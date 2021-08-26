@@ -1639,7 +1639,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Metadata.Name,
-					Cause: fmt.Sprintf("Failed to validate VolumeSnapshotRestore: %v. Err: %v", obj.Metadata.Name, err),
+					Cause: fmt.Sprintf("Failed to validate VolumeSnapshot: %v. Err: %v", obj.Metadata.Name, err),
 					Type:  obj,
 				}
 			}

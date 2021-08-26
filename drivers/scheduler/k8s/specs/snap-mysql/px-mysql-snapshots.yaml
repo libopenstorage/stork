@@ -1,0 +1,42 @@
+##### Portworx Stork Snapshot
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot-1
+spec:
+  persistentVolumeClaimName: mysql-data
+---
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot-2
+spec:
+  persistentVolumeClaimName: mysql-data
+---
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot-3
+spec:
+  persistentVolumeClaimName: mysql-data
+---
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot-4
+spec:
+  persistentVolumeClaimName: mysql-data
+---
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot-5
+spec:
+  persistentVolumeClaimName: mysql-data
+---
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot-6
+spec:
+  persistentVolumeClaimName: mysql-data
