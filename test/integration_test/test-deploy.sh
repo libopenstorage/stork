@@ -20,6 +20,7 @@ aws_id=""
 aws_key=""
 generic_csi_configmap_name=""
 external_test_pod=false
+stork_test_version_check=false
 for i in "$@"
 do
 case $i in
@@ -140,6 +141,12 @@ case $i in
     --external_test_pod)
         echo "Flag for three cluster test config: $2"
         external_test_pod=true
+        shift
+        shift
+        ;;
+    --stork_test_version_check)
+        echo "Flag for comparing stork version with stork test pod version: $2"
+        stork_test_version_check=false
         shift
         shift
         ;;
@@ -277,6 +284,13 @@ if [ "$external_test_pod" == "true" ] ; then
 	sed -i 's/'external_test_cluster'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 else 
 	sed -i 's/'external_test_cluster'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$stork_test_version_check" == "true" ] ; then
+	sed -i 's/'stork_test_version_check'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
+	sed -i 's/- -stork-version-check=false/- -stork-version-check='"$stork_test_version_check"'/g' /testspecs/stork-test-pod.yaml
+else 
+	sed -i 's/'stork_test_version_check'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 kubectl delete -f /testspecs/stork-test-pod.yaml
