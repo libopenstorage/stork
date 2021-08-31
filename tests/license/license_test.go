@@ -388,6 +388,7 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 	var contexts []*scheduler.Context
 	var err error
 	var pureSecretJSON string
+	var nodesToReboot []node.Node
 
 	It("has to setup, validate and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -433,7 +434,7 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 		})
 
 		Step("get all nodes and reboot one by one", func() {
-			nodesToReboot := node.GetWorkerNodes()
+			nodesToReboot = node.GetWorkerNodes()
 
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
@@ -502,11 +503,19 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 			})
 		})
 
+		// Perform below steps to recover setup for other tests to continue
 		Step("Re-create Pure secret", func() {
 			err := Inst().S.CreateSecret(pureSecretNamespace, pureSecretName, pureSecretDataField, pureSecretJSON)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create secret [%s] in [%s] namespace. Error: [%v]",
 					pureSecretName, pureSecretNamespace, err))
+		})
+
+		Step("Recover Portworx", func() {
+			for _, node := range nodesToReboot {
+				err := Inst().V.RestartDriver(node, nil)
+				Expect(err).NotTo(HaveOccurred(), "failed to restart service on node: [%v]. Error: [%v]", node, err)
+			}
 		})
 
 		ValidateAndDestroy(contexts, nil)
