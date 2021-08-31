@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ const (
 	defaultWaitRebootRetry   = 10 * time.Second
 	defaultCommandRetry      = 5 * time.Second
 	defaultCommandTimeout    = 1 * time.Minute
+	defaultReadynessTimeout  = 2 * time.Minute
 
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultRetryInterval         = 10 * time.Second
@@ -258,6 +260,56 @@ var _ = Describe("{BasicEssentialsRebootTest}", func() {
 		})
 		ValidateAndDestroy(contexts, nil)
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+// This test performs basic limit test of starting an application and destroying it (along with storage)
+var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("license-aggrsnaplimit-%d", i))...)
+		}
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		for _, ctx := range contexts {
+			if strings.Contains(ctx.App.Key, "snap") || strings.Contains(ctx.App.Key, "aggr") {
+				Step(fmt.Sprintf("Expect volume validation for %s app to fail", ctx.App.Key), func() {
+					err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval, &scheduler.VolumeOptions{ExpectError: false})
+					Expect(err).To(HaveOccurred(),
+						fmt.Sprintf("No error occurred while validating storage for app [%s]", ctx.App.Key))
+				})
+			} else {
+				Step(fmt.Sprintf("Expect volume validation for %s app to pass", ctx.App.Key), func() {
+					err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval, &scheduler.VolumeOptions{ExpectError: false})
+					Expect(err).ToNot(HaveOccurred(),
+						fmt.Sprintf("Error occurred during validating storage for app [%s]. Error: %v", ctx.App.Key, err))
+				})
+			}
+			// If we are running the mysql-aggr test execute next steps.
+			if strings.Contains(ctx.App.Key, "snap") || strings.Contains(ctx.App.Key, "aggr") {
+				Step(fmt.Sprintf("Expect %s app to fail to start", ctx.App.Key), func() {
+					err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval)
+					Expect(err).To(HaveOccurred(),
+						"app with aggregated volumes got deployed successfully when lic does not allow aggregated volumes.")
+				})
+			} else {
+				Step(fmt.Sprintf("Wait for %s app to start running", ctx.App.Key), func() {
+					err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			}
+		}
+	})
+
+	for _, ctx := range contexts {
+		TearDownContext(ctx, nil)
+	}
+
 	JustAfterEach(func() {
 		AfterEachTest(contexts)
 	})
