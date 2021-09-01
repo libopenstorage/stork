@@ -34,13 +34,14 @@ type BackupLocation struct {
 type BackupLocationItem struct {
 	Type BackupLocationType `json:"type"`
 	// Path is either the bucket or any other path for the backup location
-	Path          string        `json:"path"`
-	EncryptionKey string        `json:"encryptionKey"`
-	S3Config      *S3Config     `json:"s3Config,omitempty"`
-	AzureConfig   *AzureConfig  `json:"azureConfig,omitempty"`
-	GoogleConfig  *GoogleConfig `json:"googleConfig,omitempty"`
-	SecretConfig  string        `json:"secretConfig"`
-	Sync          bool          `json:"sync"`
+	Path                 string        `json:"path"`
+	EncryptionKey        string        `json:"encryptionKey"`
+	S3Config             *S3Config     `json:"s3Config,omitempty"`
+	AzureConfig          *AzureConfig  `json:"azureConfig,omitempty"`
+	GoogleConfig         *GoogleConfig `json:"googleConfig,omitempty"`
+	SecretConfig         string        `json:"secretConfig"`
+	Sync                 bool          `json:"sync"`
+	GenericBackupRepoKey string        `json:"genericBackupRepoKey"`
 }
 
 // BackupLocationType is the type of the backup location
