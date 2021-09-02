@@ -21,6 +21,7 @@ aws_key=""
 generic_csi_configmap_name=""
 external_test_pod=false
 stork_test_version_check=false
+kube_scheduler_version="v1.21.0"
 for i in "$@"
 do
 case $i in
@@ -150,6 +151,12 @@ case $i in
         shift
         shift
         ;;
+    --kube_scheduler_version)
+        echo "Kube scheduler version for stork scheduler: $2"
+        kube_scheduler_version=$2
+        shift
+        shift
+        ;;
 esac
 done
 
@@ -158,8 +165,7 @@ apk add jq
 apt-get -y update 
 apt-get -y install jq
 
-KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
-sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
+sed -i 's/<kube_version>/'"$kube_scheduler_version"'/g' /specs/stork-scheduler.yaml
 sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /specs/stork-deployment.yaml
 
 # Replace volume driver in stork
