@@ -126,7 +126,7 @@ var (
 		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: MaxNodeCapacity},
-		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 128},
 		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: false},
 		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: false},
@@ -571,6 +571,116 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 		})
 
 		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+// This test performs basic test disabling callhome and checking if the licnse stays valid
+var _ = Describe("{DisableCallHomeTest}", func() {
+	var contexts []*scheduler.Context
+	It("has to setup, validate and teardown apps, then disable callhome and wait 65 minutes to verify the license is still valid.", func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-license-callhome-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		currNode := node.GetWorkerNodes()[0]
+		Step(fmt.Sprintf("Set License expiry timeout to 1 hour"), func() {
+			err := Inst().V.SetClusterOpts(currNode, map[string]string{
+				"metering_interval_mins":       "10",
+				"license_expiry_timeout_hours": "1",
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Step(fmt.Sprintf("Disable call-home"), func() {
+			err := Inst().V.ToggleCallHome(currNode, false)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Step("get all nodes and reboot one by one", func() {
+			nodesToReboot := node.GetWorkerNodes()
+
+			// Reboot node and check driver status
+			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
+				for _, n := range nodesToReboot {
+					if n.IsStorageDriverInstalled {
+						Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+							err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+								Force: true,
+								ConnectionOpts: node.ConnectionOpts{
+									Timeout:         defaultCommandTimeout,
+									TimeBeforeRetry: defaultCommandRetry,
+								},
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+							err := Inst().N.TestConnection(n, node.ConnectionOpts{
+								Timeout:         defaultTestConnectionTimeout,
+								TimeBeforeRetry: defaultWaitRebootRetry,
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+							err := Inst().V.WaitDriverDownOnNode(n)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+							Inst().S.String(), Inst().V.String()), func() {
+
+							err := Inst().S.IsNodeReady(n)
+							Expect(err).NotTo(HaveOccurred())
+
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step("validate apps", func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
+						})
+					}
+				}
+			})
+		})
+
+		Step("Wait 65 Minutes to make sure we passed the 1 hour mark and test if our license is still valid", func() {
+			time.Sleep(65 * time.Minute)
+
+			Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+				summary, err := Inst().V.GetLicenseSummary()
+				Expect(err).NotTo(HaveOccurred(),
+					fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+				Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+					fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+
+				Step("Compare PX-Essentials FA/FB features vs activated license", func() {
+					for _, feature := range summary.Features {
+						// if the feature limit exists in the hardcoded license limits we test it.
+						if _, ok := faLicense[Label(feature.Name)]; ok {
+							Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
+								fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, faLicense[Label(feature.Name)]))
+						}
+					}
+				})
+			})
+		})
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts)

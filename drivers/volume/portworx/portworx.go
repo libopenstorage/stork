@@ -2380,6 +2380,57 @@ func (d *portworx) GetLicenseSummary() (torpedovolume.LicenseSummary, error) {
 	return licenseSummary, nil
 }
 
+func (d *portworx) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
+	var err error
+
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+
+	var rtopts string
+	for k, v := range rtOpts {
+		rtopts += k + "=" + v + ","
+	}
+
+	rtopts = strings.TrimSuffix(rtopts, ",")
+	cmd := fmt.Sprintf("pxctl cluster options update --runtime-options %s", rtopts)
+
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return fmt.Errorf("failed to set rt_opts, Err: %v %v", err, out)
+	}
+
+	logrus.Debugf("Successfully set rt_opts")
+	return nil
+}
+
+func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
+	var err error
+
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+
+	cmd := "pxctl sv call-home enable"
+	if !enabled {
+		cmd = "pxctl sv call-home disable"
+	}
+
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return fmt.Errorf("failed to toggle call-home, Err: %v %v", err, out)
+	}
+
+	logrus.Debugf("Successfully toggled call-home")
+	return nil
+}
+
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
 	condExprValue, _ := strconv.ParseFloat(conditionExpression.Values[0], 64)
 	return expectedMetricValue < condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpLt ||

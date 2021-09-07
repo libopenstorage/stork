@@ -169,6 +169,12 @@ type Driver interface {
 
 	// GetLicenseSummary returns the activated license SKU and Features
 	GetLicenseSummary() (LicenseSummary, error)
+
+	//SetClusterOpts sets cluster options
+	SetClusterOpts(n node.Node, rtOpts map[string]string) error
+
+	//ToggleCallHome toggles Call-home
+	ToggleCallHome(n node.Node, enabled bool) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

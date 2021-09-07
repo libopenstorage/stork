@@ -354,3 +354,19 @@ func (d *DefaultDriver) RestartDriver(n node.Node, triggerOpts *driver_api.Trigg
 		Operation: "RestartDriver()",
 	}
 }
+
+//SetClusterOpts sets cluster options
+func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetClusterOpts()",
+	}
+}
+
+//ToggleCallHome toggles Call-home
+func (d *DefaultDriver) ToggleCallHome(n node.Node, enabled bool) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ToggleCallHome()",
+	}
+}
