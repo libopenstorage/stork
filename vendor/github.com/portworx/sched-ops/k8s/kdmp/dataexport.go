@@ -41,7 +41,7 @@ func (c *Client) GetDataExport(name, namespace string) (*kdmpv1alpha1.DataExport
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.kdmp.KdmpV1alpha1().DataExports(namespace).Get(context.TODO(), name, metav1.CreateOptions{})
+	return c.kdmp.KdmpV1alpha1().DataExports(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListDataExport lists all the DataExport CR
@@ -49,7 +49,7 @@ func (c *Client) ListDataExport(namespace string) (*kdmpv1alpha1.DataExportList,
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.KdmpV1alpha1().DataExports(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.kdmp.KdmpV1alpha1().DataExports(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // DeleteDataExport deletes the DataExport CR
@@ -57,9 +57,17 @@ func (c *Client) DeleteDataExport(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.KdmpV1alpha1().DataExports(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
+	return c.kdmp.KdmpV1alpha1().DataExports(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+// UpdateDataExport deletes the DataExport CR
+func (c *Client) UpdateDataExport(export *kdmpv1alpha1.DataExport) (*kdmpv1alpha1.DataExport, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.kdmp.KdmpV1alpha1().DataExports(export.Namespace).Update(context.TODO(), export, metav1.UpdateOptions{})
 }
 
 // ValidateDataExport validates DataExport CR
@@ -79,14 +87,14 @@ func (c *Client) ValidateDataExport(name string, namespace string, timeout, retr
 		} else if dataExport.Status.Status == kdmpv1alpha1.DataExportStatusFailed {
 			return "", true, &errors.ErrFailedToValidateCustomSpec{
 				Name:  name,
-				Cause: fmt.Sprintf("Storage Status: %v \t Scheduler Status: %v", dataExport.Status.StorageStatus, dataExport.Status.SchedulerStatus),
+				Cause: fmt.Sprintf("Stage: %v \t Status: %v", dataExport.Status.Stage, dataExport.Status.Status),
 				Type:  dataExport,
 			}
 		}
 
 		return "", true, &errors.ErrFailedToValidateCustomSpec{
 			Name:  name,
-			Cause: fmt.Sprintf("Storage Status: %v \t Scheduler Status: %v", dataExport.Status.StorageStatus, dataExport.Status.SchedulerStatus),
+			Cause: fmt.Sprintf("Stage: %v \t Status: %v", dataExport.Status.Stage, dataExport.Status.Status),
 			Type:  dataExport,
 		}
 	}

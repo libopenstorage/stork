@@ -1076,6 +1076,7 @@ github.com/portworx/sched-ops v0.0.0-20210401071253-c9846fa7a34b/go.mod h1:DpRDD
 github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7 h1:E/ZYLCbNezKg4bT1CmZXWgi2vY6PuPHwdVBZOdQDmfM=
 github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7/go.mod h1:DpRDDqXWQrReFJ5SHWWrURuZdzVKjrh2OxbAfwnrAyk=
 github.com/portworx/sched-ops v1.20.0-rc1/go.mod h1:nl2AP/W8sWmhmW7ScwNQrm5OCHiHjLYQ2NmO3TUjIhE=
+github.com/portworx/sched-ops v1.20.4-rc1 h1:offT/z5UA4KxCoJs6I8+jhZU4fsPoywi1YSXyTcGfzc=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20210503012502-d83d87d42ead h1:3YTLDjXjwruf0DTYtx4i3Sq5LVZA5Qf63K+K/NHGgto=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20210503012502-d83d87d42ead/go.mod h1:fZ+nl20syzzXqeVuF41XfOJAmLXRV5+CFteuBkijB7A=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a h1:N+zSnQ2r2ps+fh7wi1pq2dcB6wYjTAUF0HSZ9Uny/qs=
