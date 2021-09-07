@@ -2,6 +2,8 @@ package kdmp
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
@@ -9,8 +11,9 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
-	kdmp_backup "github.com/portworx/kdmp/pkg/drivers"
+	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -23,6 +26,8 @@ const (
 	driverName    = "kdmp"
 	proxyEndpoint = "proxy_endpoint"
 	proxyPath     = "proxy_nfs_exportpath"
+	// StorkAPIVersion current api version supported by stork
+	StorkAPIVersion = "stork.libopenstorage.org/v1alpha1"
 )
 
 type kdmp struct {
@@ -57,7 +62,9 @@ func (k *kdmp) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName != "" {
 		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
-		logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
+		if err != nil {
+			logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
+		}
 		if _, ok := storageClass.Parameters[proxyEndpoint]; ok {
 			return true
 		}
@@ -101,6 +108,35 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			return nil, fmt.Errorf("error getting volume for PVC: %v", err)
 		}
 		volumeInfo.Volume = volume
+		// create kdmp cr
+
+		dataExport := &kdmpapi.DataExport{}
+		dataExport.Name = "stork-" + pvc.Name + "-" + pvc.Namespace
+		dataExport.Namespace = pvc.Namespace
+		// TODO: this needs to be generic, maybe read it from configmap
+		dataExport.Spec.Type = kdmpapi.DataExportKopia
+		dataExport.Spec.Destination = kdmpapi.DataExportObjectReference{
+			Kind:       reflect.TypeOf(storkapi.BackupLocation{}).Name(),
+			Name:       backup.Spec.BackupLocation,
+			Namespace:  backup.Namespace,
+			APIVersion: StorkAPIVersion,
+		}
+		dataExport.Spec.Source = kdmpapi.DataExportObjectReference{
+			Kind:       pvc.Kind,
+			Name:       pvc.Name,
+			Namespace:  pvc.Namespace,
+			APIVersion: pvc.APIVersion,
+		}
+		logrus.Debugf("Source for KDMP: %v", dataExport.Spec.Source)
+		logrus.Debugf("Destination for KDMP: %v", dataExport.Spec.Destination)
+		// TODO: do we need retries here
+		// in case no of CRs excedded limit handled by kdmp controller
+		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
+		if err != nil {
+			logrus.Errorf("failed to create job: %v", err)
+			return volumeInfos, err
+		}
+		logrus.Debugf("adding volume info: %v", volumeInfo)
 		volumeInfos = append(volumeInfos, volumeInfo)
 	}
 
@@ -109,7 +145,52 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 
 func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+	for _, vInfo := range backup.Status.Volumes {
+		if vInfo.DriverName != driverName {
+			continue
+		}
+		dataExport, err := kdmpShedOps.Instance().GetDataExport("stork-"+vInfo.PersistentVolumeClaim+"-"+vInfo.Namespace, backup.Namespace)
+		if err != nil {
+			logrus.Errorf("failed to get job: %v", err)
+			return volumeInfos, err
+		}
+		if dataExport.Status.TransferID == "" {
+			vInfo.Status = storkapi.ApplicationBackupStatusInitial
+			vInfo.Reason = "Volume backup not started yet"
+		} else {
+			vInfo.Volume = strings.Split(dataExport.Status.TransferID, "/")[1]
+			volumeBackup, err := kdmpShedOps.Instance().GetVolumeBackup(vInfo.Volume, backup.Namespace)
+			if err != nil {
+				logrus.Errorf("failed to get volumebackup CR: %s, err:%v", vInfo.Volume, err)
+				return volumeInfos, err
+			}
+			vInfo.BackupID = volumeBackup.Status.SnapshotID
+			if isBackupActive(dataExport.Status) {
+				vInfo.Status = storkapi.ApplicationBackupStatusInProgress
+				vInfo.Reason = fmt.Sprintf("Volume backup in progress. BytesDone: %v",
+					volumeBackup.Status.ProgressPercentage)
+				// TODO: KDMP does not return size right now, we will need to fill up
+				// size for volume once support is available
+			} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+				vInfo.Status = storkapi.ApplicationBackupStatusFailed
+				vInfo.Reason = fmt.Sprintf("Backup failed for volume: %v", dataExport.Status.Reason)
+			} else {
+				vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
+				vInfo.Reason = "Backup successful for volume"
+			}
+		}
+		volumeInfos = append(volumeInfos, vInfo)
+	}
 	return volumeInfos, nil
+}
+func isBackupActive(status kdmpapi.ExportStatus) bool {
+	if status.Stage == kdmpapi.DataExportStageTransferInProgress ||
+		status.Status == kdmpapi.DataExportStatusInProgress ||
+		status.Status == kdmpapi.DataExportStatusPending ||
+		status.Status == kdmpapi.DataExportStatusInitial {
+		return true
+	}
+	return false
 }
 
 func (k *kdmp) CancelBackup(backup *storkapi.ApplicationBackup) error {
@@ -117,6 +198,16 @@ func (k *kdmp) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (k *kdmp) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	for _, vInfo := range backup.Status.Volumes {
+		if err := kdmpShedOps.Instance().DeleteDataExport("stork-"+vInfo.PersistentVolumeClaim+"-"+vInfo.Namespace, backup.Namespace); err != nil {
+			logrus.Errorf("failed to delete data export CR: %v", err)
+			return err
+		}
+		if err := kdmpShedOps.Instance().DeleteVolumeBackup(vInfo.Volume, backup.Namespace); err != nil {
+			logrus.Errorf("failed to delete volume backup CR: %v", err)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -147,7 +238,6 @@ func (k *kdmp) CancelRestore(*storkapi.ApplicationRestore) error {
 
 func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
-	logrus.Infof("test : %s", kdmp_backup.ResticBackup)
 	return volumeInfos, nil
 }
 

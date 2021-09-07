@@ -527,15 +527,25 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 					continue
 				}
-				driverName, err := volume.GetPVCDriver(core.Instance(), &pvc)
-				if err != nil {
-					// Skip unsupported PVCs
-					if _, ok := err.(*errors.ErrNotSupported); ok {
+				driverName := "generic"
+				if backup.Spec.BackupType == "generic" {
+					volDriver, err := volume.Get("generic")
+					if err != nil {
+						return err
+					}
+					if !volDriver.OwnsPVC(core.Instance(), &pvc) {
 						continue
 					}
-					return err
+				} else {
+					driverName, err = volume.GetPVCDriver(core.Instance(), &pvc)
+					if err != nil {
+						// Skip unsupported PVCs
+						if _, ok := err.(*errors.ErrNotSupported); ok {
+							continue
+						}
+						return err
+					}
 				}
-
 				if driverName != "" {
 					// This PVC needs to be backed up
 					pvcCount++
@@ -562,9 +572,17 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		if len(backup.Status.Volumes) != pvcCount {
 
 			for driverName, pvcs := range pvcMappings {
-				driver, err := volume.Get(driverName)
-				if err != nil {
-					return err
+				var driver volume.Driver
+				if backup.Spec.BackupType == "generic" {
+					driver, err = volume.Get("kdmp")
+					if err != nil {
+						return err
+					}
+				} else {
+					driver, err = volume.Get(driverName)
+					if err != nil {
+						return err
+					}
 				}
 				batchCount := defaultBackupVolumeBatchCount
 				if len(os.Getenv(backupVolumeBatchCountEnvVar)) != 0 {
@@ -627,7 +645,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 				}
 			}
-
+			logrus.Debugf("$$$ volume info: %v", backup.Status.Volumes)
 			// Terminate any background rules that were started
 			for _, channel := range terminationChannels {
 				channel <- true
@@ -663,7 +681,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// Skip checking status if no volumes are being backed up
 		if len(backup.Status.Volumes) != 0 {
 			drivers := a.getDriversForBackup(backup)
-
+			logrus.Debugf("$$$ volume drivers: %v", drivers)
 			volumeInfos := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
 			for driverName := range drivers {
 

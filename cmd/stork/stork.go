@@ -33,6 +33,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/libopenstorage/stork/pkg/webhookadmission"
+	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	"github.com/portworx/kdmp/pkg/controllers/dataexport"
 	schedops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -173,6 +175,10 @@ func main() {
 			Name:  "k8s-api-burst",
 			Value: 100,
 			Usage: "Restrict number of k8s api requests from stork (default: 100 Burst)",
+		},
+		cli.BoolTFlag{
+			Name:  "kdmp-controller",
+			Usage: "Start the kdmp controller (default: true)",
 		},
 	}
 
@@ -423,7 +429,22 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 			log.Fatalf("Error initializing application manager: %v", err)
 		}
 	}
-
+	if c.Bool("kdmp-controller") {
+		// Setup scheme for controllers resources
+		if err := kdmpapi.AddToScheme(mgr.GetScheme()); err != nil {
+			log.Fatalf("Setup scheme for kdmp resources: %v", err)
+		}
+		dataexport, err := dataexport.NewController(mgr)
+		if err != nil {
+			log.Fatalf("Error initializing kdmp controller: %v", err)
+		}
+		if err := dataexport.Init(mgr); err != nil {
+			log.Fatalf("Error initializing kdmp controller: %v", err)
+		}
+		//		if err := controllers.RegisterTo(mgr, "application-backup-controller", dataexport, &kdmpapi.DataExport{}); err != nil {
+		//			log.Fatalf("Error register kdmp controller: %v", err)
+		//		}
+	}
 	ctx := context.Background()
 
 	go func() {
