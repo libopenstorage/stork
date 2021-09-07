@@ -22,6 +22,7 @@ var (
 // Ops is an interface to Stork operations.
 type Ops interface {
 	DataExportOps
+	VolumeBackupOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
