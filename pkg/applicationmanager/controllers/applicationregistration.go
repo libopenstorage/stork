@@ -78,7 +78,6 @@ func createAppReg(regCRD map[string][]stork_api.ApplicationResource) error {
 
 // RegisterDefaultCRDs  registered already supported CRDs
 func RegisterDefaultCRDs() error {
-
 	// skipCrds grp:version map
 	skipCrds := map[string]string{
 		"autopilot.libopenstorage.org":           "",
@@ -96,22 +95,37 @@ func RegisterDefaultCRDs() error {
 			return err
 		}
 	}
-
 	// create appreg for already registered crd
-	crds, err := apiextensions.Instance().ListCRDs()
-	if err != nil {
-		logrus.Errorf("unable to list crds: %v", err)
-		return err
-	}
-
-	for _, crd := range crds.Items {
-		// skip stork/volumesnap crd registration
-		if _, ok := skipCrds[crd.Spec.Group]; ok {
-			continue
+	// list and register crds via v1 apis
+	crdv1, err := apiextensions.Instance().ListCRDs()
+	if err == nil {
+		for _, crd := range crdv1.Items {
+			// skip stork/volumesnap crd registration
+			if _, ok := skipCrds[crd.Spec.Group]; ok {
+				continue
+			}
+			if err := registerCRDV1(crd); err != nil {
+				return err
+			}
 		}
-		if err := registerCRDV1(crd); err != nil {
+	} else if errors.IsNotFound(err) {
+		// list and register crds via v1beta1 apis
+		crds, err := apiextensions.Instance().ListCRDsV1beta1()
+		if err != nil {
+			logrus.Warnf("unable to list v1beta1 crds: %v", err)
 			return err
 		}
+		for _, crd := range crds.Items {
+			// skip stork/volumesnap crd registration
+			if _, ok := skipCrds[crd.Spec.Group]; ok {
+				continue
+			}
+			if err := registerCRD(crd); err != nil {
+				return err
+			}
+		}
+	} else {
+		return err
 	}
 	fn := func(object runtime.Object) {
 		if crd, ok := object.(*apiextensionsv1.CustomResourceDefinition); ok {
@@ -149,9 +163,18 @@ func watchCRDs(fn WatchFunc) error {
 		return err
 	}
 	listOptions := metav1.ListOptions{Watch: true}
-	watchInterface, err := srcClnt.ApiextensionsV1().CustomResourceDefinitions().Watch(context.TODO(), listOptions)
+	var watchInterface watch.Interface
+	watchInterface, err = srcClnt.ApiextensionsV1().CustomResourceDefinitions().Watch(context.TODO(), listOptions)
 	if err != nil {
-		return err
+		if errors.IsNotFound(err) {
+			watchInterface, err = srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(context.TODO(), listOptions)
+			if err != nil {
+				return err
+			}
+		} else {
+			// unable to access crds
+			return err
+		}
 	}
 	// fire of watch interface
 	go handleCRDWatch(watchInterface, fn)
