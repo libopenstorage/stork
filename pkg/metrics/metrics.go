@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,19 +33,37 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 			for {
 				isCRDRegistered := true
 				crdName := fmt.Sprintf("%s.%s", stork_api.ApplicationBackupResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive applicationbackups crds: %v", err)
-					isCRDRegistered = false
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if !errors.IsNotFound(err) {
+						isCRDRegistered = false
+					} else {
+						if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+							logrus.Errorf("failed to retrive applicationbackups crds: %v", err)
+							isCRDRegistered = false
+						}
+					}
 				}
 				crdName = fmt.Sprintf("%s.%s", stork_api.ApplicationRestoreResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive applicationrestores crds: %v", err)
-					isCRDRegistered = false
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if !errors.IsNotFound(err) {
+						isCRDRegistered = false
+					} else {
+						if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+							logrus.Errorf("failed to retrive applicationrestores crds: %v", err)
+							isCRDRegistered = false
+						}
+					}
 				}
 				crdName = fmt.Sprintf("%s.%s", stork_api.ApplicationCloneResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive applicationclones crds: %v", err)
-					isCRDRegistered = false
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if !errors.IsNotFound(err) {
+						isCRDRegistered = false
+					} else {
+						if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+							logrus.Errorf("failed to retrive applicationclones crds: %v", err)
+							isCRDRegistered = false
+						}
+					}
 				}
 				if isCRDRegistered {
 					break
@@ -73,14 +92,26 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 			for {
 				isCRDRegistered := true
 				crdName := fmt.Sprintf("%s.%s", stork_api.ClusterPairResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive clusterpairs crds: %v", err)
-					isCRDRegistered = false
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if !errors.IsNotFound(err) {
+						isCRDRegistered = false
+					} else {
+						if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+							logrus.Errorf("failed to retrive clusterpairs crds: %v", err)
+							isCRDRegistered = false
+						}
+					}
 				}
 				crdName = fmt.Sprintf("%s.%s", stork_api.MigrationResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive migrations crds: %v", err)
-					isCRDRegistered = false
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if !errors.IsNotFound(err) {
+						isCRDRegistered = false
+					} else {
+						if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+							logrus.Errorf("failed to retrive migrations crds: %v", err)
+							isCRDRegistered = false
+						}
+					}
 				}
 				if isCRDRegistered {
 					break
