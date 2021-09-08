@@ -439,23 +439,31 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20210905185157-02d8c708c3ab
+# github.com/portworx/kdmp v0.4.1-0.20210907103225-5bf7fe9467ec
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
 github.com/portworx/kdmp/pkg/client/clientset/versioned
 github.com/portworx/kdmp/pkg/client/clientset/versioned/scheme
 github.com/portworx/kdmp/pkg/client/clientset/versioned/typed/kdmp/v1alpha1
+github.com/portworx/kdmp/pkg/controllers/dataexport
 github.com/portworx/kdmp/pkg/drivers
+github.com/portworx/kdmp/pkg/drivers/driversinstance
 github.com/portworx/kdmp/pkg/drivers/kopiabackup
+github.com/portworx/kdmp/pkg/drivers/resticbackup
+github.com/portworx/kdmp/pkg/drivers/resticrestore
+github.com/portworx/kdmp/pkg/drivers/rsync
 github.com/portworx/kdmp/pkg/drivers/utils
+github.com/portworx/kdmp/pkg/snapshots
+github.com/portworx/kdmp/pkg/snapshots/externalstorage
+github.com/portworx/kdmp/pkg/snapshots/snapshotsinstance
 github.com/portworx/kdmp/pkg/util/ops
 github.com/portworx/kdmp/pkg/version
 # github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20210805192436-d51186f75dc4
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20210908045330-9060cf5304f1
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -467,6 +475,7 @@ github.com/portworx/sched-ops/k8s/core
 github.com/portworx/sched-ops/k8s/dynamic
 github.com/portworx/sched-ops/k8s/errors
 github.com/portworx/sched-ops/k8s/externalstorage
+github.com/portworx/sched-ops/k8s/kdmp
 github.com/portworx/sched-ops/k8s/networking
 github.com/portworx/sched-ops/k8s/openshift
 github.com/portworx/sched-ops/k8s/rbac

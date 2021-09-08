@@ -19,7 +19,7 @@ var (
 	deleteForegroundPolicy = metav1.DeletePropagationForeground
 )
 
-// Ops is an interface to Stork operations.
+// Ops is an interface to KDMP operations.
 type Ops interface {
 	DataExportOps
 	VolumeBackupOps
@@ -43,15 +43,15 @@ func SetInstance(i Ops) {
 	instance = i
 }
 
-// New creates a new stork client.
-func New(kube kubernetes.Interface, stork kdmpclientset.Interface, snap rest.Interface) *Client {
+// New creates a new kdmp client.
+func New(kube kubernetes.Interface, kdmp kdmpclientset.Interface, snap rest.Interface) *Client {
 	return &Client{
 		kube: kube,
-		kdmp: stork,
+		kdmp: kdmp,
 	}
 }
 
-// NewForConfig creates a new stork client for the given config.
+// NewForConfig creates a new kdmp client for the given config.
 func NewForConfig(c *rest.Config) (*Client, error) {
 	kclient, err := kubernetes.NewForConfig(c)
 	if err != nil {
@@ -80,7 +80,7 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 	return newInstance, nil
 }
 
-// Client is a wrapper for the stork operator client.
+// Client is a wrapper for the kdmp operator client.
 type Client struct {
 	config *rest.Config
 	kube   kubernetes.Interface
@@ -95,7 +95,7 @@ func (c *Client) SetConfig(cfg *rest.Config) {
 	c.kdmp = nil
 }
 
-// initClient initialize stork clients.
+// initClient initialize kdmp clients.
 func (c *Client) initClient() error {
 	if c.kdmp != nil && c.kube != nil {
 		return nil

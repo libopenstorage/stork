@@ -41,7 +41,6 @@ func NewController(mgr manager.Manager) (*Controller, error) {
 func (c *Controller) Init(mgr manager.Manager) error {
 	err := c.createCRD()
 	if err != nil {
-		logrus.Infof("unable to registered data export crds: %v", err)
 		return err
 	}
 
@@ -51,7 +50,6 @@ func (c *Controller) Init(mgr manager.Manager) error {
 		MaxConcurrentReconciles: 10,
 	})
 	if err != nil {
-		logrus.Infof("unable to start reconsiler for data export: %v", err)
 		return err
 	}
 

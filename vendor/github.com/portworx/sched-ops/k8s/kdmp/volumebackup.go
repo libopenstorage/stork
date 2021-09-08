@@ -7,7 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// VolumeBackupOps is an interface to perfrom k8s dataexport CR crud operations
+// VolumeBackupOps is an interface to perfrom k8s volume backup CR crud operations
 type VolumeBackupOps interface {
 	// CreateVolumeBackup creates the VolumeBackup CR
 	CreateVolumeBackup(*kdmpv1alpha1.VolumeBackup) (*kdmpv1alpha1.VolumeBackup, error)
@@ -22,11 +22,11 @@ type VolumeBackupOps interface {
 }
 
 // CreateVolumeBackup creates the VolumeBackup CR
-func (c *Client) CreateVolumeBackup(export *kdmpv1alpha1.VolumeBackup) (*kdmpv1alpha1.VolumeBackup, error) {
+func (c *Client) CreateVolumeBackup(backup *kdmpv1alpha1.VolumeBackup) (*kdmpv1alpha1.VolumeBackup, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.kdmp.KdmpV1alpha1().VolumeBackups(export.Namespace).Create(context.TODO(), export, metav1.CreateOptions{})
+	return c.kdmp.KdmpV1alpha1().VolumeBackups(backup.Namespace).Create(context.TODO(), backup, metav1.CreateOptions{})
 }
 
 // GetVolumeBackup gets the VolumeBackup CR
@@ -55,10 +55,10 @@ func (c *Client) DeleteVolumeBackup(name string, namespace string) error {
 	})
 }
 
-// UpdateVolumeBackup deletes the VolumeBackup CR
-func (c *Client) UpdateVolumeBackup(export *kdmpv1alpha1.VolumeBackup) (*kdmpv1alpha1.VolumeBackup, error) {
+// UpdateVolumeBackup updates the VolumeBackup CR
+func (c *Client) UpdateVolumeBackup(backup *kdmpv1alpha1.VolumeBackup) (*kdmpv1alpha1.VolumeBackup, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.kdmp.KdmpV1alpha1().VolumeBackups(export.Namespace).Update(context.TODO(), export, metav1.UpdateOptions{})
+	return c.kdmp.KdmpV1alpha1().VolumeBackups(backup.Namespace).Update(context.TODO(), backup, metav1.UpdateOptions{})
 }
