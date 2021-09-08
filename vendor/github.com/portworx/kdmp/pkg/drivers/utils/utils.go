@@ -93,7 +93,7 @@ func KopiaExecutorImage() string {
 		return customImage
 	}
 	// use a versioned docker image
-	return strings.Join([]string{drivers.KopiaExecutorImage, "latest"}, ":")
+	return strings.Join([]string{drivers.KopiaExecutorImage, version.Get().GitVersion}, ":")
 }
 
 // KopiaExecutorImageSecret returns an image pull secret for the resticexecutor image.

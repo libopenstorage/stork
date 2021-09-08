@@ -84,7 +84,8 @@ func (c *Client) ValidateDataExport(name string, namespace string, timeout, retr
 		if dataExport.Status.Stage == kdmpv1alpha1.DataExportStageFinal &&
 			dataExport.Status.Status == kdmpv1alpha1.DataExportStatusSuccessful {
 			return "", false, nil
-		} else if dataExport.Status.Status == kdmpv1alpha1.DataExportStatusFailed {
+		} else if dataExport.Status.Stage != kdmpv1alpha1.DataExportStageTransferInProgress &&
+			dataExport.Status.Status == kdmpv1alpha1.DataExportStatusFailed {
 			return "", true, &errors.ErrFailedToValidateCustomSpec{
 				Name:  name,
 				Cause: fmt.Sprintf("Stage: %v \t Status: %v", dataExport.Status.Stage, dataExport.Status.Status),
