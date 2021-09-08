@@ -527,9 +527,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 					continue
 				}
-				driverName := "generic"
-				if backup.Spec.BackupType == "generic" {
-					volDriver, err := volume.Get("generic")
+				driverName := stork_api.GenericDriver
+				if backup.Spec.BackupType == stork_api.ApplicationBackupGeneric {
+					volDriver, err := volume.Get(driverName)
 					if err != nil {
 						return err
 					}
@@ -573,8 +573,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 			for driverName, pvcs := range pvcMappings {
 				var driver volume.Driver
-				if backup.Spec.BackupType == "generic" {
-					driver, err = volume.Get("kdmp")
+				if backup.Spec.BackupType == stork_api.ApplicationBackupGeneric {
+					driver, err = volume.Get(stork_api.GenericDriver)
 					if err != nil {
 						return err
 					}
@@ -645,7 +645,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 				}
 			}
-			logrus.Debugf("$$$ volume info: %v", backup.Status.Volumes)
 			// Terminate any background rules that were started
 			for _, channel := range terminationChannels {
 				channel <- true
@@ -681,7 +680,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// Skip checking status if no volumes are being backed up
 		if len(backup.Status.Volumes) != 0 {
 			drivers := a.getDriversForBackup(backup)
-			logrus.Debugf("$$$ volume drivers: %v", drivers)
 			volumeInfos := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
 			for driverName := range drivers {
 
