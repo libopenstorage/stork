@@ -441,9 +441,6 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 		if err := dataexport.Init(mgr); err != nil {
 			log.Fatalf("Error initializing kdmp controller: %v", err)
 		}
-		//		if err := controllers.RegisterTo(mgr, "application-backup-controller", dataexport, &kdmpapi.DataExport{}); err != nil {
-		//			log.Fatalf("Error register kdmp controller: %v", err)
-		//		}
 	}
 	ctx := context.Background()
 

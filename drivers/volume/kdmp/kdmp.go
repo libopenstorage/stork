@@ -2,6 +2,7 @@ package kdmp
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -22,7 +24,7 @@ import (
 )
 
 const (
-	// driverName is the name of the aws driver implementation
+	// driverName is the name of the kdmp driver implementation
 	driverName    = "kdmp"
 	proxyEndpoint = "proxy_endpoint"
 	proxyPath     = "proxy_nfs_exportpath"
@@ -77,12 +79,12 @@ func (k *kdmp) OwnsPV(pv *v1.PersistentVolume) bool {
 	// for csi volumes (with or without snapshot) use kdmp driver by default
 	// except for px csi volumes
 	if pv.Spec.CSI != nil {
-		// We px csi volume fall back to default csi volume driver
+		// in case of px csi volume fall back to default csi volume driver
 		if pv.Spec.CSI.Driver == snapv1.PortworxCsiProvisionerName ||
 			pv.Spec.CSI.Driver == snapv1.PortworxCsiDeprecatedProvisionerName {
 			return false
 		}
-		log.PVLog(pv).Tracef("CSI Owns PV: %s", pv.Name)
+		log.PVLog(pv).Tracef("KDMP (csi) owns PV: %s", pv.Name)
 		return true
 	}
 
@@ -92,7 +94,7 @@ func (k *kdmp) OwnsPV(pv *v1.PersistentVolume) bool {
 func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	log.ApplicationBackupLog(backup).Debugf("started kdmp backup: %v", backup.Name)
+	log.ApplicationBackupLog(backup).Debugf("started generic backup: %v", backup.Name)
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, pvc := range pvcs {
 		if pvc.DeletionTimestamp != nil {
@@ -108,10 +110,10 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			return nil, fmt.Errorf("error getting volume for PVC: %v", err)
 		}
 		volumeInfo.Volume = volume
-		// create kdmp cr
 
+		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
-		dataExport.Name = "stork-" + pvc.Name + "-" + pvc.Namespace
+		dataExport.Name = backup.Name + "-" + pvc.Namespace + "-" + pvc.Name
 		dataExport.Namespace = pvc.Namespace
 		// TODO: this needs to be generic, maybe read it from configmap
 		dataExport.Spec.Type = kdmpapi.DataExportKopia
@@ -127,13 +129,9 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			Namespace:  pvc.Namespace,
 			APIVersion: pvc.APIVersion,
 		}
-		logrus.Debugf("Source for KDMP: %v", dataExport.Spec.Source)
-		logrus.Debugf("Destination for KDMP: %v", dataExport.Spec.Destination)
-		// TODO: do we need retries here
-		// in case no of CRs excedded limit handled by kdmp controller
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
-			logrus.Errorf("failed to create job: %v", err)
+			logrus.Errorf("failed to create DataExport CR: %v", err)
 			return volumeInfos, err
 		}
 		logrus.Debugf("adding volume info: %v", volumeInfo)
@@ -149,9 +147,10 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 		if vInfo.DriverName != driverName {
 			continue
 		}
-		dataExport, err := kdmpShedOps.Instance().GetDataExport("stork-"+vInfo.PersistentVolumeClaim+"-"+vInfo.Namespace, backup.Namespace)
+		crName := backup.Name + "-" + vInfo.Namespace + "-" + vInfo.PersistentVolumeClaim
+		dataExport, err := kdmpShedOps.Instance().GetDataExport(crName, backup.Namespace)
 		if err != nil {
-			logrus.Errorf("failed to get job: %v", err)
+			logrus.Errorf("failed to get DataExport CR: %v", err)
 			return volumeInfos, err
 		}
 		if dataExport.Status.TransferID == "" {
@@ -167,16 +166,23 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			vInfo.BackupID = volumeBackup.Status.SnapshotID
 			if isBackupActive(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationBackupStatusInProgress
-				vInfo.Reason = fmt.Sprintf("Volume backup in progress. BytesDone: %v",
-					volumeBackup.Status.ProgressPercentage)
+				vInfo.Reason = "Volume backup in progress"
 				// TODO: KDMP does not return size right now, we will need to fill up
 				// size for volume once support is available
 			} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
 				vInfo.Reason = fmt.Sprintf("Backup failed for volume: %v", dataExport.Status.Reason)
-			} else {
+			} else if isBackupComplete(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 				vInfo.Reason = "Backup successful for volume"
+				// delete kdmp crs
+				if err := kdmpShedOps.Instance().DeleteDataExport(crName, backup.Namespace); err != nil {
+					logrus.Warnf("failed to delete data export CR: %v", err)
+				}
+				// TODO: KDMP will take care of removing this
+				if err := kdmpShedOps.Instance().DeleteVolumeBackup(vInfo.Volume, backup.Namespace); err != nil {
+					logrus.Warnf("failed to delete volume backup CR: %v", err)
+				}
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
@@ -192,6 +198,13 @@ func isBackupActive(status kdmpapi.ExportStatus) bool {
 	}
 	return false
 }
+func isBackupComplete(status kdmpapi.ExportStatus) bool {
+	if status.Stage == kdmpapi.DataExportStageFinal &&
+		status.Status == kdmpapi.DataExportStatusSuccessful {
+		return true
+	}
+	return false
+}
 
 func (k *kdmp) CancelBackup(backup *storkapi.ApplicationBackup) error {
 	return fmt.Errorf("not supported")
@@ -199,7 +212,7 @@ func (k *kdmp) CancelBackup(backup *storkapi.ApplicationBackup) error {
 
 func (k *kdmp) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 	for _, vInfo := range backup.Status.Volumes {
-		if err := kdmpShedOps.Instance().DeleteDataExport("stork-"+vInfo.PersistentVolumeClaim+"-"+vInfo.Namespace, backup.Namespace); err != nil {
+		if err := kdmpShedOps.Instance().DeleteDataExport(backup.Name+"-"+vInfo.Namespace+"-"+vInfo.PersistentVolumeClaim, backup.Namespace); err != nil {
 			logrus.Errorf("failed to delete data export CR: %v", err)
 			return err
 		}
@@ -276,6 +289,10 @@ func (k *kdmp) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 
 func init() {
 	a := &kdmp{}
+	// set kdmp executor name
+	if err := os.Setenv(drivers.KopiaExecutorImageKey, drivers.KopiaExecutorImage+":"+"latest"); err != nil {
+		logrus.Debugf("Unable to set custom kdmp image")
+	}
 	err := a.Init(nil)
 	if err != nil {
 		logrus.Debugf("Error init'ing kdmp driver: %v", err)
