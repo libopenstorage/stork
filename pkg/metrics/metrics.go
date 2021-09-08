@@ -32,18 +32,25 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 			for {
 				isCRDRegistered := true
 				crdName := fmt.Sprintf("%s.%s", stork_api.ApplicationBackupResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive applicationbackups crds: %v", err)
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+						logrus.Errorf("failed to retrive applicationbackups crds: %v", err)
+					}
 					isCRDRegistered = false
+
 				}
 				crdName = fmt.Sprintf("%s.%s", stork_api.ApplicationRestoreResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive applicationrestores crds: %v", err)
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+						logrus.Errorf("failed to retrive applicationrestores crds: %v", err)
+					}
 					isCRDRegistered = false
 				}
 				crdName = fmt.Sprintf("%s.%s", stork_api.ApplicationCloneResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive applicationclones crds: %v", err)
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+						logrus.Errorf("failed to retrive applicationclones crds: %v", err)
+					}
 					isCRDRegistered = false
 				}
 				if isCRDRegistered {
@@ -73,13 +80,17 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 			for {
 				isCRDRegistered := true
 				crdName := fmt.Sprintf("%s.%s", stork_api.ClusterPairResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive clusterpairs crds: %v", err)
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+						logrus.Errorf("failed to retrive clusterpairs crds: %v", err)
+					}
 					isCRDRegistered = false
 				}
 				crdName = fmt.Sprintf("%s.%s", stork_api.MigrationResourcePlural, stork.GroupName)
-				if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
-					logrus.Errorf("failed to retrive migrations crds: %v", err)
+				if _, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{}); err != nil {
+					if _, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{}); err != nil {
+						logrus.Errorf("failed to retrive migrations crds: %v", err)
+					}
 					isCRDRegistered = false
 				}
 				if isCRDRegistered {
