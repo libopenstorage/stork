@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
@@ -19,6 +18,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
+	"github.com/libopenstorage/stork/pkg/snapshotter"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -63,11 +63,6 @@ const (
 	annPVBindCompleted     = "pv.kubernetes.io/bind-completed"
 	annPVBoundByController = "pv.kubernetes.io/bound-by-controller"
 	restoreUIDLabel        = "restoreUID"
-
-	// snapshotTimeout represents the duration to wait before timing out on snapshot completion
-	snapshotTimeout = time.Minute * 5
-	// restoreTimeout is the duration to wait before timing out the restore
-	restoreTimeout = time.Minute * 5
 )
 
 // csiBackupObject represents a backup of a series of CSI objects
@@ -117,6 +112,7 @@ func (cbo *csiBackupObject) GetVolumeSnapshotClass(snapshotID string) (*kSnapsho
 
 type csi struct {
 	snapshotClient *kSnapshotClient.Clientset
+	snapshotter    snapshotter.Driver
 
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
@@ -146,6 +142,11 @@ func (c *csi) Init(_ interface{}) error {
 		}
 	} else {
 		logrus.Infof("CSI VolumeSnapshotClass CRD does not exist, skipping default SnapshotClass creation")
+	}
+
+	c.snapshotter, err = snapshotter.NewCSIDriver()
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -327,7 +328,6 @@ func (c *csi) StartBackup(
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-	snapshotClassCreatedForDriver := make(map[string]bool)
 	var storageClasses []*storagev1.StorageClass
 	storageClassAdded := make(map[string]bool)
 	log.ApplicationBackupLog(backup).Debugf("started CSI backup: %v", backup.Name)
@@ -344,49 +344,19 @@ func (c *csi) StartBackup(
 		volumeInfo.Volume = pvc.Spec.VolumeName
 		volumeInfos = append(volumeInfos, volumeInfo)
 
-		// get snapshotclass name based on pv provisioner
-		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
-		if err != nil {
-			c.cancelBackupDuringStartFailure(backup, volumeInfos)
-			return nil, fmt.Errorf("error getting PV name for PVC (%v/%v): %v", pvc.Namespace, pvc.Name, err)
-		}
-		volumeInfo.Volume = pvName
-		pv, err := core.Instance().GetPersistentVolume(pvName)
-		if err != nil {
-			c.cancelBackupDuringStartFailure(backup, volumeInfos)
-			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
-		}
-		csiDriverName := pv.Spec.CSI.Driver
-		volumeInfo.Options[optCSIDriverName] = csiDriverName
-		snapshotClassName := c.getSnapshotClassName(backup, csiDriverName)
+		vsName := c.getBackupSnapshotName(&pvc, backup)
+		_, _, csiDriverName, err := c.snapshotter.CreateSnapshot(
+			snapshotter.Name(vsName),
+			snapshotter.PVCName(pvc.Name),
+			snapshotter.PVCNamespace(pvc.Namespace),
+		)
 
-		// ensure volumesnapshotclass is created for this driver
-		snapshotClassCreatedForDriver, err = c.ensureVolumeSnapshotClassCreated(snapshotClassCreatedForDriver, csiDriverName, snapshotClassName)
 		if err != nil {
 			c.cancelBackupDuringStartFailure(backup, volumeInfos)
 			return nil, fmt.Errorf("failed to ensure volumesnapshotclass was created: %v", err)
 		}
 
-		// Create CSI volume snapshot
-		vsName := c.getBackupSnapshotName(&pvc, backup)
-		vs := &kSnapshotv1beta1.VolumeSnapshot{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      vsName,
-				Namespace: pvc.Namespace,
-			},
-			Spec: kSnapshotv1beta1.VolumeSnapshotSpec{
-				VolumeSnapshotClassName: stringPtr(snapshotClassName),
-				Source: kSnapshotv1beta1.VolumeSnapshotSource{
-					PersistentVolumeClaimName: stringPtr(pvc.Name),
-				},
-			},
-		}
-		log.ApplicationBackupLog(backup).Debugf("creating volumesnapshot: %v", vsName)
-		_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(pvc.Namespace).Create(context.TODO(), vs, metav1.CreateOptions{})
-		if err != nil {
-			c.cancelBackupDuringStartFailure(backup, volumeInfos)
-			return nil, fmt.Errorf("failed to create volumesnapshot %s: %v", vsName, err)
-		}
+		volumeInfo.Options[optCSIDriverName] = csiDriverName
 		volumeInfo.BackupID = string(vsName)
 
 		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
@@ -417,14 +387,6 @@ func (c *csi) StartBackup(
 
 func (c *csi) getBackupSnapshotName(pvc *v1.PersistentVolumeClaim, backup *storkapi.ApplicationBackup) string {
 	return fmt.Sprintf("%s-%s-%s", snapshotBackupPrefix, getUIDLastSection(backup.UID), getUIDLastSection(pvc.UID))
-}
-
-func (c *csi) snapshotReady(vs *kSnapshotv1beta1.VolumeSnapshot) bool {
-	return vs.Status != nil && vs.Status.ReadyToUse != nil && *vs.Status.ReadyToUse
-}
-
-func (c *csi) snapshotContentReady(vscontent *kSnapshotv1beta1.VolumeSnapshotContent) bool {
-	return vscontent.Status != nil && vscontent.Status.ReadyToUse != nil && *vscontent.Status.ReadyToUse
 }
 
 // uploadObject uploads the given data to the backup location specified in the backup object
@@ -621,84 +583,58 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 
 		// Not in cleanup state. From here on, we're checking if the PVC snapshot has finished.
 		snapshotName := c.getBackupSnapshotName(pvc, backup)
-		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(context.TODO(), snapshotName, metav1.GetOptions{})
+
+		snapshotInfo, err := c.snapshotter.SnapshotStatus(
+			snapshotName,
+			vInfo.Namespace,
+		)
 		if err != nil {
+			vInfo.Reason = snapshotInfo.Reason
+			vInfo.Status = mapSnapshotInfoStatus(snapshotInfo.Status)
+			anyFailed = true
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
+
+		snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+		if !ok {
+			vInfo.Reason = "failed to map volumesnapshot object"
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			vInfo.Reason = fmt.Sprintf("Snapshot %s lost during backup: %v", snapshotName, err)
 			anyFailed = true
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 		vsMap[vInfo.BackupID] = snapshot
 
-		var snapshotClassName string
-		if snapshot.Spec.VolumeSnapshotClassName != nil {
-			snapshotClassName = *snapshot.Spec.VolumeSnapshotClassName
-		}
-		snapshotClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), snapshotClassName, metav1.GetOptions{})
-		if err != nil {
-			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			vInfo.Reason = fmt.Sprintf("Snapshot class %s lost during backup: %v", snapshotClassName, err)
-			anyFailed = true
-			volumeInfos = append(volumeInfos, vInfo)
-			continue
-		}
-		volumeSnapshotReady := c.snapshotReady(snapshot)
-		var volumeSnapshotContentReady bool
-		var snapshotContent *kSnapshotv1beta1.VolumeSnapshotContent
-		var contentName string
-		if volumeSnapshotReady && snapshot.Status.BoundVolumeSnapshotContentName != nil {
-			snapshotContentName := *snapshot.Status.BoundVolumeSnapshotContentName
-			vInfo.Options[optVolumeSnapshotContentName] = snapshotContentName
-			snapshotContent, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(context.TODO(), snapshotContentName, metav1.GetOptions{})
-			if err != nil {
+		if snapshotInfo.Status == snapshotter.StatusReady {
+			snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+			if !ok {
+				vInfo.Reason = "failed to map volumesnapshotcontent object"
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
-				vInfo.Reason = fmt.Sprintf("Snapshot content %s lost during backup: %v", snapshotClassName, err)
 				anyFailed = true
 				volumeInfos = append(volumeInfos, vInfo)
 				continue
 			}
 			vsContentMap[vInfo.BackupID] = snapshotContent
-			// Only backup one instance of VSClass
+			vInfo.Options[optVolumeSnapshotContentName] = snapshotContent.Name
+			snapshotClass, ok := snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass)
+			if !ok {
+				vInfo.Reason = "failed to map volumesnapshotcontent object"
+				vInfo.Status = storkapi.ApplicationBackupStatusFailed
+				anyFailed = true
+				volumeInfos = append(volumeInfos, vInfo)
+				continue
+			}
 			vsClassMap[snapshotClass.Name] = snapshotClass
-			volumeSnapshotContentReady = c.snapshotContentReady(snapshotContent)
-			contentName = snapshotContent.Name
-		}
-
-		// Evaluate current status of the backup for this PVC. Get all metadata and decide if finished.
-		var vsError string
-		if snapshot.Status != nil && snapshot.Status.Error != nil && snapshot.Status.Error.Message != nil {
-			vsError = *snapshot.Status.Error.Message
-		}
-		size := getSnapshotSize(snapshot)
-		if size == 0 {
-			// if restoreSize is empty, report PVC size
-			size = getPVCSize(pvc)
-		}
-		var vscError string
-		if contentName != "" {
-			vscError = c.getSnapshotContentError(contentName)
-		}
-		switch {
-		case volumeSnapshotReady && volumeSnapshotContentReady:
-			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
-			vInfo.Reason = "Backup successful for volume"
-			vInfo.ActualSize = uint64(size)
-			vInfo.TotalSize = uint64(size)
-
-		case time.Now().After(snapshot.CreationTimestamp.Add(snapshotTimeout)):
-			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			vInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("Snapshot timeout out after %s", snapshotTimeout.String()), vsError, vscError)
-			anyFailed = true
-
-		default:
-			vInfo.Status = storkapi.ApplicationBackupStatusInProgress
-			vInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("Volume backup in progress for PVC %s", pvc.Name), vsError, vscError)
-			vInfo.ActualSize = uint64(size)
-			vInfo.TotalSize = uint64(size)
+			vInfo.ActualSize = uint64(snapshotInfo.Size)
+			vInfo.TotalSize = uint64(snapshotInfo.Size)
+		} else if snapshotInfo.Status == snapshotter.StatusInProgress {
 			anyInProgress = true
+			vInfo.ActualSize = uint64(snapshotInfo.Size)
+			vInfo.TotalSize = uint64(snapshotInfo.Size)
 		}
-
+		vInfo.Reason = snapshotInfo.Reason
+		vInfo.Status = mapSnapshotInfoStatus(snapshotInfo.Status)
 		volumeInfos = append(volumeInfos, vInfo)
 	}
 
@@ -866,9 +802,6 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 	backupSuccessful := backup.Status.Status == storkapi.ApplicationBackupStatusSuccessful
 
 	// collect all volumesnapshots and volumesnapshotcontents
-	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
-	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
-	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
 	snapshotClassCreatedForDriver := make(map[string]bool)
 	csiBackupObject, err := c.getCSIBackupObject(backup.Name, backup.Namespace)
 	if err != nil {
@@ -886,30 +819,17 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 		if err != nil {
 			return fmt.Errorf("failed to find Snapshot for backup %s: %s", vInfo.BackupID, err.Error())
 		}
-		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(context.TODO(), vs.Name, metav1.GetOptions{})
+
+		err = c.snapshotter.DeleteSnapshot(
+			vs.Name,
+			vInfo.Namespace,
+			false, // retain snapshot content
+		)
 		if err != nil {
 			return err
 		}
-		if snapshot.Status == nil || snapshot.Status.BoundVolumeSnapshotContentName == nil {
-			return fmt.Errorf("failed to find get status for snapshot: %s/%s", snapshot.Namespace, snapshot.Name)
-		}
-		snapshotContent, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(context.TODO(), *snapshot.Status.BoundVolumeSnapshotContentName, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		snapshotClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), *vs.Spec.VolumeSnapshotClassName, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		vsMap[vInfo.BackupID] = snapshot
-		vsContentMap[vInfo.BackupID] = snapshotContent
-		vsClassMap[vInfo.BackupID] = snapshotClass
+		log.ApplicationBackupLog(backup).Debugf("deleted %v snapshot for backup %s", vs.Name, string(backup.UID))
 	}
-	err = c.cleanupSnapshots(vsMap, vsContentMap, false)
-	if err != nil {
-		return err
-	}
-	log.ApplicationBackupLog(backup).Debugf("deleted %v snapshots for backup %s", len(vsMap), string(backup.UID))
 
 	err = c.cleanupBackupLocation(backup)
 	if err != nil {
@@ -1067,24 +987,6 @@ func (c *csi) findPVCInResources(resources []runtime.Unstructured, pvcName, pvcN
 	return nil, fmt.Errorf("PVC %s not backed up in resources.json", pvcName)
 }
 
-func (c *csi) cleanK8sPVCAnnotations(pvc *v1.PersistentVolumeClaim) *v1.PersistentVolumeClaim {
-	if pvc.Annotations != nil {
-		newAnnotations := make(map[string]string)
-
-		// we will remove the following annotations to prevent controller confusion:
-		// - pv.kubernetes.io/bind-completed
-		// - pv.kubernetes.io/bound-by-controller
-		for key, val := range pvc.Annotations {
-			if key != annPVBindCompleted && key != annPVBoundByController {
-				newAnnotations[key] = val
-			}
-		}
-		pvc.Annotations = newAnnotations
-	}
-
-	return pvc
-}
-
 func (c *csi) restoreVolumeSnapshotClass(vsClass *kSnapshotv1beta1.VolumeSnapshotClass) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
 	vsClass.ResourceVersion = ""
 	vsClass.UID = ""
@@ -1141,39 +1043,6 @@ func (c *csi) restoreVolumeSnapshotContent(
 	}
 
 	return vsc, nil
-}
-
-func (c *csi) restorePVC(
-	restore *storkapi.ApplicationRestore,
-	pvc *v1.PersistentVolumeClaim,
-	snapshotName string,
-) (*v1.PersistentVolumeClaim, error) {
-	var err error
-	pvc = c.cleanK8sPVCAnnotations(pvc)
-
-	// handle namespace mapping
-	destNamespace := c.getDestinationNamespace(restore, pvc.Namespace)
-	pvc.Namespace = destNamespace
-
-	// Create new PVC
-	pvc.ResourceVersion = ""
-	pvc.Namespace = destNamespace
-	pvc.Spec.VolumeName = ""
-	pvc.Spec.DataSource = &v1.TypedLocalObjectReference{
-		APIGroup: stringPtr("snapshot.storage.k8s.io"),
-		Kind:     "VolumeSnapshot",
-		Name:     snapshotName,
-	}
-	pvc.Status = v1.PersistentVolumeClaimStatus{
-		Phase: v1.ClaimPending,
-	}
-	pvc, err = core.Instance().CreatePersistentVolumeClaim(pvc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PVC %s: %s", pvc.Name, err.Error())
-	}
-	log.ApplicationRestoreLog(restore).Debugf("created pvc: %s", pvc.Name)
-
-	return pvc, nil
 }
 
 func getUIDLastSection(uid types.UID) string {
@@ -1263,8 +1132,11 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		}
 		log.ApplicationRestoreLog(restore).Debugf("created vsc: %s", vsc.Name)
 
-		// Update PVC to restore from snapshot
-		pvc, err = c.restorePVC(restore, pvc, vs.Name)
+		pvc, err = c.snapshotter.RestoreVolumeClaim(
+			snapshotter.RestoreSnapshotName(vs.Name),
+			snapshotter.RestoreNamespace(c.getDestinationNamespace(restore, pvc.Namespace)),
+			snapshotter.PVC(*pvc),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restore pvc %s: %v", vbInfo.PersistentVolumeClaim, err.Error())
 		}
@@ -1321,7 +1193,7 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 		// Only clean up dangling PVC if it's restore did not succeed
 		if !pvcRestoreSucceeded {
 			destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
-			err := core.Instance().DeletePersistentVolumeClaim(vrInfo.PersistentVolumeClaim, destNamespace)
+			err := c.snapshotter.CancelRestore(vrInfo.PersistentVolumeClaim, destNamespace)
 			if err != nil {
 				return err
 			}
@@ -1336,69 +1208,6 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 	return nil
 }
 
-func getPVCSize(pvc *v1.PersistentVolumeClaim) uint64 {
-	size := int64(0)
-	reqSize, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-	if !ok {
-		logrus.Errorf("failed to get PVC size from spec: %s", pvc.Name)
-	} else {
-		size, ok = reqSize.AsInt64()
-		if !ok {
-			logrus.Errorf("failed to convert PVC size: %s", pvc.Name)
-		}
-	}
-
-	return uint64(size)
-}
-
-func getSnapshotSize(vs *kSnapshotv1beta1.VolumeSnapshot) uint64 {
-	if vs.Status != nil && vs.Status.RestoreSize != nil {
-		size, _ := vs.Status.RestoreSize.AsInt64()
-		return uint64(size)
-	}
-
-	return 0
-}
-
-func (c *csi) pvcBindFinished(pvc *v1.PersistentVolumeClaim) bool {
-	bindCompleted := pvc.Annotations[annPVBindCompleted]
-	boundByController := pvc.Annotations[annPVBoundByController]
-	return pvc.Status.Phase == v1.ClaimBound && bindCompleted == "yes" && boundByController == "yes"
-}
-
-func (c *csi) getSnapshotContentError(vscName string) string {
-	if vsc, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(context.TODO(), vscName, metav1.GetOptions{}); err == nil && vsc != nil {
-		if vsc.Status != nil && vsc.Status.Error != nil && vsc.Status.Error.Message != nil {
-			return *vsc.Status.Error.Message
-		}
-	} else {
-		logrus.Warnf("did not find volume snapshot content %s: %v", vscName, err)
-	}
-
-	return ""
-}
-
-func (c *csi) formatReasonErrorMessage(reason, vsError, vscError string) string {
-	var snapshotError string
-
-	switch {
-	case vsError != "" && vscError != "" && vsError != vscError:
-		snapshotError = fmt.Sprintf("Snapshot error: %s. SnapshotContent error: %s", vsError, vscError)
-
-	case vsError != "":
-		snapshotError = fmt.Sprintf("Snapshot error: %s", vsError)
-
-	case vscError != "":
-		snapshotError = fmt.Sprintf("SnapshotContent error: %s", vscError)
-	}
-
-	if snapshotError != "" {
-		return fmt.Sprintf("%s: %s", reason, snapshotError)
-	}
-
-	return reason
-}
-
 func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	var anyInProgress bool
@@ -1408,62 +1217,24 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		// Handle namespace mapping
 		destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
 
-		// Check on PVC status
-		pvc, err := core.Instance().GetPersistentVolumeClaim(vrInfo.PersistentVolumeClaim, destNamespace)
+		restoreInfo, err := c.snapshotter.RestoreStatus(vrInfo.PersistentVolumeClaim, destNamespace)
 		if err != nil {
 			return nil, err
 		}
 
-		// Try to get VS. May not exist yet or may be cleaned up already.
-		vsName := pvc.Spec.DataSource.Name
-		var vsContentName string
-		var restoreSize uint64
-		var vsError string
-		if vs, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(destNamespace).Get(context.TODO(), vsName, metav1.GetOptions{}); err == nil && vs != nil {
-			// Leave vs as inline to avoid accessing volumesnapshot when it could be nil
-			restoreSize = getSnapshotSize(vs)
-			if vs.Status != nil && vs.Status.Error != nil && vs.Status.Error.Message != nil {
-				vsError = *vs.Status.Error.Message
-			}
-			if vs.Status != nil && vs.Status.BoundVolumeSnapshotContentName != nil {
-				vsContentName = *vs.Status.BoundVolumeSnapshotContentName
-			}
-		} else {
-			log.ApplicationRestoreLog(restore).Warnf("did not find volume snapshot %s: %v", vsName, err)
-		}
-
-		// Try to get VSContent error message
-		var vscError string
-		if vsContentName != "" {
-			vscError = c.getSnapshotContentError(vsContentName)
-		}
-
-		// Use PVC size by default, but replace with restoreSize once it is ready
-		size := getPVCSize(pvc)
-		if restoreSize != 0 {
-			size = restoreSize
-		}
-
-		switch {
-		case c.pvcBindFinished(pvc):
-			vrInfo.RestoreVolume = pvc.Spec.VolumeName
-			vrInfo.TotalSize = size
-		case pvc.Status.Phase == v1.ClaimLost:
-			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
-			vrInfo.Reason = fmt.Sprintf("Volume restore failed: PVC %s is lost", pvc.Name)
-		case pvc.Status.Phase == v1.ClaimPending:
-			vrInfo.TotalSize = size
-			vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
-			vrInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("Volume restore in progress: PVC %s is pending", pvc.Name), vsError, vscError)
+		switch restoreInfo.Status {
+		case snapshotter.StatusInProgress:
 			anyInProgress = true
-		}
-
-		if time.Now().After(pvc.CreationTimestamp.Add(restoreTimeout)) {
-			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
-			vrInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("PVC restore timeout out after %s", restoreTimeout.String()), vsError, vscError)
+			vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
+			vrInfo.Reason = restoreInfo.Reason
+		case snapshotter.StatusFailed:
 			anyFailed = true
+			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
+			vrInfo.Reason = restoreInfo.Reason
+		case snapshotter.StatusReady:
+			vrInfo.TotalSize = restoreInfo.Size
+			vrInfo.RestoreVolume = restoreInfo.VolumeName
 		}
-
 		volumeInfos = append(volumeInfos, vrInfo)
 	}
 
@@ -1536,8 +1307,14 @@ func (c *csi) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 	return nil, &errors.ErrNotSupported{}
 }
 
-func stringPtr(s string) *string {
-	return &s
+func mapSnapshotInfoStatus(status snapshotter.Status) storkapi.ApplicationBackupStatusType {
+	switch status {
+	case snapshotter.StatusInProgress:
+		return storkapi.ApplicationBackupStatusInProgress
+	case snapshotter.StatusReady:
+		return storkapi.ApplicationBackupStatusSuccessful
+	}
+	return storkapi.ApplicationBackupStatusFailed
 }
 
 func init() {
