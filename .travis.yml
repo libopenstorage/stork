@@ -1,5 +1,5 @@
 sudo: required
-dist: xenial
+dist: focal
 services:
   - docker
 language: go
@@ -10,7 +10,6 @@ cache:
     - $GOPATH/pkg/mod
 before_install:
   - sudo apt-get update -yq
-  - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-ce
 script:
   - make all
 after_success:
