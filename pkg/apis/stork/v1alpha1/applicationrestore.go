@@ -77,6 +77,7 @@ type ApplicationRestoreVolumeInfo struct {
 	Status                ApplicationRestoreStatusType `json:"status"`
 	Reason                string                       `json:"reason"`
 	TotalSize             uint64                       `json:"totalSize"`
+	Options               map[string]string            `json:"options"`
 }
 
 // ApplicationRestoreStatusType is the status of the application restore

@@ -155,6 +155,11 @@ const (
 	skipBackupLocationNameCheckAnnotation = "portworx.io/skip-backup-location-name-check"
 	incrementalCountAnnotation            = "portworx.io/cloudsnap-incremental-count"
 	deleteLocalSnapAnnotation             = "portworx.io/cloudsnap-delete-local-snap"
+
+	// noToken is a constant to indicate no tokens were used while creating a client
+	noToken = "notoken"
+	// templatizedNamespace is the CSI templatized parameter for namespace
+	templatizedNamespace = "${pvc.namespace}"
 )
 
 type cloudSnapStatus struct {
@@ -786,9 +791,28 @@ func (p *portworx) getUserContext(ctx context.Context, annotations map[string]st
 		if err != nil {
 			return nil, err
 		}
-		return grpcserver.AddMetadataToContext(ctx, "authorization", "bearer "+token), nil
+		return p.addTokenToContext(ctx, token)
 	}
 	return ctx, nil
+}
+
+func (p *portworx) addTokenToContext(ctx context.Context, token string) (context.Context, error) {
+	return grpcserver.AddMetadataToContext(ctx, "authorization", "bearer "+token), nil
+}
+
+func (p *portworx) getUserToken(annotations map[string]string, namespace string) (string, error) {
+	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
+		secretNamespace := annotations[auth_secrets.SecretNamespaceKey]
+		// Substitute the templatized namespace
+		if secretNamespace == templatizedNamespace && namespace != "" {
+			secretNamespace = namespace
+		}
+		return auth_secrets.GetToken(&api.TokenSecretContext{
+			SecretName:      v,
+			SecretNamespace: secretNamespace,
+		})
+	}
+	return noToken, nil
 }
 
 func (p *portworx) secretRefFromAnnotations(annotations map[string]string) *v1.SecretReference {
@@ -804,28 +828,104 @@ func (p *portworx) secretRefFromAnnotations(annotations map[string]string) *v1.S
 	return nil
 }
 
-func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.VolumeDriver, error) {
+func (p *portworx) mergeAuthLabels(
+	pvc *v1.PersistentVolumeClaim,
+	pv *v1.PersistentVolume,
+	crAnnotations map[string]string,
+) map[string]string {
+	// Precendence order:
+	// PV.Spec.SecretRef labels > PVC annotations > CR annotations
+	authLabels := make(map[string]string)
+	if val, ok := crAnnotations[auth_secrets.SecretNameKey]; ok {
+		authLabels[auth_secrets.SecretNameKey] = val
+	}
+	if val, ok := crAnnotations[auth_secrets.SecretNamespaceKey]; ok {
+		authLabels[auth_secrets.SecretNamespaceKey] = val
+	}
+	if pvc != nil {
+		if val, ok := pvc.Annotations[auth_secrets.SecretNameKey]; ok {
+			authLabels[auth_secrets.SecretNameKey] = val
+		}
+		if val, ok := pvc.Annotations[auth_secrets.SecretNamespaceKey]; ok {
+			authLabels[auth_secrets.SecretNamespaceKey] = val
+		}
+	}
+	nameKey, namespaceKey := p.getPVSecretRefLabels(pvc, pv)
+	if len(nameKey) > 0 && len(namespaceKey) > 0 {
+		authLabels[auth_secrets.SecretNameKey] = nameKey
+		authLabels[auth_secrets.SecretNamespaceKey] = namespaceKey
+	}
+	return authLabels
+}
+
+func (p *portworx) getPVSecretRefLabels(pvc *v1.PersistentVolumeClaim, pv *v1.PersistentVolume) (string, string) {
+	// CSI today supports the following templatized secret references
+	// - csi.storage.k8s.io/provisioner-secret-name: px-user-token
+	// - csi.storage.k8s.io/provisioner-secret-namespace: ${pvc.namespace}
+	// - csi.storage.k8s.io/node-publish-secret-name: px-user-token
+	// - csi.storage.k8s.io/node-publish-secret-namespace: ${pvc.namespace}
+	// - csi.storage.k8s.io/controller-expand-secret-name: px-user-token
+	// - csi.storage.k8s.io/controller-expand-secret-namespace: ${pvc.namespace}
+	// The provisioner secrets would have been the ideal ones to use, but they are not
+	// copied over into the PV object. Hence we are overloading the NodePublish secrets
+	if pvc != nil && pv != nil && pv.Spec.CSI != nil && pv.Spec.CSI.NodePublishSecretRef != nil {
+		// If the secret ref namespace is same as the PVC namespace check if
+		// templatized namespace was provided
+		if pv.Spec.CSI.NodePublishSecretRef.Namespace == pvc.Namespace {
+			sc, err := core.Instance().GetStorageClassForPVC(pvc)
+			if err != nil {
+				logrus.Warnf("Failed to fetch storage class for PVC %v/%v: %v", pvc.Name, pvc.Namespace, err)
+				// Best effort - return what we have
+				return pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace
+			}
+			if val, ok := sc.Parameters["csi.storage.k8s.io/node-publish-secret-namespace"]; ok && val == templatizedNamespace {
+				// Found a templatized parameter
+				return pv.Spec.CSI.NodePublishSecretRef.Name, templatizedNamespace
+			}
+		}
+		// Using common/simple security model
+		// All PVCs using a common token
+		return pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace
+	}
+	return "", ""
+}
+
+func (p *portworx) getUserVolDriverFromToken(token string) (volume.VolumeDriver, string, error) {
+	if len(token) > 0 && token != noToken {
+		clnt, err := p.getRestClientWithAuth(token)
+		if err != nil {
+			return nil, "", err
+		}
+		return volumeclient.VolumeDriver(clnt), token, nil
+	}
+	clnt, err := p.getRestClient()
+	if err != nil {
+		return nil, "", err
+	}
+	return volumeclient.VolumeDriver(clnt), noToken, nil
+}
+
+func (p *portworx) getUserVolDriver(annotations map[string]string, namespace string) (volume.VolumeDriver, error) {
+	var (
+		token string
+		err   error
+	)
 	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
-		token, err := auth_secrets.GetToken(&api.TokenSecretContext{
+		secretNamespace := annotations[auth_secrets.SecretNamespaceKey]
+		// Substitute the templatized namespace
+		if secretNamespace == templatizedNamespace && namespace != "" {
+			secretNamespace = namespace
+		}
+		token, err = auth_secrets.GetToken(&api.TokenSecretContext{
 			SecretName:      v,
-			SecretNamespace: annotations[auth_secrets.SecretNamespaceKey],
+			SecretNamespace: secretNamespace,
 		})
 		if err != nil {
 			return nil, err
 		}
-		clnt, err := p.getRestClientWithAuth(token)
-		if err != nil {
-			return nil, err
-		}
-		return volumeclient.VolumeDriver(clnt), nil
 	}
-
-	clnt, err := p.getRestClient()
-	if err != nil {
-		return nil, err
-	}
-	return volumeclient.VolumeDriver(clnt), nil
-
+	volDriver, _, err := p.getUserVolDriverFromToken(token)
+	return volDriver, err
 }
 
 func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
@@ -919,7 +1019,7 @@ func (p *portworx) SnapshotCreate(
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(snap.Metadata.Annotations)
+	volDriver, err := p.getUserVolDriver(snap.Metadata.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1194,7 +1294,7 @@ func (p *portworx) CleanupSnapshotRestoreObjects(snapRestore *storkapi.VolumeSna
 
 		log.VolumeSnapshotRestoreLog(snapRestore).Infof("Deleting volume %v", volName)
 		// Get volume client from user context
-		volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
+		volDriver, err := p.getUserVolDriver(snapRestore.Annotations, "" /*templatized ns not supported*/)
 		if err != nil {
 			return err
 		}
@@ -1273,7 +1373,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *storkapi.VolumeSnapsh
 			isRes = false
 		}
 		// Get volume client from user context
-		volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
+		volDriver, err := p.getUserVolDriver(snapRestore.Annotations, "" /*templatized ns not supported*/)
 		if err != nil {
 			return err
 		}
@@ -1339,7 +1439,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *storkapi.VolumeSn
 	}
 
 	// Get volume client from user context
-	volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
+	volDriver, err := p.getUserVolDriver(snapRestore.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return err
 	}
@@ -1368,7 +1468,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *storkapi.VolumeSn
 				vol.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
 			} else {
 				// check for ha update and then mark as successful
-				isUpdate, err := p.checkAndUpdateHaLevel(vol.Volume, uid, snapRestore.Annotations)
+				isUpdate, err := p.checkAndUpdateHaLevel(vol.Volume, uid, snapRestore.Annotations, snapRestore.Spec.SourceNamespace)
 				if err != nil {
 					vol.RestoreStatus = storkapi.VolumeSnapshotRestoreStatusFailed
 					vol.Reason = fmt.Sprintf("Restore ha-update failed for volume: %v", err.Error())
@@ -1389,9 +1489,9 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *storkapi.VolumeSn
 	return nil
 }
 
-func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]string) (bool, error) {
+func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]string, namespace string) (bool, error) {
 	// Get volume client from user context
-	volDriver, err := p.getUserVolDriver(params)
+	volDriver, err := p.getUserVolDriver(params, "" /*templatized ns not supported*/)
 	if err != nil {
 		return false, err
 	}
@@ -1511,7 +1611,7 @@ func getSnapshotDetails(snapDataName string) (string, crdv1.PortworxSnapshotType
 
 func (p *portworx) pxSnapshotRestore(snapRestore *storkapi.VolumeSnapshotRestore) error {
 	// Get volume client from user context
-	volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
+	volDriver, err := p.getUserVolDriver(snapRestore.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return err
 	}
@@ -1607,7 +1707,7 @@ func (p *portworx) SnapshotRestore(
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(pvc.ObjectMeta.Annotations)
+	volDriver, err := p.getUserVolDriver(pvc.ObjectMeta.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1751,7 +1851,7 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 	}
 
 	// Get volume client from user context
-	volDriver, err := p.getUserVolDriver(snapshotData.Metadata.Annotations)
+	volDriver, err := p.getUserVolDriver(snapshotData.Metadata.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return getErrorSnapshotConditions(err), false, err
 	}
@@ -2214,7 +2314,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(migration.Annotations)
+	volDriver, err := p.getUserVolDriver(migration.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return nil, err
 	}
@@ -2302,7 +2402,7 @@ func (p *portworx) GetMigrationStatus(migration *storkapi.Migration) ([]*storkap
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(migration.Annotations)
+	volDriver, err := p.getUserVolDriver(migration.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return nil, err
 	}
@@ -2362,7 +2462,7 @@ func (p *portworx) CancelMigration(migration *storkapi.Migration) error {
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(migration.Annotations)
+	volDriver, err := p.getUserVolDriver(migration.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return err
 	}
@@ -2796,12 +2896,31 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		return nil, err
 	}
 
-	volDriver, err := p.getUserVolDriver(backup.Annotations)
-	if err != nil {
-		return nil, err
-	}
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+	driverMap := make(map[string]volume.VolumeDriver)
 	for _, pvc := range pvcs {
+		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting volume for PVC: %v", err)
+		}
+		pv, err := core.Instance().GetPersistentVolume(volume)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting PV for PVC: %v", err)
+		}
+		authLabels := p.mergeAuthLabels(&pvc, pv, backup.Annotations)
+		token, err := p.getUserToken(authLabels, pvc.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch portworx user token: %v", err)
+		}
+		volDriver, ok := driverMap[token]
+		if !ok {
+			volDriver, _, err = p.getUserVolDriverFromToken(token)
+			if err != nil {
+				return nil, err
+			}
+			driverMap[token] = volDriver
+		}
+
 		if pvc.DeletionTimestamp != nil {
 			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
 			continue
@@ -2811,10 +2930,14 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
 
-		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
-		if err != nil {
-			return nil, fmt.Errorf("Error getting volume for PVC: %v", err)
+		// Save the auth annotations
+		if volumeInfo.Options == nil {
+			volumeInfo.Options = make(map[string]string)
 		}
+		for k, v := range authLabels {
+			volumeInfo.Options[k] = v
+		}
+
 		volumeInfo.Volume = volume
 		taskID := p.getBackupRestoreTaskID(backup.UID, volumeInfo.Namespace, volumeInfo.PersistentVolumeClaim)
 		credID := p.getCredID(backup.Spec.BackupLocation, backup.Namespace)
@@ -2891,28 +3014,38 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(backup.Annotations)
-	if err != nil {
-		return nil, err
-	}
-
-	cloudBackupClient, err := p.getCloudBackupClient()
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), cloudBackupTimeout)
-	defer cancel()
-	// Get user token from secret if any
-	ctx, err = p.getUserContext(ctx, backup.Annotations)
-	if err != nil {
-		return nil, err
-	}
-
+	driverMap := make(map[string]volume.VolumeDriver)
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
 		}
+		token, err := p.getUserToken(vInfo.Options, vInfo.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch portworx user token: %v", err)
+		}
+		volDriver, ok := driverMap[token]
+		if !ok {
+			volDriver, _, err = p.getUserVolDriverFromToken(token)
+			if err != nil {
+				return nil, err
+			}
+			driverMap[token] = volDriver
+		}
+
+		cloudBackupClient, err := p.getCloudBackupClient()
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), cloudBackupTimeout)
+		defer cancel()
+		if len(token) > 0 {
+			ctx, err = p.addTokenToContext(ctx, token)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		taskID := p.getBackupRestoreTaskID(backup.UID, vInfo.Namespace, vInfo.PersistentVolumeClaim)
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, taskID)
 		vInfo.BackupID = csStatus.cloudSnapID
@@ -2965,12 +3098,21 @@ func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(backup.Annotations)
-	if err != nil {
-		return err
-	}
+	driverMap := make(map[string]volume.VolumeDriver)
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.BackupID != "" {
+			token, err := p.getUserToken(vInfo.Options, vInfo.Namespace)
+			if err != nil {
+				return fmt.Errorf("failed to fetch portworx user token: %v", err)
+			}
+			volDriver, ok := driverMap[token]
+			if !ok {
+				volDriver, _, err = p.getUserVolDriverFromToken(token)
+				if err != nil {
+					return err
+				}
+				driverMap[token] = volDriver
+			}
 			input := &api.CloudBackupDeleteRequest{
 				ID:             vInfo.BackupID,
 				CredentialUUID: p.getCredID(backup.Spec.BackupLocation, backup.Namespace),
@@ -2990,11 +3132,20 @@ func (p *portworx) CancelBackup(backup *storkapi.ApplicationBackup) error {
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(backup.Annotations)
-	if err != nil {
-		return err
-	}
+	driverMap := make(map[string]volume.VolumeDriver)
 	for _, vInfo := range backup.Status.Volumes {
+		token, err := p.getUserToken(vInfo.Options, vInfo.Namespace)
+		if err != nil {
+			return fmt.Errorf("failed to fetch portworx user token: %v", err)
+		}
+		volDriver, ok := driverMap[token]
+		if !ok {
+			volDriver, _, err = p.getUserVolDriverFromToken(token)
+			if err != nil {
+				return err
+			}
+			driverMap[token] = volDriver
+		}
 		taskID := p.getBackupRestoreTaskID(backup.UID, vInfo.Namespace, vInfo.PersistentVolumeClaim)
 		if err := p.stopCloudBackupTask(volDriver, taskID); err != nil {
 			return err
@@ -3093,10 +3244,7 @@ func (p *portworx) StartRestore(
 		return nil, err
 	}
 
-	volDriver, err := p.getUserVolDriver(restore.Annotations)
-	if err != nil {
-		return nil, err
-	}
+	driverMap := make(map[string]volume.VolumeDriver)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
@@ -3105,6 +3253,43 @@ func (p *portworx) StartRestore(
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
 		volumeInfo.RestoreVolume = p.generatePVName()
 		volumeInfo.DriverName = driverName
+
+		authLabels := p.mergeAuthLabels(nil, nil, backupVolumeInfo.Options)
+
+		destinationNamespace := backupVolumeInfo.Namespace
+		// Get volume's destination namespace
+
+		if val, ok := restore.Spec.NamespaceMapping[backupVolumeInfo.Namespace]; ok {
+			destinationNamespace = val
+		}
+
+		token, err := p.getUserToken(authLabels, destinationNamespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch portworx user token: %v", err)
+		}
+		volDriver, ok := driverMap[token]
+		if !ok {
+			volDriver, _, err = p.getUserVolDriverFromToken(token)
+			if err != nil {
+				return nil, err
+			}
+			driverMap[token] = volDriver
+		}
+		if len(volumeInfo.Options) == 0 {
+			volumeInfo.Options = make(map[string]string)
+		}
+		// Save the auth labels
+		secretName := authLabels[auth_secrets.SecretNameKey]
+		if len(secretName) > 0 {
+			volumeInfo.Options[auth_secrets.SecretNameKey] = secretName
+		}
+		if val, ok := authLabels[auth_secrets.SecretNamespaceKey]; ok && val == templatizedNamespace {
+			// Replace the templatized parameter so that subsequent restore related APIs
+			// do not need to do the conversion
+			volumeInfo.Options[auth_secrets.SecretNamespaceKey] = destinationNamespace
+		} else if len(val) > 0 {
+			volumeInfo.Options[auth_secrets.SecretNamespaceKey] = val
+		}
 
 		taskID := p.getBackupRestoreTaskID(restore.UID, volumeInfo.SourceNamespace, volumeInfo.PersistentVolumeClaim)
 		credID := p.getCredID(restore.Spec.BackupLocation, restore.Namespace)
@@ -3150,16 +3335,25 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(restore.Annotations)
-	if err != nil {
-		return nil, err
-	}
-
+	driverMap := make(map[string]volume.VolumeDriver)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
 		}
+		token, err := p.getUserToken(vInfo.Options, "" /*templatized params already converted*/)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch portworx user token: %v", err)
+		}
+		volDriver, ok := driverMap[token]
+		if !ok {
+			volDriver, err = p.getUserVolDriver(vInfo.Options, "" /*templatized params already converted*/)
+			if err != nil {
+				return nil, err
+			}
+			driverMap[token] = volDriver
+		}
+
 		taskID := p.getBackupRestoreTaskID(restore.UID, vInfo.SourceNamespace, vInfo.PersistentVolumeClaim)
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudRestoreOp, taskID)
 		if isCloudsnapStatusActive(csStatus.status) {
@@ -3189,11 +3383,21 @@ func (p *portworx) CancelRestore(restore *storkapi.ApplicationRestore) error {
 		}
 	}
 
-	volDriver, err := p.getUserVolDriver(restore.Annotations)
-	if err != nil {
-		return err
-	}
+	driverMap := make(map[string]volume.VolumeDriver)
 	for _, vInfo := range restore.Status.Volumes {
+		token, err := p.getUserToken(vInfo.Options, "" /*templatized params already converted*/)
+		if err != nil {
+			return fmt.Errorf("failed to fetch portworx user token: %v", err)
+		}
+		volDriver, ok := driverMap[token]
+		if !ok {
+			volDriver, err = p.getUserVolDriver(vInfo.Options, "" /*templatized params already converted*/)
+			if err != nil {
+				return err
+			}
+			driverMap[token] = volDriver
+		}
+
 		taskID := p.getBackupRestoreTaskID(restore.UID, vInfo.SourceNamespace, vInfo.PersistentVolumeClaim)
 		if err := p.stopCloudBackupTask(volDriver, taskID); err != nil {
 			return err
@@ -3210,7 +3414,7 @@ func (p *portworx) CreateVolumeClones(clone *storkapi.ApplicationClone) error {
 	}
 
 	createdClones := make([]string, 0)
-	volDriver, err := p.getUserVolDriver(clone.Annotations)
+	volDriver, err := p.getUserVolDriver(clone.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return err
 	}
@@ -3249,7 +3453,7 @@ func (p *portworx) CreateVolumeClones(clone *storkapi.ApplicationClone) error {
 
 func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *storkapi.GroupVolumeSnapshot, volNames []string, options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
-	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
+	volDriver, err := p.getUserVolDriver(groupSnap.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return nil, err
 	}
@@ -3329,7 +3533,7 @@ func (p *portworx) createGroupCloudSnapFromVolumes(
 	volNames []string,
 	options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
-	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
+	volDriver, err := p.getUserVolDriver(groupSnap.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return nil, err
 	}
@@ -3376,7 +3580,7 @@ func (p *portworx) generateStatusReponseFromTaskIDs(
 	}
 
 	// Get volume client from user context
-	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
+	volDriver, err := p.getUserVolDriver(groupSnap.Annotations, "" /*templatized ns not supported*/)
 	if err != nil {
 		return nil, err
 	}
