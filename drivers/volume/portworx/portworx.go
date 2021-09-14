@@ -67,7 +67,7 @@ const (
 	defaultRetryInterval              = 10 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
 	maintenanceWaitTimeout            = 2 * time.Minute
-	inspectVolumeTimeout              = 30 * time.Second
+	inspectVolumeTimeout              = 1 * time.Minute
 	inspectVolumeRetryInterval        = 2 * time.Second
 	validateDeleteVolumeTimeout       = 3 * time.Minute
 	validateReplicationUpdateTimeout  = 30 * time.Minute
@@ -537,7 +537,25 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		if err != nil {
 			return nil, true, err
 		}
-		return volumeInspectResponse.Volume, false, nil
+
+		vol := volumeInspectResponse.Volume
+		// Status
+		if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
+			return nil, true, &ErrFailedToInspectVolume{
+				ID: volumeName,
+				Cause: fmt.Sprintf("Volume has invalid status. Expected:%v Actual:%v",
+					api.VolumeStatus_VOLUME_STATUS_UP, vol.Status),
+			}
+		}
+
+		// State
+		if vol.State == api.VolumeState_VOLUME_STATE_ERROR || vol.State == api.VolumeState_VOLUME_STATE_DELETED {
+			return nil, true, &ErrFailedToInspectVolume{
+				ID:    volumeName,
+				Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
+			}
+		}
+		return vol, false, nil
 	}
 
 	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
@@ -550,24 +568,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 
 	vol := out.(*api.Volume)
 
-	// Status
-	if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
-		return &ErrFailedToInspectVolume{
-			ID: volumeName,
-			Cause: fmt.Sprintf("Volume has invalid status. Expected:%v Actual:%v",
-				api.VolumeStatus_VOLUME_STATUS_UP, vol.Status),
-		}
-	}
-
-	// State
-	if vol.State == api.VolumeState_VOLUME_STATE_ERROR || vol.State == api.VolumeState_VOLUME_STATE_DELETED {
-		return &ErrFailedToInspectVolume{
-			ID:    volumeName,
-			Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
-		}
-	}
-
-	// if the volume is a clone or a snap, validate it's parent
+	// if the volume is a clone or a snap, validate its parent
 	if vol.IsSnapshot() || vol.IsClone() {
 		parentResp, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: vol.Source.Parent})
 		if err != nil {
