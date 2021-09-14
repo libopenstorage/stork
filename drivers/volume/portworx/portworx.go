@@ -814,27 +814,19 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
-	r := func() (interface{}, bool, error) {
-		t := func() (interface{}, bool, error) {
-			volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
-			if err != nil {
-				logrus.Warnf("Failed to inspect volume: %s due to: %v", volumeName, err)
-				return nil, true, err
-			}
-			return volumeInspectResponse.Volume, false, nil
-		}
-
-		v, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	t := func() (interface{}, bool, error) {
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil {
+			logrus.Warnf("Failed to inspect volume: %s due to: %v", volumeName, err)
 			return nil, false, &ErrFailedToInspectVolume{
 				ID:    volumeName,
 				Cause: err.Error(),
 			}
 		}
-		pxVol := v.(*api.Volume)
+		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
-			if isVolumeAttachedOnNode(pxVol, n) {
-				return &n, false, nil
+			if ok, err := d.isVolumeAttachedOnNode(pxVol, n); !ok || err != nil {
+				return &n, false, err
 			}
 		}
 
@@ -843,10 +835,10 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 			return nil, false, nil
 		}
 
-		return nil, true, fmt.Errorf("Volume: %s is not attached on any node", volumeName)
+		return nil, true, fmt.Errorf("volume: %s is not attached on any node", volumeName)
 	}
 
-	n, err := task.DoRetryWithTimeout(r, timeout, retryInterval)
+	n, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
 	if err != nil {
 		return nil, &ErrFailedToValidateAttachment{
 			ID:    volumeName,
@@ -876,16 +868,35 @@ func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
 	return node.Node{}, fmt.Errorf("node where backup with id [%s] running, not found", backupID)
 }
 
-func isVolumeAttachedOnNode(volume *api.Volume, node node.Node) bool {
+// check all the possible attachment options (node ID or node IP)
+func (d *portworx) isVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
+	logrus.Debugf("Volume attached on: %s", volume.AttachedOn)
 	if node.VolDriverNodeID == volume.AttachedOn {
-		return true
+		return true, nil
 	}
+	resp, err := d.nodeManager.Inspect(context.Background(), &api.SdkNodeInspectRequest{NodeId: node.VolDriverNodeID})
+	if err != nil {
+		return false, err
+	}
+	// in case of single interface
+	logrus.Debugf("Driver management IP: %s", resp.Node.MgmtIp)
+	if resp.Node.MgmtIp == volume.AttachedOn {
+		return true, nil
+	}
+	// in case node has data and management interface
+	logrus.Debugf("Driver data IP: %s", resp.Node.DataIp)
+	if resp.Node.DataIp == volume.AttachedOn {
+		return true, nil
+	}
+
+	// check for alternate IPs
 	for _, ip := range node.Addresses {
+		logrus.Debugf("Checking if volume is on Node %s (%s)", node.Name, ip)
 		if ip == volume.AttachedOn {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
