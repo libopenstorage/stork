@@ -116,6 +116,7 @@ type ExportStatus struct {
 	SnapshotPVCNamespace string           `json:"snapshotPVCNamespace,omitempty"`
 	TransferID           string           `json:"transferID,omitempty"`
 	ProgressPercentage   int              `json:"progressPercentage,omitempty"`
+	Size                 uint64           `json:"size,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
