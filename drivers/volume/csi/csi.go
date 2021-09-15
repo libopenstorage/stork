@@ -952,6 +952,7 @@ func (c *csi) getRestoreStorageClasses(backup *storkapi.ApplicationBackup, resou
 // in order to restore the backed up PVCs
 func (c *csi) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
+	restore *storkapi.ApplicationRestore,
 	resources []runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	return c.getRestoreStorageClasses(backup, resources)

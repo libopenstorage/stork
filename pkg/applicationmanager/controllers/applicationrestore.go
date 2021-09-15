@@ -457,7 +457,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				return err
 			}
 
-			preRestoreObjects, err := driver.GetPreRestoreResources(backup, objects)
+			preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects)
 			if err != nil {
 				log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
 				return err
@@ -550,7 +550,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			return err
 		}
 	}
-
 	inProgress := false
 	// Skip checking status if no volumes are being restored
 	if len(restore.Status.Volumes) != 0 {
@@ -1007,7 +1006,7 @@ func (a *ApplicationRestoreController) applyResources(
 	if err != nil {
 		return err
 	}
-
+	logrus.Infof("pvMapping :%v", pvNameMappings)
 	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 	tempObjects := make([]runtime.Unstructured, 0)
 	for _, o := range objects {
