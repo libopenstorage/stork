@@ -112,11 +112,13 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	}
 
 	// Skip the PV if it isn't bound to a PVC that needs to be restored
-	if pvNameMappings != nil {
-		if updatedName, present = pvNameMappings[pv.Name]; !present {
-			return true, nil
-		}
+	if len(pvNameMappings) == 0 {
+		return true, nil
 	}
+	if updatedName, present = pvNameMappings[pv.Name]; !present {
+		return true, nil
+	}
+
 	pv.Name = updatedName
 	driverName, err := volume.GetPVDriver(&pv)
 	if err != nil {

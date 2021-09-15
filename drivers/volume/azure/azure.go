@@ -437,6 +437,7 @@ func (a *azure) findExistingDisk(tags map[string]string) (*compute.Disk, error) 
 
 func (a *azure) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	return nil, nil

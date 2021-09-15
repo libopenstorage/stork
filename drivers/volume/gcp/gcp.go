@@ -395,6 +395,7 @@ func (g *gcp) getSnapshotResourceName(
 
 func (g *gcp) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	return nil, nil
