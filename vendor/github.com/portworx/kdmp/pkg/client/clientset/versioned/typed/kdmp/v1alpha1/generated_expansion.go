@@ -8,6 +8,8 @@ LICENSE
 
 package v1alpha1
 
+type BackupLocationMaintenanceExpansion interface{}
+
 type DataExportExpansion interface{}
 
 type VolumeBackupExpansion interface{}

@@ -40,7 +40,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
-	github.com/portworx/kdmp v0.4.1-0.20210907103225-5bf7fe9467ec
+	github.com/portworx/kdmp v0.4.1-0.20210915085315-6aa57a32a23f
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20210908045330-9060cf5304f1
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.9.0

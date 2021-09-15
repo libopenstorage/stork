@@ -121,7 +121,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		// Create the credential secret
 		logrus.Debugf("drivername: %v", driverName)
-		if driverName == drivers.KopiaBackup || driverName == drivers.KopiaRestore {
+		if driverName == drivers.KopiaBackup {
 			// This will create a unique secret per PVC being backed up
 			err = CreateCredentialsSecret(
 				utils.FrameCredSecretName(dataExport.Name, dataExport.Spec.Source.Name),
@@ -129,10 +129,35 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				dataExport.Spec.Destination.Namespace,
 			)
 			if err != nil {
-				msg := fmt.Sprintf("failed to create cloud credential secret: %v", err)
+				msg := fmt.Sprintf("failed to create cloud credential secret during kopia backup: %v", err)
 				logrus.Errorf(msg)
 				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
 			}
+		}
+
+		if driverName == drivers.KopiaRestore {
+			// Get the volumebackup
+			vb, err := kdmpopts.Instance().GetVolumeBackup(context.Background(),
+				dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace)
+			if err != nil {
+				msg := fmt.Sprintf("Error accessing volumebackup %s in namespace %s : %v",
+					dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace, err)
+				logrus.Errorf(msg)
+				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+			}
+			// This will create a unique secret per PVC being restored
+			err = CreateCredentialsSecret(
+				utils.FrameCredSecretName(dataExport.Name, dataExport.Spec.Destination.Name),
+				vb.Spec.BackupLocation.Name,
+				vb.Spec.BackupLocation.Namespace,
+			)
+			if err != nil {
+				msg := fmt.Sprintf("failed to create cloud credential secret during kopia restore: %v", err)
+				logrus.Errorf(msg)
+				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+			}
+			// For restore setting the source PVCName as the destination PVC name for the job
+			srcPVCName = dataExport.Spec.Destination.Name
 		}
 
 		// start data transfer
@@ -470,6 +495,15 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithLabels(jobLabels(dataExport.GetName())),
 			drivers.WithDataExportName(dataExport.GetName()),
 		)
+	case drivers.KopiaRestore:
+		return drv.StartJob(
+			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
+			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
+			drivers.WithVolumeBackupNamespace(dataExport.Spec.Source.Namespace),
+			drivers.WithLabels(jobLabels(dataExport.GetName())),
+			drivers.WithDataExportName(dataExport.GetName()),
+		)
 	}
 
 	return "", fmt.Errorf("unknown data transfer driver: %s", drv.Name())
@@ -631,7 +665,12 @@ func CreateCredentialsSecret(secretName, blName, namespace string) error {
 	switch backupLocation.Location.Type {
 	case storkapi.BackupLocationS3:
 		return createS3Secret(secretName, backupLocation)
+	case storkapi.BackupLocationGoogle:
+		return createGoogleSecret(secretName, backupLocation)
+	case storkapi.BackupLocationAzure:
+		return createAzureSecret(secretName, backupLocation)
 	}
+
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
 }
 
@@ -666,10 +705,44 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation) 
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+
+	return err
+}
+
+func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocation) error {
+	credentialData := make(map[string][]byte)
+	credentialData["type"] = []byte(backupLocation.Location.Type)
+	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["accountkey"] = []byte(backupLocation.Location.GoogleConfig.AccountKey)
+	credentialData["projectid"] = []byte(backupLocation.Location.GoogleConfig.ProjectID)
+	credentialData["path"] = []byte(backupLocation.Location.Path)
+	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+
+	return err
+}
+
+func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocation) error {
+	credentialData := make(map[string][]byte)
+	credentialData["type"] = []byte(backupLocation.Location.Type)
+	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["path"] = []byte(backupLocation.Location.Path)
+	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
+	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
+	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+
+	return err
+}
+
+func createCredSecret(
+	secretName string,
+	namespace string,
+	credentialData map[string][]byte,
+) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: backupLocation.Namespace,
+			Namespace: namespace,
 			Annotations: map[string]string{
 				kopiabackup.SkipResourceAnnotation: "true",
 			},
@@ -681,5 +754,6 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation) 
 	if err != nil && errors.IsAlreadyExists(err) {
 		return nil
 	}
+
 	return err
 }
