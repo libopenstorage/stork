@@ -121,18 +121,46 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		// Create the credential secret
 		logrus.Debugf("drivername: %v", driverName)
-		if driverName == drivers.KopiaBackup || driverName == drivers.KopiaRestore {
+		if driverName == drivers.KopiaBackup {
 			// This will create a unique secret per PVC being backed up
+			// Create secret in source ns because in case of multi ns backup
+			// BL CR is created in kube-system ns
 			err = CreateCredentialsSecret(
 				utils.FrameCredSecretName(dataExport.Name, dataExport.Spec.Source.Name),
 				dataExport.Spec.Destination.Name,
-				dataExport.Spec.Destination.Namespace,
+				dataExport.Spec.Source.Namespace,
 			)
 			if err != nil {
-				msg := fmt.Sprintf("failed to create cloud credential secret: %v", err)
+				msg := fmt.Sprintf("failed to create cloud credential secret during kopia backup: %v", err)
 				logrus.Errorf(msg)
 				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
 			}
+		}
+
+		if driverName == drivers.KopiaRestore {
+			// Get the volumebackup
+			vb, err := kdmpopts.Instance().GetVolumeBackup(context.Background(),
+				dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace)
+			if err != nil {
+				msg := fmt.Sprintf("Error accessing volumebackup %s in namespace %s : %v",
+					dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace, err)
+				logrus.Errorf(msg)
+				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+			}
+			// This will create a unique secret per PVC being restored
+			// For restore create the secret in the ns where PVC is referenced
+			err = CreateCredentialsSecret(
+				utils.FrameCredSecretName(dataExport.Name, dataExport.Spec.Destination.Name),
+				vb.Spec.BackupLocation.Name,
+				dataExport.Spec.Destination.Namespace,
+			)
+			if err != nil {
+				msg := fmt.Sprintf("failed to create cloud credential secret during kopia restore: %v", err)
+				logrus.Errorf(msg)
+				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+			}
+			// For restore setting the source PVCName as the destination PVC name for the job
+			srcPVCName = dataExport.Spec.Destination.Name
 		}
 
 		// start data transfer
@@ -172,6 +200,27 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 	case kdmpapi.DataExportStageFinal:
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 			return false, nil
+		}
+		ns, name, err := utils.ParseJobID(dataExport.Status.TransferID)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to parse job ID %v from DataExport CR: %v: %v",
+				dataExport.Status.TransferID, dataExport.Name, err)
+			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
+		}
+		volumeBackupCR, err := kdmpopts.Instance().GetVolumeBackup(context.Background(),
+			name, ns)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to read VolumeBackup CR %v: %v", name, err)
+			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
+		}
+		dataExport.Status.SnapshotID = volumeBackupCR.Status.SnapshotID
+		dataExport.Status.Size = volumeBackupCR.Status.TotalBytes
+
+		// Delete VolumeBackup CR created
+		err = kdmpopts.Instance().DeleteVolumeBackup(context.Background(), name, ns)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to delete VolumeBackup CR %v: %v", name, err)
+			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
 		}
 
 		if err := c.cleanUp(driver, snapshotter, dataExport); err != nil {
@@ -456,7 +505,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 		return drv.StartJob(
 			drivers.WithSourcePVC(srcPVCName),
 			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
-			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
 			drivers.WithVolumeBackupNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithLabels(jobLabels(dataExport.GetName())),
@@ -464,9 +513,19 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 	case drivers.KopiaBackup:
 		return drv.StartJob(
 			drivers.WithSourcePVC(srcPVCName),
-			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithBackupLocationName(dataExport.Spec.Destination.Name),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithLabels(jobLabels(dataExport.GetName())),
+			drivers.WithDataExportName(dataExport.GetName()),
+		)
+	case drivers.KopiaRestore:
+		return drv.StartJob(
+			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
+			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
+			drivers.WithVolumeBackupNamespace(dataExport.Spec.Source.Namespace),
+			drivers.WithBackupLocationNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithLabels(jobLabels(dataExport.GetName())),
 			drivers.WithDataExportName(dataExport.GetName()),
 		)
@@ -631,7 +690,12 @@ func CreateCredentialsSecret(secretName, blName, namespace string) error {
 	switch backupLocation.Location.Type {
 	case storkapi.BackupLocationS3:
 		return createS3Secret(secretName, backupLocation)
+	case storkapi.BackupLocationGoogle:
+		return createGoogleSecret(secretName, backupLocation)
+	case storkapi.BackupLocationAzure:
+		return createAzureSecret(secretName, backupLocation)
 	}
+
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
 }
 
@@ -666,10 +730,44 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation) 
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+
+	return err
+}
+
+func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocation) error {
+	credentialData := make(map[string][]byte)
+	credentialData["type"] = []byte(backupLocation.Location.Type)
+	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["accountkey"] = []byte(backupLocation.Location.GoogleConfig.AccountKey)
+	credentialData["projectid"] = []byte(backupLocation.Location.GoogleConfig.ProjectID)
+	credentialData["path"] = []byte(backupLocation.Location.Path)
+	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+
+	return err
+}
+
+func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocation) error {
+	credentialData := make(map[string][]byte)
+	credentialData["type"] = []byte(backupLocation.Location.Type)
+	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["path"] = []byte(backupLocation.Location.Path)
+	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
+	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
+	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+
+	return err
+}
+
+func createCredSecret(
+	secretName string,
+	namespace string,
+	credentialData map[string][]byte,
+) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: backupLocation.Namespace,
+			Namespace: namespace,
 			Annotations: map[string]string{
 				kopiabackup.SkipResourceAnnotation: "true",
 			},
@@ -681,5 +779,6 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation) 
 	if err != nil && errors.IsAlreadyExists(err) {
 		return nil
 	}
+
 	return err
 }
