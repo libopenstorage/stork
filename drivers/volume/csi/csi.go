@@ -1406,6 +1406,9 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 	var anyFailed bool
 
 	for _, vrInfo := range restore.Status.Volumes {
+		if vrInfo.DriverName != storkCSIDriverName {
+			continue
+		}
 		// Handle namespace mapping
 		destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
 
