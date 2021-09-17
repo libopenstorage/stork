@@ -150,7 +150,10 @@ type Driver interface {
 	ValidateVolumeSnapshotRestore(vol string, snapData *snapv1.VolumeSnapshotData, timeStart time.Time) error
 
 	// CollectDiags collects live diags on a node
-	CollectDiags(n node.Node, diagOps DiagOps) error
+	CollectDiags(n node.Node, config *DiagRequestConfig, diagOps DiagOps) error
+
+	// CollectAsyncDiags collects async diags on a node
+	CollectAsyncDiags(n node.Node, config *DiagRequestConfig) error
 
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error

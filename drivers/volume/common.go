@@ -15,6 +15,37 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
+// DiagRequestConfig is a request object which provides all the configuration details
+// to PX for running diagnostics on a node. This object can also be passed over
+// the wire through an API server for remote diag requests.
+type DiagRequestConfig struct {
+	// OutputFile for the diags.tgz
+	OutputFile string
+	// DockerHost config
+	DockerHost string
+	// ContainerName for PX
+	ContainerName string
+	// ExecPath of the program making this request (pxctl)
+	ExecPath string
+	// Profile when set diags command only dumps the go profile
+	Profile bool
+	// Live gets live diagnostics
+	Live bool
+	// Upload uploads the diags.tgz to s3
+	Upload bool
+	// All gets all possible diagnostics from PX
+	All bool
+	// Force overwrite of existing diags file.
+	Force bool
+	// OnHost indicates whether diags is being run on the host
+	// or inside the container
+	OnHost bool
+	// Token for security authentication (if enabled)of the program making this request (pxctl)
+	Token string
+	// Extra indicates whether diags should attempt to collect extra information
+	Extra bool
+}
+
 // LicenseSummary struct that will hold our SKU and Features
 type LicenseSummary struct {
 	SKU                 string
@@ -287,10 +318,18 @@ func (d *DefaultDriver) ValidateVolumeSnapshotRestore(vol string, snapshotData *
 }
 
 // CollectDiags collects live diags on a node
-func (d *DefaultDriver) CollectDiags(n node.Node, diagOps DiagOps) error {
+func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, diagOps DiagOps) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CollectDiags()",
+	}
+}
+
+// CollectAsyncDiags collects diags on a node
+func (d *DefaultDriver) CollectAsyncDiags(n node.Node, config *DiagRequestConfig) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CollectAsyncDiags()",
 	}
 }
 

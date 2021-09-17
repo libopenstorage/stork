@@ -710,7 +710,21 @@ func CollectSupport() {
 			}
 			Step(fmt.Sprintf("save all useful logs on node %s", n.SchedulerNodeName), func() {
 
-				Inst().V.CollectDiags(n, volume.DiagOps{})
+				// Moves this out to deal with diag testing.
+				r := &volume.DiagRequestConfig{
+					DockerHost:    "unix:///var/run/docker.sock",
+					OutputFile:    fmt.Sprintf("/var/cores/diags-%s-%d.tar.gz", n.Name, time.Now().Unix()),
+					ContainerName: "",
+					Profile:       false,
+					Live:          true,
+					Upload:        false,
+					All:           true,
+					Force:         true,
+					OnHost:        true,
+					Extra:         false,
+				}
+
+				Inst().V.CollectDiags(n, r, volume.DiagOps{})
 
 				journalCmd := fmt.Sprintf("journalctl -l > %s/all_journal_%v.log", Inst().BundleLocation, time.Now().Format(time.RFC3339))
 				runCmd(journalCmd, n)

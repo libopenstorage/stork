@@ -25,6 +25,7 @@ message ClusterInfo {
         (gogoproto.jsontag) = "kubeconfig",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 3;
     StatusInfo status = 4;
     // delete_backups will determine whether the backups
@@ -33,8 +34,10 @@ message ClusterInfo {
     // delete_restores will determine whether the restore
     // belong to given cluster needs to be deleted or not.
     bool delete_restores = 6;
+    string stork_version = 7;
+    ObjectRef cloud_credential_ref = 8;
 
-    // Message for maintaing status of the cluster.
+    // Message for maintaining status of the cluster.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -61,6 +64,13 @@ message AWSConfig {
     string access_key = 1 [ (gogoproto.jsontag) = "accesskey" ];
     string secret_key = 2 [
         (gogoproto.jsontag) = "secretkey",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+}
+
+message IBMConfig {
+    string api_key = 1 [
+        (gogoproto.jsontag) = "api_key",
         (gogoproto.moretags) = "secure:\"true\""
     ];
 }
@@ -112,6 +122,7 @@ message CloudCredentialInfo {
         AWS = 1;
         Azure = 2;
         Google = 3;
+        IBM = 4;
     }
 
     Type type = 1;
@@ -119,6 +130,7 @@ message CloudCredentialInfo {
         AWSConfig aws_config = 100;
         AzureConfig azure_config = 101;
         GoogleConfig google_config = 102;
+        IBMConfig ibm_config = 103;
     }
 }
 
@@ -202,11 +214,12 @@ message SchedulePolicyObject {
 }
 
 message BackupScheduleInfo {
+    // schedule_policy is deprecated, not to be used.
     string schedule_policy = 1;
     bool suspend = 2;
     ReclaimPolicyType reclaim_policy = 3;
     map<string, StatusInfoList> backup_status = 4;
-    // Name of BackupLocation
+    // Name of BackupLocation, is deprecated. Not to be used.
     string backup_location = 5;
     // Name of Cluster
     string cluster = 6;
@@ -214,12 +227,30 @@ message BackupScheduleInfo {
     repeated string namespaces = 7;
     // Label selectors to choose resources
     map<string, string> label_selectors = 8;
+    // pre_exec_rule and post_exec_rule is deprecated. Not to be used.
     string pre_exec_rule = 9;
     string post_exec_rule = 10;
     bool delete_backups = 11;
     StatusInfo status = 12;
     SuspendedBy suspended_by = 13;
     repeated ResourceInfo include_resources = 14;
+    string stork_version = 15;
+    string csi_snapshot_class_name = 16;
+    repeated string resource_types = 17;
+    ObjectRef schedule_policy_ref = 18;
+    ObjectRef backup_location_ref = 19;
+    ObjectRef pre_exec_rule_ref = 20;
+    ObjectRef post_exec_rule_ref = 21;
+    // To get type of backup (generic or non-generic)
+    BackupType backup_type = 22;
+    message BackupType {
+        Type type = 1;
+        enum Type {
+            Invalid = 0;
+            Generic = 1;
+            Normal = 2;
+        }
+    }
 
     message SuspendedBy {
         Source source = 1;
@@ -278,12 +309,14 @@ message BackupLocationInfo {
         (gogoproto.jsontag) = "encryptionkey",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
     StatusInfo status = 5;
     bool delete_backups = 6;
     bool validate_cloud_credential = 7;
+    ObjectRef cloud_credential_ref = 8;
     oneof config { S3Config s3_config = 100; }
-    // Message for maintaing status of the object.
+    // Message for maintaining status of the object.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -311,7 +344,7 @@ message ResourceInfo {
 }
 
 message BackupInfo {
-    // Name of BackupLocation
+    // Name of BackupLocation, deprecated. Not to be used.
     string backup_location = 1;
     // Name of Cluster
     string cluster = 2;
@@ -324,6 +357,7 @@ message BackupInfo {
     repeated Volume volumes = 7;
     string backup_path = 8;
     Stage stage = 9;
+    // pre_exec_rule and post_exec_rule are deprecated, not to be used,
     string pre_exec_rule = 10;
     string post_exec_rule = 11;
     // Name of the backup schedule, if the backup was taken by schedule through
@@ -332,9 +366,28 @@ message BackupInfo {
     BackupSchedule backup_schedule = 12;
     string cr_name = 13;
     uint64 total_size = 14;
-    // Reference to cloud credential object used for backup
+    // Reference to cloud credential object used for backup.
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 15;
     repeated ResourceInfo include_resources = 16;
+    uint64 resource_count = 17;
+    string stork_version = 18;
+    string csi_snapshot_class_name = 19;
+    repeated string resource_types = 20;
+    ObjectRef backup_location_ref = 21;
+    ObjectRef pre_exec_rule_ref = 22;
+    ObjectRef post_exec_rule_ref = 23;
+    ObjectRef cloud_credential_ref = 24;
+    // To get type of backup (generic or non-generic)
+    BackupType backup_type = 25;
+    message BackupType {
+        Type type = 1;
+        enum Type {
+            Invalid = 0;
+            Generic = 1;
+            Normal = 2;
+        }
+    }
 
     enum Stage {
         Invalid = 0;
@@ -362,11 +415,12 @@ message BackupInfo {
         map<string, string> options = 8;
         uint64 total_size = 9;
         // actual size of the backup
-        // incase of invremental, it's the incremental backup size
+        // incase of incremental, it's the incremental backup size
         uint64 actual_size = 10;
+        string storage_class = 11;
     }
 
-    // Message for maintaing status of the object.
+    // Message for maintaining status of the object.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -430,7 +484,8 @@ message ReplacePolicy {
 message RestoreInfo {
     // Name of backup to restore from
     string backup = 1;
-    // Name of backup location to restore from
+    // Name of backup location to restore from.
+    // backup_location is deprecated, not to be used.
     string backup_location = 2;
     // Label selectors to choose resources
     map<string, string> label_selectors = 3;
@@ -438,7 +493,6 @@ message RestoreInfo {
     map<string, string> namespace_mapping = 4;
     // Restore replace policy type ("delete"/"retain")
     ReplacePolicy.Type replace_policy = 5;
-
     StatusInfo status = 6;
     repeated RestoredResource resources = 7;
     repeated Volume volumes = 8;
@@ -447,6 +501,11 @@ message RestoreInfo {
     repeated string include_optional_resource_types = 10;
     uint64 total_size = 11;
     repeated ResourceInfo include_resources = 12;
+    uint64 resource_count = 13;
+    string stork_version = 14;
+    ObjectRef backup_location_ref = 15;
+    // storage class mapping for generic backup <source, destination>
+    map<string, string> storage_class_mapping = 16;
 
     message RestoredResource {
         string name = 1;
@@ -469,7 +528,7 @@ message RestoreInfo {
         uint64 total_size = 9;
     }
 
-    // Message for maintaing status of the object.
+    // Message for maintaining status of the object.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -525,6 +584,13 @@ message EnumerateOptions {
     // filter will be returned
     string cluster_name_filter = 5;
     uint64 object_index = 6;
+    // Ths option will be set to true by the caller, when they want to have
+    // complete backup object. That means the backupObject's
+    // resource list will be set to complete list of resources.
+    // If this option is set to false, resource list will be
+    // set to nil and rest of the backupObject details will be returned in the
+    // response.
+    bool include_detailed_resources = 7;
 }
 
 service SchedulePolicy {
@@ -569,6 +635,15 @@ service SchedulePolicy {
             delete : "/v1/schedulepolicy/{org_id}/{name}"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(SchedulePolicyOwnershipUpdateRequest)
+        returns (SchedulePolicyOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/schedulepolicy/updateownership"
+            body : "*"
+        };
+    }
 }
 
 // Define SchedulePolicyCreateRequest struct
@@ -599,6 +674,7 @@ message SchedulePolicyEnumerateResponse {
 message SchedulePolicyInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 // Define SchedulePolicyInspectResponse struct
 message SchedulePolicyInspectResponse {
@@ -608,9 +684,19 @@ message SchedulePolicyInspectResponse {
 message SchedulePolicyDeleteRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 // Define SchedulePolicyDeleteResponse struct
 message SchedulePolicyDeleteResponse {}
+
+message SchedulePolicyOwnershipUpdateRequest {
+    string org_id = 1;
+    string name = 2;
+    Ownership ownership = 3;
+    string uid = 4;
+}
+
+message SchedulePolicyOwnershipUpdateResponse {}
 
 service BackupSchedule {
     // Create creates new backup schedule
@@ -659,9 +745,10 @@ service BackupSchedule {
 // Define BackupScheduleCreateRequest struct
 message BackupScheduleCreateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    // schedule_policy is deprecated, not to be used
     string schedule_policy = 2;
     BackupScheduleInfo.ReclaimPolicyType reclaim_policy = 3;
-    // Name of BackupLocation
+    // Name of BackupLocation, is deprecated. Not to be used
     string backup_location = 4;
     // Name of Cluster
     string cluster = 5;
@@ -669,10 +756,26 @@ message BackupScheduleCreateRequest {
     repeated string namespaces = 6;
     // Label selectors to choose resources
     map<string, string> label_selectors = 7;
+    // pre_exec_rule and post_exec_rule are deprecated. Not to be used.
     string pre_exec_rule = 8;
     string post_exec_rule = 9;
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 10;
+    // Snapshot class name to use for backup schedule (optional)
+    string csi_snapshot_class_name = 11;
+    // List of resource types to backup (optional)
+    repeated string resource_types = 12;
+    ObjectRef schedule_policy_ref = 13;
+    ObjectRef backup_location_ref = 14;
+    ObjectRef pre_exec_rule_ref = 15;
+    ObjectRef post_exec_rule_ref = 16;
+    // To get type of backup (generic or non-generic)
+    BackupType backup_type = 17;
+    enum BackupType {
+        Invalid = 0;
+        Generic = 1;
+        Normal = 2;
+    }
 }
 
 // Define BackupScheduleCreateResponse struct
@@ -681,9 +784,10 @@ message BackupScheduleCreateResponse {}
 // Define BackupScheduleUpdateRequest struct
 message BackupScheduleUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    // schedule_policy is deprecated, not to be used
     string schedule_policy = 2;
     BackupScheduleInfo.ReclaimPolicyType reclaim_policy = 3;
-    // Name of BackupLocation
+    // Name of BackupLocation, is deprecated. Not to be used
     string backup_location = 4;
     // Name of Cluster
     string cluster = 5;
@@ -691,11 +795,18 @@ message BackupScheduleUpdateRequest {
     repeated string namespaces = 6;
     // Label selectors to choose resources
     map<string, string> label_selectors = 7;
+    // pre_exec_rule and post_exec_rule are deprecated. Not to be used.
     string pre_exec_rule = 8;
     string post_exec_rule = 9;
     bool suspend = 10;
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 11;
+    // Snapshot class name to use for backup schedule (optional)
+    string csi_snapshot_class_name = 12;
+    ObjectRef schedule_policy_ref = 13;
+    ObjectRef backup_location_ref = 14;
+    ObjectRef pre_exec_rule_ref = 15;
+    ObjectRef post_exec_rule_ref = 16;
 }
 
 // Define BackupScheduleUpdateResponse struct
@@ -705,6 +816,12 @@ message BackupScheduleEnumerateRequest {
     string org_id = 1;
     // label selectors for the object for filtering
     map<string, string> labels = 2;
+    // Backuplocation name.
+    // Enumerate will return list of backupschedule that
+    // uses this backuplocation
+    // backup_location is deprecated, not to be used.
+    string backup_location = 3;
+    ObjectRef backup_location_ref = 4;
 }
 
 // Define BackupScheduleEnumerateResponse struct
@@ -716,6 +833,7 @@ message BackupScheduleEnumerateResponse {
 message BackupScheduleInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define BackupScheduleInspectResponse struct
@@ -730,6 +848,7 @@ message BackupScheduleDeleteRequest {
     // delete_backups indicates whether the cloud backup files need to
     // be deleted or retained.
     bool delete_backups = 3;
+    string uid = 4;
 }
 
 // Define BackupScheduleDeleteResponse struct
@@ -783,7 +902,9 @@ message ClusterCreateRequest {
         (gogoproto.jsontag) = "kubeconfig",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
+    ObjectRef cloud_credential_ref = 5;
 }
 
 // Define ClusterCreateResponse struct
@@ -797,7 +918,9 @@ message ClusterUpdateRequest {
         (gogoproto.jsontag) = "kubeconfig",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
+    ObjectRef cloud_credential_ref = 5;
 }
 
 // Define ClusterUpdateResponse struct
@@ -809,6 +932,12 @@ message ClusterEnumerateRequest {
     // label selectors for the object for filtering
     map<string, string> labels = 2;
     bool include_secrets = 3;
+    // cloud credential name.
+    // Enumerate will return list of cluster that
+    // uses this cloud credential
+    // cloud_credential is deprecated, not to be used.
+    string cloud_credential = 4;
+    ObjectRef cloud_credential_ref = 5;
 }
 
 // Define ClusterEnumerateResponse struct
@@ -881,6 +1010,15 @@ service CloudCredential {
             delete : "/v1/cloudcredential/{org_id}/{name}"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(CloudCredentialOwnershipUpdateRequest)
+        returns (CloudCredentialOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/cloudcredential/updateownership"
+            body : "*"
+        };
+    }
 }
 
 // Define CloudCredentialCreateRequest struct
@@ -917,6 +1055,7 @@ message CloudCredentialInspectRequest {
     string org_id = 1;
     string name = 2;
     bool include_secrets = 3;
+    string uid = 4;
 }
 
 // Define CloudCredentialInspectResponse struct
@@ -928,10 +1067,21 @@ message CloudCredentialInspectResponse {
 message CloudCredentialDeleteRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define CloudCredentialInspectResponse struct
 message CloudCredentialDeleteResponse {}
+
+message CloudCredentialOwnershipUpdateRequest {
+    string org_id = 1;
+    // Cloud credential name to be updated.
+    string name = 2;
+    Ownership ownership = 3;
+    string uid = 4;
+}
+
+message CloudCredentialOwnershipUpdateResponse {}
 
 service BackupLocation {
     // Create creates new backup location
@@ -984,6 +1134,15 @@ service BackupLocation {
             body : "*"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(BackupLocationOwnershipUpdateRequest)
+        returns (BackupLocationOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/backuplocation/updateownership"
+            body : "*"
+        };
+    }
 }
 
 // Define BackupLocationCreateRequest struct
@@ -1009,6 +1168,12 @@ message BackupLocationEnumerateRequest {
     string org_id = 1;
     // label selectors for the object for filtering
     map<string, string> labels = 2;
+    // cloud credential name.
+    // Enumerate will return list of backuplocation that
+    // uses this cloud credential
+    // cloud_credential is deprecated, not to be used.
+    string cloud_credential = 3;
+    ObjectRef cloud_credential_ref = 4;
 }
 
 // Define BackupLocationEnumerateResponse struct
@@ -1020,6 +1185,7 @@ message BackupLocationEnumerateResponse {
 message BackupLocationInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define BackupLocationInspectResponse struct
@@ -1034,6 +1200,7 @@ message BackupLocationDeleteRequest {
     // delete_backups indicates whether the cloud backup files need to
     // be deleted or retained.
     bool delete_backups = 3;
+    string uid = 4;
 }
 
 // Define BackupLocationDeleteResponse struct
@@ -1043,10 +1210,23 @@ message BackupLocationDeleteResponse {}
 message BackupLocationValidateRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define BackupLocationValidateResponse struct
 message BackupLocationValidateResponse {}
+
+// Define BackupLocationOwnershipUpdateRequest struct
+message BackupLocationOwnershipUpdateRequest {
+    string org_id = 1;
+    // Backup location to be updated
+    string name = 2;
+    Ownership ownership = 3;
+    string uid = 4;
+}
+
+// Define BackupLocationOwnershipUpdateResponse struct
+message BackupLocationOwnershipUpdateResponse {}
 
 service Metrics {
     rpc Inspect(MetricsInspectRequest) returns (MetricsInspectResponse) {
@@ -1111,6 +1291,7 @@ service Backup {
 message BackupCreateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
     // Name or UID + orgid of BackupLocation
+    // backup_location is deprecated, not to be used.
     string backup_location = 2;
     // Name or UID of Cluster
     string cluster = 3;
@@ -1119,11 +1300,27 @@ message BackupCreateRequest {
     // Label selectors to choose resources
     map<string, string> label_selectors = 5;
     // Pre check rule to run before backup is started
+    // deprecated, not to be used.
     string pre_exec_rule = 6;
     // Post check rule to run after backup is completed
+    // deprecated, not to be used.
     string post_exec_rule = 7;
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 8;
+    // Snapshot class name to use for backup (optional)
+    string csi_snapshot_class_name = 9;
+    // List of resource types to backup (optional)
+    repeated string resource_types = 10;
+    ObjectRef backup_location_ref = 11;
+    ObjectRef pre_exec_rule_ref = 12;
+    ObjectRef post_exec_rule_ref = 13;
+    // To get type of backup (generic or non-generic)
+    BackupType backup_type = 14;
+    enum BackupType {
+        Invalid = 0;
+        Generic = 1;
+        Normal = 2;
+    }
 }
 
 // Response message structure for backup create
@@ -1133,13 +1330,15 @@ message BackupCreateResponse {}
 message BackupUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
     // Reference to cloud credential object used for backup
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 2;
+    ObjectRef cloud_credential_ref = 3;
 }
 
 // Define BackupUpdateResponse struct
 message BackupUpdateResponse {}
 
-//  Request message strcuture for enumerate object
+//  Request message structure for enumerate object
 message BackupEnumerateRequest {
     // Organization id
     string org_id = 1;
@@ -1154,22 +1353,24 @@ message BackupEnumerateResponse {
     bool complete = 3;
 }
 
-// Request message strcuture for object inspect
+// Request message structure for object inspect
 message BackupInspectRequest {
     string name = 1;
     string org_id = 2;
 }
 
-// Response message strcuture for object inspect
+// Response message structure for object inspect
 message BackupInspectResponse { BackupObject backup = 1; }
 
-// Request message strcuture for object delete
+// Request message structure for object delete
 message BackupDeleteRequest {
     string name = 1;
     string org_id = 2;
+    // cluster name or uid to perform delete through
+    string cluster = 3;
 }
 
-// Response message strcuture for object delete
+// Response message structure for object delete
 message BackupDeleteResponse {}
 
 service Restore {
@@ -1227,6 +1428,8 @@ message RestoreCreateRequest {
     repeated string include_optional_resource_types = 6;
     // List of resources to restore (optional)
     repeated ResourceInfo include_resources = 7;
+    // storage class mapping for generic backup <source, destination>
+    map<string, string> storage_class_mapping = 8;
 }
 
 // Define RestoreCreateResponse struct
@@ -1345,6 +1548,7 @@ message RuleEnumerateResponse { repeated RuleObject rules = 1; }
 message RuleInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define RuleInspectResponse struct
@@ -1354,10 +1558,23 @@ message RuleInspectResponse { RuleObject rule = 1; }
 message RuleDeleteRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define RuleDeleteResponse struct
 message RuleDeleteResponse {}
+
+// Define RuleOwnershipUpdateRequest struct
+message RuleOwnershipUpdateRequest {
+    string org_id = 1;
+    // Rule to be updated
+    string name = 2;
+    Ownership ownership = 3;
+    string uid = 4;
+}
+
+// Define RuleOwnershipUpdateResponse struct
+message RuleOwnershipUpdateResponse {}
 
 service Rules {
     // Create creates new rule
@@ -1396,6 +1613,15 @@ service Rules {
             delete : "/v1/rule/{org_id}/{name}"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(RuleOwnershipUpdateRequest)
+        returns (RuleOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/rule/updateownership"
+            body : "*"
+        };
+    }
 }
 
 service Version {
@@ -1424,11 +1650,21 @@ message VersionGetResponse {
 
 message LicenseActivateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
-    string activation_id = 2;
-    bytes license_data = 3;
+    oneof activation {
+        string activation_id = 2;
+        bytes license_data = 3;
+        string usage_based_id = 4;
+    }
 }
 
 message LicenseActivateResponse {}
+
+message LicenseUpdateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    string usage_based_id = 2;
+}
+
+message LicenseUpdateResponse {}
 
 message LicenseInspectRequest { string org_id = 1; }
 
@@ -1436,6 +1672,7 @@ message LicenseInspectResponse { LicenseResponseInfo license_resp_info = 1; }
 
 message LicenseResponseInfo {
     repeated FeatureInfo feature_info = 1;
+    Status status = 2;
 
     message FeatureInfo {
         // Feature name
@@ -1453,6 +1690,15 @@ message LicenseResponseInfo {
         google.protobuf.Timestamp expires = 3;
         // Start time of license
         google.protobuf.Timestamp starts = 4;
+        // License type defined in common.proto
+        LicenseType type = 5;
+    }
+
+    message Status {
+        // Representing if license is active or expired
+        string status = 1;
+        // Reason for above status
+        string reason = 2;
     }
 }
 
@@ -1470,5 +1716,208 @@ service License {
         option (google.api.http) = {
             get : "/v1/license/{org_id}"
         };
+    }
+
+    // Update updates Usage Based activation ID
+    rpc Update(LicenseUpdateRequest) returns (LicenseUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/license"
+            body : "*"
+        };
+    }
+}
+
+service ActivityTimeLine {
+    // Enumerate returns a list of activity data for a given time period
+    rpc Enumerate(ActivityEnumerateRequest)
+        returns (ActivityEnumerateResponse) {
+        option (google.api.http) = {
+            get : "/v1/restore/{org_id}/{days}/{interval}"
+        };
+    }
+}
+
+message ActivityEnumerateRequest {
+    string org_id = 1;
+    // Time period for which activity is needed
+    int32 days = 2;
+    // Interval for which we want the activity
+    // For now Hourly and Daily are supported
+    Interval interval = 3;
+    string time_zone = 4;
+    string cluster = 5;
+    // For which type of Actvity data eg: backup, restore, etc..
+    string kind = 6;
+
+    enum Interval {
+        Invalid = 0;
+        Hourly = 1;
+        Daily = 2;
+    }
+}
+
+message ActivityEnumerateResponse {
+    repeated Data activity_data = 1;
+
+    message Data {
+        google.protobuf.Timestamp start_time = 1;
+        google.protobuf.Timestamp end_time = 2;
+        uint64 successful = 3;
+        uint64 failed = 4;
+        uint64 in_progress = 5;
+        double completion_time = 6;
+        // Total number of backups in a given time frame (success/failure)
+        uint64 total = 7;
+    }
+}
+
+// Defines a RoleObject object.
+message RoleObject {
+    // Metadata of the object
+    Metadata metadata = 1 [ (gogoproto.embed) = true ];
+    // RoleConfig associated with role object
+    repeated RoleConfig rules = 2;
+    // Keyclock UID associated with role
+    string role_id = 3;
+}
+
+// RoleConfig object for set of rules associated with each role object
+// services - PX-Backup services names
+// apis - allowed apis for px-backup services
+message RoleConfig {
+    // The gRPC service name
+    repeated string services = 1;
+    // The API name in the service in lowercase
+    repeated string apis = 2;
+}
+
+service Role {
+    // Create creates new role object in datastore
+    rpc Create(RoleCreateRequest) returns (RoleCreateResponse) {
+        option (google.api.http) = {
+            post : "/v1/role"
+            body : "*"
+        };
+    }
+    // Enumerate returns a list of roles object
+    rpc Enumerate(RoleEnumerateRequest) returns (RoleEnumerateResponse) {
+        option (google.api.http) = {
+            get : "/v1/role/{org_id}"
+        };
+    }
+
+    // Inspect returns detailed information about requested role object
+    rpc Inspect(RoleInspectRequest) returns (RoleInspectResponse) {
+        option (google.api.http) = {
+            get : "/v1/role/{org_id}/{name}"
+        };
+    }
+    // Update given role information
+    rpc Update(RoleUpdateRequest) returns (RoleUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/role"
+            body : "*"
+        };
+    }
+    // Delete removes given role from px-backup
+    rpc Delete(RoleDeleteRequest) returns (RoleDeleteResponse) {
+        option (google.api.http) = {
+            delete : "/v1/role/{org_id}/{name}"
+        };
+    }
+    // Permission returns list of service,apis permission for given user
+    rpc Permission(RolePermissionRequest) returns (RolePermissionResponse) {
+        option (google.api.http) = {
+            get : "/v1/role"
+        };
+    }
+}
+
+// RoleCreateRequest defines roleobject create structure
+// Metadata with each role object
+// RoleConfig set of rules over api services for given role object
+message RoleCreateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    repeated RoleConfig rules = 2;
+    // Keyclock UID associated with role
+    string role_id = 3;
+}
+
+message RoleCreateResponse {}
+// RoleUpdateRequest defines roleobject update structure
+message RoleUpdateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    repeated RoleConfig rules = 2;
+    // Keyclock UID associated with role
+    string role_id = 3;
+}
+
+// Define RoleUpdateResponse struct
+message RoleUpdateResponse {}
+
+// Define RoleEnumerateRequest struct
+message RoleEnumerateRequest {
+    string org_id = 1;
+    // Optional arguments for enumeration
+    EnumerateOptions enumerate_options = 2 [ (gogoproto.embed) = true ];
+}
+
+// Define RoleEnumerateResponse struct
+message RoleEnumerateResponse { repeated RoleObject roles = 1; }
+
+// Define RoleInspectRequest struct
+message RoleInspectRequest {
+    string org_id = 1;
+    string name = 2;
+    string uid = 3;
+}
+
+// Define RoleInspectResponse struct
+message RoleInspectResponse { RoleObject role = 1; }
+
+// Define RoleDeleteRequest struct
+message RoleDeleteRequest {
+    string org_id = 1;
+    string name = 2;
+    string uid = 3;
+}
+
+// Define RoleDeleteResponse struct
+message RoleDeleteResponse {}
+
+// Define RolePermissionRequest struct
+message RolePermissionRequest { string org_id = 1; }
+
+// Define RolePermissionResponse struct
+message RolePermissionResponse { map<string, Permission> rules = 1; }
+
+// Define Permission struct
+message Permission { bool full_access = 1; }
+
+// ActivityDataObject defines activity data to be stored
+message ActivityDataObject {
+    Metadata metadata = 1 [ (gogoproto.embed) = true ];
+    string kind = 2;
+    // Final status of activity
+    Status status = 3;
+    // Completion time in seconds
+    double completion_time = 4;
+    // Captures transistion times between different status
+    repeated Opcycle opcycle = 5;
+    string cluster = 6;
+
+    message Opcycle {
+        google.protobuf.Timestamp start_time = 1;
+        google.protobuf.Timestamp last_updated_time = 2;
+        Status status = 3;
+    }
+
+    enum Status {
+        Invalid = 0;
+        Inprogress = 1;
+        Success = 2;
+        Failed = 3;
+        Deleting = 4;
+        Deleted = 5;
     }
 }
