@@ -432,6 +432,7 @@ func (a *aws) generatePVName() string {
 }
 func (a *aws) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	return nil, nil
