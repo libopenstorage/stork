@@ -810,7 +810,7 @@ func (c *csi) cleanupBackupLocation(backup *storkapi.ApplicationBackup) error {
 	return nil
 }
 
-func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	// if successful, re-create VS and VSC
 	backupSuccessful := backup.Status.Status == storkapi.ApplicationBackupStatusSuccessful
 
@@ -818,7 +818,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 	snapshotClassCreatedForDriver := make(map[string]bool)
 	csiBackupObject, err := c.getCSIBackupObject(backup.Name, backup.Namespace)
 	if err != nil {
-		return err
+		return true, err
 	}
 
 	for _, vInfo := range backup.Status.Volumes {
@@ -828,12 +828,12 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 		if backupSuccessful {
 			err = c.recreateSnapshotForDeletion(backup, vInfo, csiBackupObject, snapshotClassCreatedForDriver)
 			if err != nil {
-				return err
+				return true, err
 			}
 		}
 		vs, err := csiBackupObject.GetVolumeSnapshot(vInfo.BackupID)
 		if err != nil {
-			return fmt.Errorf("failed to find Snapshot for backup %s: %s", vInfo.BackupID, err.Error())
+			return true, fmt.Errorf("failed to find Snapshot for backup %s: %s", vInfo.BackupID, err.Error())
 		}
 
 		err = c.snapshotter.DeleteSnapshot(
@@ -842,18 +842,18 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 			false, // retain snapshot content
 		)
 		if err != nil {
-			return err
+			return true, err
 		}
 		log.ApplicationBackupLog(backup).Debugf("deleted %v snapshot for backup %s", vs.Name, string(backup.UID))
 	}
 
 	err = c.cleanupBackupLocation(backup)
 	if err != nil {
-		return err
+		return true, err
 	}
 	log.ApplicationBackupLog(backup).Debugf("cleaned up objects for backup %s", string(backup.UID))
 
-	return nil
+	return true, nil
 }
 
 func (c *csi) UpdateMigratedPersistentVolumeSpec(
