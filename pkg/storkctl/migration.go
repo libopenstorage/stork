@@ -351,16 +351,16 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 					}
 					err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
 					if err != nil {
-						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
 						continue
 					}
 
 					_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
 					if err != nil {
-						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
 						continue
 					}
-					printMsg(fmt.Sprintf("Updated \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+					printMsg(fmt.Sprintf("Updated \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
 					if !activate {
 						if crd.PodsPath == "" {
 							continue
