@@ -149,14 +149,37 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 			log.ApplicationRestoreLog(restore).Infof("Creating dest namespace %v", ns.Name)
 			if err != nil {
 				if errors.IsAlreadyExists(err) {
+					oldNS, err := core.Instance().GetNamespace(ns.GetName())
+					if err != nil {
+						return err
+					}
+					annotations := make(map[string]string)
+					labels := make(map[string]string)
+					if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+						// overwrite all annotation in case of replace policy set to delete
+						annotations = ns.GetAnnotations()
+						labels = ns.GetLabels()
+					} else if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyRetain {
+						// only add new annotation,labels in case of replace policy is set to retain
+						annotations = oldNS.GetAnnotations()
+						for k, v := range ns.GetAnnotations() {
+							if _, ok := annotations[k]; !ok {
+								annotations[k] = v
+							}
+						}
+						labels = oldNS.GetLabels()
+						for k, v := range ns.GetLabels() {
+							if _, ok := labels[k]; !ok {
+								labels[k] = v
+							}
+						}
+					}
 					log.ApplicationRestoreLog(restore).Warnf("Namespace already exists, updating dest namespace %v", ns.Name)
-					// regardless of replace policy we should always update namespace is
-					// its already exist to keep latest annotations/labels
 					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:        ns.Name,
-							Labels:      ns.Labels,
-							Annotations: ns.GetAnnotations(),
+							Labels:      labels,
+							Annotations: annotations,
 						},
 					})
 					if err != nil {
@@ -351,6 +374,12 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 		}
 		if restore.Status.Stage == storkapi.ApplicationRestoreStageFinal ||
 			restore.Status.Stage == storkapi.ApplicationRestoreStageApplications {
+			// updated timestamp for failed restores
+			if restore.Status.Status == storkapi.ApplicationRestoreStatusFailed {
+				restore.Status.FinishTimestamp = metav1.Now()
+				restore.Status.LastUpdateTimestamp = metav1.Now()
+				restore.Status.Reason = reason
+			}
 			return restore, nil
 		}
 		logrus.Infof("Updating restore  %s/%s in stage/stagus: %s/%s to volume stage", restore.Namespace, restore.Name, restore.Status.Stage, restore.Status.Status)
