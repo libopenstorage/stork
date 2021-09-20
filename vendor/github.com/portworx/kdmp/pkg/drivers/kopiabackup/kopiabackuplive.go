@@ -81,7 +81,7 @@ func jobForLiveBackup(
 						{
 							Name:            "kopiaexecutor",
 							Image:           utils.KopiaExecutorImage(),
-							ImagePullPolicy: corev1.PullIfNotPresent,
+							ImagePullPolicy: corev1.PullAlways,
 							Command: []string{
 								"/bin/sh",
 								"-x",

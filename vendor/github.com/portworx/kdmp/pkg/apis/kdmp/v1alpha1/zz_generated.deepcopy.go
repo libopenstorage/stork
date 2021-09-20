@@ -96,13 +96,9 @@ func (in *BackupLocationMaintenanceStatus) DeepCopyInto(out *BackupLocationMaint
 	*out = *in
 	if in.RepoStatus != nil {
 		in, out := &in.RepoStatus, &out.RepoStatus
-		*out = make([]*RepoMaintenanceStatus, len(*in))
-		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
-				*out = new(RepoMaintenanceStatus)
-				(*in).DeepCopyInto(*out)
-			}
+		*out = make(map[string]RepoMaintenanceStatus, len(*in))
+		for key, val := range *in {
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 	return
