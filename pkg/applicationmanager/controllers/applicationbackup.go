@@ -445,6 +445,12 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 		// volume stage again
 		if backup.Status.Stage == stork_api.ApplicationBackupStageFinal ||
 			backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
+			// updated timestamp for failed backups
+			if backup.Status.Status == stork_api.ApplicationBackupStatusFailed {
+				backup.Status.FinishTimestamp = metav1.Now()
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				backup.Status.Reason = reason
+			}
 			return backup, nil
 		}
 		backup.Status.Status = status
