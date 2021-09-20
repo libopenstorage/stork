@@ -215,8 +215,10 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
-			if err := a.deleteBackup(backup); err != nil {
-				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
+			canDelete, err := a.deleteBackup(backup)
+			logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
+			if !canDelete {
+				return nil
 			}
 		}
 
@@ -1266,12 +1268,12 @@ func (a *ApplicationBackupController) backupResources(
 	return nil
 }
 
-func (a *ApplicationBackupController) deleteBackup(backup *stork_api.ApplicationBackup) error {
+func (a *ApplicationBackupController) deleteBackup(backup *stork_api.ApplicationBackup) (bool, error) {
 	// Only delete the backup from the backupLocation if the ReclaimPolicy is
 	// set to Delete or if it is not successful
 	if backup.Spec.ReclaimPolicy != stork_api.ApplicationBackupReclaimPolicyDelete &&
 		backup.Status.Status == stork_api.ApplicationBackupStatusSuccessful {
-		return nil
+		return true, nil
 	}
 
 	drivers := a.getDriversForBackup(backup)
@@ -1279,7 +1281,7 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 
 		driver, err := volume.Get(driverName)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Ignore error when cancelling since completed ones could possibly not be
@@ -1287,45 +1289,53 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 		if err := driver.CancelBackup(backup); err != nil {
 			log.ApplicationBackupLog(backup).Debugf("Error cancelling backup: %v", err)
 		}
+		// For non-kdmp drivers, today we ignore if deletions of snapshots
+		// trigerred in the background really succeeds or not (even if the snapshots are deleted lazily by the provider)
+		// Keeping it the same way by returning true always for non-kdmp drivers
+		canDelete, err := driver.DeleteBackup(backup)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("%v", err)
+			return canDelete, err
+		}
 
-		if err := driver.DeleteBackup(backup); err != nil {
-			return err
+		if !canDelete {
+			log.ApplicationBackupLog(backup).Debugf("Skipping deletion of ApplicationBackup CR as snaphot deletes are in-progress")
+			return false, nil
 		}
 	}
-
 	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
 		// Can't do anything if the backup location is deleted
 		if k8s_errors.IsNotFound(err) {
-			return nil
+			return true, nil
 		}
-		return err
+		return true, err
 	}
 	bucket, err := objectstore.GetBucket(backupLocation)
 	if err != nil {
-		return err
+		return true, err
 	}
 
 	objectPath := backup.Status.BackupPath
 	if objectPath != "" {
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, resourceObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
-			return fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+			return true, fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, metadataObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
-			return fmt.Errorf("error deleting metadata for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+			return true, fmt.Errorf("error deleting metadata for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, crdObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
-			return fmt.Errorf("error deleting crds for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+			return true, fmt.Errorf("error deleting crds for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, nsObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
-			return fmt.Errorf("error deleting namespaces for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+			return true, fmt.Errorf("error deleting namespaces for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 	}
 
-	return nil
+	return true, nil
 }
 
 func (a *ApplicationBackupController) createCRD() error {

@@ -340,13 +340,14 @@ func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 }
 
 func (g *gcp) CancelBackup(backup *storkapi.ApplicationBackup) error {
-	return g.DeleteBackup(backup)
+	_, err := g.DeleteBackup(backup)
+	return err
 }
 
-func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	if g.service == nil {
 		if err := g.Init(nil); err != nil {
-			return err
+			return true, err
 		}
 	}
 
@@ -356,10 +357,10 @@ func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 		}
 		_, err := g.service.Snapshots.Delete(vInfo.Options["projectID"], vInfo.BackupID).Do()
 		if err != nil {
-			return err
+			return true, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (g *gcp) UpdateMigratedPersistentVolumeSpec(

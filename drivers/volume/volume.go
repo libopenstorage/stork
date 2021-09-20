@@ -141,7 +141,7 @@ type BackupRestorePluginInterface interface {
 	// Cancel the backup of volumes specified in the status
 	CancelBackup(*storkapi.ApplicationBackup) error
 	// Delete the backups specified in the status
-	DeleteBackup(*storkapi.ApplicationBackup) error
+	DeleteBackup(*storkapi.ApplicationBackup) (bool, error)
 	// Get any resources that should be created before the restore is started
 	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
@@ -381,8 +381,8 @@ func (b *BackupRestoreNotSupported) CancelBackup(*storkapi.ApplicationBackup) er
 }
 
 // DeleteBackup returns ErrNotSupported
-func (b *BackupRestoreNotSupported) DeleteBackup(*storkapi.ApplicationBackup) error {
-	return &errors.ErrNotSupported{}
+func (b *BackupRestoreNotSupported) DeleteBackup(*storkapi.ApplicationBackup) (bool, error) {
+	return true, &errors.ErrNotSupported{}
 }
 
 // GetPreRestoreResources returns ErrNotSupported

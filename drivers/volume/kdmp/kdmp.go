@@ -13,12 +13,17 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	"github.com/portworx/kdmp/pkg/controllers/dataexport"
 	"github.com/portworx/kdmp/pkg/drivers"
+	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
+	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
@@ -40,7 +45,12 @@ const (
 	// KdmpAPIVersion current api version supported by KDMP
 	KdmpAPIVersion = "kdmp.portworx.com/v1alpha1"
 	// PVCKind constant for pvc
-	PVCKind = "PersistentVolumeClaim"
+	PVCKind                 = "PersistentVolumeClaim"
+	kopiaDeleteDriver       = "kopiadelete"
+	snapshotDeleteJobPrefix = "stork-delete"
+	secretNamespace         = "kube-system"
+	pxbackupAnnotation      = "portworx.io/created-by"
+	pxbackupAnnotationValue = "px-backup"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -219,17 +229,144 @@ func isDataExportCompleted(status kdmpapi.ExportStatus) bool {
 }
 
 func (k *kdmp) CancelBackup(backup *storkapi.ApplicationBackup) error {
-	return k.DeleteBackup(backup)
-}
-
-func (k *kdmp) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 	for _, vInfo := range backup.Status.Volumes {
 		crName := getGenericCRName(backup.Name, vInfo.Namespace, vInfo.PersistentVolumeClaim)
-		if err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.Namespace); err != nil {
-			logrus.Warnf("failed to delete data export CR: %v", err)
+		err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.Namespace)
+		if err != nil && k8serror.IsNotFound(err) {
+			errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
+			log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
 		}
 	}
+
 	return nil
+}
+
+func (k *kdmp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
+	// For Applicationbackup CR created by px-backup, we want to handle deleting
+	// successful PVC (of in-progress backup) from px-backup deleteworker() to avoid two entities
+	// doing the delete of snapshot leading to races.
+	if val, ok := backup.Annotations[pxbackupAnnotation]; !ok {
+		return deleteKdmpSnapshot(backup)
+	} else if val != pxbackupAnnotationValue {
+		return deleteKdmpSnapshot(backup)
+	} else {
+		logrus.Infof("skipping snapshot deletion as ApplicationBackup CR [%v] is created by px-backup", backup.Name)
+	}
+
+	return true, nil
+}
+
+func deleteKdmpSnapshot(backup *storkapi.ApplicationBackup) (bool, error) {
+	index := -1
+	for len(backup.Status.Volumes) >= 1 {
+		index++
+		if index >= len(backup.Status.Volumes) {
+			break
+		}
+		vInfo := backup.Status.Volumes[index]
+		// Delete those successful PVC vols which are completed as part of this backup.
+		if vInfo.BackupID != "" {
+			secretName := backup.Name
+			driver, err := driversinstance.Get(kopiaDeleteDriver)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed in getting driver instance of kdmp delete driver: %v", err)
+				logrus.Errorf("%v", errMsg)
+				return false, fmt.Errorf(errMsg)
+			}
+			jobName := getGenericCRName(snapshotDeleteJobPrefix, vInfo.Namespace, vInfo.PersistentVolumeClaim)
+			_, err = batch.Instance().GetJob(
+				jobName,
+				vInfo.Namespace,
+			)
+			if err != nil && k8serror.IsNotFound(err) {
+				err := dataexport.CreateCredentialsSecret(secretName, backup.Spec.BackupLocation, backup.Namespace, backup.Namespace)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to create secret [%v] in namespace [%v]: %v", secretName, backup.Namespace, err)
+					log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+					return false, fmt.Errorf(errMsg)
+				}
+				_, err = driver.StartJob(
+					drivers.WithJobName(jobName),
+					drivers.WithSnapshotID(vInfo.BackupID),
+					drivers.WithNamespace(vInfo.Namespace),
+					drivers.WithSourcePVC(vInfo.PersistentVolumeClaim),
+					drivers.WithCredSecretName(secretName),
+					drivers.WithCredSecretNamespace(secretNamespace),
+				)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to start kdmp snapshot delete job for snapshot [%v] for backup [%v]: %v",
+						vInfo.BackupID, backup.Name, err)
+					log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+					return false, fmt.Errorf(errMsg)
+				}
+				return false, nil
+			}
+			jobID := kdmputils.NamespacedName(backup.Namespace, jobName)
+			canDelete, err := doKdmpDeleteJob(jobID, driver)
+			if err != nil {
+				return false, err
+			}
+			if canDelete {
+				// Remove the vol from the volInfo list
+				copy(backup.Status.Volumes[index:], backup.Status.Volumes[index+1:])
+				backup.Status.Volumes = backup.Status.Volumes[:len(backup.Status.Volumes)-1]
+				// After each successful deleted iteration, volume list is update.
+				// Starting from previous postion as the delted volume slot is empty
+				index--
+			}
+		}
+	}
+
+	// When all vols are deleted, go ahead and delete the secret
+	if len(backup.Status.Volumes) == 0 {
+		err := core.Instance().DeleteSecret(backup.Name, backup.Namespace)
+		if err != nil && !k8serror.IsNotFound(err) {
+			errMsg := fmt.Sprintf("failed to delete secret [%s] from namespace [%v]:' %v",
+				backup.Name, backup.Namespace, err)
+			log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+			return false, fmt.Errorf(errMsg)
+		}
+	} else {
+		// Some jobs are still in-progress
+		log.ApplicationBackupLog(backup).Debugf("cannot delete ApplicationBackup CR as some vol deletes are in-progress")
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func doKdmpDeleteJob(id string, driver drivers.Interface) (bool, error) {
+	fn := "doKdmpDeleteJob:"
+	progress, err := driver.JobStatus(id)
+	if err != nil {
+		errMsg := fmt.Errorf("failed in getting kdmp delete job [%v] status: %v", id, err)
+		logrus.Warnf("%s %v", fn, errMsg)
+		return false, errMsg
+	}
+	switch progress.State {
+	case drivers.JobStateCompleted:
+		if err := driver.DeleteJob(id); err != nil {
+			errMsg := fmt.Errorf("deletion of job [%v] failed: %v", id, err)
+			logrus.Warnf("%s %v", fn, errMsg)
+			return false, errMsg
+		}
+		return true, nil
+	case drivers.JobStateFailed:
+		errMsg := fmt.Errorf("kdmp delete job [%v] failed to execute: %v", id, err)
+		logrus.Warnf("%s %v", fn, errMsg)
+		if err := driver.DeleteJob(id); err != nil {
+			errMsg := fmt.Errorf("deletion of job [%v] failed: %v", id, err)
+			logrus.Warnf("%s %v", fn, errMsg)
+			return false, errMsg
+		}
+		return true, nil
+	case drivers.JobStateInProgress:
+		return false, nil
+	default:
+		errMsg := fmt.Errorf("invalid job [%v] status type: [%v]", id, progress.State)
+		logrus.Warnf("%s %v", fn, errMsg)
+		return true, nil
+	}
 }
 
 func (k *kdmp) UpdateMigratedPersistentVolumeSpec(
