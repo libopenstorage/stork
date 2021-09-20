@@ -118,8 +118,8 @@ type Driver interface {
 	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
 
-	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
-	SetReplicationFactor(vol *Volume, rf int64, opts ...Options) error
+	// SetReplicationFactor sets the volume's replication factor to the passed param rf and nodes.
+	SetReplicationFactor(vol *Volume, rf int64, nodesToBeUpdated []string, opts ...Options) error
 
 	// GetMaxReplicationFactor returns the max supported repl factor of a volume
 	GetMaxReplicationFactor() int64

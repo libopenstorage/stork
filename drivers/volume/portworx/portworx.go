@@ -813,6 +813,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
+//GetNodeForVolume returns the node on which volume is attached
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
@@ -1303,7 +1304,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 	return replFactor, nil
 }
 
-func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, opts ...torpedovolume.Options) error {
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, opts ...torpedovolume.Options) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	var replicationUpdateTimeout time.Duration
 	if len(opts) > 0 {
@@ -1312,6 +1313,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		replicationUpdateTimeout = validateReplicationUpdateTimeout
 	}
 	logrus.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
+	logrus.Infof("Setting ReplicationFactor to: %v", replFactor)
 
 	t := func() (interface{}, bool, error) {
 		volDriver := d.getVolDriver()
@@ -1322,10 +1324,16 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			return nil, true, err
 		}
 
+		replicaSet := &api.ReplicaSet{}
+		if len(nodesToBeUpdated) > 0 {
+			replicaSet = &api.ReplicaSet{Nodes: nodesToBeUpdated}
+			logrus.Infof("Updating ReplicaSet of node(s): %v", nodesToBeUpdated)
+		}
+
 		volumeSpecUpdate := &api.VolumeSpecUpdate{
 			HaLevelOpt:          &api.VolumeSpecUpdate_HaLevel{HaLevel: int64(replFactor)},
 			SnapshotIntervalOpt: &api.VolumeSpecUpdate_SnapshotInterval{SnapshotInterval: math.MaxUint32},
-			ReplicaSet:          &api.ReplicaSet{},
+			ReplicaSet:          replicaSet,
 		}
 		_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
 			VolumeId: volumeInspectResponse.Volume.Id,

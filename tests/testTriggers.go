@@ -259,7 +259,7 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 							errExpected = true
 						}
 						expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-						err = Inst().V.SetReplicationFactor(v, currRep+1, opts)
+						err = Inst().V.SetReplicationFactor(v, currRep+1, nil, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
 						} else {
@@ -346,7 +346,7 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 						}
 						expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 
-						err = Inst().V.SetReplicationFactor(v, currRep-1, opts)
+						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
 

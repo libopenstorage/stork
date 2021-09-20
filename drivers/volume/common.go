@@ -185,7 +185,7 @@ func (d *DefaultDriver) GetReplicationFactor(vol *Volume) (int64, error) {
 }
 
 // SetReplicationFactor sets the volume's replication factor to the passed param rf.
-func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, opts ...Options) error {
+func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, nodesToBeUpdated []string, opts ...Options) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetReplicationFactor()",
