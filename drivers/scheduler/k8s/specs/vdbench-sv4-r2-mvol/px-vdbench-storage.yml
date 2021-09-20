@@ -1,0 +1,46 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: vdbench-sc-sharedv4
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+  sharedv4: "true"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-sharedv4-1
+spec:
+  storageClassName: vdbench-sc-sharedv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-sharedv4-2
+spec:
+  storageClassName: vdbench-sc-sharedv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-sharedv4-3
+spec:
+  storageClassName: vdbench-sc-sharedv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi

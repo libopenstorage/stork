@@ -1,0 +1,38 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vdbench-sv4-svc-multivol
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vdbench-sv4-svc-multivol
+  template:
+    metadata:
+      labels:
+        app: vdbench-sv4-svc-multivol
+    spec:
+      schedulerName: stork
+      containers:
+        - name: vdbench
+          image: portworx/vdbench:multivol
+          imagePullPolicy: IfNotPresent
+          command: ["./bench_runner.sh"]
+          args: ["Basic", "5400", "datadir", "1" , "{{ .ClaimsCount }}", "$(POD_NAME)"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+          {{- range $val := Iterate .ClaimsCount }}
+            - name: vdbench-persistent-storage-{{ $val }}
+              mountPath: /datadir{{ $val }}
+          {{- end }}
+      volumes:
+      {{- range $val := Iterate .ClaimsCount }}
+        - name: vdbench-persistent-storage-{{ $val }}
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-sv4-svc-{{ $val }}
+      {{- end }}

@@ -329,7 +329,18 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 			customConfig = scheduler.AppConfig{}
 		}
 
-		tmpl, err := template.New("customConfig").Parse(string(file))
+		var funcs = template.FuncMap{
+			"Iterate": func(count int) []int {
+				var i int
+				var Items []int
+				for i = 1; i <= (count); i++ {
+					Items = append(Items, i)
+				}
+				return Items
+			},
+		}
+
+		tmpl, err := template.New("customConfig").Funcs(funcs).Parse(string(file))
 		if err != nil {
 			return nil, err
 		}
@@ -2950,6 +2961,7 @@ func (k *K8s) IsScalable(spec interface{}) bool {
 				}
 			}
 		}
+		return true
 	} else if _, ok := spec.(*appsapi.StatefulSet); ok {
 		return true
 	}

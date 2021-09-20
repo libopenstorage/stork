@@ -94,3 +94,13 @@ type ErrFailedToSystemCheck struct {
 func (e *ErrFailedToSystemCheck) Error() string {
 	return fmt.Sprintf("System check failed on: %v. Cause: %v", e.Node.Name, e.Cause)
 }
+
+// ErrFailedToDeleteNode error type when failing to delete the node
+type ErrFailedToDeleteNode struct {
+	Node  Node
+	Cause string
+}
+
+func (e *ErrFailedToDeleteNode) Error() string {
+	return fmt.Sprintf("Failed to delete node: %v. Cause: %v", e.Node.Name, e.Cause)
+}

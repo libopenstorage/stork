@@ -63,6 +63,7 @@ type AppConfig struct {
 	Replicas     int    `yaml:"replicas"`
 	VolumeSize   string `yaml:"volume_size"`
 	WorkloadSize string `yaml:"workload_size"`
+	ClaimsCount  int    `yaml:"claims_count"`
 }
 
 // InitOptions initialization options

@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -76,6 +77,7 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
+	logrus.Infof("Got Insatacne id:%v", instanceID)
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
@@ -95,8 +97,11 @@ func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 			aws_pkg.String(instanceID),
 		},
 	}
+	logrus.Infof("sendCommandInput:%+v", sendCommandInput)
 	sendCommandOutput, err := a.svcSsm.SendCommand(sendCommandInput)
+	logrus.Infof("sendCommandOutput:%+v", sendCommandOutput)
 	if err != nil {
+		logrus.Infof("sendCommandOutput Err:%+v", err)
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),
@@ -163,6 +168,54 @@ func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 }
 
 func (a *aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
+	var err error
+	instanceID, err := a.getNodeIDByPrivAddr(n)
+	if err != nil {
+		return &node.ErrFailedToShutdownNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get instance ID due to: %v", err),
+		}
+	}
+	//Reboot the instance by its InstanceID
+	stopInstanceInput := &ec2.StopInstancesInput{
+		InstanceIds: []*string{
+			aws_pkg.String(instanceID),
+		},
+	}
+	_, err = a.svc.StopInstances(stopInstanceInput)
+	if err != nil {
+		return &node.ErrFailedToShutdownNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to stop instance due to: %v", err),
+		}
+	}
+
+	return nil
+}
+
+func (a *aws) DeleteNode(n node.Node, timeout time.Duration) error {
+	var err error
+	instanceID, err := a.getNodeIDByPrivAddr(n)
+	if err != nil {
+		return &node.ErrFailedToDeleteNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get instance ID due to: %v", err),
+		}
+	}
+	//Terminate the instance by its InstanceID
+	stopInstanceInput := &ec2.TerminateInstancesInput{
+		InstanceIds: []*string{
+			aws_pkg.String(instanceID),
+		},
+	}
+	_, err = a.svc.TerminateInstances(stopInstanceInput)
+	if err != nil {
+		return &node.ErrFailedToDeleteNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to terminate instance due to: %v", err),
+		}
+	}
+
 	return nil
 }
 

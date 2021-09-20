@@ -1,0 +1,44 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vdbench-sharedv4
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: vdbench-sharedv4
+  template:
+    metadata:
+      labels:
+        app: vdbench-sharedv4
+    spec:
+      schedulerName: stork
+      containers:
+        - name: vdbench
+          image: srinav/ocp-vdbench:v3
+          imagePullPolicy: IfNotPresent
+          command: ["./bench_runner.sh"]
+          args: ["Basic", "5400", "datadir", "1" , "3", "$(POD_NAME)"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: vdbench-persistent-storage-1
+              mountPath: /datadir1
+            - name: vdbench-persistent-storage-2
+              mountPath: /datadir2
+            - name: vdbench-persistent-storage-3
+              mountPath: /datadir3
+      volumes:
+        - name: vdbench-persistent-storage-1
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-sharedv4-1
+        - name: vdbench-persistent-storage-2
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-sharedv4-2
+        - name: vdbench-persistent-storage-3
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-sharedv4-3

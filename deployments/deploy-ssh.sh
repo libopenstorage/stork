@@ -150,6 +150,11 @@ if [ -n "${CSI_GENERIC_DRIVER_CONFIGMAP}" ]; then
     CSI_GENERIC_CONFIGMAP="${CSI_GENERIC_DRIVER_CONFIGMAP}"
 fi
 
+if [ -z "$AWS_REGION" ]; then
+    AWS_REGION="us-east-1"
+    echo "Using default AWS_REGION of ${AWS_REGION}"
+fi
+
 for i in $@
 do
 case $i in
@@ -174,7 +179,8 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/scheduler_upgrade.test",
             "bin/node_decommission.test",
             "bin/license.test",
-            "bin/upgrade_cluster.test",'
+            "bin/upgrade_cluster.test",
+            "bin/sharedv4.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi
@@ -467,6 +473,8 @@ spec:
       value: "${AWS_ACCESS_KEY_ID}"
     - name: AWS_SECRET_ACCESS_KEY
       value: "${AWS_SECRET_ACCESS_KEY}"
+    - name: AWS_REGION
+      value: "${AWS_REGION}"
     - name: KUBECONFIGS
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT
