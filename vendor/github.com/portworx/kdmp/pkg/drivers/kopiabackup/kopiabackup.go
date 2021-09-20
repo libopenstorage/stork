@@ -21,7 +21,6 @@ import (
 const (
 	// SkipResourceAnnotation skipping kopia secret to be backed up
 	SkipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
-	backupJobPrefix        = "backup"
 )
 
 // Driver is a resticbackup implementation of the data export interface.
@@ -73,6 +72,13 @@ func (d Driver) DeleteJob(id string) error {
 	namespace, name, err := utils.ParseJobID(id)
 	if err != nil {
 		return err
+	}
+
+	logrus.Infof("Delete job: name: %v, namespace: %v", name, namespace)
+	err = kdmpops.Instance().DeleteVolumeBackup(context.Background(), name, namespace)
+	if err != nil && !apierrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("failed to delete VolumeBackup CR %v: %v", name, err)
+		return fmt.Errorf(errMsg)
 	}
 
 	if err := coreops.Instance().DeleteSecret(name, namespace); err != nil && !apierrors.IsNotFound(err) {
@@ -232,7 +238,7 @@ func jobFor(
 }
 
 func toJobName(dataExportName string) string {
-	return fmt.Sprintf("%s-%s", backupJobPrefix, dataExportName)
+	return fmt.Sprintf("%s-%s", utils.BackupJobPrefix, dataExportName)
 }
 
 func toRepoName(pvcName, pvcNamespace string) string {
@@ -273,7 +279,7 @@ func buildJob(jobName string, o drivers.JobOpts) (*batchv1.Job, error) {
 			jobName,
 			o.Namespace,
 			o.SourcePVCName,
-			utils.FrameCredSecretName(o.DataExportName, o.SourcePVCName),
+			utils.FrameCredSecretName(utils.BackupJobPrefix, o.DataExportName),
 			o.BackupLocationName,
 			o.BackupLocationNamespace,
 			o.Namespace,
@@ -287,7 +293,7 @@ func buildJob(jobName string, o drivers.JobOpts) (*batchv1.Job, error) {
 		jobName,
 		o.Namespace,
 		o.SourcePVCName,
-		utils.FrameCredSecretName(o.DataExportName, o.SourcePVCName),
+		utils.FrameCredSecretName(utils.BackupJobPrefix, o.DataExportName),
 		o.BackupLocationName,
 		o.BackupLocationNamespace,
 		o.Namespace,

@@ -6,9 +6,9 @@ import (
 
 const (
 	// BackupLocationMaintenanceName is name for the BackupLocationMaintenance resource.
-	BackupLocationMaintenanceName = "backupLocationMaintenance"
+	BackupLocationMaintenanceName = "backuplocationmaintenance"
 	// BackupLocationMaintenancePlural is the name for list of BackupLocationMaintenance resources.
-	BackupLocationMaintenancePlural = "backupLocationMaintenances"
+	BackupLocationMaintenancePlural = "backuplocationmaintenances"
 )
 
 // +genclient
@@ -43,7 +43,7 @@ type BackupLocationMaintenanceSpec struct {
 
 // BackupLocationMaintenanceStatus defines  the status for BackupLocationMaintenance
 type BackupLocationMaintenanceStatus struct {
-	RepoStatus []*RepoMaintenanceStatus
+	RepoStatus map[string]RepoMaintenanceStatus
 }
 
 // RepoMaintenanceStatusType is the status of the repository maintenance run.
@@ -58,8 +58,6 @@ const (
 
 // RepoMaintenanceStatus defines status for RepoMaintenanceStatus.
 type RepoMaintenanceStatus struct {
-	// RepoName - name of the repository
-	RepoName string `json:"repoName"`
 	// LastRunTimestamp - last maintenance run timestamp
 	LastRunTimestamp metav1.Time `json:"lastRunTimestamp"`
 	// Status - last maintenance run status

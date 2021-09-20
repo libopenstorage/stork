@@ -7,6 +7,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/kopiabackup"
 	"github.com/portworx/kdmp/pkg/drivers/kopiadelete"
+	"github.com/portworx/kdmp/pkg/drivers/kopiamaintenance"
 	"github.com/portworx/kdmp/pkg/drivers/kopiarestore"
 	"github.com/portworx/kdmp/pkg/drivers/resticbackup"
 	"github.com/portworx/kdmp/pkg/drivers/resticrestore"
@@ -16,12 +17,13 @@ import (
 var (
 	mu         sync.Mutex
 	driversMap = map[string]drivers.Interface{
-		drivers.Rsync:         rsync.Driver{},
-		drivers.ResticBackup:  resticbackup.Driver{},
-		drivers.ResticRestore: resticrestore.Driver{},
-		drivers.KopiaBackup:   kopiabackup.Driver{},
-		drivers.KopiaRestore:  kopiarestore.Driver{},
-		drivers.KopiaDelete:   kopiadelete.Driver{},
+		drivers.Rsync:            rsync.Driver{},
+		drivers.ResticBackup:     resticbackup.Driver{},
+		drivers.ResticRestore:    resticrestore.Driver{},
+		drivers.KopiaBackup:      kopiabackup.Driver{},
+		drivers.KopiaRestore:     kopiarestore.Driver{},
+		drivers.KopiaDelete:      kopiadelete.Driver{},
+		drivers.KopiaMaintenance: kopiamaintenance.Driver{},
 	}
 )
 

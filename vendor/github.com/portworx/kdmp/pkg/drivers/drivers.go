@@ -4,12 +4,13 @@ import "fmt"
 
 // Known drivers.
 const (
-	Rsync         = "rsync"
-	ResticBackup  = "resticbackup"
-	ResticRestore = "resticrestore"
-	KopiaBackup   = "kopiabackup"
-	KopiaRestore  = "kopiarestore"
-	KopiaDelete   = "kopiadelete"
+	Rsync            = "rsync"
+	ResticBackup     = "resticbackup"
+	ResticRestore    = "resticrestore"
+	KopiaBackup      = "kopiabackup"
+	KopiaRestore     = "kopiarestore"
+	KopiaDelete      = "kopiadelete"
+	KopiaMaintenance = "kopiamaintenance"
 )
 
 // Docker images.
