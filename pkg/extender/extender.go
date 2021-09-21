@@ -216,7 +216,9 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 						}
 					}
 				}
-				if !onlineNodeFound {
+				if !onlineNodeFound && len(volumeInfo.DataNodes) > 0 {
+					// Volume has a list of DataNodes where it has a replica present and none of
+					// those nodes are online
 					storklog.PodLog(pod).Errorf("No online storage nodes have replica for volume, returning error")
 					msg := "No online node found with volume replica"
 					e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
