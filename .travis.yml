@@ -12,7 +12,7 @@ cache:
     - $HOME/.cache/go-build
 script:
   - |
-    if [ "${TRAVIS_BRANCH}" == "2.6" ]; then
+    if [ "${TRAVIS_BRANCH}" == "2.7" ]; then
       export DOCKER_HUB_STORK_TAG="${TRAVIS_BRANCH}"-dev
       export DOCKER_HUB_STORK_TEST_TAG="${TRAVIS_BRANCH}"
       export DOCKER_HUB_CMD_EXECUTOR_TAG="${TRAVIS_BRANCH}"-dev
