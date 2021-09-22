@@ -2317,11 +2317,9 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 		defer resp.Body.Close()
 
-		/* PWX-19768
 		// Check S3 bucket for diags
 
 		// TODO: Waiting for S3 credentials.
-		*/
 	}
 
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
@@ -2377,42 +2375,42 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		time.Sleep(5 * time.Second)
 	}
 
-	/* TODO: Verify we can see the files once we return a filename
-	if diagOps.Validate() {
-	pxNode, err := d.getPxNode(&n)
-	if err != nil {
-		return err
-	}
+	//TODO: Verify we can see the files once we return a filename
+	/*
+		if diagOps.Validate {
+			pxNode, err := d.getPxNode(&n)
+			if err != nil {
+				return err
+			}
 
-	opts := node.ConnectionOpts{
-		IgnoreError:     false,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-		Sudo:            true,
-	}
+			opts := node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+				Sudo:            true,
+			}
 
-	cmd := fmt.Sprintf("test -f %s", config.OutputFile)
-	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
-	if err != nil {
-		return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
-	}
+			cmd := fmt.Sprintf("test -f %s", config.OutputFile)
+			out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+			if err != nil {
+				return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			}
 
-	logrus.Debug("Validating CCM health")
-	// Change to config package.
-	url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
-	ccmresp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-	}
+			logrus.Debug("Validating CCM health")
+			// Change to config package.
+			url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+			ccmresp, err := http.Get(url)
+			if err != nil {
+				return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+			}
 
-	defer ccmresp.Body.Close()
+			defer ccmresp.Body.Close()
 
-	// Check S3 bucket for diags
-	// TODO: Waiting for S3 credentials.
+			// Check S3 bucket for diags
+			// TODO: Waiting for S3 credentials.
 
-	}
+		}
 	*/
-
 	logrus.Debugf("Successfully collected diags on node %v", n.Name)
 	return nil
 }

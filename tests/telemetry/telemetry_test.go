@@ -39,12 +39,9 @@ var _ = Describe("{DiagsBasic}", func() {
 
 		ValidateApplications(contexts)
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
-			Step(fmt.Sprintf("collect diags on node: %s", currNode.Name), func() {
+			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
@@ -58,7 +55,7 @@ var _ = Describe("{DiagsBasic}", func() {
 		}
 
 		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
+			TearDownContext(ctx, nil)
 		}
 	})
 	JustAfterEach(func() {
@@ -77,9 +74,6 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 
 		ValidateApplications(contexts)
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s", currNode.Name), func() {
@@ -96,48 +90,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 		}
 
 		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
-	})
-
-	JustAfterEach(func() {
-		AfterEachTest(contexts)
-	})
-})
-
-// This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("{DiagsAsyncLiveBasic}", func() {
-	var contexts []*scheduler.Context
-	It("has to setup, validate, try to get a-sync diags on nodes and teardown apps", func() {
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("diagsasynclivebasic-%d", i))...)
-		}
-
-		ValidateApplications(contexts)
-
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-
-		// One node at a time, collect diags and verify in S3
-		for _, currNode := range node.GetWorkerNodes() {
-			Step(fmt.Sprintf("collect diags on node: %s", currNode.Name), func() {
-
-				config := &torpedovolume.DiagRequestConfig{
-					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/torpedo-diagsasynclive-%s-%d.tar.gz", currNode.Name, time.Now().Unix()),
-					ContainerName: "",
-					Live:          true,
-					OnHost:        true,
-				}
-
-				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true, Async: true})
-				Expect(err).NotTo(HaveOccurred())
-			})
-		}
-
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
+			TearDownContext(ctx, nil)
 		}
 	})
 
