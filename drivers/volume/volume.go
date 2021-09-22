@@ -143,7 +143,7 @@ type BackupRestorePluginInterface interface {
 	// Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) error
 	// Get any resources that should be created before the restore is started
-	GetPreRestoreResources(*storkapi.ApplicationBackup, []runtime.Unstructured) ([]runtime.Unstructured, error)
+	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
 	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
@@ -388,6 +388,7 @@ func (b *BackupRestoreNotSupported) DeleteBackup(*storkapi.ApplicationBackup) er
 // GetPreRestoreResources returns ErrNotSupported
 func (b *BackupRestoreNotSupported) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	return nil, &errors.ErrNotSupported{}

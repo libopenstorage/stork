@@ -64,7 +64,7 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		return false, fmt.Errorf("error converting PVC object: %v: %v", object, err)
 	}
 
-	if pvNameMappings != nil {
+	if len(pvNameMappings) != 0 {
 		if updatedName, present = pvNameMappings[pvc.Spec.VolumeName]; !present {
 			return false, fmt.Errorf("PV name mapping not found for %v", metadata.GetName())
 		}

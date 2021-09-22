@@ -9,6 +9,7 @@ const (
 	ResticRestore = "resticrestore"
 	KopiaBackup   = "kopiabackup"
 	KopiaRestore  = "kopiarestore"
+	KopiaDelete   = "kopiadelete"
 )
 
 // Docker images.

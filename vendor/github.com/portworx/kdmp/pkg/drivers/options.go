@@ -18,7 +18,43 @@ type JobOpts struct {
 	VolumeBackupName        string
 	VolumeBackupNamespace   string
 	DataExportName          string
+	SnapshotID              string
+	CredSecretName          string
+	CredSecretNamespace     string
 	Labels                  map[string]string
+}
+
+// WithSnapshotID is job parameter.
+func WithSnapshotID(snapshotID string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(snapshotID) == "" {
+			return fmt.Errorf("snapshotID should be set")
+		}
+		opts.SnapshotID = strings.TrimSpace(snapshotID)
+		return nil
+	}
+}
+
+// WithCredSecretName is job parameter.
+func WithCredSecretName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("cred secret name should be set")
+		}
+		opts.CredSecretName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithCredSecretNamespace is job parameter.
+func WithCredSecretNamespace(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(namespace) == "" {
+			return fmt.Errorf("cred secret namespace should be set")
+		}
+		opts.CredSecretNamespace = strings.TrimSpace(namespace)
+		return nil
+	}
 }
 
 // WithSourcePVC is job parameter.

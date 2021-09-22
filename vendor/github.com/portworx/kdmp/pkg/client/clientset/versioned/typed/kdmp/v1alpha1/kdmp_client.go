@@ -16,6 +16,7 @@ import (
 
 type KdmpV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	BackupLocationMaintenancesGetter
 	DataExportsGetter
 	VolumeBackupsGetter
 }
@@ -23,6 +24,10 @@ type KdmpV1alpha1Interface interface {
 // KdmpV1alpha1Client is used to interact with features provided by the kdmp.portworx.com group.
 type KdmpV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *KdmpV1alpha1Client) BackupLocationMaintenances(namespace string) BackupLocationMaintenanceInterface {
+	return newBackupLocationMaintenances(c, namespace)
 }
 
 func (c *KdmpV1alpha1Client) DataExports(namespace string) DataExportInterface {
