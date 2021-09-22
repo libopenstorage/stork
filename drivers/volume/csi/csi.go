@@ -604,6 +604,23 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
 	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
+
+	// check if all csi vol backup is successful
+	isCompleted := true
+	currVolInfo := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+	for _, vInfo := range backup.Status.Volumes {
+		if vInfo.DriverName != storkCSIDriverName {
+			continue
+		}
+		if vInfo.Status != storkapi.ApplicationBackupStatusSuccessful {
+			isCompleted = false
+			break
+		}
+		currVolInfo = append(currVolInfo, vInfo)
+	}
+	if isCompleted {
+		return currVolInfo, nil
+	}
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkCSIDriverName {
 			continue
