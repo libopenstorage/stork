@@ -55,7 +55,30 @@ func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericcliopt
 					}
 				}
 			} else if len(args) == 1 {
-				activationList = []string{args[0]}
+				clusterDomainName := args[0]
+				cdsList, err := storkops.Instance().ListClusterDomainStatuses()
+				if err != nil {
+					util.CheckErr(fmt.Errorf("failed to list existing cluster domains: %v", err))
+					return
+				} else if cdsList == nil {
+					util.CheckErr(fmt.Errorf("could not find any configured cluster domains"))
+					return
+				}
+				found := false
+				for _, cds := range cdsList.Items {
+					for _, cdsInfo := range cds.Status.ClusterDomainInfos {
+						if cdsInfo.Name == clusterDomainName {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					util.CheckErr(fmt.Errorf("provided cluster domain %v not found", clusterDomainName))
+					return
+				}
+
+				activationList = []string{clusterDomainName}
 			} else {
 				util.CheckErr(fmt.Errorf("exactly one cluster domain name needs to be provided to the activate command"))
 				return
@@ -127,7 +150,29 @@ func newDeactivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclio
 				if len(nameClusterDomainUpdate) > 0 {
 					name = nameClusterDomainUpdate
 				}
+
 				clusterDomainName := args[0]
+				cdsList, err := storkops.Instance().ListClusterDomainStatuses()
+				if err != nil {
+					util.CheckErr(fmt.Errorf("failed to list existing cluster domains: %v", err))
+					return
+				} else if cdsList == nil {
+					util.CheckErr(fmt.Errorf("could not find any configured cluster domains"))
+					return
+				}
+				found := false
+				for _, cds := range cdsList.Items {
+					for _, cdsInfo := range cds.Status.ClusterDomainInfos {
+						if cdsInfo.Name == clusterDomainName {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					util.CheckErr(fmt.Errorf("provided cluster domain %v not found", clusterDomainName))
+					return
+				}
 				clusterDomainUpdate := &storkv1.ClusterDomainUpdate{
 					ObjectMeta: meta.ObjectMeta{
 						Name: name,
@@ -137,7 +182,7 @@ func newDeactivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclio
 						Active:        false,
 					},
 				}
-				_, err := storkops.Instance().CreateClusterDomainUpdate(clusterDomainUpdate)
+				_, err = storkops.Instance().CreateClusterDomainUpdate(clusterDomainUpdate)
 				if err != nil {
 					util.CheckErr(fmt.Errorf("failed to deactivate cluster domain %v: %v", clusterDomainName, err))
 					return
