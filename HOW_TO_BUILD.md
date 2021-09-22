@@ -23,12 +23,12 @@ To build the Torpedo container without deploying: `make container`
 #### To build a specific ginkgo test
 
 ```
-ginkgo build  <path_to_test_pkg>
+ginkgo build <path_to_test_pkg>
 ```
 
 For e.g:
 ```
-ginkgo build  tests/basic
+ginkgo build tests/basic
 ```
 
 #### Vendoring

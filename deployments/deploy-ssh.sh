@@ -181,6 +181,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/license.test",
             "bin/upgrade_cluster.test",
             "bin/sharedv4.test",'
+            "bin/telemetry.test",
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi

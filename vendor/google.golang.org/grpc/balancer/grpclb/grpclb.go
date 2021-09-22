@@ -25,6 +25,7 @@ package grpclb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -221,6 +222,7 @@ type lbBalancer struct {
 	// when resolved address updates are received, and read in the goroutine
 	// handling fallback.
 	resolvedBackendAddrs []resolver.Address
+	connErr              error // the last connection error
 }
 
 // regeneratePicker takes a snapshot of the balancer, and generates a picker from
@@ -230,7 +232,7 @@ type lbBalancer struct {
 // Caller must hold lb.mu.
 func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 	if lb.state == connectivity.TransientFailure {
-		lb.picker = &errPicker{err: balancer.ErrTransientFailure}
+		lb.picker = &errPicker{err: fmt.Errorf("all SubConns are in TransientFailure, last connection error: %v", lb.connErr)}
 		return
 	}
 
@@ -288,7 +290,11 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 //
 // The aggregated state is:
 //  - If at least one SubConn in Ready, the aggregated state is Ready;
-//  - Else if at least one SubConn in Connecting, the aggregated state is Connecting;
+//  - Else if at least one SubConn in Connecting or IDLE, the aggregated state is Connecting;
+//    - It's OK to consider IDLE as Connecting. SubConns never stay in IDLE,
+//    they start to connect immediately. But there's a race between the overall
+//    state is reported, and when the new SubConn state arrives. And SubConns
+//    never go back to IDLE.
 //  - Else the aggregated state is TransientFailure.
 func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
 	var numConnecting uint64
@@ -298,7 +304,7 @@ func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
 			switch state {
 			case connectivity.Ready:
 				return connectivity.Ready
-			case connectivity.Connecting:
+			case connectivity.Connecting, connectivity.Idle:
 				numConnecting++
 			}
 		}
@@ -332,6 +338,8 @@ func (lb *lbBalancer) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubCo
 		// When an address was removed by resolver, b called RemoveSubConn but
 		// kept the sc's state in scStates. Remove state for this sc here.
 		delete(lb.scStates, sc)
+	case connectivity.TransientFailure:
+		lb.connErr = scs.ConnectionError
 	}
 	// Force regenerate picker if
 	//  - this sc became ready from not-ready

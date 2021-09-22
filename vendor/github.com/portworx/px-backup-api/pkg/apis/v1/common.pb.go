@@ -24,11 +24,91 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
+type LicenseType int32
+
+const (
+	LicenseType_Invalid    LicenseType = 0
+	LicenseType_Trial      LicenseType = 1
+	LicenseType_Enterprise LicenseType = 2
+	LicenseType_UsageBased LicenseType = 3
+	LicenseType_IBM        LicenseType = 4
+	LicenseType_AWS        LicenseType = 5
+	LicenseType_GCP        LicenseType = 6
+)
+
+var LicenseType_name = map[int32]string{
+	0: "Invalid",
+	1: "Trial",
+	2: "Enterprise",
+	3: "UsageBased",
+	4: "IBM",
+	5: "AWS",
+	6: "GCP",
+}
+
+var LicenseType_value = map[string]int32{
+	"Invalid":    0,
+	"Trial":      1,
+	"Enterprise": 2,
+	"UsageBased": 3,
+	"IBM":        4,
+	"AWS":        5,
+	"GCP":        6,
+}
+
+func (x LicenseType) String() string {
+	return proto.EnumName(LicenseType_name, int32(x))
+}
+
+func (LicenseType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_b12f1cda86a0f641, []int{0}
+}
+
+type Ownership_AccessType int32
+
+const (
+	Ownership_Invalid Ownership_AccessType = 0
+	// Read access only and cannot affect the resource.
+	Ownership_Read Ownership_AccessType = 1
+	// Write access and can affect the resource.
+	// This type automatically provides Read access also.
+	Ownership_Write Ownership_AccessType = 2
+	// Administrator access.
+	// This type automatically provides Read and Write access also.
+	Ownership_Admin Ownership_AccessType = 3
+)
+
+var Ownership_AccessType_name = map[int32]string{
+	0: "Invalid",
+	1: "Read",
+	2: "Write",
+	3: "Admin",
+}
+
+var Ownership_AccessType_value = map[string]int32{
+	"Invalid": 0,
+	"Read":    1,
+	"Write":   2,
+	"Admin":   3,
+}
+
+func (x Ownership_AccessType) String() string {
+	return proto.EnumName(Ownership_AccessType_name, int32(x))
+}
+
+func (Ownership_AccessType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_b12f1cda86a0f641, []int{2, 0}
+}
+
 type Metadata struct {
 	// name of the object
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// uid for the object
-	Uid   string `protobuf:"bytes,2,opt,name=uid,proto3" json:"uid,omitempty"`
+	Uid string `protobuf:"bytes,2,opt,name=uid,proto3" json:"uid,omitempty"`
+	// owner of the object. This field is deprecated, not to be used
+	// TODO: Currently gRPC supports marking field as [deprecated=true]
+	// As we need to access this field as part of migration to new Ownership
+	// message will not use the same for now.
 	Owner string `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"`
 	// organization uid
 	OrgId          string           `protobuf:"bytes,4,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
@@ -36,6 +116,10 @@ type Metadata struct {
 	LastUpdateTime *types.Timestamp `protobuf:"bytes,6,opt,name=last_update_time,json=lastUpdateTime,proto3" json:"last_update_time,omitempty"`
 	// label selectors for the object for filtering
 	Labels map[string]string `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// create time in sec
+	CreateTimeInSec int64 `protobuf:"varint,8,opt,name=create_time_in_sec,json=createTimeInSec,proto3" json:"create_time_in_sec,omitempty"`
+	// ownership of the object
+	Ownership *Ownership `protobuf:"bytes,9,opt,name=ownership,proto3" json:"ownership,omitempty"`
 }
 
 func (m *Metadata) Reset()         { *m = Metadata{} }
@@ -120,15 +204,33 @@ func (m *Metadata) GetLabels() map[string]string {
 	return nil
 }
 
+func (m *Metadata) GetCreateTimeInSec() int64 {
+	if m != nil {
+		return m.CreateTimeInSec
+	}
+	return 0
+}
+
+func (m *Metadata) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
+}
+
 type CreateMetadata struct {
 	// name of the object
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// org id of the object
 	OrgId string `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
-	// owner of the object
+	// owner of the object. This field is deprecated, not to be used
 	Owner string `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"`
 	// labels associated with the object
 	Labels map[string]string `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// ownership of the object
+	Ownership *Ownership `protobuf:"bytes,5,opt,name=ownership,proto3" json:"ownership,omitempty"`
+	// uid of the object
+	Uid string `protobuf:"bytes,6,opt,name=uid,proto3" json:"uid,omitempty"`
 }
 
 func (m *CreateMetadata) Reset()         { *m = CreateMetadata{} }
@@ -192,41 +294,327 @@ func (m *CreateMetadata) GetLabels() map[string]string {
 	return nil
 }
 
+func (m *CreateMetadata) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
+}
+
+func (m *CreateMetadata) GetUid() string {
+	if m != nil {
+		return m.Uid
+	}
+	return ""
+}
+
+// Ownership information for objects(eg: backup object, schedule object).
+// Administrators are users who belong to the group `*`, meaning, every group.
+type Ownership struct {
+	// Username of owner
+	// The storage system uses the username taken from the token
+	// and is saved on this field. Only users with system administration
+	// can edit this value.
+	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	// Group access to objects which must match the group set in the
+	// authorization token.
+	// Can be set by the owner or the system administrator only.
+	// Possible values are:
+	// 1. no groups: Means no groups are given access.
+	// 2. `["*"]`: All groups are allowed.
+	// 3. `["group1", "group2"]`: Only certain groups are allowed. In this
+	// example only
+	// _group1_ and _group2_ are allowed.
+	Groups []*Ownership_AccessConfig `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty"`
+	// Collaborator access to objects gives access to other user.
+	// Must be the username (unique id) set in the authorization token.
+	// The owner or the administrator can set this value. Possible values
+	// are:
+	// 1. no collaborators: Means no users are given access.
+	// 2. `["*"]`: All users are allowed.
+	// 3. `["username1", "username2"]`: Only certain usernames are allowed.
+	// In this example only
+	// _username1_ and _username2_ are allowed.
+	Collaborators []*Ownership_AccessConfig `protobuf:"bytes,3,rep,name=collaborators,proto3" json:"collaborators,omitempty"`
+	// Public access to objects may be assigned for access by the public
+	// userd
+	// TODO: Instead of PublicAccessControl, can we just set '*' in
+	// collaborators with required permission?
+	Public *Ownership_PublicAccessControl `protobuf:"bytes,4,opt,name=public,proto3" json:"public,omitempty"`
+}
+
+func (m *Ownership) Reset()         { *m = Ownership{} }
+func (m *Ownership) String() string { return proto.CompactTextString(m) }
+func (*Ownership) ProtoMessage()    {}
+func (*Ownership) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b12f1cda86a0f641, []int{2}
+}
+func (m *Ownership) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Ownership) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Ownership.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Ownership) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Ownership.Merge(m, src)
+}
+func (m *Ownership) XXX_Size() int {
+	return m.Size()
+}
+func (m *Ownership) XXX_DiscardUnknown() {
+	xxx_messageInfo_Ownership.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Ownership proto.InternalMessageInfo
+
+func (m *Ownership) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *Ownership) GetGroups() []*Ownership_AccessConfig {
+	if m != nil {
+		return m.Groups
+	}
+	return nil
+}
+
+func (m *Ownership) GetCollaborators() []*Ownership_AccessConfig {
+	if m != nil {
+		return m.Collaborators
+	}
+	return nil
+}
+
+func (m *Ownership) GetPublic() *Ownership_PublicAccessControl {
+	if m != nil {
+		return m.Public
+	}
+	return nil
+}
+
+type Ownership_AccessConfig struct {
+	Id     string               `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Access Ownership_AccessType `protobuf:"varint,2,opt,name=access,proto3,enum=Ownership_AccessType" json:"access,omitempty"`
+}
+
+func (m *Ownership_AccessConfig) Reset()         { *m = Ownership_AccessConfig{} }
+func (m *Ownership_AccessConfig) String() string { return proto.CompactTextString(m) }
+func (*Ownership_AccessConfig) ProtoMessage()    {}
+func (*Ownership_AccessConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b12f1cda86a0f641, []int{2, 0}
+}
+func (m *Ownership_AccessConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Ownership_AccessConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Ownership_AccessConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Ownership_AccessConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Ownership_AccessConfig.Merge(m, src)
+}
+func (m *Ownership_AccessConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *Ownership_AccessConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_Ownership_AccessConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Ownership_AccessConfig proto.InternalMessageInfo
+
+func (m *Ownership_AccessConfig) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *Ownership_AccessConfig) GetAccess() Ownership_AccessType {
+	if m != nil {
+		return m.Access
+	}
+	return Ownership_Invalid
+}
+
+// PublicAccessControl allows assigning public ownership
+type Ownership_PublicAccessControl struct {
+	// AccessType declares which level of public access is allowed
+	Type Ownership_AccessType `protobuf:"varint,1,opt,name=type,proto3,enum=Ownership_AccessType" json:"type,omitempty"`
+}
+
+func (m *Ownership_PublicAccessControl) Reset()         { *m = Ownership_PublicAccessControl{} }
+func (m *Ownership_PublicAccessControl) String() string { return proto.CompactTextString(m) }
+func (*Ownership_PublicAccessControl) ProtoMessage()    {}
+func (*Ownership_PublicAccessControl) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b12f1cda86a0f641, []int{2, 1}
+}
+func (m *Ownership_PublicAccessControl) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Ownership_PublicAccessControl) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Ownership_PublicAccessControl.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Ownership_PublicAccessControl) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Ownership_PublicAccessControl.Merge(m, src)
+}
+func (m *Ownership_PublicAccessControl) XXX_Size() int {
+	return m.Size()
+}
+func (m *Ownership_PublicAccessControl) XXX_DiscardUnknown() {
+	xxx_messageInfo_Ownership_PublicAccessControl.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Ownership_PublicAccessControl proto.InternalMessageInfo
+
+func (m *Ownership_PublicAccessControl) GetType() Ownership_AccessType {
+	if m != nil {
+		return m.Type
+	}
+	return Ownership_Invalid
+}
+
+type ObjectRef struct {
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Uid  string `protobuf:"bytes,2,opt,name=uid,proto3" json:"uid,omitempty"`
+}
+
+func (m *ObjectRef) Reset()         { *m = ObjectRef{} }
+func (m *ObjectRef) String() string { return proto.CompactTextString(m) }
+func (*ObjectRef) ProtoMessage()    {}
+func (*ObjectRef) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b12f1cda86a0f641, []int{3}
+}
+func (m *ObjectRef) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ObjectRef) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ObjectRef.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ObjectRef) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ObjectRef.Merge(m, src)
+}
+func (m *ObjectRef) XXX_Size() int {
+	return m.Size()
+}
+func (m *ObjectRef) XXX_DiscardUnknown() {
+	xxx_messageInfo_ObjectRef.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ObjectRef proto.InternalMessageInfo
+
+func (m *ObjectRef) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *ObjectRef) GetUid() string {
+	if m != nil {
+		return m.Uid
+	}
+	return ""
+}
+
 func init() {
+	proto.RegisterEnum("LicenseType", LicenseType_name, LicenseType_value)
+	proto.RegisterEnum("Ownership_AccessType", Ownership_AccessType_name, Ownership_AccessType_value)
 	proto.RegisterType((*Metadata)(nil), "Metadata")
 	proto.RegisterMapType((map[string]string)(nil), "Metadata.LabelsEntry")
 	proto.RegisterType((*CreateMetadata)(nil), "CreateMetadata")
 	proto.RegisterMapType((map[string]string)(nil), "CreateMetadata.LabelsEntry")
+	proto.RegisterType((*Ownership)(nil), "Ownership")
+	proto.RegisterType((*Ownership_AccessConfig)(nil), "Ownership.AccessConfig")
+	proto.RegisterType((*Ownership_PublicAccessControl)(nil), "Ownership.PublicAccessControl")
+	proto.RegisterType((*ObjectRef)(nil), "ObjectRef")
 }
 
 func init() { proto.RegisterFile("pkg/apis/v1/common.proto", fileDescriptor_b12f1cda86a0f641) }
 
 var fileDescriptor_b12f1cda86a0f641 = []byte{
-	// 380 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x50, 0xbd, 0x4e, 0xeb, 0x30,
-	0x18, 0xad, 0x93, 0x36, 0xf7, 0x5e, 0x47, 0xaa, 0xaa, 0xe8, 0x56, 0x8a, 0x7a, 0x25, 0xdf, 0xaa,
-	0x53, 0x19, 0xea, 0x88, 0x76, 0xe1, 0x67, 0xe3, 0x67, 0x40, 0x82, 0xa5, 0x82, 0x85, 0xa5, 0x72,
-	0x1a, 0x63, 0xa2, 0x26, 0x71, 0x94, 0x38, 0x45, 0x7d, 0x0b, 0x1e, 0x83, 0x47, 0x60, 0x65, 0x43,
-	0x4c, 0x1d, 0x19, 0x21, 0x7d, 0x09, 0x46, 0x64, 0x27, 0xfd, 0x41, 0x42, 0xb0, 0xb0, 0x9d, 0x73,
-	0x74, 0xfc, 0xf9, 0x9c, 0x03, 0xed, 0x78, 0xc2, 0x1c, 0x12, 0xfb, 0xa9, 0x33, 0xdd, 0x76, 0xc6,
-	0x3c, 0x0c, 0x79, 0x84, 0xe3, 0x84, 0x0b, 0xde, 0xfa, 0xcf, 0x38, 0x67, 0x01, 0x75, 0x14, 0x73,
-	0xb3, 0x2b, 0x47, 0xf8, 0x21, 0x4d, 0x05, 0x09, 0xe3, 0xd2, 0xd0, 0x63, 0xbe, 0xb8, 0xce, 0x5c,
-	0x3c, 0xe6, 0xa1, 0xc3, 0x38, 0xe3, 0x6b, 0xa7, 0x64, 0x8a, 0x28, 0x54, 0xd8, 0x3b, 0x4f, 0x1a,
-	0xfc, 0x7d, 0x46, 0x05, 0xf1, 0x88, 0x20, 0x96, 0x05, 0xab, 0x11, 0x09, 0xa9, 0x0d, 0xda, 0xa0,
-	0xfb, 0x67, 0xa8, 0xb0, 0xd5, 0x80, 0x7a, 0xe6, 0x7b, 0xb6, 0xa6, 0x24, 0x09, 0xad, 0xbf, 0xb0,
-	0xc6, 0x6f, 0x22, 0x9a, 0xd8, 0xba, 0xd2, 0x0a, 0x62, 0x35, 0xa1, 0xc1, 0x13, 0x36, 0xf2, 0x3d,
-	0xbb, 0x5a, 0xca, 0x09, 0x3b, 0xf1, 0xac, 0x7d, 0x68, 0x8e, 0x13, 0x4a, 0x04, 0x1d, 0xc9, 0xa0,
-	0x76, 0xad, 0x0d, 0xba, 0x66, 0xbf, 0x85, 0x8b, 0x16, 0x78, 0x99, 0x0d, 0x9f, 0x2f, 0x5b, 0x0c,
-	0x61, 0x61, 0x97, 0x82, 0x75, 0x04, 0x1b, 0x01, 0x49, 0xc5, 0x28, 0x8b, 0xbd, 0xd5, 0x05, 0xe3,
-	0xdb, 0x0b, 0x75, 0xf9, 0xe6, 0x42, 0x3d, 0x51, 0x57, 0x7a, 0xd0, 0x08, 0x88, 0x4b, 0x83, 0xd4,
-	0xfe, 0xd5, 0xd6, 0xbb, 0x66, 0xbf, 0x89, 0x97, 0x85, 0xf1, 0xa9, 0xd2, 0x8f, 0x23, 0x91, 0xcc,
-	0x86, 0xa5, 0xa9, 0xb5, 0x0b, 0xcd, 0x0d, 0x59, 0xf6, 0x9f, 0xd0, 0x59, 0x39, 0x89, 0x84, 0xb2,
-	0xff, 0x94, 0x04, 0x19, 0x2d, 0x37, 0x29, 0xc8, 0x9e, 0xb6, 0x03, 0x3a, 0x0f, 0x00, 0xd6, 0x0f,
-	0x55, 0xfc, 0x2f, 0x27, 0x5d, 0x4f, 0xa5, 0x6d, 0x4e, 0xf5, 0xf9, 0xae, 0x83, 0x55, 0xfa, 0xaa,
-	0x4a, 0xff, 0x0f, 0x7f, 0xfc, 0xe1, 0x87, 0x3b, 0x1c, 0x6c, 0xbd, 0xbd, 0x22, 0x70, 0x97, 0x23,
-	0x70, 0x9f, 0x23, 0xf0, 0x98, 0x23, 0x30, 0xcf, 0x11, 0x78, 0xc9, 0x11, 0xb8, 0x5d, 0xa0, 0xca,
-	0x7c, 0x81, 0x2a, 0xcf, 0x0b, 0x54, 0xb9, 0xd4, 0x49, 0xec, 0xbb, 0x86, 0x1a, 0x7f, 0xf0, 0x1e,
-	0x00, 0x00, 0xff, 0xff, 0x6c, 0x43, 0xe6, 0xee, 0xae, 0x02, 0x00, 0x00,
+	// 691 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x54, 0xcd, 0x6e, 0xd3, 0x4a,
+	0x14, 0xce, 0xc4, 0x89, 0xdb, 0x9c, 0xdc, 0x9b, 0x6b, 0xcd, 0xa5, 0xc2, 0x0a, 0x92, 0x89, 0xb2,
+	0x4a, 0x41, 0x75, 0xd4, 0x54, 0x42, 0x14, 0x84, 0x44, 0x5b, 0x2a, 0x14, 0xa9, 0x55, 0x2b, 0xb7,
+	0x55, 0x25, 0x36, 0x61, 0x62, 0x4f, 0xdd, 0xa1, 0x8e, 0xc7, 0x9a, 0x99, 0x14, 0xe5, 0x2d, 0xd8,
+	0xf0, 0x00, 0xec, 0x78, 0x04, 0x1e, 0x81, 0x65, 0x97, 0x2c, 0x21, 0x7d, 0x09, 0x36, 0x48, 0xc8,
+	0x13, 0x27, 0x4e, 0xd5, 0x52, 0x90, 0xd8, 0x9d, 0x73, 0xe6, 0x3b, 0x3f, 0xdf, 0x77, 0x8e, 0x06,
+	0xec, 0xe4, 0x2c, 0x6c, 0x93, 0x84, 0xc9, 0xf6, 0xf9, 0x6a, 0xdb, 0xe7, 0x83, 0x01, 0x8f, 0xdd,
+	0x44, 0x70, 0xc5, 0xeb, 0xf7, 0x43, 0xce, 0xc3, 0x88, 0xb6, 0xb5, 0xd7, 0x1f, 0x9e, 0xb4, 0x15,
+	0x1b, 0x50, 0xa9, 0xc8, 0x20, 0xc9, 0x00, 0x2b, 0x21, 0x53, 0xa7, 0xc3, 0xbe, 0xeb, 0xf3, 0x41,
+	0x3b, 0xe4, 0x21, 0xcf, 0x91, 0xa9, 0xa7, 0x1d, 0x6d, 0x4d, 0xe0, 0xcd, 0x0f, 0x06, 0x2c, 0xee,
+	0x52, 0x45, 0x02, 0xa2, 0x08, 0xc6, 0x50, 0x8a, 0xc9, 0x80, 0xda, 0xa8, 0x81, 0x5a, 0x15, 0x4f,
+	0xdb, 0xd8, 0x02, 0x63, 0xc8, 0x02, 0xbb, 0xa8, 0x43, 0xa9, 0x89, 0xef, 0x40, 0x99, 0xbf, 0x8d,
+	0xa9, 0xb0, 0x0d, 0x1d, 0x9b, 0x38, 0x78, 0x09, 0x4c, 0x2e, 0xc2, 0x1e, 0x0b, 0xec, 0x52, 0x16,
+	0x16, 0x61, 0x37, 0xc0, 0x4f, 0xa1, 0xea, 0x0b, 0x4a, 0x14, 0xed, 0xa5, 0x83, 0xda, 0xe5, 0x06,
+	0x6a, 0x55, 0x3b, 0x75, 0x77, 0xc2, 0xc2, 0x9d, 0xce, 0xe6, 0x1e, 0x4e, 0x59, 0x78, 0x30, 0x81,
+	0xa7, 0x01, 0xfc, 0x02, 0xac, 0x88, 0x48, 0xd5, 0x1b, 0x26, 0xc1, 0xac, 0x82, 0xf9, 0xdb, 0x0a,
+	0xb5, 0x34, 0xe7, 0x48, 0xa7, 0xe8, 0x2a, 0x2b, 0x60, 0x46, 0xa4, 0x4f, 0x23, 0x69, 0x2f, 0x34,
+	0x8c, 0x56, 0xb5, 0xb3, 0xe4, 0x4e, 0x09, 0xbb, 0x3b, 0x3a, 0xbe, 0x1d, 0x2b, 0x31, 0xf2, 0x32,
+	0x10, 0x7e, 0x08, 0x78, 0x6e, 0xe2, 0x1e, 0x8b, 0x7b, 0x92, 0xfa, 0xf6, 0x62, 0x03, 0xb5, 0x0c,
+	0xef, 0xbf, 0x7c, 0xb8, 0x6e, 0x7c, 0x40, 0x7d, 0xdc, 0x82, 0x8a, 0xa6, 0x2f, 0x4f, 0x59, 0x62,
+	0x57, 0xf4, 0x68, 0xe0, 0xee, 0x4d, 0x23, 0x5e, 0xfe, 0x58, 0x5f, 0x87, 0xea, 0x5c, 0xb7, 0x54,
+	0xd6, 0x33, 0x3a, 0xca, 0x94, 0x4e, 0xcd, 0x54, 0xd6, 0x73, 0x12, 0x0d, 0x69, 0x26, 0xf5, 0xc4,
+	0x79, 0x52, 0x7c, 0x8c, 0x9a, 0x3f, 0x10, 0xd4, 0xb6, 0x74, 0xe3, 0x5b, 0x37, 0x95, 0x6f, 0xa0,
+	0x38, 0xbf, 0x81, 0x9b, 0xd7, 0xb5, 0x36, 0x13, 0xa5, 0xa4, 0x45, 0xb9, 0xe7, 0x5e, 0xed, 0x70,
+	0xa3, 0x34, 0x57, 0xd8, 0x96, 0x6f, 0x61, 0x3b, 0xbd, 0x1a, 0x73, 0x76, 0x35, 0x7f, 0xc3, 0xff,
+	0xbd, 0x01, 0x95, 0x59, 0x97, 0x9c, 0x0f, 0x9a, 0xe7, 0xd3, 0x06, 0x33, 0x14, 0x7c, 0x98, 0x48,
+	0xbb, 0xa8, 0xf9, 0xdc, 0xcd, 0xe7, 0x72, 0x37, 0x7c, 0x9f, 0x4a, 0xb9, 0xc5, 0xe3, 0x13, 0x16,
+	0x7a, 0x19, 0x0c, 0x3f, 0x83, 0x7f, 0x7d, 0x1e, 0x45, 0xa4, 0xcf, 0x05, 0x51, 0x5c, 0x48, 0xdb,
+	0xb8, 0x3d, 0xef, 0x2a, 0x1a, 0x3f, 0x02, 0x33, 0x19, 0xf6, 0x23, 0xe6, 0xeb, 0x73, 0xaf, 0x76,
+	0x9c, 0xb9, 0xbc, 0x7d, 0xfd, 0x30, 0xcb, 0x56, 0x82, 0x47, 0x5e, 0x86, 0xae, 0xef, 0xc2, 0x3f,
+	0xf3, 0x65, 0x71, 0x0d, 0x8a, 0x2c, 0xc8, 0xa8, 0x14, 0x59, 0x90, 0x1e, 0x2b, 0xd1, 0xef, 0x5a,
+	0x86, 0x5a, 0x67, 0xe9, 0xda, 0x3c, 0x87, 0xa3, 0x84, 0x7a, 0x19, 0xa8, 0xfe, 0x1c, 0xfe, 0xbf,
+	0xa1, 0x1b, 0x5e, 0x86, 0x92, 0x1a, 0x25, 0x93, 0xf3, 0xf8, 0x65, 0x0d, 0x0d, 0x69, 0xae, 0x03,
+	0xe4, 0x31, 0x5c, 0x85, 0x85, 0x6e, 0x7c, 0x4e, 0x22, 0x16, 0x58, 0x05, 0xbc, 0x08, 0x25, 0x8f,
+	0x92, 0xc0, 0x42, 0xb8, 0x02, 0xe5, 0x63, 0xc1, 0x14, 0xb5, 0x8a, 0xa9, 0xb9, 0x11, 0x0c, 0x58,
+	0x6c, 0x19, 0xcd, 0x55, 0xa8, 0xec, 0xf5, 0xdf, 0x50, 0x5f, 0x79, 0xf4, 0xe4, 0xcf, 0xfe, 0x8e,
+	0x07, 0xaf, 0xa1, 0xba, 0xc3, 0x7c, 0x1a, 0x4b, 0x7a, 0xbd, 0x5d, 0x05, 0xca, 0x87, 0x82, 0x91,
+	0xc8, 0x42, 0xb8, 0x06, 0xb0, 0x1d, 0x2b, 0x2a, 0x12, 0xc1, 0x64, 0xda, 0xb4, 0x06, 0x70, 0x24,
+	0x49, 0x48, 0x37, 0x89, 0xa4, 0x81, 0x65, 0xe0, 0x05, 0x30, 0xba, 0x9b, 0xbb, 0x56, 0x29, 0x35,
+	0x36, 0x8e, 0x0f, 0xac, 0x72, 0x6a, 0xbc, 0xdc, 0xda, 0xb7, 0xcc, 0xcd, 0xe5, 0xef, 0xdf, 0x1c,
+	0xf4, 0x71, 0xec, 0xa0, 0x4f, 0x63, 0x07, 0x7d, 0x1e, 0x3b, 0xe8, 0x62, 0xec, 0xa0, 0xaf, 0x63,
+	0x07, 0xbd, 0xbb, 0x74, 0x0a, 0x17, 0x97, 0x4e, 0xe1, 0xcb, 0xa5, 0x53, 0x78, 0x65, 0x90, 0x84,
+	0xf5, 0x4d, 0xfd, 0x79, 0xac, 0xfd, 0x0c, 0x00, 0x00, 0xff, 0xff, 0x11, 0xd5, 0xd7, 0xfd, 0x6e,
+	0x05, 0x00, 0x00,
 }
 
 func (this *Metadata) Equal(that interface{}) bool {
@@ -274,6 +662,12 @@ func (this *Metadata) Equal(that interface{}) bool {
 			return false
 		}
 	}
+	if this.CreateTimeInSec != that1.CreateTimeInSec {
+		return false
+	}
+	if !this.Ownership.Equal(that1.Ownership) {
+		return false
+	}
 	return true
 }
 func (this *CreateMetadata) Equal(that interface{}) bool {
@@ -312,6 +706,133 @@ func (this *CreateMetadata) Equal(that interface{}) bool {
 			return false
 		}
 	}
+	if !this.Ownership.Equal(that1.Ownership) {
+		return false
+	}
+	if this.Uid != that1.Uid {
+		return false
+	}
+	return true
+}
+func (this *Ownership) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Ownership)
+	if !ok {
+		that2, ok := that.(Ownership)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Owner != that1.Owner {
+		return false
+	}
+	if len(this.Groups) != len(that1.Groups) {
+		return false
+	}
+	for i := range this.Groups {
+		if !this.Groups[i].Equal(that1.Groups[i]) {
+			return false
+		}
+	}
+	if len(this.Collaborators) != len(that1.Collaborators) {
+		return false
+	}
+	for i := range this.Collaborators {
+		if !this.Collaborators[i].Equal(that1.Collaborators[i]) {
+			return false
+		}
+	}
+	if !this.Public.Equal(that1.Public) {
+		return false
+	}
+	return true
+}
+func (this *Ownership_AccessConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Ownership_AccessConfig)
+	if !ok {
+		that2, ok := that.(Ownership_AccessConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.Access != that1.Access {
+		return false
+	}
+	return true
+}
+func (this *Ownership_PublicAccessControl) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Ownership_PublicAccessControl)
+	if !ok {
+		that2, ok := that.(Ownership_PublicAccessControl)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	return true
+}
+func (this *ObjectRef) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ObjectRef)
+	if !ok {
+		that2, ok := that.(ObjectRef)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.Uid != that1.Uid {
+		return false
+	}
 	return true
 }
 func (m *Metadata) Marshal() (dAtA []byte, err error) {
@@ -334,6 +855,23 @@ func (m *Metadata) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.Ownership != nil {
+		{
+			size, err := m.Ownership.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintCommon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x4a
+	}
+	if m.CreateTimeInSec != 0 {
+		i = encodeVarintCommon(dAtA, i, uint64(m.CreateTimeInSec))
+		i--
+		dAtA[i] = 0x40
+	}
 	if len(m.Labels) > 0 {
 		for k := range m.Labels {
 			v := m.Labels[k]
@@ -428,6 +966,25 @@ func (m *CreateMetadata) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.Uid) > 0 {
+		i -= len(m.Uid)
+		copy(dAtA[i:], m.Uid)
+		i = encodeVarintCommon(dAtA, i, uint64(len(m.Uid)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if m.Ownership != nil {
+		{
+			size, err := m.Ownership.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintCommon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x2a
+	}
 	if len(m.Labels) > 0 {
 		for k := range m.Labels {
 			v := m.Labels[k]
@@ -471,6 +1028,176 @@ func (m *CreateMetadata) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *Ownership) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Ownership) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Ownership) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Public != nil {
+		{
+			size, err := m.Public.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintCommon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Collaborators) > 0 {
+		for iNdEx := len(m.Collaborators) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Collaborators[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCommon(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if len(m.Groups) > 0 {
+		for iNdEx := len(m.Groups) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Groups[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCommon(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintCommon(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *Ownership_AccessConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Ownership_AccessConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Ownership_AccessConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Access != 0 {
+		i = encodeVarintCommon(dAtA, i, uint64(m.Access))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Id) > 0 {
+		i -= len(m.Id)
+		copy(dAtA[i:], m.Id)
+		i = encodeVarintCommon(dAtA, i, uint64(len(m.Id)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *Ownership_PublicAccessControl) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Ownership_PublicAccessControl) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Ownership_PublicAccessControl) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Type != 0 {
+		i = encodeVarintCommon(dAtA, i, uint64(m.Type))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ObjectRef) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ObjectRef) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ObjectRef) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Uid) > 0 {
+		i -= len(m.Uid)
+		copy(dAtA[i:], m.Uid)
+		i = encodeVarintCommon(dAtA, i, uint64(len(m.Uid)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintCommon(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintCommon(dAtA []byte, offset int, v uint64) int {
 	offset -= sovCommon(v)
 	base := offset
@@ -501,6 +1228,13 @@ func NewPopulatedMetadata(r randyCommon, easy bool) *Metadata {
 			this.Labels[randStringCommon(r)] = randStringCommon(r)
 		}
 	}
+	this.CreateTimeInSec = int64(r.Int63())
+	if r.Intn(2) == 0 {
+		this.CreateTimeInSec *= -1
+	}
+	if r.Intn(5) != 0 {
+		this.Ownership = NewPopulatedOwnership(r, easy)
+	}
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -518,6 +1252,61 @@ func NewPopulatedCreateMetadata(r randyCommon, easy bool) *CreateMetadata {
 			this.Labels[randStringCommon(r)] = randStringCommon(r)
 		}
 	}
+	if r.Intn(5) != 0 {
+		this.Ownership = NewPopulatedOwnership(r, easy)
+	}
+	this.Uid = string(randStringCommon(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedOwnership(r randyCommon, easy bool) *Ownership {
+	this := &Ownership{}
+	this.Owner = string(randStringCommon(r))
+	if r.Intn(5) != 0 {
+		v3 := r.Intn(5)
+		this.Groups = make([]*Ownership_AccessConfig, v3)
+		for i := 0; i < v3; i++ {
+			this.Groups[i] = NewPopulatedOwnership_AccessConfig(r, easy)
+		}
+	}
+	if r.Intn(5) != 0 {
+		v4 := r.Intn(5)
+		this.Collaborators = make([]*Ownership_AccessConfig, v4)
+		for i := 0; i < v4; i++ {
+			this.Collaborators[i] = NewPopulatedOwnership_AccessConfig(r, easy)
+		}
+	}
+	if r.Intn(5) != 0 {
+		this.Public = NewPopulatedOwnership_PublicAccessControl(r, easy)
+	}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedOwnership_AccessConfig(r randyCommon, easy bool) *Ownership_AccessConfig {
+	this := &Ownership_AccessConfig{}
+	this.Id = string(randStringCommon(r))
+	this.Access = Ownership_AccessType([]int32{0, 1, 2, 3}[r.Intn(4)])
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedOwnership_PublicAccessControl(r randyCommon, easy bool) *Ownership_PublicAccessControl {
+	this := &Ownership_PublicAccessControl{}
+	this.Type = Ownership_AccessType([]int32{0, 1, 2, 3}[r.Intn(4)])
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedObjectRef(r randyCommon, easy bool) *ObjectRef {
+	this := &ObjectRef{}
+	this.Name = string(randStringCommon(r))
+	this.Uid = string(randStringCommon(r))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -542,9 +1331,9 @@ func randUTF8RuneCommon(r randyCommon) rune {
 	return rune(ru + 61)
 }
 func randStringCommon(r randyCommon) string {
-	v3 := r.Intn(100)
-	tmps := make([]rune, v3)
-	for i := 0; i < v3; i++ {
+	v5 := r.Intn(100)
+	tmps := make([]rune, v5)
+	for i := 0; i < v5; i++ {
 		tmps[i] = randUTF8RuneCommon(r)
 	}
 	return string(tmps)
@@ -566,11 +1355,11 @@ func randFieldCommon(dAtA []byte, r randyCommon, fieldNumber int, wire int) []by
 	switch wire {
 	case 0:
 		dAtA = encodeVarintPopulateCommon(dAtA, uint64(key))
-		v4 := r.Int63()
+		v6 := r.Int63()
 		if r.Intn(2) == 0 {
-			v4 *= -1
+			v6 *= -1
 		}
-		dAtA = encodeVarintPopulateCommon(dAtA, uint64(v4))
+		dAtA = encodeVarintPopulateCommon(dAtA, uint64(v6))
 	case 1:
 		dAtA = encodeVarintPopulateCommon(dAtA, uint64(key))
 		dAtA = append(dAtA, byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)))
@@ -633,6 +1422,13 @@ func (m *Metadata) Size() (n int) {
 			n += mapEntrySize + 1 + sovCommon(uint64(mapEntrySize))
 		}
 	}
+	if m.CreateTimeInSec != 0 {
+		n += 1 + sovCommon(uint64(m.CreateTimeInSec))
+	}
+	if m.Ownership != nil {
+		l = m.Ownership.Size()
+		n += 1 + l + sovCommon(uint64(l))
+	}
 	return n
 }
 
@@ -661,6 +1457,88 @@ func (m *CreateMetadata) Size() (n int) {
 			mapEntrySize := 1 + len(k) + sovCommon(uint64(len(k))) + 1 + len(v) + sovCommon(uint64(len(v)))
 			n += mapEntrySize + 1 + sovCommon(uint64(mapEntrySize))
 		}
+	}
+	if m.Ownership != nil {
+		l = m.Ownership.Size()
+		n += 1 + l + sovCommon(uint64(l))
+	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovCommon(uint64(l))
+	}
+	return n
+}
+
+func (m *Ownership) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovCommon(uint64(l))
+	}
+	if len(m.Groups) > 0 {
+		for _, e := range m.Groups {
+			l = e.Size()
+			n += 1 + l + sovCommon(uint64(l))
+		}
+	}
+	if len(m.Collaborators) > 0 {
+		for _, e := range m.Collaborators {
+			l = e.Size()
+			n += 1 + l + sovCommon(uint64(l))
+		}
+	}
+	if m.Public != nil {
+		l = m.Public.Size()
+		n += 1 + l + sovCommon(uint64(l))
+	}
+	return n
+}
+
+func (m *Ownership_AccessConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Id)
+	if l > 0 {
+		n += 1 + l + sovCommon(uint64(l))
+	}
+	if m.Access != 0 {
+		n += 1 + sovCommon(uint64(m.Access))
+	}
+	return n
+}
+
+func (m *Ownership_PublicAccessControl) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Type != 0 {
+		n += 1 + sovCommon(uint64(m.Type))
+	}
+	return n
+}
+
+func (m *ObjectRef) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovCommon(uint64(l))
+	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovCommon(uint64(l))
 	}
 	return n
 }
@@ -1016,7 +1894,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthCommon
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -1027,16 +1905,68 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 			}
 			m.Labels[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CreateTimeInSec", wireType)
+			}
+			m.CreateTimeInSec = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.CreateTimeInSec |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ownership", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Ownership == nil {
+				m.Ownership = &Ownership{}
+			}
+			if err := m.Ownership.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipCommon(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
-				return ErrInvalidLengthCommon
-			}
-			if (iNdEx + skippy) < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthCommon
 			}
 			if (iNdEx + skippy) > l {
@@ -1292,7 +2222,7 @@ func (m *CreateMetadata) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthCommon
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -1303,16 +2233,551 @@ func (m *CreateMetadata) Unmarshal(dAtA []byte) error {
 			}
 			m.Labels[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ownership", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Ownership == nil {
+				m.Ownership = &Ownership{}
+			}
+			if err := m.Ownership.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipCommon(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthCommon
 			}
-			if (iNdEx + skippy) < 0 {
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Ownership) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCommon
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Ownership: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Ownership: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Groups", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Groups = append(m.Groups, &Ownership_AccessConfig{})
+			if err := m.Groups[len(m.Groups)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Collaborators", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Collaborators = append(m.Collaborators, &Ownership_AccessConfig{})
+			if err := m.Collaborators[len(m.Collaborators)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Public", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Public == nil {
+				m.Public = &Ownership_PublicAccessControl{}
+			}
+			if err := m.Public.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCommon(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Ownership_AccessConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCommon
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AccessConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AccessConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Id = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Access", wireType)
+			}
+			m.Access = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Access |= Ownership_AccessType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCommon(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Ownership_PublicAccessControl) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCommon
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PublicAccessControl: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PublicAccessControl: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= Ownership_AccessType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCommon(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ObjectRef) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCommon
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ObjectRef: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ObjectRef: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCommon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCommon
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCommon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCommon(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthCommon
 			}
 			if (iNdEx + skippy) > l {

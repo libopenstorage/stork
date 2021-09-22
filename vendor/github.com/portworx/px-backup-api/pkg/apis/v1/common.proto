@@ -13,11 +13,25 @@ option (gogoproto.populate_all) = true;
 option (gogoproto.equal_all) = true;
 option (gogoproto.testgen_all) = true;
 
+enum LicenseType {
+    Invalid = 0;
+    Trial = 1;
+    Enterprise = 2;
+    UsageBased = 3;
+    IBM = 4;
+    AWS = 5;
+    GCP = 6;
+}
+
 message Metadata {
     // name of the object
     string name = 1;
     // uid for the object
     string uid = 2;
+    // owner of the object. This field is deprecated, not to be used
+    // TODO: Currently gRPC supports marking field as [deprecated=true]
+    // As we need to access this field as part of migration to new Ownership
+    // message will not use the same for now.
     string owner = 3;
     // organization uid
     string org_id = 4;
@@ -25,6 +39,10 @@ message Metadata {
     google.protobuf.Timestamp last_update_time = 6;
     // label selectors for the object for filtering
     map<string, string> labels = 7;
+    // create time in sec
+    int64 create_time_in_sec = 8;
+    // ownership of the object
+    Ownership ownership = 9;
 }
 
 message CreateMetadata {
@@ -32,8 +50,77 @@ message CreateMetadata {
     string name = 1;
     // org id of the object
     string org_id = 2;
-    // owner of the object
+    // owner of the object. This field is deprecated, not to be used
     string owner = 3;
     // labels associated with the object
     map<string, string> labels = 4;
+    // ownership of the object
+    Ownership ownership = 5;
+    // uid of the object
+    string uid = 6;
+}
+
+// Ownership information for objects(eg: backup object, schedule object).
+// Administrators are users who belong to the group `*`, meaning, every group.
+message Ownership {
+    enum AccessType {
+        Invalid = 0;
+        // Read access only and cannot affect the resource.
+        Read = 1;
+        // Write access and can affect the resource.
+        // This type automatically provides Read access also.
+        Write = 2;
+        // Administrator access.
+        // This type automatically provides Read and Write access also.
+        Admin = 3;
+    }
+    message AccessConfig {
+        string id = 1;
+        AccessType access = 2;
+    }
+
+    // PublicAccessControl allows assigning public ownership
+    message PublicAccessControl {
+        // AccessType declares which level of public access is allowed
+        AccessType type = 1;
+    }
+
+    // Username of owner
+    // The storage system uses the username taken from the token
+    // and is saved on this field. Only users with system administration
+    // can edit this value.
+    string owner = 1;
+
+    // Group access to objects which must match the group set in the
+    // authorization token.
+    // Can be set by the owner or the system administrator only.
+    // Possible values are:
+    // 1. no groups: Means no groups are given access.
+    // 2. `["*"]`: All groups are allowed.
+    // 3. `["group1", "group2"]`: Only certain groups are allowed. In this
+    // example only
+    // _group1_ and _group2_ are allowed.
+    repeated AccessConfig groups = 2;
+
+    // Collaborator access to objects gives access to other user.
+    // Must be the username (unique id) set in the authorization token.
+    // The owner or the administrator can set this value. Possible values
+    // are:
+    // 1. no collaborators: Means no users are given access.
+    // 2. `["*"]`: All users are allowed.
+    // 3. `["username1", "username2"]`: Only certain usernames are allowed.
+    // In this example only
+    // _username1_ and _username2_ are allowed.
+    repeated AccessConfig collaborators = 3;
+
+    // Public access to objects may be assigned for access by the public
+    // userd
+    // TODO: Instead of PublicAccessControl, can we just set '*' in
+    // collaborators with required permission?
+    PublicAccessControl public = 4;
+}
+
+message ObjectRef {
+    string name = 1;
+    string uid = 2;
 }

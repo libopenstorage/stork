@@ -18,7 +18,13 @@ package auth
 
 import (
 	"context"
+
+	"github.com/libopenstorage/openstorage/pkg/correlation"
 )
+
+func init() {
+	correlation.RegisterComponent(correlation.ComponentAuth)
+}
 
 const (
 	systemGuestRoleName = "system.guest"

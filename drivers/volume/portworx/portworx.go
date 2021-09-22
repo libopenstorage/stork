@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/http"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -88,6 +89,7 @@ const (
 	upgradePerNodeTimeout             = 15 * time.Minute
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
+	asyncTimeout                      = 15 * time.Minute
 )
 
 const (
@@ -129,6 +131,8 @@ type portworx struct {
 	alertsManager         api.OpenStorageAlertsClient
 	csbackupManager       api.OpenStorageCloudBackupClient
 	storagePoolManager    api.OpenStoragePoolClient
+	diagsManager          api.OpenStorageDiagsClient
+	diagsJobManager       api.OpenStorageJobClient
 	licenseManager        pxapi.PortworxLicenseClient
 	licenseFeatureManager pxapi.PortworxLicensedFeatureClient
 	schedOps              schedops.Driver
@@ -145,37 +149,6 @@ type metadataNode struct {
 	DbSize     int      `json:"DbSize"`
 	IsHealthy  bool     `json:"IsHealthy"`
 	ID         string   `json:"ID"`
-}
-
-// DiagRequestConfig is a request object which provides all the configuration details
-// to PX for running diagnostics on a node. This object can also be passed over
-// the wire through an API server for remote diag requests.
-type DiagRequestConfig struct {
-	// OutputFile for the diags.tgz
-	OutputFile string
-	// DockerHost config
-	DockerHost string
-	// ContainerName for PX
-	ContainerName string
-	// ExecPath of the program making this request (pxctl)
-	ExecPath string
-	// Profile when set diags command only dumps the go profile
-	Profile bool
-	// Live gets live diagnostics
-	Live bool
-	// Upload uploads the diags.tgz to s3
-	Upload bool
-	// All gets all possible diagnostics from PX
-	All bool
-	// Force overwrite of existing diags file.
-	Force bool
-	// OnHost indicates whether diags is being run on the host
-	// or inside the container
-	OnHost bool
-	// Token for security authentication (if enabled)of the program making this request (pxctl)
-	Token string
-	// Extra indicates whether diags should attempt to collect extra information
-	Extra bool
 }
 
 func (d *portworx) String() string {
@@ -1514,6 +1487,8 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.alertsManager = api.NewOpenStorageAlertsClient(conn)
 	d.csbackupManager = api.NewOpenStorageCloudBackupClient(conn)
 	d.licenseManager = pxapi.NewPortworxLicenseClient(conn)
+	d.diagsManager = api.NewOpenStorageDiagsClient(conn)
+	d.diagsJobManager = api.NewOpenStorageJobClient(conn)
 	d.licenseFeatureManager = pxapi.NewPortworxLicensedFeatureClient(conn)
 	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
@@ -1853,6 +1828,20 @@ func (d *portworx) getNodeManager() api.OpenStorageNodeClient {
 
 }
 
+func (d *portworx) getDiagsManager() api.OpenStorageDiagsClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.diagsManager
+}
+
+func (d *portworx) getDiagsJobManager() api.OpenStorageJobClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.diagsJobManager
+}
+
 func (d *portworx) getLicenseManager() pxapi.PortworxLicenseClient {
 	if d.refreshEndpoint {
 		d.setDriver()
@@ -2141,9 +2130,144 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 	return kvdbMembers, err
 }
 
-func (d *portworx) CollectDiags(n node.Node) error {
+// GetTimeStamp returns 'readable' timestamp with no spaces 'YYYYMMDDHHMMSS'
+func GetTimeStamp() string {
+	tnow := time.Now()
+	return fmt.Sprintf("%d%02d%02d%02d%02d%02d",
+		tnow.Year(), tnow.Month(), tnow.Day(),
+		tnow.Hour(), tnow.Minute(), tnow.Second())
+}
+
+func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps) error {
+
+	if diagOps.Async {
+		return collectAsyncDiags(n, config, diagOps, d)
+	}
+	return collectDiags(n, config, diagOps, d)
+}
+
+func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
 	var err error
 
+	pxNode, err := d.getPxNode(&n)
+	if err != nil {
+		return err
+	}
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+
+	if !diagOps.Validate {
+		logrus.Infof("Collecting diags on node %v. Will skip validation", pxNode.Hostname)
+	}
+
+	if pxNode.Status == api.Status_STATUS_OFFLINE {
+		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
+
+		// Only way to collect diags when PX is offline is using pxctl
+		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
+		if err != nil {
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+		}
+
+		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+		return nil
+	}
+
+	url := fmt.Sprintf("http://%s:9014", n.Addresses[0])
+
+	c, err := client.NewClient(url, "", "")
+	if err != nil {
+		return err
+	}
+	req := c.Post().Resource(pxDiagPath).Body(config)
+
+	resp := req.Do()
+	if resp.Error() != nil {
+		return fmt.Errorf("failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+	}
+
+	if diagOps.Validate {
+		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
+		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+		if err != nil {
+			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+		}
+
+		logrus.Debug("Validating CCM health")
+		// Change to config package.
+		url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+		resp, err := http.Get(url)
+		if err != nil {
+			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+		}
+		defer resp.Body.Close()
+
+		/* PWX-19768
+		// Check S3 bucket for diags
+
+		// TODO: Waiting for S3 credentials.
+		*/
+	}
+
+	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	return nil
+}
+
+func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
+	diagsMgr := d.getDiagsManager()
+	jobMgr := d.getDiagsJobManager()
+
+	pxNode, err := d.getPxNode(&n)
+	if err != nil {
+		return err
+	}
+
+	req := &api.SdkDiagsCollectRequest{
+		Issuer:      "CLI",
+		ProfileOnly: config.Profile,
+		Live:        config.Live,
+	}
+
+	req.Node = &api.DiagsNodeSelector{
+		NodeIds: []string{pxNode.Id},
+	}
+
+	resp, err := diagsMgr.Collect(d.getContext(), req)
+	if err != nil {
+		return err
+	}
+	if resp.Job == nil {
+		err = fmt.Errorf("diags collection request submitted but did not get a Job ID in response")
+		return err
+	}
+
+	start := time.Now()
+	for {
+		if time.Since(start) >= asyncTimeout {
+			return fmt.Errorf("waiting for async diags job timed out")
+		}
+
+		resp, _ := jobMgr.GetStatus(d.getContext(), &api.SdkGetJobStatusRequest{
+			Id:   resp.Job.GetId(),
+			Type: resp.Job.GetType(),
+		})
+
+		state := resp.GetJob().GetState()
+
+		if state == api.Job_DONE || state == api.Job_FAILED || state == api.Job_CANCELLED {
+			break
+		}
+		fmt.Println("Waiting 5 seconds to check job status again.")
+		// Sleep 5 seconds until we check jobs again.
+		time.Sleep(5 * time.Second)
+	}
+
+	/* TODO: Verify we can see the files once we return a filename
+	if diagOps.Validate() {
 	pxNode, err := d.getPxNode(&n)
 	if err != nil {
 		return err
@@ -2156,45 +2280,29 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		Sudo:            true,
 	}
 
-	logrus.Debugf("Collecting diags on node %v, because there was an error", pxNode.Hostname)
-
-	if pxNode.Status == api.Status_STATUS_OFFLINE {
-		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
-
-		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
-		if err != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
-		}
-		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
-		return nil
-	}
-
-	url := fmt.Sprintf("http://%s:9014", n.Addresses[0])
-
-	r := &DiagRequestConfig{
-		DockerHost:    "unix:///var/run/docker.sock",
-		OutputFile:    "/var/cores/diags.tar.gz",
-		ContainerName: "",
-		Profile:       false,
-		Live:          true,
-		Upload:        false,
-		All:           true,
-		Force:         true,
-		OnHost:        true,
-		Extra:         false,
-	}
-
-	c, err := client.NewClient(url, "", "")
+	cmd := fmt.Sprintf("test -f %s", config.OutputFile)
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 	}
-	req := c.Post().Resource(pxDiagPath).Body(r)
-	resp := req.Do()
-	if resp.Error() != nil {
-		return fmt.Errorf("failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+
+	logrus.Debug("Validating CCM health")
+	// Change to config package.
+	url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+	ccmresp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
 	}
-	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+
+	defer ccmresp.Body.Close()
+
+	// Check S3 bucket for diags
+	// TODO: Waiting for S3 credentials.
+
+	}
+	*/
+
+	logrus.Debugf("Successfully collected diags on node %v", n.Name)
 	return nil
 }
 
