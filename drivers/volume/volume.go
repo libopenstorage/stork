@@ -152,9 +152,6 @@ type Driver interface {
 	// CollectDiags collects live diags on a node
 	CollectDiags(n node.Node, config *DiagRequestConfig, diagOps DiagOps) error
 
-	// CollectAsyncDiags collects async diags on a node
-	CollectAsyncDiags(n node.Node, config *DiagRequestConfig) error
-
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error
 

@@ -55,8 +55,10 @@ type LicenseSummary struct {
 
 // DiagOps options collection for switching the workflow of the DiagCollection function.
 type DiagOps struct {
-	// Toggle to indicate that we want to test the diags generation (only used in telemetry test currently)
+	// Validate toggle to indicate that we want to test the diags generation (only used in telemetry test currently)
 	Validate bool
+	// Async toggle to indicate that we want to use async diags
+	Async bool
 }
 
 // DefaultDriver implements defaults for Driver interface
@@ -322,14 +324,6 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CollectDiags()",
-	}
-}
-
-// CollectAsyncDiags collects diags on a node
-func (d *DefaultDriver) CollectAsyncDiags(n node.Node, config *DiagRequestConfig) error {
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "CollectAsyncDiags()",
 	}
 }
 

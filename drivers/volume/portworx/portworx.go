@@ -89,6 +89,7 @@ const (
 	upgradePerNodeTimeout             = 15 * time.Minute
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
+	asyncTimeout                      = 15 * time.Minute
 )
 
 const (
@@ -2138,13 +2139,20 @@ func GetTimeStamp() string {
 }
 
 func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps) error {
+
+	if diagOps.Async {
+		return collectAsyncDiags(n, config, diagOps, d)
+	}
+	return collectDiags(n, config, diagOps, d)
+}
+
+func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
 	var err error
 
 	pxNode, err := d.getPxNode(&n)
 	if err != nil {
 		return err
 	}
-
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -2153,7 +2161,7 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	}
 
 	if !diagOps.Validate {
-		logrus.Infof("Collecting diags on node %v, because there was an error", pxNode.Hostname)
+		logrus.Infof("Collecting diags on node %v. Will skip validation", pxNode.Hostname)
 	}
 
 	if pxNode.Status == api.Status_STATUS_OFFLINE {
@@ -2198,10 +2206,10 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 		}
 		defer resp.Body.Close()
 
-		/*
-			// Check S3 bucket for diags
+		/* PWX-19768
+		// Check S3 bucket for diags
 
-			// TODO: Waiting for S3 credentials.
+		// TODO: Waiting for S3 credentials.
 		*/
 	}
 
@@ -2209,9 +2217,14 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return nil
 }
 
-func (d *portworx) CollectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig) error {
+func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
 	diagsMgr := d.getDiagsManager()
 	jobMgr := d.getDiagsJobManager()
+
+	pxNode, err := d.getPxNode(&n)
+	if err != nil {
+		return err
+	}
 
 	req := &api.SdkDiagsCollectRequest{
 		Issuer:      "CLI",
@@ -2220,7 +2233,7 @@ func (d *portworx) CollectAsyncDiags(n node.Node, config *torpedovolume.DiagRequ
 	}
 
 	req.Node = &api.DiagsNodeSelector{
-		NodeIds: []string{n.Id},
+		NodeIds: []string{pxNode.Id},
 	}
 
 	resp, err := diagsMgr.Collect(d.getContext(), req)
@@ -2232,7 +2245,12 @@ func (d *portworx) CollectAsyncDiags(n node.Node, config *torpedovolume.DiagRequ
 		return err
 	}
 
+	start := time.Now()
 	for {
+		if time.Since(start) >= asyncTimeout {
+			return fmt.Errorf("waiting for async diags job timed out")
+		}
+
 		resp, _ := jobMgr.GetStatus(d.getContext(), &api.SdkGetJobStatusRequest{
 			Id:   resp.Job.GetId(),
 			Type: resp.Job.GetType(),
@@ -2248,6 +2266,8 @@ func (d *portworx) CollectAsyncDiags(n node.Node, config *torpedovolume.DiagRequ
 		time.Sleep(5 * time.Second)
 	}
 
+	/* TODO: Verify we can see the files once we return a filename
+	if diagOps.Validate() {
 	pxNode, err := d.getPxNode(&n)
 	if err != nil {
 		return err
@@ -2276,12 +2296,13 @@ func (d *portworx) CollectAsyncDiags(n node.Node, config *torpedovolume.DiagRequ
 
 	defer ccmresp.Body.Close()
 
-	/*
-		// Check S3 bucket for diags
-		// TODO: Waiting for S3 credentials.
+	// Check S3 bucket for diags
+	// TODO: Waiting for S3 credentials.
+
+	}
 	*/
 
-	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	logrus.Debugf("Successfully collected diags on node %v", n.Name)
 	return nil
 }
 

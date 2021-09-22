@@ -28,6 +28,7 @@ type Driver interface {
 	// ValidateBackupsDeletedFromCloud validates if bucket has been deleted from the cloud objectstore
 	ValidateBackupsDeletedFromCloud(backupLocation *stork_api.BackupLocation, backupPath string) error
 
+	// TODO: Actually add these per PWX-19768
 	// ListBuckets()
 	ListBuckets() ([]string, error)
 

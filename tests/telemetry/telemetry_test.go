@@ -34,7 +34,7 @@ var _ = Describe("{DiagsBasic}", func() {
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-diags-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("diagsbasic-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -50,13 +50,7 @@ var _ = Describe("{DiagsBasic}", func() {
 					DockerHost:    "unix:///var/run/docker.sock",
 					OutputFile:    fmt.Sprintf("/var/cores/torpedo-diagsbasic-%s-%d.tar.gz", currNode.Name, time.Now().Unix()),
 					ContainerName: "",
-					Profile:       false,
-					Live:          false,
-					Upload:        false,
-					All:           false,
-					Force:         false,
 					OnHost:        true,
-					Extra:         false,
 				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
 				Expect(err).NotTo(HaveOccurred())
@@ -72,14 +66,13 @@ var _ = Describe("{DiagsBasic}", func() {
 	})
 })
 
-/*
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{DiagsAsyncBasic}", func() {
 	var contexts []*scheduler.Context
 	It("has to setup, validate, try to get a-sync diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-diags-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("diagsasyncbasic-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -95,15 +88,9 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 					DockerHost:    "unix:///var/run/docker.sock",
 					OutputFile:    fmt.Sprintf("/var/cores/torpedo-diagsasync-%s-%d.tar.gz", currNode.Name, time.Now().Unix()),
 					ContainerName: "",
-					Profile:       false,
-					Live:          false,
-					Upload:        false,
-					All:           false,
-					Force:         false,
 					OnHost:        true,
-					Extra:         false,
 				}
-				err := Inst().V.CollectAsyncDiags(currNode, config)
+				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true, Async: true})
 				Expect(err).NotTo(HaveOccurred())
 			})
 		}
@@ -117,7 +104,48 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 		AfterEachTest(contexts)
 	})
 })
-*/
+
+// This test performs basic test of starting an application and destroying it (along with storage)
+var _ = Describe("{DiagsAsyncLiveBasic}", func() {
+	var contexts []*scheduler.Context
+	It("has to setup, validate, try to get a-sync diags on nodes and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("diagsasynclivebasic-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		// One node at a time, collect diags and verify in S3
+		for _, currNode := range node.GetWorkerNodes() {
+			Step(fmt.Sprintf("collect diags on node: %s", currNode.Name), func() {
+
+				config := &torpedovolume.DiagRequestConfig{
+					DockerHost:    "unix:///var/run/docker.sock",
+					OutputFile:    fmt.Sprintf("/var/cores/torpedo-diagsasynclive-%s-%d.tar.gz", currNode.Name, time.Now().Unix()),
+					ContainerName: "",
+					Live:          true,
+					OnHost:        true,
+				}
+
+				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true, Async: true})
+				Expect(err).NotTo(HaveOccurred())
+			})
+		}
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()
