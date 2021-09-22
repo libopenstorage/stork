@@ -338,6 +338,13 @@ func (m *MigrationScheduleController) startMigration(
 		},
 		Spec: migrationSchedule.Spec.Template.Spec,
 	}
+
+	if migration.Annotations == nil {
+		migration.Annotations = make(map[string]string)
+	}
+	for k, v := range migrationSchedule.Annotations {
+		migration.Annotations[k] = v
+	}
 	log.MigrationScheduleLog(migrationSchedule).Infof("Starting migration %v", migrationName)
 	_, err = storkops.Instance().CreateMigration(migration)
 	return err
