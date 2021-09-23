@@ -49,6 +49,7 @@ func TestGetClusterDomainUpdateNoUpdates(t *testing.T) {
 
 func TestGetClusterDomainUpdate(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
 	createClusterDomainUpdate(t, "test1", "zone1", true)
 	cmdArgs := []string{"get", "clusterdomainupdate"}
 
@@ -59,6 +60,7 @@ func TestGetClusterDomainUpdate(t *testing.T) {
 
 func TestGetClusterDomainUpdateWithChanges(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
 	cdu := createClusterDomainUpdate(t, "test1", "zone1", true)
 	cmdArgs := []string{"get", "clusterdomainupdate", "test1"}
 
@@ -90,6 +92,7 @@ func TestGetClusterDomainUpdateWithChanges(t *testing.T) {
 
 func TestGetClusterDomainUpdateNotFound(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
 	createClusterDomainUpdate(t, "test1", "zone1", true)
 	cmdArgs := []string{"get", "clusterdomainupdate", "test2"}
 
@@ -99,6 +102,8 @@ func TestGetClusterDomainUpdateNotFound(t *testing.T) {
 
 func TestActivateClusterDomain(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
 	name := "zone2"
 	cmdArgs := []string{"activate", "clusterdomain", name}
 
@@ -115,6 +120,8 @@ func TestActivateClusterDomain(t *testing.T) {
 
 func TestActivateClusterDomainWithName(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
 	name := "zone2"
 	cmdArgs := []string{"activate", "clusterdomain", name, "--name", "testupdate1"}
 
@@ -130,6 +137,8 @@ func TestActivateClusterDomainWithName(t *testing.T) {
 
 func TestActivateClusterDomainNoDomainSpecified(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
 	cmdArgs := []string{"activate", "clusterdomain"}
 
 	expected := "error: exactly one cluster domain name needs to be provided to the activate command"
@@ -183,8 +192,19 @@ func TestActivateAllClusterDomainWithName(t *testing.T) {
 
 }
 
+func TestActivateClusterDomainWithInvalidDomain(t *testing.T) {
+	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
+	cmdArgs := []string{"activate", "clusterdomain", "foobar"}
+	expected := "error: provided cluster domain foobar not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
 func TestDeactivateClusterDomain(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
 	name := "zone2"
 	cmdArgs := []string{"deactivate", "clusterdomain", name}
 
@@ -201,6 +221,8 @@ func TestDeactivateClusterDomain(t *testing.T) {
 
 func TestDeactivateClusterDomainWithName(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
 	name := "zone2"
 	cmdArgs := []string{"deactivate", "clusterdomain", name, "--name", "testupdate1"}
 
@@ -216,14 +238,26 @@ func TestDeactivateClusterDomainWithName(t *testing.T) {
 
 func TestDeactivateClusterDomainNoDomainSpecified(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
 	cmdArgs := []string{"deactivate", "clusterdomain"}
 
 	expected := "error: exactly one cluster domain name needs to be provided to the deactivate command"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
+func TestDeactivateClusterDomainWithInvalidDomain(t *testing.T) {
+	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
+
+	cmdArgs := []string{"deactivate", "clusterdomain", "foobar"}
+	expected := "error: provided cluster domain foobar not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
 func TestActivateClusterDomainWaitSuccess(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
 
 	name := "testzone"
 	domainName := "zone2"
@@ -241,6 +275,7 @@ func TestActivateClusterDomainWaitSuccess(t *testing.T) {
 
 func TestActivateClusterDomainWaitFailed(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
 
 	name := "testzone"
 	domainName := "zone2"
@@ -258,6 +293,7 @@ func TestActivateClusterDomainWaitFailed(t *testing.T) {
 
 func TestDeactivateClusterDomainWaitSuccess(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
 
 	name := "testzone"
 	domainName := "zone2"
@@ -275,6 +311,7 @@ func TestDeactivateClusterDomainWaitSuccess(t *testing.T) {
 
 func TestDectivateClusterDomainWaitFailed(t *testing.T) {
 	defer resetTest()
+	createClusterDomainsStatus(t, "test1")
 
 	name := "testzone"
 	domainName := "zone2"
