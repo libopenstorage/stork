@@ -88,6 +88,7 @@ func (cbo *csiBackupObject) GetVolumeSnapshot(snapshotID string) (*kSnapshotv1be
 
 // GetVolumeSnapshotContent retrieves a backed up volume snapshot content
 func (cbo *csiBackupObject) GetVolumeSnapshotContent(snapshotID string) (*kSnapshotv1beta1.VolumeSnapshotContent, error) {
+
 	vsc, ok := cbo.VolumeSnapshotContents[snapshotID]
 	if !ok {
 		return nil, fmt.Errorf("failed to retrieve volume snapshot content for snapshotID %s", snapshotID)
@@ -603,8 +604,25 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
 	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
+
+	// check if all csi vol backup is successful
+	isCompleted := true
+	currVolInfo := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != storkCSIDriverName || vInfo.Status == storkapi.ApplicationBackupStatusSuccessful {
+		if vInfo.DriverName != storkCSIDriverName {
+			continue
+		}
+		if vInfo.Status != storkapi.ApplicationBackupStatusSuccessful {
+			isCompleted = false
+			break
+		}
+		currVolInfo = append(currVolInfo, vInfo)
+	}
+	if isCompleted {
+		return currVolInfo, nil
+	}
+	for _, vInfo := range backup.Status.Volumes {
+		if vInfo.DriverName != storkCSIDriverName {
 			continue
 		}
 
@@ -871,6 +889,9 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 	}
 
 	for _, vInfo := range backup.Status.Volumes {
+		if vInfo.DriverName != storkCSIDriverName {
+			continue
+		}
 		if backupSuccessful {
 			err = c.recreateSnapshotForDeletion(backup, vInfo, csiBackupObject, snapshotClassCreatedForDriver)
 			if err != nil {
@@ -952,6 +973,7 @@ func (c *csi) getRestoreStorageClasses(backup *storkapi.ApplicationBackup, resou
 // in order to restore the backed up PVCs
 func (c *csi) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
+	restore *storkapi.ApplicationRestore,
 	resources []runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	return c.getRestoreStorageClasses(backup, resources)
@@ -1206,6 +1228,10 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 	// ensure volumesnapshotclass is created for this driver
 	log.ApplicationRestoreLog(restore).Debugf("restoring %v volumes", len(volumeBackupInfos))
 	for _, vbInfo := range volumeBackupInfos {
+		if vbInfo.DriverName != storkCSIDriverName {
+			continue
+		}
+
 		vrInfo := &storkapi.ApplicationRestoreVolumeInfo{}
 		log.ApplicationRestoreLog(restore).Debugf("restoring CSI volume %s", vbInfo.BackupID)
 
@@ -1311,6 +1337,9 @@ func (c *csi) StartRestore(
 
 func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 	for _, vrInfo := range restore.Status.Volumes {
+		if vrInfo.DriverName != storkCSIDriverName {
+			continue
+		}
 		pvcRestoreSucceeded := (vrInfo.Status == storkapi.ApplicationRestoreStatusPartialSuccess || vrInfo.Status == storkapi.ApplicationRestoreStatusSuccessful)
 
 		// Only clean up dangling PVC if it's restore did not succeed
@@ -1400,6 +1429,9 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 	var anyFailed bool
 
 	for _, vrInfo := range restore.Status.Volumes {
+		if vrInfo.DriverName != storkCSIDriverName {
+			continue
+		}
 		// Handle namespace mapping
 		destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
 
@@ -1471,6 +1503,9 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 
 		// Mark complete once cleanup has started
 		for _, vrInfo := range restore.Status.Volumes {
+			if vrInfo.DriverName != storkCSIDriverName {
+				continue
+			}
 			vrInfo.Reason = fmt.Sprintf("Volume restore successful: PVC %s is bound", vrInfo.PersistentVolumeClaim)
 			vrInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 		}

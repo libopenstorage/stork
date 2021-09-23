@@ -3174,6 +3174,7 @@ func (p *portworx) generatePVName() string {
 
 func (p *portworx) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
+	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	secretsToRestore := make(map[string]bool)
