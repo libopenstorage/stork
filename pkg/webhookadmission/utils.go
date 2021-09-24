@@ -12,9 +12,11 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -28,9 +30,21 @@ const (
 	defaultNamespace  = "kube-system"
 )
 
+var (
+	webhookPath = "/mutate"
+)
+
 // CreateMutateWebhook create new webhookconfig for stork if not exist already
 func CreateMutateWebhook(caBundle []byte, ns string) error {
-	path := "/mutate"
+
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		// register v1 crds
+		return createWebhookV1(caBundle, ns)
+	}
 	// We make best efforts to change incoming apps scheduler to stork, if application is
 	// using stork supported storage drivers.
 	sideEffect := admissionv1beta1.SideEffectClassNoneOnDryRun
@@ -40,7 +54,7 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 			Service: &admissionv1beta1.ServiceReference{
 				Name:      storkService,
 				Namespace: ns,
-				Path:      &path,
+				Path:      &webhookPath,
 			},
 			CABundle: caBundle,
 		},
@@ -63,19 +77,19 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 		Webhooks: []admissionv1beta1.MutatingWebhook{webhook},
 	}
 
-	resp, err := admissionregistration.Instance().GetMutatingWebhookConfiguration(storkAdmissionController)
+	resp, err := admissionregistration.Instance().GetMutatingWebhookConfigurationV1beta1(storkAdmissionController)
 	if err != nil {
 		if k8serr.IsNotFound(err) {
-			_, err = admissionregistration.Instance().CreateMutatingWebhookConfiguration(req)
+			_, err = admissionregistration.Instance().CreateMutatingWebhookConfigurationV1beta1(req)
 		}
 		return err
 	}
 	req.ResourceVersion = resp.ResourceVersion
-	if _, err := admissionregistration.Instance().UpdateMutatingWebhookConfiguration(req); err != nil {
+	if _, err := admissionregistration.Instance().UpdateMutatingWebhookConfigurationV1beta1(req); err != nil {
 		log.Errorf("unable to update webhook configuration: %v", err)
 		return err
 	}
-	log.Debugf("stork webhook configured: %v", webhookName)
+	log.Debugf("stork webhook v1beta1 configured: %v", webhookName)
 	return nil
 }
 
@@ -151,4 +165,55 @@ func CreateCertSecrets(cert, key []byte, ns string) (*v1.Secret, error) {
 		Data: secretData,
 	}
 	return core.Instance().CreateSecret(secret)
+}
+
+func createWebhookV1(caBundle []byte, ns string) error {
+	// We make best efforts to change incoming apps scheduler to stork, if application is
+	// using stork supported storage drivers.
+	sideEffect := admissionv1.SideEffectClassNoneOnDryRun
+	failurePolicy := admissionv1.Ignore
+	matchPolicy := admissionv1.Exact
+	webhook := admissionv1.MutatingWebhook{
+		Name: webhookName,
+		ClientConfig: admissionv1.WebhookClientConfig{
+			Service: &admissionv1.ServiceReference{
+				Name:      storkService,
+				Namespace: ns,
+				Path:      &webhookPath,
+			},
+			CABundle: caBundle,
+		},
+		Rules: []admissionv1.RuleWithOperations{
+			{
+				Operations: []admissionv1.OperationType{admissionv1.Create},
+				Rule: admissionv1.Rule{
+					APIGroups:   []string{"apps", ""},
+					APIVersions: []string{"v1"},
+					Resources:   []string{"deployments", "statefulsets", "pods"},
+				},
+			},
+		},
+		SideEffects:             &sideEffect,
+		FailurePolicy:           &failurePolicy,
+		AdmissionReviewVersions: []string{"v1"},
+		MatchPolicy:             &matchPolicy,
+	}
+	req := &admissionv1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: storkAdmissionController,
+		},
+		Webhooks: []admissionv1.MutatingWebhook{webhook},
+	}
+
+	// recreate webhook
+	err := admissionregistration.Instance().DeleteMutatingWebhookConfiguration(storkAdmissionController)
+	if err != nil && !k8serr.IsNotFound(err) {
+		return err
+	}
+	if _, err := admissionregistration.Instance().CreateMutatingWebhookConfiguration(req); err != nil {
+		log.Errorf("unable to create webhook configuration: %v", err)
+		return err
+	}
+	log.Debugf("stork webhook v1 configured: %v", webhookName)
+	return nil
 }
