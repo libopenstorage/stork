@@ -218,16 +218,20 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							}
 
 							logrus.Infof("ReplicaSet of volume %v is: %v", v.Name, currReplicaSet)
+							logrus.Infof("Volume %v is attached to : %v", v.Name, attachedNode.Id)
 
 							for _, n := range currReplicaSet {
 								if n == attachedNode.Id {
 									updateReplicaSet = append(updateReplicaSet, n)
-
 								} else {
 									expectedReplicaSet = append(expectedReplicaSet, n)
-
 								}
+							}
 
+							if len(updateReplicaSet) == 0 {
+								logrus.Info("Attached node in not part of ReplicatSet, choosing a random node part of set for setting replication factor")
+								updateReplicaSet = append(updateReplicaSet, expectedReplicaSet[0])
+								expectedReplicaSet = expectedReplicaSet[1:]
 							}
 
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
@@ -256,6 +260,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							}
 
 							logrus.Infof("ReplicaSet of volume %v is: %v", v.Name, reducedReplicaSet)
+							logrus.Infof("Expected ReplicaSet of volume %v is: %v", v.Name, expectedReplicaSet)
 							res := reflect.DeepEqual(reducedReplicaSet, expectedReplicaSet)
 							Expect(res).To(BeTrue())
 						})

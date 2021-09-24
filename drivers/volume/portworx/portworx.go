@@ -1301,6 +1301,8 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		if len(nodesToBeUpdated) > 0 {
 			replicaSet = &api.ReplicaSet{Nodes: nodesToBeUpdated}
 			logrus.Infof("Updating ReplicaSet of node(s): %v", nodesToBeUpdated)
+		} else {
+			logrus.Infof("Nodes not passed, random node will be choosen")
 		}
 
 		volumeSpecUpdate := &api.VolumeSpecUpdate{

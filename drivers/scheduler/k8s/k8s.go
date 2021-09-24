@@ -95,7 +95,7 @@ const (
 	// DefaultRetryInterval  Default retry interval
 	DefaultRetryInterval = 10 * time.Second
 	// DefaultTimeout default timeout
-	DefaultTimeout = 2 * time.Minute
+	DefaultTimeout = 3 * time.Minute
 
 	autopilotServiceName          = "autopilot"
 	autopilotDefaultNamespace     = "kube-system"
