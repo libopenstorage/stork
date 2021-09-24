@@ -62,6 +62,8 @@ const (
 	restoreCRNameKey        = "kdmp.portworx.com/restore-cr-name"
 	pvcNameKey              = "kdmp.portworx.com/pvc-name"
 	labelNamelimit          = 63
+	// optCSISnapshotClassName is an option for providing a snapshot class name
+	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -187,6 +189,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			Namespace:  pvc.Namespace,
 			APIVersion: pvc.APIVersion,
 		}
+		dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
 			logrus.Errorf("failed to create DataExport CR: %v", err)
@@ -210,6 +213,14 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			logrus.Errorf("failed to get DataExport CR: %v", err)
 			return volumeInfos, err
 		}
+
+		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+			vInfo.Status = storkapi.ApplicationBackupStatusFailed
+			vInfo.Reason = fmt.Sprintf("Backup failed at stage %v for volume: %v", dataExport.Status.Stage, dataExport.Status.Reason)
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
+
 		if dataExport.Status.TransferID == "" {
 			vInfo.Status = storkapi.ApplicationBackupStatusInitial
 			vInfo.Reason = "Volume backup not started yet"
@@ -220,9 +231,6 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				vInfo.Reason = "Volume backup in progress"
 				// TODO: KDMP does not return size right now, we will need to fill up
 				// size for volume once support is available
-			} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-				vInfo.Status = storkapi.ApplicationBackupStatusFailed
-				vInfo.Reason = fmt.Sprintf("Backup failed for volume: %v", dataExport.Status.Reason)
 			} else if isDataExportCompleted(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 				vInfo.Reason = "Backup successful for volume"
@@ -692,6 +700,13 @@ func (k *kdmp) CleanupRestoreResources(restore *storkapi.ApplicationRestore) err
 // GetGenericDriverName returns current generic backup/restore driver
 func GetGenericDriverName() string {
 	return driverName
+}
+
+func (k *kdmp) getSnapshotClassName(backup *storkapi.ApplicationBackup) string {
+	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok {
+		return snapshotClassName
+	}
+	return ""
 }
 
 func init() {

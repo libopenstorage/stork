@@ -28,6 +28,8 @@ type Options struct {
 	SnapshotClassName string
 	// RestoreSnapshotName is the name of the snapshot from which restore will be performed
 	RestoreSnapshotName string
+	// Annotations are the annotations that can be applied on the snapshot related objects
+	Annotations map[string]string
 }
 
 // Name is used to set a snapshot name.
@@ -105,6 +107,17 @@ func RestoreSnapshotName(name string) Option {
 			return fmt.Errorf("restore snapshot name is empty")
 		}
 		opts.RestoreSnapshotName = name
+		return nil
+	}
+}
+
+// Annotations are the annotations applied on the snapshot related objects
+func Annotations(annotations map[string]string) Option {
+	return func(opts *Options) error {
+		opts.Annotations = make(map[string]string)
+		for k, v := range annotations {
+			opts.Annotations[k] = v
+		}
 		return nil
 	}
 }

@@ -86,8 +86,9 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 	}
 	vs := &kSnapshotv1beta1.VolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      o.Name,
-			Namespace: o.PVCNamespace,
+			Name:        o.Name,
+			Namespace:   o.PVCNamespace,
+			Annotations: o.Annotations,
 		},
 		Spec: kSnapshotv1beta1.VolumeSnapshotSpec{
 			VolumeSnapshotClassName: stringPtr(o.SnapshotClassName),
@@ -223,7 +224,7 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 
 	default:
 		snapshotInfo.Status = StatusInProgress
-		snapshotInfo.Reason = formatReasonErrorMessage(fmt.Sprintf("volume backup in progress for PVC %s", pvcName), vsError, vscError)
+		snapshotInfo.Reason = formatReasonErrorMessage(fmt.Sprintf("volume snapshot in progress for PVC %s", pvcName), vsError, vscError)
 		snapshotInfo.Size = uint64(size)
 	}
 	return snapshotInfo, nil

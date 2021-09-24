@@ -249,7 +249,10 @@ func (c *csi) getSnapshotClassName(
 	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok {
 		return snapshotClassName
 	}
-	return c.getDefaultSnapshotClassName(driverName)
+	if driverName != "" {
+		return c.getDefaultSnapshotClassName(driverName)
+	}
+	return ""
 }
 
 func (c *csi) getVolumeSnapshotClass(snapshotClassName string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
@@ -350,8 +353,8 @@ func (c *csi) StartBackup(
 			snapshotter.Name(vsName),
 			snapshotter.PVCName(pvc.Name),
 			snapshotter.PVCNamespace(pvc.Namespace),
+			snapshotter.SnapshotClassName(c.getSnapshotClassName(backup, "")),
 		)
-
 		if err != nil {
 			c.cancelBackupDuringStartFailure(backup, volumeInfos)
 			return nil, fmt.Errorf("failed to ensure volumesnapshotclass was created: %v", err)
