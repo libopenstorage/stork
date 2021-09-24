@@ -51,6 +51,9 @@ const (
 	secretNamespace         = "kube-system"
 	pxbackupAnnotation      = "portworx.io/created-by"
 	pxbackupAnnotationValue = "px-backup"
+	backupCRNameKey         = "kdmp.portworx.com/backup-cr-name"
+	restoreCRNameKey        = "kdmp.portworx.com/restore-cr-name"
+	pvcNameKey              = "kdmp.portworx.com/pvc-name"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -145,6 +148,10 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
+		labels := make(map[string]string)
+		labels[backupCRNameKey] = backup.Name
+		labels[pvcNameKey] = pvc.Name
+		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
 		dataExport.Name = getGenericCRName(backup.Name, pvc.Namespace, pvc.Name)
@@ -471,6 +478,10 @@ func (k *kdmp) StartRestore(
 
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
+		labels := make(map[string]string)
+		labels[backupCRNameKey] = restore.Name
+		labels[pvcNameKey] = bkpvInfo.PersistentVolumeClaim
+		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
 		dataExport.Name = getGenericCRName(restore.Name, bkpvInfo.Namespace, bkpvInfo.PersistentVolumeClaim)
