@@ -86,7 +86,8 @@ type Snapshotter interface {
 
 // NewDefaultSnapshotter returns the default implementation of Snapshotter
 func NewDefaultSnapshotter() Snapshotter {
-	return &defaultSnapshotter{}
+	providers := make(map[string]Driver)
+	return &defaultSnapshotter{providers: providers}
 }
 
 type defaultSnapshotter struct {
