@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
+	kdmpSchedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,7 +17,7 @@ import (
 )
 
 const (
-	kopiaDeleteJobPrefix = "snapshot-delete"
+	kopiaDeleteJobPrefix = "d"
 )
 
 // Driver is a kopia delete snapshot implementation
@@ -43,6 +45,23 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		logrus.Infof("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
+	labels := addVolumeBackupDeleteLabels(o)
+	// Create the volumeBackupDelete CR to store the delete job status
+	vd := &kdmpapi.VolumeBackupDelete{}
+	vd.Name = o.VolumeBackupDeleteName
+	vd.Annotations = map[string]string{
+		utils.SkipResourceAnnotation: "true",
+	}
+	vd.Labels = labels
+	vd.Namespace = o.VolumeBackupDeleteNamespace
+	vd.Spec.PvcName = o.SourcePVCName
+	vd.Spec.SnapshotID = o.SnapshotID
+	_, err = kdmpSchedOps.Instance().CreateVolumeBackupDelete(vd)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		errMsg := fmt.Sprintf("failed in creating volumeBackupDelete  [%s/%s]: %v", o.VolumeBackupDeleteName, o.VolumeBackupDeleteNamespace, err)
+		logrus.Errorf("%s %v", fn, errMsg)
+		return "", fmt.Errorf("%v", errMsg)
+	}
 	jobName := toJobName(o.JobName, o.SnapshotID)
 	job, err := buildJob(jobName, o)
 	if err != nil {
@@ -67,7 +86,12 @@ func (d Driver) DeleteJob(id string) error {
 		logrus.Errorf("%s %v", fn, err)
 		return err
 	}
-
+	err = kdmpSchedOps.Instance().DeleteVolumeBackupDelete(name, namespace)
+	if err != nil && !apierrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("failed to delete volumeBackupDelete CR [%v]: %v", id, err)
+		logrus.Errorf("%v", errMsg)
+		return fmt.Errorf(errMsg)
+	}
 	if err = batch.Instance().DeleteJob(name, namespace); err != nil && !apierrors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("deletion of delete snapshot job [%s/%s] failed: %v", namespace, name, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
@@ -102,21 +126,6 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 }
 
 func (d Driver) validate(o drivers.JobOpts) error {
-	if o.SnapshotID == "" {
-		return fmt.Errorf("snapshotID should be set")
-	}
-	if o.CredSecretName == "" {
-		return fmt.Errorf("credential secret name should be set")
-	}
-	if o.CredSecretNamespace == "" {
-		return fmt.Errorf("credential secret namespace  should be set")
-	}
-	if o.Namespace == "" {
-		return fmt.Errorf("namespace should be set")
-	}
-	if o.SourcePVCName == "" {
-		return fmt.Errorf("sourcePVC should be set")
-	}
 	return nil
 }
 
@@ -127,11 +136,12 @@ func jobFor(
 	pvcNamespace,
 	credSecretName,
 	credSecretNamespace,
-	snapshotID string,
+	volumeBackupDeleteName,
+	volumeBackupDeleteNamespace,
+	snapshotID,
+	serviceAccountName string,
 	resources corev1.ResourceRequirements,
 	labels map[string]string) (*batchv1.Job, error) {
-
-	labels = addJobLabels(labels)
 
 	cmd := strings.Join([]string{
 		"/kopiaexecutor",
@@ -144,13 +154,20 @@ func jobFor(
 		credSecretNamespace,
 		"--snapshot-id",
 		snapshotID,
+		"--volume-backup-delete-name",
+		volumeBackupDeleteName,
+		"--volume-backup-delete-namespace",
+		volumeBackupDeleteNamespace,
 	}, " ")
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: jobNamespace,
-			Labels:    labels,
+			Annotations: map[string]string{
+				utils.SkipResourceAnnotation: "true",
+			},
+			Labels: labels,
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
@@ -158,8 +175,9 @@ func jobFor(
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					RestartPolicy:    corev1.RestartPolicyOnFailure,
-					ImagePullSecrets: utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
+					RestartPolicy:      corev1.RestartPolicyOnFailure,
+					ServiceAccountName: serviceAccountName,
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
 					Containers: []corev1.Container{
 						{
 							Name:  "kopiaexecutor",
@@ -209,12 +227,21 @@ func toRepoName(pvcName, pvcNamespace string) string {
 	return fmt.Sprintf("%s-%s", pvcNamespace, pvcName)
 }
 
-func addJobLabels(labels map[string]string) map[string]string {
+func addVolumeBackupDeleteLabels(o drivers.JobOpts) map[string]string {
+	labels := make(map[string]string)
+	labels[utils.BackupObjectNameKey] = o.BackupObjectName
+	labels[utils.BackupObjectUIDKey] = o.BackupObjectUID
+	return labels
+}
+
+func addJobLabels(labels map[string]string, o drivers.JobOpts) map[string]string {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.KopiaBackup
+	labels[utils.BackupObjectNameKey] = o.BackupObjectName
+	labels[utils.BackupObjectUIDKey] = o.BackupObjectUID
 	return labels
 }
 
@@ -224,15 +251,19 @@ func buildJob(jobName string, o drivers.JobOpts) (*batchv1.Job, error) {
 		return nil, err
 	}
 
+	labels := addJobLabels(o.Labels, o)
 	return jobFor(
 		jobName,
 		o.JobNamespace,
-		o.SourcePVCNamespace,
 		o.SourcePVCName,
+		o.SourcePVCNamespace,
 		o.CredSecretName,
 		o.CredSecretNamespace,
+		o.VolumeBackupDeleteName,
+		o.VolumeBackupDeleteNamespace,
 		o.SnapshotID,
+		o.ServiceAccountName,
 		resources,
-		o.Labels,
+		labels,
 	)
 }

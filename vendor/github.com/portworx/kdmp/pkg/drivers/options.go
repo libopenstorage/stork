@@ -10,29 +10,58 @@ type JobOption func(opts *JobOpts) error
 
 // JobOpts defines all job parameters.
 type JobOpts struct {
-	SourcePVCName              string
-	SourcePVCNamespace         string
-	DestinationPVCName         string
-	Namespace                  string
-	BackupLocationName         string
-	BackupLocationNamespace    string
-	VolumeBackupName           string
-	VolumeBackupNamespace      string
-	DataExportName             string
-	SnapshotID                 string
-	CredSecretName             string
-	CredSecretNamespace        string
-	MaintenanceStatusName      string
-	MaintenanceStatusNamespace string
-	JobName                    string
-	JobNamespace               string
-	ServiceAccountName         string
-	Labels                     map[string]string
+	SourcePVCName               string
+	SourcePVCNamespace          string
+	DestinationPVCName          string
+	Namespace                   string
+	BackupLocationName          string
+	BackupLocationNamespace     string
+	VolumeBackupName            string
+	VolumeBackupNamespace       string
+	VolumeBackupDeleteName      string
+	VolumeBackupDeleteNamespace string
+	DataExportName              string
+	SnapshotID                  string
+	CredSecretName              string
+	CredSecretNamespace         string
+	MaintenanceStatusName       string
+	MaintenanceStatusNamespace  string
+	JobName                     string
+	JobNamespace                string
+	ServiceAccountName          string
+	BackupObjectName            string
+	BackupObjectUID             string
+	Labels                      map[string]string
+}
+
+// WithBackupObjectName is job parameter.
+func WithBackupObjectName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("backupObject name should be set")
+		}
+		opts.BackupObjectName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithBackupObjectUID is job parameter.
+func WithBackupObjectUID(uid string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(uid) == "" {
+			return fmt.Errorf("backupObject uid should be set")
+		}
+		opts.BackupObjectUID = strings.TrimSpace(uid)
+		return nil
+	}
 }
 
 // WithJobName is job parameter.
 func WithJobName(name string) JobOption {
 	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("job name should be set")
+		}
 		opts.JobName = strings.TrimSpace(name)
 		return nil
 	}
@@ -42,7 +71,7 @@ func WithJobName(name string) JobOption {
 func WithJobNamespace(namespace string) JobOption {
 	return func(opts *JobOpts) error {
 		if strings.TrimSpace(namespace) == "" {
-			return fmt.Errorf("namespace should be set")
+			return fmt.Errorf("job namespace should be set")
 		}
 		opts.JobNamespace = strings.TrimSpace(namespace)
 		return nil
@@ -140,6 +169,9 @@ func WithSourcePVCNamespace(namespace string) JobOption {
 // WithDestinationPVC is job parameter.
 func WithDestinationPVC(name string) JobOption {
 	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("destination pvc name should be set")
+		}
 		opts.DestinationPVCName = strings.TrimSpace(name)
 		return nil
 	}
@@ -159,6 +191,9 @@ func WithNamespace(ns string) JobOption {
 // WithBackupLocationName is job parameter.
 func WithBackupLocationName(name string) JobOption {
 	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("backuplocation name should be set")
+		}
 		opts.BackupLocationName = strings.TrimSpace(name)
 		return nil
 	}
@@ -167,6 +202,9 @@ func WithBackupLocationName(name string) JobOption {
 // WithBackupLocationNamespace is job parameter.
 func WithBackupLocationNamespace(ns string) JobOption {
 	return func(opts *JobOpts) error {
+		if strings.TrimSpace(ns) == "" {
+			return fmt.Errorf("backuplocation namespace should be set")
+		}
 		opts.BackupLocationNamespace = strings.TrimSpace(ns)
 		return nil
 	}
@@ -175,6 +213,9 @@ func WithBackupLocationNamespace(ns string) JobOption {
 // WithVolumeBackupName is job parameter.
 func WithVolumeBackupName(name string) JobOption {
 	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("volumebackup name should be set")
+		}
 		opts.VolumeBackupName = strings.TrimSpace(name)
 		return nil
 	}
@@ -183,7 +224,32 @@ func WithVolumeBackupName(name string) JobOption {
 // WithVolumeBackupNamespace is job parameter.
 func WithVolumeBackupNamespace(ns string) JobOption {
 	return func(opts *JobOpts) error {
+		if strings.TrimSpace(ns) == "" {
+			return fmt.Errorf("volumebackup namespace should be set")
+		}
 		opts.VolumeBackupNamespace = strings.TrimSpace(ns)
+		return nil
+	}
+}
+
+// WithVolumeBackupDeleteName is job parameter.
+func WithVolumeBackupDeleteName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("volumeBackupDelete name should be set")
+		}
+		opts.VolumeBackupDeleteName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithVolumeBackupDeleteNamespace is job parameter.
+func WithVolumeBackupDeleteNamespace(ns string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(ns) == "" {
+			return fmt.Errorf("volumeBackupDelete namespace should be set")
+		}
+		opts.VolumeBackupDeleteNamespace = strings.TrimSpace(ns)
 		return nil
 	}
 }
@@ -199,6 +265,9 @@ func WithLabels(l map[string]string) JobOption {
 // WithDataExportName is job parameter.
 func WithDataExportName(name string) JobOption {
 	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("dataexport namespace should be set")
+		}
 		opts.DataExportName = name
 		return nil
 	}

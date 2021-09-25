@@ -18,11 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	// SkipResourceAnnotation skipping kopia secret to be backed up
-	SkipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
-)
-
 // Driver is a resticbackup implementation of the data export interface.
 type Driver struct{}
 
@@ -49,7 +44,7 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	}
 	// DataExportName will be unique name when also generated from stork
 	// if there are multiple backups being triggered
-	jobName := toJobName(o.DataExportName)
+	jobName := toJobName(o.SourcePVCName)
 	logrus.Debugf("backup jobname: %s", jobName)
 	job, err := buildJob(jobName, o)
 	if err != nil {
