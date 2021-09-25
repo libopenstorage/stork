@@ -61,6 +61,9 @@ github.com/MakeNowJust/heredoc
 github.com/PuerkitoBio/purell
 # github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
 github.com/PuerkitoBio/urlesc
+# github.com/aquilax/truncate v1.0.0
+## explicit
+github.com/aquilax/truncate
 # github.com/aws/aws-sdk-go v1.35.37
 ## explicit
 github.com/aws/aws-sdk-go/aws
