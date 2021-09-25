@@ -19,6 +19,7 @@ type KdmpV1alpha1Interface interface {
 	BackupLocationMaintenancesGetter
 	DataExportsGetter
 	VolumeBackupsGetter
+	VolumeBackupDeletesGetter
 }
 
 // KdmpV1alpha1Client is used to interact with features provided by the kdmp.portworx.com group.
@@ -36,6 +37,10 @@ func (c *KdmpV1alpha1Client) DataExports(namespace string) DataExportInterface {
 
 func (c *KdmpV1alpha1Client) VolumeBackups(namespace string) VolumeBackupInterface {
 	return newVolumeBackups(c, namespace)
+}
+
+func (c *KdmpV1alpha1Client) VolumeBackupDeletes(namespace string) VolumeBackupDeleteInterface {
+	return newVolumeBackupDeletes(c, namespace)
 }
 
 // NewForConfig creates a new KdmpV1alpha1Client for the given config.

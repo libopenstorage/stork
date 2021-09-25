@@ -23,6 +23,7 @@ var (
 type Ops interface {
 	DataExportOps
 	VolumeBackupOps
+	VolumeBackupDeleteOps
 	BackupLocationMaintenanceOps
 
 	// SetConfig sets the config and resets the client
