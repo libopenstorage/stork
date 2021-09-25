@@ -13,6 +13,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.3.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
+	github.com/aquilax/truncate v1.0.0
 	github.com/aws/aws-sdk-go v1.35.37
 	github.com/banzaicloud/k8s-objectmatcher v1.5.1 // indirect
 	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
