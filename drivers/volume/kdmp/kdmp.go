@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/aquilax/truncate"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
-	_ "github.com/aquilax/truncate"
 )
 
 const (
@@ -55,6 +55,7 @@ const (
 	backupCRNameKey         = "kdmp.portworx.com/backup-cr-name"
 	restoreCRNameKey        = "kdmp.portworx.com/restore-cr-name"
 	pvcNameKey              = "kdmp.portworx.com/pvc-name"
+	labelNamelimit          = 63
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -150,8 +151,17 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
 		labels := make(map[string]string)
-		labels[backupCRNameKey] = backup.Name
-		labels[pvcNameKey] = pvc.Name
+		if len(backup.Name) <= labelNamelimit {
+			labels[backupCRNameKey] = backup.Name
+		} else {
+			labels[backupCRNameKey] = truncate.Truncate(backup.Name, labelNamelimit, "", truncate.PositionEnd)
+		}
+		if len(pvc.Name) <= labelNamelimit {
+			labels[pvcNameKey] = pvc.Name
+		} else {
+			labels[pvcNameKey] = truncate.Truncate(pvc.Name, labelNamelimit, "", truncate.PositionEnd)
+		}
+
 		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
@@ -480,8 +490,16 @@ func (k *kdmp) StartRestore(
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
 		labels := make(map[string]string)
-		labels[backupCRNameKey] = restore.Name
-		labels[pvcNameKey] = bkpvInfo.PersistentVolumeClaim
+		if len(restore.Name) <= labelNamelimit {
+			labels[restoreCRNameKey] = restore.Name
+		} else {
+			labels[restoreCRNameKey] = truncate.Truncate(restore.Name, labelNamelimit, "", truncate.PositionEnd)
+		}
+		if len(bkpvInfo.PersistentVolumeClaim) <= labelNamelimit {
+			labels[pvcNameKey] = bkpvInfo.PersistentVolumeClaim
+		} else {
+			labels[pvcNameKey] = truncate.Truncate(bkpvInfo.PersistentVolumeClaim, labelNamelimit, "", truncate.PositionEnd)
+		}
 		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
