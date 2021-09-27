@@ -383,13 +383,14 @@ func (a *aws) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 }
 
 func (a *aws) CancelBackup(backup *storkapi.ApplicationBackup) error {
-	return a.DeleteBackup(backup)
+	_, err := a.DeleteBackup(backup)
+	return err
 }
 
-func (a *aws) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+func (a *aws) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	if a.client == nil {
 		if err := a.Init(nil); err != nil {
-			return err
+			return true, err
 		}
 	}
 
@@ -409,10 +410,10 @@ func (a *aws) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 					continue
 				}
 			}
-			return err
+			return true, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (a *aws) UpdateMigratedPersistentVolumeSpec(

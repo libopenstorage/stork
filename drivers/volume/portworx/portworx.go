@@ -3091,10 +3091,10 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 	return volumeInfos, nil
 }
 
-func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	if !p.initDone {
 		if err := p.initPortworxClients(); err != nil {
-			return err
+			return true, err
 		}
 	}
 
@@ -3103,13 +3103,13 @@ func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 		if vInfo.BackupID != "" {
 			token, err := p.getUserToken(vInfo.Options, vInfo.Namespace)
 			if err != nil {
-				return fmt.Errorf("failed to fetch portworx user token: %v", err)
+				return true, fmt.Errorf("failed to fetch portworx user token: %v", err)
 			}
 			volDriver, ok := driverMap[token]
 			if !ok {
 				volDriver, _, err = p.getUserVolDriverFromToken(token)
 				if err != nil {
-					return err
+					return true, err
 				}
 				driverMap[token] = volDriver
 			}
@@ -3118,11 +3118,11 @@ func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 				CredentialUUID: p.getCredID(backup.Spec.BackupLocation, backup.Namespace),
 			}
 			if err := volDriver.CloudBackupDelete(input); err != nil {
-				return err
+				return true, err
 			}
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (p *portworx) CancelBackup(backup *storkapi.ApplicationBackup) error {

@@ -13,6 +13,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.3.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
+	github.com/aquilax/truncate v1.0.0
 	github.com/aws/aws-sdk-go v1.35.37
 	github.com/banzaicloud/k8s-objectmatcher v1.5.1 // indirect
 	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
@@ -40,8 +41,8 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
-	github.com/portworx/kdmp v0.4.1-0.20210916140650-6d5c5ebbea75
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20210908045330-9060cf5304f1
+	github.com/portworx/kdmp v0.4.1-0.20210924125313-ad7517929e3a
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20210921050234-561b707a5d96
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.9.0
 	github.com/sirupsen/logrus v1.8.1

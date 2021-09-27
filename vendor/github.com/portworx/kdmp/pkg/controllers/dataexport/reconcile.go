@@ -126,8 +126,9 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			// Create secret in source ns because in case of multi ns backup
 			// BL CR is created in kube-system ns
 			err = CreateCredentialsSecret(
-				utils.FrameCredSecretName(dataExport.Name, dataExport.Spec.Source.Name),
+				utils.FrameCredSecretName(utils.BackupJobPrefix, dataExport.Name),
 				dataExport.Spec.Destination.Name,
+				dataExport.Spec.Destination.Namespace,
 				dataExport.Spec.Source.Namespace,
 			)
 			if err != nil {
@@ -149,9 +150,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			}
 			// This will create a unique secret per PVC being restored
 			// For restore create the secret in the ns where PVC is referenced
+
 			err = CreateCredentialsSecret(
-				utils.FrameCredSecretName(dataExport.Name, dataExport.Spec.Destination.Name),
+				utils.FrameCredSecretName(utils.RestoreJobPrefix, dataExport.Name),
 				vb.Spec.BackupLocation.Name,
+				vb.Spec.BackupLocation.Namespace,
 				dataExport.Spec.Destination.Namespace,
 			)
 			if err != nil {
@@ -201,27 +204,30 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 			return false, nil
 		}
-		ns, name, err := utils.ParseJobID(dataExport.Status.TransferID)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to parse job ID %v from DataExport CR: %v: %v",
-				dataExport.Status.TransferID, dataExport.Name, err)
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
+		var vbName string
+		var vbNamespace string
+		if driverName == drivers.KopiaBackup {
+			vbNamespace, vbName, err = utils.ParseJobID(dataExport.Status.TransferID)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to parse job ID %v from DataExport CR: %v: %v",
+					dataExport.Status.TransferID, dataExport.Name, err)
+				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
+			}
 		}
+
+		if driverName == drivers.KopiaRestore {
+			vbName = dataExport.Spec.Source.Name
+			vbNamespace = dataExport.Spec.Source.Namespace
+		}
+
 		volumeBackupCR, err := kdmpopts.Instance().GetVolumeBackup(context.Background(),
-			name, ns)
+			vbName, vbNamespace)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed to read VolumeBackup CR %v: %v", name, err)
+			errMsg := fmt.Sprintf("failed to read VolumeBackup CR %v: %v", vbName, err)
 			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
 		}
 		dataExport.Status.SnapshotID = volumeBackupCR.Status.SnapshotID
 		dataExport.Status.Size = volumeBackupCR.Status.TotalBytes
-
-		// Delete VolumeBackup CR created
-		err = kdmpopts.Instance().DeleteVolumeBackup(context.Background(), name, ns)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to delete VolumeBackup CR %v: %v", name, err)
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
-		}
 
 		if err := c.cleanUp(driver, snapshotter, dataExport); err != nil {
 			msg := fmt.Sprintf("failed to remove resources: %s", err)
@@ -679,8 +685,8 @@ func checkNameNamespace(ref kdmpapi.DataExportObjectReference) error {
 }
 
 // CreateCredentialsSecret parses the provided backup location and creates secret with cloud credentials
-func CreateCredentialsSecret(secretName, blName, namespace string) error {
-	backupLocation, err := readBackupLocation(blName, namespace, "")
+func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string) error {
+	backupLocation, err := readBackupLocation(blName, blNamespace, "")
 	if err != nil {
 		return err
 	}
@@ -689,11 +695,11 @@ func CreateCredentialsSecret(secretName, blName, namespace string) error {
 	// Creating cloud cred secret
 	switch backupLocation.Location.Type {
 	case storkapi.BackupLocationS3:
-		return createS3Secret(secretName, backupLocation)
+		return createS3Secret(secretName, backupLocation, namespace)
 	case storkapi.BackupLocationGoogle:
-		return createGoogleSecret(secretName, backupLocation)
+		return createGoogleSecret(secretName, backupLocation, namespace)
 	case storkapi.BackupLocationAzure:
-		return createAzureSecret(secretName, backupLocation)
+		return createAzureSecret(secretName, backupLocation, namespace)
 	}
 
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
@@ -721,7 +727,7 @@ func readBackupLocation(name, namespace, filePath string) (*storkapi.BackupLocat
 	return out, nil
 }
 
-func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation) error {
+func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, namespace string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["endpoint"] = []byte(backupLocation.Location.S3Config.Endpoint)
 	credentialData["accessKey"] = []byte(backupLocation.Location.S3Config.AccessKeyID)
@@ -730,31 +736,31 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation) 
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
-	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+	err := createCredSecret(secretName, namespace, credentialData)
 
 	return err
 }
 
-func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocation) error {
+func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["accountkey"] = []byte(backupLocation.Location.GoogleConfig.AccountKey)
 	credentialData["projectid"] = []byte(backupLocation.Location.GoogleConfig.ProjectID)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
-	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+	err := createCredSecret(secretName, namespace, credentialData)
 
 	return err
 }
 
-func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocation) error {
+func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
-	err := createCredSecret(secretName, backupLocation.Namespace, credentialData)
+	err := createCredSecret(secretName, namespace, credentialData)
 
 	return err
 }

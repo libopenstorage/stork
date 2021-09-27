@@ -20,10 +20,6 @@ import (
 // Driver is a kopiarestore implementation of the data export interface.
 type Driver struct{}
 
-const (
-	restoreJobPrefix = "restore"
-)
-
 // Name returns a name of the driver.
 func (d Driver) Name() string {
 	return drivers.KopiaRestore
@@ -43,7 +39,6 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	if err := d.validate(o); err != nil {
 		return "", err
 	}
-
 	vb, err := kdmpops.Instance().GetVolumeBackup(context.Background(), o.VolumeBackupName, o.VolumeBackupNamespace)
 	if err != nil {
 		return "", err
@@ -54,9 +49,11 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		jobName,
 		o.Namespace,
 		o.DestinationPVCName,
-		utils.FrameCredSecretName(o.DataExportName, o.DestinationPVCName),
+		o.VolumeBackupName,
+		utils.FrameCredSecretName(utils.RestoreJobPrefix, o.DataExportName),
 		vb.Spec.BackupLocation.Name,
 		vb.Spec.BackupLocation.Namespace,
+		o.Namespace,
 		vb.Status.SnapshotID,
 		vb.Spec.Repository,
 		o.Labels)
@@ -132,9 +129,11 @@ func jobFor(
 	jobName,
 	namespace,
 	pvcName,
+	volumeBackupName,
 	credSecretName,
 	backuplocationName,
 	backuplocationNamespace,
+	restoreNamespace,
 	snapshotID,
 	repository string,
 	labels map[string]string) (*batchv1.Job, error) {
@@ -152,12 +151,16 @@ func jobFor(
 	cmd := strings.Join([]string{
 		"/kopiaexecutor",
 		"restore",
+		"--volume-backup-name",
+		volumeBackupName,
 		"--backup-location",
 		backuplocationName,
 		"--backup-location-namespace",
 		backuplocationNamespace,
 		"--repository",
 		repository,
+		"--restore-namespace",
+		restoreNamespace,
 		"--credentials",
 		credSecretName,
 		"--target-path",
@@ -185,7 +188,7 @@ func jobFor(
 						{
 							Name:            "kopiaexecutor",
 							Image:           utils.KopiaExecutorImage(),
-							ImagePullPolicy: corev1.PullIfNotPresent,
+							ImagePullPolicy: corev1.PullAlways,
 							Command: []string{
 								"/bin/sh",
 								"-x",
@@ -231,7 +234,7 @@ func jobFor(
 }
 
 func toJobName(dataExportName string) string {
-	return fmt.Sprintf("%s-%s", restoreJobPrefix, dataExportName)
+	return fmt.Sprintf("%s-%s", utils.RestoreJobPrefix, dataExportName)
 }
 
 func addJobLabels(labels map[string]string) map[string]string {

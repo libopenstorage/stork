@@ -354,13 +354,14 @@ func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi
 }
 
 func (a *azure) CancelBackup(backup *storkapi.ApplicationBackup) error {
-	return a.DeleteBackup(backup)
+	_, err := a.DeleteBackup(backup)
+	return err
 }
 
-func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	if !a.initDone {
 		if err := a.Init(nil); err != nil {
-			return err
+			return true, err
 		}
 	}
 
@@ -378,7 +379,7 @@ func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 			}
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (a *azure) UpdateMigratedPersistentVolumeSpec(

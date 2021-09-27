@@ -43,7 +43,7 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		logrus.Infof("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
-	jobName := toJobName(o.SnapshotID)
+	jobName := toJobName(o.JobName, o.SnapshotID)
 	job, err := buildJob(jobName, o)
 	if err != nil {
 		errMsg := fmt.Sprintf("building backup snapshot delete job [%s] failed: %v", jobName, err)
@@ -122,8 +122,9 @@ func (d Driver) validate(o drivers.JobOpts) error {
 
 func jobFor(
 	jobName,
-	namespace,
+	jobNamespace,
 	pvcName,
+	pvcNamespace,
 	credSecretName,
 	credSecretNamespace,
 	snapshotID string,
@@ -136,7 +137,7 @@ func jobFor(
 		"/kopiaexecutor",
 		"delete",
 		"--repository",
-		toRepoName(pvcName, namespace),
+		toRepoName(pvcName, pvcNamespace),
 		"--cred-secret-name",
 		credSecretName,
 		"--cred-secret-namespace",
@@ -148,7 +149,7 @@ func jobFor(
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: namespace,
+			Namespace: jobNamespace,
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
@@ -197,7 +198,10 @@ func jobFor(
 	}, nil
 }
 
-func toJobName(snapshotID string) string {
+func toJobName(jobName, snapshotID string) string {
+	if jobName != "" {
+		return jobName
+	}
 	return fmt.Sprintf("%s-%s", kopiaDeleteJobPrefix, snapshotID)
 }
 
@@ -222,7 +226,8 @@ func buildJob(jobName string, o drivers.JobOpts) (*batchv1.Job, error) {
 
 	return jobFor(
 		jobName,
-		o.Namespace,
+		o.JobNamespace,
+		o.SourcePVCNamespace,
 		o.SourcePVCName,
 		o.CredSecretName,
 		o.CredSecretNamespace,

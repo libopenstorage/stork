@@ -11,6 +11,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// BackupJobPrefix job prefix for backup jobs
+	BackupJobPrefix = "backup"
+	// RestoreJobPrefix job prefix for restore jobs
+	RestoreJobPrefix = "restore"
+)
+
 // SetupServiceAccount create a service account and bind it to a provided role.
 func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 	if role != nil {
@@ -73,6 +80,6 @@ func serviceAccountFor(name, namespace string) *corev1.ServiceAccount {
 }
 
 // FrameCredSecretName frames credential secret name
-func FrameCredSecretName(dataExportName, blName string) string {
-	return dataExportName + "-" + blName
+func FrameCredSecretName(prefix, deName string) string {
+	return prefix + "-" + deName
 }
