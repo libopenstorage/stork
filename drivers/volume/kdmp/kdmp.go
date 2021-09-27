@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/aquilax/truncate"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
@@ -52,10 +51,6 @@ const (
 	secretNamespace         = "kube-system"
 	pxbackupAnnotation      = "portworx.io/created-by"
 	pxbackupAnnotationValue = "px-backup"
-	backupCRNameKey         = "kdmp.portworx.com/backup-cr-name"
-	restoreCRNameKey        = "kdmp.portworx.com/restore-cr-name"
-	pvcNameKey              = "kdmp.portworx.com/pvc-name"
-	labelNamelimit          = 63
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -150,19 +145,6 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
-		labels := make(map[string]string)
-		if len(backup.Name) <= labelNamelimit {
-			labels[backupCRNameKey] = backup.Name
-		} else {
-			labels[backupCRNameKey] = truncate.Truncate(backup.Name, labelNamelimit, "", truncate.PositionEnd)
-		}
-		if len(pvc.Name) <= labelNamelimit {
-			labels[pvcNameKey] = pvc.Name
-		} else {
-			labels[pvcNameKey] = truncate.Truncate(pvc.Name, labelNamelimit, "", truncate.PositionEnd)
-		}
-
-		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
 		dataExport.Name = getGenericCRName(backup.Name, pvc.Namespace, pvc.Name)
@@ -193,36 +175,13 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 
 func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-	// check if all csi vol backup is successful
-	// Add this work around till we have cleanup api implementation.
-	isCompleted := true
-	currVolInfo := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
-			continue
-		}
-		if vInfo.Status != storkapi.ApplicationBackupStatusSuccessful {
-			isCompleted = false
-			break
-		}
-		currVolInfo = append(currVolInfo, vInfo)
-	}
-	if isCompleted {
-		for _, vInfo := range backup.Status.Volumes {
-			crName := getGenericCRName(backup.Name, vInfo.Namespace, vInfo.PersistentVolumeClaim)
-			// delete kdmp crs
-			if err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.Namespace); err != nil {
-				logrus.Warnf("failed to delete data export CR: %v", err)
-			}
-		}
-		return currVolInfo, nil
-	}
+	inProgress := false
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
 		}
 		crName := getGenericCRName(backup.Name, vInfo.Namespace, vInfo.PersistentVolumeClaim)
-		dataExport, err := kdmpShedOps.Instance().GetDataExport(crName, backup.Namespace)
+		dataExport, err := kdmpShedOps.Instance().GetDataExport(crName, vInfo.Namespace)
 		if err != nil {
 			logrus.Errorf("failed to get DataExport CR: %v", err)
 			return volumeInfos, err
@@ -237,6 +196,7 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				vInfo.Reason = "Volume backup in progress"
 				// TODO: KDMP does not return size right now, we will need to fill up
 				// size for volume once support is available
+				inProgress = true
 			} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
 				vInfo.Reason = fmt.Sprintf("Backup failed for volume: %v", dataExport.Status.Reason)
@@ -246,6 +206,19 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
+	}
+	// delete data export crs once backup is completed
+	if !inProgress {
+		for _, vInfo := range backup.Status.Volumes {
+			if vInfo.DriverName != driverName {
+				continue
+			}
+			crName := getGenericCRName(backup.Name, vInfo.Namespace, vInfo.PersistentVolumeClaim)
+			// delete kdmp crs
+			if err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.Namespace); err != nil {
+				logrus.Warnf("failed to delete data export CR: %v", err)
+			}
+		}
 	}
 	return volumeInfos, nil
 }
@@ -509,18 +482,6 @@ func (k *kdmp) StartRestore(
 
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
-		labels := make(map[string]string)
-		if len(restore.Name) <= labelNamelimit {
-			labels[restoreCRNameKey] = restore.Name
-		} else {
-			labels[restoreCRNameKey] = truncate.Truncate(restore.Name, labelNamelimit, "", truncate.PositionEnd)
-		}
-		if len(bkpvInfo.PersistentVolumeClaim) <= labelNamelimit {
-			labels[pvcNameKey] = bkpvInfo.PersistentVolumeClaim
-		} else {
-			labels[pvcNameKey] = truncate.Truncate(bkpvInfo.PersistentVolumeClaim, labelNamelimit, "", truncate.PositionEnd)
-		}
-		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
 		dataExport.Name = getGenericCRName(restore.Name, bkpvInfo.Namespace, bkpvInfo.PersistentVolumeClaim)
@@ -561,6 +522,7 @@ func (k *kdmp) CancelRestore(restore *storkapi.ApplicationRestore) error {
 
 func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
+	inProgress := false
 	for _, vInfo := range restore.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
@@ -580,19 +542,26 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 				vInfo.Reason = "Volume restore is in progress. BytesDone"
 				// TODO: KDMP does not return size right now, we will need to fill up
 				// size for volume once support is available
+				inProgress = true
 			} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 				vInfo.Status = storkapi.ApplicationRestoreStatusFailed
 				vInfo.Reason = fmt.Sprintf("restore failed for volume:%s, %s", vInfo.SourceVolume, dataExport.Status.Reason)
 			} else if isDataExportCompleted(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 				vInfo.Reason = "restore successful for volume"
-				// delete kdmp crs
-				if err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.SourceNamespace); err != nil {
-					logrus.Warnf("failed to delete data export CR:%s/%s, err: %v", vInfo.SourceNamespace, crName, err)
-				}
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
+	}
+	// delete data export crs once restore is completed
+	if !inProgress {
+		for _, vInfo := range restore.Status.Volumes {
+			crName := getGenericCRName(restore.Name, vInfo.SourceNamespace, vInfo.PersistentVolumeClaim)
+			// delete kdmp crs
+			if err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.SourceNamespace); err != nil {
+				logrus.Warnf("failed to delete data export CR:%s/%s, err: %v", vInfo.SourceNamespace, crName, err)
+			}
+		}
 	}
 	return volumeInfos, nil
 }
