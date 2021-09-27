@@ -193,6 +193,30 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 
 func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+	// check if all csi vol backup is successful
+	// Add this work around till we have cleanup api implementation.
+	isCompleted := true
+	currVolInfo := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+	for _, vInfo := range backup.Status.Volumes {
+		if vInfo.DriverName != driverName {
+			continue
+		}
+		if vInfo.Status != storkapi.ApplicationBackupStatusSuccessful {
+			isCompleted = false
+			break
+		}
+		currVolInfo = append(currVolInfo, vInfo)
+	}
+	if isCompleted {
+		for _, vInfo := range backup.Status.Volumes {
+			crName := getGenericCRName(backup.Name, vInfo.Namespace, vInfo.PersistentVolumeClaim)
+			// delete kdmp crs
+			if err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.Namespace); err != nil {
+				logrus.Warnf("failed to delete data export CR: %v", err)
+			}
+		}
+		return currVolInfo, nil
+	}
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
@@ -219,10 +243,6 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			} else if isDataExportCompleted(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 				vInfo.Reason = "Backup successful for volume"
-				// delete kdmp crs
-				if err := kdmpShedOps.Instance().DeleteDataExport(crName, backup.Namespace); err != nil {
-					logrus.Warnf("failed to delete data export CR: %v", err)
-				}
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
