@@ -1,0 +1,149 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-1
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-2
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-3
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-4
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-5
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-6
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-7
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-8
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-9
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---       
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-10
+   labels:
+     app: mysql 
+   annotations:
+     volume.beta.kubernetes.io/storage-class: mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
