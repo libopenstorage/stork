@@ -1358,9 +1358,9 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 	// cleanup after a successful object upload
 	err := c.cleanupSnapshots(vsMap, vsContentMap, true)
 	if err != nil {
-		logrus.Errorf("failed to cleanup snapshots: %v", err)
+		logrus.Tracef("failed to cleanup snapshots: %v", err)
 	}
-	log.ApplicationBackupLog(backup).Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
+	log.ApplicationBackupLog(backup).Tracef("started clean up of %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
 	return nil
 }
 
@@ -1368,7 +1368,7 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 func (c *csi) CleanupRestoreResources(restore *storkapi.ApplicationRestore) error {
 	err := c.cleanupSnapshotsForRestore(restore, true)
 	if err != nil {
-		logrus.Errorf("failed to clean CSI snapshots: %v", err)
+		logrus.Tracef("failed to clean CSI snapshots: %v", err)
 	}
 	return nil
 }
