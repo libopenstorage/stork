@@ -310,8 +310,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		}
 
 	case storkapi.ApplicationRestoreStageFinal:
-		// Do Nothing
-		return nil
+		return a.cleanupResources(restore)
 	default:
 		log.ApplicationRestoreLog(restore).Errorf("Invalid stage for restore: %v", restore.Status.Stage)
 	}
@@ -1279,4 +1278,19 @@ func (a *ApplicationRestoreController) createCRD() error {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.ApplicationRestore) error {
+	drivers := a.getDriversForRestore(restore)
+	for driverName := range drivers {
+
+		driver, err := volume.Get(driverName)
+		if err != nil {
+			return err
+		}
+		if err := driver.CleanupRestoreResources(restore); err != nil {
+			logrus.Errorf("unable to cleanup post backup resources, err: %v", err)
+		}
+	}
+	return nil
 }
