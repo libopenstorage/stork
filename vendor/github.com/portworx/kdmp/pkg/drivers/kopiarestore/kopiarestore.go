@@ -44,7 +44,7 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		return "", err
 	}
 
-	jobName := toJobName(o.DataExportName)
+	jobName := toJobName(o.DestinationPVCName)
 	job, err := jobFor(
 		jobName,
 		o.Namespace,
@@ -233,8 +233,8 @@ func jobFor(
 	}, nil
 }
 
-func toJobName(dataExportName string) string {
-	return fmt.Sprintf("%s-%s", utils.RestoreJobPrefix, dataExportName)
+func toJobName(destinationPVC string) string {
+	return fmt.Sprintf("%s-%s", utils.RestoreJobPrefix, destinationPVC)
 }
 
 func addJobLabels(labels map[string]string) map[string]string {

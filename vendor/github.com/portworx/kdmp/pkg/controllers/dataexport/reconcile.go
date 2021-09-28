@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 
+	"github.com/aquilax/truncate"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
@@ -32,6 +34,9 @@ const (
 	LabelControllerName  = "controller-name"
 	KopiaSecretName      = "generic-backup-repo"
 	KopiaSecretNamespace = "kube-system"
+	backupCRNameKey      = "kdmp.portworx.com/backup-cr-name"
+	pvcNameKey           = "kdmp.portworx.com/pvc-name"
+	labelNamelimit       = 63
 )
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
@@ -497,7 +502,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithSourcePVC(srcPVCName),
 			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
-			drivers.WithLabels(jobLabels(dataExport.GetName())),
+			drivers.WithLabels(jobLabels(dataExport)),
 		)
 	case drivers.ResticBackup:
 		return drv.StartJob(
@@ -505,7 +510,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithBackupLocationName(dataExport.Spec.Destination.Name),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Destination.Namespace),
-			drivers.WithLabels(jobLabels(dataExport.GetName())),
+			drivers.WithLabels(jobLabels(dataExport)),
 		)
 	case drivers.ResticRestore:
 		return drv.StartJob(
@@ -514,7 +519,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
 			drivers.WithVolumeBackupNamespace(dataExport.Spec.Source.Namespace),
-			drivers.WithLabels(jobLabels(dataExport.GetName())),
+			drivers.WithLabels(jobLabels(dataExport)),
 		)
 	case drivers.KopiaBackup:
 		return drv.StartJob(
@@ -522,7 +527,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithBackupLocationName(dataExport.Spec.Destination.Name),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Destination.Namespace),
-			drivers.WithLabels(jobLabels(dataExport.GetName())),
+			drivers.WithLabels(jobLabels(dataExport)),
 			drivers.WithDataExportName(dataExport.GetName()),
 		)
 	case drivers.KopiaRestore:
@@ -532,7 +537,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
 			drivers.WithVolumeBackupNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Source.Namespace),
-			drivers.WithLabels(jobLabels(dataExport.GetName())),
+			drivers.WithLabels(jobLabels(dataExport)),
 			drivers.WithDataExportName(dataExport.GetName()),
 		)
 	}
@@ -605,11 +610,33 @@ func isStatusEqual(de *kdmpapi.DataExport, status kdmpapi.DataExportStatus, reas
 	return de.Status.Status == status && de.Status.Reason == reason
 }
 
-func jobLabels(DataExportName string) map[string]string {
-	return map[string]string{
-		LabelController:     DataExportName,
-		LabelControllerName: DataExportName,
+func jobLabels(dataExport *kdmpapi.DataExport) map[string]string {
+	labels := make(map[string]string)
+	if len(dataExport.GetName()) <= labelNamelimit {
+		labels[LabelController] = dataExport.GetName()
+		labels[LabelControllerName] = dataExport.GetName()
+	} else {
+		// truncating it to length of labelNamelimit and store it.
+		labels[LabelController] = truncate.Truncate(dataExport.GetName(), labelNamelimit, "", truncate.PositionEnd)
+		labels[LabelControllerName] = truncate.Truncate(dataExport.GetName(), labelNamelimit, "", truncate.PositionEnd)
 	}
+
+	if val, ok := dataExport.Labels[backupCRNameKey]; ok {
+		if len(val) <= labelNamelimit {
+			labels[backupCRNameKey] = val
+		} else {
+			labels[backupCRNameKey] = truncate.Truncate(val, labelNamelimit, "", truncate.PositionEnd)
+		}
+	}
+
+	if val, ok := dataExport.Labels[pvcNameKey]; ok {
+		if len(val) < labelNamelimit {
+			labels[pvcNameKey] = val
+		} else {
+			labels[pvcNameKey] = truncate.Truncate(val, labelNamelimit, "", truncate.PositionEnd)
+		}
+	}
+	return labels
 }
 
 func getDriverType(de *kdmpapi.DataExport) (string, error) {
@@ -736,6 +763,7 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, 
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["disablessl"] = []byte(strconv.FormatBool(backupLocation.Location.S3Config.DisableSSL))
 	err := createCredSecret(secretName, namespace, credentialData)
 
 	return err

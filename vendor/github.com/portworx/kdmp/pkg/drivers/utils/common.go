@@ -13,9 +13,9 @@ import (
 
 const (
 	// BackupJobPrefix job prefix for backup jobs
-	BackupJobPrefix = "backup"
+	BackupJobPrefix = "b"
 	// RestoreJobPrefix job prefix for restore jobs
-	RestoreJobPrefix = "restore"
+	RestoreJobPrefix = "r"
 )
 
 // SetupServiceAccount create a service account and bind it to a provided role.

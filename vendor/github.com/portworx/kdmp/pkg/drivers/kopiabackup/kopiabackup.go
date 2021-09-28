@@ -237,8 +237,8 @@ func jobFor(
 	}, nil
 }
 
-func toJobName(dataExportName string) string {
-	return fmt.Sprintf("%s-%s", utils.BackupJobPrefix, dataExportName)
+func toJobName(sourcePVCName string) string {
+	return fmt.Sprintf("%s-%s", utils.BackupJobPrefix, sourcePVCName)
 }
 
 func toRepoName(pvcName, pvcNamespace string) string {
