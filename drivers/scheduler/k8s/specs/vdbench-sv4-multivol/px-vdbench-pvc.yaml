@@ -1,0 +1,14 @@
+{{- range $val := Iterate .ClaimsCount }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-sv4-{{$val}}
+spec:
+  storageClassName: vdbench-sc-sv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+        storage: 200Gi
+{{- end }}
