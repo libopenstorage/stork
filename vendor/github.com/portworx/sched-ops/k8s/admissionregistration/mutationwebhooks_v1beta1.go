@@ -7,7 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// MutatingWebhookConfigurationOps is interface to perform CRUD ops on mutatting webhook controller
+// MutatingWebhookConfigurationV1beta1Ops is interface to perform CRUD ops on mutatting webhook controller
 type MutatingWebhookConfigurationV1beta1Ops interface {
 	// GetMutatingWebhookConfigurationV1beta1 returns a given MutatingWebhookConfiguration
 	GetMutatingWebhookConfigurationV1beta1(name string) (*hook.MutatingWebhookConfiguration, error)
@@ -19,7 +19,7 @@ type MutatingWebhookConfigurationV1beta1Ops interface {
 	DeleteMutatingWebhookConfigurationV1beta1(name string) error
 }
 
-// GetMutatingWebhookConfiguration returns a given MutatingWebhookConfiguration
+// GetMutatingWebhookConfigurationV1beta1 returns a given MutatingWebhookConfiguration
 func (c *Client) GetMutatingWebhookConfigurationV1beta1(name string) (*hook.MutatingWebhookConfiguration, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func (c *Client) GetMutatingWebhookConfigurationV1beta1(name string) (*hook.Muta
 	return c.admission.MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
-// CreateMutatingWebhookConfiguration creates given MutatingWebhookConfiguration
+// GetMutatingWebhookConfigurationV1beta1 creates given MutatingWebhookConfiguration
 func (c *Client) CreateMutatingWebhookConfigurationV1beta1(cfg *hook.MutatingWebhookConfiguration) (*hook.MutatingWebhookConfiguration, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func (c *Client) CreateMutatingWebhookConfigurationV1beta1(cfg *hook.MutatingWeb
 	return c.admission.MutatingWebhookConfigurations().Create(context.TODO(), cfg, metav1.CreateOptions{})
 }
 
-// UpdateMutatingWebhookConfiguration updates given MutatingWebhookConfiguration
+// UpdateMutatingWebhookConfigurationV1beta1 updates given MutatingWebhookConfiguration
 func (c *Client) UpdateMutatingWebhookConfigurationV1beta1(cfg *hook.MutatingWebhookConfiguration) (*hook.MutatingWebhookConfiguration, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func (c *Client) UpdateMutatingWebhookConfigurationV1beta1(cfg *hook.MutatingWeb
 	return c.admission.MutatingWebhookConfigurations().Update(context.TODO(), cfg, metav1.UpdateOptions{})
 }
 
-// DeleteMutatingWebhookConfiguration deletes given MutatingWebhookConfiguration
+// DeleteMutatingWebhookConfigurationV1beta1 deletes given MutatingWebhookConfiguration
 func (c *Client) DeleteMutatingWebhookConfigurationV1beta1(name string) error {
 	if err := c.initClient(); err != nil {
 		return err
