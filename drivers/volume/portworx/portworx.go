@@ -3811,6 +3811,16 @@ func isCloudBackupServerBusyError(err error) bool {
 	return strings.Contains(err.Error(), cloudBackupErr.Error())
 }
 
+// CleanupBackupResources the backup of resource specified backup
+func (p *portworx) CleanupBackupResources(*storkapi.ApplicationBackup) error {
+	return nil
+}
+
+// CleanupBackupResources the backup of resource specified restore
+func (p *portworx) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
+	return nil
+}
+
 func init() {
 	p := &portworx{}
 	err := p.Init(nil)
