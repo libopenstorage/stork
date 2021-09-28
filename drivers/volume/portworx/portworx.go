@@ -160,6 +160,7 @@ const (
 	noToken = "notoken"
 	// templatizedNamespace is the CSI templatized parameter for namespace
 	templatizedNamespace = "${pvc.namespace}"
+	proxyEndpoint        = "proxy_endpoint"
 )
 
 type cloudSnapStatus struct {
@@ -656,20 +657,23 @@ func (p *portworx) GetClusterID() (string, error) {
 func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 
 	provisioner := ""
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName != "" {
+		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
+		if err == nil {
+			if _, ok := storageClass.Parameters[proxyEndpoint]; ok {
+				logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
+				return false
+			}
+			provisioner = storageClass.Provisioner
+		} else {
+			logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
+		}
+	}
 	// Check for the provisioner in the PVC annotation. If not populated
 	// try getting the provisioner from the Storage class.
 	if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
 		provisioner = val
-	} else {
-		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-		if storageClassName != "" {
-			storageClass, err := storage.Instance().GetStorageClass(storageClassName)
-			if err == nil {
-				provisioner = storageClass.Provisioner
-			} else {
-				logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
-			}
-		}
 	}
 
 	if provisioner == "" {
