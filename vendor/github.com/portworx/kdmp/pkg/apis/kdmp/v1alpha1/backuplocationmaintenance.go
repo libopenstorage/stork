@@ -62,4 +62,6 @@ type RepoMaintenanceStatus struct {
 	LastRunTimestamp metav1.Time `json:"lastRunTimestamp"`
 	// Status - last maintenance run status
 	Status RepoMaintenanceStatusType `json:"status"`
+	// Reason - Failure reason. In case of success it will be empty.
+	Reason string `json:"reason"`
 }
