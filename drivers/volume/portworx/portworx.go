@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -212,6 +213,7 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
 	}
+
 	return nil
 }
 
@@ -970,6 +972,35 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 					Cause: fmt.Sprintf("px is not yet up on node. cause: %v", err),
 				}
 			}
+			opts := node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+			}
+			out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", d.getPxctlPath(n)), opts)
+			if err != nil {
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: err.Error(),
+				}
+			}
+			var data interface{}
+			err = json.Unmarshal([]byte(out), &data)
+			if err != nil {
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: err.Error(),
+				}
+			}
+			statusMap := data.(map[string]interface{})
+			if status, ok := statusMap["status"]; ok && status != "STATUS_OK" {
+				return "", true, &ErrFailedToWaitForPx{
+					Node: n,
+					Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
+						n.Name, api.Status_STATUS_OK, status),
+				}
+			}
+
 		case api.Status_STATUS_OFFLINE:
 			// in case node is offline and it is a storageless node, the id might have changed so update it
 			if len(pxNode.Pools) == 0 {
@@ -1769,7 +1800,7 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 	}
-	if _, err := d.nodeDriver.RunCommand(*n, "/opt/pwx/bin/pxctl sv node-wipe --all", opts); err != nil {
+	if _, err := d.nodeDriver.RunCommand(*n, fmt.Sprintf("%s sv node-wipe --all", d.getPxctlPath(*n)), opts); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: err.Error(),
@@ -2174,7 +2205,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
+		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f", d.getPxctlPath(n)), opts)
 		if err != nil {
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
@@ -2538,7 +2569,7 @@ func (d *portworx) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
 	}
 
 	rtopts = strings.TrimSuffix(rtopts, ",")
-	cmd := fmt.Sprintf("pxctl cluster options update --runtime-options %s", rtopts)
+	cmd := fmt.Sprintf("%s cluster options update --runtime-options %s", d.getPxctlPath(n), rtopts)
 
 	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 	if err != nil {
@@ -2559,9 +2590,9 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 		Sudo:            true,
 	}
 
-	cmd := "pxctl sv call-home enable"
+	cmd := fmt.Sprintf("%s sv call-home enable", d.getPxctlPath(n))
 	if !enabled {
-		cmd = "pxctl sv call-home disable"
+		cmd = fmt.Sprintf("%s sv call-home disable", d.getPxctlPath(n))
 	}
 
 	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
@@ -2571,6 +2602,20 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 
 	logrus.Debugf("Successfully toggled call-home")
 	return nil
+}
+
+func (d *portworx) getPxctlPath(n node.Node) string {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	out, err := d.nodeDriver.RunCommand(n, "which pxctl", opts)
+	if err != nil {
+		return "/opt/pwx/bin/pxctl"
+	}
+	return strings.TrimSpace(out)
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
