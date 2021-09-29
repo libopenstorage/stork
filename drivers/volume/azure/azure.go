@@ -589,6 +589,16 @@ func (a *azure) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 	return nil, &errors.ErrNotSupported{}
 }
 
+// CleanupBackupResources for specified backup
+func (a *azure) CleanupBackupResources(*storkapi.ApplicationBackup) error {
+	return nil
+}
+
+// CleanupBackupResources for specified restore
+func (a *azure) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
+	return nil
+}
+
 func init() {
 	a := &azure{}
 	err := a.Init(nil)

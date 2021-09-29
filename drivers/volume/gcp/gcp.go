@@ -583,6 +583,15 @@ func (g *gcp) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 	return nil, &errors.ErrNotSupported{}
 }
 
+// CleanupBackupResources for specified backup
+func (g *gcp) CleanupBackupResources(*storkapi.ApplicationBackup) error {
+	return nil
+}
+
+// CleanupBackupResources for specified restore
+func (g *gcp) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
+	return nil
+}
 func init() {
 	g := &gcp{}
 	err := g.Init(nil)

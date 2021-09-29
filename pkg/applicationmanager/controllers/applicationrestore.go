@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	"github.com/libopenstorage/stork/drivers/volume/kdmp"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
@@ -146,7 +147,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 					Annotations: ns.GetAnnotations(),
 				},
 			})
-			log.ApplicationRestoreLog(restore).Infof("Creating dest namespace %v", ns.Name)
+			log.ApplicationRestoreLog(restore).Tracef("Creating dest namespace %v", ns.Name)
 			if err != nil {
 				if errors.IsAlreadyExists(err) {
 					oldNS, err := core.Instance().GetNamespace(ns.GetName())
@@ -174,7 +175,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 							}
 						}
 					}
-					log.ApplicationRestoreLog(restore).Warnf("Namespace already exists, updating dest namespace %v", ns.Name)
+					log.ApplicationRestoreLog(restore).Tracef("Namespace already exists, updating dest namespace %v", ns.Name)
 					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:        ns.Name,
@@ -310,8 +311,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		}
 
 	case storkapi.ApplicationRestoreStageFinal:
-		// Do Nothing
-		return nil
+		return a.cleanupResources(restore)
 	default:
 		log.ApplicationRestoreLog(restore).Errorf("Invalid stage for restore: %v", restore.Status.Stage)
 	}
@@ -947,7 +947,23 @@ func isGenericCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
 	if driverName == "csi" {
 		return true, nil
 	}
+	return false, nil
+}
+func isGenericPersistentVolume(pv *v1.PersistentVolume, volInfos []*storkapi.ApplicationRestoreVolumeInfo) (bool, error) {
+	for _, vol := range volInfos {
+		if vol.DriverName == kdmp.GetGenericDriverName() && vol.RestoreVolume == pv.Name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
+func isGenericCSIPersistentVolumeClaim(pvc *v1.PersistentVolumeClaim, volInfos []*storkapi.ApplicationRestoreVolumeInfo) (bool, error) {
+	for _, vol := range volInfos {
+		if vol.DriverName == kdmp.GetGenericDriverName() && vol.PersistentVolumeClaim == pvc.Name {
+			return true, nil
+		}
+	}
 	return false, nil
 }
 
@@ -956,7 +972,6 @@ func (a *ApplicationRestoreController) removeCSIVolumesBeforeApply(
 	objects []runtime.Unstructured,
 ) ([]runtime.Unstructured, error) {
 	tempObjects := make([]runtime.Unstructured, 0)
-
 	// Get PVC to PV mapping first for checking if a PVC is bound to a generic CSI PV
 	pvcToPVMapping, err := getPVCToPVMapping(objects)
 	if err != nil {
@@ -981,9 +996,12 @@ func (a *ApplicationRestoreController) removeCSIVolumesBeforeApply(
 			if err != nil {
 				return nil, fmt.Errorf("failed to check if PV was provisioned by a CSI driver: %v", err)
 			}
-
+			isGenericDriverPV, err := isGenericPersistentVolume(&pv, restore.Status.Volumes)
+			if err != nil {
+				return nil, err
+			}
 			// Only add this object if it's not a generic CSI PV
-			if !isGenericCSIPVC {
+			if !isGenericCSIPVC && !isGenericDriverPV {
 				tempObjects = append(tempObjects, o)
 			} else {
 				log.ApplicationRestoreLog(restore).Debugf("skipping CSI PV in restore: %s", pv.Name)
@@ -1010,12 +1028,15 @@ func (a *ApplicationRestoreController) removeCSIVolumesBeforeApply(
 			if err != nil {
 				return nil, err
 			}
-
+			isGenericDriverPVC, err := isGenericCSIPersistentVolumeClaim(&pvc, restore.Status.Volumes)
+			if err != nil {
+				return nil, err
+			}
 			// Only add this object if it's not a generic CSI PVC
-			if !isGenericCSIPVC {
+			if !isGenericCSIPVC && !isGenericDriverPVC {
 				tempObjects = append(tempObjects, o)
 			} else {
-				log.ApplicationRestoreLog(restore).Debugf("skipping CSI PVC in restore: %s", pvc.Name)
+				log.ApplicationRestoreLog(restore).Debugf("skipping PVC in restore: %s", pvc.Name)
 			}
 
 		default:
@@ -1279,4 +1300,19 @@ func (a *ApplicationRestoreController) createCRD() error {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.ApplicationRestore) error {
+	drivers := a.getDriversForRestore(restore)
+	for driverName := range drivers {
+
+		driver, err := volume.Get(driverName)
+		if err != nil {
+			return err
+		}
+		if err := driver.CleanupRestoreResources(restore); err != nil {
+			logrus.Errorf("unable to cleanup post restore resources, err: %v", err)
+		}
+	}
+	return nil
 }

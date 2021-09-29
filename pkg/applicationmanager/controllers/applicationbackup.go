@@ -385,8 +385,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 	case stork_api.ApplicationBackupStageFinal:
-		// Do Nothing
-		return nil
+		return a.cleanupResources(backup)
 	default:
 		log.ApplicationBackupLog(backup).Errorf("Invalid stage for backup: %v", backup.Status.Stage)
 	}
@@ -1399,4 +1398,21 @@ func IsResourceTypePVC(backup *stork_api.ApplicationBackup) bool {
 	}
 
 	return false
+}
+
+func (a *ApplicationBackupController) cleanupResources(
+	backup *stork_api.ApplicationBackup,
+) error {
+	drivers := a.getDriversForBackup(backup)
+	for driverName := range drivers {
+
+		driver, err := volume.Get(driverName)
+		if err != nil {
+			return err
+		}
+		if err := driver.CleanupBackupResources(backup); err != nil {
+			logrus.Errorf("unable to cleanup post backup resources, err: %v", err)
+		}
+	}
+	return nil
 }

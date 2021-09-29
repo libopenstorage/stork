@@ -566,23 +566,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
 	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
-
-	// check if all csi vol backup is successful
-	isCompleted := true
-	currVolInfo := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != storkCSIDriverName {
-			continue
-		}
-		if vInfo.Status != storkapi.ApplicationBackupStatusSuccessful {
-			isCompleted = false
-			break
-		}
-		currVolInfo = append(currVolInfo, vInfo)
-	}
-	if isCompleted {
-		return currVolInfo, nil
-	}
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkCSIDriverName {
 			continue
@@ -670,13 +653,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			return nil, err
 		}
 		log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
-
-		// cleanup after a successful object upload
-		err = c.cleanupSnapshots(vsMap, vsContentMap, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to cleanup snapshots: %v", err)
-		}
-		log.ApplicationBackupLog(backup).Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
 	}
 
 	return volumeInfos, nil
@@ -1267,11 +1243,6 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 
 	// If none are in progress, we can safely cleanup our volumesnapshot objects
 	if !anyInProgress {
-		err := c.cleanupSnapshotsForRestore(restore, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to clean CSI snapshots: %v", err)
-		}
-
 		// Mark complete once cleanup has started
 		for _, vrInfo := range restore.Status.Volumes {
 			if vrInfo.DriverName != storkCSIDriverName {
@@ -1345,6 +1316,61 @@ func mapSnapshotInfoStatus(status snapshotter.Status) storkapi.ApplicationBackup
 		return storkapi.ApplicationBackupStatusSuccessful
 	}
 	return storkapi.ApplicationBackupStatusFailed
+}
+
+// CleanupBackupResources for specified backup
+func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
+	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
+	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
+	for _, vInfo := range backup.Status.Volumes {
+		if vInfo.DriverName != storkCSIDriverName {
+			continue
+		}
+		// Get PVC we're checking the backup for
+		pvc, err := core.Instance().GetPersistentVolumeClaim(vInfo.PersistentVolumeClaim, vInfo.Namespace)
+		if err != nil {
+			return err
+		}
+		snapshotName := c.getBackupSnapshotName(pvc, backup)
+		snapshotInfo, err := c.snapshotter.SnapshotStatus(
+			snapshotName,
+			vInfo.Namespace,
+		)
+		if err != nil {
+			logrus.Warnf("unable to cleanup snapshot :%s, err:%v", snapshotName, err)
+			continue
+		}
+		snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+		if !ok {
+			logrus.Warnf("failed to map volumesnapshot object")
+			continue
+		}
+		vsMap[vInfo.BackupID] = snapshot
+		if snapshotInfo.Status == snapshotter.StatusReady {
+			snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+			if !ok {
+				logrus.Warnf("failed to map volumesnapshotcontent object")
+				continue
+			}
+			vsContentMap[vInfo.BackupID] = snapshotContent
+		}
+	}
+	// cleanup after a successful object upload
+	err := c.cleanupSnapshots(vsMap, vsContentMap, true)
+	if err != nil {
+		logrus.Tracef("failed to cleanup snapshots: %v", err)
+	}
+	log.ApplicationBackupLog(backup).Tracef("started clean up of %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
+	return nil
+}
+
+// CleanupBackupResources for specified restore
+func (c *csi) CleanupRestoreResources(restore *storkapi.ApplicationRestore) error {
+	err := c.cleanupSnapshotsForRestore(restore, true)
+	if err != nil {
+		logrus.Tracef("failed to clean CSI snapshots: %v", err)
+	}
+	return nil
 }
 
 func init() {

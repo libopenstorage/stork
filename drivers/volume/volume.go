@@ -140,6 +140,8 @@ type BackupRestorePluginInterface interface {
 	GetBackupStatus(*storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error)
 	// Cancel the backup of volumes specified in the status
 	CancelBackup(*storkapi.ApplicationBackup) error
+	// CleanupBackupResources the backup of resource specified backup
+	CleanupBackupResources(*storkapi.ApplicationBackup) error
 	// Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) (bool, error)
 	// Get any resources that should be created before the restore is started
@@ -152,6 +154,8 @@ type BackupRestorePluginInterface interface {
 	GetRestoreStatus(*storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
 	// Cancel the restore of volumes specified in the status
 	CancelRestore(*storkapi.ApplicationRestore) error
+	// CleanupRestoreResources for specigied restore
+	CleanupRestoreResources(*storkapi.ApplicationRestore) error
 }
 
 // SnapshotRestorePluginInterface Interface to perform in place restore of volume
@@ -385,6 +389,11 @@ func (b *BackupRestoreNotSupported) DeleteBackup(*storkapi.ApplicationBackup) (b
 	return true, &errors.ErrNotSupported{}
 }
 
+// CleanupBackupResources returns ErrNotSupported
+func (b *BackupRestoreNotSupported) CleanupBackupResources(*storkapi.ApplicationBackup) error {
+	return &errors.ErrNotSupported{}
+}
+
 // GetPreRestoreResources returns ErrNotSupported
 func (b *BackupRestoreNotSupported) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
@@ -409,6 +418,11 @@ func (b *BackupRestoreNotSupported) GetRestoreStatus(*storkapi.ApplicationRestor
 
 // CancelRestore returns ErrNotSupported
 func (b *BackupRestoreNotSupported) CancelRestore(*storkapi.ApplicationRestore) error {
+	return &errors.ErrNotSupported{}
+}
+
+// CleanupRestoreResources returns ErrNotSupported
+func (b *BackupRestoreNotSupported) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
 	return &errors.ErrNotSupported{}
 }
 
