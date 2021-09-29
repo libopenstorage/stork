@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/aquilax/truncate"
@@ -158,12 +159,14 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		if len(backup.Name) <= labelNamelimit {
 			labels[backupCRNameKey] = backup.Name
 		} else {
-			labels[backupCRNameKey] = truncate.Truncate(backup.Name, labelNamelimit, "", truncate.PositionEnd)
+			crLabelName := truncate.Truncate(backup.Name, labelNamelimit, "", truncate.PositionEnd)
+			labels[backupCRNameKey] = strings.Trim(crLabelName, "-")
 		}
 		if len(pvc.Name) <= labelNamelimit {
 			labels[pvcNameKey] = pvc.Name
 		} else {
-			labels[pvcNameKey] = truncate.Truncate(pvc.Name, labelNamelimit, "", truncate.PositionEnd)
+			crLabelName := truncate.Truncate(pvc.Name, labelNamelimit, "", truncate.PositionEnd)
+			labels[pvcNameKey] = strings.Trim(crLabelName, "-")
 		}
 
 		dataExport.Labels = labels
@@ -502,7 +505,7 @@ func (k *kdmp) StartRestore(
 		volBackup.Spec.Repository = fmt.Sprintf("%s/%s-%s/", prefixRepo, volumeInfo.SourceNamespace, bkpvInfo.PersistentVolumeClaim)
 		volBackup.Status.SnapshotID = bkpvInfo.BackupID
 		if _, err := kdmpShedOps.Instance().CreateVolumeBackup(volBackup); err != nil {
-			logrus.Errorf("unable to create backup cr: %v", err)
+			logrus.Errorf("unable to create volumebackup CR: %v", err)
 			return nil, err
 		}
 
@@ -512,12 +515,14 @@ func (k *kdmp) StartRestore(
 		if len(restore.Name) <= labelNamelimit {
 			labels[restoreCRNameKey] = restore.Name
 		} else {
-			labels[restoreCRNameKey] = truncate.Truncate(restore.Name, labelNamelimit, "", truncate.PositionEnd)
+			crLabelname := truncate.Truncate(restore.Name, labelNamelimit, "", truncate.PositionEnd)
+			labels[restoreCRNameKey] = strings.Trim(crLabelname, "-")
 		}
 		if len(bkpvInfo.PersistentVolumeClaim) <= labelNamelimit {
 			labels[pvcNameKey] = bkpvInfo.PersistentVolumeClaim
 		} else {
-			labels[pvcNameKey] = truncate.Truncate(bkpvInfo.PersistentVolumeClaim, labelNamelimit, "", truncate.PositionEnd)
+			crLabelName := truncate.Truncate(bkpvInfo.PersistentVolumeClaim, labelNamelimit, "", truncate.PositionEnd)
+			labels[pvcNameKey] = strings.Trim(crLabelName, "-")
 		}
 		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
@@ -658,7 +663,7 @@ func (k *kdmp) CleanupBackupResources(backup *storkapi.ApplicationBackup) error 
 	return nil
 }
 
-// CleanupBackupResources for specified restore
+// CleanupRestoreResources for specified restore
 func (k *kdmp) CleanupRestoreResources(restore *storkapi.ApplicationRestore) error {
 	for _, vInfo := range restore.Status.Volumes {
 		if vInfo.DriverName != driverName {

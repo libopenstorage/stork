@@ -1311,7 +1311,7 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 			return err
 		}
 		if err := driver.CleanupRestoreResources(restore); err != nil {
-			logrus.Errorf("unable to cleanup post backup resources, err: %v", err)
+			logrus.Errorf("unable to cleanup post restore resources, err: %v", err)
 		}
 	}
 	return nil
