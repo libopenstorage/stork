@@ -154,7 +154,7 @@ type BackupRestorePluginInterface interface {
 	GetRestoreStatus(*storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
 	// Cancel the restore of volumes specified in the status
 	CancelRestore(*storkapi.ApplicationRestore) error
-	// CleanupBackupResources the backup of resource specified backup
+	// CleanupRestoreResources for specigied restore
 	CleanupRestoreResources(*storkapi.ApplicationRestore) error
 }
 
