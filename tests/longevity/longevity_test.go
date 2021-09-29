@@ -35,7 +35,7 @@ var (
 	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
 
-	triggerFunctions map[string]func([]*scheduler.Context, *chan *EventRecord)
+	triggerFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 )
 
 func TestLongevity(t *testing.T) {
@@ -54,16 +54,17 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{Longevity}", func() {
-	var contexts []*scheduler.Context
+	contexts := make([]*scheduler.Context, 0)
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
-	triggerFunctions = map[string]func([]*scheduler.Context, *chan *EventRecord){
+	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		DeployApps:       TriggerDeployNewApps,
 		RebootNode:       TriggerRebootNodes,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
 		HAIncrease:       TriggerHAIncrease,
 		HADecrease:       TriggerHADecrease,
+		VolumeResize:     TriggerVolumeResize,
 		EmailReporter:    TriggerEmailReporter,
 		AppTaskDown:      TriggerAppTaskDown,
 		CoreChecker:      TriggerCoreChecker,
@@ -75,12 +76,12 @@ var _ = Describe("{Longevity}", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		TriggerDeployNewApps([]*scheduler.Context{}, &triggerEventsChan)
+		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
-				go testTrigger(&wg, contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
+				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
@@ -98,9 +99,9 @@ var _ = Describe("{Longevity}", func() {
 })
 
 func testTrigger(wg *sync.WaitGroup,
-	contexts []*scheduler.Context,
+	contexts *[]*scheduler.Context,
 	triggerType string,
-	triggerFunc func([]*scheduler.Context, *chan *EventRecord),
+	triggerFunc func(*[]*scheduler.Context, *chan *EventRecord),
 	triggerLoc *sync.Mutex,
 	triggerEventsChan *chan *EventRecord) {
 	defer wg.Done()
@@ -278,6 +279,7 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 	triggerInterval[DeployApps] = map[int]time.Duration{}
 	triggerInterval[CoreChecker] = map[int]time.Duration{}
+	triggerInterval[VolumeResize] = make(map[int]time.Duration)
 
 	baseInterval := 60 * time.Minute
 	triggerInterval[RebootNode][10] = 1 * baseInterval
@@ -346,6 +348,17 @@ func populateIntervals() {
 	triggerInterval[HADecrease][2] = 24 * baseInterval
 	triggerInterval[HADecrease][1] = 27 * baseInterval
 
+	triggerInterval[VolumeResize][10] = 1 * baseInterval
+	triggerInterval[VolumeResize][9] = 3 * baseInterval
+	triggerInterval[VolumeResize][8] = 6 * baseInterval
+	triggerInterval[VolumeResize][7] = 9 * baseInterval
+	triggerInterval[VolumeResize][6] = 12 * baseInterval
+	triggerInterval[VolumeResize][5] = 15 * baseInterval
+	triggerInterval[VolumeResize][4] = 18 * baseInterval
+	triggerInterval[VolumeResize][3] = 21 * baseInterval
+	triggerInterval[VolumeResize][2] = 24 * baseInterval
+	triggerInterval[VolumeResize][1] = 27 * baseInterval
+
 	baseInterval = 6 * time.Hour
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
@@ -388,6 +401,7 @@ func populateIntervals() {
 	triggerInterval[HADecrease][0] = 0
 	triggerInterval[RestartVolDriver][0] = 0
 	triggerInterval[AppTaskDown][0] = 0
+	triggerInterval[VolumeResize][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
