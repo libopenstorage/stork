@@ -146,6 +146,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
 		volumeInfo.PersistentVolumeClaim = pvc.Name
+		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
@@ -494,6 +495,7 @@ func (k *kdmp) StartRestore(
 		}
 		restoreNamespace := val
 		volumeInfo.PersistentVolumeClaim = bkpvInfo.PersistentVolumeClaim
+		volumeInfo.PersistentVolumeClaimUID = bkpvInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = bkpvInfo.Namespace
 		volumeInfo.SourceVolume = bkpvInfo.Volume
 		volumeInfo.DriverName = driverName
