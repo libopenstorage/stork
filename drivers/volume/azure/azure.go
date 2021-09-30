@@ -252,10 +252,11 @@ func (a *azure) StartBackup(
 			continue
 		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{
-			PersistentVolumeClaim: pvc.Name,
-			Namespace:             pvc.Namespace,
-			DriverName:            driverName,
-			Volume:                pvc.Spec.VolumeName,
+			PersistentVolumeClaim:    pvc.Name,
+			PersistentVolumeClaimUID: string(pvc.UID),
+			Namespace:                pvc.Namespace,
+			DriverName:               driverName,
+			Volume:                   pvc.Spec.VolumeName,
 			Options: map[string]string{
 				resourceGroupKey: a.resourceGroup,
 			},
@@ -469,10 +470,11 @@ func (a *azure) StartRestore(
 			return nil, err
 		}
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{
-			PersistentVolumeClaim: backupVolumeInfo.PersistentVolumeClaim,
-			SourceNamespace:       backupVolumeInfo.Namespace,
-			SourceVolume:          backupVolumeInfo.Volume,
-			DriverName:            driverName,
+			PersistentVolumeClaim:    backupVolumeInfo.PersistentVolumeClaim,
+			PersistentVolumeClaimUID: backupVolumeInfo.PersistentVolumeClaimUID,
+			SourceNamespace:          backupVolumeInfo.Namespace,
+			SourceVolume:             backupVolumeInfo.Volume,
+			DriverName:               driverName,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 

@@ -167,6 +167,7 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
 		volumeInfo.PersistentVolumeClaim = pvc.Name
+		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
 		volumeInfo.Options = map[string]string{
@@ -417,11 +418,12 @@ func (g *gcp) StartRestore(
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{
-			PersistentVolumeClaim: backupVolumeInfo.PersistentVolumeClaim,
-			SourceNamespace:       backupVolumeInfo.Namespace,
-			SourceVolume:          backupVolumeInfo.Volume,
-			DriverName:            driverName,
-			Zones:                 backupVolumeInfo.Zones,
+			PersistentVolumeClaim:    backupVolumeInfo.PersistentVolumeClaim,
+			PersistentVolumeClaimUID: backupVolumeInfo.PersistentVolumeClaimUID,
+			SourceNamespace:          backupVolumeInfo.Namespace,
+			SourceVolume:             backupVolumeInfo.Volume,
+			DriverName:               driverName,
+			Zones:                    backupVolumeInfo.Zones,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 		labels := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)

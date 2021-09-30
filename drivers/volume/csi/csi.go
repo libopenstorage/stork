@@ -343,6 +343,7 @@ func (c *csi) StartBackup(
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
 		volumeInfo.Options = make(map[string]string)
 		volumeInfo.PersistentVolumeClaim = pvc.Name
+		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = storkCSIDriverName
 		volumeInfo.Volume = pvc.Spec.VolumeName
@@ -1145,6 +1146,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		// Populate volumeRestoreInfo
 		vrInfo.DriverName = storkCSIDriverName
 		vrInfo.PersistentVolumeClaim = pvc.Name
+		vrInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		vrInfo.SourceNamespace = vbInfo.Namespace
 		vrInfo.SourceVolume = vbInfo.Volume
 		vrInfo.Status = storkapi.ApplicationRestoreStatusInitial
