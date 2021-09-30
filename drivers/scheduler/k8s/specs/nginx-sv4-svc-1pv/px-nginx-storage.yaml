@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+type: Opaque
+data:
+  nginx-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
+---
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-nginx-sc-sharedv4-svc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+  sharedv4: "true"
+  sharedv4_svc_type: "ClusterIP"
+allowVolumeExpansion: true
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: sharedv4-svc
+spec:
+  storageClassName: px-nginx-sc-sharedv4-svc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi

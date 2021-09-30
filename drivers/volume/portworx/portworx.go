@@ -800,7 +800,11 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		}
 		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
-			if ok, err := d.isVolumeAttachedOnNode(pxVol, n); !ok || err != nil {
+			ok, err := d.isVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
 				return &n, false, err
 			}
 		}
