@@ -319,7 +319,7 @@ github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
 # github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952
 github.com/libopenstorage/gossip/types
-# github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
+# github.com/libopenstorage/openstorage v8.0.1-0.20211010162107-3409854b020f+incompatible
 ## explicit
 github.com/libopenstorage/openstorage/api
 github.com/libopenstorage/openstorage/api/client
