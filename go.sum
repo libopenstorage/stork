@@ -834,6 +834,12 @@ github.com/libopenstorage/openstorage v8.0.1-0.20200914191223-6fb8d163a67c+incom
 github.com/libopenstorage/openstorage v8.0.1-0.20200914191223-6fb8d163a67c+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
 github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible h1:/WHzMLA5HXNKrZa3gLb8rNDBDGgVSEeeFQ1p4ndKHvM=
 github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
+github.com/libopenstorage/openstorage v8.0.1-0.20211001053059-4a89cb1aabc8+incompatible h1:yBUAQnWCECJhr6Bg6t7kdn2EKJaTcGHO4tzJxPGUn7g=
+github.com/libopenstorage/openstorage v8.0.1-0.20211001053059-4a89cb1aabc8+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
+github.com/libopenstorage/openstorage v8.0.1-0.20211001213756-2d80c383c962+incompatible h1:YvMQKw0TSWrf0WBoH07MB7xTgN6TKSnfvyKyQyCme+o=
+github.com/libopenstorage/openstorage v8.0.1-0.20211001213756-2d80c383c962+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
+github.com/libopenstorage/openstorage v8.0.1-0.20211010162107-3409854b020f+incompatible h1:JOLZVPbk7DElie8S4xspHFArdCaykmwio7X25EY7xPU=
+github.com/libopenstorage/openstorage v8.0.1-0.20211010162107-3409854b020f+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
 github.com/libopenstorage/operator v0.0.0-20191009190641-8642de5d0812/go.mod h1:Qh+VXOB6hj60VmlgsmY+R1w+dFuHK246UueM4SAqZG0=
 github.com/libopenstorage/operator v0.0.0-20200725001727-48d03e197117/go.mod h1:Qh+VXOB6hj60VmlgsmY+R1w+dFuHK246UueM4SAqZG0=
