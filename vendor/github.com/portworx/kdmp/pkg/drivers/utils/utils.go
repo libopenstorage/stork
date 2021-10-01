@@ -5,12 +5,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aquilax/truncate"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/version"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // NamespacedName returns a name in form "<namespace>/<name>".
@@ -206,4 +208,17 @@ func toResourceRequirements(requestCPU, requestMem, limitCPU, limitMem string) (
 			corev1.ResourceMemory: limitMemQ,
 		},
 	}, nil
+}
+
+// GetValidLabel - will validate the label to make sure the length is less than 63 and contains valid label format.
+// If the length is greater then 63, it will truncate to 63 character.
+func GetValidLabel(labelVal string) string {
+	if len(labelVal) > validation.LabelValueMaxLength {
+		labelVal = truncate.Truncate(labelVal, validation.LabelValueMaxLength, "", truncate.PositionEnd)
+		// make sure the truncated value does not end with the hyphen.
+		labelVal = strings.Trim(labelVal, "-")
+		// make sure the truncated value does not end with the dot.
+		labelVal = strings.Trim(labelVal, ".")
+	}
+	return labelVal
 }

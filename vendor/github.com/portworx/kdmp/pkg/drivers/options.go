@@ -32,6 +32,8 @@ type JobOpts struct {
 	BackupObjectName            string
 	BackupObjectUID             string
 	Labels                      map[string]string
+	CertSecretName              string
+	CertSecretNamespace         string
 }
 
 // WithBackupObjectName is job parameter.
@@ -269,6 +271,22 @@ func WithDataExportName(name string) JobOption {
 			return fmt.Errorf("dataexport namespace should be set")
 		}
 		opts.DataExportName = name
+		return nil
+	}
+}
+
+// WithCertSecretName is job parameter.
+func WithCertSecretName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.CertSecretName = name
+		return nil
+	}
+}
+
+// WithCertSecretNamespace is job parameter.
+func WithCertSecretNamespace(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.CertSecretNamespace = namespace
 		return nil
 	}
 }

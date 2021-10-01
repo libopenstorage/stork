@@ -18,17 +18,13 @@ var (
 )
 
 func jobForLiveBackup(
+	jobOption drivers.JobOpts,
 	jobName,
-	namespace,
-	pvcName,
-	credSecretName,
-	backupLocationName,
-	backuplocationNamespace,
-	backupNamespace string,
+	credSecretName string,
 	mountPod corev1.Pod,
 	resources corev1.ResourceRequirements,
-	labels map[string]string) (*batchv1.Job, error) {
-	volDir, err := getVolumeDirectory(pvcName, namespace)
+) (*batchv1.Job, error) {
+	volDir, err := getVolumeDirectory(jobOption.SourcePVCName, jobOption.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -40,8 +36,7 @@ func jobForLiveBackup(
 
 	backupName := jobName
 
-	labels = addJobLabels(labels)
-
+	labels := addJobLabels(jobOption.Labels)
 	cmd := strings.Join([]string{
 		"/kopiaexecutor",
 		"backup",
@@ -50,21 +45,21 @@ func jobForLiveBackup(
 		"--credentials",
 		credSecretName,
 		"--backup-location",
-		backupLocationName,
+		jobOption.BackupLocationName,
 		"--backup-location-namespace",
-		backuplocationNamespace,
+		jobOption.BackupLocationNamespace,
 		"--backup-namespace",
-		backupNamespace,
+		jobOption.Namespace,
 		"--repository",
-		toRepoName(pvcName, namespace),
+		toRepoName(jobOption.SourcePVCName, jobOption.Namespace),
 		"--source-path-glob",
 		backupPath,
 	}, " ")
 
-	return &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: namespace,
+			Namespace: jobOption.Namespace,
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
@@ -123,7 +118,42 @@ func jobForLiveBackup(
 				},
 			},
 		},
-	}, nil
+	}
+
+	if drivers.CertFilePath != "" {
+		volumeMount := corev1.VolumeMount{
+			Name:      "tls-secret",
+			MountPath: drivers.CertMount,
+			ReadOnly:  true,
+		}
+
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+
+		volume := corev1.Volume{
+			Name: "tls-secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: jobOption.CertSecretName,
+				},
+			},
+		}
+
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
+
+		env := []corev1.EnvVar{
+			{
+				Name:  drivers.CertDirPath,
+				Value: drivers.CertMount,
+			},
+		}
+
+		job.Spec.Template.Spec.Containers[0].Env = env
+	}
+
+	return job, nil
 }
 
 // getVolumeDirectory gets the name of the directory on the host, under /var/lib/kubelet/pods/<podUID>/volumes/,
