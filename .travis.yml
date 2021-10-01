@@ -10,6 +10,8 @@ cache:
     - $GOPATH/pkg/mod
 before_install:
   - sudo apt-get update -yq
+  - sudo apt-get install apt-transport-https ca-certificates -y
+  - sudo update-ca-certificates
 script:
   - make all
 after_success:
