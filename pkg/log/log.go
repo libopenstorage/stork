@@ -222,6 +222,7 @@ func ApplicationBackupLog(backup *storkv1.ApplicationBackup) *logrus.Entry {
 	if backup != nil {
 		return logrus.WithFields(logrus.Fields{
 			"ApplicationBackupName": backup.Name,
+			"ApplicationBackupUID":  string(backup.UID),
 			"Namespace":             backup.Namespace,
 			"ResourceVersion":       backup.ResourceVersion,
 		})
@@ -235,6 +236,7 @@ func ApplicationRestoreLog(restore *storkv1.ApplicationRestore) *logrus.Entry {
 	if restore != nil {
 		return logrus.WithFields(logrus.Fields{
 			"ApplicationRestoreName": restore.Name,
+			"ApplicationRestoreUID":  string(restore.UID),
 			"Namespace":              restore.Namespace,
 		})
 	}
