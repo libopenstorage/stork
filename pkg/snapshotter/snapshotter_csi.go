@@ -2,13 +2,23 @@ package snapshotter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/crypto"
+	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
+	"gocloud.dev/blob"
+	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +36,15 @@ const (
 	snapshotTimeout = time.Minute * 5
 	// restoreTimeout is the duration to wait before timing out the restore
 	restoreTimeout = time.Minute * 5
+	// localCSIRetention is the max number of csi snapshots those can be kept locally
+	localCSIRetention = 1
 )
+
+type csiBackupObject struct {
+	VolumeSnapshots        map[string]*kSnapshotv1beta1.VolumeSnapshot        `json:"volumeSnapshots"`
+	VolumeSnapshotContents map[string]*kSnapshotv1beta1.VolumeSnapshotContent `json:"volumeSnapshotContents"`
+	VolumeSnapshotClasses  map[string]*kSnapshotv1beta1.VolumeSnapshotClass   `json:"volumeSnapshotClasses"`
+}
 
 // NewCSIDriver returns the csi implementation of Driver object
 func NewCSIDriver() (Driver, error) {
@@ -89,6 +107,7 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 			Name:        o.Name,
 			Namespace:   o.PVCNamespace,
 			Annotations: o.Annotations,
+			Labels:      o.Labels,
 		},
 		Spec: kSnapshotv1beta1.VolumeSnapshotSpec{
 			VolumeSnapshotClassName: stringPtr(o.SnapshotClassName),
@@ -349,6 +368,26 @@ func (c *csiDriver) getVolumeSnapshotClass(snapshotClassName string) (*kSnapshot
 	return c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), snapshotClassName, metav1.GetOptions{})
 }
 
+// GetVolumeSnapshotClass retrieves a backed up volume snapshot class
+func (cbo *csiBackupObject) GetVolumeSnapshotClass(snapshotID string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
+	vs, ok := cbo.VolumeSnapshots[snapshotID]
+	if !ok {
+		return nil, fmt.Errorf("failed to retrieve volume snapshot for snapshotID %s", snapshotID)
+	}
+
+	if vs.Spec.VolumeSnapshotClassName == nil {
+		return nil, fmt.Errorf("failed to retrieve volume snapshot class for snapshot %s. Volume snapshot class is undefined", snapshotID)
+	}
+	vsClassName := *vs.Spec.VolumeSnapshotClassName
+
+	vsClass, ok := cbo.VolumeSnapshotClasses[vsClassName]
+	if !ok {
+		return nil, fmt.Errorf("failed to retrieve volume snapshot class for snapshotID %s", snapshotID)
+	}
+
+	return vsClass, nil
+}
+
 func (c *csiDriver) createVolumeSnapshotClass(snapshotClassName, driverName string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
 	return c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(context.TODO(), &kSnapshotv1beta1.VolumeSnapshotClass{
 		ObjectMeta: metav1.ObjectMeta{
@@ -462,4 +501,345 @@ func (c *csiDriver) getSnapshotContentError(vscName string) string {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+// uploadObject uploads the given data to the backup location
+func (c *csiDriver) UploadSnapshotObjects(
+	backupLocation *storkapi.BackupLocation,
+	snapshotInfoList []SnapshotInfo,
+	objectPath, objectName string,
+) error {
+
+	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
+	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
+	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
+
+	for _, snapshotInfo := range snapshotInfoList {
+		snapID := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot).Name
+		vsMap[snapID] = snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+		vsContentMap[snapID] = snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+		snapshotClassName := snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass).Name
+		vsClassMap[snapshotClassName] = snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass)
+	}
+
+	csiBackup := csiBackupObject{
+		VolumeSnapshots:        vsMap,
+		VolumeSnapshotContents: vsContentMap,
+		VolumeSnapshotClasses:  vsClassMap,
+	}
+
+	data, err := json.Marshal(csiBackup)
+	if err != nil {
+		return err
+	}
+
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return err
+	}
+
+	if backupLocation.Location.EncryptionKey != "" {
+		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+			return err
+		}
+	}
+
+	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write(data)
+	if err != nil {
+		closeErr := writer.Close()
+		if closeErr != nil {
+			logrus.Errorf("error closing writer for objectstore: %v", closeErr)
+		}
+		return err
+	}
+	err = writer.Close()
+	if err != nil {
+		logrus.Errorf("error closing writer for objectstore: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (c *csiDriver) DownloadSnapshotObjects(
+	backupLocation *storkapi.BackupLocation,
+	objectPath string,
+) ([]SnapshotInfo, error) {
+	var snapshotInfoList []SnapshotInfo
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return snapshotInfoList, err
+	}
+
+	exists, err := bucket.Exists(context.TODO(), objectPath)
+	if err != nil || !exists {
+		return snapshotInfoList, err
+	}
+	data, err := bucket.ReadAll(context.TODO(), objectPath)
+	if err != nil {
+		return snapshotInfoList, err
+	}
+	if backupLocation.Location.EncryptionKey != "" {
+		if data, err = crypto.Decrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+			return snapshotInfoList, err
+		}
+	}
+
+	cbo := &csiBackupObject{}
+	err = json.Unmarshal(data, cbo)
+	if err != nil {
+		return snapshotInfoList, err
+	}
+
+	for snapID := range cbo.VolumeSnapshots {
+		var snapshotInfo SnapshotInfo
+		snapshotInfo.SnapshotRequest = cbo.VolumeSnapshots[snapID]
+		snapshotInfo.Content = cbo.VolumeSnapshotContents[snapID]
+		snapshotInfo.Class, err = cbo.GetVolumeSnapshotClass(snapID)
+		if err != nil {
+			return snapshotInfoList, err
+		}
+		snapshotInfoList = append(snapshotInfoList, snapshotInfo)
+	}
+
+	return snapshotInfoList, nil
+}
+
+func (c *csiDriver) DeleteSnapshotObject(
+	backupLocation *storkapi.BackupLocation,
+	objectPath string,
+) error {
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return err
+	}
+
+	if objectPath != "" {
+		if err = bucket.Delete(context.TODO(), objectPath); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+			return fmt.Errorf("error deleting object %s: %v", objectPath, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *csiDriver) restoreVolumeSnapshotClass(vsClass *kSnapshotv1beta1.VolumeSnapshotClass) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
+	vsClass.ResourceVersion = ""
+	vsClass.UID = ""
+	newVSClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(context.TODO(), vsClass, metav1.CreateOptions{})
+	if err != nil {
+		if k8s_errors.IsAlreadyExists(err) {
+			return vsClass, nil
+		}
+		return nil, err
+	}
+
+	return newVSClass, nil
+}
+
+func (c *csiDriver) restoreVolumeSnapshot(
+	namespace string,
+	vs *kSnapshotv1beta1.VolumeSnapshot,
+	vsc *kSnapshotv1beta1.VolumeSnapshotContent,
+) (*kSnapshotv1beta1.VolumeSnapshot, error) {
+	vs.ResourceVersion = ""
+	vs.Spec.Source.PersistentVolumeClaimName = nil
+	vs.Spec.Source.VolumeSnapshotContentName = &vsc.Name
+	vs.Namespace = namespace
+	vs, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vs, metav1.CreateOptions{})
+	if err != nil {
+		if k8s_errors.IsAlreadyExists(err) {
+			return vs, nil
+		}
+		return nil, err
+	}
+
+	return vs, nil
+}
+
+func (c *csiDriver) restoreVolumeSnapshotContent(
+	namespace string,
+	vs *kSnapshotv1beta1.VolumeSnapshot,
+	vsc *kSnapshotv1beta1.VolumeSnapshotContent,
+	retain bool,
+) (*kSnapshotv1beta1.VolumeSnapshotContent, error) {
+	snapshotHandle := *vsc.Status.SnapshotHandle
+	vsc.ResourceVersion = ""
+	vsc.Spec.Source.VolumeHandle = nil
+	vsc.Spec.Source.SnapshotHandle = &snapshotHandle
+	vsc.Spec.VolumeSnapshotRef.Name = vs.Name
+	vsc.Spec.VolumeSnapshotRef.Namespace = namespace
+	vsc.Spec.VolumeSnapshotRef.UID = vs.UID
+
+	// ensure all vscontent have the desired delete policy
+	desiredRetainPolicy := kSnapshotv1beta1.VolumeSnapshotContentRetain
+	if !retain {
+		desiredRetainPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
+	}
+
+	vsc.Spec.DeletionPolicy = desiredRetainPolicy
+	vsc, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(context.TODO(), vsc, metav1.CreateOptions{})
+	if err != nil {
+		if k8s_errors.IsAlreadyExists(err) {
+			return vsc, nil
+		}
+		return nil, err
+	}
+
+	return vsc, nil
+}
+
+func (c *csiDriver) RecreateSnapshotResources(
+	snapshotInfo SnapshotInfo,
+	snapshotDriverName string,
+	snapshotClassName string,
+	namespace string,
+	retain bool,
+) error {
+	var err error
+
+	// Get VSC and VS
+	vsc := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+	vs := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+	vsClass := snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass)
+
+	logrus.Infof("recreating snapshot resources for %s/%s", namespace, vs.Name)
+
+	// make sure snapshot class is created for this object.
+	// if we have already created it in this batch, do not check if created already.
+	err = c.ensureVolumeSnapshotClassCreated(snapshotDriverName, snapshotClassName)
+	if err != nil {
+		return err
+	}
+
+	// Create vsClass
+	_, err = c.restoreVolumeSnapshotClass(vsClass)
+	if err != nil {
+		return fmt.Errorf("failed to restore VolumeSnapshotClass for deletion: %s", err.Error())
+	}
+	logrus.Debugf("created volume snapshot class %s for backup %s deletion", vs.Name, vs.Name)
+
+	// Create VS, bound to VSC
+	vs, err = c.restoreVolumeSnapshot(namespace, vs, vsc)
+	if err != nil {
+		return fmt.Errorf("failed to restore VolumeSnapshot for deletion: %s", err.Error())
+	}
+	logrus.Debugf("created volume snapshot %s for backup %s deletion", vs.Name, vs.Name)
+
+	// Create VSC
+	_, err = c.restoreVolumeSnapshotContent(namespace, vs, vsc, retain)
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("created volume snapshot content %s for backup %s deletion", vsc.Name, vs.Name)
+
+	return nil
+}
+
+func getBackupInfoFromObjectKey(objKey string) (string, string) {
+	var backupUID, timestamp string
+
+	keySplits := strings.Split(objKey, "/")
+	fileName := keySplits[len(keySplits)-1]
+	fileSplits := strings.Split(fileName, "-")
+	backupUID = strings.Join(fileSplits[0:len(fileSplits)-1], "-")
+	timestamp = strings.Split(fileSplits[len(fileSplits)-1], ".")[0]
+
+	return backupUID, timestamp
+}
+
+func (c *csiDriver) getCSISnapshotsCRListForDelete(backupLocation *storkapi.BackupLocation, pvcUID, objectPath string) ([]string, error) {
+	var vsList []string
+	var timestamps []string
+	timestampBackupMapping := make(map[string]string)
+
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return vsList, err
+	}
+	iterator := bucket.List(&blob.ListOptions{
+		Prefix: fmt.Sprintf("%s/", objectPath),
+	})
+
+	for {
+		object, err := iterator.Next(context.TODO())
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return vsList, err
+		}
+		if object.IsDir {
+			continue
+		}
+
+		backupUID, timestamp := getBackupInfoFromObjectKey(object.Key)
+		logrus.Debugf("volumes snapshots file: %s, backupUID: %s, timestamp: %s", object.Key, backupUID, timestamp)
+		timestamps = append(timestamps, timestamp)
+		timestampBackupMapping[timestamp] = object.Key
+	}
+
+	sort.Strings(timestamps)
+	if len(timestamps) > localCSIRetention {
+		for _, timestamp := range timestamps[:len(timestamps)-localCSIRetention] {
+			vsList = append(vsList, timestampBackupMapping[timestamp])
+		}
+	}
+	return vsList, nil
+}
+
+func (c *csiDriver) RetainLocalSnapshots(
+	backupLocation *storkapi.BackupLocation,
+	snapshotDriverName string,
+	snapshotClassName string,
+	namespace string,
+	pvcUID string,
+	objectPath string,
+	retain bool,
+) error {
+	vsCRList, err := c.getCSISnapshotsCRListForDelete(backupLocation, pvcUID, objectPath)
+	if err != nil {
+		return fmt.Errorf("failed in getting list of older volumesnapshot CRs from objectstore : %v", err)
+	}
+
+	for _, volumeSnapshotCR := range vsCRList {
+		snapshotInfoList, err := c.DownloadSnapshotObjects(backupLocation, volumeSnapshotCR)
+		if err != nil {
+			return err
+		}
+
+		for _, snapshotInfo := range snapshotInfoList {
+			vs := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+			snapName := vs.Name
+
+			err := c.RecreateSnapshotResources(snapshotInfo, snapshotDriverName, snapshotClassName, namespace, retain)
+			if err != nil {
+				return fmt.Errorf("recreating snapshot resources failed for snapshot %s/%s: %v", namespace, snapName, err)
+			}
+			logrus.Debugf("successfully recreated snapshot resources for snapshot %s/%s", namespace, snapName)
+
+			err = c.DeleteSnapshot(
+				vs.Name,
+				namespace,
+				retain, // retain snapshot content
+			)
+			if err != nil {
+				return err
+			}
+			logrus.Debugf("successfully deleted the recreated snapshot resources for snapshot %s/%s", namespace, snapName)
+
+			// Delete the CRs from objectstore
+			err = c.DeleteSnapshotObject(backupLocation, volumeSnapshotCR)
+			if err != nil {
+				logrus.Errorf("deleting the CRs from objectstore failed for snapshot %s/%s: %v", namespace, snapName, err)
+			}
+			logrus.Debugf("successfully deleted snapshot resources in objectstore for snapshot %s/%s", namespace, snapName)
+		}
+	}
+
+	return nil
 }

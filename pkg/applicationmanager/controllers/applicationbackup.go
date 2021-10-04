@@ -543,6 +543,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 				}
 
+				// Don't backup PVCs with skip resource annotation set
+				if resourcecollector.SkipResource(pvc.Annotations) {
+					logrus.Debugf("skipping pvc %s/%s as skip resource annotation is set", pvc.Namespace, pvc.Name)
+					continue
+				}
+
 				// Don't backup pending or deleting PVCs
 				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 					continue
