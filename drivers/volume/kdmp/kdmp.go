@@ -56,9 +56,9 @@ const (
 	secretNamespace   = "kube-system"
 	// KdmpAnnotation for pvcs created by kdmp
 	KdmpAnnotation = "stork.libopenstorage.org/created-by"
-	// StorkAnnotation for pvcs created by stork-kdmp driver
 	// optCSISnapshotClassName is an option for providing a snapshot class name
 	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
+	// StorkAnnotation for pvcs created by stork-kdmp driver
 	StorkAnnotation = "stork.libopenstorage.org/kdmp"
 
 	pxbackupAnnotationPrefix        = "portworx.io/"
