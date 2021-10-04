@@ -511,7 +511,7 @@ func (k *kdmp) StartRestore(
 			if err != nil {
 				return false, nil
 			}
-			if pvc.Spec.VolumeName == "" {
+			if pvc.Spec.VolumeName == "" || pvc.Status.Phase != v1.ClaimBound {
 				return false, nil
 			}
 			volumeInfo.RestoreVolume = pvc.Spec.VolumeName
