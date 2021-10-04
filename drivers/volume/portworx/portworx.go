@@ -834,7 +834,7 @@ func (p *portworx) mergeAuthLabels(
 	crAnnotations map[string]string,
 ) map[string]string {
 	// Precendence order:
-	// PV.Spec.SecretRef labels > PVC annotations > CR annotations
+	// PV.Spec.SecretRef labels (CSI) OR StorageClass parameters (non-CSI) > PVC annotations > CR annotations
 	authLabels := make(map[string]string)
 	if val, ok := crAnnotations[auth_secrets.SecretNameKey]; ok {
 		authLabels[auth_secrets.SecretNameKey] = val
@@ -886,6 +886,12 @@ func (p *portworx) getPVSecretRefLabels(pvc *v1.PersistentVolumeClaim, pv *v1.Pe
 		// Using common/simple security model
 		// All PVCs using a common token
 		return pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace
+	} else if pvc != nil {
+		// Check if auth tokens are provided as in-tree storage class parameters
+		sc, err := core.Instance().GetStorageClassForPVC(pvc)
+		if err == nil && sc != nil {
+			return sc.Parameters[auth_secrets.SecretNameKey], sc.Parameters[auth_secrets.SecretNamespaceKey]
+		}
 	}
 	return "", ""
 }
