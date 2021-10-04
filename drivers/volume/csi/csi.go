@@ -249,7 +249,10 @@ func (c *csi) getSnapshotClassName(
 	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok {
 		return snapshotClassName
 	}
-	return c.getDefaultSnapshotClassName(driverName)
+	if driverName != "" {
+		return c.getDefaultSnapshotClassName(driverName)
+	}
+	return ""
 }
 
 func (c *csi) getVolumeSnapshotClass(snapshotClassName string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
@@ -340,6 +343,7 @@ func (c *csi) StartBackup(
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
 		volumeInfo.Options = make(map[string]string)
 		volumeInfo.PersistentVolumeClaim = pvc.Name
+		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = storkCSIDriverName
 		volumeInfo.Volume = pvc.Spec.VolumeName
@@ -350,8 +354,8 @@ func (c *csi) StartBackup(
 			snapshotter.Name(vsName),
 			snapshotter.PVCName(pvc.Name),
 			snapshotter.PVCNamespace(pvc.Namespace),
+			snapshotter.SnapshotClassName(c.getSnapshotClassName(backup, "")),
 		)
-
 		if err != nil {
 			c.cancelBackupDuringStartFailure(backup, volumeInfos)
 			return nil, fmt.Errorf("failed to ensure volumesnapshotclass was created: %v", err)
@@ -1142,6 +1146,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		// Populate volumeRestoreInfo
 		vrInfo.DriverName = storkCSIDriverName
 		vrInfo.PersistentVolumeClaim = pvc.Name
+		vrInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		vrInfo.SourceNamespace = vbInfo.Namespace
 		vrInfo.SourceVolume = vbInfo.Volume
 		vrInfo.Status = storkapi.ApplicationRestoreStatusInitial

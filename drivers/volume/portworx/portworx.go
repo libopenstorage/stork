@@ -2937,6 +2937,7 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
 		volumeInfo.PersistentVolumeClaim = pvc.Name
+		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
 
@@ -3260,6 +3261,7 @@ func (p *portworx) StartRestore(
 	for _, backupVolumeInfo := range volumeBackupInfos {
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
 		volumeInfo.PersistentVolumeClaim = backupVolumeInfo.PersistentVolumeClaim
+		volumeInfo.PersistentVolumeClaimUID = backupVolumeInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = backupVolumeInfo.Namespace
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
 		volumeInfo.RestoreVolume = p.generatePVName()

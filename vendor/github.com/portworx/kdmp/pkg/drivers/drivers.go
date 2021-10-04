@@ -39,6 +39,10 @@ const (
 	KopiaSecretMount     = "/tmp/kopiasecret"
 	KopiaSecretKey       = "password"
 	KopiaCredSecretMount = "/etc/cred-secret"
+	CertDirPath          = "SSL_CERT_DIR"
+	CertFileName         = "public.crt"
+	CertSecretName       = "tls-s3-cert"
+	CertMount            = "/etc/tls-s3-cert"
 )
 
 // Driver job options.
@@ -71,6 +75,11 @@ const (
 	DefaultResticExecutorRequestMemory = "700Mi"
 	DefaultResticExecutorLimitCPU      = "2"
 	DefaultResticExecutorLimitMemory   = "1Gi"
+)
+
+var (
+	// CertFilePath path where certificates are mounted in the pod for TLS
+	CertFilePath string
 )
 
 // JobState represents a data transfer job state.

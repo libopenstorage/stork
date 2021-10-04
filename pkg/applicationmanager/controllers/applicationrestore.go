@@ -311,7 +311,8 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		}
 
 	case storkapi.ApplicationRestoreStageFinal:
-		return a.cleanupResources(restore)
+		// DoNothing
+		return nil
 	default:
 		log.ApplicationRestoreLog(restore).Errorf("Invalid stage for restore: %v", restore.Status.Stage)
 	}
@@ -1171,7 +1172,11 @@ func (a *ApplicationRestoreController) restoreResources(
 	if err := a.applyResources(restore, objects); err != nil {
 		return err
 	}
-
+	// Before  updating to final stage, cleanup generic backup CRs, if any.
+	err = a.cleanupResources(restore)
+	if err != nil {
+		return err
+	}
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful

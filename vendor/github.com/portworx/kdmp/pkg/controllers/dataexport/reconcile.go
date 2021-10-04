@@ -3,20 +3,22 @@ package dataexport
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 
-	"github.com/aquilax/truncate"
+	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/snapshotter"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
-	"github.com/portworx/kdmp/pkg/drivers/kopiabackup"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/kdmp/pkg/snapshots"
-	"github.com/portworx/kdmp/pkg/snapshots/snapshotsinstance"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/stork"
@@ -25,18 +27,25 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/utils/pointer"
+	"k8s.io/client-go/rest"
 )
 
 // Data export label names/keys.
 const (
-	LabelController      = "kdmp.portworx.com/controller"
-	LabelControllerName  = "controller-name"
-	KopiaSecretName      = "generic-backup-repo"
-	KopiaSecretNamespace = "kube-system"
-	backupCRNameKey      = "kdmp.portworx.com/backup-cr-name"
-	pvcNameKey           = "kdmp.portworx.com/pvc-name"
-	labelNamelimit       = 63
+	LabelController          = "kdmp.portworx.com/controller"
+	LabelControllerName      = "controller-name"
+	KopiaSecretName          = "generic-backup-repo"
+	KopiaSecretNamespace     = "kube-system"
+	backupCRNameKey          = "kdmp.portworx.com/backup-cr-name"
+	pvcNameKey               = "kdmp.portworx.com/pvc-name"
+	labelNamelimit           = 63
+	csiProvider              = "csi"
+	dataExportUIDAnnotation  = "portworx.io/dataexport-uid"
+	dataExportNameAnnotation = "portworx.io/dataexport-name"
+	skipResourceAnnotation   = "stork.libopenstorage.org/skip-resource"
+	// pvcNameLenLimit is the max length of PVC name that DataExport related CRs
+	// will incorporate in their names
+	pvcNameLenLimit = 247
 )
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
@@ -84,17 +93,12 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		return false, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusFailed, msg))
 	}
 
-	snapshotter, err := snapshotsinstance.Get(snapshots.ExternalStorage)
-	if err != nil {
-		return false, fmt.Errorf("failed to get snapshotter for a storage provider: %v", err)
-	}
-
 	if dataExport.DeletionTimestamp != nil {
 		if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
 			return false, nil
 		}
 
-		if err = c.cleanUp(driver, snapshotter, dataExport); err != nil {
+		if err = c.cleanUp(driver, dataExport); err != nil {
 			return true, fmt.Errorf("%s: cleanup: %s", reflect.TypeOf(dataExport), err)
 		}
 
@@ -104,14 +108,16 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 	switch dataExport.Status.Stage {
 	case kdmpapi.DataExportStageInitial:
-		return c.stageInitial(ctx, snapshotter, dataExport)
+		return c.stageInitial(ctx, dataExport)
 	// TODO: 'merge' scheduled&inProgress&restore stages
 	case kdmpapi.DataExportStageSnapshotScheduled:
-		return c.stageSnapshotScheduled(ctx, snapshotter, dataExport)
+		return c.stageSnapshotScheduled(ctx, dataExport)
 	case kdmpapi.DataExportStageSnapshotInProgress:
-		return c.stageSnapshotInProgress(ctx, snapshotter, dataExport)
+		return c.stageSnapshotInProgress(ctx, dataExport)
 	case kdmpapi.DataExportStageSnapshotRestore:
-		return c.stageSnapshotRestore(ctx, snapshotter, dataExport)
+		return c.stageSnapshotRestore(ctx, dataExport)
+	case kdmpapi.DataExportStageSnapshotRestoreInProgress:
+		return c.stageSnapshotRestoreInProgress(ctx, dataExport)
 	case kdmpapi.DataExportStageTransferScheduled:
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 			// set to the next stage
@@ -124,23 +130,39 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		if dataExport.Status.SnapshotPVCName != "" {
 			srcPVCName = dataExport.Status.SnapshotPVCName
 		}
-		// Create the credential secret
+
 		logrus.Debugf("drivername: %v", driverName)
+		// Creating a secret for ssl enabled objectstore with custom certificates
+		// User creates a secret in kube-system ns, mounts it to stork and recommendation is
+		// secret data is 'public.crt' always which contains the certificate content
+		// This secret path is provided as env section as follows
+		// env:
+		// - name: SSL_CERT_DIR
+		//   value: "/etc/tls-secrets" (can be any path)
+
+		// Check if the above env is present and read the certs file contents and
+		// secret for the job pod for kopia to access the same
+		err = createCertificateSecret(drivers.CertSecretName, dataExport.Spec.Source.Namespace, dataExport.Labels)
+		if err != nil {
+			return false, err
+		}
 		if driverName == drivers.KopiaBackup {
 			// This will create a unique secret per PVC being backed up
 			// Create secret in source ns because in case of multi ns backup
 			// BL CR is created in kube-system ns
 			err = CreateCredentialsSecret(
-				utils.FrameCredSecretName(utils.BackupJobPrefix, dataExport.Name),
+				dataExport.Name,
 				dataExport.Spec.Destination.Name,
 				dataExport.Spec.Destination.Namespace,
 				dataExport.Spec.Source.Namespace,
+				dataExport.Labels,
 			)
 			if err != nil {
 				msg := fmt.Sprintf("failed to create cloud credential secret during kopia backup: %v", err)
 				logrus.Errorf(msg)
 				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
 			}
+
 		}
 
 		if driverName == drivers.KopiaRestore {
@@ -157,10 +179,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			// For restore create the secret in the ns where PVC is referenced
 
 			err = CreateCredentialsSecret(
-				utils.FrameCredSecretName(utils.RestoreJobPrefix, dataExport.Name),
+				dataExport.Name,
 				vb.Spec.BackupLocation.Name,
 				vb.Spec.BackupLocation.Namespace,
 				dataExport.Spec.Destination.Namespace,
+				dataExport.Labels,
 			)
 			if err != nil {
 				msg := fmt.Sprintf("failed to create cloud credential secret during kopia restore: %v", err)
@@ -233,8 +256,14 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		dataExport.Status.SnapshotID = volumeBackupCR.Status.SnapshotID
 		dataExport.Status.Size = volumeBackupCR.Status.TotalBytes
-
-		if err := c.cleanUp(driver, snapshotter, dataExport); err != nil {
+		// Delete the tls certificate secret created
+		err = core.Instance().DeleteSecret(drivers.CertSecretName, dataExport.Spec.Source.Namespace)
+		if err != nil && errors.IsAlreadyExists(err) {
+			errMsg := fmt.Sprintf("failed to delete [%s:%s] secret", dataExport.Spec.Source.Namespace, drivers.CertSecretName)
+			logrus.Errorf("%v", errMsg)
+			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
+		}
+		if err := c.cleanUp(driver, dataExport); err != nil {
 			msg := fmt.Sprintf("failed to remove resources: %s", err)
 			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
 		}
@@ -245,7 +274,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 	return false, nil
 }
 
-func (c *Controller) stageInitial(ctx context.Context, snapshotter snapshots.Driver, dataExport *kdmpapi.DataExport) (bool, error) {
+func (c *Controller) stageInitial(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
 		dataExport.Status.Stage = kdmpapi.DataExportStageTransferScheduled
@@ -267,6 +296,10 @@ func (c *Controller) stageInitial(ctx context.Context, snapshotter snapshots.Dri
 		err = c.checkResticBackup(dataExport)
 	case drivers.ResticRestore:
 		err = c.checkResticRestore(dataExport)
+	case drivers.KopiaBackup:
+		err = c.checkKopiaBackup(dataExport)
+	case drivers.KopiaRestore:
+		err = c.checkKopiaRestore(dataExport)
 	}
 	if err != nil {
 		msg := fmt.Sprintf("check failed: %s", err)
@@ -276,21 +309,36 @@ func (c *Controller) stageInitial(ctx context.Context, snapshotter snapshots.Dri
 	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
 }
 
-func (c *Controller) stageSnapshotScheduled(ctx context.Context, snapshotter snapshots.Driver, dataExport *kdmpapi.DataExport) (bool, error) {
+func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
 		dataExport.Status.Stage = kdmpapi.DataExportStageSnapshotInProgress
 		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
 	}
 
-	if snapshotter == nil {
-		return false, fmt.Errorf("snapshot driver is nil")
+	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver name: %v", err)
 	}
 
-	name, namespace, err := snapshotter.CreateSnapshot(
-		snapshots.PVCName(dataExport.Spec.Source.Name),
-		snapshots.PVCNamespace(dataExport.Spec.Source.Namespace),
-		snapshots.RestoreNamespaces(dataExport.Spec.Destination.Namespace),
+	snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+	}
+
+	// First check if a snapshot has already been triggered
+	snapName := toSnapName(dataExport.Spec.Source.Name, string(dataExport.UID))
+	annotations := make(map[string]string)
+	annotations[dataExportUIDAnnotation] = string(dataExport.UID)
+	annotations[dataExportNameAnnotation] = trimLabel(dataExport.Name)
+	name, namespace, _, err := snapshotDriver.CreateSnapshot(
+		snapshotter.Name(snapName),
+		snapshotter.PVCName(dataExport.Spec.Source.Name),
+		snapshotter.PVCNamespace(dataExport.Spec.Source.Namespace),
+		// TODO: restore namespace is required for external-storage snapshots
+		//snapshots.RestoreNamespaces(dataExport.Spec.Destination.Namespace),
+		snapshotter.SnapshotClassName(dataExport.Spec.SnapshotStorageClass),
+		snapshotter.Annotations(annotations),
 	)
 	if err != nil {
 		msg := fmt.Sprintf("failed to create a snapshot: %s", err)
@@ -302,55 +350,86 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, snapshotter sna
 	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
 }
 
-func (c *Controller) stageSnapshotInProgress(ctx context.Context, snapshotter snapshots.Driver, dataExport *kdmpapi.DataExport) (bool, error) {
+func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (string, error) {
+	if len(dataExport.Spec.SnapshotStorageClass) == 0 {
+		return "", fmt.Errorf("snapshot storage class not provided")
+	}
+	// Check if snapshot class is a CSI snapshot class
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return "", err
+	}
+
+	cs, err := kSnapshotClient.NewForConfig(config)
+	if err != nil {
+		return "", err
+	}
+	_, err = cs.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), dataExport.Spec.SnapshotStorageClass, metav1.GetOptions{})
+	if err == nil {
+		return csiProvider, nil
+	}
+	if err != nil && !errors.IsNotFound(err) {
+		return "", nil
+	}
+	// Default to external-storage snapshot class
+	return snapshots.ExternalStorage, nil
+}
+
+func (c *Controller) stageSnapshotInProgress(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
 		dataExport.Status.Stage = kdmpapi.DataExportStageSnapshotRestore
 		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
 	}
 
-	if snapshotter == nil {
-		return false, fmt.Errorf("snapshot driver is nil")
+	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver name: %v", err)
 	}
 
-	status, err := snapshotter.SnapshotStatus(dataExport.Status.SnapshotID, dataExport.Spec.Source.Namespace)
+	snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+	}
+
+	snapInfo, err := snapshotDriver.SnapshotStatus(dataExport.Status.SnapshotID, dataExport.Spec.Source.Namespace)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get a snapshot status: %s", err)
 		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
 	}
 
-	if status == snapshots.StatusFailed {
-		// TODO: pass a reason
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, "")
+	if snapInfo.Status == snapshotter.StatusFailed {
+		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, snapInfo.Reason)
 	}
 
-	if status != snapshots.StatusReady {
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, "")
+	if snapInfo.Status != snapshotter.StatusReady {
+		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, snapInfo.Reason)
 	}
 
-	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
+	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, snapInfo.Reason))
 }
 
-func (c *Controller) stageSnapshotRestore(ctx context.Context, snapshotter snapshots.Driver, dataExport *kdmpapi.DataExport) (bool, error) {
+func (c *Controller) stageSnapshotRestore(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
-		dataExport.Status.Stage = kdmpapi.DataExportStageTransferScheduled
+		dataExport.Status.Stage = kdmpapi.DataExportStageSnapshotRestoreInProgress
 		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
 	}
 
-	if snapshotter == nil {
-		return false, fmt.Errorf("snapshot driver is nil")
+	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver name: %v", err)
 	}
 
-	pvc, err := c.restoreSnapshot(ctx, snapshotter, dataExport)
+	snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+	}
+
+	pvc, err := c.restoreSnapshot(ctx, snapshotDriver, dataExport)
 	if err != nil {
 		msg := fmt.Sprintf("failed to restore a snapshot: %s", err)
 		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
-	}
-
-	if pvc.Status.Phase != corev1.ClaimBound {
-		msg := fmt.Sprintf("snapshot pvc phase is %q, expected- %q", pvc.Status.Phase, corev1.ClaimBound)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, msg)
 	}
 
 	dataExport.Status.SnapshotPVCName = pvc.Name
@@ -358,17 +437,68 @@ func (c *Controller) stageSnapshotRestore(ctx context.Context, snapshotter snaps
 	return true, c.updateStatus(dataExport, kdmpapi.DataExportStatusSuccessful, "")
 }
 
-func (c *Controller) cleanUp(driver drivers.Interface, snapshotter snapshots.Driver, de *kdmpapi.DataExport) error {
+func (c *Controller) stageSnapshotRestoreInProgress(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
+	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver name: %v", err)
+	}
+
+	snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+	}
+
+	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
+		// set to the next stage
+		dataExport.Status.Stage = kdmpapi.DataExportStageTransferScheduled
+		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+	}
+
+	src := dataExport.Spec.Source
+	srcPvc, err := core.Instance().GetPersistentVolumeClaim(src.Name, src.Namespace)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get restore pvc %v: %v", src.Name, err)
+		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+	}
+
+	restoreInfo, err := snapshotDriver.RestoreStatus(toSnapshotPVCName(srcPvc.Name, string(dataExport.UID)), srcPvc.Namespace)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get a snapshot restore status: %s", err)
+		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+	}
+
+	if restoreInfo.Status == snapshotter.StatusFailed {
+		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, restoreInfo.Reason)
+	}
+
+	if restoreInfo.Status != snapshotter.StatusReady {
+		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, restoreInfo.Reason)
+	}
+
+	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, restoreInfo.Reason))
+
+}
+
+func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) error {
 	if driver == nil {
 		return fmt.Errorf("driver is nil")
 	}
-	if snapshotter == nil {
-		return fmt.Errorf("snapshot driver is nil")
-	}
 
 	if hasSnapshotStage(de) {
+		snapshotDriverName, err := c.getSnapshotDriverName(de)
+		if err != nil {
+			return fmt.Errorf("failed to get snapshot driver name: %v", err)
+		}
+
+		snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
+		if err != nil {
+			return fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+		}
+
 		if de.Status.SnapshotID != "" && de.Status.SnapshotNamespace != "" {
-			if err := snapshotter.DeleteSnapshot(de.Status.SnapshotID, de.Status.SnapshotNamespace); err != nil && !errors.IsNotFound(err) {
+
+			snapName := toSnapName(de.Spec.Source.Name, string(de.UID))
+			if err := snapshotDriver.DeleteSnapshot(snapName, de.Status.SnapshotNamespace, false); err != nil && !errors.IsNotFound(err) {
 				return fmt.Errorf("delete %s/%s snapshot: %s", de.Status.SnapshotNamespace, de.Status.SnapshotID, err)
 			}
 		}
@@ -396,8 +526,8 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, status kdmpapi.DataExp
 	return c.client.Update(context.TODO(), setStatus(de, status, errMsg))
 }
 
-func (c *Controller) restoreSnapshot(ctx context.Context, snapshotter snapshots.Driver, de *kdmpapi.DataExport) (*corev1.PersistentVolumeClaim, error) {
-	if snapshotter == nil {
+func (c *Controller) restoreSnapshot(ctx context.Context, snapshotDriver snapshotter.Driver, de *kdmpapi.DataExport) (*corev1.PersistentVolumeClaim, error) {
+	if snapshotDriver == nil {
 		return nil, fmt.Errorf("snapshot driver is nil")
 	}
 
@@ -407,20 +537,31 @@ func (c *Controller) restoreSnapshot(ctx context.Context, snapshotter snapshots.
 		return nil, err
 	}
 
-	restoreSpec := corev1.PersistentVolumeClaimSpec{
-		StorageClassName: pointer.StringPtr(de.Spec.SnapshotStorageClass),
-		AccessModes:      srcPvc.Spec.AccessModes,
-		Resources:        srcPvc.Spec.Resources,
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      toSnapshotPVCName(srcPvc.Name, string(de.UID)),
+			Namespace: srcPvc.Namespace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      srcPvc.Spec.AccessModes,
+			Resources:        srcPvc.Spec.Resources,
+			StorageClassName: srcPvc.Spec.StorageClassName, // use the same SC as the source PVC
+		},
 	}
-	pvc, err := snapshotter.RestoreVolumeClaim(
-		snapshots.Name(de.Status.SnapshotID),
-		snapshots.Namespace(de.Status.SnapshotNamespace),
-		snapshots.PVCName(toSnapshotPVCName(srcPvc.Name)),
-		snapshots.PVCNamespace(de.Spec.Destination.Namespace),
-		snapshots.PVCSpec(restoreSpec),
+	// We don't want other reconcilors (if any) to backup this temporary PVC
+	pvc.Annotations = make(map[string]string)
+	pvc.Annotations[skipResourceAnnotation] = "true"
+	pvc.Annotations[dataExportUIDAnnotation] = string(de.UID)
+	pvc.Annotations[dataExportNameAnnotation] = trimLabel(de.Name)
+
+	pvc, err = snapshotDriver.RestoreVolumeClaim(
+		snapshotter.RestoreNamespace(de.Namespace),
+		snapshotter.RestoreSnapshotName(de.Status.SnapshotID),
+		snapshotter.PVC(*pvc),
 	)
+
 	if err != nil {
-		return nil, fmt.Errorf("restore pvc from %s snapshot: %s", de.Status.SnapshotID, err)
+		return nil, fmt.Errorf("restore pvc from %s snapshot failed: %s", de.Status.SnapshotID, err)
 	}
 
 	de.Status.SnapshotPVCName = pvc.Name
@@ -455,10 +596,26 @@ func (c *Controller) checkClaims(de *kdmpapi.DataExport) error {
 }
 
 func (c *Controller) checkResticBackup(de *kdmpapi.DataExport) error {
+	return c.checkGenericBackup(de)
+}
+
+func (c *Controller) checkResticRestore(de *kdmpapi.DataExport) error {
+	return c.checkGenericRestore(de)
+}
+
+func (c *Controller) checkKopiaBackup(de *kdmpapi.DataExport) error {
+	return c.checkGenericBackup(de)
+}
+
+func (c *Controller) checkKopiaRestore(de *kdmpapi.DataExport) error {
+	return c.checkGenericRestore(de)
+}
+
+func (c *Controller) checkGenericBackup(de *kdmpapi.DataExport) error {
 	if !isPVCRef(de.Spec.Source) && !isAPIVersionKindNotSetRef(de.Spec.Source) {
 		return fmt.Errorf("source is expected to be PersistentVolumeClaim")
 	}
-	// restic supports "live" backups so there is not need to check if it's mounted
+	// restic/kopia supports "live" backups so there is not need to check if it's mounted
 	if _, err := checkPVC(de.Spec.Source, false); err != nil {
 		return fmt.Errorf("source: %s", err)
 	}
@@ -469,11 +626,10 @@ func (c *Controller) checkResticBackup(de *kdmpapi.DataExport) error {
 	if _, err := checkBackupLocation(de.Spec.Destination); err != nil {
 		return fmt.Errorf("destination: %s", err)
 	}
-
 	return nil
 }
 
-func (c *Controller) checkResticRestore(de *kdmpapi.DataExport) error {
+func (c *Controller) checkGenericRestore(de *kdmpapi.DataExport) error {
 	if !isVolumeBackupRef(de.Spec.Source) {
 		return fmt.Errorf("source is expected to be VolumeBackup")
 	}
@@ -502,7 +658,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithSourcePVC(srcPVCName),
 			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
-			drivers.WithLabels(jobLabels(dataExport)),
+			drivers.WithLabels(dataExport.Labels),
 		)
 	case drivers.ResticBackup:
 		return drv.StartJob(
@@ -510,7 +666,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithBackupLocationName(dataExport.Spec.Destination.Name),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Destination.Namespace),
-			drivers.WithLabels(jobLabels(dataExport)),
+			drivers.WithLabels(dataExport.Labels),
 		)
 	case drivers.ResticRestore:
 		return drv.StartJob(
@@ -519,7 +675,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
 			drivers.WithVolumeBackupNamespace(dataExport.Spec.Source.Namespace),
-			drivers.WithLabels(jobLabels(dataExport)),
+			drivers.WithLabels(dataExport.Labels),
 		)
 	case drivers.KopiaBackup:
 		return drv.StartJob(
@@ -527,8 +683,10 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithBackupLocationName(dataExport.Spec.Destination.Name),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Destination.Namespace),
-			drivers.WithLabels(jobLabels(dataExport)),
+			drivers.WithLabels(dataExport.Labels),
 			drivers.WithDataExportName(dataExport.GetName()),
+			drivers.WithCertSecretName(drivers.CertSecretName),
+			drivers.WithCertSecretNamespace(dataExport.Spec.Source.Namespace),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
@@ -537,8 +695,10 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
 			drivers.WithVolumeBackupNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Source.Namespace),
-			drivers.WithLabels(jobLabels(dataExport)),
+			drivers.WithLabels(dataExport.Labels),
 			drivers.WithDataExportName(dataExport.GetName()),
+			drivers.WithCertSecretName(drivers.CertSecretName),
+			drivers.WithCertSecretNamespace(dataExport.Spec.Destination.Namespace),
 		)
 	}
 
@@ -566,7 +726,6 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 			return nil, fmt.Errorf("mounted to %v pods", toPodNames(pods))
 		}
 	}
-
 	return pvc, nil
 }
 
@@ -592,10 +751,6 @@ func toPodNames(objs []corev1.Pod) []string {
 	return out
 }
 
-func toSnapshotPVCName(name string) string {
-	return fmt.Sprintf("snap-%s", name)
-}
-
 func hasSnapshotStage(de *kdmpapi.DataExport) bool {
 	return de.Spec.SnapshotStorageClass != ""
 }
@@ -603,40 +758,12 @@ func hasSnapshotStage(de *kdmpapi.DataExport) bool {
 func setStatus(de *kdmpapi.DataExport, status kdmpapi.DataExportStatus, reason string) *kdmpapi.DataExport {
 	de.Status.Status = status
 	de.Status.Reason = reason
+
 	return de
 }
 
 func isStatusEqual(de *kdmpapi.DataExport, status kdmpapi.DataExportStatus, reason string) bool {
 	return de.Status.Status == status && de.Status.Reason == reason
-}
-
-func jobLabels(dataExport *kdmpapi.DataExport) map[string]string {
-	labels := make(map[string]string)
-	if len(dataExport.GetName()) <= labelNamelimit {
-		labels[LabelController] = dataExport.GetName()
-		labels[LabelControllerName] = dataExport.GetName()
-	} else {
-		// truncating it to length of labelNamelimit and store it.
-		labels[LabelController] = truncate.Truncate(dataExport.GetName(), labelNamelimit, "", truncate.PositionEnd)
-		labels[LabelControllerName] = truncate.Truncate(dataExport.GetName(), labelNamelimit, "", truncate.PositionEnd)
-	}
-
-	if val, ok := dataExport.Labels[backupCRNameKey]; ok {
-		if len(val) <= labelNamelimit {
-			labels[backupCRNameKey] = val
-		} else {
-			labels[backupCRNameKey] = truncate.Truncate(val, labelNamelimit, "", truncate.PositionEnd)
-		}
-	}
-
-	if val, ok := dataExport.Labels[pvcNameKey]; ok {
-		if len(val) < labelNamelimit {
-			labels[pvcNameKey] = val
-		} else {
-			labels[pvcNameKey] = truncate.Truncate(val, labelNamelimit, "", truncate.PositionEnd)
-		}
-	}
-	return labels
 }
 
 func getDriverType(de *kdmpapi.DataExport) (string, error) {
@@ -712,7 +839,7 @@ func checkNameNamespace(ref kdmpapi.DataExportObjectReference) error {
 }
 
 // CreateCredentialsSecret parses the provided backup location and creates secret with cloud credentials
-func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string) error {
+func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string, labels map[string]string) error {
 	backupLocation, err := readBackupLocation(blName, blNamespace, "")
 	if err != nil {
 		return err
@@ -722,11 +849,11 @@ func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string) 
 	// Creating cloud cred secret
 	switch backupLocation.Location.Type {
 	case storkapi.BackupLocationS3:
-		return createS3Secret(secretName, backupLocation, namespace)
+		return createS3Secret(secretName, backupLocation, namespace, labels)
 	case storkapi.BackupLocationGoogle:
-		return createGoogleSecret(secretName, backupLocation, namespace)
+		return createGoogleSecret(secretName, backupLocation, namespace, labels)
 	case storkapi.BackupLocationAzure:
-		return createAzureSecret(secretName, backupLocation, namespace)
+		return createAzureSecret(secretName, backupLocation, namespace, labels)
 	}
 
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
@@ -754,7 +881,7 @@ func readBackupLocation(name, namespace, filePath string) (*storkapi.BackupLocat
 	return out, nil
 }
 
-func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, namespace string) error {
+func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["endpoint"] = []byte(backupLocation.Location.S3Config.Endpoint)
 	credentialData["accessKey"] = []byte(backupLocation.Location.S3Config.AccessKeyID)
@@ -764,46 +891,68 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, 
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["disablessl"] = []byte(strconv.FormatBool(backupLocation.Location.S3Config.DisableSSL))
-	err := createCredSecret(secretName, namespace, credentialData)
+	err := createJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
 
-func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string) error {
+func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["accountkey"] = []byte(backupLocation.Location.GoogleConfig.AccountKey)
 	credentialData["projectid"] = []byte(backupLocation.Location.GoogleConfig.ProjectID)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
-	err := createCredSecret(secretName, namespace, credentialData)
+	err := createJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
 
-func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string) error {
+func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
-	err := createCredSecret(secretName, namespace, credentialData)
+	err := createJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
 
-func createCredSecret(
+func createCertificateSecret(secretName, namespace string, labels map[string]string) error {
+	drivers.CertFilePath = os.Getenv(drivers.CertDirPath)
+	if drivers.CertFilePath != "" {
+		certificateData, err := ioutil.ReadFile(filepath.Join(drivers.CertFilePath, drivers.CertFileName))
+		if err != nil {
+			errMsg := fmt.Sprintf("failed reading data from file %s : %s", drivers.CertFilePath, err)
+			logrus.Errorf("%v", errMsg)
+			return fmt.Errorf(errMsg)
+		}
+
+		certData := make(map[string][]byte)
+		certData[drivers.CertFileName] = certificateData
+		err = createJobSecret(secretName, namespace, certData, labels)
+
+		return err
+	}
+
+	return nil
+}
+
+func createJobSecret(
 	secretName string,
 	namespace string,
 	credentialData map[string][]byte,
+	labels map[string]string,
 ) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: namespace,
+			Labels:    labels,
 			Annotations: map[string]string{
-				kopiabackup.SkipResourceAnnotation: "true",
+				utils.SkipResourceAnnotation: "true",
 			},
 		},
 		Data: credentialData,
@@ -815,4 +964,29 @@ func createCredSecret(
 	}
 
 	return err
+}
+
+func toSnapName(pvcName, dataExportUID string) string {
+	truncatedPVCName := pvcName
+	if len(pvcName) > pvcNameLenLimit {
+		truncatedPVCName = pvcName[:pvcNameLenLimit]
+	}
+	uidToken := strings.Split(dataExportUID, "-")
+	return fmt.Sprintf("%s-%s", truncatedPVCName, uidToken[0])
+}
+
+func toSnapshotPVCName(pvcName string, dataExportUID string) string {
+	truncatedPVCName := pvcName
+	if len(pvcName) > pvcNameLenLimit {
+		truncatedPVCName = pvcName[:pvcNameLenLimit]
+	}
+	uidToken := strings.Split(dataExportUID, "-")
+	return fmt.Sprintf("%s-%s", truncatedPVCName, uidToken[0])
+}
+
+func trimLabel(label string) string {
+	if len(label) > 63 {
+		return label[:63]
+	}
+	return label
 }

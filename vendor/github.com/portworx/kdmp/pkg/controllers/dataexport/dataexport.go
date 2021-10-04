@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/snapshotter"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/sirupsen/logrus"
@@ -27,13 +28,15 @@ var (
 
 // Controller is a k8s controller that handles DataExport resources.
 type Controller struct {
-	client runtimeclient.Client
+	client      runtimeclient.Client
+	snapshotter snapshotter.Snapshotter
 }
 
 // NewController returns a new instance of the controller.
 func NewController(mgr manager.Manager) (*Controller, error) {
 	return &Controller{
-		client: mgr.GetClient(),
+		client:      mgr.GetClient(),
+		snapshotter: snapshotter.NewDefaultSnapshotter(),
 	}, nil
 }
 

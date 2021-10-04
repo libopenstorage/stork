@@ -34,6 +34,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&DataExportList{},
 		&VolumeBackup{},
 		&VolumeBackupList{},
+		&VolumeBackupDelete{},
+		&VolumeBackupDeleteList{},
 		&BackupLocationMaintenance{},
 		&BackupLocationMaintenanceList{},
 	)

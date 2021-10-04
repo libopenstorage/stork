@@ -16,6 +16,12 @@ const (
 	BackupJobPrefix = "b"
 	// RestoreJobPrefix job prefix for restore jobs
 	RestoreJobPrefix = "r"
+	// SkipResourceAnnotation skipping kopia secret to be backed up
+	SkipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
+	// BackupObjectNameKey - label key to store backup object name
+	BackupObjectNameKey = "backup-object-name"
+	// BackupObjectUIDKey - label key to store backup object uid
+	BackupObjectUIDKey = "backup-object-uid"
 )
 
 // SetupServiceAccount create a service account and bind it to a provided role.

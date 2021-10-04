@@ -385,7 +385,8 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 	case stork_api.ApplicationBackupStageFinal:
-		return a.cleanupResources(backup)
+		// Do Nothing
+		return nil
 	default:
 		log.ApplicationBackupLog(backup).Errorf("Invalid stage for backup: %v", backup.Status.Stage)
 	}
@@ -1236,6 +1237,11 @@ func (a *ApplicationBackupController) backupResources(
 			string(stork_api.ApplicationBackupStatusFailed),
 			message)
 		log.ApplicationBackupLog(backup).Errorf(message)
+		return err
+	}
+	// Before moving it to success case, cleanup generic backup CR, if any
+	err = a.cleanupResources(backup)
+	if err != nil {
 		return err
 	}
 	backup.Status.BackupPath = GetObjectPath(backup)

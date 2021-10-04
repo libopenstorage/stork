@@ -696,6 +696,13 @@ func (in *ApplicationRestoreSpec) DeepCopyInto(out *ApplicationRestoreSpec) {
 		*out = make([]ObjectInfo, len(*in))
 		copy(*out, *in)
 	}
+	if in.StorageClassMapping != nil {
+		in, out := &in.StorageClassMapping, &out.StorageClassMapping
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 
@@ -756,6 +763,13 @@ func (in *ApplicationRestoreVolumeInfo) DeepCopyInto(out *ApplicationRestoreVolu
 		in, out := &in.Zones, &out.Zones
 		*out = make([]string, len(*in))
 		copy(*out, *in)
+	}
+	if in.Options != nil {
+		in, out := &in.Options, &out.Options
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 	return
 }

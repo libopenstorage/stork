@@ -190,6 +190,7 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
 		volumeInfo.PersistentVolumeClaim = pvc.Name
+		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
 
@@ -453,6 +454,7 @@ func (a *aws) StartRestore(
 	for _, backupVolumeInfo := range volumeBackupInfos {
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
 		volumeInfo.PersistentVolumeClaim = backupVolumeInfo.PersistentVolumeClaim
+		volumeInfo.PersistentVolumeClaimUID = backupVolumeInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = backupVolumeInfo.Namespace
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
 		volumeInfo.DriverName = driverName
