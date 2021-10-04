@@ -1183,8 +1183,8 @@ func (a *ApplicationRestoreController) restoreResources(
 	restore.Status.Reason = "Volumes and resources were restored up successfully"
 	for _, resource := range restore.Status.Resources {
 		if resource.Status != storkapi.ApplicationRestoreStatusSuccessful {
-			restore.Status.Status = storkapi.ApplicationRestoreStatusInProgress
-			restore.Status.Reason = "Volumes were restored successfully. Some existing resources were not replaced, clean up in progress"
+			restore.Status.Status = storkapi.ApplicationRestoreStatusPartialSuccess
+			restore.Status.Reason = "Volumes were restored successfully. Some existing resources were not replaced"
 			break
 		}
 	}
