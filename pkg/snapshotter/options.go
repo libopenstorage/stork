@@ -30,6 +30,8 @@ type Options struct {
 	RestoreSnapshotName string
 	// Annotations are the annotations that can be applied on the snapshot related objects
 	Annotations map[string]string
+	// Labels are the labels that can be applied on the snapshot related objects
+	Labels map[string]string
 }
 
 // Name is used to set a snapshot name.
@@ -117,6 +119,17 @@ func Annotations(annotations map[string]string) Option {
 		opts.Annotations = make(map[string]string)
 		for k, v := range annotations {
 			opts.Annotations[k] = v
+		}
+		return nil
+	}
+}
+
+// Labels are the labels applied on snapshot related objects
+func Labels(labels map[string]string) Option {
+	return func(opts *Options) error {
+		opts.Labels = make(map[string]string)
+		for k, v := range labels {
+			opts.Labels[k] = v
 		}
 		return nil
 	}

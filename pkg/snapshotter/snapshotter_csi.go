@@ -2,13 +2,19 @@ package snapshotter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/crypto"
+	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
+	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +33,12 @@ const (
 	// restoreTimeout is the duration to wait before timing out the restore
 	restoreTimeout = time.Minute * 5
 )
+
+type csiBackupObject struct {
+	VolumeSnapshots        map[string]*kSnapshotv1beta1.VolumeSnapshot        `json:"volumeSnapshots"`
+	VolumeSnapshotContents map[string]*kSnapshotv1beta1.VolumeSnapshotContent `json:"volumeSnapshotContents"`
+	VolumeSnapshotClasses  map[string]*kSnapshotv1beta1.VolumeSnapshotClass   `json:"volumeSnapshotClasses"`
+}
 
 // NewCSIDriver returns the csi implementation of Driver object
 func NewCSIDriver() (Driver, error) {
@@ -89,6 +101,7 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 			Name:        o.Name,
 			Namespace:   o.PVCNamespace,
 			Annotations: o.Annotations,
+			Labels:      o.Labels,
 		},
 		Spec: kSnapshotv1beta1.VolumeSnapshotSpec{
 			VolumeSnapshotClassName: stringPtr(o.SnapshotClassName),
@@ -228,6 +241,39 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 		snapshotInfo.Size = uint64(size)
 	}
 	return snapshotInfo, nil
+}
+
+func (c *csiDriver) getSnapshotResources(snapName string, snapshotInfo SnapshotInfo) (*csiBackupObject, error) {
+	var csiObject *csiBackupObject
+
+	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
+	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
+	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
+
+	snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+	if !ok {
+		return csiObject, fmt.Errorf("failed to get volumesnapshot object")
+	}
+	vsMap[snapName] = snapshot
+
+	if snapshotInfo.Status == StatusReady {
+		snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+		if !ok {
+			return csiObject, fmt.Errorf("failed to get volumesnapshotcontent object")
+		}
+		vsContentMap[snapName] = snapshotContent
+		snapshotClass, ok := snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass)
+		if !ok {
+			return csiObject, fmt.Errorf("failed to map volumesnapshotclass object")
+		}
+		vsClassMap[snapshotClass.Name] = snapshotClass
+	}
+
+	csiObject.VolumeSnapshots = vsMap
+	csiObject.VolumeSnapshotContents = vsContentMap
+	csiObject.VolumeSnapshotClasses = vsClassMap
+
+	return csiObject, nil
 }
 
 func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClaim, error) {
@@ -462,4 +508,99 @@ func (c *csiDriver) getSnapshotContentError(vscName string) string {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+// uploadObject uploads the given data to the backup location
+func (c *csiDriver) UploadSnapshotData(
+	backupLocation *storkapi.BackupLocation,
+	snapshotInfo SnapshotInfo,
+	snapName, objectPath, objectName string,
+) error {
+	csiBackupObject, err := c.getSnapshotResources(snapName, snapshotInfo)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(csiBackupObject)
+	if err != nil {
+		return err
+	}
+
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return err
+	}
+
+	if backupLocation.Location.EncryptionKey != "" {
+		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+			return err
+		}
+	}
+
+	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write(data)
+	if err != nil {
+		closeErr := writer.Close()
+		if closeErr != nil {
+			logrus.Errorf("error closing writer for objectstore: %v", closeErr)
+		}
+		return err
+	}
+	err = writer.Close()
+	if err != nil {
+		logrus.Errorf("error closing writer for objectstore: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (c *csiDriver) DownloadObject(
+	backupLocation *storkapi.BackupLocation,
+	objectName string,
+	objectPath string,
+) ([]byte, error) {
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	exists, err := bucket.Exists(context.TODO(), filepath.Join(objectPath, objectName))
+	if err != nil || !exists {
+		return nil, nil
+	}
+
+	data, err := bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
+	if err != nil {
+		return nil, err
+	}
+	if backupLocation.Location.EncryptionKey != "" {
+		if data, err = crypto.Decrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+			return nil, err
+		}
+	}
+
+	return data, nil
+}
+
+func (c *csiDriver) DeleteCloudObject(
+	backupLocation *storkapi.BackupLocation,
+	objectName string,
+	objectPath string,
+) error {
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return err
+	}
+
+	if objectPath != "" {
+		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, objectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+			return fmt.Errorf("error deleting object %v/%v: %v", objectPath, objectName, err)
+		}
+	}
+
+	return nil
 }
