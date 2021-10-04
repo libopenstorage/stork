@@ -168,6 +168,8 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
+		dataExport.Annotations[backupObjectUIDKey] = string(backup.UID)
+		dataExport.Annotations[pvcUIDKey] = string(pvc.UID)
 		dataExport.Name = getGenericCRName(prefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
 		dataExport.Namespace = pvc.Namespace
 		dataExport.Spec.Type = kdmpapi.DataExportKopia

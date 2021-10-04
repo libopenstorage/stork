@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -76,6 +77,16 @@ type Driver interface {
 	RestoreStatus(pvcName, namespace string) (RestoreInfo, error)
 	// CancelRestore cancels a restore operation
 	CancelRestore(pvcName, namespace string) error
+	// Upload objects to cloud
+	UploadSnapshotObjects(backupLocation *storkapi.BackupLocation, snapshotInfoList []SnapshotInfo, objectPath, objectName string) error
+	// Download objects from cloud
+	DownloadSnapshotObjects(backupLocation *storkapi.BackupLocation, objectPath string) ([]SnapshotInfo, error)
+	// Delete objects in cloud
+	DeleteSnapshotObject(backupLocation *storkapi.BackupLocation, objectPath string) error
+	// Recreate snapshot resources before doing snapshot restore
+	RecreateSnapshotResources(snapshotInfo SnapshotInfo, snapshotDriverName, snapshotClassName, namespace string, retain bool) error
+	// Retain local snapshots if required
+	RetainLocalSnapshots(backupLocation *storkapi.BackupLocation, snapshotDriverName, snapshotClassName, namespace, pvcUID, objectPath string, retain bool) error
 }
 
 // Snapshotter inteface returns a Driver object
