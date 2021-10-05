@@ -238,13 +238,6 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			return volumeInfos, err
 		}
 
-		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			vInfo.Reason = fmt.Sprintf("Backup failed at stage %v for volume: %v", dataExport.Status.Stage, dataExport.Status.Reason)
-			volumeInfos = append(volumeInfos, vInfo)
-			continue
-		}
-
 		if dataExport.Status.TransferID == "" {
 			vInfo.Status = storkapi.ApplicationBackupStatusInitial
 			vInfo.Reason = "Volume backup not started yet"
@@ -255,6 +248,16 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				vInfo.Reason = "Volume backup in progress"
 				// TODO: KDMP does not return size right now, we will need to fill up
 				// size for volume once support is available
+			} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+				// As DE CR is in DataExportStageTransferInProgress we check VB CR status
+				// and as this is created by job, there could be a race where this CR
+				// is not yet available as the job pod is still creating it
+				// and we mark the backup as failure. We should mark it as failure only in
+				// DataExportStageFinal stage
+				// TODO: We need to think of some logic on how long we are going to
+				// try and fail the backup aka backup timeout kind off stuff
+				vInfo.Status = storkapi.ApplicationBackupStatusFailed
+				vInfo.Reason = fmt.Sprintf("Backup failed for volume: %v", dataExport.Status.Reason)
 			} else if isDataExportCompleted(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 				vInfo.Reason = "Backup successful for volume"
