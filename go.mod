@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/go-version v1.2.1
 	github.com/heptio/ark v1.0.0
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
-	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc5
+	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc6
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67
@@ -28,7 +28,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
-	github.com/portworx/kdmp v0.4.1-0.20211004132125-118c8be62b32
+	github.com/portworx/kdmp v0.4.1-0.20211006042942-e0dcc6f202ac
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20210929114621-9001768f8eb7
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.9.0
@@ -66,7 +66,7 @@ replace (
 	github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
-	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc5
+	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc6
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7

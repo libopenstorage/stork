@@ -246,7 +246,7 @@ func addJobLabels(labels map[string]string, o drivers.JobOpts) map[string]string
 }
 
 func buildJob(jobName string, o drivers.JobOpts) (*batchv1.Job, error) {
-	resources, err := utils.JobResourceRequirements()
+	resources, err := utils.KopiaResourceRequirements()
 	if err != nil {
 		return nil, err
 	}

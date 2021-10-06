@@ -177,7 +177,6 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			}
 			// This will create a unique secret per PVC being restored
 			// For restore create the secret in the ns where PVC is referenced
-
 			err = CreateCredentialsSecret(
 				dataExport.Name,
 				vb.Spec.BackupLocation.Name,
@@ -263,6 +262,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			logrus.Errorf("%v", errMsg)
 			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
 		}
+
 		if err := c.cleanUp(driver, dataExport); err != nil {
 			msg := fmt.Sprintf("failed to remove resources: %s", err)
 			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
