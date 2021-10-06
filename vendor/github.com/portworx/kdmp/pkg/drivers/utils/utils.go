@@ -8,11 +8,18 @@ import (
 	"github.com/aquilax/truncate"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/version"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
+)
+
+const (
+	defaultPXNamespace = "kube-system"
+	kdmpConfig         = "kdmp-config"
 )
 
 // NamespacedName returns a name in form "<namespace>/<name>".
@@ -53,6 +60,30 @@ func IsJobFailed(j *batchv1.Job) bool {
 	return false
 }
 
+// IsJobPending checks if a kubernetes job is in pending state
+func IsJobPending(j *batchv1.Job) bool {
+	// Check if the pod is in running state
+	pods, err := core.Instance().GetPods(
+		j.Namespace,
+		map[string]string{
+			"job-name": j.Name,
+		},
+	)
+	if err != nil {
+		// Cannot determine job state
+		return false
+	} else if len(pods.Items) == 0 {
+		return true
+	}
+	for _, c := range pods.Items[0].Status.ContainerStatuses {
+		if c.State.Waiting != nil {
+			// container is in waiting state
+			return true
+		}
+	}
+	return false
+}
+
 // ToJobStatus returns a job status for provided parameters.
 func ToJobStatus(progress float64, errMsg string) *drivers.JobStatus {
 	if len(errMsg) > 0 {
@@ -75,6 +106,21 @@ func ToJobStatus(progress float64, errMsg string) *drivers.JobStatus {
 	}
 }
 
+// GetConfigValue read configmap and return the value of the requested parameter
+// If error in reading from configmap, we try reading from env variable
+func GetConfigValue(key string) string {
+	configMap, err := core.Instance().GetConfigMap(
+		kdmpConfig,
+		defaultPXNamespace,
+	)
+	if err != nil {
+		logrus.Warnf("Failed in getting value for key [%v] from configmap[%v]", key, kdmpConfig)
+		// try reading from the Env variable
+		return os.Getenv(key)
+	}
+	return configMap.Data[key]
+}
+
 // ResticExecutorImage returns a docker image that contains resticexecutor binary.
 func ResticExecutorImage() string {
 	if customImage := strings.TrimSpace(os.Getenv(drivers.ResticExecutorImageKey)); customImage != "" {
@@ -91,7 +137,7 @@ func ResticExecutorImageSecret() string {
 
 // KopiaExecutorImage returns a docker image that contains kopiaexecutor binary.
 func KopiaExecutorImage() string {
-	if customImage := strings.TrimSpace(os.Getenv(drivers.KopiaExecutorImageKey)); customImage != "" {
+	if customImage := strings.TrimSpace(GetConfigValue(drivers.KopiaExecutorImageKey)); customImage != "" {
 		return customImage
 	}
 	// use a versioned docker image
@@ -100,7 +146,7 @@ func KopiaExecutorImage() string {
 
 // KopiaExecutorImageSecret returns an image pull secret for the resticexecutor image.
 func KopiaExecutorImageSecret() string {
-	return strings.TrimSpace(os.Getenv(drivers.KopiaExecutorImageSecretKey))
+	return strings.TrimSpace(GetConfigValue(drivers.KopiaExecutorImageSecretKey))
 }
 
 // RsyncImage returns a docker image that contains rsync binary.
@@ -139,8 +185,29 @@ func ToImagePullSecret(name string) []corev1.LocalObjectReference {
 
 }
 
-// JobResourceRequirements returns JobResourceRequirements for the executor container.
-func JobResourceRequirements() (corev1.ResourceRequirements, error) {
+// KopiaResourceRequirements returns ResourceRequirements for the kopiaexecutor container.
+func KopiaResourceRequirements() (corev1.ResourceRequirements, error) {
+	requestCPU := drivers.DefaultKopiaExecutorRequestCPU
+	if customRequestCPU := os.Getenv(drivers.KopiaExecutorRequestCPU); customRequestCPU != "" {
+		requestCPU = customRequestCPU
+	}
+	requestMem := drivers.DefaultKopiaExecutorRequestMemory
+	if customRequestMemory := os.Getenv(drivers.KopiaExecutorRequestMemory); customRequestMemory != "" {
+		requestMem = customRequestMemory
+	}
+	limitCPU := drivers.DefaultKopiaExecutorLimitCPU
+	if customLimitCPU := os.Getenv(drivers.KopiaExecutorLimitCPU); customLimitCPU != "" {
+		limitCPU = customLimitCPU
+	}
+	limitMem := drivers.DefaultKopiaExecutorLimitMemory
+	if customLimitMemory := os.Getenv(drivers.KopiaExecutorLimitMemory); customLimitMemory != "" {
+		limitMem = customLimitMemory
+	}
+	return toResourceRequirements(requestCPU, requestMem, limitCPU, limitMem)
+}
+
+// ResticResourceRequirements returns JobResourceRequirements for the executor container.
+func ResticResourceRequirements() (corev1.ResourceRequirements, error) {
 	requestCPU := drivers.DefaultResticExecutorRequestCPU
 	if customRequestCPU := os.Getenv(drivers.ResticExecutorRequestCPU); customRequestCPU != "" {
 		requestCPU = customRequestCPU
