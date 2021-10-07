@@ -28,8 +28,6 @@ import (
 )
 
 const (
-	// driverName is the name of the gcp driver implementation
-	driverName = "gce"
 	// provisioner names for gce volumes
 	provisionerName = "kubernetes.io/gce-pd"
 	// CSI provisioner name for for gce volumes
@@ -82,7 +80,7 @@ func (g *gcp) Init(_ interface{}) error {
 }
 
 func (g *gcp) String() string {
-	return driverName
+	return storkvolume.GCEDriverName
 }
 
 func (g *gcp) Stop() error {
@@ -169,7 +167,7 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
-		volumeInfo.DriverName = driverName
+		volumeInfo.DriverName = storkvolume.GCEDriverName
 		volumeInfo.Options = map[string]string{
 			"projectID": g.projectID,
 		}
@@ -319,7 +317,7 @@ func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.GCEDriverName {
 			continue
 		}
 		snapshot, err := g.service.Snapshots.Get(g.projectID, vInfo.BackupID).Do()
@@ -359,7 +357,7 @@ func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	}
 
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.GCEDriverName {
 			continue
 		}
 		_, err := g.service.Snapshots.Delete(vInfo.Options["projectID"], vInfo.BackupID).Do()
@@ -428,7 +426,7 @@ func (g *gcp) StartRestore(
 			PersistentVolumeClaimUID: backupVolumeInfo.PersistentVolumeClaimUID,
 			SourceNamespace:          backupVolumeInfo.Namespace,
 			SourceVolume:             backupVolumeInfo.Volume,
-			DriverName:               driverName,
+			DriverName:               storkvolume.GCEDriverName,
 			Zones:                    backupVolumeInfo.Zones,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
@@ -494,7 +492,7 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.GCEDriverName {
 			continue
 		}
 		var status string
@@ -606,7 +604,7 @@ func init() {
 	if err != nil {
 		logrus.Debugf("Error init'ing gcp driver: %v", err)
 	}
-	if err := storkvolume.Register(driverName, g); err != nil {
+	if err := storkvolume.Register(storkvolume.GCEDriverName, g); err != nil {
 		logrus.Panicf("Error registering gcp volume driver: %v", err)
 	}
 }

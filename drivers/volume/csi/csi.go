@@ -36,9 +36,6 @@ import (
 )
 
 const (
-	// storkDriverName is the name of the k8s driver implementation.
-	// not to be confused with a CSI Driver Name
-	storkCSIDriverName = "csi"
 	// snapshotPrefix is appended to CSI backup snapshot
 	snapshotBackupPrefix = "backup"
 	// snapshotPrefix is appended to CSI restore snapshot
@@ -197,7 +194,7 @@ func (c *csi) createDefaultSnapshotClasses() error {
 }
 
 func (c *csi) String() string {
-	return storkCSIDriverName
+	return storkvolume.CSIDriverName
 }
 
 func (c *csi) Stop() error {
@@ -345,7 +342,7 @@ func (c *csi) StartBackup(
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
-		volumeInfo.DriverName = storkCSIDriverName
+		volumeInfo.DriverName = storkvolume.CSIDriverName
 		volumeInfo.Volume = pvc.Spec.VolumeName
 		volumeInfos = append(volumeInfos, volumeInfo)
 
@@ -571,7 +568,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
 	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != storkCSIDriverName {
+		if vInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
 
@@ -723,7 +720,7 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 	if backup.Status.Status == storkapi.ApplicationBackupStatusInProgress {
 		// set of all snapshot classes deleted
 		for _, vInfo := range backup.Status.Volumes {
-			if vInfo.DriverName != storkCSIDriverName {
+			if vInfo.DriverName != storkvolume.CSIDriverName {
 				continue
 			}
 			snapshotName := vInfo.BackupID
@@ -802,7 +799,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	}
 
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != storkCSIDriverName {
+		if vInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
 		if backupSuccessful {
@@ -1077,7 +1074,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 	// ensure volumesnapshotclass is created for this driver
 	log.ApplicationRestoreLog(restore).Debugf("restoring %v volumes", len(volumeBackupInfos))
 	for _, vbInfo := range volumeBackupInfos {
-		if vbInfo.DriverName != storkCSIDriverName {
+		if vbInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
 
@@ -1144,7 +1141,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		log.ApplicationRestoreLog(restore).Debugf("created pvc: %s", pvc.Name)
 
 		// Populate volumeRestoreInfo
-		vrInfo.DriverName = storkCSIDriverName
+		vrInfo.DriverName = storkvolume.CSIDriverName
 		vrInfo.PersistentVolumeClaim = pvc.Name
 		vrInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		vrInfo.SourceNamespace = vbInfo.Namespace
@@ -1190,7 +1187,7 @@ func (c *csi) StartRestore(
 
 func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 	for _, vrInfo := range restore.Status.Volumes {
-		if vrInfo.DriverName != storkCSIDriverName {
+		if vrInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
 		pvcRestoreSucceeded := (vrInfo.Status == storkapi.ApplicationRestoreStatusPartialSuccess || vrInfo.Status == storkapi.ApplicationRestoreStatusSuccessful)
@@ -1219,7 +1216,7 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 	var anyFailed bool
 
 	for _, vrInfo := range restore.Status.Volumes {
-		if vrInfo.DriverName != storkCSIDriverName {
+		if vrInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
 		// Handle namespace mapping
@@ -1250,7 +1247,7 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 	if !anyInProgress {
 		// Mark complete once cleanup has started
 		for _, vrInfo := range restore.Status.Volumes {
-			if vrInfo.DriverName != storkCSIDriverName {
+			if vrInfo.DriverName != storkvolume.CSIDriverName {
 				continue
 			}
 			vrInfo.Reason = fmt.Sprintf("Volume restore successful: PVC %s is bound", vrInfo.PersistentVolumeClaim)
@@ -1328,7 +1325,7 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != storkCSIDriverName {
+		if vInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
 		// Get PVC we're checking the backup for
@@ -1384,7 +1381,7 @@ func init() {
 	if err != nil {
 		logrus.Debugf("Error init'ing csi driver: %v", err)
 	}
-	if err := storkvolume.Register(storkCSIDriverName, c); err != nil {
+	if err := storkvolume.Register(storkvolume.CSIDriverName, c); err != nil {
 		logrus.Panicf("Error registering csi volume driver: %v", err)
 	}
 }

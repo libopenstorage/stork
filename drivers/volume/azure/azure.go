@@ -29,8 +29,6 @@ import (
 )
 
 const (
-	// driverName is the name of the azure driver implementation
-	driverName = "azure"
 	// provisioner names for azure disks
 	provisionerName = "kubernetes.io/azure-disk"
 	// CSI provisioner names for azure disks
@@ -136,7 +134,7 @@ func (a *azure) getMetadata() (map[string]string, error) {
 }
 
 func (a *azure) String() string {
-	return driverName
+	return storkvolume.AzureDriverName
 }
 
 func (a *azure) Stop() error {
@@ -255,7 +253,7 @@ func (a *azure) StartBackup(
 			PersistentVolumeClaim:    pvc.Name,
 			PersistentVolumeClaimUID: string(pvc.UID),
 			Namespace:                pvc.Namespace,
-			DriverName:               driverName,
+			DriverName:               storkvolume.AzureDriverName,
 			Volume:                   pvc.Spec.VolumeName,
 			Options: map[string]string{
 				resourceGroupKey: a.resourceGroup,
@@ -327,7 +325,7 @@ func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.AzureDriverName {
 			continue
 		}
 		snapshot, err := a.snapshotClient.Get(context.TODO(), a.resourceGroup, vInfo.BackupID)
@@ -367,7 +365,7 @@ func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	}
 
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.AzureDriverName {
 			continue
 		}
 		_, err := a.snapshotClient.Delete(context.TODO(), a.resourceGroup, vInfo.BackupID)
@@ -474,7 +472,7 @@ func (a *azure) StartRestore(
 			PersistentVolumeClaimUID: backupVolumeInfo.PersistentVolumeClaimUID,
 			SourceNamespace:          backupVolumeInfo.Namespace,
 			SourceVolume:             backupVolumeInfo.Volume,
-			DriverName:               driverName,
+			DriverName:               storkvolume.AzureDriverName,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 
@@ -524,7 +522,7 @@ func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*stork
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.AzureDriverName {
 			continue
 		}
 		disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, vInfo.RestoreVolume)
@@ -607,7 +605,7 @@ func init() {
 	if err != nil {
 		logrus.Debugf("Error init'ing azure driver: %v", err)
 	}
-	if err := storkvolume.Register(driverName, a); err != nil {
+	if err := storkvolume.Register(storkvolume.AzureDriverName, a); err != nil {
 		logrus.Panicf("Error registering azure volume driver: %v", err)
 	}
 }
