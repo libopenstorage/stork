@@ -84,8 +84,3 @@ func serviceAccountFor(name, namespace string) *corev1.ServiceAccount {
 		},
 	}
 }
-
-// FrameCredSecretName frames credential secret name
-func FrameCredSecretName(prefix, deName string) string {
-	return prefix + "-" + deName
-}

@@ -19,8 +19,7 @@ var (
 
 func jobForLiveBackup(
 	jobOption drivers.JobOpts,
-	jobName,
-	credSecretName string,
+	jobName string,
 	mountPod corev1.Pod,
 	resources corev1.ResourceRequirements,
 ) (*batchv1.Job, error) {
@@ -43,7 +42,7 @@ func jobForLiveBackup(
 		"--volume-backup-name",
 		backupName,
 		"--credentials",
-		credSecretName,
+		jobOption.DataExportName,
 		"--backup-location",
 		jobOption.BackupLocationName,
 		"--backup-location-namespace",
@@ -110,7 +109,7 @@ func jobForLiveBackup(
 							Name: "cred-secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: credSecretName,
+									SecretName: jobOption.DataExportName,
 								},
 							},
 						},

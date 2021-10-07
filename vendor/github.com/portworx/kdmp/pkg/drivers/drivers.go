@@ -63,6 +63,10 @@ const (
 	ResticExecutorLimitMemory    = "KDMP_RESTICEXECUTOR_LIMIT_MEMORY"
 	KopiaExecutorImageKey        = "KDMP_KOPIAEXECUTOR_IMAGE"
 	KopiaExecutorImageSecretKey  = "KDMP_KOPIAEXECUTOR_IMAGE_SECRET"
+	KopiaExecutorRequestCPU      = "KDMP_KOPIAEXECUTOR_REQUEST_CPU"
+	KopiaExecutorRequestMemory   = "KDMP_KOPIAEXECUTOR_REQUEST_MEMORY"
+	KopiaExecutorLimitCPU        = "KDMP_KOPIAEXECUTOR_LIMIT_CPU"
+	KopiaExecutorLimitMemory     = "KDMP_KOPIAEXECUTOR_LIMIT_MEMORY"
 )
 
 // Default parameters for job options.
@@ -75,6 +79,10 @@ const (
 	DefaultResticExecutorRequestMemory = "700Mi"
 	DefaultResticExecutorLimitCPU      = "2"
 	DefaultResticExecutorLimitMemory   = "1Gi"
+	DefaultKopiaExecutorRequestCPU     = "1"
+	DefaultKopiaExecutorRequestMemory  = "700Mi"
+	DefaultKopiaExecutorLimitCPU       = "2"
+	DefaultKopiaExecutorLimitMemory    = "1Gi"
 )
 
 var (

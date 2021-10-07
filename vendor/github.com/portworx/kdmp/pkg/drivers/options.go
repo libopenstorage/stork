@@ -34,6 +34,7 @@ type JobOpts struct {
 	Labels                      map[string]string
 	CertSecretName              string
 	CertSecretNamespace         string
+	MaintenanceType             string
 }
 
 // WithBackupObjectName is job parameter.
@@ -287,6 +288,14 @@ func WithCertSecretName(name string) JobOption {
 func WithCertSecretNamespace(namespace string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.CertSecretNamespace = namespace
+		return nil
+	}
+}
+
+// WithMaintenaceType is job parameter.
+func WithMaintenaceType(maintenanceType string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.MaintenanceType = maintenanceType
 		return nil
 	}
 }

@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	kopiaMaintenanceJobPrefix = "repo-maintenance"
-	// TODO: for now setting it to 30 mints for testing purpose.
-	// Will change it to 24 hours later.
-	defaultSchedule = "*/30 * * * *"
+	kopiaMaintenanceJobPrefix         = "repo-maintenance"
+	defaultFullSchedule               = "0 */24 * * *"
+	defaultQuickSchedule              = "0 */2 * * *"
+	fullMaintenanceType               = "full"
+	quickMaintenaceTye                = "quick"
+	defaultFailedJobsHistoryLimit     = 1
+	defaultSuccessfulJobsHistoryLimit = 1
 )
 
 // Driver is a kopia maintenance snapshot implementation
@@ -125,9 +128,18 @@ func jobFor(
 	maintenacneStatusNamespace,
 	serviceAccountName string,
 	resources corev1.ResourceRequirements,
-	labels map[string]string) (*batchv1beta1.CronJob, error) {
+	labels map[string]string,
+	maintenanceType string,
+) (*batchv1beta1.CronJob, error) {
 
 	labels = addJobLabels(labels)
+	var successfulJobsHistoryLimit int32 = defaultSuccessfulJobsHistoryLimit
+	var failedJobsHistoryLimit int32 = defaultFailedJobsHistoryLimit
+
+	scheduleInterval := defaultQuickSchedule
+	if maintenanceType == fullMaintenanceType {
+		scheduleInterval = defaultFullSchedule
+	}
 
 	cmd := strings.Join([]string{
 		"/kopiaexecutor",
@@ -140,6 +152,8 @@ func jobFor(
 		maintenaceStatusName,
 		"--maintenance-status-namespace",
 		maintenacneStatusNamespace,
+		"--maintenance-type",
+		maintenanceType,
 	}, " ")
 
 	return &batchv1beta1.CronJob{
@@ -149,7 +163,9 @@ func jobFor(
 			Labels:    labels,
 		},
 		Spec: batchv1beta1.CronJobSpec{
-			Schedule: defaultSchedule,
+			Schedule:                   scheduleInterval,
+			SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
+			FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
 			JobTemplate: batchv1beta1.JobTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
@@ -222,7 +238,7 @@ func addJobLabels(labels map[string]string) map[string]string {
 }
 
 func buildJob(jobName string, o drivers.JobOpts) (*batchv1beta1.CronJob, error) {
-	resources, err := utils.JobResourceRequirements()
+	resources, err := utils.KopiaResourceRequirements()
 	if err != nil {
 		return nil, err
 	}
@@ -237,5 +253,6 @@ func buildJob(jobName string, o drivers.JobOpts) (*batchv1beta1.CronJob, error) 
 		o.ServiceAccountName,
 		resources,
 		o.Labels,
+		o.MaintenanceType,
 	)
 }

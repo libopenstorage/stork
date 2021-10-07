@@ -296,7 +296,7 @@ github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/scheme
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1beta1
-# github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc5 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc5
+# github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc6 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc6
 ## explicit
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/client
@@ -425,7 +425,7 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20211004132125-118c8be62b32
+# github.com/portworx/kdmp v0.4.1-0.20211007020540-ca77d6d2ade1
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
@@ -1368,7 +1368,7 @@ sigs.k8s.io/yaml
 # github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
 # github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 # github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
-# github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc5
+# github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc6
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7

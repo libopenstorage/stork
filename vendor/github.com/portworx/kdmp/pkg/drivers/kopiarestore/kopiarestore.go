@@ -11,6 +11,7 @@ import (
 	kdmpops "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/batch"
 	coreops "github.com/portworx/sched-ops/k8s/core"
+	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -50,7 +51,6 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		o,
 		vb,
 		jobName,
-		utils.FrameCredSecretName(utils.RestoreJobPrefix, o.DataExportName),
 	)
 	if err != nil {
 		return "", err
@@ -99,6 +99,11 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		errMsg := fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
 		return utils.ToJobStatus(0, errMsg), nil
 	}
+	if utils.IsJobPending(job) {
+		logrus.Warnf("restore job %s is in pending state", job.Name)
+		return utils.ToJobStatus(0, ""), nil
+	}
+
 	if !utils.IsJobCompleted(job) {
 		// TODO: update progress
 		return utils.ToJobStatus(0, ""), nil
@@ -123,12 +128,11 @@ func (d Driver) validate(o drivers.JobOpts) error {
 func jobFor(
 	jobOption drivers.JobOpts,
 	vb *v1alpha1.VolumeBackup,
-	jobName,
-	credSecretName string,
+	jobName string,
 ) (*batchv1.Job, error) {
 	labels := addJobLabels(jobOption.Labels)
 
-	resources, err := utils.JobResourceRequirements()
+	resources, err := utils.KopiaResourceRequirements()
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +155,7 @@ func jobFor(
 		"--restore-namespace",
 		jobOption.Namespace,
 		"--credentials",
-		credSecretName,
+		jobOption.DataExportName,
 		"--target-path",
 		"/data",
 		"--snapshot-id",
@@ -211,7 +215,7 @@ func jobFor(
 							Name: "cred-secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: credSecretName,
+									SecretName: jobOption.DataExportName,
 								},
 							},
 						},
