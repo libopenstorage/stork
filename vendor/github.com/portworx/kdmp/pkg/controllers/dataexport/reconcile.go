@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -26,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 )
@@ -45,8 +47,17 @@ const (
 	skipResourceAnnotation   = "stork.libopenstorage.org/skip-resource"
 	// pvcNameLenLimit is the max length of PVC name that DataExport related CRs
 	// will incorporate in their names
-	pvcNameLenLimit = 247
+	pvcNameLenLimit    = 247
+	volumeinitialDelay = 2 * time.Second
+	volumeFactor       = 1.5
+	volumeSteps        = 20
 )
+
+var volumeAPICallBackoff = wait.Backoff{
+	Duration: volumeinitialDelay,
+	Factor:   volumeFactor,
+	Steps:    volumeSteps,
+}
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
 	if in == nil {
@@ -709,12 +720,27 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 	if err := checkNameNamespace(in); err != nil {
 		return nil, err
 	}
-	pvc, err := core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
-	if err != nil {
+	// wait for pvc to get bound
+	var pvc *corev1.PersistentVolumeClaim
+	var err error
+	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
+		pvc, err = core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
+		if err != nil {
+			return false, err
+		}
+
+		if pvc.Status.Phase != corev1.ClaimBound {
+			errMsg := fmt.Sprintf("status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
+			logrus.Debugf("%v", errMsg)
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if wErr != nil {
+		logrus.Errorf("%v", err)
 		return nil, err
-	}
-	if pvc.Status.Phase != corev1.ClaimBound {
-		return nil, fmt.Errorf("status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
 	}
 
 	if checkMounts {

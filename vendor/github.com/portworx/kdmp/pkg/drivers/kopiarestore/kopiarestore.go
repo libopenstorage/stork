@@ -11,6 +11,7 @@ import (
 	kdmpops "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/batch"
 	coreops "github.com/portworx/sched-ops/k8s/core"
+	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -98,6 +99,11 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		errMsg := fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
 		return utils.ToJobStatus(0, errMsg), nil
 	}
+	if utils.IsJobPending(job) {
+		logrus.Warnf("restore job %s is in pending state", job.Name)
+		return utils.ToJobStatus(0, ""), nil
+	}
+
 	if !utils.IsJobCompleted(job) {
 		// TODO: update progress
 		return utils.ToJobStatus(0, ""), nil
