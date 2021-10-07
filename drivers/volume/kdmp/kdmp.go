@@ -22,7 +22,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
-	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
@@ -34,14 +33,10 @@ import (
 )
 
 const (
-	// driverName is the name of the kdmp driver implementation
-	driverName             = "kdmp"
 	prefixRepo             = "generic-backup"
 	prefixRestore          = "restore"
 	prefixBackup           = "backup"
 	prefixDelete           = "delete"
-	proxyEndpoint          = "proxy_endpoint"
-	proxyPath              = "proxy_nfs_exportpath"
 	skipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
 	volumeinitialDelay     = 2 * time.Second
 	volumeFactor           = 1.5
@@ -107,7 +102,7 @@ func (k *kdmp) Init(_ interface{}) error {
 }
 
 func (k *kdmp) String() string {
-	return driverName
+	return storkvolume.KDMPDriverName
 }
 
 func (k *kdmp) Stop() error {
@@ -115,40 +110,15 @@ func (k *kdmp) Stop() error {
 }
 
 func (k *kdmp) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
-	// Try to get info from the PV since storage class could be deleted
-	pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
-	if err != nil {
-		log.PVCLog(pvc).Warnf("error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
-		return false
-	}
-	// for px proxy volume use kdmp by default
-	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-	if storageClassName != "" {
-		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
-		if err != nil {
-			logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
-		}
-		if _, ok := storageClass.Parameters[proxyEndpoint]; ok {
-			return true
-		}
-	}
-	return k.OwnsPV(pv)
+	// KDMP can handle any PVC type. KDMP driver will always be a fallback
+	// option when none of the other supported drivers by stork own the PVC
+	return true
 }
 
 func (k *kdmp) OwnsPV(pv *v1.PersistentVolume) bool {
-
-	// for csi volumes (with or without snapshot) use kdmp driver by default
-	// except for px csi volumes
-	if pv.Spec.CSI != nil {
-		// in case of px csi volume fall back to default csi volume driver
-		if pv.Spec.CSI.Driver == snapv1.PortworxCsiProvisionerName ||
-			pv.Spec.CSI.Driver == snapv1.PortworxCsiDeprecatedProvisionerName {
-			return false
-		}
-		log.PVLog(pv).Tracef("KDMP (csi) owns PV: %s", pv.Name)
-		return true
-	}
-	return false
+	// KDMP can handle any PVC type. KDMP driver will always be a fallback
+	// option when none of the other supported drivers by stork own the PVC
+	return true
 }
 
 func getGenericCRName(opsPrefix, crUID, pvcUID, ns string) string {
@@ -172,7 +142,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
 		volumeInfo.Namespace = pvc.Namespace
-		volumeInfo.DriverName = driverName
+		volumeInfo.DriverName = storkvolume.KDMPDriverName
 		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
 			return nil, fmt.Errorf("error getting volume for PVC: %v", err)
@@ -228,7 +198,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
 		crName := getGenericCRName(prefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
@@ -535,7 +505,7 @@ func (k *kdmp) StartRestore(
 		volumeInfo.PersistentVolumeClaimUID = bkpvInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = bkpvInfo.Namespace
 		volumeInfo.SourceVolume = bkpvInfo.Volume
-		volumeInfo.DriverName = driverName
+		volumeInfo.DriverName = storkvolume.KDMPDriverName
 
 		// create VolumeBackup CR
 		// Adding required label for debugging
@@ -624,7 +594,7 @@ func (k *kdmp) CancelRestore(restore *storkapi.ApplicationRestore) error {
 func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
 		val, ok := restore.Spec.NamespaceMapping[vInfo.SourceNamespace]
@@ -699,7 +669,7 @@ func (k *kdmp) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 func (k *kdmp) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 	// delete data export crs once backup is completed
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
 		crName := getGenericCRName(prefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
@@ -716,7 +686,7 @@ func (k *kdmp) CleanupBackupResources(backup *storkapi.ApplicationBackup) error 
 // CleanupRestoreResources for specified restore
 func (k *kdmp) CleanupRestoreResources(restore *storkapi.ApplicationRestore) error {
 	for _, vInfo := range restore.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
 		val, ok := restore.Spec.NamespaceMapping[vInfo.SourceNamespace]
@@ -741,7 +711,7 @@ func (k *kdmp) CleanupRestoreResources(restore *storkapi.ApplicationRestore) err
 
 // GetGenericDriverName returns current generic backup/restore driver
 func GetGenericDriverName() string {
-	return driverName
+	return storkvolume.KDMPDriverName
 }
 
 func (k *kdmp) getSnapshotClassName(backup *storkapi.ApplicationBackup) string {
@@ -762,7 +732,7 @@ func init() {
 	if err != nil {
 		logrus.Debugf("Error init'ing kdmp driver: %v", err)
 	}
-	if err := storkvolume.Register(driverName, a); err != nil {
+	if err := storkvolume.Register(storkvolume.KDMPDriverName, a); err != nil {
 		logrus.Panicf("Error registering kdmp volume driver: %v", err)
 	}
 }

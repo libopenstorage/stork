@@ -19,6 +19,36 @@ const (
 	// Default snapshot type if drivers don't support different types or can't
 	// find driver
 	defaultSnapType = "Local"
+	// PortworxDriverName is the name of the portworx driver implementation
+	PortworxDriverName = "pxd"
+	// AWSDriverName is the name of the aws driver implementation
+	AWSDriverName = "aws"
+	// AzureDriverName is the name of the azure driver implementation
+	AzureDriverName = "azure"
+	// CSIDriverName is the name of the k8s driver implementation.
+	CSIDriverName = "csi"
+	// GCEDriverName is the name of the gcp driver implementation
+	GCEDriverName = "gce"
+	// LinstorDriverName is the name of the Linstor driver implementation
+	LinstorDriverName = "linstor"
+	// KDMPDriverName is the name of the kdmp driver implementation
+	KDMPDriverName = "kdmp"
+)
+
+var (
+	// orderedListOfDrivers is an ordered list of drivers in which stork
+	// will check if a PVC is owned by a particular driver. This ordered list
+	// is mainly required since we want the KDMP driver to be the fallback
+	// mechanism if none of drivers satisfy a PVC
+	orderedListOfDrivers = []string{
+		PortworxDriverName,
+		AWSDriverName,
+		AzureDriverName,
+		GCEDriverName,
+		LinstorDriverName,
+		CSIDriverName,
+		KDMPDriverName,
+	}
 )
 
 // Driver defines an external volume driver interface.
@@ -264,7 +294,11 @@ func Get(name string) (Driver, error) {
 // GetPVCDriver gets the driver associated with a PVC. Returns ErrNotFound if the PVC is
 // not owned by any available driver
 func GetPVCDriver(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) (string, error) {
-	for driverName, d := range volDrivers {
+	for _, driverName := range orderedListOfDrivers {
+		d, ok := volDrivers[driverName]
+		if !ok {
+			continue
+		}
 		if d.OwnsPVC(coreOps, pvc) {
 			return driverName, nil
 		}
