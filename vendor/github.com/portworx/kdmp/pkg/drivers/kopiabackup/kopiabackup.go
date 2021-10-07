@@ -119,7 +119,8 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if utils.IsJobPending(job) {
-				return utils.ToJobStatus(0, "job is in pending state"), nil
+				logrus.Warnf("backup job %s is in pending state", job.Name)
+				return utils.ToJobStatus(0, ""), nil
 			}
 		}
 		errMsg := fmt.Sprintf("failed to fetch volumebackup %s/%s status: %v", namespace, name, err)
