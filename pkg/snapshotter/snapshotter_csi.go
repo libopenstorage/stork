@@ -244,7 +244,7 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 }
 
 func (c *csiDriver) getSnapshotResources(snapName string, snapshotInfo SnapshotInfo) (*csiBackupObject, error) {
-	var csiObject *csiBackupObject
+	logrus.Infof("In getSnapshotResources , snapName: %s, snapshotInfo: %+v", snapName, snapshotInfo)
 
 	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
@@ -252,28 +252,31 @@ func (c *csiDriver) getSnapshotResources(snapName string, snapshotInfo SnapshotI
 
 	snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
 	if !ok {
-		return csiObject, fmt.Errorf("failed to get volumesnapshot object")
+		return nil, fmt.Errorf("failed to get volumesnapshot object")
 	}
+	logrus.Infof("In getSnapshotResources , snapName: %s, snapshot: %+v", snapName, snapshot)
 	vsMap[snapName] = snapshot
 
 	if snapshotInfo.Status == StatusReady {
 		snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
 		if !ok {
-			return csiObject, fmt.Errorf("failed to get volumesnapshotcontent object")
+			return nil, fmt.Errorf("failed to get volumesnapshotcontent object")
 		}
 		vsContentMap[snapName] = snapshotContent
 		snapshotClass, ok := snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass)
 		if !ok {
-			return csiObject, fmt.Errorf("failed to map volumesnapshotclass object")
+			return nil, fmt.Errorf("failed to map volumesnapshotclass object")
 		}
 		vsClassMap[snapshotClass.Name] = snapshotClass
 	}
 
-	csiObject.VolumeSnapshots = vsMap
-	csiObject.VolumeSnapshotContents = vsContentMap
-	csiObject.VolumeSnapshotClasses = vsClassMap
-
-	return csiObject, nil
+	logrus.Infof("In getSnapshotResources , snapName: %s, vsMap: %+v, vsContentMap: %+v, vsClassMap: %+v", snapName, vsMap, vsContentMap, vsClassMap)
+	csiObject := csiBackupObject{
+		VolumeSnapshots:        vsMap,
+		VolumeSnapshotContents: vsContentMap,
+		VolumeSnapshotClasses:  vsClassMap,
+	}
+	return &csiObject, nil
 }
 
 func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClaim, error) {
@@ -560,7 +563,6 @@ func (c *csiDriver) UploadSnapshotData(
 
 func (c *csiDriver) DownloadObject(
 	backupLocation *storkapi.BackupLocation,
-	objectName string,
 	objectPath string,
 ) ([]byte, error) {
 	bucket, err := objectstore.GetBucket(backupLocation)
@@ -568,12 +570,11 @@ func (c *csiDriver) DownloadObject(
 		return nil, err
 	}
 
-	exists, err := bucket.Exists(context.TODO(), filepath.Join(objectPath, objectName))
+	exists, err := bucket.Exists(context.TODO(), objectPath)
 	if err != nil || !exists {
-		return nil, nil
+		return nil, err
 	}
-
-	data, err := bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
+	data, err := bucket.ReadAll(context.TODO(), objectPath)
 	if err != nil {
 		return nil, err
 	}
@@ -582,13 +583,11 @@ func (c *csiDriver) DownloadObject(
 			return nil, err
 		}
 	}
-
 	return data, nil
 }
 
 func (c *csiDriver) DeleteCloudObject(
 	backupLocation *storkapi.BackupLocation,
-	objectName string,
 	objectPath string,
 ) error {
 	bucket, err := objectstore.GetBucket(backupLocation)
@@ -597,8 +596,8 @@ func (c *csiDriver) DeleteCloudObject(
 	}
 
 	if objectPath != "" {
-		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, objectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
-			return fmt.Errorf("error deleting object %v/%v: %v", objectPath, objectName, err)
+		if err = bucket.Delete(context.TODO(), objectPath); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+			return fmt.Errorf("error deleting object %s: %v", objectPath, err)
 		}
 	}
 

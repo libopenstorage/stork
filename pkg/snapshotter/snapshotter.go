@@ -80,9 +80,9 @@ type Driver interface {
 	// Upload objects to cloud
 	UploadSnapshotData(backupLocation *storkapi.BackupLocation, snapshotInfo SnapshotInfo, snapName, objectPath, objectName string) error
 	// Download objects from cloud
-	DownloadObject(backupLocation *storkapi.BackupLocation, objectName, objectPath string) ([]byte, error)
+	DownloadObject(backupLocation *storkapi.BackupLocation, objectPath string) ([]byte, error)
 	// Delete objects in cloud
-	DeleteCloudObject(backupLocation *storkapi.BackupLocation, objectName, objectPath string) error
+	DeleteCloudObject(backupLocation *storkapi.BackupLocation, objectPath string) error
 }
 
 // Snapshotter inteface returns a Driver object
