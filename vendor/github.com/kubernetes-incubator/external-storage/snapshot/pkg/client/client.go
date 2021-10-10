@@ -41,9 +41,9 @@ const (
 
 var (
 	// storkVolumeSnapshotShortNames are the short names for volume snapshot CR
-	storkVolumeSnapshotShortNames = []string{"stork-volumesnapshot", "svs"}
+	storkVolumeSnapshotShortNames = []string{"stork-volumesnapshot", "stork-volumesnapshots", "svs"}
 	// storkVolumeSnapshotDataShortNames are the short names for volume snapshot data CR
-	storkVolumeSnapshotDataShortNames = []string{"stork-volumesnapshotdata", "svsd"}
+	storkVolumeSnapshotDataShortNames = []string{"stork-volumesnapshotdata", "stork-volumesnapshotdatas", "svsd"}
 )
 
 // NewClient creates a new RESTClient
