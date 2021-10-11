@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,6 +37,9 @@ import (
 	"github.com/libopenstorage/stork/pkg/webhookadmission"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/controllers/dataexport"
+	"github.com/portworx/kdmp/pkg/drivers"
+	"github.com/portworx/kdmp/pkg/jobratelimit"
+	kdmpversion "github.com/portworx/kdmp/pkg/version"
 	schedops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -60,6 +65,7 @@ const (
 	cmName                     = "stork-version"
 	eventComponentName         = "stork"
 	debugFilePath              = "/var/cores"
+	kdmpConfigmapName          = "kdmp-config"
 )
 
 var ext *extender.Extender
@@ -206,6 +212,25 @@ func run(c *cli.Context) {
 		}
 	} else if err != nil {
 		log.Warnf("Unable to create stork version configmap: %v", err)
+	}
+	kdmpConfig := &api_v1.ConfigMap{}
+	kdmpConfig.Name = kdmpConfigmapName
+	kdmpConfig.Namespace = defaultAdminNamespace
+	kdmpConfig.Data = make(map[string]string)
+	kdmpConfig.Data[drivers.KopiaExecutorRequestCPU] = drivers.DefaultKopiaExecutorRequestCPU
+	kdmpConfig.Data[drivers.KopiaExecutorRequestMemory] = drivers.DefaultKopiaExecutorRequestMemory
+	kdmpConfig.Data[drivers.KopiaExecutorLimitCPU] = drivers.DefaultKopiaExecutorLimitCPU
+	kdmpConfig.Data[drivers.KopiaExecutorLimitMemory] = drivers.DefaultKopiaExecutorLimitMemory
+	kdmpConfig.Data[drivers.KopiaExecutorImageSecretKey] = ""
+	kdmpConfig.Data[drivers.KopiaExecutorImageKey] = strings.Join([]string{drivers.KopiaExecutorImage, kdmpversion.Get().GitVersion}, ":")
+	kdmpConfig.Data[jobratelimit.BackupJobLimitKey] = strconv.Itoa(jobratelimit.DefaultBackupJobLimit)
+	kdmpConfig.Data[jobratelimit.RestoreJobLimitKey] = strconv.Itoa(jobratelimit.DefaultRestoreJobLimit)
+	kdmpConfig.Data[jobratelimit.DeleteJobLimitKey] = strconv.Itoa(jobratelimit.DefaultDeleteJobLimit)
+	kdmpConfig.Data[jobratelimit.MaintenanceJobLimitKey] = strconv.Itoa(jobratelimit.DefaultMaintenanceJobLimit)
+	// ConfigMap create failure should not fail the bring up
+	_, err = schedops.Instance().CreateConfigMap(kdmpConfig)
+	if err != nil && !k8s_errors.IsAlreadyExists(err) {
+		log.Warnf("Unable to create kdmp config configmap: %v", err)
 	}
 
 	driverName := c.String("driver")
