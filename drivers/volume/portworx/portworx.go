@@ -759,9 +759,13 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 			if len(volumeInfo.Labels) == 0 {
 				volumeInfo.Labels = make(map[string]string)
 			}
-			for k, v := range pvc.ObjectMeta.Annotations {
-				volumeInfo.Labels[k] = v
+
+			if pvc != nil {
+				for k, v := range pvc.ObjectMeta.Annotations {
+					volumeInfo.Labels[k] = v
+				}
 			}
+
 			volumes = append(volumes, volumeInfo)
 		}
 	}
