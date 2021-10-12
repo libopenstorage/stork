@@ -3,9 +3,11 @@ package kopiamaintenance
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
+	"github.com/portworx/kdmp/pkg/jobratelimit"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
@@ -33,10 +35,14 @@ func (d Driver) Name() string {
 	return drivers.KopiaMaintenance
 }
 
+var maintenanceJobLock sync.Mutex
+
 // StartJob creates a cron job for kopia snapshot maintenance
 // Note: Not added separate interface apis for cronjob. Reused job apis to start the cron job.
 func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	fn := "StartJob:"
+	maintenanceJobLock.Lock()
+	defer maintenanceJobLock.Unlock()
 	o := drivers.JobOpts{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -45,7 +51,16 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 			}
 		}
 	}
-
+	// Check whether there is slot to schedule maintenance job.
+	driverType := d.Name()
+	available, err := jobratelimit.JobCanRun(driverType)
+	if err != nil {
+		logrus.Errorf("%v", err)
+		return "", err
+	}
+	if !available {
+		return "", utils.ErrOutOfJobResources
+	}
 	if err := d.validate(o); err != nil {
 		errMsg := fmt.Sprintf("validation failed for maintenance job for backuplocation [%v]: %v", o.BackupLocationName, err)
 		logrus.Infof("%s %v", fn, errMsg)
@@ -160,7 +175,10 @@ func jobFor(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: jobNamespace,
-			Labels:    labels,
+			Annotations: map[string]string{
+				utils.SkipResourceAnnotation: "true",
+			},
+			Labels: labels,
 		},
 		Spec: batchv1beta1.CronJobSpec{
 			Schedule:                   scheduleInterval,
@@ -170,7 +188,10 @@ func jobFor(
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
 					Namespace: jobNamespace,
-					Labels:    labels,
+					Annotations: map[string]string{
+						utils.SkipResourceAnnotation: "true",
+					},
+					Labels: labels,
 				},
 				Spec: batchv1.JobSpec{
 					Template: corev1.PodTemplateSpec{
@@ -233,7 +254,7 @@ func addJobLabels(labels map[string]string) map[string]string {
 		labels = make(map[string]string)
 	}
 
-	labels[drivers.DriverNameLabel] = drivers.KopiaBackup
+	labels[drivers.DriverNameLabel] = drivers.KopiaMaintenance
 	return labels
 }
 

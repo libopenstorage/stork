@@ -3,10 +3,12 @@ package kopiadelete
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
+	"github.com/portworx/kdmp/pkg/jobratelimit"
 	"github.com/portworx/sched-ops/k8s/batch"
 	kdmpSchedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/sirupsen/logrus"
@@ -28,9 +30,13 @@ func (d Driver) Name() string {
 	return drivers.KopiaDelete
 }
 
+var deleteJobLock sync.Mutex
+
 // StartJob creates a job for kopia snapshot delete
 func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	fn := "StartJob:"
+	deleteJobLock.Lock()
+	defer deleteJobLock.Unlock()
 	o := drivers.JobOpts{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -39,7 +45,16 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 			}
 		}
 	}
-
+	// Check whether there is slot to schedule delete job.
+	driverType := d.Name()
+	available, err := jobratelimit.JobCanRun(driverType)
+	if err != nil {
+		logrus.Errorf("%v", err)
+		return "", err
+	}
+	if !available {
+		return "", utils.ErrOutOfJobResources
+	}
 	if err := d.validate(o); err != nil {
 		errMsg := fmt.Sprintf("validation failed for snapshot delete job for snapshotID [%v]: %v", o.SnapshotID, err)
 		logrus.Infof("%s %v", fn, errMsg)
@@ -239,7 +254,7 @@ func addJobLabels(labels map[string]string, o drivers.JobOpts) map[string]string
 		labels = make(map[string]string)
 	}
 
-	labels[drivers.DriverNameLabel] = drivers.KopiaBackup
+	labels[drivers.DriverNameLabel] = drivers.KopiaDelete
 	labels[utils.BackupObjectNameKey] = o.BackupObjectName
 	labels[utils.BackupObjectUIDKey] = o.BackupObjectUID
 	return labels
