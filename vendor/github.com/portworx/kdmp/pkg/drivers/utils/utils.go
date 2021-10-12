@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -20,6 +21,11 @@ import (
 const (
 	defaultPXNamespace = "kube-system"
 	kdmpConfig         = "kdmp-config"
+)
+
+var (
+	// ErrOutOfJobResources - out of job resource error
+	ErrOutOfJobResources = errors.New("out of job resources")
 )
 
 // NamespacedName returns a name in form "<namespace>/<name>".

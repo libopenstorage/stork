@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
+	"github.com/portworx/kdmp/pkg/jobratelimit"
 	kdmpops "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/batch"
 	coreops "github.com/portworx/sched-ops/k8s/core"
@@ -18,7 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Driver is a resticbackup implementation of the data export interface.
+var backupJobLock sync.Mutex
+
+// Driver is a kopiabackup implementation of the data export interface.
 type Driver struct{}
 
 // Name returns a name of the driver.
@@ -29,6 +33,8 @@ func (d Driver) Name() string {
 // StartJob creates a job for data transfer between volumes.
 func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	fn := "StartJob"
+	backupJobLock.Lock()
+	defer backupJobLock.Unlock()
 	o := drivers.JobOpts{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -37,7 +43,16 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 			}
 		}
 	}
-
+	// Check whether there is slot to schedule the job.
+	driverType := d.Name()
+	available, err := jobratelimit.JobCanRun(driverType)
+	if err != nil {
+		logrus.Errorf("%v", err)
+		return "", err
+	}
+	if !available {
+		return "", utils.ErrOutOfJobResources
+	}
 	if err := d.validate(o); err != nil {
 		logrus.Errorf("%s validate: err: %v", fn, err)
 		return "", err
@@ -173,7 +188,10 @@ func jobFor(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: jobOption.Namespace,
-			Labels:    labels,
+			Annotations: map[string]string{
+				utils.SkipResourceAnnotation: "true",
+			},
+			Labels: labels,
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
