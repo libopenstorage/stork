@@ -22,6 +22,7 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
 	ost_errors "github.com/libopenstorage/openstorage/api/errors"
+	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/pkg/auth"
 	auth_secrets "github.com/libopenstorage/openstorage/pkg/auth/secrets"
@@ -2940,6 +2941,7 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
+		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
 
 		// Save the auth annotations
 		if volumeInfo.Options == nil {
@@ -3306,12 +3308,17 @@ func (p *portworx) StartRestore(
 
 		taskID := p.getBackupRestoreTaskID(restore.UID, volumeInfo.SourceNamespace, volumeInfo.PersistentVolumeClaim)
 		credID := p.getCredID(restore.Spec.BackupLocation, restore.Namespace)
+		locator, restoreSpec, err := p.getCloudBackupRestoreSpec(restore.Spec.StorageClassMapping, backupVolumeInfo.StorageClass, taskID)
+		if err != nil {
+			return volumeInfos, fmt.Errorf("failed to parse restore volume spec: %v ", err)
+		}
 		request := &api.CloudBackupRestoreRequest{
+			Name:              taskID,
 			ID:                backupVolumeInfo.BackupID,
 			RestoreVolumeName: volumeInfo.RestoreVolume,
 			CredentialUUID:    credID,
-			Name:              taskID,
-			Spec:              &api.RestoreVolumeSpec{IoProfileBkupSrc: true},
+			Locator:           locator,
+			Spec:              restoreSpec,
 		}
 
 		var cloudRestoreErr error
@@ -3339,6 +3346,45 @@ func (p *portworx) StartRestore(
 		}
 	}
 	return volumeInfos, nil
+}
+
+func (p *portworx) getCloudBackupRestoreSpec(
+	storageClassMapping map[string]string,
+	sourceStorageClass string,
+	taskID string,
+
+) (*api.VolumeLocator, *api.RestoreVolumeSpec, error) {
+	locator := &api.VolumeLocator{
+		Name: taskID, // always override name with taskID
+	}
+	var restoreSpec *api.RestoreVolumeSpec
+	destStorageClass := storageClassMapping[sourceStorageClass]
+	if len(destStorageClass) == 0 {
+		restoreSpec = &api.RestoreVolumeSpec{
+			IoProfileBkupSrc: true, // setting this for backward compatibility
+		}
+		// No mapping provided
+		return locator, restoreSpec, nil
+	}
+	sc, err := storage.Instance().GetStorageClass(destStorageClass)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch storage class %v: %v", destStorageClass, err)
+	}
+
+	restoreSpec, locator, err = spec.NewSpecHandler().RestoreSpecFromOpts(sc.Parameters)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse storage class %v: %v", destStorageClass, err)
+	}
+	// Special handling for io_profile
+	// The default volumeSpec.IoProfile is set to sequential
+	// Check in storage class if an io profile is set. If not set use
+	// the io profile from the source
+	if _, ok := sc.Parameters[api.SpecIoProfile]; !ok {
+		// io profile not specified in storage class
+		restoreSpec.IoProfileBkupSrc = true
+	}
+
+	return locator, restoreSpec, nil
 }
 
 func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
