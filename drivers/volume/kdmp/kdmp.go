@@ -253,11 +253,11 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			if isDataExportActive(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationBackupStatusInProgress
 				vInfo.Reason = "Volume backup in progress"
-				// TODO: KDMP does not return size right now, we will need to fill up
-				// size for volume once support is available
 			} else if isDataExportCompleted(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 				vInfo.Reason = "Backup successful for volume"
+				vInfo.TotalSize = dataExport.Status.Size
+				vInfo.ActualSize = dataExport.Status.Size
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
@@ -653,6 +653,7 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 			} else if isDataExportCompleted(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 				vInfo.Reason = "restore successful for volume"
+				vInfo.TotalSize = dataExport.Status.Size
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
