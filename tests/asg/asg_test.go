@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
@@ -215,8 +216,21 @@ func Scale(count int64) {
 
 	perZoneCount := count / int64(len(zones))
 
-	err = Inst().N.SetASGClusterSize(perZoneCount, scaleTimeout)
+	// err = Inst().N.SetASGClusterSize(perZoneCount, scaleTimeout)
+	// Expect(err).NotTo(HaveOccurred())
+
+	t := func() (interface{}, bool, error) {
+
+		err = Inst().N.SetASGClusterSize(perZoneCount, scaleTimeout)
+		if err != nil {
+			return "", true, err
+		}
+		return "", false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 2*time.Minute)
 	Expect(err).NotTo(HaveOccurred())
+
 }
 
 func KillANodeAndValidate(storageDriverNodes []node.Node) {

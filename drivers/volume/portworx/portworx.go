@@ -2613,8 +2613,9 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	}
 	out, err := d.nodeDriver.RunCommand(n, "which pxctl", opts)
 	if err != nil {
-		return "/opt/pwx/bin/pxctl"
+		return "sudo /opt/pwx/bin/pxctl"
 	}
+	out = "sudo " + out
 	return strings.TrimSpace(out)
 }
 
