@@ -40,7 +40,7 @@ const (
 
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
 	aututils.PVCRuleByUsageCapacity(50, 50, ""),
-	aututils.PVCRuleByUsageCapacity(90, 50, ""),
+	aututils.PVCRuleByUsageCapacity(85, 50, ""),
 	aututils.PVCRuleByUsageCapacity(50, 50, "20Gi"),
 	aututils.PVCRuleByUsageCapacity(50, 300, ""),
 }

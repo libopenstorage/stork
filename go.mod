@@ -23,7 +23,7 @@ require (
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20210921050234-561b707a5d96
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20211115213015-b317aedd1e61
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
