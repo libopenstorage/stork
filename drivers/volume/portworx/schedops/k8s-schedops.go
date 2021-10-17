@@ -295,6 +295,10 @@ PodLoop:
 		if err != nil && err == k8serrors.ErrPodsNotFound {
 			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
 			continue
+		} else if !pod.DeletionTimestamp.IsZero() {
+			// pod is being terminated, skip
+			logrus.Warnf("pod %s/%s is being terminated, not validating the mounts...", p.Namespace, p.Name)
+			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
 			printStatus(*pod)
@@ -303,6 +307,7 @@ PodLoop:
 			return validatedMountPods, err
 		}
 
+		logrus.Debugf("validating the mounts in pod %s/%s", p.Namespace, p.Name)
 		containerPaths := getContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
