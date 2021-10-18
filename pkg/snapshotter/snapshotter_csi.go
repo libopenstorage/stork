@@ -244,7 +244,7 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 }
 
 func (c *csiDriver) getSnapshotResources(snapName string, snapshotInfo SnapshotInfo) (*csiBackupObject, error) {
-	logrus.Infof("In getSnapshotResources , snapName: %s, snapshotInfo: %+v", snapName, snapshotInfo)
+	logrus.Infof("getting csi volume snapshot resources for %s", snapName)
 
 	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
@@ -254,7 +254,6 @@ func (c *csiDriver) getSnapshotResources(snapName string, snapshotInfo SnapshotI
 	if !ok {
 		return nil, fmt.Errorf("failed to get volumesnapshot object")
 	}
-	logrus.Infof("In getSnapshotResources , snapName: %s, snapshot: %+v", snapName, snapshot)
 	vsMap[snapName] = snapshot
 
 	if snapshotInfo.Status == StatusReady {
@@ -270,7 +269,6 @@ func (c *csiDriver) getSnapshotResources(snapName string, snapshotInfo SnapshotI
 		vsClassMap[snapshotClass.Name] = snapshotClass
 	}
 
-	logrus.Infof("In getSnapshotResources , snapName: %s, vsMap: %+v, vsContentMap: %+v, vsClassMap: %+v", snapName, vsMap, vsContentMap, vsClassMap)
 	csiObject := csiBackupObject{
 		VolumeSnapshots:        vsMap,
 		VolumeSnapshotContents: vsContentMap,
