@@ -12,6 +12,7 @@ data:
         randrepeat=1
         blocksize_range=4k-512k
         direct=1
+        end_fsync=1
         do_verify=1
         verify=crc32c
         verify_pattern=0xdeadbeef
