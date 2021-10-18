@@ -135,24 +135,17 @@ func (d Driver) validate(o drivers.JobOpts) error {
 }
 
 func jobFor(
-	jobName,
-	jobNamespace,
-	credSecretName,
-	credSecretNamespace,
-	maintenaceStatusName,
-	maintenacneStatusNamespace,
-	serviceAccountName string,
+	jobOption drivers.JobOpts,
+	jobName string,
 	resources corev1.ResourceRequirements,
-	labels map[string]string,
-	maintenanceType string,
 ) (*batchv1beta1.CronJob, error) {
 
-	labels = addJobLabels(labels)
+	labels := addJobLabels(jobOption.Labels)
 	var successfulJobsHistoryLimit int32 = defaultSuccessfulJobsHistoryLimit
 	var failedJobsHistoryLimit int32 = defaultFailedJobsHistoryLimit
 
 	scheduleInterval := defaultQuickSchedule
-	if maintenanceType == fullMaintenanceType {
+	if jobOption.MaintenanceType == fullMaintenanceType {
 		scheduleInterval = defaultFullSchedule
 	}
 
@@ -160,21 +153,21 @@ func jobFor(
 		"/kopiaexecutor",
 		"maintenance",
 		"--cred-secret-name",
-		credSecretName,
+		jobOption.CredSecretName,
 		"--cred-secret-namespace",
-		credSecretNamespace,
+		jobOption.CredSecretNamespace,
 		"--maintenance-status-name",
-		maintenaceStatusName,
+		jobOption.MaintenanceStatusName,
 		"--maintenance-status-namespace",
-		maintenacneStatusNamespace,
+		jobOption.MaintenanceStatusNamespace,
 		"--maintenance-type",
-		maintenanceType,
+		jobOption.MaintenanceType,
 	}, " ")
 
-	return &batchv1beta1.CronJob{
+	job := &batchv1beta1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: jobNamespace,
+			Namespace: jobOption.JobNamespace,
 			Annotations: map[string]string{
 				utils.SkipResourceAnnotation: "true",
 			},
@@ -187,7 +180,7 @@ func jobFor(
 			JobTemplate: batchv1beta1.JobTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
-					Namespace: jobNamespace,
+					Namespace: jobOption.JobNamespace,
 					Annotations: map[string]string{
 						utils.SkipResourceAnnotation: "true",
 					},
@@ -200,7 +193,7 @@ func jobFor(
 						},
 						Spec: corev1.PodSpec{
 							RestartPolicy:      corev1.RestartPolicyOnFailure,
-							ServiceAccountName: serviceAccountName,
+							ServiceAccountName: jobOption.ServiceAccountName,
 							ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
 							Containers: []corev1.Container{
 								{
@@ -229,7 +222,7 @@ func jobFor(
 									Name: "cred-secret",
 									VolumeSource: corev1.VolumeSource{
 										Secret: &corev1.SecretVolumeSource{
-											SecretName: credSecretName,
+											SecretName: jobOption.CredSecretName,
 										},
 									},
 								},
@@ -239,7 +232,40 @@ func jobFor(
 				},
 			},
 		},
-	}, nil
+	}
+
+	if drivers.CertFilePath != "" {
+		volumeMount := corev1.VolumeMount{
+			Name:      utils.TLSCertMountVol,
+			MountPath: drivers.CertMount,
+			ReadOnly:  true,
+		}
+		job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+
+		volume := corev1.Volume{
+			Name: utils.TLSCertMountVol,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: jobOption.CertSecretName,
+				},
+			},
+		}
+		job.Spec.JobTemplate.Spec.Template.Spec.Volumes = append(job.Spec.JobTemplate.Spec.Template.Spec.Volumes, volume)
+
+		env := []corev1.EnvVar{
+			{
+				Name:  drivers.CertDirPath,
+				Value: drivers.CertMount,
+			},
+		}
+
+		job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env = env
+	}
+
+	return job, nil
 }
 
 func toJobName(jobName, backupLocation string) string {
@@ -258,22 +284,15 @@ func addJobLabels(labels map[string]string) map[string]string {
 	return labels
 }
 
-func buildJob(jobName string, o drivers.JobOpts) (*batchv1beta1.CronJob, error) {
+func buildJob(jobName string, jobOpts drivers.JobOpts) (*batchv1beta1.CronJob, error) {
 	resources, err := utils.KopiaResourceRequirements()
 	if err != nil {
 		return nil, err
 	}
 
 	return jobFor(
+		jobOpts,
 		jobName,
-		o.JobNamespace,
-		o.CredSecretName,
-		o.CredSecretNamespace,
-		o.MaintenanceStatusName,
-		o.MaintenanceStatusNamespace,
-		o.ServiceAccountName,
 		resources,
-		o.Labels,
-		o.MaintenanceType,
 	)
 }
