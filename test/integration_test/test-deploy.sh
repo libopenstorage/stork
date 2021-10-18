@@ -165,7 +165,6 @@ apk add jq
 apt-get -y update 
 apt-get -y install jq
 
-sed -i 's/<kube_version>/'"$kube_scheduler_version"'/g' /specs/stork-scheduler.yaml
 sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /specs/stork-deployment.yaml
 
 # Replace volume driver in stork
@@ -212,25 +211,6 @@ for i in $(seq 1 100) ; do
         sleep 10
     fi
 done
-
-if [ "$volume_driver" == "pxd" ] || [ "$volume_driver" == "linstor" ] ; then
-	echo "Creating stork scheduler"
-	kubectl apply -f /specs/stork-scheduler.yaml
-# Delete the pods to make sure we are waiting for the status from the
-# new pods
-kubectl delete pods -n kube-system -l name=stork-scheduler
-
-	echo "Waiting for stork-scheduler to be in running state"
-	for i in $(seq 1 100) ; do
-		replicas=$(kubectl get deployment -n kube-system stork-scheduler -o json | jq ".status.readyReplicas")
-		if [ "$replicas" == "3" ]; then
-			break
-		else
-			echo "Stork scheduler is not ready yet"
-			sleep 10
-		fi
-	done
-fi
 
 if [ "$run_cluster_domain_test" == "true" ] ; then
 	sed -i 's/'enable_cluster_domain'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
