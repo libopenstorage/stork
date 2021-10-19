@@ -145,40 +145,32 @@ func (d Driver) validate(o drivers.JobOpts) error {
 }
 
 func jobFor(
-	jobName,
-	jobNamespace,
-	pvcName,
-	pvcNamespace,
-	credSecretName,
-	credSecretNamespace,
-	volumeBackupDeleteName,
-	volumeBackupDeleteNamespace,
-	snapshotID,
-	serviceAccountName string,
+	jobOption drivers.JobOpts,
+	jobName string,
 	resources corev1.ResourceRequirements,
-	labels map[string]string) (*batchv1.Job, error) {
-
+	labels map[string]string,
+) (*batchv1.Job, error) {
 	cmd := strings.Join([]string{
 		"/kopiaexecutor",
 		"delete",
 		"--repository",
-		toRepoName(pvcName, pvcNamespace),
+		toRepoName(jobOption.SourcePVCName, jobOption.SourcePVCNamespace),
 		"--cred-secret-name",
-		credSecretName,
+		jobOption.CredSecretName,
 		"--cred-secret-namespace",
-		credSecretNamespace,
+		jobOption.CredSecretNamespace,
 		"--snapshot-id",
-		snapshotID,
+		jobOption.SnapshotID,
 		"--volume-backup-delete-name",
-		volumeBackupDeleteName,
+		jobOption.VolumeBackupDeleteName,
 		"--volume-backup-delete-namespace",
-		volumeBackupDeleteNamespace,
+		jobOption.VolumeBackupDeleteNamespace,
 	}, " ")
 
-	return &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: jobNamespace,
+			Namespace: jobOption.JobNamespace,
 			Annotations: map[string]string{
 				utils.SkipResourceAnnotation: "true",
 			},
@@ -191,7 +183,7 @@ func jobFor(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ServiceAccountName: serviceAccountName,
+					ServiceAccountName: jobOption.ServiceAccountName,
 					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
 					Containers: []corev1.Container{
 						{
@@ -220,7 +212,7 @@ func jobFor(
 							Name: "cred-secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: credSecretName,
+									SecretName: jobOption.CredSecretName,
 								},
 							},
 						},
@@ -228,7 +220,42 @@ func jobFor(
 				},
 			},
 		},
-	}, nil
+	}
+
+	if drivers.CertFilePath != "" {
+		volumeMount := corev1.VolumeMount{
+			Name:      utils.TLSCertMountVol,
+			MountPath: drivers.CertMount,
+			ReadOnly:  true,
+		}
+
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+
+		volume := corev1.Volume{
+			Name: utils.TLSCertMountVol,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: jobOption.CertSecretName,
+				},
+			},
+		}
+
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
+
+		env := []corev1.EnvVar{
+			{
+				Name:  drivers.CertDirPath,
+				Value: drivers.CertMount,
+			},
+		}
+
+		job.Spec.Template.Spec.Containers[0].Env = env
+	}
+
+	return job, nil
 }
 
 func toJobName(jobName, snapshotID string) string {
@@ -242,42 +269,34 @@ func toRepoName(pvcName, pvcNamespace string) string {
 	return fmt.Sprintf("%s-%s", pvcNamespace, pvcName)
 }
 
-func addVolumeBackupDeleteLabels(o drivers.JobOpts) map[string]string {
+func addVolumeBackupDeleteLabels(jobOpts drivers.JobOpts) map[string]string {
 	labels := make(map[string]string)
-	labels[utils.BackupObjectNameKey] = o.BackupObjectName
-	labels[utils.BackupObjectUIDKey] = o.BackupObjectUID
+	labels[utils.BackupObjectNameKey] = jobOpts.BackupObjectName
+	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
 	return labels
 }
 
-func addJobLabels(labels map[string]string, o drivers.JobOpts) map[string]string {
+func addJobLabels(labels map[string]string, jobOpts drivers.JobOpts) map[string]string {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.KopiaDelete
-	labels[utils.BackupObjectNameKey] = o.BackupObjectName
-	labels[utils.BackupObjectUIDKey] = o.BackupObjectUID
+	labels[utils.BackupObjectNameKey] = jobOpts.BackupObjectName
+	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
 	return labels
 }
 
-func buildJob(jobName string, o drivers.JobOpts) (*batchv1.Job, error) {
+func buildJob(jobName string, jobOpts drivers.JobOpts) (*batchv1.Job, error) {
 	resources, err := utils.KopiaResourceRequirements()
 	if err != nil {
 		return nil, err
 	}
 
-	labels := addJobLabels(o.Labels, o)
+	labels := addJobLabels(jobOpts.Labels, jobOpts)
 	return jobFor(
+		jobOpts,
 		jobName,
-		o.JobNamespace,
-		o.SourcePVCName,
-		o.SourcePVCNamespace,
-		o.CredSecretName,
-		o.CredSecretNamespace,
-		o.VolumeBackupDeleteName,
-		o.VolumeBackupDeleteNamespace,
-		o.SnapshotID,
-		o.ServiceAccountName,
 		resources,
 		labels,
 	)

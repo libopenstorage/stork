@@ -22,6 +22,8 @@ const (
 	BackupObjectNameKey = "backup-object-name"
 	// BackupObjectUIDKey - label key to store backup object uid
 	BackupObjectUIDKey = "backup-object-uid"
+	// TLSCertMountVol mount vol name for tls certificate secret
+	TLSCertMountVol = "tls-secret"
 )
 
 // SetupServiceAccount create a service account and bind it to a provided role.

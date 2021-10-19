@@ -292,8 +292,8 @@ func WithCertSecretNamespace(namespace string) JobOption {
 	}
 }
 
-// WithMaintenaceType is job parameter.
-func WithMaintenaceType(maintenanceType string) JobOption {
+// WithMaintenanceType is job parameter.
+func WithMaintenanceType(maintenanceType string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.MaintenanceType = maintenanceType
 		return nil

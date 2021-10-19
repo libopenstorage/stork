@@ -121,7 +121,7 @@ func jobForLiveBackup(
 
 	if drivers.CertFilePath != "" {
 		volumeMount := corev1.VolumeMount{
-			Name:      "tls-secret",
+			Name:      utils.TLSCertMountVol,
 			MountPath: drivers.CertMount,
 			ReadOnly:  true,
 		}
@@ -132,7 +132,7 @@ func jobForLiveBackup(
 		)
 
 		volume := corev1.Volume{
-			Name: "tls-secret",
+			Name: utils.TLSCertMountVol,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: jobOption.CertSecretName,
