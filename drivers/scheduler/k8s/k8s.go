@@ -82,6 +82,8 @@ const (
 	ZoneK8SNodeLabel = "failure-domain.beta.kubernetes.io/zone"
 	// RegionK8SNodeLabel is node label describing region of the k8s node
 	RegionK8SNodeLabel = "failure-domain.beta.kubernetes.io/region"
+	// PureFile is the parameter in storageclass to represent FB volume
+	PureFile = "pure_file"
 )
 
 const (
@@ -817,8 +819,8 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 
 func convertStorageClassToPure(scParameters map[string]string) map[string]string {
 	if len(scParameters["shared"]) > 0 || len(scParameters["sharedv4"]) > 0 {
-		scParameters["backend"] = "pure_file" // This is needed to create volumes via Pure FB backend
-
+		scParameters["backend"] = PureFile // This is needed to create volumes via Pure FB backend
+		scParameters["exportrules"] = "*(rw)"
 		// These are the parameters that are not supported by Pure FB
 		if _, found := scParameters["shared"]; found {
 			delete(scParameters, "shared")
@@ -2385,6 +2387,75 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
+// GetPureVolumes  Get Pure FB Volumes
+func (k *K8s) GetPureVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	k8sOps := k8sApps
+	var vols []*volume.Volume
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			scForPvc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+			if err != nil {
+				return nil, err
+			}
+			if scForPvc.Parameters["backend"] == PureFile {
+				pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+				pvcSize, _ := pvcSizeObj.AsInt64()
+				vol := &volume.Volume{
+					ID:          string(pvcObj.Spec.VolumeName),
+					Name:        obj.Name,
+					Namespace:   obj.Namespace,
+					Shared:      k.isPVCShared(obj),
+					Annotations: make(map[string]string),
+					Labels:      pvcObj.Labels,
+					Size:        uint64(pvcSize),
+				}
+				for key, val := range obj.Annotations {
+					vol.Annotations[key] = val
+				}
+				vols = append(vols, vol)
+			}
+
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if scForPvc.Parameters["backend"] == PureFile {
+					vols = append(vols, &volume.Volume{
+						ID:        pvc.Spec.VolumeName,
+						Name:      pvc.Name,
+						Namespace: pvc.Namespace,
+						Shared:    k.isPVCShared(&pvc),
+					})
+				}
+			}
+		}
+	}
+
+	return vols, nil
+}
+
 // ResizeVolume  Resize the volume
 func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
@@ -2440,6 +2511,56 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 	}
 
 	return vols, nil
+}
+
+// ResizePureVolumes resizes all PureVolumes by 1GB
+func (k *K8s) ResizePureVolumes(ctx *scheduler.Context) error {
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			updatedPVC, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			scForPvc, err := k8sCore.GetStorageClassForPVC(updatedPVC)
+			if err != nil {
+				return err
+			}
+			if scForPvc.Parameters["backend"] == PureFile {
+				_, err := k.resizePVCBy1GB(ctx, updatedPVC)
+				if err != nil {
+					return err
+				}
+			}
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&pvc)
+				if err != nil {
+					return err
+				}
+				if scForPvc.Parameters["backend"] == PureFile {
+					_, err := k.resizePVCBy1GB(ctx, &pvc)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (k *K8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClaim) (*volume.Volume, error) {
@@ -2583,6 +2704,11 @@ func (k *K8s) getPodsForApp(ctx *scheduler.Context) ([]corev1.Pod, error) {
 	}
 
 	return pods, nil
+}
+
+// GetPodsForPVC returns pods for give pvc and namespace
+func (k *K8s) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
+	return k8sCore.GetPodsUsingPVC(pvcname, namespace)
 }
 
 // Describe describe the test case

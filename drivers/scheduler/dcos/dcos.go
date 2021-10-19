@@ -19,6 +19,8 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -448,11 +450,35 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	}
 }
 
+func (d *dcos) GetPureVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPureVolumes()",
+	}
+}
+
+func (d *dcos) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPodsForPVC()",
+	}
+}
+
 func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume.Volume, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ResizeVolume()",
+	}
+}
+
+func (d *dcos) ResizePureVolumes(cxt *scheduler.Context) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ResizePureVolumes()",
 	}
 }
 

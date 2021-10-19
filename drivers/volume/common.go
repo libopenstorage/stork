@@ -124,6 +124,59 @@ func (d *DefaultDriver) ValidateCreateVolume(name string, params map[string]stri
 	}
 }
 
+// ValidateCreateSnapshot validates whether a volume has been created properly.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) ValidateCreateSnapshot(name string, params map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateSnapshot()",
+	}
+}
+
+// ValidateCreateSnapshotUsingPxctl validates whether a volume snapshot has been created properly.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) ValidateCreateSnapshotUsingPxctl(name string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateSnapshotUsingPxctl()",
+	}
+}
+
+// ValidateCreateCloudsnap validates whether a volume has been created properly.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) ValidateCreateCloudsnap(name string, params map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateCloudsnap()",
+	}
+}
+
+// ValidateCreateCloudsnapUsingPxctl validates whether a cloudsnap has been created properly.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) ValidateCreateCloudsnapUsingPxctl(name string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateCloudsnapUsingPxctl()",
+	}
+}
+
+// ValidateCreateGroupSnapshotUsingPxctl validates whether a group volumesnapshot has been created properly.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) ValidateCreateGroupSnapshotUsingPxctl() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateGroupSnapshotUsingPxctl()",
+	}
+}
+
+//ValidateGetByteUsedForVolume validates and returns byteUsed for given volume.
+func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error) {
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateGetByteUsedForVolume()",
+	}
+}
+
 // ValidateUpdateVolume validates if volume changes has been applied
 func (d *DefaultDriver) ValidateUpdateVolume(vol *Volume, params map[string]string) error {
 	return &errors.ErrNotSupported{

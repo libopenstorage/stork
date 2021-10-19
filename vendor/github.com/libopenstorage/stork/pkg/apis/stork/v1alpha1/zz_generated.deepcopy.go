@@ -1710,6 +1710,11 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.SkipServiceUpdate != nil {
+		in, out := &in.SkipServiceUpdate, &out.SkipServiceUpdate
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Selectors != nil {
 		in, out := &in.Selectors, &out.Selectors
 		*out = make(map[string]string, len(*in))

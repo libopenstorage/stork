@@ -197,7 +197,7 @@ github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
 github.com/googleapis/gnostic/jsonschema
 github.com/googleapis/gnostic/openapiv2
-# github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
+# github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 github.com/grpc-ecosystem/go-grpc-middleware/util/metautils
 # github.com/grpc-ecosystem/grpc-gateway v1.16.0
 github.com/grpc-ecosystem/grpc-gateway/internal
@@ -292,7 +292,7 @@ github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
-# github.com/libopenstorage/stork v1.3.0-beta1.0.20210503014041-fb328e234db7
+# github.com/libopenstorage/stork v1.4.1-0.20210903185636-5a1f8a4142bf
 github.com/libopenstorage/stork/pkg/apis/stork
 github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1
 github.com/libopenstorage/stork/pkg/client/clientset/versioned
@@ -393,7 +393,7 @@ github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
 # github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20210916142241-b43071d02b7d => github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20210921050234-561b707a5d96 => github.com/portworx/sched-ops v1.20.4-rc1.0.20211006132704-8a90df7acb50
 github.com/portworx/sched-ops/k8s/apiextensions
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
@@ -419,7 +419,7 @@ github.com/sendgrid/rest
 # github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 github.com/sendgrid/sendgrid-go
 github.com/sendgrid/sendgrid-go/helpers/mail
-# github.com/sirupsen/logrus v1.7.0
+# github.com/sirupsen/logrus v1.8.1
 github.com/sirupsen/logrus
 # github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
@@ -890,7 +890,7 @@ k8s.io/client-go/util/workqueue
 k8s.io/klog/v2
 # k8s.io/kube-openapi v0.0.0-20210216185858-15cd8face8d6
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+# k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 k8s.io/utils/integer
 k8s.io/utils/pointer
 # sigs.k8s.io/controller-runtime v0.8.0

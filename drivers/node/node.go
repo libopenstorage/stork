@@ -123,6 +123,9 @@ type Driver interface {
 	// RunCommand runs the given command on the node and returns the output
 	RunCommand(node Node, command string, options ConnectionOpts) (string, error)
 
+	// RunCommandWithNoRetry runs the given command on the node but with no retry
+	RunCommandWithNoRetry(node Node, command string, options ConnectionOpts) (string, error)
+
 	// ShutdownNode shuts down the given node
 	ShutdownNode(node Node, options ShutdownNodeOpts) error
 
@@ -219,6 +222,13 @@ func (d *notSupportedDriver) RunCommand(node Node, command string, options Conne
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RunCommand()",
+	}
+}
+
+func (d *notSupportedDriver) RunCommandWithNoRetry(node Node, command string, options ConnectionOpts) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RunCommandWithNoRetry()",
 	}
 }
 

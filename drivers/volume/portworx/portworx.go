@@ -50,17 +50,21 @@ const (
 
 const (
 	// DriverName is the name of the portworx driver implementation
-	DriverName                  = "pxd"
-	pxDiagPath                  = "/remotediags"
-	pxVersionLabel              = "PX Version"
-	enterMaintenancePath        = "/entermaintenance"
-	exitMaintenancePath         = "/exitmaintenance"
-	pxSystemdServiceName        = "portworx.service"
-	tokenKey                    = "token"
-	clusterIP                   = "ip"
-	clusterPort                 = "port"
-	remoteKubeConfigPath        = "/tmp/kubeconfig"
-	pxMinVersionForStorkUpgrade = "2.1"
+	DriverName                                = "pxd"
+	pxDiagPath                                = "/remotediags"
+	pxVersionLabel                            = "PX Version"
+	enterMaintenancePath                      = "/entermaintenance"
+	exitMaintenancePath                       = "/exitmaintenance"
+	pxSystemdServiceName                      = "portworx.service"
+	tokenKey                                  = "token"
+	clusterIP                                 = "ip"
+	clusterPort                               = "port"
+	remoteKubeConfigPath                      = "/tmp/kubeconfig"
+	pxMinVersionForStorkUpgrade               = "2.1"
+	formattingCommandPxctlLocalSnapshotCreate = "pxctl volume snapshot create %s --name %s"
+	formattingCommandPxctlCloudSnapCreate     = "pxctl cloudsnap backup %s"
+	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
+	refreshEndpointParam                      = "refresh-endpoint"
 )
 
 const (
@@ -500,7 +504,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
-	if val, hasKey := params["refresh-endpoint"]; hasKey {
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
 		refreshEndpoint, _ := strconv.ParseBool(val)
 		d.refreshEndpoint = refreshEndpoint
 	}
@@ -667,6 +671,96 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	return nil
+}
+
+func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]string) error {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	volDriver := d.getVolDriver()
+	_, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "_snapshot"})
+	if err != nil {
+		logrus.WithError(err).Error("error when creating local snapshot")
+		return err
+	}
+	return nil
+}
+
+func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
+	nodes := node.GetStorageDriverNodes()
+	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], fmt.Sprintf(formattingCommandPxctlLocalSnapshotCreate, volumeName, constructSnapshotName(volumeName)), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		logrus.WithError(err).Error("error when creating local snapshot using PXCTL")
+		return err
+	}
+	return nil
+}
+
+func constructSnapshotName(volumeName string) string {
+	return volumeName + "-snapshot"
+}
+
+func (d *portworx) ValidateCreateCloudsnap(volumeName string, params map[string]string) error {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	_, err := d.csbackupManager.Create(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupCreateRequest{VolumeId: volumeName})
+	if err != nil {
+		fmt.Printf("error when creating cloudsnap is %v", err)
+		return err
+	}
+	return nil
+}
+
+func (d *portworx) ValidateCreateCloudsnapUsingPxctl(volumeName string) error {
+	nodes := node.GetStorageDriverNodes()
+	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], fmt.Sprintf(formattingCommandPxctlCloudSnapCreate, volumeName), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		logrus.WithError(err).Error("error when creating cloudSnapshot using PXCTL")
+		return err
+	}
+	return nil
+}
+
+func (d *portworx) ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error) {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	statistic, err := d.volDriver.Stats(d.getContextWithToken(context.Background(), token), &api.SdkVolumeStatsRequest{VolumeId: volumeName})
+	if err != nil {
+		logrus.WithError(err).Error("error retrieving volume statistic")
+		return 0, err
+	}
+	return statistic.GetStats().BytesUsed, nil
+}
+
+func (d *portworx) ValidateCreateGroupSnapshotUsingPxctl() error {
+	nodes := node.GetStorageDriverNodes()
+	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], pxctlGroupSnapshotCreate, node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		logrus.WithError(err).Error("error when creating groupsnapshot using PXCTL")
+		return err
+	}
+
 	return nil
 }
 
