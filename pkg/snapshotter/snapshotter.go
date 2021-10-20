@@ -78,11 +78,15 @@ type Driver interface {
 	// CancelRestore cancels a restore operation
 	CancelRestore(pvcName, namespace string) error
 	// Upload objects to cloud
-	UploadSnapshotData(backupLocation *storkapi.BackupLocation, snapshotInfo SnapshotInfo, snapName, objectPath, objectName string) error
+	UploadSnapshotObjects(backupLocation *storkapi.BackupLocation, snapshotInfoList []SnapshotInfo, objectPath, objectName string) error
 	// Download objects from cloud
-	DownloadObject(backupLocation *storkapi.BackupLocation, objectPath string) ([]byte, error)
+	DownloadSnapshotObjects(backupLocation *storkapi.BackupLocation, objectPath string) ([]SnapshotInfo, error)
 	// Delete objects in cloud
-	DeleteCloudObject(backupLocation *storkapi.BackupLocation, objectPath string) error
+	DeleteSnapshotObject(backupLocation *storkapi.BackupLocation, objectPath string) error
+	// Recreate snapshot resources before doing snapshot restore
+	RecreateSnapshotResources(snapshotInfo SnapshotInfo, snapshotID, snapshotDriverName, snapshotClassName, namespace string, retain bool) error
+	// Retain local snapshots if required
+	RetainLocalSnapshots(backupLocation *storkapi.BackupLocation, snapshotDriverName, snapshotClassName, namespace, pvcUID, objectPath string, retain bool) error
 }
 
 // Snapshotter inteface returns a Driver object
