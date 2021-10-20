@@ -59,7 +59,10 @@ func jobForLiveBackup(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: jobOption.Namespace,
-			Labels:    labels,
+			Annotations: map[string]string{
+				utils.SkipResourceAnnotation: "true",
+			},
+			Labels: labels,
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
