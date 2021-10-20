@@ -101,7 +101,7 @@ if [ -z "${TIMEOUT}" ]; then
 fi
 
 if [ -z "$DRIVER_START_TIMEOUT" ]; then
-    DRIVER_START_TIMEOUT="5m0s"
+    DRIVER_START_TIMEOUT="10m0s"
     echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
 fi
 

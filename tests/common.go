@@ -117,11 +117,12 @@ const (
 )
 
 const (
-	waitResourceCleanup     = 2 * time.Minute
-	defaultTimeout          = 5 * time.Minute
-	defaultRetryInterval    = 10 * time.Second
-	defaultCmdTimeout       = 20 * time.Second
-	defaultCmdRetryInterval = 5 * time.Second
+	waitResourceCleanup       = 2 * time.Minute
+	defaultTimeout            = 5 * time.Minute
+	defaultRetryInterval      = 10 * time.Second
+	defaultCmdTimeout         = 20 * time.Second
+	defaultCmdRetryInterval   = 5 * time.Second
+	defaultDriverStartTimeout = 10 * time.Minute
 )
 
 var (
@@ -1010,7 +1011,7 @@ func ParseFlags() {
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
-	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
+	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultDriverStartTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.DurationVar(&licenseExpiryTimeoutHours, licenseExpiryTimeoutHoursFlag, defaultLicenseExpiryTimeoutHours, "Maximum wait time in hours after which force expire license")
 	flag.DurationVar(&meteringIntervalMins, meteringIntervalMinsFlag, defaultMeteringIntervalMins, "Metering interval in minutes for metering agent")
