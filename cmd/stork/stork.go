@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	stork_driver "github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
@@ -65,7 +66,6 @@ const (
 	cmName                     = "stork-version"
 	eventComponentName         = "stork"
 	debugFilePath              = "/var/cores"
-	kdmpConfigmapName          = "kdmp-config"
 )
 
 var ext *extender.Extender
@@ -214,8 +214,8 @@ func run(c *cli.Context) {
 		log.Warnf("Unable to create stork version configmap: %v", err)
 	}
 	kdmpConfig := &api_v1.ConfigMap{}
-	kdmpConfig.Name = kdmpConfigmapName
-	kdmpConfig.Namespace = defaultAdminNamespace
+	kdmpConfig.Name = stork_driver.KdmpConfigmapName
+	kdmpConfig.Namespace = stork_driver.KdmpConfigmapNamespace
 	kdmpConfig.Data = make(map[string]string)
 	kdmpConfig.Data[drivers.KopiaExecutorRequestCPU] = drivers.DefaultKopiaExecutorRequestCPU
 	kdmpConfig.Data[drivers.KopiaExecutorRequestMemory] = drivers.DefaultKopiaExecutorRequestMemory
