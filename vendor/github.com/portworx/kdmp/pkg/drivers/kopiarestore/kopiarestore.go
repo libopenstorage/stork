@@ -46,7 +46,7 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	}
 	// Check whether there is slot to schedule restore job.
 	driverType := d.Name()
-	available, err := jobratelimit.JobCanRun(driverType)
+	available, err := jobratelimit.CanJobBeScheduled(driverType)
 	if err != nil {
 		logrus.Errorf("%v", err)
 		return "", err
@@ -246,7 +246,7 @@ func jobFor(
 
 	if drivers.CertFilePath != "" {
 		volumeMount := corev1.VolumeMount{
-			Name:      "tls-secret",
+			Name:      utils.TLSCertMountVol,
 			MountPath: drivers.CertMount,
 			ReadOnly:  true,
 		}
@@ -257,7 +257,7 @@ func jobFor(
 		)
 
 		volume := corev1.Volume{
-			Name: "tls-secret",
+			Name: utils.TLSCertMountVol,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: jobOption.CertSecretName,

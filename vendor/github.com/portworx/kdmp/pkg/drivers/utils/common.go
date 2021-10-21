@@ -22,12 +22,17 @@ const (
 	BackupObjectNameKey = "backup-object-name"
 	// BackupObjectUIDKey - label key to store backup object uid
 	BackupObjectUIDKey = "backup-object-uid"
+	// TLSCertMountVol mount vol name for tls certificate secret
+	TLSCertMountVol = "tls-secret"
 )
 
 // SetupServiceAccount create a service account and bind it to a provided role.
 func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 	if role != nil {
 		role.Name, role.Namespace = name, namespace
+		role.Annotations = map[string]string{
+			SkipResourceAnnotation: "true",
+		}
 		if _, err := rbacops.Instance().CreateRole(role); err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("create %s/%s role: %s", namespace, name, err)
 		}
@@ -60,6 +65,9 @@ func roleBindingFor(name, namespace string) *rbacv1.RoleBinding {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				SkipResourceAnnotation: "true",
+			},
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -81,6 +89,9 @@ func serviceAccountFor(name, namespace string) *corev1.ServiceAccount {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				SkipResourceAnnotation: "true",
+			},
 		},
 	}
 }

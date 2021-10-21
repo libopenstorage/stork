@@ -256,7 +256,13 @@ func (g *gcp) getFilterFromMap(labels map[string]string) string {
 
 func (g *gcp) getZones(pv *v1.PersistentVolume) []string {
 	if pv.Spec.GCEPersistentDisk != nil {
-		zone := pv.Labels[v1.LabelZoneFailureDomain]
+		var zone string
+		val, ok := pv.Labels[v1.LabelZoneFailureDomain]
+		if ok {
+			zone = val
+		} else if val, ok := pv.Labels[v1.LabelZoneFailureDomainStable]; ok {
+			zone = val
+		}
 		if g.isRegional(zone) {
 			return g.getRegionalZones(zone)
 		}

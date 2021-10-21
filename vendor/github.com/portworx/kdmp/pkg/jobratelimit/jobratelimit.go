@@ -22,6 +22,10 @@ const (
 	DeleteJobLimitKey = "KDMP_DELETE_JOB_LIMIT"
 	// MaintenanceJobLimitKey - maintenance job limit configmap key
 	MaintenanceJobLimitKey = "KDMP_MAINTENANCE_JOB_LIMIT"
+	// PvcNameKey - PVC name label key
+	PvcNameKey = "kdmp.portworx.com/pvc-name"
+	// PvcUIDKey - PVC UID label key
+	PvcUIDKey = "kdmp.portworx.com/pvc-uid"
 	// DefaultBackupJobLimit - default backup job limit value
 	DefaultBackupJobLimit = 5
 	// DefaultRestoreJobLimit - default restore job limit value
@@ -116,14 +120,35 @@ func jobLimitByType(jobType string) int {
 	return jobLimit
 }
 
-// JobCanRun takes the jobType and returns whether the given job can run or not based on limit set
-func JobCanRun(jobType string) (bool, error) {
+// CanJobBeScheduled takes the jobType and returns whether the given job can run or not based on limit set
+func CanJobBeScheduled(jobType string) (bool, error) {
 	jobCount, err := getJobCountByType(jobType)
 	if err != nil {
 		return false, err
 	}
 	jobLimitCount := jobLimitByType(jobType)
 	if jobCount >= jobLimitCount {
+		return false, nil
+	}
+	return true, nil
+}
+
+// IsJobForPvcAlreadyRunning - Check whether there is job already running for the given PVC
+func IsJobForPvcAlreadyRunning(pvcName, pvcNamespace, pvcUID, jobType string) (bool, error) {
+	driverNameLabel := drivers.DriverNameLabel + "=" + jobType
+	pvcNameLabel := PvcNameKey + "=" + pvcName
+	pvcUIDLabel := PvcUIDKey + "=" + pvcUID
+	labelSelector := driverNameLabel + "," + pvcNameLabel + "," + pvcUIDLabel
+	options := metav1.ListOptions{
+		LabelSelector: labelSelector,
+	}
+	allJobs, err := batch.Instance().ListAllJobs(pvcNamespace, options)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to get job list: %v", err)
+		log.Errorf("%v", errMsg)
+		return true, fmt.Errorf("%v", errMsg)
+	}
+	if len(allJobs.Items) == 0 {
 		return false, nil
 	}
 	return true, nil
