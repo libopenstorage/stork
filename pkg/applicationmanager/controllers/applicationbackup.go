@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-openapi/inflect"
+	"github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -63,6 +64,7 @@ const (
 	backupResourcesBatchCount     = 15
 	maxRetry                      = 10
 	retrySleep                    = 10 * time.Second
+	genericBackupKey              = "BACKUP_TYPE"
 )
 
 var (
@@ -516,7 +518,11 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if err != nil {
 				return fmt.Errorf("error getting list of volumes to backup: %v", err)
 			}
-
+			kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
+			if err != nil {
+				return fmt.Errorf("error readig kdmp config map: %v", err)
+			}
+			driverType := kdmpData.Data[genericBackupKey]
 			for _, pvc := range pvcList.Items {
 				// If a list of resources was specified during backup check if
 				// this PVC was included
@@ -542,7 +548,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					continue
 				}
 				driverName := stork_api.GenericDriver
-				if backup.Spec.BackupType == stork_api.ApplicationBackupGeneric {
+				if backup.Spec.BackupType == stork_api.ApplicationBackupGeneric ||
+					driverType == stork_api.ApplicationBackupGeneric {
 					volDriver, err := volume.Get(driverName)
 					if err != nil {
 						return err
