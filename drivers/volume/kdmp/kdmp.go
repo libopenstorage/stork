@@ -673,7 +673,7 @@ func (k *kdmp) CleanupBackupResources(backup *storkapi.ApplicationBackup) error 
 			continue
 		}
 		crName := getGenericCRName(prefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
-		logrus.Infof("deleting data export CR: %s%s", vInfo.Namespace, crName)
+		logrus.Tracef("deleting data export CR: %s/%s", vInfo.Namespace, crName)
 		// delete kdmp crs
 		if err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.Namespace); err != nil && !k8serror.IsNotFound(err) {
 			logrus.Warnf("failed to delete data export CR: %v", err)
