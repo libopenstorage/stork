@@ -43,9 +43,27 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 			}
 		}
 	}
+	// Check whether already a job running to backup the PVC.
+	// If so return already job running on the PVC error and caller will retry.
+	running, err := jobratelimit.IsJobForPvcAlreadyRunning(
+		o.Labels[jobratelimit.PvcNameKey],
+		o.Namespace,
+		o.Labels[jobratelimit.PvcUIDKey],
+		drivers.KopiaBackup,
+	)
+	if err != nil {
+		logrus.Debugf("error while checking already a backup job is running for PVC [%v/%v]: %v",
+			o.Labels[jobratelimit.PvcNameKey], o.Labels[jobratelimit.PvcUIDKey], err)
+		return "", err
+	}
+	if running {
+		logrus.Infof("already a backup job is running for PVC [%v/%v]",
+			o.Labels[jobratelimit.PvcNameKey], o.Labels[jobratelimit.PvcUIDKey])
+		return "", utils.ErrJobAlreadyRunning
+	}
 	// Check whether there is slot to schedule the job.
 	driverType := d.Name()
-	available, err := jobratelimit.JobCanRun(driverType)
+	available, err := jobratelimit.CanJobBeScheduled(driverType)
 	if err != nil {
 		logrus.Errorf("%v", err)
 		return "", err

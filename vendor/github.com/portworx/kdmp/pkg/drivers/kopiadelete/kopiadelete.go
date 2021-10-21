@@ -47,7 +47,7 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	}
 	// Check whether there is slot to schedule delete job.
 	driverType := d.Name()
-	available, err := jobratelimit.JobCanRun(driverType)
+	available, err := jobratelimit.CanJobBeScheduled(driverType)
 	if err != nil {
 		logrus.Errorf("%v", err)
 		return "", err

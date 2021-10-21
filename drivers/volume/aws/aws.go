@@ -31,8 +31,6 @@ import (
 )
 
 const (
-	// driverName is the name of the aws driver implementation
-	driverName = "aws"
 	// provisioner names for ebs volumes
 	provisionerName = "kubernetes.io/aws-ebs"
 	// CSI provisioner name for ebs volumes
@@ -105,7 +103,7 @@ func (a *aws) Init(_ interface{}) error {
 }
 
 func (a *aws) String() string {
-	return driverName
+	return storkvolume.AWSDriverName
 }
 
 func (a *aws) Stop() error {
@@ -192,7 +190,7 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
-		volumeInfo.DriverName = driverName
+		volumeInfo.DriverName = storkvolume.AWSDriverName
 
 		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
@@ -356,7 +354,7 @@ func (a *aws) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.AWSDriverName {
 			continue
 		}
 		snapshot, err := a.getEBSSnapshot(vInfo.BackupID, nil)
@@ -396,7 +394,7 @@ func (a *aws) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	}
 
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.AWSDriverName {
 			continue
 		}
 		input := &ec2.DeleteSnapshotInput{
@@ -457,7 +455,7 @@ func (a *aws) StartRestore(
 		volumeInfo.PersistentVolumeClaimUID = backupVolumeInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = backupVolumeInfo.Namespace
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
-		volumeInfo.DriverName = driverName
+		volumeInfo.DriverName = storkvolume.AWSDriverName
 		volumeInfo.RestoreVolume = a.generatePVName()
 
 		tags := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
@@ -548,7 +546,7 @@ func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.AWSDriverName {
 			continue
 		}
 		ebsVolume, err := a.getEBSVolume(vInfo.RestoreVolume, nil)
@@ -633,7 +631,7 @@ func init() {
 	if err != nil {
 		logrus.Debugf("Error init'ing aws driver: %v", err)
 	}
-	if err := storkvolume.Register(driverName, a); err != nil {
+	if err := storkvolume.Register(storkvolume.AWSDriverName, a); err != nil {
 		logrus.Panicf("Error registering aws volume driver: %v", err)
 	}
 }

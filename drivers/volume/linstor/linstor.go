@@ -27,8 +27,6 @@ import (
 )
 
 const (
-	driverName = "linstor"
-
 	// pvcProvisionerAnnotation is the annotation on PVC which has the provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
 	// pvProvisionedByAnnotation is the annotation on PV which has the provisioner name
@@ -116,7 +114,7 @@ func (l *linstor) startNodeCache() error {
 }
 
 func (l *linstor) String() string {
-	return driverName
+	return storkvolume.LinstorDriverName
 }
 
 func (l *linstor) InspectNode(id string) (*storkvolume.NodeInfo, error) {
@@ -402,7 +400,7 @@ func (l *linstor) GetClusterID() (string, error) {
 
 func init() {
 	l := &linstor{}
-	if err := storkvolume.Register(driverName, l); err != nil {
+	if err := storkvolume.Register(storkvolume.LinstorDriverName, l); err != nil {
 		logrus.Panicf("Error registering linstor volume driver: %v", err)
 	}
 }

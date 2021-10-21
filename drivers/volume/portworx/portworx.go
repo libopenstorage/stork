@@ -66,8 +66,6 @@ import (
 
 // TODO: Make some of these configurable
 const (
-	// driverName is the name of the portworx driver implementation
-	driverName = "pxd"
 
 	// default API port
 	defaultAPIPort = 9001
@@ -162,6 +160,9 @@ const (
 	// templatizedNamespace is the CSI templatized parameter for namespace
 	templatizedNamespace = "${pvc.namespace}"
 	proxyEndpoint        = "proxy_endpoint"
+	proxyPath            = "proxy_nfs_exportpath"
+	pureBackendParam     = "backend"
+	pureFileParam        = "pure_file"
 )
 
 type cloudSnapStatus struct {
@@ -236,7 +237,7 @@ type portworxGrpcConnection struct {
 }
 
 func (p *portworx) String() string {
-	return driverName
+	return storkvolume.PortworxDriverName
 }
 
 func (p *portworx) Init(_ interface{}) error {
@@ -665,6 +666,9 @@ func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool
 			if _, ok := storageClass.Parameters[proxyEndpoint]; ok {
 				logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
 				return false
+			} else if val, ok := storageClass.Parameters[pureBackendParam]; ok && val == pureFileParam {
+				logrus.Tracef("pure file backend param set, not classifying it as pxd for pvc [%v]", pvc.Name)
+				return false
 			}
 			provisioner = storageClass.Provisioner
 		} else {
@@ -992,11 +996,11 @@ func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 }
 
 func (p *portworx) getRestClientWithAuth(token string) (*apiclient.Client, error) {
-	return volumeclient.NewAuthDriverClient(p.endpoint, driverName, "", token, "", "stork")
+	return volumeclient.NewAuthDriverClient(p.endpoint, storkvolume.PortworxDriverName, "", token, "", "stork")
 }
 
 func (p *portworx) getRestClient() (*apiclient.Client, error) {
-	return volumeclient.NewDriverClient(p.endpoint, driverName, "", "stork")
+	return volumeclient.NewDriverClient(p.endpoint, storkvolume.PortworxDriverName, "", "stork")
 }
 
 func (p *portworx) addCloudsnapInfo(
@@ -2944,8 +2948,8 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
-		volumeInfo.DriverName = driverName
 		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
+		volumeInfo.DriverName = storkvolume.PortworxDriverName
 
 		// Save the auth annotations
 		if volumeInfo.Options == nil {
@@ -3034,7 +3038,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 	driverMap := make(map[string]volume.VolumeDriver)
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.PortworxDriverName {
 			continue
 		}
 		token, err := p.getUserToken(vInfo.Options, vInfo.Namespace)
@@ -3271,7 +3275,7 @@ func (p *portworx) StartRestore(
 		volumeInfo.SourceNamespace = backupVolumeInfo.Namespace
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
 		volumeInfo.RestoreVolume = p.generatePVName()
-		volumeInfo.DriverName = driverName
+		volumeInfo.DriverName = storkvolume.PortworxDriverName
 
 		authLabels := p.mergeAuthLabels(nil, nil, backupVolumeInfo.Options)
 
@@ -3401,7 +3405,7 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 	driverMap := make(map[string]volume.VolumeDriver)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
-		if vInfo.DriverName != driverName {
+		if vInfo.DriverName != storkvolume.PortworxDriverName {
 			continue
 		}
 		token, err := p.getUserToken(vInfo.Options, "" /*templatized params already converted*/)
@@ -3886,7 +3890,7 @@ func init() {
 		logrus.Debugf("Error init'ing portworx driver: %v", err)
 	}
 
-	if err := storkvolume.Register(driverName, p); err != nil {
+	if err := storkvolume.Register(storkvolume.PortworxDriverName, p); err != nil {
 		logrus.Panicf("Error registering portworx volume driver: %v", err)
 	}
 }

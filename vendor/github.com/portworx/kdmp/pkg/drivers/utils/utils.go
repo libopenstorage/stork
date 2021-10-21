@@ -26,6 +26,8 @@ const (
 var (
 	// ErrOutOfJobResources - out of job resource error
 	ErrOutOfJobResources = errors.New("out of job resources")
+	// ErrJobAlreadyRunning - Already a job is running for the given instance of PVC
+	ErrJobAlreadyRunning = errors.New("job Already Running")
 )
 
 // NamespacedName returns a name in form "<namespace>/<name>".
