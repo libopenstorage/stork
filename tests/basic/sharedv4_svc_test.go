@@ -104,6 +104,8 @@ var _ = Describe("{NFSServerFailover}", func() {
 				var newServer *node.Node
 
 				for i := 0; i < 60; i++ {
+					err := Inst().V.RefreshDriverEndpoints()
+					Expect(err).NotTo(HaveOccurred())
 					server, err := Inst().V.GetNodeForVolume(volume, defaultCommandTimeout, defaultCommandRetry)
 					// there could be intermittent error here
 					if err != nil {
