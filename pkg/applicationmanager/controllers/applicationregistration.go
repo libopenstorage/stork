@@ -84,6 +84,7 @@ func RegisterDefaultCRDs() error {
 		"core.libopenstorage.org":                "",
 		"volumesnapshot.external-storage.k8s.io": "",
 		"stork.libopenstorage.org":               "",
+		"kdmp.portworx.com":                      "",
 	}
 	for name, res := range appregistration.GetSupportedCRD() {
 		appReg := &stork_api.ApplicationRegistration{
