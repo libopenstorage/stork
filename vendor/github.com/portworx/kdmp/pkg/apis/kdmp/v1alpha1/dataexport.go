@@ -68,6 +68,8 @@ const (
 	// DataExportStageTransferInProgress when rsync is in progress and is transferring data
 	// between the two PVCs.
 	DataExportStageTransferInProgress DataExportStage = "TransferInProgress"
+	// DataExportStageCleanup cleanup stage to remove resources created
+	DataExportStageCleanup DataExportStage = "Cleanup"
 	// DataExportStageFinal when rsync is completed.
 	DataExportStageFinal DataExportStage = "Final"
 )

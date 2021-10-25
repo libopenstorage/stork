@@ -67,7 +67,7 @@ func (c *Controller) Init(mgr manager.Manager) error {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 //
 func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	logrus.Debugf("Reconciling DataExport %s/%s", request.Namespace, request.Name)
+	logrus.Tracef("Reconciling DataExport %s/%s", request.Namespace, request.Name)
 
 	dataExport := &kdmpapi.DataExport{}
 	err := c.client.Get(context.TODO(), request.NamespacedName, dataExport)

@@ -2,15 +2,16 @@ package jobratelimit
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strconv"
 )
 
 const (
@@ -64,13 +65,25 @@ func getJobCountByType(jobType string) (int, error) {
 	getAllNamespaces := getAllNamespaces()
 	var count int
 	for _, item := range getAllNamespaces.Items {
+		jobCount := 0
 		allJobs, err := batch.Instance().ListAllJobs(item.Name, options)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to get job list: %v", err)
 			log.Errorf("%v", errMsg)
 			return 0, fmt.Errorf("%v", errMsg)
 		}
-		count = count + len(allJobs.Items)
+		jobCount = len(allJobs.Items)
+		// Check if any of the job is already in completed state.
+		// If complemented, exclude them from counting.
+		for _, job := range allJobs.Items {
+			for _, condition := range job.Status.Conditions {
+				if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
+					jobCount = jobCount - 1
+					break
+				}
+			}
+		}
+		count = count + jobCount
 	}
 	return count, nil
 }
