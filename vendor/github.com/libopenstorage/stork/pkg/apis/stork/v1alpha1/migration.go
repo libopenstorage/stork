@@ -20,6 +20,7 @@ type MigrationSpec struct {
 	IncludeVolumes               *bool             `json:"includeVolumes"`
 	StartApplications            *bool             `json:"startApplications"`
 	PurgeDeletedResources        *bool             `json:"purgeDeletedResources"`
+	SkipServiceUpdate            *bool             `json:"skipServiceUpdate"`
 	Selectors                    map[string]string `json:"selectors"`
 	PreExecRule                  string            `json:"preExecRule"`
 	PostExecRule                 string            `json:"postExecRule"`

@@ -17,15 +17,15 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20210223183702-b9c6b74cbf1d
 	github.com/libopenstorage/openstorage v8.0.1-0.20210909003102-97e11e6485ad+incompatible
-	github.com/libopenstorage/stork v1.3.0-beta1.0.20210503014041-fb328e234db7
+	github.com/libopenstorage/stork v1.4.1-0.20210903185636-5a1f8a4142bf
 	github.com/onsi/ginkgo v1.15.0
 	github.com/onsi/gomega v1.10.5
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20210916142241-b43071d02b7d
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20210921050234-561b707a5d96
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
-	github.com/sirupsen/logrus v1.7.0
+	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
@@ -45,7 +45,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.3.0-alpha.1.0.20200130041458-d2b33d4448ea+incompatible
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211006132704-8a90df7acb50
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.0.0
 
