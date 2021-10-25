@@ -79,9 +79,9 @@ const (
 	DefaultResticExecutorRequestMemory = "700Mi"
 	DefaultResticExecutorLimitCPU      = "2"
 	DefaultResticExecutorLimitMemory   = "1Gi"
-	DefaultKopiaExecutorRequestCPU     = "1"
+	DefaultKopiaExecutorRequestCPU     = "0.1"
 	DefaultKopiaExecutorRequestMemory  = "700Mi"
-	DefaultKopiaExecutorLimitCPU       = "2"
+	DefaultKopiaExecutorLimitCPU       = "0.2"
 	DefaultKopiaExecutorLimitMemory    = "1Gi"
 )
 

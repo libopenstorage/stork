@@ -859,6 +859,7 @@ github.com/libopenstorage/stork v1.4.1-0.20211005135736-c670be7925d2/go.mod h1:i
 github.com/libopenstorage/stork v1.4.1-0.20211005182718-1c9b1186e228/go.mod h1:iPI/Hy/+nR+O0swmX0IBkD7QjjFNYoWvdafVrPSauPg=
 github.com/libopenstorage/stork v1.4.1-0.20211007173333-ae7f793dcb5c/go.mod h1:xrUHkvEq/8Pw74Wje2bLgd40Iv92gCUf1ck1jUg8YI8=
 github.com/libopenstorage/stork v1.4.1-0.20211012172837-b4d489e3aac8/go.mod h1:UyIEpfnhai7e9wlrSL4wgd1QXrAzN1zhaE2eMvckhx8=
+github.com/libopenstorage/stork v1.4.1-0.20211025085547-964e1d8300eb/go.mod h1:FqHGC0i08bBINXF0YhQi+3RxZX4Jgha3fEd/PiN3Jt8=
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de h1:9TO3cAIGXtEhnIaL+V+BEER86oLrvS+kWobKpbJuye0=
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de/go.mod h1:zAbeS9B/r2mtpb6U+EI2rYA5OAXxsYw6wTamcNW+zcE=
 github.com/lightstep/lightstep-tracer-common/golang/gogo v0.0.0-20190605223551-bc2310a04743/go.mod h1:qklhhLq1aX+mtWk9cPHPzaBjWImj5ULL6C7HFJtXQMM=
@@ -1107,6 +1108,8 @@ github.com/portworx/kdmp v0.4.1-0.20211014134259-35fa348614f8 h1:n0hcYfJ+zbqU51T
 github.com/portworx/kdmp v0.4.1-0.20211014134259-35fa348614f8/go.mod h1:ethpTE5btKfTpuuC0T3bQHTBCLymlUaBAa2pRoCJixM=
 github.com/portworx/kdmp v0.4.1-0.20211020042040-649a87216a48 h1:/z7KPnbxB6BUz4Ak97eSYNasgDraE1KY9+/Dn36Utc8=
 github.com/portworx/kdmp v0.4.1-0.20211020042040-649a87216a48/go.mod h1:ethpTE5btKfTpuuC0T3bQHTBCLymlUaBAa2pRoCJixM=
+github.com/portworx/kdmp v0.4.1-0.20211025111614-fab3040208f4 h1:o8QKtiJaLZpn0vq8TcHP3K+TUJGtgMhj1plPGPraeoE=
+github.com/portworx/kdmp v0.4.1-0.20211025111614-fab3040208f4/go.mod h1:w89lWoGaz58D/XyYdR9fNi6noBRV7VzzSi0MxQ1PvmY=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200311180812-b2c72382d652 h1:NElBL34RIHlZKGtDVXT/srxuVZ1+tqmnCdm1K+MC+fU=
