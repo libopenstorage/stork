@@ -1249,6 +1249,59 @@ func (m *MigrationController) getPrunedAnnotations(annotations map[string]string
 	return a
 }
 
+func (m *MigrationController) handleCSIPVs(
+	migration *stork_api.Migration,
+	latestPV *v1.PersistentVolume,
+	adminClient *kubernetes.Clientset,
+) error {
+	// This is required for failback of CSI PVs. The VolumeHandle object points
+	// to the original volume before a failover and failback was done. Kubernetes
+	// does not allow changing this volumeHandle field so the only way is to delete
+	// the PV with reclaimPolicy set to Retain and recreate it with the new name
+	savedReclaimPolicy := latestPV.Spec.PersistentVolumeReclaimPolicy
+	latestPV.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
+	latestPV.Finalizers = []string{}
+
+	_, err := adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), latestPV, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed in updating PV %v reclaim policy during recreation step: %v", latestPV.Name, err)
+	}
+
+	// Force delete the pv - since the PV will not get deleted as it points to an invalid non-existent volume
+	gracePeriod := int64(0)
+	isDeleted := false
+	deleteStart := metav1.Now()
+	err = adminClient.CoreV1().PersistentVolumes().Delete(context.TODO(), latestPV.Name, metav1.DeleteOptions{
+		GracePeriodSeconds: &gracePeriod,
+	})
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete CSI pv %v: %v", latestPV.Name, err)
+	}
+	for i := 0; i < deletedMaxRetries; i++ {
+		obj, err := adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), latestPV.Name, metav1.GetOptions{})
+		if err != nil && errors.IsNotFound(err) {
+			isDeleted = true
+			break
+		}
+		createTime := obj.GetCreationTimestamp()
+		if deleteStart.Before(&createTime) {
+			log.MigrationLog(migration).Warnf("PV object[%v] got re-created after deletion. Not retrying deletion, deleteStart time:[%v], create time:[%v]",
+				obj.GetName(), deleteStart, createTime)
+			break
+		}
+		log.MigrationLog(migration).Infof("PV object %v still present, retrying in %v", latestPV.GetName(), deletedRetryInterval)
+		time.Sleep(deletedRetryInterval)
+	}
+
+	if !isDeleted {
+		return fmt.Errorf("failed in deleting CSI PV %v during recreation step", latestPV.GetName())
+	}
+	latestPV.Spec.PersistentVolumeReclaimPolicy = savedReclaimPolicy
+	latestPV.Spec.CSI.VolumeHandle = latestPV.GetName()
+	_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), latestPV, metav1.CreateOptions{})
+	return err
+}
+
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
@@ -1451,7 +1504,11 @@ func (m *MigrationController) applyResources(
 					respPV.Annotations = pv.Annotations
 					respPV.Spec.PersistentVolumeReclaimPolicy = pv.Spec.PersistentVolumeReclaimPolicy
 					respPV.ResourceVersion = ""
-					_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{})
+					if respPV.Spec.CSI != nil && respPV.Spec.CSI.VolumeHandle != respPV.Name {
+						err = m.handleCSIPVs(migration, respPV, adminClient)
+					} else {
+						_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{})
+					}
 				}
 			}
 		}
