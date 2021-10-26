@@ -972,32 +972,20 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 					Cause: fmt.Sprintf("px is not yet up on node. cause: %v", err),
 				}
 			}
-			opts := node.ConnectionOpts{
-				IgnoreError:     false,
-				TimeBeforeRetry: defaultRetryInterval,
-				Timeout:         defaultTimeout,
-			}
-			out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", d.getPxctlPath(n)), opts)
+
+			pxStatus, err := d.getPxctlStatus(n)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
-					Cause: err.Error(),
+					Cause: fmt.Sprintf("failed to get pxctl status. cause: %v", err),
 				}
 			}
-			var data interface{}
-			err = json.Unmarshal([]byte(out), &data)
-			if err != nil {
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: err.Error(),
-				}
-			}
-			statusMap := data.(map[string]interface{})
-			if status, ok := statusMap["status"]; ok && status != "STATUS_OK" {
+
+			if pxStatus != api.Status_STATUS_OK.String() {
 				return "", true, &ErrFailedToWaitForPx{
 					Node: n,
 					Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
-						n.Name, api.Status_STATUS_OK, status),
+						n.Name, api.Status_STATUS_OK, pxStatus),
 				}
 			}
 
@@ -2617,6 +2605,49 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	}
 	out = "sudo " + out
 	return strings.TrimSpace(out)
+}
+
+func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	// create context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to create pxctl context. cause: %v", err)
+		}
+	}
+
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", pxctlPath), opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+
+	var data interface{}
+	err = json.Unmarshal([]byte(out), &data)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
+	}
+
+	// delete context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+		}
+	}
+
+	statusMap := data.(map[string]interface{})
+	if status, ok := statusMap["status"]; ok {
+		return status.(string), nil
+	}
+	return api.Status_STATUS_NONE.String(), nil
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
