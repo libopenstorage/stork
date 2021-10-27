@@ -228,7 +228,7 @@ func Scale(count int64) {
 		return "", false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 2*time.Minute)
+	_, err = task.DoRetryWithTimeout(t, 60*time.Minute, 2*time.Minute)
 	Expect(err).NotTo(HaveOccurred())
 
 }
