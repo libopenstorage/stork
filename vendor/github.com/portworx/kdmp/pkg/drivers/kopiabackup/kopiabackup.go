@@ -61,6 +61,15 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 			o.Labels[jobratelimit.PvcNameKey], o.Labels[jobratelimit.PvcUIDKey])
 		return "", utils.ErrJobAlreadyRunning
 	}
+
+	// Sometimes the StartJob is getting called for the same dataexport CR,
+	// If the status update to the CR fails in the reconciler. In that case, if we
+	// the find job already created, we will exit from here with out doing anything.
+	present := jobratelimit.IsJobAlreadyPresent(o.DataExportName, o.Namespace)
+	if present {
+		return utils.NamespacedName(o.Namespace, o.DataExportName), nil
+	}
+
 	// Check whether there is slot to schedule the job.
 	driverType := d.Name()
 	available, err := jobratelimit.CanJobBeScheduled(driverType)
@@ -119,11 +128,58 @@ func (d Driver) DeleteJob(id string) error {
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return fmt.Errorf(errMsg)
 	}
-
-	if err = batch.Instance().DeleteJob(name, namespace); err != nil && !apierrors.IsNotFound(err) {
-		errMsg := fmt.Sprintf("deletion of backup job %s/%s failed: %v", namespace, name, err)
+	// Get job and check whether it has nodename set.
+	job, err := batch.Instance().GetJob(name, namespace)
+	if err != nil && !apierrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("failed in getting job %v/%v with err: %v", namespace, name, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return fmt.Errorf(errMsg)
+	}
+	nodeName := job.Spec.Template.Spec.NodeName
+	if nodeName != "" {
+		err := coreops.Instance().IsNodeReady(nodeName)
+		if err != nil {
+			// force delete the job
+			if err = batch.Instance().DeleteJobWithForce(job.Name, job.Namespace); err != nil && !apierrors.IsNotFound(err) {
+				errMsg := fmt.Sprintf("deletion of backup job %s/%s failed: %v", namespace, name, err)
+				logrus.Errorf("%s: %v", fn, errMsg)
+				return fmt.Errorf(errMsg)
+			}
+			// force delete the job pod as well
+			pods, err := coreops.Instance().GetPods(
+				job.Namespace,
+				map[string]string{
+					"job-name": job.Name,
+				},
+			)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed in fetching job pods %s/%s: %v", namespace, name, err)
+				logrus.Errorf("%s: %v", fn, errMsg)
+				return fmt.Errorf(errMsg)
+			}
+
+			for _, pod := range pods.Items {
+				err = coreops.Instance().DeletePod(pod.Name, pod.Namespace, true)
+				if err != nil && !apierrors.IsNotFound(err) {
+					errMsg := fmt.Sprintf("deletion of backup pod %s/%s failed: %v", namespace, pod.Name, err)
+					logrus.Errorf("%s: %v", fn, errMsg)
+					return fmt.Errorf(errMsg)
+				}
+			}
+		} else {
+			if err = batch.Instance().DeleteJob(name, namespace); err != nil && !apierrors.IsNotFound(err) {
+				errMsg := fmt.Sprintf("deletion of backup job %s/%s failed: %v", namespace, name, err)
+				logrus.Errorf("%s: %v", fn, errMsg)
+				return fmt.Errorf(errMsg)
+			}
+		}
+
+	} else {
+		if err = batch.Instance().DeleteJob(name, namespace); err != nil && !apierrors.IsNotFound(err) {
+			errMsg := fmt.Sprintf("deletion of backup job %s/%s failed: %v", namespace, name, err)
+			logrus.Errorf("%s: %v", fn, errMsg)
+			return fmt.Errorf(errMsg)
+		}
 	}
 
 	return nil
@@ -143,8 +199,14 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	if utils.IsJobFailed(job) {
-		errMsg := fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
+	jobErr, nodeErr := utils.IsJobOrNodeFailed(job)
+	var errMsg string
+	if jobErr {
+		errMsg = fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
+		return utils.ToJobStatus(0, errMsg), nil
+	}
+	if nodeErr {
+		errMsg = fmt.Sprintf("Node [%v] on which job [%v/%v] schedules is NotReady", job.Spec.Template.Spec.NodeName, namespace, name)
 		return utils.ToJobStatus(0, errMsg), nil
 	}
 

@@ -58,6 +58,24 @@ func IsJobCompleted(j *batchv1.Job) bool {
 	return false
 }
 
+// IsJobOrNodeFailed checks if a kubernetes job is failed, also check the node status, where the job is schedule
+func IsJobOrNodeFailed(j *batchv1.Job) (bool, bool) {
+	// Get the node name from job spec.
+	nodeName := j.Spec.Template.Spec.NodeName
+	if nodeName != "" {
+		err := core.Instance().IsNodeReady(nodeName)
+		if err != nil {
+			return false, true
+		}
+	}
+	for _, c := range j.Status.Conditions {
+		if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
+			return true, false
+		}
+	}
+	return false, false
+}
+
 // IsJobFailed checks if a kubernetes job is failed.
 func IsJobFailed(j *batchv1.Job) bool {
 	for _, c := range j.Status.Conditions {
@@ -84,8 +102,7 @@ func IsJobPending(j *batchv1.Job) bool {
 		return true
 	}
 	for _, c := range pods.Items[0].Status.ContainerStatuses {
-		if c.State.Waiting != nil {
-			// container is in waiting state
+		if c.State.Waiting != nil || c.State.Running != nil {
 			return true
 		}
 	}

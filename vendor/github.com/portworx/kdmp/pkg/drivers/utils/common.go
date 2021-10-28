@@ -2,9 +2,12 @@ package utils
 
 import (
 	"fmt"
+	"time"
 
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	rbacops "github.com/portworx/sched-ops/k8s/rbac"
+	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -23,7 +26,9 @@ const (
 	// BackupObjectUIDKey - label key to store backup object uid
 	BackupObjectUIDKey = "backup-object-uid"
 	// TLSCertMountVol mount vol name for tls certificate secret
-	TLSCertMountVol = "tls-secret"
+	TLSCertMountVol       = "tls-secret"
+	defaultTimeout        = 1 * time.Minute
+	progressCheckInterval = 5 * time.Second
 )
 
 // SetupServiceAccount create a service account and bind it to a provided role.
@@ -40,8 +45,40 @@ func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 			return fmt.Errorf("create %s/%s rolebinding: %s", namespace, name, err)
 		}
 	}
-	if _, err := coreops.Instance().CreateServiceAccount(serviceAccountFor(name, namespace)); err != nil && !errors.IsAlreadyExists(err) {
+	var sa *corev1.ServiceAccount
+	var err error
+	if sa, err = coreops.Instance().CreateServiceAccount(serviceAccountFor(name, namespace)); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("create %s/%s serviceaccount: %s", namespace, name, err)
+	}
+	t := func() (interface{}, bool, error) {
+		sa, err = coreops.Instance().GetServiceAccount(name, namespace)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed fetching sa [%v/%v]: %v", name, namespace, err)
+			logrus.Tracef("%v", errMsg)
+			return "", true, fmt.Errorf("%v", errMsg)
+		}
+		if sa.Secrets == nil {
+			errMsg := fmt.Sprintf("secret token is missing in sa [%v/%v]", name, namespace)
+			return "", true, fmt.Errorf("%v", errMsg)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, progressCheckInterval); err != nil {
+		errMsg := fmt.Sprintf("max retries done, failed in fetching secret token of sa [%v/%v]: %v ", name, namespace, err)
+		logrus.Errorf("%v", errMsg)
+		// Exhausted all retries
+		return err
+	}
+
+	tokenName := sa.Secrets[0].Name
+	secretToken, err := coreops.Instance().GetSecret(tokenName, namespace)
+	if err != nil {
+		return fmt.Errorf("failed in getting secretToken [%v] of service account [%v/%v]: %v", tokenName, name, namespace, err)
+	}
+	secretToken.Annotations[SkipResourceAnnotation] = "true"
+	_, err = coreops.Instance().UpdateSecret(secretToken)
+	if err != nil {
+		return fmt.Errorf("failed in updating the secretToken [%v] of service account [%v/%v]: %v", tokenName, name, namespace, err)
 	}
 	return nil
 }
