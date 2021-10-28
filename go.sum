@@ -1104,6 +1104,8 @@ github.com/portworx/kdmp v0.4.1-0.20211014134259-35fa348614f8 h1:n0hcYfJ+zbqU51T
 github.com/portworx/kdmp v0.4.1-0.20211014134259-35fa348614f8/go.mod h1:ethpTE5btKfTpuuC0T3bQHTBCLymlUaBAa2pRoCJixM=
 github.com/portworx/kdmp v0.4.1-0.20211020042040-649a87216a48 h1:/z7KPnbxB6BUz4Ak97eSYNasgDraE1KY9+/Dn36Utc8=
 github.com/portworx/kdmp v0.4.1-0.20211020042040-649a87216a48/go.mod h1:ethpTE5btKfTpuuC0T3bQHTBCLymlUaBAa2pRoCJixM=
+github.com/portworx/kdmp v0.4.1-0.20211028105734-7556284d0342 h1:fCAJrZ/dad0xnYgeT3t08XOsztwFxpQP732ddjiLNHg=
+github.com/portworx/kdmp v0.4.1-0.20211028105734-7556284d0342/go.mod h1:zNkIUImPeEU0yDHFogtihy2pTEfJogLjGLDdON0Kaoc=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200311180812-b2c72382d652 h1:NElBL34RIHlZKGtDVXT/srxuVZ1+tqmnCdm1K+MC+fU=
@@ -1128,6 +1130,8 @@ github.com/portworx/sched-ops v1.20.4-rc1.0.20210929114621-9001768f8eb7 h1:+DcMk
 github.com/portworx/sched-ops v1.20.4-rc1.0.20210929114621-9001768f8eb7/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211006132704-8a90df7acb50 h1:FmTch/gRKT3vq+dtY1DEOBKVg1xoEYLzQudmyV4TpEc=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211006132704-8a90df7acb50/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20211026113317-db80e47fe929 h1:yl7Lb1yRziwDVHkCbZAtyGI9aWa1pYb5wPr8wpHNxbY=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20211026113317-db80e47fe929/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224/go.mod h1:OjpMH9Uh5o9ntVGktm4FbjLNwubJ3ITih2OfYrAeWtA=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 h1:J5D0JPZWueVAK8/Dr5s84I7/tCfin6NjIGbKKCSyyJ0=

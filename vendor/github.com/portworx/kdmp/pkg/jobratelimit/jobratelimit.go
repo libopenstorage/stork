@@ -153,3 +153,9 @@ func IsJobForPvcAlreadyRunning(pvcName, pvcNamespace, pvcUID, jobType string) (b
 	}
 	return true, nil
 }
+
+// IsJobAlreadyPresent - will check whether the given job is already present.
+func IsJobAlreadyPresent(name, namespace string) bool {
+	_, err := batch.Instance().GetJob(name, namespace)
+	return err == nil
+}
