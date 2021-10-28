@@ -69,6 +69,14 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		return "", utils.ErrJobAlreadyRunning
 	}
 
+	// Sometimes the StartJob is getting called for the same dataexport CR,
+	// If the status update to the CR fails in the reconciler. In that case, if we
+	// the find job already created, we will exit from here with out doing anything.
+	present := jobratelimit.IsJobAlreadyPresent(o.DataExportName, o.Namespace)
+	if present {
+		return utils.NamespacedName(o.Namespace, o.DataExportName), nil
+	}
+
 	// Check whether there is slot to schedule the job.
 	driverType := d.Name()
 	available, err := jobratelimit.CanJobBeScheduled(driverType)
