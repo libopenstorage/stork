@@ -18,6 +18,8 @@ type JobOps interface {
 	GetJob(name, namespace string) (*batchv1.Job, error)
 	// DeleteJob deletes the job with given namespace and name
 	DeleteJob(name, namespace string) error
+	// DeleteJobWithForce deletes the job with given namespace and name
+	DeleteJobWithForce(name, namespace string) error
 	// ValidateJob validates if the job with given namespace and name succeeds.
 	// It waits for timeout duration for job to succeed
 	ValidateJob(name, namespace string, timeout time.Duration) error
@@ -52,6 +54,19 @@ func (c *Client) DeleteJob(name, namespace string) error {
 	return c.batch.Jobs(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+// DeleteJobWithForce deletes the job with given namespace and name with force option
+func (c *Client) DeleteJobWithForce(name, namespace string) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+	gracePeriodSec := int64(0)
+	deleteOptions := metav1.DeleteOptions{
+		PropagationPolicy:  &deleteForegroundPolicy,
+		GracePeriodSeconds: &gracePeriodSec,
+	}
+	return c.batch.Jobs(namespace).Delete(context.TODO(), name, deleteOptions)
 }
 
 // ValidateJob validates if the job with given namespace and name succeeds.
