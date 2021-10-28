@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
@@ -56,17 +57,31 @@ const (
 	progressCheckInterval = 5 * time.Second
 )
 
+type updateDataExportDetail struct {
+	stage                kdmpapi.DataExportStage
+	status               kdmpapi.DataExportStatus
+	transferID           string
+	reason               string
+	snapshotID           string
+	size                 uint64
+	progressPercentage   int
+	snapshotPVCName      string
+	snapshotPVCNamespace string
+}
+
 var volumeAPICallBackoff = wait.Backoff{
 	Duration: volumeinitialDelay,
 	Factor:   volumeFactor,
 	Steps:    volumeSteps,
 }
 
+var lastKnownStatusOfInProgress kdmpapi.DataExportStatus
+var lastKnownInProgressErrMsg string
+
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
 	if in == nil {
 		return false, nil
 	}
-
 	dataExport := in.DeepCopy()
 
 	// set the initial stage
@@ -111,7 +126,6 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
 			return false, nil
 		}
-
 		if err = c.cleanUp(driver, dataExport); err != nil {
 			return true, fmt.Errorf("%s: cleanup: %s", reflect.TypeOf(dataExport), err)
 		}
@@ -119,7 +133,6 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		controllers.RemoveFinalizer(dataExport, cleanupFinalizer)
 		return true, c.client.Update(ctx, dataExport)
 	}
-
 	switch dataExport.Status.Stage {
 	case kdmpapi.DataExportStageInitial:
 		return c.stageInitial(ctx, dataExport)
@@ -174,7 +187,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			if err != nil {
 				msg := fmt.Sprintf("failed to create cloud credential secret during kopia backup: %v", err)
 				logrus.Errorf(msg)
-				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: msg,
+				}
+				return false, c.updateStatus(dataExport, data)
 			}
 
 		}
@@ -187,7 +204,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				msg := fmt.Sprintf("Error accessing volumebackup %s in namespace %s : %v",
 					dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace, err)
 				logrus.Errorf(msg)
-				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: msg,
+				}
+				return false, c.updateStatus(dataExport, data)
 			}
 			// This will create a unique secret per PVC being restored
 			// For restore create the secret in the ns where PVC is referenced
@@ -201,7 +222,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			if err != nil {
 				msg := fmt.Sprintf("failed to create cloud credential secret during kopia restore: %v", err)
 				logrus.Errorf(msg)
-				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: msg,
+				}
+				return false, c.updateStatus(dataExport, data)
 			}
 			// For restore setting the source PVCName as the destination PVC name for the job
 			srcPVCName = dataExport.Spec.Destination.Name
@@ -212,112 +237,126 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		if err != nil {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
 			logrus.Warnf(msg)
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: msg,
+			}
+			return false, c.updateStatus(dataExport, data)
 		}
 
 		dataExport.Status.TransferID = id
-		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
+		data := updateDataExportDetail{
+			status:     kdmpapi.DataExportStatusSuccessful,
+			transferID: id,
+		}
+		return true, c.updateStatus(dataExport, data)
 	case kdmpapi.DataExportStageTransferInProgress:
-		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
+		// Remember the state so that we populate the same in the final stage if cleanup
+		// pass but InProgress failed. Need to propogate failure to caller
+		lastKnownStatusOfInProgress = dataExport.Status.Status
+		lastKnownInProgressErrMsg = dataExport.Status.Reason
+		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
+			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 			// set to the next stage
-			dataExport.Status.Stage = kdmpapi.DataExportStageFinal
-			return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+			dataExport.Status.Stage = kdmpapi.DataExportStageCleanup
+			return false, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
 		}
 
 		// get transfer job status
 		progress, err := driver.JobStatus(dataExport.Status.TransferID)
 		if err != nil {
-			msg := fmt.Sprintf("failed to get %s job status: %s", dataExport.Status.TransferID, err)
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+			errMsg := fmt.Sprintf("failed to get %s job status: %s", dataExport.Status.TransferID, err)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: errMsg,
+			}
+			return false, c.updateStatus(dataExport, data)
 		}
 
 		switch progress.State {
 		case drivers.JobStateFailed:
-			msg := fmt.Sprintf("%s transfer job failed: %s", dataExport.Status.TransferID, progress.Reason)
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+			errMsg := fmt.Sprintf("%s transfer job failed: %s", dataExport.Status.TransferID, progress.Reason)
+			// If a job has failed it means it has tried all possible retires and given up.
+			// In such a scenario we need to fail DE CR and move to clean up stage
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: errMsg,
+			}
+			return true, c.updateStatus(dataExport, data)
 		case drivers.JobStateCompleted:
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusSuccessful, "")
-		}
+			var vbName string
+			var vbNamespace string
+			if driverName == drivers.KopiaBackup {
+				vbNamespace, vbName, err = utils.ParseJobID(dataExport.Status.TransferID)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to parse job ID %v from DataExport CR: %v: %v",
+						dataExport.Status.TransferID, dataExport.Name, err)
+					data := updateDataExportDetail{
+						status: kdmpapi.DataExportStatusFailed,
+						reason: errMsg,
+					}
+					return false, c.updateStatus(dataExport, data)
+				}
+			}
+			if driverName == drivers.KopiaRestore {
+				vbName = dataExport.Spec.Source.Name
+				vbNamespace = dataExport.Spec.Source.Namespace
+			}
+			var volumeBackupCR *kdmpapi.VolumeBackup
+			var vbErr error
+			vbTask := func() (interface{}, bool, error) {
+				volumeBackupCR, vbErr = kdmpopts.Instance().GetVolumeBackup(context.Background(),
+					vbName, vbNamespace)
+				if errors.IsNotFound(vbErr) {
+					errMsg := fmt.Sprintf("volumebackup CR %v/%v not found", vbNamespace, vbName)
+					logrus.Errorf("%v", errMsg)
+					return "", false, fmt.Errorf(errMsg)
+				}
 
-		dataExport.Status.ProgressPercentage = int(progress.ProgressPercents)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, "")
-	case kdmpapi.DataExportStageFinal:
-		// If we have a failure case in this stage it means in the previous stage
-		// all retries were done in cleaning up resources and failed.
-		// In such a case we don't want to proceed further as stork will
-		// eventually clean up DE CR.
-		// Without this, we would again see the resource cleanup error and move
-		// the status to DataExportStatusInProgress which is not desireable
+				if vbErr != nil {
+					errMsg := fmt.Sprintf("failed to read VolumeBackup CR %v: %v", vbName, err)
+					logrus.Errorf("%v", errMsg)
+					data := updateDataExportDetail{
+						status: kdmpapi.DataExportStatusInProgress,
+					}
+					err := c.updateStatus(dataExport, data)
+					if err != nil {
+						return "", false, fmt.Errorf("%v", err)
+					}
+					return "", true, fmt.Errorf("%v", errMsg)
+				}
+				return "", false, nil
+			}
+			if _, err := task.DoRetryWithTimeout(vbTask, defaultTimeout, progressCheckInterval); err != nil {
+				errMsg := fmt.Sprintf("max retries done, failed to read VolumeBackup CR %v: %v", vbName, err)
+				logrus.Errorf("%v", errMsg)
+				// Exhausted all retries, fail the CR
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: errMsg,
+				}
+				return false, c.updateStatus(dataExport, data)
+			}
+
+			data := updateDataExportDetail{
+				status:             kdmpapi.DataExportStatusSuccessful,
+				snapshotID:         volumeBackupCR.Status.SnapshotID,
+				size:               volumeBackupCR.Status.TotalBytes,
+				progressPercentage: int(progress.ProgressPercents),
+			}
+
+			return false, c.updateStatus(dataExport, data)
+		}
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusInProgress,
+		}
+		return false, c.updateStatus(dataExport, data)
+	case kdmpapi.DataExportStageCleanup:
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
 			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-			return false, nil
-		}
-
-		var vbName string
-		var vbNamespace string
-		if driverName == drivers.KopiaBackup {
-			vbNamespace, vbName, err = utils.ParseJobID(dataExport.Status.TransferID)
-			if err != nil {
-				errMsg := fmt.Sprintf("failed to parse job ID %v from DataExport CR: %v: %v",
-					dataExport.Status.TransferID, dataExport.Name, err)
-				return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
-			}
-		}
-
-		if driverName == drivers.KopiaRestore {
-			vbName = dataExport.Spec.Source.Name
-			vbNamespace = dataExport.Spec.Source.Namespace
-		}
-		var volumeBackupCR *kdmpapi.VolumeBackup
-		var vbErr error
-		vbTask := func() (interface{}, bool, error) {
-			volumeBackupCR, vbErr = kdmpopts.Instance().GetVolumeBackup(context.Background(),
-				vbName, vbNamespace)
-			if errors.IsNotFound(vbErr) {
-				errMsg := fmt.Sprintf("volumebackup CR %v/%v not found", vbNamespace, vbName)
-				logrus.Errorf("%v", errMsg)
-				return "", false, fmt.Errorf(errMsg)
-			}
-
-			if vbErr != nil {
-				errMsg := fmt.Sprintf("failed to read VolumeBackup CR %v: %v", vbName, err)
-				logrus.Errorf("%v", errMsg)
-				err := c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, "")
-				if err != nil {
-					return "", false, fmt.Errorf("%v", err)
-				}
-				return "", true, fmt.Errorf("%v", errMsg)
-			}
-			return "", false, nil
-		}
-		if _, err := task.DoRetryWithTimeout(vbTask, defaultTimeout, progressCheckInterval); err != nil {
-			errMsg := fmt.Sprintf("max retries done, failed to read VolumeBackup CR %v: %v", vbName, err)
-			logrus.Errorf("%v", errMsg)
-			// Exhausted all retries, fail the CR
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
-		}
-
-		dataExport.Status.SnapshotID = volumeBackupCR.Status.SnapshotID
-		dataExport.Status.Size = volumeBackupCR.Status.TotalBytes
-		tlsTask := func() (interface{}, bool, error) {
-			// Delete the tls certificate secret created
-			err = core.Instance().DeleteSecret(drivers.CertSecretName, dataExport.Spec.Source.Namespace)
-			if err != nil && !errors.IsNotFound(err) {
-				errMsg := fmt.Sprintf("failed to delete [%s/%s] secret", dataExport.Spec.Source.Namespace, drivers.CertSecretName)
-				logrus.Errorf("%v", errMsg)
-				err := c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, "")
-				if err != nil {
-					return "", false, fmt.Errorf("%v", err)
-				}
-				return "", true, fmt.Errorf("%v", errMsg)
-			}
-			return "", false, nil
-		}
-		if _, err := task.DoRetryWithTimeout(tlsTask, defaultTimeout, progressCheckInterval); err != nil {
-			errMsg := fmt.Sprintf("max retries done, failed to delete [%s/%s] secret", dataExport.Spec.Source.Namespace, drivers.CertSecretName)
-			logrus.Errorf("%v", errMsg)
-			// Exhausted all retries, fail the CR
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
+			// set to the next stage
+			dataExport.Status.Stage = kdmpapi.DataExportStageFinal
+			return true, c.client.Update(ctx, dataExport)
 		}
 
 		cleanupTask := func() (interface{}, bool, error) {
@@ -325,7 +364,10 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			if err != nil {
 				errMsg := fmt.Sprintf("failed to remove resources: %s", err)
 				logrus.Errorf("%v", errMsg)
-				err := c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, "")
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusInProgress,
+				}
+				err := c.updateStatus(dataExport, data)
 				if err != nil {
 					return "", false, fmt.Errorf("%v", err)
 				}
@@ -338,11 +380,16 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			errMsg := fmt.Sprintf("max retries done, failed to delete [%s:%s] secret", dataExport.Spec.Source.Namespace, drivers.CertSecretName)
 			logrus.Errorf("%v", errMsg)
 			// Exhausted all retries, fail the CR
-			return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, errMsg)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: errMsg,
+			}
+			return false, c.updateStatus(dataExport, data)
 		}
-		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
+		return true, c.client.Update(ctx, setStatus(dataExport, lastKnownStatusOfInProgress, lastKnownInProgressErrMsg))
+	case kdmpapi.DataExportStageFinal:
+		return false, nil
 	}
-
 	return false, nil
 }
 
@@ -359,7 +406,11 @@ func (c *Controller) stageInitial(ctx context.Context, dataExport *kdmpapi.DataE
 	driverName, err := getDriverType(dataExport)
 	if err != nil {
 		msg := fmt.Sprintf("check failed: %s", err)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 	switch driverName {
 	case drivers.Rsync:
@@ -375,7 +426,11 @@ func (c *Controller) stageInitial(ctx context.Context, dataExport *kdmpapi.DataE
 	}
 	if err != nil {
 		msg := fmt.Sprintf("check failed: %s", err)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
@@ -414,7 +469,11 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 	)
 	if err != nil {
 		msg := fmt.Sprintf("failed to create a snapshot: %s", err)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	dataExport.Status.SnapshotID = name
@@ -467,15 +526,27 @@ func (c *Controller) stageSnapshotInProgress(ctx context.Context, dataExport *kd
 	snapInfo, err := snapshotDriver.SnapshotStatus(dataExport.Status.SnapshotID, dataExport.Spec.Source.Namespace)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get a snapshot status: %s", err)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	if snapInfo.Status == snapshotter.StatusFailed {
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, snapInfo.Reason)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: snapInfo.Reason,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	if snapInfo.Status != snapshotter.StatusReady {
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, snapInfo.Reason)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusInProgress,
+			reason: snapInfo.Reason,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, snapInfo.Reason))
@@ -501,12 +572,21 @@ func (c *Controller) stageSnapshotRestore(ctx context.Context, dataExport *kdmpa
 	pvc, err := c.restoreSnapshot(ctx, snapshotDriver, dataExport)
 	if err != nil {
 		msg := fmt.Sprintf("failed to restore a snapshot: %s", err)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	dataExport.Status.SnapshotPVCName = pvc.Name
 	dataExport.Status.SnapshotPVCNamespace = pvc.Namespace
-	return true, c.updateStatus(dataExport, kdmpapi.DataExportStatusSuccessful, "")
+	data := updateDataExportDetail{
+		snapshotPVCName:      pvc.Name,
+		snapshotPVCNamespace: pvc.Namespace,
+		status:               kdmpapi.DataExportStatusSuccessful,
+	}
+	return true, c.updateStatus(dataExport, data)
 }
 
 func (c *Controller) stageSnapshotRestoreInProgress(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
@@ -530,21 +610,37 @@ func (c *Controller) stageSnapshotRestoreInProgress(ctx context.Context, dataExp
 	srcPvc, err := core.Instance().GetPersistentVolumeClaim(src.Name, src.Namespace)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get restore pvc %v: %v", src.Name, err)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	restoreInfo, err := snapshotDriver.RestoreStatus(toSnapshotPVCName(srcPvc.Name, string(dataExport.UID)), srcPvc.Namespace)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get a snapshot restore status: %s", err)
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	if restoreInfo.Status == snapshotter.StatusFailed {
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusFailed, restoreInfo.Reason)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: restoreInfo.Reason,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	if restoreInfo.Status != snapshotter.StatusReady {
-		return false, c.updateStatus(dataExport, kdmpapi.DataExportStatusInProgress, restoreInfo.Reason)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusInProgress,
+			reason: restoreInfo.Reason,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, restoreInfo.Reason))
@@ -581,9 +677,16 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 			}
 		}
 	}
-
+	// Delete the tls certificate secret created
+	err := core.Instance().DeleteSecret(drivers.CertSecretName, de.Spec.Source.Namespace)
+	if err != nil && !errors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("failed to delete [%s/%s] secret", de.Spec.Source.Namespace, drivers.CertSecretName)
+		logrus.Errorf("%v", errMsg)
+		return fmt.Errorf("%v", errMsg)
+	}
 	if de.Status.TransferID != "" {
-		if err := driver.DeleteJob(de.Status.TransferID); err != nil {
+		err := driver.DeleteJob(de.Status.TransferID)
+		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("delete %s job: %s", de.Status.TransferID, err)
 		}
 	}
@@ -591,14 +694,48 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 	return nil
 }
 
-func (c *Controller) updateStatus(de *kdmpapi.DataExport, status kdmpapi.DataExportStatus, errMsg string) error {
-	if isStatusEqual(de, status, errMsg) {
-		return nil
-	}
+func (c *Controller) updateStatus(de *kdmpapi.DataExport, data updateDataExportDetail) error {
 	t := func() (interface{}, bool, error) {
-		err := c.client.Update(context.TODO(), setStatus(de, status, errMsg))
+		namespacedName := types.NamespacedName{}
+		namespacedName.Name = de.Name
+		namespacedName.Namespace = de.Namespace
+		err := c.client.Get(context.TODO(), namespacedName, de)
+		if err != nil && !errors.IsNotFound(err) {
+			errMsg := fmt.Sprintf("failed in getting DE CR %v/%v: %v", de.Namespace, de.Name, err)
+			logrus.Infof("%v", errMsg)
+			return "", true, fmt.Errorf("%v", errMsg)
+		}
+		if data.stage != "" {
+			de.Status.Stage = data.stage
+		}
+		if data.status != "" {
+			de.Status.Status = data.status
+		}
+		if data.transferID != "" {
+			de.Status.TransferID = data.transferID
+		}
+		if data.reason != "" {
+			de.Status.Reason = data.reason
+		}
+		if data.snapshotID != "" {
+			de.Status.SnapshotID = data.snapshotID
+		}
+		if data.size != uint64(0) {
+			de.Status.Size = data.size
+		}
+		if data.progressPercentage != 0 {
+			de.Status.ProgressPercentage = data.progressPercentage
+		}
+		if data.snapshotPVCName != "" {
+			de.Status.SnapshotPVCName = data.snapshotPVCName
+		}
+		if data.snapshotPVCNamespace != "" {
+			de.Status.SnapshotPVCNamespace = data.snapshotPVCNamespace
+		}
+
+		err = c.client.Update(context.TODO(), de)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed updating DE CR %s to status %v: %v", de.Name, status, err)
+			errMsg := fmt.Sprintf("failed updating DE CR %s: %v", de.Name, err)
 			logrus.Errorf("%v", errMsg)
 			return "", true, fmt.Errorf("%v", errMsg)
 		}
@@ -606,7 +743,7 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, status kdmpapi.DataExp
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, progressCheckInterval); err != nil {
-		errMsg := fmt.Sprintf("max retries done, failed updating DE CR %s to status %v: %v", de.Name, status, err)
+		errMsg := fmt.Sprintf("max retries done, failed updating DE CR %s: %v", de.Name, err)
 		logrus.Errorf("%v", errMsg)
 		// Exhausted all retries, fail the CR
 		return err
@@ -863,10 +1000,6 @@ func setStatus(de *kdmpapi.DataExport, status kdmpapi.DataExportStatus, reason s
 	de.Status.Reason = reason
 
 	return de
-}
-
-func isStatusEqual(de *kdmpapi.DataExport, status kdmpapi.DataExportStatus, reason string) bool {
-	return de.Status.Status == status && de.Status.Reason == reason
 }
 
 func getDriverType(de *kdmpapi.DataExport) (string, error) {
