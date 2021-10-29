@@ -1157,6 +1157,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 func (c *csi) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	if c.snapshotClient == nil {
 		if err := c.Init(nil); err != nil {

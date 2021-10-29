@@ -222,6 +222,20 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				}
 				return false, c.updateStatus(dataExport, data)
 			}
+
+			// Create the pvc from the spec provided in the dataexport CR
+			pvcSpec := dataExport.Status.RestorePVC
+			_, err = c.createPVC(dataExport)
+			if err != nil {
+				msg := fmt.Sprintf("Error creating pvc %s/%s for restore: %v", pvcSpec.Namespace, pvcSpec.Name, err)
+				logrus.Errorf(msg)
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: msg,
+				}
+				return false, c.updateStatus(dataExport, data)
+			}
+
 			// This will create a unique secret per PVC being restored
 			// For restore create the secret in the ns where PVC is referenced
 			err = CreateCredentialsSecret(
@@ -863,6 +877,18 @@ func (c *Controller) restoreSnapshot(ctx context.Context, snapshotDriver snapsho
 	return pvc, nil
 }
 
+func (c *Controller) createPVC(dataExport *kdmpapi.DataExport) (*corev1.PersistentVolumeClaim, error) {
+	pvc := dataExport.Status.RestorePVC
+	newPVC, err := core.Instance().CreatePersistentVolumeClaim(pvc)
+	if err != nil{
+		if k8sErrors.IsAlreadyExists(err) {
+			return pvc, nil
+		}
+		return nil, fmt.Errorf("failed to create PVC %s: %s", pvc.Name, err.Error())
+	}
+	return newPVC, nil
+}
+
 func (c *Controller) checkClaims(de *kdmpapi.DataExport) error {
 	if !hasSnapshotStage(de) && de.Spec.Source.Namespace != de.Spec.Destination.Namespace {
 		return fmt.Errorf("source and destination volume claims should be in the same namespace if no snapshot class is provided")
@@ -933,9 +959,6 @@ func (c *Controller) checkGenericRestore(de *kdmpapi.DataExport) error {
 
 	if !isPVCRef(de.Spec.Destination) && !isAPIVersionKindNotSetRef(de.Spec.Destination) {
 		return fmt.Errorf("destination is expected to be PersistentVolumeClaim")
-	}
-	if _, err := checkPVC(de.Spec.Destination, true); err != nil {
-		return fmt.Errorf("destination: %s", err)
 	}
 
 	return nil

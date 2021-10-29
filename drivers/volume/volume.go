@@ -178,7 +178,7 @@ type BackupRestorePluginInterface interface {
 	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
-	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
+	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo, []runtime.Unstructured) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
 	// Get the status of restore of the volumes specified in the status
 	// for the restore spec
 	GetRestoreStatus(*storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
@@ -441,6 +441,7 @@ func (b *BackupRestoreNotSupported) GetPreRestoreResources(
 func (b *BackupRestoreNotSupported) StartRestore(
 	*storkapi.ApplicationRestore,
 	[]*storkapi.ApplicationBackupVolumeInfo,
+	[]runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
