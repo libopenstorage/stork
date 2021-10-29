@@ -60,6 +60,11 @@ const (
 	annPVBindCompleted     = "pv.kubernetes.io/bind-completed"
 	annPVBoundByController = "pv.kubernetes.io/bound-by-controller"
 	restoreUIDLabel        = "restoreUID"
+	pureCSIProvisioner     = "pure-csi"
+	vSphereCSIProvisioner  = "csi.vsphere.vmware.com"
+	efsCSIProvisioner      = "efs.csi.aws.com"
+	pureBackendParam       = "backend"
+	pureFileParam          = "file"
 )
 
 // csiBackupObject represents a backup of a series of CSI objects
@@ -219,11 +224,31 @@ func (c *csi) HasNativeVolumeDriverSupport(driverName string) bool {
 		driverName == "disk.csi.azure.com"
 }
 
+func (c *csi) IsDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
+	driverName := pv.Spec.CSI.Driver
+	// pure FB csi driver does not support snapshot
+	if driverName == pureCSIProvisioner {
+		if pv.Spec.CSI.VolumeAttributes[pureBackendParam] == pureFileParam {
+			return true
+		}
+	}
+	// vSphere and efs does not support snapshot
+	if driverName == vSphereCSIProvisioner || driverName == efsCSIProvisioner {
+		return true
+	}
+	return false
+}
+
 func (c *csi) OwnsPV(pv *v1.PersistentVolume) bool {
 	// check if CSI volume
 	if pv.Spec.CSI != nil {
 		// We support certain CSI drivers natively
 		if c.HasNativeVolumeDriverSupport(pv.Spec.CSI.Driver) {
+			return false
+		}
+		// If the CSI driver does not support snapshot feature, we will return false,
+		// It will default to kdmp generic backup.
+		if c.IsDriverWithoutSnapshotSupport(pv) {
 			return false
 		}
 
