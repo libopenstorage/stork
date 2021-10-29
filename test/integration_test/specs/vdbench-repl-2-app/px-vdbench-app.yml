@@ -46,6 +46,6 @@ metadata:
   name: vdbench-config
 data:
     File-Writes: |
-        fsd=fsd-datadir1,anchor=/datadir1,depth=1,width=1,files=1000,size=100M
+        fsd=fsd-datadir1,anchor=/datadir1,depth=1,width=1,files=100,size=100M
         fwd=fwd1,fsd=fsd*,rdpct=0,xfersize=(4k,100),fileio=random,threads=4,fileselect=random
         rd=rd1,fwd=fwd*,elapsed=21600,interval=1,fwdrate=max,format=yes
