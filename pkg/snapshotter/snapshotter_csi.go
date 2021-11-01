@@ -121,6 +121,9 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		vs,
 		metav1.CreateOptions{},
 	); err != nil {
+		if k8s_errors.IsAlreadyExists(err) {
+			return o.Name, o.PVCNamespace, pv.Spec.CSI.Driver, nil
+		}
 		return "", "", "", err
 	}
 	return o.Name, o.PVCNamespace, pv.Spec.CSI.Driver, nil
@@ -274,6 +277,9 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 	}
 	pvc, err := core.Instance().CreatePersistentVolumeClaim(pvc)
 	if err != nil {
+		if k8s_errors.IsAlreadyExists(err) {
+			return pvc, nil
+		}
 		return nil, fmt.Errorf("failed to create PVC %s: %s", pvc.Name, err.Error())
 	}
 	return pvc, nil
@@ -784,10 +790,8 @@ func (c *csiDriver) getCSISnapshotsCRListForDelete(backupLocation *storkapi.Back
 	}
 
 	sort.Strings(timestamps)
-	if len(timestamps) > localCSIRetention {
-		for _, timestamp := range timestamps[:len(timestamps)-localCSIRetention] {
-			vsList = append(vsList, timestampBackupMapping[timestamp])
-		}
+	for _, timestamp := range timestamps {
+		vsList = append(vsList, timestampBackupMapping[timestamp])
 	}
 	return vsList, nil
 }
@@ -806,7 +810,7 @@ func (c *csiDriver) RetainLocalSnapshots(
 		return fmt.Errorf("failed in getting list of older volumesnapshot CRs from objectstore : %v", err)
 	}
 
-	for _, volumeSnapshotCR := range vsCRList {
+	for index, volumeSnapshotCR := range vsCRList {
 		snapshotInfoList, err := c.DownloadSnapshotObjects(backupLocation, volumeSnapshotCR)
 		if err != nil {
 			return err
@@ -821,7 +825,11 @@ func (c *csiDriver) RetainLocalSnapshots(
 				return fmt.Errorf("recreating snapshot resources failed for snapshot %s/%s: %v", namespace, snapName, err)
 			}
 			logrus.Debugf("successfully recreated snapshot resources for snapshot %s/%s", namespace, snapName)
-
+			if index < len(vsCRList)-localCSIRetention {
+				retain = false
+			} else {
+				retain = true
+			}
 			err = c.DeleteSnapshot(
 				vs.Name,
 				namespace,
@@ -831,11 +839,12 @@ func (c *csiDriver) RetainLocalSnapshots(
 				return err
 			}
 			logrus.Debugf("successfully deleted the recreated snapshot resources for snapshot %s/%s", namespace, snapName)
-
-			// Delete the CRs from objectstore
-			err = c.DeleteSnapshotObject(backupLocation, volumeSnapshotCR)
-			if err != nil {
-				logrus.Errorf("deleting the CRs from objectstore failed for snapshot %s/%s: %v", namespace, snapName, err)
+			if !retain {
+				// Delete the CRs from objectstore
+				err = c.DeleteSnapshotObject(backupLocation, volumeSnapshotCR)
+				if err != nil {
+					logrus.Errorf("deleting the CRs from objectstore failed for snapshot %s/%s: %v", namespace, snapName, err)
+				}
 			}
 			logrus.Debugf("successfully deleted snapshot resources in objectstore for snapshot %s/%s", namespace, snapName)
 		}
