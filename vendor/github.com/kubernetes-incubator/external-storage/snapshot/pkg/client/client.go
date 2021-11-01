@@ -39,6 +39,13 @@ const (
 	SnapshotPVCAnnotation = "snapshot.alpha.kubernetes.io/snapshot"
 )
 
+var (
+	// storkVolumeSnapshotShortNames are the short names for volume snapshot CR
+	storkVolumeSnapshotShortNames = []string{"stork-volumesnapshot", "stork-volumesnapshots", "svs"}
+	// storkVolumeSnapshotDataShortNames are the short names for volume snapshot data CR
+	storkVolumeSnapshotDataShortNames = []string{"stork-volumesnapshotdata", "stork-volumesnapshotdatas", "svsd"}
+)
+
 // NewClient creates a new RESTClient
 func NewClient(cfg *rest.Config) (*rest.RESTClient, *runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
@@ -73,6 +80,7 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
 				Plural: crdv1.VolumeSnapshotDataResourcePlural,
 				Kind:   reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
+				ShortNames: storkVolumeSnapshotDataShortNames,
 			},
 		},
 	}
@@ -94,6 +102,7 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
 				Plural: crdv1.VolumeSnapshotResourcePlural,
 				Kind:   reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
+				ShortNames: storkVolumeSnapshotShortNames,
 			},
 		},
 	}
@@ -132,6 +141,7 @@ func CreateCRDV1(clientset apiextensionsclient.Interface) error {
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
 				Plural: crdv1.VolumeSnapshotDataResourcePlural,
 				Kind:   reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
+				ShortNames: storkVolumeSnapshotDataShortNames,
 			},
 		},
 	}
@@ -164,6 +174,7 @@ func CreateCRDV1(clientset apiextensionsclient.Interface) error {
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
 				Plural: crdv1.VolumeSnapshotResourcePlural,
 				Kind:   reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
+				ShortNames: storkVolumeSnapshotShortNames,
 			},
 		},
 	}

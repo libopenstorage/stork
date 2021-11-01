@@ -162,12 +162,18 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 					} else if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyRetain {
 						// only add new annotation,labels in case of replace policy is set to retain
 						annotations = oldNS.GetAnnotations()
+						if annotations == nil {
+							annotations = make(map[string]string)
+						}
 						for k, v := range ns.GetAnnotations() {
 							if _, ok := annotations[k]; !ok {
 								annotations[k] = v
 							}
 						}
 						labels = oldNS.GetLabels()
+						if labels == nil {
+							labels = make(map[string]string)
+						}
 						for k, v := range ns.GetLabels() {
 							if _, ok := labels[k]; !ok {
 								labels[k] = v

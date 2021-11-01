@@ -10,17 +10,18 @@ LABEL name="Stork" \
        summary="Storage Operator Runtime for Kubernetes" \
        description="Stork is a Cloud Native storage operator runtime scheduler plugin"
 
-RUN microdnf clean all && microdnf install -y wget python3 ca-certificates tar gzip
+RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip
 
-RUN wget -q -O /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \
+RUN python3 -m pip install awscli  && python3 -m pip install rsa --upgrade
+
+
+RUN curl -q -o /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \
     chmod +x /usr/local/bin/aws-iam-authenticator
-
-RUN python3 -m pip install awscli && python3 -m pip install rsa --upgrade
 
 ARG GCLOUD_SDK=google-cloud-sdk-269.0.0-linux-x86_64.tar.gz
 # Remove the test directories
 # Also don't need gsutil
-RUN wget -q https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK && \
+RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK && \
     tar xf $GCLOUD_SDK && rm -rf $GCLOUD_SDK && \
     rm -rf /google-cloud-sdk/platform/gsutil/third_party/oauth2client/tests \
         /google-cloud-sdk/platform/gsutil/third_party/rsa/tests \

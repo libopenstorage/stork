@@ -26,7 +26,7 @@ spec:
               memory: 256Mi
               cpu: 100m
           command: ["./bench_runner.sh"]
-          args: ["Writes", "21600"]
+          args: ["Writes", "12300"]
           volumeMounts:
             - name: vdbench-persistent-storage
               mountPath: /datadir1
