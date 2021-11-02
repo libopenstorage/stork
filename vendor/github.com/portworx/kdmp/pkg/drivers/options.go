@@ -35,6 +35,7 @@ type JobOpts struct {
 	CertSecretName              string
 	CertSecretNamespace         string
 	MaintenanceType             string
+	RepoPVCName                 string
 }
 
 // WithBackupObjectName is job parameter.
@@ -176,6 +177,17 @@ func WithDestinationPVC(name string) JobOption {
 			return fmt.Errorf("destination pvc name should be set")
 		}
 		opts.DestinationPVCName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithRepoPVC is job parameter.
+func WithRepoPVC(name string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("repo pvc name should be set")
+		}
+		opts.RepoPVCName = strings.TrimSpace(name)
 		return nil
 	}
 }
