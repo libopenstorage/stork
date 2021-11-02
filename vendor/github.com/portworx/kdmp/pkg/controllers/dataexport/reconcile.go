@@ -496,6 +496,7 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 
 	dataExport.Status.SnapshotID = name
 	dataExport.Status.SnapshotNamespace = namespace
+	dataExport.Status.VolumeSnapshot = snapName
 	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
 }
 
@@ -974,6 +975,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 	case drivers.KopiaBackup:
 		return drv.StartJob(
 			drivers.WithSourcePVC(srcPVCName),
+			drivers.WithRepoPVC(getRepoPVCName(dataExport, srcPVCName)),
 			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithBackupLocationName(dataExport.Spec.Destination.Name),
 			drivers.WithBackupLocationNamespace(dataExport.Spec.Destination.Namespace),
@@ -1294,6 +1296,14 @@ func trimLabel(label string) string {
 		return label[:63]
 	}
 	return label
+}
+
+func getRepoPVCName(de *kdmpapi.DataExport, pvcName string) string {
+	if hasSnapshotStage(de) {
+		subStrings := strings.Split(pvcName, "-")
+		pvcName = strings.Join(subStrings[:len(subStrings)-1], "-")
+	}
+	return pvcName
 }
 
 func getAnnotationValue(de *kdmpapi.DataExport, key string) string {
