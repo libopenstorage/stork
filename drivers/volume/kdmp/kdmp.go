@@ -80,6 +80,12 @@ const (
 
 	pvcNameKey = kdmpAnnotationPrefix + "pvc-name"
 	pvcUIDKey  = kdmpAnnotationPrefix + "pvc-uid"
+	// pvcProvisionerAnnotation is the annotation on PVC which has the
+	// provisioner name
+	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
+	// pvProvisionedByAnnotation is the annotation on PV which has the
+	// provisioner name
+	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -127,6 +133,25 @@ func getGenericCRName(opsPrefix, crUID, pvcUID, ns string) string {
 	return name
 }
 
+func getProvisionerName(pvc v1.PersistentVolumeClaim) string {
+	provisioner := ""
+	if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
+		provisioner = val
+	}
+	if len(provisioner) != 0 {
+		return provisioner
+	}
+	pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+	if err != nil {
+		logrus.Warnf("error getting pv for pvc [%v/%v]: %v", pvc.Namespace, pvc.Name, err)
+		return provisioner
+	}
+	if val, ok := pv.Annotations[pvProvisionedByAnnotation]; ok {
+		provisioner = val
+	}
+	return provisioner
+}
+
 func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
@@ -138,6 +163,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			continue
 		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
+		volumeInfo.Provisioner = getProvisionerName(pvc)
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
@@ -231,6 +257,7 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				vInfo.Reason = "Backup successful for volume"
 				vInfo.TotalSize = dataExport.Status.Size
 				vInfo.ActualSize = dataExport.Status.Size
+				vInfo.VolumeSnapshot = dataExport.Status.VolumeSnapshot
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
