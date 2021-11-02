@@ -22,6 +22,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
@@ -86,6 +87,12 @@ const (
 	// pvProvisionedByAnnotation is the annotation on PV which has the
 	// provisioner name
 	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
+	pureCSIProvisioner        = "pure-csi"
+	vSphereCSIProvisioner     = "csi.vsphere.vmware.com"
+	efsCSIProvisioner         = "efs.csi.aws.com"
+	pureBackendParam          = "backend"
+	pureFileParam             = "file"
+	proxyEndpoint             = "proxy_endpoint"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -152,6 +159,45 @@ func getProvisionerName(pvc v1.PersistentVolumeClaim) string {
 	return provisioner
 }
 
+func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) bool {
+	pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+	if err != nil {
+		errMsg := fmt.Sprintf("error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
+		logrus.Warnf("ifCSISnapshotSupported: %v", errMsg)
+		// In the case errors, we will allow the kdmp controller csi steps to decide on snapshot support.
+		return true
+	}
+	// check if CSI volume
+	if pv.Spec.CSI != nil {
+		driverName := pv.Spec.CSI.Driver
+		// pure FB csi driver does not support snapshot
+		if driverName == pureCSIProvisioner {
+			if pv.Spec.CSI.VolumeAttributes[pureBackendParam] == pureFileParam {
+				return false
+			}
+		}
+		// vSphere or aws EFS  does not support snapshot
+		if driverName == vSphereCSIProvisioner || driverName == efsCSIProvisioner {
+			return false
+		}
+
+		// For now, we know only pso file and vsphere are CSI driver that does not support snapshot.
+		// So added check. For other we will try to create CSI snapshot and if it fails, we will take generic backup.
+		return true
+	}
+	// TODO: If storage class is not present, need to make volume instpect call to protworx and check.
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName != "" {
+		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
+		if err == nil {
+			if _, ok := storageClass.Parameters[proxyEndpoint]; ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
@@ -211,7 +257,10 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			Namespace:  pvc.Namespace,
 			APIVersion: pvc.APIVersion,
 		}
-		dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
+		snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
+		if snapshotClassRequired {
+			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
+		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
 			logrus.Errorf("failed to create DataExport CR: %v", err)
