@@ -95,6 +95,8 @@ type ApplicationBackupVolumeInfo struct {
 	TotalSize                uint64                      `json:"totalSize"`
 	ActualSize               uint64                      `json:"actualSize"`
 	StorageClass             string                      `json:"storageClass"`
+	Provisioner              string                      `json:"provisioner"`
+	VolumeSnapshot           string                      `json:"volumeSnapshot"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
