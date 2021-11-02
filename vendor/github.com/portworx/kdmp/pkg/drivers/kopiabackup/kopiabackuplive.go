@@ -50,7 +50,7 @@ func jobForLiveBackup(
 		"--backup-namespace",
 		jobOption.Namespace,
 		"--repository",
-		toRepoName(jobOption.SourcePVCName, jobOption.Namespace),
+		toRepoName(jobOption.RepoPVCName, jobOption.Namespace),
 		"--source-path-glob",
 		backupPath,
 	}, " ")

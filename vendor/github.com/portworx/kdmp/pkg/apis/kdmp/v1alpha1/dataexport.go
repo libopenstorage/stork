@@ -122,6 +122,7 @@ type ExportStatus struct {
 	TransferID           string           `json:"transferID,omitempty"`
 	ProgressPercentage   int              `json:"progressPercentage,omitempty"`
 	Size                 uint64           `json:"size,omitempty"`
+	VolumeSnapshot       string           `json:"volumeSnapshot,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
