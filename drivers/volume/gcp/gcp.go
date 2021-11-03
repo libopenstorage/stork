@@ -410,6 +410,7 @@ func (g *gcp) GetPreRestoreResources(
 func (g *gcp) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	if g.service == nil {
 		if err := g.Init(nil); err != nil {
