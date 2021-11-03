@@ -446,6 +446,7 @@ func (a *azure) GetPreRestoreResources(
 func (a *azure) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	if !a.initDone {
 		if err := a.Init(nil); err != nil {

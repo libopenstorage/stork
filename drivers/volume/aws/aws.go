@@ -441,6 +441,7 @@ func (a *aws) GetPreRestoreResources(
 func (a *aws) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	if a.client == nil {
 		if err := a.Init(nil); err != nil {

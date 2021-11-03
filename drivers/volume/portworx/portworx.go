@@ -3245,6 +3245,7 @@ func (p *portworx) GetPreRestoreResources(
 func (p *portworx) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	if !p.initDone {
 		if err := p.initPortworxClients(); err != nil {

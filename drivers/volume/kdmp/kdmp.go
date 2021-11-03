@@ -546,33 +546,45 @@ func (k *kdmp) getRestorePVCs(
 	return pvcs, nil
 }
 
+func (k *kdmp) getPVCFromObjects(objects []runtime.Unstructured, volumeBackupInfo *storkapi.ApplicationBackupVolumeInfo) (*v1.PersistentVolumeClaim, error) {
+	var pvc v1.PersistentVolumeClaim
+	for _, o := range objects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return &pvc, err
+		}
+
+		if objectType.GetKind() == "PersistentVolumeClaim" {
+			var tempPVC v1.PersistentVolumeClaim
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &tempPVC)
+			if err != nil {
+				return &pvc, nil
+			}
+			if tempPVC.Name == volumeBackupInfo.PersistentVolumeClaim {
+				pvc = tempPVC
+				break
+			}
+		}
+	}
+	return &pvc, nil
+}
+
 func (k *kdmp) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+	objects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	log.ApplicationRestoreLog(restore).Debugf("started generic restore: %v", restore.Name)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, bkpvInfo := range volumeBackupInfos {
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
-		// wait for pvc to get bound
-		err := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
-			pvc, err := core.Instance().GetPersistentVolumeClaim(bkpvInfo.PersistentVolumeClaim, bkpvInfo.Namespace)
-			if err != nil {
-				return false, nil
-			}
-			if pvc.Spec.VolumeName == "" || pvc.Status.Phase != v1.ClaimBound {
-				return false, nil
-			}
-			volumeInfo.RestoreVolume = pvc.Spec.VolumeName
-			return true, nil
-		})
-		if err != nil {
-			logrus.Errorf("Failed to get volume restore volume: %s, err: %v", bkpvInfo.PersistentVolumeClaim, err)
-			continue
-		}
+
+		// get corresponding pvc object from objects list
+		pvc, err := k.getPVCFromObjects(objects, bkpvInfo)
 		if err != nil {
 			return nil, err
 		}
+
 		val, ok := restore.Spec.NamespaceMapping[bkpvInfo.Namespace]
 		if !ok {
 			return nil, fmt.Errorf("restore namespace mapping not found: %s", bkpvInfo.Namespace)
@@ -619,6 +631,8 @@ func (k *kdmp) StartRestore(
 			return nil, err
 		}
 
+		pvc.Namespace = restoreNamespace
+
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
 		dataExport.Labels = labels
@@ -627,6 +641,7 @@ func (k *kdmp) StartRestore(
 		dataExport.Name = getGenericCRName(prefixRestore, string(restore.UID), bkpvInfo.PersistentVolumeClaimUID, restoreNamespace)
 		dataExport.Namespace = restoreNamespace
 		dataExport.Status.TransferID = volBackup.Namespace + "/" + volBackup.Name
+		dataExport.Status.RestorePVC = pvc
 		dataExport.Spec.Type = kdmpapi.DataExportKopia
 		dataExport.Spec.Source = kdmpapi.DataExportObjectReference{
 			Kind:       reflect.TypeOf(kdmpapi.VolumeBackup{}).Name(),
@@ -636,7 +651,7 @@ func (k *kdmp) StartRestore(
 		}
 		dataExport.Spec.Destination = kdmpapi.DataExportObjectReference{
 			Kind:       PVCKind,
-			Name:       bkpvInfo.PersistentVolumeClaim,
+			Name:       pvc.Name,
 			Namespace:  restoreNamespace,
 			APIVersion: "v1",
 		}
@@ -700,9 +715,17 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 				vInfo.Status = storkapi.ApplicationRestoreStatusFailed
 				vInfo.Reason = fmt.Sprintf("restore failed for volume:%s, %s", vInfo.SourceVolume, dataExport.Status.Reason)
 			} else if isDataExportCompleted(dataExport.Status) {
+				restoredPVC, err := core.Instance().GetPersistentVolumeClaim(dataExport.Status.RestorePVC.Name, dataExport.Status.RestorePVC.Namespace)
+				if err != nil {
+					logrus.Errorf("failed to get pvc object for %s/%s: %v", dataExport.Status.RestorePVC.Namespace, dataExport.Status.RestorePVC.Name, err)
+					vInfo.Status = storkapi.ApplicationRestoreStatusFailed
+					vInfo.Reason = fmt.Sprintf("failed to get pvc object for %s/%s", dataExport.Status.RestorePVC.Namespace, dataExport.Status.RestorePVC.Name)
+					return volumeInfos, err
+				}
 				vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 				vInfo.Reason = "restore successful for volume"
 				vInfo.TotalSize = dataExport.Status.Size
+				vInfo.RestoreVolume = restoredPVC.Spec.VolumeName
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)

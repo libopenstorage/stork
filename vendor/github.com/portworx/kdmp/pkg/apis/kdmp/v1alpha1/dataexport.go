@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -112,17 +113,19 @@ type DataExportObjectReference struct {
 
 // ExportStatus indicates a current state of the data transfer.
 type ExportStatus struct {
-	Stage                DataExportStage  `json:"stage,omitempty"`
-	Status               DataExportStatus `json:"status,omitempty"`
-	Reason               string           `json:"reason,omitempty"`
-	SnapshotID           string           `json:"snapshotID,omitempty"`
-	SnapshotNamespace    string           `json:"snapshotNamespace,omitempty"`
-	SnapshotPVCName      string           `json:"snapshotPVCName,omitempty"`
-	SnapshotPVCNamespace string           `json:"snapshotPVCNamespace,omitempty"`
-	TransferID           string           `json:"transferID,omitempty"`
-	ProgressPercentage   int              `json:"progressPercentage,omitempty"`
-	Size                 uint64           `json:"size,omitempty"`
-	VolumeSnapshot       string           `json:"volumeSnapshot,omitempty"`
+	Stage                DataExportStage           `json:"stage,omitempty"`
+	Status               DataExportStatus          `json:"status,omitempty"`
+	Reason               string                    `json:"reason,omitempty"`
+	SnapshotID           string                    `json:"snapshotID,omitempty"`
+	SnapshotNamespace    string                    `json:"snapshotNamespace,omitempty"`
+	SnapshotPVCName      string                    `json:"snapshotPVCName,omitempty"`
+	SnapshotPVCNamespace string                    `json:"snapshotPVCNamespace,omitempty"`
+	TransferID           string                    `json:"transferID,omitempty"`
+	ProgressPercentage   int                       `json:"progressPercentage,omitempty"`
+	Size                 uint64                    `json:"size,omitempty"`
+	VolumeSnapshot       string                    `json:"volumeSnapshot,omitempty"`
+	RestorePVC           *v1.PersistentVolumeClaim `json:"restorePVC,omitempty"`
+	LocalSnapshotRestore bool                      `json:"localSnapshotRestore,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

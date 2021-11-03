@@ -498,8 +498,12 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
 				return err
 			}
-			if err := a.applyResources(restore, preRestoreObjects); err != nil {
-				return err
+
+			// pvc creation is not part of kdmp
+			if driverName != "kdmp" {
+				if err := a.applyResources(restore, preRestoreObjects); err != nil {
+					return err
+				}
 			}
 
 			// Pre-delete resources for CSI driver
@@ -540,7 +544,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				}
 			}
 
-			restoreVolumeInfos, err := driver.StartRestore(restore, vInfos)
+			restoreVolumeInfos, err := driver.StartRestore(restore, vInfos, preRestoreObjects)
 			if err != nil {
 				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", err)
 				log.ApplicationRestoreLog(restore).Errorf(message)
