@@ -79,6 +79,9 @@ type updateDataExportDetail struct {
 	progressPercentage   int
 	snapshotPVCName      string
 	snapshotPVCNamespace string
+	snapshotNamespace    string
+	removeFinalizer      bool
+	volumeSnapshot       string
 }
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -103,9 +106,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			dataExport.Spec.Type = kdmpapi.DataExportRsync
 		}
 
-		dataExport.Status.Stage = kdmpapi.DataExportStageInitial
-		dataExport.Status.Status = kdmpapi.DataExportStatusInitial
-		return true, c.client.Update(ctx, dataExport)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusInitial,
+			stage:  kdmpapi.DataExportStageInitial,
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 
 	// delete an object on the init stage without cleanup
@@ -118,20 +123,30 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			return true, fmt.Errorf("failed to delete dataexport object: %s", err)
 		}
 
-		controllers.RemoveFinalizer(dataExport, cleanupFinalizer)
-		return true, c.client.Update(ctx, dataExport)
+		data := updateDataExportDetail{
+			removeFinalizer: true,
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 
 	// TODO: validate DataExport resource & update status?
 	driverName, err := getDriverType(dataExport)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get a driver type for %s: %s", dataExport.Spec.Type, err)
-		return false, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusFailed, msg))
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 	driver, err := driversinstance.Get(driverName)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get a driver for a %s type: %s", dataExport.Spec.Type, err)
-		return false, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusFailed, msg))
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	if dataExport.DeletionTimestamp != nil {
@@ -142,8 +157,10 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			return true, fmt.Errorf("%s: cleanup: %s", reflect.TypeOf(dataExport), err)
 		}
 
-		controllers.RemoveFinalizer(dataExport, cleanupFinalizer)
-		return true, c.client.Update(ctx, dataExport)
+		data := updateDataExportDetail{
+			removeFinalizer: true,
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 	switch dataExport.Status.Stage {
 	case kdmpapi.DataExportStageInitial:
@@ -160,8 +177,12 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 	case kdmpapi.DataExportStageTransferScheduled:
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 			// set to the next stage
-			dataExport.Status.Stage = kdmpapi.DataExportStageTransferInProgress
-			return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusInitial,
+				reason: "",
+				stage:  kdmpapi.DataExportStageTransferInProgress,
+			}
+			return true, c.updateStatus(dataExport, data)
 		}
 
 		// use snapshot pvc in the dst namespace if it's available
@@ -270,8 +291,12 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
 			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 			// set to the next stage
-			dataExport.Status.Stage = kdmpapi.DataExportStageCleanup
-			return false, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+			data := updateDataExportDetail{
+				stage:  kdmpapi.DataExportStageCleanup,
+				status: kdmpapi.DataExportStatusInitial,
+				reason: "",
+			}
+			return false, c.updateStatus(dataExport, data)
 		}
 
 		// get transfer job status
@@ -366,8 +391,10 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
 			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 			// set to the next stage
-			dataExport.Status.Stage = kdmpapi.DataExportStageFinal
-			return true, c.client.Update(ctx, dataExport)
+			data := updateDataExportDetail{
+				stage: kdmpapi.DataExportStageFinal,
+			}
+			return true, c.updateStatus(dataExport, data)
 		}
 
 		cleanupTask := func() (interface{}, bool, error) {
@@ -388,7 +415,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			return "", false, nil
 		}
 		if _, err := task.DoRetryWithTimeout(cleanupTask, defaultTimeout, progressCheckInterval); err != nil {
-			errMsg := fmt.Sprintf("max retries done, failed to delete [%s:%s] secret", dataExport.Spec.Source.Namespace, drivers.CertSecretName)
+			errMsg := fmt.Sprintf("max retries done, dataexport: [%v/%v] cleanup failed with %v", dataExport.Namespace, dataExport.Name, err)
 			logrus.Errorf("%v", errMsg)
 			// Exhausted all retries, fail the CR
 			data := updateDataExportDetail{
@@ -397,7 +424,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			}
 			return false, c.updateStatus(dataExport, data)
 		}
-		return true, c.client.Update(ctx, setStatus(dataExport, lastKnownStatusOfInProgress, lastKnownInProgressErrMsg))
+		data := updateDataExportDetail{
+			status: lastKnownStatusOfInProgress,
+			reason: lastKnownInProgressErrMsg,
+		}
+		return true, c.updateStatus(dataExport, data)
 	case kdmpapi.DataExportStageFinal:
 		return false, nil
 	}
@@ -411,7 +442,12 @@ func (c *Controller) stageInitial(ctx context.Context, dataExport *kdmpapi.DataE
 		if hasSnapshotStage(dataExport) {
 			dataExport.Status.Stage = kdmpapi.DataExportStageSnapshotScheduled
 		}
-		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+		data := updateDataExportDetail{
+			stage:  dataExport.Status.Stage,
+			status: kdmpapi.DataExportStatusInitial,
+			reason: "",
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 
 	driverName, err := getDriverType(dataExport)
@@ -444,14 +480,22 @@ func (c *Controller) stageInitial(ctx context.Context, dataExport *kdmpapi.DataE
 		return false, c.updateStatus(dataExport, data)
 	}
 
-	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
+	data := updateDataExportDetail{
+		status: kdmpapi.DataExportStatusSuccessful,
+		reason: "",
+	}
+	return true, c.updateStatus(dataExport, data)
 }
 
 func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
-		dataExport.Status.Stage = kdmpapi.DataExportStageSnapshotInProgress
-		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+		data := updateDataExportDetail{
+			stage:  kdmpapi.DataExportStageSnapshotInProgress,
+			status: kdmpapi.DataExportStatusInitial,
+			reason: "",
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 
 	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
@@ -494,10 +538,14 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 		return false, c.updateStatus(dataExport, data)
 	}
 
-	dataExport.Status.SnapshotID = name
-	dataExport.Status.SnapshotNamespace = namespace
-	dataExport.Status.VolumeSnapshot = snapName
-	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, ""))
+	data := updateDataExportDetail{
+		snapshotID:        name,
+		snapshotNamespace: namespace,
+		status:            kdmpapi.DataExportStatusSuccessful,
+		volumeSnapshot:    snapName,
+		reason:            "",
+	}
+	return true, c.updateStatus(dataExport, data)
 }
 
 func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (string, error) {
@@ -528,8 +576,12 @@ func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (stri
 func (c *Controller) stageSnapshotInProgress(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
-		dataExport.Status.Stage = kdmpapi.DataExportStageSnapshotRestore
-		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+		data := updateDataExportDetail{
+			stage:  kdmpapi.DataExportStageSnapshotRestore,
+			status: kdmpapi.DataExportStatusInitial,
+			reason: "",
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 
 	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
@@ -612,14 +664,21 @@ func (c *Controller) stageSnapshotInProgress(ctx context.Context, dataExport *kd
 		return false, c.updateStatus(dataExport, data)
 	}
 
-	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, snapInfo.Reason))
+	data := updateDataExportDetail{
+		status: kdmpapi.DataExportStatusSuccessful,
+	}
+	return true, c.updateStatus(dataExport, data)
 }
 
 func (c *Controller) stageSnapshotRestore(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
-		dataExport.Status.Stage = kdmpapi.DataExportStageSnapshotRestoreInProgress
-		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+		data := updateDataExportDetail{
+			stage:  kdmpapi.DataExportStageSnapshotRestoreInProgress,
+			status: kdmpapi.DataExportStatusInitial,
+			reason: "",
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 
 	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
@@ -665,8 +724,12 @@ func (c *Controller) stageSnapshotRestoreInProgress(ctx context.Context, dataExp
 
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
 		// set to the next stage
-		dataExport.Status.Stage = kdmpapi.DataExportStageTransferScheduled
-		return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusInitial, ""))
+		data := updateDataExportDetail{
+			stage:  kdmpapi.DataExportStageTransferScheduled,
+			status: kdmpapi.DataExportStatusInitial,
+			reason: "",
+		}
+		return true, c.updateStatus(dataExport, data)
 	}
 
 	src := dataExport.Spec.Source
@@ -706,8 +769,59 @@ func (c *Controller) stageSnapshotRestoreInProgress(ctx context.Context, dataExp
 		return false, c.updateStatus(dataExport, data)
 	}
 
-	return true, c.client.Update(ctx, setStatus(dataExport, kdmpapi.DataExportStatusSuccessful, restoreInfo.Reason))
+	data := updateDataExportDetail{
+		status: kdmpapi.DataExportStatusSuccessful,
+		reason: restoreInfo.Reason,
+	}
+	return true, c.updateStatus(dataExport, data)
 
+}
+
+func getBackuplocationFromSecret(secretName, namespace string) (*storkapi.BackupLocation, error) {
+	secret, err := core.Instance().GetSecret(secretName, namespace)
+	if err != nil {
+		logrus.Infof("failed in getting secret [%v]: %v", secretName, err)
+		return nil, err
+	}
+	backupLocation := &storkapi.BackupLocation{
+		ObjectMeta: metav1.ObjectMeta{},
+		Location:   storkapi.BackupLocationItem{},
+	}
+	secretData := secret.Data
+	var backupType storkapi.BackupLocationType
+	switch string(secretData["type"]) {
+	case "s3":
+		backupType = storkapi.BackupLocationS3
+		disableSSL := false
+		if string(secretData["disablessl"]) == "true" {
+			disableSSL = true
+		}
+		backupLocation.Location.S3Config = &storkapi.S3Config{
+			AccessKeyID:     string(secretData["accessKey"]),
+			SecretAccessKey: string(secretData["secretAccessKey"]),
+			Endpoint:        string(secretData["endpoint"]),
+			DisableSSL:      disableSSL,
+			Region:          string(secretData["region"]),
+		}
+	case "azure":
+		backupType = storkapi.BackupLocationAzure
+		backupLocation.Location.AzureConfig = &storkapi.AzureConfig{
+			StorageAccountName: string(secretData["storageaccountname"]),
+			StorageAccountKey:  string(secretData["storageaccountkey"]),
+		}
+	case "google":
+		backupType = storkapi.BackupLocationGoogle
+		backupLocation.Location.GoogleConfig = &storkapi.GoogleConfig{
+			ProjectID:  string(secretData["projectid"]),
+			AccountKey: string(secretData["accountkey"]),
+		}
+	default:
+	}
+	backupLocation.Location.Path = string(secretData["path"])
+	backupLocation.Name = secretName
+	backupLocation.Namespace = namespace
+	backupLocation.Location.Type = backupType
+	return backupLocation, nil
 }
 
 func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) error {
@@ -729,7 +843,14 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		}
 		if de.Status.SnapshotPVCName != "" && de.Status.SnapshotPVCNamespace != "" {
 			pvcUID := getAnnotationValue(de, pvcUIDKey)
-			if bl, err = checkBackupLocation(de.Spec.Destination); err != nil {
+			// Construct the backuplocation from the secret
+			// Since we same name across the resources, using the de name and namespace as secret name and namespace
+			bl, err = getBackuplocationFromSecret(de.Name, de.Spec.Source.Namespace)
+			if err != nil {
+				// If secret is not found, we assume, it is retry
+				if k8sErrors.IsNotFound(err) {
+					return nil
+				}
 				return fmt.Errorf("backuplocation fetch error: %v", err)
 			}
 			objectPath := getCSICRUploadDirectory(pvcUID)
@@ -801,6 +922,15 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, data updateDataExportD
 		}
 		if data.snapshotPVCNamespace != "" {
 			de.Status.SnapshotPVCNamespace = data.snapshotPVCNamespace
+		}
+		if data.snapshotID != "" {
+			de.Status.SnapshotID = data.snapshotID
+		}
+		if data.snapshotNamespace != "" {
+			de.Status.SnapshotNamespace = data.snapshotNamespace
+		}
+		if data.removeFinalizer {
+			controllers.RemoveFinalizer(de, cleanupFinalizer)
 		}
 
 		err = c.client.Update(context.TODO(), de)
@@ -1064,13 +1194,6 @@ func toPodNames(objs []corev1.Pod) []string {
 
 func hasSnapshotStage(de *kdmpapi.DataExport) bool {
 	return de.Spec.SnapshotStorageClass != ""
-}
-
-func setStatus(de *kdmpapi.DataExport, status kdmpapi.DataExportStatus, reason string) *kdmpapi.DataExport {
-	de.Status.Status = status
-	de.Status.Reason = reason
-
-	return de
 }
 
 func getDriverType(de *kdmpapi.DataExport) (string, error) {
