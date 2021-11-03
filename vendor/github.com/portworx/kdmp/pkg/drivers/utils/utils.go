@@ -101,6 +101,10 @@ func IsJobPending(j *batchv1.Job) bool {
 	} else if len(pods.Items) == 0 {
 		return true
 	}
+	// some time even though the pod is created, initially ContainerStatuses is not available for sometime
+	if len(pods.Items[0].Status.ContainerStatuses) == 0 {
+		return true
+	}
 	for _, c := range pods.Items[0].Status.ContainerStatuses {
 		if c.State.Waiting != nil || c.State.Running != nil {
 			return true
