@@ -67,6 +67,7 @@ const (
 	volumeSteps           = 20
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
+	compressionKey        = "KDMP_COMPRESSION"
 )
 
 type updateDataExportDetail struct {
@@ -264,9 +265,18 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			// For restore setting the source PVCName as the destination PVC name for the job
 			srcPVCName = dataExport.Spec.Destination.Name
 		}
-
+		// Read the config map to get compression type
+		var compressionType string
+		kdmpData, err := core.Instance().GetConfigMap(utils.KdmpConfigmapName, utils.KdmpConfigmapNamespace)
+		if err != nil {
+			logrus.Errorf("failed reading config map %v: %v", utils.KdmpConfigmapName, err)
+			logrus.Warnf("default to %s compression", utils.DefaultCompresion)
+			compressionType = utils.DefaultCompresion
+		} else {
+			compressionType = kdmpData.Data[compressionKey]
+		}
 		// start data transfer
-		id, err := startTransferJob(driver, srcPVCName, dataExport)
+		id, err := startTransferJob(driver, srcPVCName, compressionType, dataExport)
 		if err != nil {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
 			logrus.Warnf(msg)
@@ -932,6 +942,9 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, data updateDataExportD
 		if data.removeFinalizer {
 			controllers.RemoveFinalizer(de, cleanupFinalizer)
 		}
+		if data.volumeSnapshot != "" {
+			de.Status.VolumeSnapshot = data.volumeSnapshot
+		}
 
 		err = c.client.Update(context.TODO(), de)
 		if err != nil {
@@ -1072,7 +1085,11 @@ func (c *Controller) checkGenericRestore(de *kdmpapi.DataExport) error {
 	return nil
 }
 
-func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmpapi.DataExport) (string, error) {
+func startTransferJob(
+	drv drivers.Interface,
+	srcPVCName string,
+	compressionType string,
+	dataExport *kdmpapi.DataExport) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
 	}
@@ -1113,6 +1130,7 @@ func startTransferJob(drv drivers.Interface, srcPVCName string, dataExport *kdmp
 			drivers.WithDataExportName(dataExport.GetName()),
 			drivers.WithCertSecretName(drivers.CertSecretName),
 			drivers.WithCertSecretNamespace(dataExport.Spec.Source.Namespace),
+			drivers.WithCompressionType(compressionType),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(

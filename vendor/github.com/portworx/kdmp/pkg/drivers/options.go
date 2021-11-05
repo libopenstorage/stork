@@ -36,6 +36,7 @@ type JobOpts struct {
 	CertSecretNamespace         string
 	MaintenanceType             string
 	RepoPVCName                 string
+	Compression                 string
 }
 
 // WithBackupObjectName is job parameter.
@@ -308,6 +309,14 @@ func WithCertSecretNamespace(namespace string) JobOption {
 func WithMaintenanceType(maintenanceType string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.MaintenanceType = maintenanceType
+		return nil
+	}
+}
+
+// WithCompressionType is job parameter.
+func WithCompressionType(compressionType string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.Compression = compressionType
 		return nil
 	}
 }
