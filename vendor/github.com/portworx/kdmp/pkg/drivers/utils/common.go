@@ -29,6 +29,12 @@ const (
 	TLSCertMountVol       = "tls-secret"
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
+	// KdmpConfigmapName kdmp config map name
+	KdmpConfigmapName = "kdmp-config"
+	// KdmpConfigmapNamespace kdmp config map ns
+	KdmpConfigmapNamespace = "kube-system"
+	// DefaultCompresion default compression type
+	DefaultCompresion = "s2-parallel-8"
 )
 
 // SetupServiceAccount create a service account and bind it to a provided role.

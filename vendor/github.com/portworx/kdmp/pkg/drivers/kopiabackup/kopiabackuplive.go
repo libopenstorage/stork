@@ -55,6 +55,12 @@ func jobForLiveBackup(
 		backupPath,
 	}, " ")
 
+	if jobOption.Compression != "" {
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--compression", jobOption.Compression)
+		cmd = strings.Join(splitCmd, " ")
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
