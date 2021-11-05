@@ -23,6 +23,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
@@ -56,6 +57,8 @@ const (
 	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
 	// StorkAnnotation for pvcs created by stork-kdmp driver
 	StorkAnnotation = "stork.libopenstorage.org/kdmp"
+	// backupUID annotation key
+	backupUIDKey = "portworx.io/backup-uid"
 
 	pxbackupAnnotationPrefix        = "portworx.io/"
 	pxbackupAnnotationCreateByKey   = pxbackupAnnotationPrefix + "created-by"
@@ -650,16 +653,30 @@ func (k *kdmp) StartRestore(
 
 		pvc.Namespace = restoreNamespace
 
+		backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get applicationbackup cr %s/%s: %v", restore.Namespace, restore.Spec.BackupName, err)
+		}
+		var backupUID string
+		if _, ok := backup.Annotations[backupUIDKey]; !ok {
+			msg := fmt.Sprintf("unable to find backup uid from applicationbackup %s/%s", restore.Namespace, restore.Spec.BackupName)
+			return nil, fmt.Errorf(msg)
+		}
+		backupUID = backup.Annotations[backupUIDKey]
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
 		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
+		dataExport.Annotations[backupObjectUIDKey] = backupUID
+		dataExport.Annotations[pvcUIDKey] = bkpvInfo.PersistentVolumeClaimUID
 		dataExport.Name = getGenericCRName(prefixRestore, string(restore.UID), bkpvInfo.PersistentVolumeClaimUID, restoreNamespace)
 		dataExport.Namespace = restoreNamespace
 		dataExport.Status.TransferID = volBackup.Namespace + "/" + volBackup.Name
 		dataExport.Status.RestorePVC = pvc
+		dataExport.Status.LocalSnapshotRestore = k.doLocalRestore(restore, bkpvInfo)
 		dataExport.Spec.Type = kdmpapi.DataExportKopia
+		dataExport.Spec.SnapshotStorageClass = getVolumeSnapshotClassFromBackupVolumeInfo(bkpvInfo)
 		dataExport.Spec.Source = kdmpapi.DataExportObjectReference{
 			Kind:       reflect.TypeOf(kdmpapi.VolumeBackup{}).Name(),
 			Name:       volBackup.Name,
@@ -719,6 +736,15 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 			logrus.Errorf("failed to get restore DataExport CR: %v", err)
 			return volumeInfos, err
 		}
+
+		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed &&
+			dataExport.Status.Stage == kdmpapi.DataExportStageFinal {
+			vInfo.Status = storkapi.ApplicationRestoreStatusFailed
+			vInfo.Reason = fmt.Sprintf("restore failed for volume:%s reason: %s", vInfo.SourceVolume, dataExport.Status.Reason)
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
+
 		if dataExport.Status.TransferID == "" {
 			vInfo.Status = storkapi.ApplicationRestoreStatusInitial
 			vInfo.Reason = "Volume restore not started yet"
@@ -726,11 +752,6 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 			if isDataExportActive(dataExport.Status) {
 				vInfo.Status = storkapi.ApplicationRestoreStatusInProgress
 				vInfo.Reason = "Volume restore is in progress. BytesDone"
-				// TODO: KDMP does not return size right now, we will need to fill up
-				// size for volume once support is available
-			} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-				vInfo.Status = storkapi.ApplicationRestoreStatusFailed
-				vInfo.Reason = fmt.Sprintf("restore failed for volume:%s, %s", vInfo.SourceVolume, dataExport.Status.Reason)
 			} else if isDataExportCompleted(dataExport.Status) {
 				restoredPVC, err := core.Instance().GetPersistentVolumeClaim(dataExport.Status.RestorePVC.Name, dataExport.Status.RestorePVC.Namespace)
 				if err != nil {
@@ -781,6 +802,25 @@ func (k *kdmp) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
 func (k *kdmp) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 	[]v1.PersistentVolumeClaim, error) {
 	return nil, &errors.ErrNotSupported{}
+}
+
+func (k *kdmp) doLocalRestore(restore *storkapi.ApplicationRestore, bkpvInfo *storkapi.ApplicationBackupVolumeInfo) bool {
+	// without snapshotting case
+	if bkpvInfo.VolumeSnapshot == "" {
+		return false
+	}
+
+	if scName, ok := restore.Spec.StorageClassMapping[bkpvInfo.StorageClass]; ok {
+		sc, err := storage.Instance().GetStorageClass(scName)
+		if err != nil {
+			return false
+		}
+		// If provisioners are not same , do not try for restore from localsnapshot
+		if sc.Provisioner != bkpvInfo.Provisioner {
+			return false
+		}
+	}
+	return true
 }
 
 // CleanupBackupResources for specified backup
@@ -879,4 +919,16 @@ func getValidLabel(labelVal string) string {
 // getShortUID returns the first part of the UID
 func getShortUID(uid string) string {
 	return uid[0:7]
+}
+
+// getVolumeSnapshotClassFromBackupVolumeInfo returns the volumesnapshotclass if it is present
+func getVolumeSnapshotClassFromBackupVolumeInfo(bkvpInfo *storkapi.ApplicationBackupVolumeInfo) string {
+	var vsClass string
+	if bkvpInfo.VolumeSnapshot == "" {
+		return vsClass
+	}
+	subStrings := strings.Split(bkvpInfo.VolumeSnapshot, ".")
+	vsClass = strings.Join(subStrings[0:len(subStrings)-1], ".")
+
+	return vsClass
 }
