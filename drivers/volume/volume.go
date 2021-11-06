@@ -80,6 +80,10 @@ type Driver interface {
 	// OwnsPVC returns true if the PVC is owned by the driver
 	OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool
 
+	// OwnsPVCForBackup returns true if the PVC is owned by the driver
+	// Since we have extra check need to done for backup case, added seperate version of API.
+	OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool
+
 	// OwnsPV returns true if the PV is owned by the driver
 	OwnsPV(pvc *v1.PersistentVolume) bool
 
@@ -291,9 +295,33 @@ func Get(name string) (Driver, error) {
 	}
 }
 
+// GetPVCDriverForBackup  gets the driver associated with a PVC for backup operation. Returns ErrNotSupported if the PVC is
+// not owned by any available driver
+func GetPVCDriverForBackup(coreOps core.Ops,
+	pvc *v1.PersistentVolumeClaim,
+	cmBackupType string,
+	crBackupType string,
+) (string, error) {
+	for _, driverName := range orderedListOfDrivers {
+		d, ok := volDrivers[driverName]
+		if !ok {
+			continue
+		}
+		if d.OwnsPVCForBackup(coreOps, pvc, cmBackupType, crBackupType) {
+			return driverName, nil
+		}
+	}
+	return "", &errors.ErrNotSupported{
+		Feature: "VolumeDriver",
+		Reason:  fmt.Sprintf("PVC %v/%v provisioned using unsupported driver", pvc.Namespace, pvc.Name),
+	}
+}
+
 // GetPVCDriver gets the driver associated with a PVC. Returns ErrNotFound if the PVC is
 // not owned by any available driver
-func GetPVCDriver(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) (string, error) {
+func GetPVCDriver(coreOps core.Ops,
+	pvc *v1.PersistentVolumeClaim,
+) (string, error) {
 	for _, driverName := range orderedListOfDrivers {
 		d, ok := volDrivers[driverName]
 		if !ok {

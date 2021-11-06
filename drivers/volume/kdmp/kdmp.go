@@ -122,6 +122,12 @@ func (k *kdmp) Stop() error {
 	return nil
 }
 
+func (k *kdmp) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+	// KDMP can handle any PVC type. KDMP driver will always be a fallback
+	// option when none of the other supported drivers by stork own the PVC
+	return true
+}
+
 func (k *kdmp) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	// KDMP can handle any PVC type. KDMP driver will always be a fallback
 	// option when none of the other supported drivers by stork own the PVC

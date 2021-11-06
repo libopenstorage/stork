@@ -87,8 +87,20 @@ func (g *gcp) Stop() error {
 	return nil
 }
 
-func (g *gcp) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
+func (g *gcp) OwnsPVCForBackup(
+	coreOps core.Ops,
+	pvc *v1.PersistentVolumeClaim,
+	cmBackupType string,
+	crBackupType string,
+) bool {
+	if cmBackupType == storkapi.ApplicationBackupGeneric {
+		// If user has forced the backupType in config map, default to generic always
+		return false
+	}
+	return g.OwnsPVC(coreOps, pvc)
+}
 
+func (g *gcp) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	provisioner := ""
 	// Check for the provisioner in the PVC annotation. If not populated
 	// try getting the provisioner from the Storage class.

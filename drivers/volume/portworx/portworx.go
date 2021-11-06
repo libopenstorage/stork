@@ -656,6 +656,10 @@ func (p *portworx) GetClusterID() (string, error) {
 	return cluster.Id, nil
 }
 
+func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+	return p.OwnsPVC(coreOps, pvc)
+}
+
 func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 
 	provisioner := ""
