@@ -255,6 +255,11 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvo
 	return volumes, nil
 }
 
+// OwnsPVCForBackup returns true because it owns all PVCs created by tests
+func (m *Driver) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+	return m.OwnsPVC(coreOps, pvc)
+}
+
 // OwnsPVC returns true because it owns all PVCs created by tests
 func (m *Driver) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	return true

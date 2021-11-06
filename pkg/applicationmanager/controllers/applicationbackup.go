@@ -523,6 +523,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				return fmt.Errorf("error readig kdmp config map: %v", err)
 			}
 			driverType := kdmpData.Data[genericBackupKey]
+			logrus.Tracef("driverType: %v", driverType)
 			for _, pvc := range pvcList.Items {
 				// If a list of resources was specified during backup check if
 				// this PVC was included
@@ -553,26 +554,16 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 					continue
 				}
-				driverName := stork_api.GenericDriver
-				if backup.Spec.BackupType == stork_api.ApplicationBackupGeneric ||
-					driverType == stork_api.ApplicationBackupGeneric {
-					volDriver, err := volume.Get(driverName)
-					if err != nil {
-						return err
-					}
-					if !volDriver.OwnsPVC(core.Instance(), &pvc) {
+				var driverName string
+				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType)
+				if err != nil {
+					// Skip unsupported PVCs
+					if _, ok := err.(*errors.ErrNotSupported); ok {
 						continue
 					}
-				} else {
-					driverName, err = volume.GetPVCDriver(core.Instance(), &pvc)
-					if err != nil {
-						// Skip unsupported PVCs
-						if _, ok := err.(*errors.ErrNotSupported); ok {
-							continue
-						}
-						return err
-					}
+					return err
 				}
+
 				if driverName != "" {
 					// This PVC needs to be backed up
 					pvcCount++
@@ -589,7 +580,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 			}
 		}
-
 		if backup.Status.Volumes == nil {
 			backup.Status.Volumes = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
 		}
@@ -600,16 +590,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 			for driverName, pvcs := range pvcMappings {
 				var driver volume.Driver
-				if backup.Spec.BackupType == stork_api.ApplicationBackupGeneric {
-					driver, err = volume.Get(stork_api.GenericDriver)
-					if err != nil {
-						return err
-					}
-				} else {
-					driver, err = volume.Get(driverName)
-					if err != nil {
-						return err
-					}
+				driver, err = volume.Get(driverName)
+				if err != nil {
+					return err
 				}
 				batchCount := defaultBackupVolumeBatchCount
 				if len(os.Getenv(backupVolumeBatchCountEnvVar)) != 0 {

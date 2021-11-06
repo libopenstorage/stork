@@ -206,6 +206,19 @@ func (c *csi) Stop() error {
 	return nil
 }
 
+func (c *csi) OwnsPVCForBackup(
+	coreOps core.Ops,
+	pvc *v1.PersistentVolumeClaim,
+	cmBackupType string,
+	crBackupType string,
+) bool {
+	if cmBackupType == storkapi.ApplicationBackupGeneric || crBackupType == storkapi.ApplicationBackupGeneric {
+		// If user has forced the backupType in config map or applicationbackup CR, default to generic always
+		return false
+	}
+	return c.OwnsPVC(coreOps, pvc)
+}
+
 func (c *csi) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	// Try to get info from the PV since storage class could be deleted
 	pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)

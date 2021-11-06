@@ -296,6 +296,10 @@ func (l *linstor) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim) 
 	return linstorTemplates, nil
 }
 
+func (l *linstor) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+	return l.OwnsPVC(coreOps, pvc)
+}
+
 func (l *linstor) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	provisioner := ""
 	// Check for the provisioner in the PVC annotation. If not populated
