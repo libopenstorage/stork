@@ -258,7 +258,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				return false, c.updateStatus(dataExport, data)
 			}
 
-			_, err = checkPVC(dataExport.Spec.Destination, true)
+			_, err = checkPVCIgnoringJobMounts(dataExport.Spec.Destination, dataExport.Name)
 			if err != nil {
 				msg := fmt.Sprintf("Destination pvc %s/%s is not bound yet: %v", pvcSpec.Namespace, pvcSpec.Name, err)
 				logrus.Errorf(msg)
@@ -1188,6 +1188,29 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 		return nil, err
 	}
 	// wait for pvc to get bound
+	pvc, err := waitForPVCBound(in, checkMounts)
+	if err != nil {
+		return nil, err
+	}
+
+	if checkMounts {
+		pods, err := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("get mounted pods: %v", err)
+		}
+
+		if len(pods) > 0 {
+			return nil, fmt.Errorf("mounted to %v pods", toPodNames(pods))
+		}
+	}
+	return pvc, nil
+}
+
+func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.PersistentVolumeClaim, error) {
+	if err := checkNameNamespace(in); err != nil {
+		return nil, err
+	}
+	// wait for pvc to get bound
 	var pvc *corev1.PersistentVolumeClaim
 	var err error
 	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
@@ -1209,17 +1232,51 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 		logrus.Errorf("%v", err)
 		return nil, err
 	}
+	return pvc, nil
+}
 
-	if checkMounts {
-		pods, err := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
-		if err != nil {
-			return nil, fmt.Errorf("get mounted pods: %v", err)
+func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMountJob string) (*corev1.PersistentVolumeClaim, error) {
+	if err := checkNameNamespace(in); err != nil {
+		return nil, err
+	}
+	// wait for pvc to get bound
+	pvc, err := waitForPVCBound(in, true)
+	if err != nil {
+		return nil, err
+	}
+
+	pods, err := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("get mounted pods: %v", err)
+	}
+
+	if len(pods) > 0 {
+		for _, pod := range pods {
+			if podBelongsToJob(pod, expectedMountJob, pvc.Namespace) {
+				return pvc, nil
+			}
 		}
-		if len(pods) > 0 {
-			return nil, fmt.Errorf("mounted to %v pods", toPodNames(pods))
-		}
+		return nil, fmt.Errorf("mounted to %v pods", toPodNames(pods))
 	}
 	return pvc, nil
+}
+
+func podBelongsToJob(pod corev1.Pod, job, namespace string) bool {
+	jobPods, err := core.Instance().GetPods(
+		namespace,
+		map[string]string{
+			"job-name": job,
+		},
+	)
+	if err != nil {
+		return false
+	}
+	for _, jobPod := range jobPods.Items {
+		if pod.Name == jobPod.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func checkBackupLocation(ref kdmpapi.DataExportObjectReference) (*storkapi.BackupLocation, error) {
