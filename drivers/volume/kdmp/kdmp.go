@@ -246,7 +246,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		dataExport.Labels = labels
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
-		dataExport.Annotations[backupObjectUIDKey] = string(backup.UID)
+		dataExport.Annotations[backupObjectUIDKey] = string(backup.Annotations[pxbackupObjectUIDKey])
 		dataExport.Annotations[pvcUIDKey] = string(pvc.UID)
 		dataExport.Name = getGenericCRName(prefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
 		dataExport.Namespace = pvc.Namespace
@@ -266,6 +266,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
 		if snapshotClassRequired {
 			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
+			volumeInfo.VolumeSnapshot = k.getSnapshotClassName(backup)
 		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
@@ -312,7 +313,7 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				vInfo.Reason = "Backup successful for volume"
 				vInfo.TotalSize = dataExport.Status.Size
 				vInfo.ActualSize = dataExport.Status.Size
-				vInfo.VolumeSnapshot = dataExport.Status.VolumeSnapshot
+				vInfo.VolumeSnapshot = fmt.Sprintf("%s.%s", vInfo.VolumeSnapshot, dataExport.Status.VolumeSnapshot)
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
