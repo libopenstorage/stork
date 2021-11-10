@@ -965,14 +965,6 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
-			err := d.testAndSetEndpointUsingNodeIP(pxNode.MgmtIp)
-			if err != nil {
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: fmt.Sprintf("px is not yet up on node. cause: %v", err),
-				}
-			}
-
 			pxStatus, err := d.getPxctlStatus(n)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
