@@ -137,14 +137,9 @@ func (c *csi) Init(_ interface{}) error {
 	}
 	c.snapshotClient = cs
 
-	if c.isCSIInstalled() {
-		logrus.Infof("Creating default CSI SnapshotClasses")
-		err = c.createDefaultSnapshotClasses()
-		if err != nil {
-			return err
-		}
-	} else {
-		logrus.Infof("CSI VolumeSnapshotClass CRD does not exist, skipping default SnapshotClass creation")
+	err = c.createDefaultSnapshotClasses()
+	if err != nil {
+		return err
 	}
 
 	c.snapshotter, err = snapshotter.NewCSIDriver()
@@ -155,12 +150,13 @@ func (c *csi) Init(_ interface{}) error {
 	return nil
 }
 
-func (c *csi) isCSIInstalled() bool {
-	_, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().List(context.TODO(), metav1.ListOptions{})
-	return err == nil
-}
-
 func (c *csi) createDefaultSnapshotClasses() error {
+	existingSnapshotClasses, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		logrus.Infof("CSI VolumeSnapshotClass CRD does not exist, skipping default SnapshotClass creation")
+		return nil
+	}
+	logrus.Infof("Creating default CSI SnapshotClasses")
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get config for creating default CSI snapshot classes: %v", err)
@@ -186,6 +182,17 @@ func (c *csi) createDefaultSnapshotClasses() error {
 			continue
 		}
 
+		foundSnapClass := false
+		for _, existingSnapClass := range existingSnapshotClasses.Items {
+			if driver.Name == existingSnapClass.Driver {
+				logrus.Infof("CSI VolumeSnapshotClass exists for driver %v. Skipping creation of snapshotclass", driver.Name)
+				foundSnapClass = true
+				break
+			}
+		}
+		if foundSnapClass {
+			continue
+		}
 		snapshotClassName := c.getDefaultSnapshotClassName(driver.Name)
 		_, err := c.createVolumeSnapshotClass(snapshotClassName, driver.Name)
 		if err != nil && !k8s_errors.IsAlreadyExists(err) {

@@ -198,7 +198,7 @@ func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) bool {
 		// So added check. For other we will try to create CSI snapshot and if it fails, we will take generic backup.
 		return true
 	}
-	// TODO: If storage class is not present, need to make volume instpect call to protworx and check.
+	// TODO: If storage class is not present, need to make volume inspect call to portworx and check.
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName != "" {
 		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
