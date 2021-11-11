@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Options specifies keys for a key-value pair that can be passed to scheduler methods
@@ -167,8 +169,17 @@ type Driver interface {
 	// GetVolumes returns all storage volumes for the given context
 	GetVolumes(*Context) ([]*volume.Volume, error)
 
+	// GetPureVolumes returns all Pure storage volumes for the given context
+	GetPureVolumes(*Context) ([]*volume.Volume, error)
+
+	// GetPodsForPVC returns pods using the pvc
+	GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error)
+
 	// ResizeVolume resizes all the volumes of a given context
 	ResizeVolume(*Context, string) ([]*volume.Volume, error)
+
+	// ResizePureVolumes resizes all Pure volumes of a given context
+	ResizePureVolumes(*Context) error
 
 	// GetSnapshots returns all storage snapshots for the given context
 	GetSnapshots(*Context) ([]*volume.Snapshot, error)

@@ -325,6 +325,14 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	return output.(string), nil
 }
 
+// RunCommandWithNoRetry runs given command on given node but with no retries
+func (s *SSH) RunCommandWithNoRetry(n node.Node, command string, options node.ConnectionOpts) (string, error) {
+	if useSSH() {
+		return s.doCmdSSH(n, options, command, options.IgnoreError)
+	}
+	return s.doCmdUsingPodWithoutRetry(n, command)
+}
+
 // FindFiles finds files from give path on given node
 func (s *SSH) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	findCmd := "sudo find " + path
@@ -411,6 +419,30 @@ func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 		return s.doCmdSSH(n, options, cmd, ignoreErr)
 	}
 	return s.doCmdUsingPod(n, options, cmd, ignoreErr)
+}
+
+func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error) {
+	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
+	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
+	if err != nil {
+		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+		return "", err
+	}
+	var debugPod *v1.Pod
+	for _, pod := range allPodsForNode.Items {
+		if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
+			debugPod = &pod
+			break
+		}
+	}
+
+	if debugPod == nil {
+		return "", &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("debug pod not found in node %v", n),
+		}
+	}
+	return k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 }
 
 func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {

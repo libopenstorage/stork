@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -26,6 +27,7 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/pkg/osutils"
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
 	// import backup driver to invoke it's init
@@ -97,6 +99,7 @@ const (
 )
 
 const (
+	oneMegabytes                          = 1024 * 1024
 	defaultScheduler                      = "k8s"
 	defaultNodeDriver                     = "ssh"
 	defaultStorageDriver                  = "pxd"
@@ -114,6 +117,7 @@ const (
 	specObjAppWorkloadSizeEnvVar          = "SIZE"
 	defaultLicenseExpiryTimeoutHours      = 1 * time.Hour
 	defaultMeteringIntervalMins           = 10 * time.Minute
+	authTokenParam                        = "auth-token"
 )
 
 const (
@@ -126,6 +130,11 @@ const (
 )
 
 var (
+	errPureBlockNotSupported         = errors.New("pure_block pass through volume not supported")
+	errPureFileSnapshotNotSupported  = errors.New("snapshot feature is not supported for pure_file volumes")
+	errUnexpectedSizeChangeAfterFBIO = errors.New("the size change in bytes is not expected after write to FB volume")
+)
+var (
 	context = ginkgo.Context
 	// Step is an alias for ginko "By" which represents a step in the spec
 	Step         = ginkgo.By
@@ -134,6 +143,7 @@ var (
 	beEmpty      = gomega.BeEmpty
 	beNil        = gomega.BeNil
 	equal        = gomega.Equal
+	contain      = gomega.ContainSubstring
 )
 
 // InitInstance is the ginkgo spec for initializing torpedo
@@ -260,6 +270,119 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+// ValidateContextForPureVolumesSDK is the ginkgo spec for validating a scheduled context
+func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		var timeout time.Duration
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
+		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateFBSnapshotsSDK(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateResizeFBPVC(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+			processError(err, errChan...)
+		})
+
+		Step(fmt.Sprintf("validate %s app's volums statstics ", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateVolumeStatsticsDynamicUpdate(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+			if ctx.SkipVolumeValidation {
+				return
+			}
+
+			vols, err := Inst().S.GetVolumes(ctx)
+			processError(err, errChan...)
+
+			for _, vol := range vols {
+				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+					err := Inst().V.ValidateVolumeSetup(vol)
+					processError(err, errChan...)
+				})
+			}
+		})
+	})
+}
+
+// ValidateContextForPureVolumesPXCTL is the ginkgo spec for validating a scheduled context
+func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		var timeout time.Duration
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
+
+		Step(fmt.Sprintf("validate %s app's volumes for pxctl", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateFBSnapshotsPXCTL(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateResizeFBPVC(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+			processError(err, errChan...)
+		})
+
+		Step(fmt.Sprintf("validate %s app's volums statstics ", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateVolumeStatsticsDynamicUpdate(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+			if ctx.SkipVolumeValidation {
+				return
+			}
+
+			vols, err := Inst().S.GetVolumes(ctx)
+			processError(err, errChan...)
+
+			for _, vol := range vols {
+				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+					err := Inst().V.ValidateVolumeSetup(vol)
+					processError(err, errChan...)
+				})
+			}
+		})
+	})
+}
+
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
 func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
@@ -278,7 +401,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 
 		for vol, params := range vols {
 			if Inst().ConfigMap != "" {
-				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 				processError(err, errChan...)
 			}
 			if ctx.RefreshStorageEndpoint {
@@ -292,7 +415,164 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
-// GetVolumeParameters retuns volume parameters for all volumes for given context
+// ValidateFBSnapshotsSDK is the ginkgo spec for validating FB volume snapshots using API for a context
+func ValidateFBSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an app's volumes", func() {
+		var err error
+		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
+			processError(err, errChan...)
+		})
+
+		var vols map[string]map[string]string
+		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+			vols, err = Inst().S.GetVolumeParameters(ctx)
+			processError(err, errChan...)
+		})
+
+		for vol, params := range vols {
+			if Inst().ConfigMap != "" {
+				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+				processError(err, errChan...)
+			}
+			if ctx.RefreshStorageEndpoint {
+				params["refresh-endpoint"] = "true"
+			}
+			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateVolume(vol, params)
+				processError(err, errChan...)
+			})
+			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateSnapshot(vol, params)
+				if err != nil {
+					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+				}
+			})
+			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateCloudsnap(vol, params)
+				if err != nil {
+					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+				}
+			})
+		}
+	})
+}
+
+// ValidateFBSnapshotsPXCTL is the ginkgo spec for validating FB volume snapshots using PXCTL for a context
+func ValidateFBSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an app's volumes", func() {
+		var err error
+		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
+			processError(err, errChan...)
+		})
+
+		var vols []*volume.Volume
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx)
+			processError(err, errChan...)
+		})
+
+		for _, vol := range vols {
+
+			Step(fmt.Sprintf("get %s app's volume: %s then create snapshot using pxctl", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateSnapshotUsingPxctl(vol.ID)
+				if err != nil {
+					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+				}
+			})
+			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol.ID)
+				if err != nil {
+					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+				}
+			})
+		}
+		Step(fmt.Sprintf("validating groupsnap for using pxctl"), func() {
+			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
+			if err != nil {
+				expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+			}
+		})
+	})
+}
+
+// ValidateResizeFBPVC is the ginkgo spec for validating resize of volumes
+func ValidateResizeFBPVC(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an resizing pvc", func() {
+		var err error
+		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
+			processError(err, errChan...)
+		})
+
+		Step(fmt.Sprintf("validating resizing pvcs"), func() {
+			err = Inst().S.ResizePureVolumes(ctx)
+			if err != nil {
+				expect(err).ToNot(haveOccurred())
+			}
+		})
+	})
+}
+
+// ValidateVolumeStatsticsDynamicUpdate is the ginkgo spec for validating dynamic update of byteUsed statstic for pure volumes
+func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an resizing pvc", func() {
+		var err error
+		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
+			processError(err, errChan...)
+		})
+		var vols []*volume.Volume
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx)
+			processError(err, errChan...)
+		})
+		byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+		fmt.Println(fmt.Sprintf("initially the byteUsed is %v", byteUsedInitial))
+		// get the pod for this pvc
+		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
+
+		// write to the FB volume
+		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", "dd bs=512 count=1048576 </dev/urandom > " + getMountPath(pods[0].Namespace) + "/myfile"}
+		err = osutils.Kubectl(cmdArgs)
+		processError(err, errChan...)
+		// wait until the backends size is reflected before making the REST call
+		time.Sleep(20 * time.Second)
+
+		byteUsedafter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+		fmt.Println(fmt.Sprintf("after writing random bytes to the file the byteUsed is %v", byteUsedafter))
+		err = fbVolumeExpectedSizechange(byteUsedafter - byteUsedInitial)
+		expect(err).NotTo(haveOccurred())
+
+	})
+}
+
+func fbVolumeExpectedSizechange(sizeChangeInBytes uint64) error {
+	if sizeChangeInBytes > 502*oneMegabytes && sizeChangeInBytes < 521*oneMegabytes {
+		return errUnexpectedSizeChangeAfterFBIO
+	}
+	return nil
+}
+
+// getMountPath checkts the podname prefix, and finds the mountpath.
+//	unfortunately, the mountpath for PVCs all vary among applications, so Im getting the hardcoded value here
+//	maybe there will be some improvement later
+func getMountPath(namespace string) string {
+	if strings.HasPrefix(namespace, "nginx-without-enc") {
+		return "/usr/share/nginx/html"
+	} else if strings.HasPrefix(namespace, "wordpress") {
+		return "/var/www/html"
+	} else {
+		return ""
+	}
+}
+
+// GetVolumeParameters returns volume parameters for all volumes for given context
 func GetVolumeParameters(ctx *scheduler.Context) map[string]map[string]string {
 	var vols map[string]map[string]string
 	var err error
@@ -320,7 +600,7 @@ func ValidateVolumeParameters(volParam map[string]map[string]string) {
 	var err error
 	for vol, params := range volParam {
 		if Inst().ConfigMap != "" {
-			params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+			params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 			expect(err).NotTo(haveOccurred())
 		}
 		Step(fmt.Sprintf("get volume: %s inspected by the volume driver", vol), func() {
@@ -470,6 +750,24 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	})
 
 	return contexts
+}
+
+// ValidateApplicationsPurePxctl validates applications
+func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
+	Step("validate applications", func() {
+		for _, ctx := range contexts {
+			ValidateContextForPureVolumesPXCTL(ctx)
+		}
+	})
+}
+
+// ValidateApplicationsPureSDK validates applications
+func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
+	Step("validate applications", func() {
+		for _, ctx := range contexts {
+			ValidateContextForPureVolumesSDK(ctx)
+		}
+	})
 }
 
 // ValidateApplications validates applications

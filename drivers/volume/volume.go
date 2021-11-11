@@ -62,6 +62,26 @@ type Driver interface {
 	// params are the custom volume options passed when creating the volume.
 	ValidateCreateVolume(name string, params map[string]string) error
 
+	// ValidateCreateSnapshot validates whether a snapshot has been created properly.
+	// params are the custom volume options passed
+	ValidateCreateSnapshot(name string, params map[string]string) error
+
+	// ValidateCreateSnapshotUsingPxctl validates whether a snapshot has been created properly using pxctl.
+	ValidateCreateSnapshotUsingPxctl(name string) error
+
+	// ValidateCreateCloudsnap validates whether a cloudsnap backup can be created properly(or errored expectely)
+	// params are the custom backup options passed
+	ValidateCreateCloudsnap(name string, params map[string]string) error
+
+	// ValidateCreateCloudsnapUsingPxctl validates whether a cloudsnap backup can be created properly(or errored expectely) using pxctl
+	ValidateCreateCloudsnapUsingPxctl(name string) error
+
+	// ValidateCreateGroupSnapshotUsingPxctl validates whether a groupsnap backup can be created properly (or errored expectedly) using pxctl
+	ValidateCreateGroupSnapshotUsingPxctl() error
+
+	// ValidateGetByteUsedForVolume validates returning volume statstic succesfully
+	ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error)
+
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
 
