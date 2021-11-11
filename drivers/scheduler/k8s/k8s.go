@@ -2968,13 +2968,22 @@ func (k *K8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string
 		}
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			logrus.Infof("Scale all Deployments")
-			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
-			if err != nil {
-				return err
-			}
 			newScaleFactor := scaleFactorMap[obj.Name+DeploymentSuffix]
-			*dep.Spec.Replicas = newScaleFactor
-			if _, err := k8sOps.UpdateDeployment(dep); err != nil {
+
+			t := func() (interface{}, bool, error) {
+				dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
+				if err != nil {
+					return "", true, err // failed to get deployment, retry
+				}
+				*dep.Spec.Replicas = newScaleFactor
+				dep, err = k8sOps.UpdateDeployment(dep)
+				if err == nil {
+					return dep, false, nil // succeeded, no retry
+				}
+				return "", true, err // failed to update deployment, retry
+			}
+			_, err := task.DoRetryWithTimeout(t, 2*time.Minute, time.Second)
+			if err != nil {
 				return &scheduler.ErrFailedToUpdateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to update Deployment: %v. Err: %v", obj.Name, err),
