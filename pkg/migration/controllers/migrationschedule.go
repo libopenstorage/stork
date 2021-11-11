@@ -16,6 +16,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -142,9 +143,26 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				err.Error())
 			return nil
 		}
+		coreOps, err := core.NewForConfig(remoteConfig)
+		if err != nil {
+			m.recorder.Event(migrationSchedule,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				err.Error())
+			return nil
+		}
 		migrSched, err := remoteOps.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
 		if errors.IsNotFound(err) {
 			// TODO:generate event?
+			namespace, err := core.Instance().GetNamespace(migrationSchedule.Namespace)
+			if err != nil {
+				return err
+			}
+			namespace.ResourceVersion = ""
+			_, err = coreOps.CreateNamespace(namespace)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
 			// create new
 			remoteMigrSched := migrationSchedule.DeepCopy()
 			remoteMigrSched.ResourceVersion = ""
@@ -172,9 +190,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				msg)
 			log.MigrationScheduleLog(migrationSchedule).Warn(msg)
 			// deactivate apps in namespace
-			if _, err := deactivateApps(migrSched); err != nil {
-				return err
-			}
+			// TODO: suspend deploy/sts,crds
 			return m.client.Update(context.TODO(), migrationSchedule)
 		}
 	}
@@ -425,7 +441,8 @@ func (m *MigrationScheduleController) startMigration(
 	for k, v := range migrationSchedule.Annotations {
 		migration.Annotations[k] = v
 	}
-	log.MigrationScheduleLog(migrationSchedule).Infof("Starting migration %v", migrationName)
+	migration.Annotations[StorkMigrationName] = migrationSchedule.GetName()
+	log.MigrationScheduleLog(migrationSchedule).Infof("Starting migration %s", migrationName)
 	_, err = storkops.Instance().CreateMigration(migration)
 	return err
 }
@@ -537,55 +554,6 @@ func getMigratedAppStatus(migrationSchedule *stork_api.MigrationSchedule) (bool,
 				logrus.Warnf("Deploy updated %v/%v", sts.Name, sts.Namespace)
 				return true, nil
 			}
-		}
-	}
-	return false, nil
-}
-
-func deactivateApps(migrationSchedule *stork_api.MigrationSchedule) (bool, error) {
-	for _, ns := range migrationSchedule.Spec.Template.Spec.Namespaces {
-		deployList, err := apps.Instance().ListDeployments(ns, meta.ListOptions{})
-		if err != nil {
-			return false, err
-		}
-		for _, deploy := range deployList.Items {
-			annot := deploy.GetAnnotations()
-			if annot != nil {
-				if _, ok := annot[skipResource]; ok {
-					continue
-				}
-			} else {
-				annot = make(map[string]string)
-			}
-			logrus.Debugf("scaling down deploy %v/%v", deploy.Namespace, deploy.Name)
-			annot[appsReplicas] = fmt.Sprintf("%v", *deploy.Spec.Replicas)
-			deploy.SetAnnotations(annot)
-			disable := int32(0)
-			deploy.Spec.Replicas = &disable
-			if _, err := apps.Instance().UpdateDeployment(&deploy); err != nil {
-				return false, err
-			}
-		}
-
-		// check statefulset status
-		stsList, err := apps.Instance().ListStatefulSets(ns, meta.ListOptions{LabelSelector: fmt.Sprintf("%v=%v", StorkMigrationAnnotation, "true")})
-		if err != nil {
-			return false, err
-		}
-		for _, sts := range stsList.Items {
-			annot := sts.GetAnnotations()
-			if annot != nil {
-				if _, ok := annot[skipResource]; ok {
-					continue
-				}
-			} else {
-				annot = make(map[string]string)
-			}
-			logrus.Debugf("scaling down sts %v/%v", sts.Namespace, sts.Name)
-			replicas := *sts.Spec.Replicas
-			annot[appsReplicas] = fmt.Sprintf("%v", replicas)
-			sts.SetAnnotations(annot)
-			replicas = 0
 		}
 	}
 	return false, nil
