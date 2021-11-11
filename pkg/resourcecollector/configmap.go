@@ -18,7 +18,9 @@ func (r *ResourceCollector) configmapToBeCollected(
 	// included in GetResources API as they are controlled by some controller,
 	// "kube-root-ca.crt" is a configmap that is created in every namespace by
 	// kube-controller-manager from k8s 1.20.0 onwards.
-	excludeConfigMap := []string{"kube-root-ca.crt"}
+	// "openshift-service-ca.crt" is a configmap that is created in every
+	// namespace by openshift
+	excludeConfigMap := []string{"kube-root-ca.crt", "openshift-service-ca.crt"}
 
 	for _, name := range excludeConfigMap {
 		ret := strings.Compare(metadata.GetName(), name)
