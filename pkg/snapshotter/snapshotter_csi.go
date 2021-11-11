@@ -656,7 +656,7 @@ func (c *csiDriver) restoreVolumeSnapshot(
 	vs.Spec.Source.PersistentVolumeClaimName = nil
 	vs.Spec.Source.VolumeSnapshotContentName = &vsc.Name
 	vs.Namespace = namespace
-	vs, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vs, metav1.CreateOptions{})
+	newVS, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vs, metav1.CreateOptions{})
 	if err != nil {
 		if k8s_errors.IsAlreadyExists(err) {
 			return vs, nil
@@ -664,7 +664,7 @@ func (c *csiDriver) restoreVolumeSnapshot(
 		return nil, err
 	}
 
-	return vs, nil
+	return newVS, nil
 }
 
 func (c *csiDriver) restoreVolumeSnapshotContent(
@@ -688,7 +688,7 @@ func (c *csiDriver) restoreVolumeSnapshotContent(
 	}
 
 	vsc.Spec.DeletionPolicy = desiredRetainPolicy
-	vsc, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(context.TODO(), vsc, metav1.CreateOptions{})
+	newVSC, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(context.TODO(), vsc, metav1.CreateOptions{})
 	if err != nil {
 		if k8s_errors.IsAlreadyExists(err) {
 			return vsc, nil
@@ -696,7 +696,7 @@ func (c *csiDriver) restoreVolumeSnapshotContent(
 		return nil, err
 	}
 
-	return vsc, nil
+	return newVSC, nil
 }
 
 func (c *csiDriver) RecreateSnapshotResources(
@@ -727,21 +727,21 @@ func (c *csiDriver) RecreateSnapshotResources(
 	if err != nil {
 		return fmt.Errorf("failed to restore VolumeSnapshotClass for deletion: %s", err.Error())
 	}
-	logrus.Debugf("created volume snapshot class %s for backup %s deletion", vs.Name, vs.Name)
+	logrus.Debugf("created volume snapshot class %s", vsClass.Name)
 
 	// Create VS, bound to VSC
 	vs, err = c.restoreVolumeSnapshot(namespace, vs, vsc)
 	if err != nil {
 		return fmt.Errorf("failed to restore VolumeSnapshot for deletion: %s", err.Error())
 	}
-	logrus.Debugf("created volume snapshot %s for backup %s deletion", vs.Name, vs.Name)
+	logrus.Debugf("created volume snapshot %s/%s", vs.Namespace, vs.Name)
 
 	// Create VSC
 	_, err = c.restoreVolumeSnapshotContent(namespace, vs, vsc, retain)
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("created volume snapshot content %s for backup %s deletion", vsc.Name, vs.Name)
+	logrus.Debugf("created volume snapshot content %s for snapshot %s/%s", vsc.Name, vs.Namespace, vs.Name)
 
 	return nil
 }

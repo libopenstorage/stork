@@ -313,7 +313,11 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				vInfo.Reason = "Backup successful for volume"
 				vInfo.TotalSize = dataExport.Status.Size
 				vInfo.ActualSize = dataExport.Status.Size
-				vInfo.VolumeSnapshot = fmt.Sprintf("%s.%s", vInfo.VolumeSnapshot, dataExport.Status.VolumeSnapshot)
+				if len(dataExport.Status.VolumeSnapshot) == 0 {
+					vInfo.VolumeSnapshot = ""
+				} else {
+					vInfo.VolumeSnapshot = fmt.Sprintf("%s.%s", vInfo.VolumeSnapshot, dataExport.Status.VolumeSnapshot)
+				}
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
