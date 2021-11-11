@@ -100,12 +100,25 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 	}
 
 	if o.SnapshotClassName == "" {
-		o.SnapshotClassName = c.getDefaultSnapshotClassName(pv.Spec.CSI.Driver)
+		return "", "", "", fmt.Errorf("snapshot class cannot be empty, use 'default' to choose the default snapshot class")
 	}
 
-	if err := c.ensureVolumeSnapshotClassCreated(pv.Spec.CSI.Driver, o.SnapshotClassName); err != nil {
-		return "", "", "", err
+	if o.SnapshotClassName == "default" || o.SnapshotClassName == "Default" {
+		// Let kubernetes choose the default snapshot class to use
+		// for this snapshot. If none is set then the volume snapshot will fail
+		o.SnapshotClassName = ""
+	} else {
+		// For other snapshot class names ensure the volume snapshot class has
+		// been created
+		if err := c.ensureVolumeSnapshotClassCreated(pv.Spec.CSI.Driver, o.SnapshotClassName); err != nil {
+			return "", "", "", err
+		}
 	}
+	snapClassPtr := stringPtr(o.SnapshotClassName)
+	if o.SnapshotClassName == "" {
+		snapClassPtr = nil
+	}
+
 	vs := &kSnapshotv1beta1.VolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        o.Name,
@@ -114,7 +127,7 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 			Labels:      o.Labels,
 		},
 		Spec: kSnapshotv1beta1.VolumeSnapshotSpec{
-			VolumeSnapshotClassName: stringPtr(o.SnapshotClassName),
+			VolumeSnapshotClassName: snapClassPtr,
 			Source: kSnapshotv1beta1.VolumeSnapshotSource{
 				PersistentVolumeClaimName: stringPtr(o.PVCName),
 			},
@@ -192,14 +205,17 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 	}
 	snapshotInfo.SnapshotRequest = snapshot
 	var snapshotClassName string
+	var snapshotClass *kSnapshotv1beta1.VolumeSnapshotClass
 	if snapshot.Spec.VolumeSnapshotClassName != nil {
 		snapshotClassName = *snapshot.Spec.VolumeSnapshotClassName
 	}
-	snapshotClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), snapshotClassName, metav1.GetOptions{})
-	if err != nil {
-		snapshotInfo.Status = StatusFailed
-		snapshotInfo.Reason = fmt.Sprintf("snapshot class %s lost during backup: %v", snapshotClassName, err)
-		return snapshotInfo, err
+	if len(snapshotClassName) > 0 {
+		snapshotClass, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), snapshotClassName, metav1.GetOptions{})
+		if err != nil {
+			snapshotInfo.Status = StatusFailed
+			snapshotInfo.Reason = fmt.Sprintf("snapshot class %s lost during backup: %v", snapshotClassName, err)
+			return snapshotInfo, err
+		}
 	}
 
 	volumeSnapshotReady := c.snapshotReady(snapshot)
@@ -255,8 +271,15 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 		snapshotInfo.Reason = formatReasonErrorMessage(fmt.Sprintf("snapshot timeout out after %s", snapshotTimeout.String()), vsError, vscError)
 
 	default:
-		snapshotInfo.Status = StatusInProgress
-		snapshotInfo.Reason = formatReasonErrorMessage(fmt.Sprintf("volume snapshot in progress for PVC %s", pvcName), vsError, vscError)
+		if len(vsError) > 0 {
+			snapshotInfo.Status = StatusFailed
+			snapshotInfo.Reason = formatReasonErrorMessage(
+				fmt.Sprintf("volume snapshot failed for PVC %s", pvcName), vsError, vscError)
+		} else {
+			snapshotInfo.Status = StatusInProgress
+			snapshotInfo.Reason = formatReasonErrorMessage(
+				fmt.Sprintf("volume snapshot in progress for PVC %s", pvcName), vsError, vscError)
+		}
 		snapshotInfo.Size = uint64(size)
 	}
 	return snapshotInfo, nil
@@ -376,10 +399,6 @@ func (c *csiDriver) cleanK8sPVCAnnotations(pvc *v1.PersistentVolumeClaim) *v1.Pe
 	return pvc
 }
 
-func (c *csiDriver) getDefaultSnapshotClassName(driverName string) string {
-	return snapshotClassNamePrefix + driverName
-}
-
 func (c *csiDriver) getVolumeSnapshotClass(snapshotClassName string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
 	return c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), snapshotClassName, metav1.GetOptions{})
 }
@@ -457,13 +476,13 @@ func formatReasonErrorMessage(reason, vsError, vscError string) string {
 
 	switch {
 	case vsError != "" && vscError != "" && vsError != vscError:
-		snapshotError = fmt.Sprintf("Snapshot error: %s. SnapshotContent error: %s", vsError, vscError)
+		snapshotError = fmt.Sprintf("snapshot error: %s, snapshotContent error: %s", vsError, vscError)
 
 	case vsError != "":
-		snapshotError = fmt.Sprintf("Snapshot error: %s", vsError)
+		snapshotError = fmt.Sprintf("snapshot error: %s", vsError)
 
 	case vscError != "":
-		snapshotError = fmt.Sprintf("SnapshotContent error: %s", vscError)
+		snapshotError = fmt.Sprintf("snapshotContent error: %s", vscError)
 	}
 
 	if snapshotError != "" {
