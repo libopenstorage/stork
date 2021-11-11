@@ -23,7 +23,7 @@ spec:
         - name: fio-sv4-svc
           image: joshuarobinson/fio:3.19
           command: ["sh"]
-          args: ["-c", "mkdir -p /scratch/$(POD_NAME) /var/log/$(POD_NAME) && fio /configs/fio.job --eta=never --directory=/scratch/$(POD_NAME) --output=/var/log/$(POD_NAME)/fio.log"]
+          args: ["-c", "mkdir -p /scratch/$(POD_NAME) /output/$(POD_NAME) && fio /configs/fio.job --eta=never --directory=/scratch/$(POD_NAME) --output=/output/$(POD_NAME)/fio.log"]
           env:
             - name: POD_NAME
               valueFrom:
@@ -34,6 +34,8 @@ spec:
               mountPath: /configs
             - name: fio-data
               mountPath: /scratch
+            - name: fio-output
+              mountPath: /output
           imagePullPolicy: IfNotPresent
           resources:
             limits:
@@ -50,3 +52,6 @@ spec:
         - name: fio-data
           persistentVolumeClaim:
             claimName: fio-sv4-svc-pvc
+        - name: fio-output
+          persistentVolumeClaim:
+            claimName: fio-sv4-svc-output-pvc

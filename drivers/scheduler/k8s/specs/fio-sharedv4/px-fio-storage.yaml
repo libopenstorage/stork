@@ -25,3 +25,15 @@ spec:
       storage: {{ .VolumeSize }}
       {{ else }}
       storage: 2000Gi{{ end }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-sharedv4-output-pvc
+spec:
+  storageClassName: fio-sharedv4-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

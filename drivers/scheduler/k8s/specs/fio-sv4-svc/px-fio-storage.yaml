@@ -26,3 +26,15 @@ spec:
       storage: {{ .VolumeSize }}
       {{ else }}
       storage: 2000Gi{{ end }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-sv4-svc-output-pvc
+spec:
+  storageClassName: fio-sv4-svc-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
