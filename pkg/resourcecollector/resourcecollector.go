@@ -559,7 +559,7 @@ func (r *ResourceCollector) pruneOwnedResources(
 							collect = false
 							break
 						}
-						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" && objectType.GetKind() != "ReplicaSet" {
+						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" && objectType.GetKind() != "ReplicaSet" && objectType.GetKind() != "DeploymentConfig" {
 							continue
 						}
 
@@ -631,8 +631,10 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 						kind.Version == resourceKind.Version {
 						// remove status from crd
 						if !kind.KeepStatus {
+
 							delete(content, "status")
 						}
+
 					}
 				}
 			}
