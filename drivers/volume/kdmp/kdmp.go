@@ -93,6 +93,10 @@ const (
 	pureBackendParam          = "backend"
 	pureFileParam             = "file"
 	proxyEndpoint             = "proxy_endpoint"
+	bindCompletedKey          = "pv.kubernetes.io/bind-completed"
+	boundByControllerKey      = "pv.kubernetes.io/bound-by-controller"
+	storageClassKey           = "volume.beta.kubernetes.io/storage-class"
+	storageProvisioner        = "volume.beta.kubernetes.io/storage-provisioner"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -539,8 +543,10 @@ func (k *kdmp) getRestorePVCs(
 				pvc.Spec.VolumeName = ""
 			}
 			if pvc.Annotations != nil {
-				delete(pvc.Annotations, "pv.kubernetes.io/bind-completed")
-				delete(pvc.Annotations, "pv.kubernetes.io/bound-by-controller")
+				delete(pvc.Annotations, bindCompletedKey)
+				delete(pvc.Annotations, boundByControllerKey)
+				delete(pvc.Annotations, storageClassKey)
+				delete(pvc.Annotations, storageProvisioner)
 				pvc.Annotations[KdmpAnnotation] = StorkAnnotation
 			}
 			o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
