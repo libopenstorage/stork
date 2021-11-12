@@ -7,5 +7,6 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
   sharedv4: "true"
+  mount_options: "nodiscard=true"
   sharedv4_svc_type: "ClusterIP"
 allowVolumeExpansion: true

@@ -7,6 +7,7 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
   shared: "true"
+  mount_options: "nodiscard=true"
 allowVolumeExpansion: true
 ---
 kind: PersistentVolumeClaim

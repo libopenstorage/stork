@@ -8,6 +8,7 @@ parameters:
   repl: "3"
   priority_io: "high"
   sharedv4: "true"
+  mount_options: "nodiscard=true"
 allowVolumeExpansion: true
 ---
 kind: PersistentVolumeClaim
