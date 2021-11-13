@@ -63,6 +63,12 @@ const (
 	// DataExportStageSnapshotRestoreInProgress if a driver supports this stage, it means a PVC is
 	// being restored from a snapshot
 	DataExportStageSnapshotRestoreInProgress DataExportStage = "SnapshotRestoreInProgress"
+	// DataExportStageLocalSnapshotRestore if a driver supports this stage, it means schedule a restore
+	// from a snapshot before doing kdmp restore
+	DataExportStageLocalSnapshotRestore DataExportStage = "LocalSnapshotRestore"
+	// DataExportStageLocalSnapshotRestoreInProgress if a driver supports this stage, it means check for
+	// status of the restore from snapshot
+	DataExportStageLocalSnapshotRestoreInProgress DataExportStage = "LocalSnapshotRestoreInProgress"
 	// DataExportStageTransferScheduled when the rsync daemon and pod are currently being
 	// scheduled by Kubernetes.
 	DataExportStageTransferScheduled DataExportStage = "TransferScheduled"
