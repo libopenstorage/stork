@@ -676,7 +676,9 @@ func (k *kdmp) StartRestore(
 		dataExport.Status.RestorePVC = pvc
 		dataExport.Status.LocalSnapshotRestore = k.doLocalRestore(restore, bkpvInfo)
 		dataExport.Spec.Type = kdmpapi.DataExportKopia
-		dataExport.Spec.SnapshotStorageClass = getVolumeSnapshotClassFromBackupVolumeInfo(bkpvInfo)
+		if dataExport.Status.LocalSnapshotRestore {
+			dataExport.Spec.SnapshotStorageClass = getVolumeSnapshotClassFromBackupVolumeInfo(bkpvInfo)
+		}
 		dataExport.Spec.Source = kdmpapi.DataExportObjectReference{
 			Kind:       reflect.TypeOf(kdmpapi.VolumeBackup{}).Name(),
 			Name:       volBackup.Name,
