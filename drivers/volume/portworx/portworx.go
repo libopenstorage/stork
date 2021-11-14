@@ -3413,6 +3413,10 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 		if vInfo.DriverName != storkvolume.PortworxDriverName {
 			continue
 		}
+		if vInfo.Status == storkapi.ApplicationRestoreStatusSuccessful || vInfo.Status == storkapi.ApplicationRestoreStatusFailed || vInfo.Status == storkapi.ApplicationRestoreStatusRetained {
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
 		token, err := p.getUserToken(vInfo.Options, "" /*templatized params already converted*/)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch portworx user token: %v", err)

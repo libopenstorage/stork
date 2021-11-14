@@ -562,6 +562,10 @@ func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		if vInfo.DriverName != storkvolume.AWSDriverName {
 			continue
 		}
+		if vInfo.Status == storkapi.ApplicationRestoreStatusSuccessful || vInfo.Status == storkapi.ApplicationRestoreStatusFailed || vInfo.Status == storkapi.ApplicationRestoreStatusRetained {
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
 		ebsVolume, err := a.getEBSVolume(vInfo.RestoreVolume, nil)
 		if err != nil {
 			if awsErr, ok := err.(awserr.Error); ok {
