@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -663,4 +664,28 @@ func GetApplicationRestoreLabels(
 		"source-pvc-name":      volumeInfo.PersistentVolumeClaim,
 		"source-pvc-namespace": volumeInfo.SourceNamespace,
 	}
+}
+
+// GetPVCFromObjects gets the pvc object from the objects for a particular volume
+func GetPVCFromObjects(objects []runtime.Unstructured, volumeBackupInfo *storkapi.ApplicationBackupVolumeInfo) (*v1.PersistentVolumeClaim, error) {
+	var pvc v1.PersistentVolumeClaim
+	for _, o := range objects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return &pvc, err
+		}
+
+		if objectType.GetKind() == "PersistentVolumeClaim" {
+			var tempPVC v1.PersistentVolumeClaim
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &tempPVC)
+			if err != nil {
+				return &pvc, nil
+			}
+			if tempPVC.Name == volumeBackupInfo.PersistentVolumeClaim {
+				pvc = tempPVC
+				break
+			}
+		}
+	}
+	return &pvc, nil
 }

@@ -566,29 +566,6 @@ func (k *kdmp) getRestorePVCs(
 	return pvcs, nil
 }
 
-func (k *kdmp) getPVCFromObjects(objects []runtime.Unstructured, volumeBackupInfo *storkapi.ApplicationBackupVolumeInfo) (*v1.PersistentVolumeClaim, error) {
-	var pvc v1.PersistentVolumeClaim
-	for _, o := range objects {
-		objectType, err := meta.TypeAccessor(o)
-		if err != nil {
-			return &pvc, err
-		}
-
-		if objectType.GetKind() == "PersistentVolumeClaim" {
-			var tempPVC v1.PersistentVolumeClaim
-			err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &tempPVC)
-			if err != nil {
-				return &pvc, nil
-			}
-			if tempPVC.Name == volumeBackupInfo.PersistentVolumeClaim {
-				pvc = tempPVC
-				break
-			}
-		}
-	}
-	return &pvc, nil
-}
-
 func (k *kdmp) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
@@ -600,7 +577,7 @@ func (k *kdmp) StartRestore(
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
 
 		// get corresponding pvc object from objects list
-		pvc, err := k.getPVCFromObjects(objects, bkpvInfo)
+		pvc, err := storkvolume.GetPVCFromObjects(objects, bkpvInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -726,6 +703,10 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
+		if vInfo.Status == storkapi.ApplicationRestoreStatusSuccessful || vInfo.Status == storkapi.ApplicationRestoreStatusFailed || vInfo.Status == storkapi.ApplicationRestoreStatusRetained {
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
 		val, ok := restore.Spec.NamespaceMapping[vInfo.SourceNamespace]
 		if !ok {
 			return nil, fmt.Errorf("restore namespace mapping not found: %s", vInfo.SourceNamespace)
@@ -760,7 +741,8 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 					logrus.Errorf("failed to get pvc object for %s/%s: %v", dataExport.Status.RestorePVC.Namespace, dataExport.Status.RestorePVC.Name, err)
 					vInfo.Status = storkapi.ApplicationRestoreStatusFailed
 					vInfo.Reason = fmt.Sprintf("failed to get pvc object for %s/%s", dataExport.Status.RestorePVC.Namespace, dataExport.Status.RestorePVC.Name)
-					return volumeInfos, err
+					volumeInfos = append(volumeInfos, vInfo)
+					continue
 				}
 				vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 				vInfo.Reason = "restore successful for volume"

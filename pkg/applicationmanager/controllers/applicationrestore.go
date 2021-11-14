@@ -480,6 +480,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	restoreCompleteList := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	if len(restore.Status.Volumes) != pvcCount {
 		for driverName, vInfos := range backupVolumeInfoMappings {
+			backupVolInfos := vInfos
+			existingRestoreVolInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 			driver, err := volume.Get(driverName)
 			if err != nil {
 				return err
@@ -491,6 +493,15 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			if err != nil {
 				log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
 				return err
+			}
+
+			// Skip pv/pvc if replacepolicy is set to retain to avoid creating
+			if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyRetain {
+				backupVolInfos, existingRestoreVolInfos, err = a.skipVolumesFromRestoreList(backup, restore, objects, driver)
+				if err != nil {
+					log.ApplicationRestoreLog(restore).Errorf("Error while checking pvcs: %v", err)
+					return err
+				}
 			}
 
 			preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects)
@@ -507,7 +518,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 
 			// Pre-delete resources for CSI driver
-			if driverName == "csi" && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+			if (driverName == "csi" || driverName == "kdmp") && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
 				objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 				objectBasedOnIncludeResources := make([]runtime.Unstructured, 0)
 				for _, o := range objects {
@@ -544,7 +555,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				}
 			}
 
-			restoreVolumeInfos, err := driver.StartRestore(restore, vInfos, preRestoreObjects)
+			restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
+			restoreVolumeInfos, err := driver.StartRestore(restore, backupVolInfos, preRestoreObjects)
 			if err != nil {
 				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", err)
 				log.ApplicationRestoreLog(restore).Errorf(message)
@@ -978,6 +990,53 @@ func isGenericCSIPersistentVolumeClaim(pvc *v1.PersistentVolumeClaim, volInfos [
 	return false, nil
 }
 
+func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
+	backup *storkapi.ApplicationBackup,
+	restore *storkapi.ApplicationRestore,
+	objects []runtime.Unstructured,
+	driver volume.Driver,
+) ([]*storkapi.ApplicationBackupVolumeInfo, []*storkapi.ApplicationRestoreVolumeInfo, error) {
+	existingInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
+	newVolInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+	for _, bkupVolInfo := range backup.Status.Volumes {
+		restoreVolInfo := &storkapi.ApplicationRestoreVolumeInfo{}
+
+		val, ok := restore.Spec.NamespaceMapping[bkupVolInfo.Namespace]
+		if !ok {
+			return newVolInfos, existingInfos, fmt.Errorf("restore namespace mapping not found: %s", bkupVolInfo.Namespace)
+		}
+
+		// get corresponding pvc object from objects list
+		pvcObject, err := volume.GetPVCFromObjects(objects, bkupVolInfo)
+		if err != nil {
+			return newVolInfos, existingInfos, err
+		}
+
+		ns := val
+		pvc, err := core.Instance().GetPersistentVolumeClaim(pvcObject.Name, ns)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				newVolInfos = append(newVolInfos, bkupVolInfo)
+				continue
+			}
+			return newVolInfos, existingInfos, fmt.Errorf("erorr getting pvc %s/%s: %v", ns, pvcObject.Name, err)
+		}
+
+		restoreVolInfo.PersistentVolumeClaim = bkupVolInfo.PersistentVolumeClaim
+		restoreVolInfo.PersistentVolumeClaimUID = bkupVolInfo.PersistentVolumeClaimUID
+		restoreVolInfo.SourceNamespace = bkupVolInfo.Namespace
+		restoreVolInfo.SourceVolume = bkupVolInfo.Volume
+		restoreVolInfo.DriverName = driver.String()
+		restoreVolInfo.Status = storkapi.ApplicationRestoreStatusRetained
+		restoreVolInfo.RestoreVolume = pvc.Spec.VolumeName
+		restoreVolInfo.TotalSize = bkupVolInfo.TotalSize
+		restoreVolInfo.Reason = fmt.Sprintf("Skipped from volume restore as policy is set to %s and pvc already exists", storkapi.ApplicationRestoreReplacePolicyRetain)
+		existingInfos = append(existingInfos, restoreVolInfo)
+	}
+
+	return newVolInfos, existingInfos, nil
+}
+
 func (a *ApplicationRestoreController) removeCSIVolumesBeforeApply(
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
@@ -1085,6 +1144,13 @@ func (a *ApplicationRestoreController) applyResources(
 		}
 	}
 	objects = tempObjects
+
+	// skip CSI PV/PVCs before applying
+	objects, err = a.removeCSIVolumesBeforeApply(restore, objects)
+	if err != nil {
+		return err
+	}
+
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
 	if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
@@ -1094,12 +1160,6 @@ func (a *ApplicationRestoreController) applyResources(
 		if err != nil {
 			return err
 		}
-	}
-
-	// skip CSI PV/PVCs before applying
-	objects, err = a.removeCSIVolumesBeforeApply(restore, objects)
-	if err != nil {
-		return err
 	}
 
 	for _, o := range objects {
@@ -1173,12 +1233,6 @@ func (a *ApplicationRestoreController) restoreResources(
 		return err
 	}
 
-	// skip CSI PV/PVCs before applying
-	objects, err = a.removeCSIVolumesBeforeApply(restore, objects)
-	if err != nil {
-		return err
-	}
-
 	if err := a.applyResources(restore, objects); err != nil {
 		return err
 	}
@@ -1187,6 +1241,14 @@ func (a *ApplicationRestoreController) restoreResources(
 	if err != nil {
 		return err
 	}
+
+	// Add all CSI PVCs and PVs back into resources.
+	// CSI PVs are dynamically generated by the CSI controller for restore,
+	// so we need to get the new PV name after restore volumes finishes
+	if err := a.addCSIVolumeResources(restore); err != nil {
+		return err
+	}
+
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
@@ -1197,13 +1259,6 @@ func (a *ApplicationRestoreController) restoreResources(
 			restore.Status.Reason = "Volumes were restored successfully. Some existing resources were not replaced"
 			break
 		}
-	}
-
-	// Add all CSI PVCs and PVs back into resources.
-	// CSI PVs are dynamically generated by the CSI controller for restore,
-	// so we need to get the new PV name after restore volumes finishes
-	if err := a.addCSIVolumeResources(restore); err != nil {
-		return err
 	}
 
 	restore.Status.LastUpdateTimestamp = metav1.Now()
@@ -1239,7 +1294,7 @@ func (a *ApplicationRestoreController) addCSIVolumeResources(restore *storkapi.A
 		if err := a.updateResourceStatus(
 			restore,
 			pvObj,
-			storkapi.ApplicationRestoreStatusSuccessful,
+			vrInfo.Status,
 			"Resource restored successfully"); err != nil {
 			return err
 		}
@@ -1264,10 +1319,11 @@ func (a *ApplicationRestoreController) addCSIVolumeResources(restore *storkapi.A
 			Version: "v1",
 			Group:   "core",
 		})
+
 		if err := a.updateResourceStatus(
 			restore,
 			pvcObj,
-			storkapi.ApplicationRestoreStatusSuccessful,
+			vrInfo.Status,
 			"Resource restored successfully"); err != nil {
 			return err
 		}

@@ -508,6 +508,10 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		if vInfo.DriverName != storkvolume.GCEDriverName {
 			continue
 		}
+		if vInfo.Status == storkapi.ApplicationRestoreStatusSuccessful || vInfo.Status == storkapi.ApplicationRestoreStatusFailed || vInfo.Status == storkapi.ApplicationRestoreStatusRetained {
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
 		var status string
 		if len(vInfo.Zones) == 0 {
 			return nil, fmt.Errorf("zones missing for restore volume %v",
