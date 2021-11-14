@@ -1258,6 +1258,10 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		if vrInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
+		if vrInfo.Status == storkapi.ApplicationRestoreStatusSuccessful || vrInfo.Status == storkapi.ApplicationRestoreStatusFailed || vrInfo.Status == storkapi.ApplicationRestoreStatusRetained {
+			volumeInfos = append(volumeInfos, vrInfo)
+			continue
+		}
 		// Handle namespace mapping
 		destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
 
@@ -1289,8 +1293,14 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			if vrInfo.DriverName != storkvolume.CSIDriverName {
 				continue
 			}
-			vrInfo.Reason = fmt.Sprintf("Volume restore successful: PVC %s is bound", vrInfo.PersistentVolumeClaim)
-			vrInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
+			reason := fmt.Sprintf("Volume restore successful: PVC %s is bound", vrInfo.PersistentVolumeClaim)
+			vrStatus := storkapi.ApplicationRestoreStatusSuccessful
+			if vrInfo.Status == storkapi.ApplicationRestoreStatusRetained {
+				vrStatus = storkapi.ApplicationRestoreStatusRetained
+				reason = fmt.Sprintf("Skipped from volume restore as policy is set to %s and pvc already exists", storkapi.ApplicationRestoreReplacePolicyRetain)
+			}
+			vrInfo.Status = vrStatus
+			vrInfo.Reason = reason
 		}
 
 		return volumeInfos, nil

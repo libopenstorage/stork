@@ -538,6 +538,10 @@ func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*stork
 		if vInfo.DriverName != storkvolume.AzureDriverName {
 			continue
 		}
+		if vInfo.Status == storkapi.ApplicationRestoreStatusSuccessful || vInfo.Status == storkapi.ApplicationRestoreStatusFailed || vInfo.Status == storkapi.ApplicationRestoreStatusRetained {
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
 		disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, vInfo.RestoreVolume)
 		if err != nil {
 			if azureErr, ok := err.(autorest.DetailedError); ok {
