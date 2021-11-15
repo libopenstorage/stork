@@ -340,7 +340,11 @@ func GetPVCDriver(coreOps core.Ops,
 // GetPVDriver gets the driver associated with a PV. Returns ErrNotFound if the PV is
 // not owned by any available driver
 func GetPVDriver(pv *v1.PersistentVolume) (string, error) {
-	for driverName, d := range volDrivers {
+	for _, driverName := range orderedListOfDrivers {
+		d, ok := volDrivers[driverName]
+		if !ok {
+			continue
+		}
 		if d.OwnsPV(pv) {
 			return driverName, nil
 		}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
-	"github.com/portworx/kdmp/pkg/jobratelimit"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
@@ -50,16 +49,6 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 				return "", err
 			}
 		}
-	}
-	// Check whether there is slot to schedule maintenance job.
-	driverType := d.Name()
-	available, err := jobratelimit.CanJobBeScheduled(driverType)
-	if err != nil {
-		logrus.Errorf("%v", err)
-		return "", err
-	}
-	if !available {
-		return "", utils.ErrOutOfJobResources
 	}
 	if err := d.validate(o); err != nil {
 		errMsg := fmt.Sprintf("validation failed for maintenance job for backuplocation [%v]: %v", o.BackupLocationName, err)
