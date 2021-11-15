@@ -1216,7 +1216,7 @@ func (a *ApplicationRestoreController) restoreResources(
 
 func (a *ApplicationRestoreController) addCSIVolumeResources(restore *storkapi.ApplicationRestore) error {
 	for _, vrInfo := range restore.Status.Volumes {
-		if vrInfo.DriverName != "csi" {
+		if vrInfo.DriverName != "csi" && vrInfo.DriverName != "kdmp" {
 			continue
 		}
 
