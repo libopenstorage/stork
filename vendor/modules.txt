@@ -425,7 +425,7 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20211108115338-ba2bebf06ffb
+# github.com/portworx/kdmp v0.4.1-0.20211116132125-2360753e3fec
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
@@ -444,14 +444,13 @@ github.com/portworx/kdmp/pkg/drivers/resticrestore
 github.com/portworx/kdmp/pkg/drivers/rsync
 github.com/portworx/kdmp/pkg/drivers/utils
 github.com/portworx/kdmp/pkg/jobratelimit
-github.com/portworx/kdmp/pkg/snapshots
 github.com/portworx/kdmp/pkg/util/ops
 github.com/portworx/kdmp/pkg/version
 # github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20211026113317-db80e47fe929
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
