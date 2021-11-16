@@ -22,16 +22,19 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
+	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 // Data export label names/keys.
@@ -89,9 +92,6 @@ var volumeAPICallBackoff = wait.Backoff{
 	Factor:   volumeFactor,
 	Steps:    volumeSteps,
 }
-
-var lastKnownStatusOfInProgress kdmpapi.DataExportStatus
-var lastKnownInProgressErrMsg string
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
 	if in == nil {
@@ -322,16 +322,12 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		return true, c.updateStatus(dataExport, data)
 	case kdmpapi.DataExportStageTransferInProgress:
-		// Remember the state so that we populate the same in the final stage if cleanup
-		// pass but InProgress failed. Need to propogate failure to caller
-		lastKnownStatusOfInProgress = dataExport.Status.Status
-		lastKnownInProgressErrMsg = dataExport.Status.Reason
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
 			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 			// set to the next stage
 			data := updateDataExportDetail{
 				stage:  kdmpapi.DataExportStageCleanup,
-				status: kdmpapi.DataExportStatusInitial,
+				status: dataExport.Status.Status,
 				reason: "",
 			}
 			return false, c.updateStatus(dataExport, data)
@@ -426,27 +422,15 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		return false, c.updateStatus(dataExport, data)
 	case kdmpapi.DataExportStageCleanup:
-		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
-			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-			// set to the next stage
-			data := updateDataExportDetail{
-				stage: kdmpapi.DataExportStageFinal,
-			}
-			return true, c.updateStatus(dataExport, data)
-		}
 		var cleanupErr error
+		data := updateDataExportDetail{
+			stage: kdmpapi.DataExportStageFinal,
+		}
 		cleanupTask := func() (interface{}, bool, error) {
 			cleanupErr := c.cleanUp(driver, dataExport)
 			if cleanupErr != nil {
 				errMsg := fmt.Sprintf("failed to remove resources: %s", err)
 				logrus.Errorf("%v", errMsg)
-				data := updateDataExportDetail{
-					status: kdmpapi.DataExportStatusInProgress,
-				}
-				err := c.updateStatus(dataExport, data)
-				if err != nil {
-					return "", false, fmt.Errorf("%v", err)
-				}
 				return "", true, fmt.Errorf("%v", errMsg)
 			}
 
@@ -456,15 +440,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			errMsg := fmt.Sprintf("max retries done, dataexport: [%v/%v] cleanup failed with %v", dataExport.Namespace, dataExport.Name, cleanupErr)
 			logrus.Errorf("%v", errMsg)
 			// Exhausted all retries, fail the CR
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: errMsg,
-			}
-			return false, c.updateStatus(dataExport, data)
-		}
-		data := updateDataExportDetail{
-			status: lastKnownStatusOfInProgress,
-			reason: lastKnownInProgressErrMsg,
+			data.status = kdmpapi.DataExportStatusFailed
 		}
 		return true, c.updateStatus(dataExport, data)
 	case kdmpapi.DataExportStageFinal:
@@ -591,6 +567,10 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (string, error) {
 	if len(dataExport.Spec.SnapshotStorageClass) == 0 {
 		return "", fmt.Errorf("snapshot storage class not provided")
+	}
+	if dataExport.Spec.SnapshotStorageClass == "default" ||
+		dataExport.Spec.SnapshotStorageClass == "Default" {
+		return csiProvider, nil
 	}
 	// Check if snapshot class is a CSI snapshot class
 	config, err := rest.InClusterConfig()
@@ -812,8 +792,31 @@ func (c *Controller) stageSnapshotRestoreInProgress(ctx context.Context, dataExp
 		status: kdmpapi.DataExportStatusSuccessful,
 		reason: restoreInfo.Reason,
 	}
-	return true, c.updateStatus(dataExport, data)
+	// Add annotation for corresponding PV to be skipped backing
+	tempName := toSnapshotPVCName(srcPvc.Name, string(dataExport.UID))
+	interPvc, err := core.Instance().GetPersistentVolumeClaim(tempName, srcPvc.Namespace)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get restore pvc %v: %v", src.Name, err)
+		logrus.Warnf("%v", msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
+	pv, err := core.Instance().GetPersistentVolume(interPvc.Spec.VolumeName)
+	if err != nil {
+		errMsg := fmt.Sprintf("error fetching PV %s: %s", interPvc.Spec.VolumeName, err)
+		logrus.Errorf("%v", errMsg)
+	} else {
+		pv.Annotations[skipResourceAnnotation] = "true"
+		pv, err = core.Instance().UpdatePersistentVolume(pv)
+		if err != nil {
+			logrus.Warnf("error updating pv %v: %v", pv.Name, err)
+		}
+	}
 
+	return true, c.updateStatus(dataExport, data)
 }
 
 func getBackuplocationFromSecret(secretName, namespace string) (*storkapi.BackupLocation, error) {
@@ -962,13 +965,9 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 
 func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
 	if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
-		// update following vars before moving to the last clean up stage
-		lastKnownStatusOfInProgress = dataExport.Status.Status
-		lastKnownInProgressErrMsg = dataExport.Status.Reason
 		// set to the next stage
 		data := updateDataExportDetail{
 			stage:  kdmpapi.DataExportStageCleanup,
-			status: kdmpapi.DataExportStatusInitial,
 			reason: "",
 		}
 		return true, c.updateStatus(dataExport, data)
@@ -1032,9 +1031,12 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 		return false, c.updateStatus(dataExport, data)
 	}
 
+	msg := fmt.Sprintf("Volume restore from local snapshot for volumebackup %s in namespace %s is successful", dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace)
+	logrus.Debugf(msg)
 	data := updateDataExportDetail{
 		status: kdmpapi.DataExportStatusSuccessful,
-		reason: restoreInfo.Reason,
+		reason: msg,
+		size:   restoreInfo.Size,
 	}
 	return true, c.updateStatus(dataExport, data)
 
@@ -1475,10 +1477,25 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 	if err := checkNameNamespace(in); err != nil {
 		return nil, err
 	}
-	// wait for pvc to get bound
-	pvc, err := waitForPVCBound(in, true)
+	pvc, err := core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
 	if err != nil {
 		return nil, err
+	}
+	var sc *storagev1.StorageClass
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName != "" {
+		sc, err = storage.Instance().GetStorageClass(storageClassName)
+		if err != nil {
+			return nil, err
+		}
+		logrus.Debugf("checkPVCIgnoringJobMounts: pvc name %v - storage class VolumeBindingMode %v", pvc.Name, *sc.VolumeBindingMode)
+	}
+	if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
+		// wait for pvc to get bound
+		pvc, err = waitForPVCBound(in, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	pods, err := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
