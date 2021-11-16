@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,6 +30,8 @@ type DaemonSetOps interface {
 	UpdateDaemonSet(*appsv1.DaemonSet) (*appsv1.DaemonSet, error)
 	// DeleteDaemonSet deletes the given daemonset
 	DeleteDaemonSet(name, namespace string) error
+	// ValidateDaemonSetIsTerminated validates if given daemonset is terminated
+	ValidateDaemonSetIsTerminated(name, namespace string, timeout time.Duration) error
 }
 
 // CreateDaemonSet creates the given daemonset
@@ -177,4 +180,34 @@ func (c *Client) DeleteDaemonSet(name, namespace string) error {
 	return c.apps.DaemonSets(namespace).Delete(context.TODO(),
 		name,
 		metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
+}
+
+// ValidateDaemonSetIsTerminated validates if given daemonset is terminated
+func (c *Client) ValidateDaemonSetIsTerminated(name, namespace string, timeout time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		ds, err := c.GetDaemonSet(name, namespace)
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else if err != nil {
+			return nil, true, err
+		}
+
+		currPods := ds.Status.CurrentNumberScheduled
+		if currPods > 0 {
+			return nil, true, &schederrors.ErrAppNotTerminated{
+				ID:    ds.Name,
+				Cause: fmt.Sprintf("%d pods are still present", currPods),
+			}
+		}
+
+		return nil, true, &schederrors.ErrAppNotTerminated{
+			ID:    ds.Name,
+			Cause: fmt.Sprintf("daemon is still present"),
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, 15*time.Second); err != nil {
+		return err
+	}
+	return nil
 }

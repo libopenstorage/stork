@@ -1130,6 +1130,10 @@ github.com/portworx/kdmp v0.4.1-0.20211108115338-ba2bebf06ffb h1:2KjIdoDHUAJS4q8
 github.com/portworx/kdmp v0.4.1-0.20211108115338-ba2bebf06ffb/go.mod h1:cbaFBCLFTtF0taXtGR2zGD89k0gl7fNl+n4Vi9p4gmI=
 github.com/portworx/kdmp v0.4.1-0.20211113181724-d6993a40aa4d h1:iKLjGGM2Y578StIDF4eY4ZOQEjeGiG6p8C+XEnBPdNw=
 github.com/portworx/kdmp v0.4.1-0.20211113181724-d6993a40aa4d/go.mod h1:iUItF4An5p0UmtTYoJUU0NLU4nWxdd6kMoHyTjaOReA=
+github.com/portworx/kdmp v0.4.1-0.20211116131424-efce3ec4cad4 h1:Iw1lBKH/GsJOURcauyohFrdARMtqKKZ7fhrAJISC+Gw=
+github.com/portworx/kdmp v0.4.1-0.20211116131424-efce3ec4cad4/go.mod h1:QrB4B1mH0aUtQa/vvfi+xf8fTUf3oJf0dCYzM61psAg=
+github.com/portworx/kdmp v0.4.1-0.20211117114335-623768a845fc h1:De0pxRI33i1Rb8/bT9X5NCZQ9hy5ykqcd+YFPzgNWHE=
+github.com/portworx/kdmp v0.4.1-0.20211117114335-623768a845fc/go.mod h1:iPEUswzaOQ+Ox7CFqQDh2g4G+zf4FREEzmqp23MUHHQ=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200311180812-b2c72382d652 h1:NElBL34RIHlZKGtDVXT/srxuVZ1+tqmnCdm1K+MC+fU=
@@ -1156,6 +1160,8 @@ github.com/portworx/sched-ops v1.20.4-rc1.0.20211006132704-8a90df7acb50 h1:FmTch
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211006132704-8a90df7acb50/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211026113317-db80e47fe929 h1:yl7Lb1yRziwDVHkCbZAtyGI9aWa1pYb5wPr8wpHNxbY=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211026113317-db80e47fe929/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23 h1:CvUosdpqAPPiGiDWuDuWUQXyEJcuDuTMqel378aiFUA=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224/go.mod h1:OjpMH9Uh5o9ntVGktm4FbjLNwubJ3ITih2OfYrAeWtA=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 h1:J5D0JPZWueVAK8/Dr5s84I7/tCfin6NjIGbKKCSyyJ0=
