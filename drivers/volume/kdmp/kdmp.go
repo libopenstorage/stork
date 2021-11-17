@@ -543,8 +543,8 @@ func (k *kdmp) getRestorePVCs(
 			sc := k8shelper.GetPersistentVolumeClaimClass(&pvc)
 			if val, ok := restore.Spec.StorageClassMapping[sc]; ok {
 				pvc.Spec.StorageClassName = &val
-				pvc.Spec.VolumeName = ""
 			}
+			pvc.Spec.VolumeName = ""
 			if pvc.Annotations != nil {
 				delete(pvc.Annotations, bindCompletedKey)
 				delete(pvc.Annotations, boundByControllerKey)
