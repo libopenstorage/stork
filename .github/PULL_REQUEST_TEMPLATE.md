@@ -3,6 +3,7 @@
 > Uncomment only one and also add the corresponding label in the PR:
 >bug
 >feature
+>improvement
 >cleanup
 >api-change
 >design
@@ -26,6 +27,9 @@ If yes, add the release-note label to the PR. Also enter a single sentence relea
 If no, just write no and remove the release-note block below.
 -->
 ```release-note
+Issue:
+User Impact:
+Resolution
 
 ```
 
