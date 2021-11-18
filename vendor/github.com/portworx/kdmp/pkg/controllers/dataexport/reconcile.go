@@ -22,16 +22,19 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
+	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 // Data export label names/keys.
@@ -1024,9 +1027,12 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 		return false, c.updateStatus(dataExport, data)
 	}
 
+	msg := fmt.Sprintf("Volume restore from local snapshot for volumebackup %s in namespace %s is successful", dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace)
+	logrus.Debugf(msg)
 	data := updateDataExportDetail{
 		status: kdmpapi.DataExportStatusSuccessful,
-		reason: restoreInfo.Reason,
+		reason: msg,
+		size:   restoreInfo.Size,
 	}
 	return true, c.updateStatus(dataExport, data)
 
@@ -1467,10 +1473,25 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 	if err := checkNameNamespace(in); err != nil {
 		return nil, err
 	}
-	// wait for pvc to get bound
-	pvc, err := waitForPVCBound(in, true)
+	pvc, err := core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
 	if err != nil {
 		return nil, err
+	}
+	var sc *storagev1.StorageClass
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName != "" {
+		sc, err = storage.Instance().GetStorageClass(storageClassName)
+		if err != nil {
+			return nil, err
+		}
+		logrus.Debugf("checkPVCIgnoringJobMounts: pvc name %v - storage class VolumeBindingMode %v", pvc.Name, *sc.VolumeBindingMode)
+	}
+	if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
+		// wait for pvc to get bound
+		pvc, err = waitForPVCBound(in, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	pods, err := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
