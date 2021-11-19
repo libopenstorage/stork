@@ -66,6 +66,9 @@ const (
 	cmName                     = "stork-version"
 	eventComponentName         = "stork"
 	debugFilePath              = "/var/cores"
+	awsKopiaExecutorImage      = "709825985650.dkr.ecr.us-east-1.amazonaws.com/portworx/kopiaexecutor"
+	awsKopiaExecutorImageTag   = "1.0.0-a345bb2"
+	awsMarketPlace             = "aws"
 )
 
 var ext *extender.Extender
@@ -213,6 +216,7 @@ func run(c *cli.Context) {
 	} else if err != nil {
 		log.Warnf("Unable to create stork version configmap: %v", err)
 	}
+	marketPlace := os.Getenv("MARKET_PLACE")
 	kdmpConfig := &api_v1.ConfigMap{}
 	kdmpConfig.Name = stork_driver.KdmpConfigmapName
 	kdmpConfig.Namespace = stork_driver.KdmpConfigmapNamespace
@@ -222,7 +226,11 @@ func run(c *cli.Context) {
 	kdmpConfig.Data[drivers.KopiaExecutorLimitCPU] = drivers.DefaultKopiaExecutorLimitCPU
 	kdmpConfig.Data[drivers.KopiaExecutorLimitMemory] = drivers.DefaultKopiaExecutorLimitMemory
 	kdmpConfig.Data[drivers.KopiaExecutorImageSecretKey] = ""
-	kdmpConfig.Data[drivers.KopiaExecutorImageKey] = strings.Join([]string{drivers.KopiaExecutorImage, kdmpversion.Get().GitVersion}, ":")
+	if marketPlace == awsMarketPlace {
+		kdmpConfig.Data[drivers.KopiaExecutorImageKey] = strings.Join([]string{awsKopiaExecutorImage, awsKopiaExecutorImageTag}, ":")
+	} else {
+		kdmpConfig.Data[drivers.KopiaExecutorImageKey] = strings.Join([]string{drivers.KopiaExecutorImage, kdmpversion.Get().GitVersion}, ":")
+	}
 	kdmpConfig.Data[jobratelimit.BackupJobLimitKey] = strconv.Itoa(jobratelimit.DefaultBackupJobLimit)
 	kdmpConfig.Data[jobratelimit.RestoreJobLimitKey] = strconv.Itoa(jobratelimit.DefaultRestoreJobLimit)
 	kdmpConfig.Data[jobratelimit.DeleteJobLimitKey] = strconv.Itoa(jobratelimit.DefaultDeleteJobLimit)
