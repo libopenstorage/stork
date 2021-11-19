@@ -113,12 +113,35 @@ func IsJobPending(j *batchv1.Job) bool {
 	return false
 }
 
+// FetchJobContainerRestartCount fetches job pod restart count
+func FetchJobContainerRestartCount(j *batchv1.Job) (int32, error) {
+	// Check if the pod is in running state
+	pods, err := core.Instance().GetPods(
+		j.Namespace,
+		map[string]string{
+			"job-name": j.Name,
+		},
+	)
+	if err != nil {
+		// Cannot determine job state
+		return 0, fmt.Errorf("cannot determine job state")
+	} else if len(pods.Items) == 0 {
+		return 0, nil
+	}
+	if len(pods.Items[0].Status.ContainerStatuses) == 0 {
+		return 0, nil
+	}
+
+	return (pods.Items[0].Status.ContainerStatuses[0].RestartCount), nil
+}
+
 // ToJobStatus returns a job status for provided parameters.
-func ToJobStatus(progress float64, errMsg string) *drivers.JobStatus {
+func ToJobStatus(progress float64, errMsg string, retartCount int32) *drivers.JobStatus {
 	if len(errMsg) > 0 {
 		return &drivers.JobStatus{
-			State:  drivers.JobStateFailed,
-			Reason: errMsg,
+			State:        drivers.JobStateFailed,
+			Reason:       errMsg,
+			RestartCount: retartCount,
 		}
 	}
 
@@ -126,12 +149,14 @@ func ToJobStatus(progress float64, errMsg string) *drivers.JobStatus {
 		return &drivers.JobStatus{
 			State:            drivers.JobStateCompleted,
 			ProgressPercents: progress,
+			RestartCount:     retartCount,
 		}
 	}
 
 	return &drivers.JobStatus{
 		State:            drivers.JobStateInProgress,
 		ProgressPercents: progress,
+		RestartCount:     retartCount,
 	}
 }
 
