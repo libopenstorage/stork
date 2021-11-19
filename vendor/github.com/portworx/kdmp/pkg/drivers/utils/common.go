@@ -37,6 +37,11 @@ const (
 	DefaultCompresion = "s2-parallel-8"
 )
 
+var (
+	// JobPodBackOffLimit backofflimit for the job
+	JobPodBackOffLimit = int32(4)
+)
+
 // SetupServiceAccount create a service account and bind it to a provided role.
 func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 	if role != nil {

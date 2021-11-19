@@ -98,7 +98,6 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		return false, nil
 	}
 	dataExport := in.DeepCopy()
-
 	// set the initial stage
 	if dataExport.Status.Stage == "" {
 		// TODO: set defaults
@@ -187,6 +186,16 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				stage:  kdmpapi.DataExportStageTransferInProgress,
 			}
 			return true, c.updateStatus(dataExport, data)
+		}
+
+		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+			// set to the next stage
+			data := updateDataExportDetail{
+				stage:  kdmpapi.DataExportStageCleanup,
+				status: dataExport.Status.Status,
+				reason: "",
+			}
+			return false, c.updateStatus(dataExport, data)
 		}
 
 		// use snapshot pvc in the dst namespace if it's available
@@ -343,7 +352,17 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			}
 			return false, c.updateStatus(dataExport, data)
 		}
-
+		// When job reaches the last retry limit, pod is removed and reconciler
+		// can be coming later during which is pod might be deleted. GetPods() doesn't give
+		// error when pods are not present hence we are not sure if pods are still coming up
+		// or deleted.
+		if progress.RestartCount < (utils.JobPodBackOffLimit - 1) {
+			logrus.Tracef("pod restart cnt: %v", progress.RestartCount)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusInProgress,
+			}
+			return true, c.updateStatus(dataExport, data)
+		}
 		switch progress.State {
 		case drivers.JobStateFailed:
 			errMsg := fmt.Sprintf("%s transfer job failed: %s", dataExport.Status.TransferID, progress.Reason)
@@ -567,6 +586,10 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (string, error) {
 	if len(dataExport.Spec.SnapshotStorageClass) == 0 {
 		return "", fmt.Errorf("snapshot storage class not provided")
+	}
+	if dataExport.Spec.SnapshotStorageClass == "default" ||
+		dataExport.Spec.SnapshotStorageClass == "Default" {
+		return csiProvider, nil
 	}
 	// Check if snapshot class is a CSI snapshot class
 	config, err := rest.InClusterConfig()
@@ -1470,42 +1493,54 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 }
 
 func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMountJob string) (*corev1.PersistentVolumeClaim, error) {
-	if err := checkNameNamespace(in); err != nil {
-		return nil, err
-	}
-	pvc, err := core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	var sc *storagev1.StorageClass
-	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-	if storageClassName != "" {
-		sc, err = storage.Instance().GetStorageClass(storageClassName)
-		if err != nil {
-			return nil, err
+	var pvc *corev1.PersistentVolumeClaim
+	var checkErr error
+	checkTask := func() (interface{}, bool, error) {
+		if checkErr := checkNameNamespace(in); checkErr != nil {
+			return "", true, checkErr
 		}
-		logrus.Debugf("checkPVCIgnoringJobMounts: pvc name %v - storage class VolumeBindingMode %v", pvc.Name, *sc.VolumeBindingMode)
-	}
-	if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
-		// wait for pvc to get bound
-		pvc, err = waitForPVCBound(in, true)
-		if err != nil {
-			return nil, err
+		pvc, checkErr = core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
+		if checkErr != nil {
+			return "", true, checkErr
 		}
-	}
-
-	pods, err := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
-	if err != nil {
-		return nil, fmt.Errorf("get mounted pods: %v", err)
-	}
-
-	if len(pods) > 0 {
-		for _, pod := range pods {
-			if podBelongsToJob(pod, expectedMountJob, pvc.Namespace) {
-				return pvc, nil
+		var sc *storagev1.StorageClass
+		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+		if storageClassName != "" {
+			sc, checkErr = storage.Instance().GetStorageClass(storageClassName)
+			if checkErr != nil {
+				return "", true, checkErr
+			}
+			logrus.Debugf("checkPVCIgnoringJobMounts: pvc name %v - storage class VolumeBindingMode %v", pvc.Name, *sc.VolumeBindingMode)
+		}
+		if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
+			// wait for pvc to get bound
+			pvc, checkErr = waitForPVCBound(in, true)
+			if checkErr != nil {
+				return "", true, checkErr
 			}
 		}
-		return nil, fmt.Errorf("mounted to %v pods", toPodNames(pods))
+
+		pods, checkErr := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		if checkErr != nil {
+			return "", true, fmt.Errorf("get mounted pods: %v", checkErr)
+		}
+
+		if len(pods) > 0 {
+			for _, pod := range pods {
+				if podBelongsToJob(pod, expectedMountJob, pvc.Namespace) {
+					return "", false, nil
+				}
+			}
+			checkErr = fmt.Errorf("mounted to %v pods", toPodNames(pods))
+			return "", false, checkErr
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(checkTask, defaultTimeout, progressCheckInterval); err != nil {
+		errMsg := fmt.Sprintf("max retries done, failed to check the PVC status in dataexport %v/%v: %v", in.Namespace, in.Name, checkErr)
+		logrus.Errorf("%v", errMsg)
+		// Exhausted all retries, fail the CR
+		return nil, fmt.Errorf("%v", errMsg)
 	}
 	return pvc, nil
 }
