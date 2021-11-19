@@ -345,9 +345,6 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				string(stork_api.ApplicationBackupStatusFailed),
 				message)
 			key := runtimeclient.ObjectKeyFromObject(backup)
-			if err != nil {
-				return err
-			}
 			err = a.client.Get(context.TODO(), key, backup)
 			if err != nil {
 				return err
@@ -851,9 +848,6 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 	// Get the latest object so that the rules engine can update annotations if
 	// required
 	key := runtimeclient.ObjectKeyFromObject(backup)
-	if err != nil {
-		return nil, false, err
-	}
 	err = a.client.Get(context.TODO(), key, backup)
 	if err != nil {
 		return nil, false, err
@@ -885,12 +879,6 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 	// Get the latest object again since the rules engine could have updated
 	// annotations
 	key = runtimeclient.ObjectKeyFromObject(backup)
-	if err != nil {
-		for _, channel := range terminationChannels {
-			channel <- true
-		}
-		return nil, false, err
-	}
 	err = a.client.Get(context.TODO(), key, backup)
 	if err != nil {
 		for _, channel := range terminationChannels {
