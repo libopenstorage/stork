@@ -71,6 +71,7 @@ func jobForLiveBackup(
 			Labels: labels,
 		},
 		Spec: batchv1.JobSpec{
+			BackoffLimit: &utils.JobPodBackOffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
