@@ -124,6 +124,8 @@ type JobStatus struct {
 	ProgressPercents float64
 	State            JobState
 	Reason           string
+	// RestartCount holds container restart count of job pod
+	RestartCount int32
 }
 
 // IsTransferCompleted allows to check transfer status.

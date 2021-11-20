@@ -189,7 +189,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	fn := "JobStatus"
 	namespace, name, err := utils.ParseJobID(id)
 	if err != nil {
-		return utils.ToJobStatus(0, err.Error()), nil
+		return utils.ToJobStatus(0, err.Error(), 0), nil
 	}
 
 	job, err := batch.Instance().GetJob(name, namespace)
@@ -198,15 +198,21 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
+	restartCount, err := utils.FetchJobContainerRestartCount(job)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to get restart count for job  %s/%s job: %v", namespace, name, err)
+		logrus.Errorf("%s: %v", fn, errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
 	jobErr, nodeErr := utils.IsJobOrNodeFailed(job)
 	var errMsg string
 	if jobErr {
 		errMsg = fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
-		return utils.ToJobStatus(0, errMsg), nil
+		return utils.ToJobStatus(0, errMsg, restartCount), nil
 	}
 	if nodeErr {
 		errMsg = fmt.Sprintf("Node [%v] on which job [%v/%v] schedules is NotReady", job.Spec.Template.Spec.NodeName, namespace, name)
-		return utils.ToJobStatus(0, errMsg), nil
+		return utils.ToJobStatus(0, errMsg, restartCount), nil
 	}
 
 	vb, err := kdmpops.Instance().GetVolumeBackup(context.Background(), name, namespace)
@@ -214,7 +220,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		if apierrors.IsNotFound(err) {
 			if utils.IsJobPending(job) {
 				logrus.Warnf("backup job %s is in pending state", job.Name)
-				return utils.ToJobStatus(0, ""), nil
+				return utils.ToJobStatus(0, "", restartCount), nil
 			}
 		}
 		errMsg := fmt.Sprintf("failed to fetch volumebackup %s/%s status: %v", namespace, name, err)
@@ -222,7 +228,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	return utils.ToJobStatus(vb.Status.ProgressPercentage, vb.Status.LastKnownError), nil
+	return utils.ToJobStatus(vb.Status.ProgressPercentage, vb.Status.LastKnownError, restartCount), nil
 }
 
 func (d Driver) validate(o drivers.JobOpts) error {
@@ -279,6 +285,7 @@ func jobFor(
 			Labels: labels,
 		},
 		Spec: batchv1.JobSpec{
+			BackoffLimit: &utils.JobPodBackOffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
@@ -402,9 +409,14 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-
 	// run a "live" backup if a pvc is mounted (mount a kubelet directory with pod volumes)
 	if len(pods) > 0 {
+		logrus.Debugf("buildJob: pod %v phase %v pvc: %v/%v", pods[0].Name, pods[0].Status.Phase, jobOptions.Namespace, jobOptions.SourcePVCName)
+		if pods[0].Status.Phase == corev1.PodPending {
+			errMsg := fmt.Sprintf("pods %v is using pvc %v/%v but it is in pending state, backup is not possible", pods[0].Name, jobOptions.Namespace, jobOptions.SourcePVCName)
+			logrus.Errorf("%s: %v", fn, errMsg)
+			return nil, fmt.Errorf(errMsg)
+		}
 		return jobForLiveBackup(
 			jobOptions,
 			jobName,
