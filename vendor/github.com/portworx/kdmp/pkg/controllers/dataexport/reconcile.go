@@ -314,7 +314,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		// start data transfer
 		id, err := startTransferJob(driver, srcPVCName, compressionType, dataExport)
-		if err != nil {
+		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
 			logrus.Warnf(msg)
 			data := updateDataExportDetail{
@@ -322,6 +322,8 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				reason: msg,
 			}
 			return false, c.updateStatus(dataExport, data)
+		} else if err != nil {
+			return true, nil
 		}
 
 		dataExport.Status.TransferID = id
@@ -356,11 +358,22 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		// can be coming later during which is pod might be deleted. GetPods() doesn't give
 		// error when pods are not present hence we are not sure if pods are still coming up
 		// or deleted.
+		// TODO: Remove these debug later
 		if progress.RestartCount < (utils.JobPodBackOffLimit - 1) {
-			logrus.Tracef("pod restart cnt: %v", progress.RestartCount)
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusInProgress,
+			if (progress.State == drivers.JobStateInProgress) || (progress.State == drivers.JobStateFailed) {
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusInProgress,
+				}
+				logrus.Debugf("Retrying job again internally [pod restart count: %v, DE CR : %v/%v, driver state: %v]",
+					progress.RestartCount, dataExport.Namespace, dataExport.Name, progress.State)
+				return true, c.updateStatus(dataExport, data)
 			}
+		} else {
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+			}
+			logrus.Debugf("Exhausted job retries and job is still failing [pod restart count: %v, DE CR : %v/%v, driver state: %v]",
+				progress.RestartCount, dataExport.Namespace, dataExport.Name, progress.State)
 			return true, c.updateStatus(dataExport, data)
 		}
 		switch progress.State {

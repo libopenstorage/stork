@@ -124,11 +124,15 @@ func FetchJobContainerRestartCount(j *batchv1.Job) (int32, error) {
 	)
 	if err != nil {
 		// Cannot determine job state
-		return 0, fmt.Errorf("cannot determine job state")
+		errMsg := fmt.Sprintf("cannot determine job state for: %v/%v", j.Namespace, j.Name)
+		logrus.Errorf("%v", errMsg)
+		return 0, fmt.Errorf(errMsg)
 	} else if len(pods.Items) == 0 {
+		logrus.Debugf("no pods in job spec: %v/%v", j.Namespace, j.Name)
 		return 0, nil
 	}
 	if len(pods.Items[0].Status.ContainerStatuses) == 0 {
+		logrus.Debugf("container status not present in pod - job: %v/%v", j.Namespace, j.Name)
 		return 0, nil
 	}
 
