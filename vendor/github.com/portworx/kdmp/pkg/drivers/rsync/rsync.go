@@ -70,24 +70,31 @@ func (d Driver) DeleteJob(id string) error {
 func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	namespace, name, err := utils.ParseJobID(id)
 	if err != nil {
-		return utils.ToJobStatus(0, err.Error()), nil
+		return utils.ToJobStatus(0, err.Error(), 0), nil
 	}
 
 	job, err := batch.Instance().GetJob(name, namespace)
 	if err != nil {
 		return nil, err
 	}
+
+	restartCount, err := utils.FetchJobContainerRestartCount(job)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to get restart count for job  %s/%s job: %v", namespace, name, err)
+		return nil, fmt.Errorf(errMsg)
+	}
+
 	if utils.IsJobFailed(job) {
 		errMsg := fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
-		return utils.ToJobStatus(0, errMsg), nil
+		return utils.ToJobStatus(0, errMsg, restartCount), nil
 	}
 
 	if !utils.IsJobCompleted(job) {
 		// TODO: update progress
-		return utils.ToJobStatus(0, ""), nil
+		return utils.ToJobStatus(0, "", restartCount), nil
 	}
 
-	return utils.ToJobStatus(drivers.TransferProgressCompleted, ""), nil
+	return utils.ToJobStatus(drivers.TransferProgressCompleted, "", 0), nil
 }
 
 func (d Driver) validate(o drivers.JobOpts) error {
@@ -123,6 +130,7 @@ func jobFor(srcVol, dstVol, namespace string, labels map[string]string) (*batchv
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
+			BackoffLimit: &utils.JobPodBackOffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
