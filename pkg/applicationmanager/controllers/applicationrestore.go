@@ -1000,10 +1000,10 @@ func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
 	newVolInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, bkupVolInfo := range backup.Status.Volumes {
 		restoreVolInfo := &storkapi.ApplicationRestoreVolumeInfo{}
-
 		val, ok := restore.Spec.NamespaceMapping[bkupVolInfo.Namespace]
 		if !ok {
-			return newVolInfos, existingInfos, fmt.Errorf("restore namespace mapping not found: %s", bkupVolInfo.Namespace)
+			logrus.Infof("skipping namespace %s for restore", bkupVolInfo.Namespace)
+			continue
 		}
 
 		// get corresponding pvc object from objects list
