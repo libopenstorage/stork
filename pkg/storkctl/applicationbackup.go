@@ -10,6 +10,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -117,8 +118,9 @@ func newGetApplicationBackupCommand(cmdFactory Factory, ioStreams genericcliopti
 				}
 			} else {
 				var tempApplicationBackups storkv1.ApplicationBackupList
+				listOptions := metav1.ListOptions{}
 				for _, ns := range namespaces {
-					applicationBackups, err = storkops.Instance().ListApplicationBackups(ns)
+					applicationBackups, err = storkops.Instance().ListApplicationBackups(ns, listOptions)
 					if err != nil {
 						util.CheckErr(err)
 						return

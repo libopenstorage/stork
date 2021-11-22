@@ -605,7 +605,8 @@ func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, po
 		applicationBackupScheduleName, namespace))
 
 	time.Sleep(10 * time.Second)
-	applicationBackupList, err := storkops.Instance().ListApplicationBackups(namespace)
+	listOptions := meta.ListOptions{}
+	applicationBackupList, err := storkops.Instance().ListApplicationBackups(namespace, listOptions)
 	require.NoError(t, err, fmt.Sprintf("Error getting list of applicationBackups for namespace: %v", namespace))
 	// sometimes length of backuplist is expected+1 depending on the timing issue
 	require.True(t, len(applicationBackupList.Items) <= expectedBackups+1, fmt.Sprintf("Should have %v ApplicationBackups triggered by schedule in namespace %v", expectedBackups, namespace))
@@ -1261,7 +1262,8 @@ func applicationBackupMultiple(t *testing.T) {
 
 func deleteAllBackupsNamespace(namespace string) error {
 	logrus.Infof("Deleting all backups in namespace: %s", namespace)
-	allAppBackups, err := storkops.Instance().ListApplicationBackups(namespace)
+	listOptions := meta.ListOptions{}
+	allAppBackups, err := storkops.Instance().ListApplicationBackups(namespace, listOptions)
 	if err != nil {
 		return fmt.Errorf("Failed to list backups before deleting: %v", err)
 	}
@@ -1284,8 +1286,8 @@ func deleteAndWaitForBackupDeletion(namespace string) error {
 		if err != nil {
 			return "", false, err
 		}
-
-		allAppBackups, err := storkops.Instance().ListApplicationBackups(namespace)
+		listOptions := meta.ListOptions{}
+		allAppBackups, err := storkops.Instance().ListApplicationBackups(namespace, listOptions)
 		if err != nil || len(allAppBackups.Items) != 0 {
 			logrus.Infof("Failed to delete all app backups in %s. Error: %v. Number of backups: %v", namespace, err, len(allAppBackups.Items))
 			return "", true, fmt.Errorf("All backups not deleted yet")
@@ -1401,7 +1403,8 @@ func getSyncedBackupWithAnnotation(appBackup *storkv1.ApplicationBackup, lookUpA
 	var backupToRestore *storkv1.ApplicationBackup
 	var err error
 	listBackupsTask := func() (interface{}, bool, error) {
-		allAppBackups, err = storkops.Instance().ListApplicationBackups(appBackup.Namespace)
+		listOptions := meta.ListOptions{}
+		allAppBackups, err = storkops.Instance().ListApplicationBackups(appBackup.Namespace, listOptions)
 		if err != nil {
 			logrus.Infof("Failed to list app backups on first cluster post migrate and sync. Error: %v", err)
 			return "", true, fmt.Errorf("Failed to list app backups on first cluster")

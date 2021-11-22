@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -34,10 +35,11 @@ func (b *BackupSyncController) Init(stopChannel chan os.Signal) error {
 }
 
 func (b *BackupSyncController) startBackupSync() {
+	listOptions := metav1.ListOptions{}
 	for {
 		select {
 		case <-time.After(b.SyncInterval):
-			backupLocations, err := storkops.Instance().ListBackupLocations("")
+			backupLocations, err := storkops.Instance().ListBackupLocations("", listOptions)
 			if err != nil {
 				logrus.Errorf("Error getting backup location to sync: %v", err)
 				continue

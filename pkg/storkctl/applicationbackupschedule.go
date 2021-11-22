@@ -7,6 +7,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -119,8 +120,9 @@ func newGetApplicationBackupScheduleCommand(cmdFactory Factory, ioStreams generi
 				}
 			} else {
 				var tempApplicationBackupSchedules storkv1.ApplicationBackupScheduleList
+				listOptions := metav1.ListOptions{}
 				for _, ns := range namespaces {
-					applicationBackupSchedules, err = storkops.Instance().ListApplicationBackupSchedules(ns)
+					applicationBackupSchedules, err = storkops.Instance().ListApplicationBackupSchedules(ns, listOptions)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -181,7 +183,8 @@ func newDeleteApplicationBackupScheduleCommand(cmdFactory Factory, ioStreams gen
 				}
 				applicationBackupSchedules = args
 			} else {
-				applicationBackupScheduleList, err := storkops.Instance().ListApplicationBackupSchedules(cmdFactory.GetNamespace())
+				listOptions := metav1.ListOptions{}
+				applicationBackupScheduleList, err := storkops.Instance().ListApplicationBackupSchedules(cmdFactory.GetNamespace(), listOptions)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -230,7 +233,8 @@ func getApplicationBackupSchedules(backupLocation string, args []string, namespa
 		}
 		applicationBackupSchedules = append(applicationBackupSchedules, applicationBackupSchedule)
 	} else {
-		applicationBackupScheduleList, err := storkops.Instance().ListApplicationBackupSchedules(namespace)
+		listOptions := metav1.ListOptions{}
+		applicationBackupScheduleList, err := storkops.Instance().ListApplicationBackupSchedules(namespace, listOptions)
 		if err != nil {
 			return nil, err
 		}
