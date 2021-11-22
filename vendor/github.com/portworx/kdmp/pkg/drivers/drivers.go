@@ -1,6 +1,9 @@
 package drivers
 
-import "fmt"
+import (
+	"fmt"
+	batchv1 "k8s.io/api/batch/v1"
+)
 
 // Known drivers.
 const (
@@ -124,8 +127,7 @@ type JobStatus struct {
 	ProgressPercents float64
 	State            JobState
 	Reason           string
-	// RestartCount holds container restart count of job pod
-	RestartCount int32
+	Status           batchv1.JobConditionType
 }
 
 // IsTransferCompleted allows to check transfer status.
