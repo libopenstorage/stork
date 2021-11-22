@@ -12,16 +12,28 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.3.0
 	github.com/LINBIT/golinstor v0.27.0
+	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
 	github.com/aquilax/truncate v1.0.0
 	github.com/aws/aws-sdk-go v1.35.37
+	github.com/banzaicloud/k8s-objectmatcher v1.5.1 // indirect
+	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
+	github.com/frankban/quicktest v1.4.1 // indirect
+	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-openapi/inflect v0.19.0
+	github.com/go-openapi/spec v0.19.5 // indirect
 	github.com/hashicorp/go-multierror v1.1.0
+	github.com/hashicorp/go-retryablehttp v0.6.6 // indirect
 	github.com/hashicorp/go-version v1.2.1
+	github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02 // indirect
+	github.com/hashicorp/vault/sdk v0.1.14-0.20200429182704-29fce8f27ce4 // indirect
 	github.com/heptio/ark v1.0.0
+	github.com/heptio/velero v1.0.0 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
+	github.com/kubernetes-csi/external-snapshotter/v2 v2.1.1 // indirect
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
+	github.com/libopenstorage/operator v0.0.0-20210303221358-0bb211a9908c // indirect
 	github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67
 	github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
@@ -29,7 +41,9 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/portworx/kdmp v0.4.1-0.20211120134402-5fd440d39f88
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23
+	github.com/portworx/px-backup-api v1.2.1-0.20210608134439-01a3059d49ea // indirect
+	github.com/portworx/pxc v0.33.0 // indirect
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.9.0
 	github.com/sirupsen/logrus v1.8.1
@@ -41,8 +55,9 @@ require (
 	gocloud.dev v0.20.0
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	google.golang.org/api v0.30.0
-	google.golang.org/grpc v1.36.0
+	google.golang.org/grpc v1.38.0
 	gopkg.in/yaml.v2 v2.4.0
+	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 // indirect
 	k8s.io/api v0.20.4
 	k8s.io/apiextensions-apiserver v0.20.4
 	k8s.io/apimachinery v0.20.4
@@ -50,6 +65,7 @@ require (
 	k8s.io/cli-runtime v0.20.4
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/code-generator v0.21.0
+	k8s.io/kube-openapi v0.0.0-20210216185858-15cd8face8d6 // indirect
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.20.4
 	k8s.io/kubernetes v1.20.4
@@ -69,7 +85,6 @@ replace (
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
 

@@ -17,6 +17,8 @@ type RuleOps interface {
 	UpdateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, error)
 	// DeleteRule deletes the given stork rule
 	DeleteRule(name, namespace string) error
+	// ListRules returns the list of rules
+	ListRules(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.RuleList, error)
 }
 
 // GetRule fetches the given stork rule
@@ -51,4 +53,12 @@ func (c *Client) DeleteRule(name, namespace string) error {
 	return c.stork.StorkV1alpha1().Rules(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+// ListRules returns the list of rules
+func (c *Client) ListRules(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.RuleList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.stork.StorkV1alpha1().Rules(namespace).List(context.TODO(), filterOptions)
 }
