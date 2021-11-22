@@ -105,14 +105,18 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	fn := "JobStatus:"
 	namespace, name, err := utils.ParseJobID(id)
 	if err != nil {
-		return utils.ToJobStatus(0, err.Error(), 0), nil
+		return utils.ToJobStatus(0, err.Error(), batchv1.JobConditionType("")), nil
 	}
 
 	job, err := batch.Instance().GetJob(name, namespace)
 	if err != nil {
 		return nil, err
 	}
-	restartCount, err := utils.FetchJobContainerRestartCount(job)
+	var jobStatus batchv1.JobConditionType
+	if len(job.Status.Conditions) != 0 {
+		jobStatus = job.Status.Conditions[0].Type
+
+	}
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get restart count for job  %s/%s job: %v", namespace, name, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
@@ -121,19 +125,19 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 
 	if utils.IsJobFailed(job) {
 		errMsg := fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
-		return utils.ToJobStatus(0, errMsg, restartCount), nil
+		return utils.ToJobStatus(0, errMsg, jobStatus), nil
 	}
 	if utils.IsJobPending(job) {
 		logrus.Warnf("restore job %s is in pending state", job.Name)
-		return utils.ToJobStatus(0, "", restartCount), nil
+		return utils.ToJobStatus(0, "", jobStatus), nil
 	}
 
 	if !utils.IsJobCompleted(job) {
 		// TODO: update progress
-		return utils.ToJobStatus(0, "", restartCount), nil
+		return utils.ToJobStatus(0, "", jobStatus), nil
 	}
 
-	return utils.ToJobStatus(drivers.TransferProgressCompleted, "", restartCount), nil
+	return utils.ToJobStatus(drivers.TransferProgressCompleted, "", jobStatus), nil
 }
 
 func (d Driver) validate(o drivers.JobOpts) error {

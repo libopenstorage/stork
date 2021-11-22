@@ -140,12 +140,12 @@ func FetchJobContainerRestartCount(j *batchv1.Job) (int32, error) {
 }
 
 // ToJobStatus returns a job status for provided parameters.
-func ToJobStatus(progress float64, errMsg string, retartCount int32) *drivers.JobStatus {
+func ToJobStatus(progress float64, errMsg string, jobStatus batchv1.JobConditionType) *drivers.JobStatus {
 	if len(errMsg) > 0 {
 		return &drivers.JobStatus{
-			State:        drivers.JobStateFailed,
-			Reason:       errMsg,
-			RestartCount: retartCount,
+			State:  drivers.JobStateFailed,
+			Reason: errMsg,
+			Status: jobStatus,
 		}
 	}
 
@@ -153,14 +153,14 @@ func ToJobStatus(progress float64, errMsg string, retartCount int32) *drivers.Jo
 		return &drivers.JobStatus{
 			State:            drivers.JobStateCompleted,
 			ProgressPercents: progress,
-			RestartCount:     retartCount,
+			Status:           jobStatus,
 		}
 	}
 
 	return &drivers.JobStatus{
 		State:            drivers.JobStateInProgress,
 		ProgressPercents: progress,
-		RestartCount:     retartCount,
+		Status:           jobStatus,
 	}
 }
 

@@ -189,7 +189,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	fn := "JobStatus"
 	namespace, name, err := utils.ParseJobID(id)
 	if err != nil {
-		return utils.ToJobStatus(0, err.Error(), 0), nil
+		return utils.ToJobStatus(0, err.Error(), batchv1.JobConditionType("")), nil
 	}
 
 	job, err := batch.Instance().GetJob(name, namespace)
@@ -198,21 +198,20 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	restartCount, err := utils.FetchJobContainerRestartCount(job)
-	if err != nil {
-		errMsg := fmt.Sprintf("failed to get restart count for job  %s/%s job: %v", namespace, name, err)
-		logrus.Errorf("%s: %v", fn, errMsg)
-		return nil, fmt.Errorf(errMsg)
+	var jobStatus batchv1.JobConditionType
+	if len(job.Status.Conditions) != 0 {
+		jobStatus = job.Status.Conditions[0].Type
+
 	}
 	jobErr, nodeErr := utils.IsJobOrNodeFailed(job)
 	var errMsg string
 	if jobErr {
 		errMsg = fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
-		return utils.ToJobStatus(0, errMsg, restartCount), nil
+		return utils.ToJobStatus(0, errMsg, jobStatus), nil
 	}
 	if nodeErr {
 		errMsg = fmt.Sprintf("Node [%v] on which job [%v/%v] schedules is NotReady", job.Spec.Template.Spec.NodeName, namespace, name)
-		return utils.ToJobStatus(0, errMsg, restartCount), nil
+		return utils.ToJobStatus(0, errMsg, jobStatus), nil
 	}
 
 	vb, err := kdmpops.Instance().GetVolumeBackup(context.Background(), name, namespace)
@@ -220,7 +219,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		if apierrors.IsNotFound(err) {
 			if utils.IsJobPending(job) {
 				logrus.Warnf("backup job %s is in pending state", job.Name)
-				return utils.ToJobStatus(0, "", restartCount), nil
+				return utils.ToJobStatus(0, "", jobStatus), nil
 			}
 		}
 		errMsg := fmt.Sprintf("failed to fetch volumebackup %s/%s status: %v", namespace, name, err)
@@ -228,7 +227,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	return utils.ToJobStatus(vb.Status.ProgressPercentage, vb.Status.LastKnownError, restartCount), nil
+	return utils.ToJobStatus(vb.Status.ProgressPercentage, vb.Status.LastKnownError, jobStatus), nil
 }
 
 func (d Driver) validate(o drivers.JobOpts) error {

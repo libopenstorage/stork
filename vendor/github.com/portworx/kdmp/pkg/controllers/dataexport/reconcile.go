@@ -26,6 +26,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -354,28 +355,29 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			}
 			return false, c.updateStatus(dataExport, data)
 		}
-		// When job reaches the last retry limit, pod is removed and reconciler
-		// can be coming later during which is pod might be deleted. GetPods() doesn't give
-		// error when pods are not present hence we are not sure if pods are still coming up
-		// or deleted.
-		// TODO: Remove these debug later
-		if progress.RestartCount < (utils.JobPodBackOffLimit - 1) {
-			if (progress.State == drivers.JobStateInProgress) || (progress.State == drivers.JobStateFailed) {
-				data := updateDataExportDetail{
-					status: kdmpapi.DataExportStatusInProgress,
-				}
-				logrus.Debugf("Retrying job again internally [pod restart count: %v, DE CR : %v/%v, driver state: %v]",
-					progress.RestartCount, dataExport.Namespace, dataExport.Name, progress.State)
-				return true, c.updateStatus(dataExport, data)
-			}
-		} else {
+		// Upon first kopia backup failure, we want job spec to try till the backuOff limit
+		// is reached. Once this is reached, k8s marks the job as "Failed" during which we will
+		// fail the backup.
+		logrus.Infof("DE CR name: %v/%v job status: %v", dataExport.Namespace, dataExport.Name, progress.Status)
+		if progress.Status == batchv1.JobFailed {
 			data := updateDataExportDetail{
 				status: kdmpapi.DataExportStatusFailed,
+				reason: progress.Reason,
 			}
-			logrus.Debugf("Exhausted job retries and job is still failing [pod restart count: %v, DE CR : %v/%v, driver state: %v]",
-				progress.RestartCount, dataExport.Namespace, dataExport.Name, progress.State)
+			if len(progress.Reason) == 0 {
+				// As we couldn't get actual reason from kopia executor
+				// marking it as internal error
+				data.reason = "internal error from executor"
+				return true, c.updateStatus(dataExport, data)
+			}
+			return true, c.updateStatus(dataExport, data)
+		} else if progress.Status == batchv1.JobConditionType("") {
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusInProgress,
+			}
 			return true, c.updateStatus(dataExport, data)
 		}
+
 		switch progress.State {
 		case drivers.JobStateFailed:
 			errMsg := fmt.Sprintf("%s transfer job failed: %s", dataExport.Status.TransferID, progress.Reason)
