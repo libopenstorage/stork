@@ -20,8 +20,8 @@ func (r *ResourceCollector) subjectInNamespace(subject *rbacv1.Subject, namespac
 		}
 		// check if user has an access to sa in namespace
 		_, err := r.coreOps.GetServiceAccount(subject.Name, namespace)
-		if err != nil {
-			if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
+		if err != nil && !apierrors.IsNotFound(err) {
+			if apierrors.IsForbidden(err) {
 				return false, nil
 			}
 			return false, err
