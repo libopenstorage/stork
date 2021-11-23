@@ -875,7 +875,7 @@ func init() {
 	a := &kdmp{}
 
 	// set kdmp executor name
-	if err := os.Setenv(drivers.KopiaExecutorImageKey, drivers.KopiaExecutorImage+":"+"master"); err != nil {
+	if err := os.Setenv(drivers.KopiaExecutorImageKey, drivers.KopiaExecutorImage+":"+"1.0.0"); err != nil {
 		logrus.Debugf("Unable to set custom kdmp image")
 	}
 	err := a.Init(nil)
