@@ -67,7 +67,7 @@ const (
 	pvcNameLenLimit       = 247
 	volumeinitialDelay    = 2 * time.Second
 	volumeFactor          = 1.5
-	volumeSteps           = 20
+	volumeSteps           = 15
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	compressionKey        = "KDMP_COMPRESSION"
@@ -1501,8 +1501,8 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 	})
 
 	if wErr != nil {
-		logrus.Errorf("%v", err)
-		return nil, err
+		logrus.Errorf("%v", wErr)
+		return nil, wErr
 	}
 	return pvc, nil
 }
@@ -1552,7 +1552,7 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(checkTask, defaultTimeout, progressCheckInterval); err != nil {
-		errMsg := fmt.Sprintf("max retries done, failed to check the PVC status in dataexport %v/%v: %v", in.Namespace, in.Name, checkErr)
+		errMsg := fmt.Sprintf("max retries done, failed in checking the PVC status of %v/%v: %v", in.Namespace, in.Name, checkErr)
 		logrus.Errorf("%v", errMsg)
 		// Exhausted all retries, fail the CR
 		return nil, fmt.Errorf("%v", errMsg)
