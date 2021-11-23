@@ -67,7 +67,7 @@ const (
 	eventComponentName         = "stork"
 	debugFilePath              = "/var/cores"
 	awsKopiaExecutorImage      = "709825985650.dkr.ecr.us-east-1.amazonaws.com/portworx/kopiaexecutor"
-	awsKopiaExecutorImageTag   = "1.0.0-a345bb2"
+	awsKopiaExecutorImageTag   = "1.0.0-6d1b92a"
 	awsMarketPlace             = "aws"
 )
 
