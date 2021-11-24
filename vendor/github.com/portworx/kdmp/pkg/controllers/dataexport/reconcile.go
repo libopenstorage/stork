@@ -1531,7 +1531,7 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 			// wait for pvc to get bound
 			pvc, checkErr = waitForPVCBound(in, true)
 			if checkErr != nil {
-				return "", true, checkErr
+				return "", false, checkErr
 			}
 		}
 

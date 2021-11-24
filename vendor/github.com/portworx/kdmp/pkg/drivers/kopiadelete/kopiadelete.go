@@ -205,10 +205,9 @@ func jobFor(
 					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
 					Containers: []corev1.Container{
 						{
-							Name:  "kopiaexecutor",
-							Image: utils.KopiaExecutorImage(),
-							// TODO: Need to revert it to NotPresent. For now keep it as PullAlways.
-							ImagePullPolicy: corev1.PullAlways,
+							Name:            "kopiaexecutor",
+							Image:           utils.KopiaExecutorImage(),
+							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command: []string{
 								"/bin/sh",
 								"-x",
