@@ -1,0 +1,3 @@
+reponame: "portworx"
+chartname: "px-monitor"
+releasename: "px-monitor"

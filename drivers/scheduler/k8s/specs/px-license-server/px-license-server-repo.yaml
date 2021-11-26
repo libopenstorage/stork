@@ -1,0 +1,3 @@
+reponame: "portworx"
+chartname: "px-license-server"
+releasename: "px-license-server"

@@ -160,16 +160,17 @@ func InitInstance() {
 	}
 
 	err = Inst().S.Init(scheduler.InitOptions{
-		SpecDir:             Inst().SpecDir,
-		VolDriverName:       Inst().V.String(),
-		NodeDriverName:      Inst().N.String(),
-		SecretConfigMapName: Inst().ConfigMap,
-		CustomAppConfig:     Inst().CustomAppConfig,
-		StorageProvisioner:  Inst().Provisioner,
-		SecretType:          Inst().SecretType,
-		VaultAddress:        Inst().VaultAddress,
-		VaultToken:          Inst().VaultToken,
-		PureVolumes:         Inst().PureVolumes,
+		SpecDir:                 Inst().SpecDir,
+		VolDriverName:           Inst().V.String(),
+		NodeDriverName:          Inst().N.String(),
+		SecretConfigMapName:     Inst().ConfigMap,
+		CustomAppConfig:         Inst().CustomAppConfig,
+		StorageProvisioner:      Inst().Provisioner,
+		SecretType:              Inst().SecretType,
+		VaultAddress:            Inst().VaultAddress,
+		VaultToken:              Inst().VaultToken,
+		PureVolumes:             Inst().PureVolumes,
+		HelmValuesConfigMapName: Inst().HelmValuesConfigMap,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -1256,6 +1257,7 @@ type Torpedo struct {
 	SchedUpgradeHops                    string
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
+	HelmValuesConfigMap                 string
 }
 
 // ParseFlags parses command line flags

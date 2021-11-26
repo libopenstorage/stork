@@ -124,7 +124,13 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	var contexts []*scheduler.Context
 	for _, app := range apps {
 
-		appNamespace := app.GetID(instanceID)
+		var appNamespace string
+		if options.Namespace != "" {
+			appNamespace = options.Namespace
+		} else {
+			appNamespace = app.GetID(instanceID)
+			options.Namespace = appNamespace
+		}
 
 		// Update security context for namespace and user
 		if err := k.updateSecurityContextConstraints(appNamespace); err != nil {
@@ -136,6 +142,12 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 			return nil, err
 		}
 
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		specObjects = append(specObjects, helmSpecObjects...)
 		ctx := &scheduler.Context{
 			UID: instanceID,
 			App: &spec.AppSpec{
@@ -143,6 +155,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 				SpecList: specObjects,
 				Enabled:  app.Enabled,
 			},
+			ScheduleOptions: options,
 		}
 
 		contexts = append(contexts, ctx)

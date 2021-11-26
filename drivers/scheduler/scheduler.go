@@ -41,6 +41,8 @@ type Context struct {
 	RefreshStorageEndpoint bool
 	// ReadinessTimeout time within which context is expected to be up
 	ReadinessTimeout time.Duration
+	// HelmRepo info for helm chart schedules
+	HelmRepo *HelmRepo
 }
 
 // DeepCopy create a copy of Context
@@ -81,6 +83,8 @@ type InitOptions struct {
 	NodeDriverName string
 	// ConfigMap  identifies what config map should be used to
 	SecretConfigMapName string
+	// HelmValuesConfigMapName custom values for helm charts
+	HelmValuesConfigMapName string
 	// CustomAppConfig custom settings for apps
 	CustomAppConfig map[string]AppConfig
 	// StorageProvisioner name
@@ -115,6 +119,10 @@ type ScheduleOptions struct {
 	PvcNodesAnnotation []string
 	// PvcSize is the size of PVC
 	PvcSize int64
+	// Upgrade specifies whether to schedule an upgrade job
+	Upgrade bool
+	// Namespace to schedule app installation if not empty
+	Namespace string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -141,6 +149,12 @@ type Driver interface {
 
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
+
+	// ScheduleUninstall uninstalls tasks from an existing context
+	ScheduleUninstall(*Context, ScheduleOptions) error
+
+	// RemoveAppSpecsByName removes certain specs from list to avoid validation
+	RemoveAppSpecsByName(ctx *Context, removeSpecs []interface{}) error
 
 	// UpdateTasksID updates task IDs in the given context
 	UpdateTasksID(*Context, string) error
@@ -324,6 +338,17 @@ type Event struct {
 	LastSeen  v1.Time
 	Kind      string
 	Type      string
+}
+
+// HelmRepo has the related info about the repo
+type HelmRepo struct {
+	RepoName    string `yaml:"reponame"`
+	ChartName   string `yaml:"chartname"`
+	ReleaseName string `yaml:"releasename"`
+	URL         string
+	Namespace   string
+	Version     string
+	Values      string
 }
 
 // Register registers the given scheduler driver

@@ -269,6 +269,24 @@ func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOption
 	return nil
 }
 
+// ScheduleUninstall uninstalls tasks from an existing context
+func (d *dcos) ScheduleUninstall(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ScheduleUninstall()",
+	}
+}
+
+// RemoveAppSpecsByName removes certain specs from list to avoid validation
+func (d *dcos) RemoveAppSpecsByName(ctx *scheduler.Context, removeSpecs []interface{}) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveAppSpecsByName()",
+	}
+}
+
 func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
@@ -774,6 +792,14 @@ func (d *dcos) DeleteSecret(namespace, name string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteSecret()",
+	}
+}
+
+func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ParseCharts()",
 	}
 }
 
