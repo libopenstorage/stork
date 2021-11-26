@@ -101,9 +101,7 @@ spec:
         - /usr/local/bin/kube-scheduler
         - --address=0.0.0.0
         - --leader-elect=true
-        - --scheduler-name=stork
-        - --policy-configmap=stork-config
-        - --policy-configmap-namespace=kube-system
+        - --config=/etc/kubernetes/stork-config.yaml
         - --lock-object-name=stork-scheduler
         image: gcr.io/google_containers/kube-scheduler-amd64:<kube_version>
         livenessProbe:
@@ -121,6 +119,9 @@ spec:
             cpu: '0.1'
         securityContext:
           privileged: false
+        volumeMounts:
+        - mountPath: /etc/kubernetes
+          name: scheduler-config          
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -133,3 +134,8 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       hostPID: false
       serviceAccountName: stork-scheduler-account
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: stork-config
+        name: scheduler-config      
