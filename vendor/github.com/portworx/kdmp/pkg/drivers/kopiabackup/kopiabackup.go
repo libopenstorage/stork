@@ -203,6 +203,12 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		jobStatus = job.Status.Conditions[0].Type
 
 	}
+	err = utils.JobNodeExists(job)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to fetch the node info tied to the job %s/%s: %v", namespace, name, err)
+		logrus.Errorf("%s: %v", fn, errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
 	jobErr, nodeErr := utils.IsJobOrNodeFailed(job)
 	var errMsg string
 	if jobErr {

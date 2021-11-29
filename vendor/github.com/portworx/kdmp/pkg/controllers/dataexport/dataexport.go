@@ -8,6 +8,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	"github.com/portworx/kdmp/pkg/utils"
+	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/sirupsen/logrus"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -21,7 +23,9 @@ import (
 )
 
 var (
-	resyncPeriod = 10 * time.Second
+	resyncPeriod                      = 10 * time.Second
+	validateCRDInterval time.Duration = 10 * time.Second
+	validateCRDTimeout  time.Duration = 2 * time.Minute
 
 	cleanupFinalizer = "kdmp.portworx.com/finalizer-cleanup"
 )
@@ -109,12 +113,27 @@ func (c *Controller) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(kdmpapi.VolumeBackup{}).Name(),
 	}
-	err := apiextensions.Instance().CreateCRDV1beta1(vb)
-	if err != nil && !errors.IsAlreadyExists(err) {
+
+	requiresV1, err := version.RequiresV1Registration()
+	if err != nil {
 		return err
 	}
-	if err := apiextensions.Instance().ValidateCRDV1beta1(vb, 10*time.Second, 2*time.Minute); err != nil {
-		return err
+	if requiresV1 {
+		err := utils.CreateCRD(vb)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(vb.Plural+"."+vb.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+	} else {
+		err = apiextensions.Instance().CreateCRDV1beta1(vb)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRDV1beta1(vb, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
 	}
 
 	resource := apiextensions.CustomResource{
@@ -125,10 +144,23 @@ func (c *Controller) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(kdmpapi.DataExport{}).Name(),
 	}
-	err = apiextensions.Instance().CreateCRDV1beta1(resource)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
 
-	return apiextensions.Instance().ValidateCRDV1beta1(resource, 10*time.Second, 2*time.Minute)
+	if requiresV1 {
+		err := utils.CreateCRD(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+vb.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+	} else {
+		err = apiextensions.Instance().CreateCRDV1beta1(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+	}
+	return nil
 }
