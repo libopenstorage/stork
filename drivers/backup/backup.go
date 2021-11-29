@@ -7,6 +7,7 @@ import (
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Image Generic struct
@@ -74,8 +75,11 @@ type CloudCredential interface {
 	// EnumerateCloudCredential lists the cloud credentials for given Org
 	EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
 
-	// DeletrCloudCredential deletes a cloud credential object
+	// DeleteCloudCredential deletes a cloud credential object
 	DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error)
+
+	// UpdateOwnershipCloudCredential update ownership of cloud credential object
+	UpdateOwnershipCloudCredential(ctx context.Context, req *api.CloudCredentialOwnershipUpdateRequest) (*api.CloudCredentialOwnershipUpdateResponse, error)
 }
 
 // Cluster obj interface
@@ -126,8 +130,11 @@ type BLocation interface {
 	// ValidateBackupLocation validates the backuplocation object
 	ValidateBackupLocation(ctx context.Context, req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error)
 
+	// UpdateOwnershipBackupLocation updates backuplocation ownership
+	UpdateOwnershipBackupLocation(ctx context.Context, req *api.BackupLocationOwnershipUpdateRequest) (*api.BackupLocationOwnershipUpdateResponse, error)
+
 	// WaitForBackupLocationDeletion watis for backup location to be deleted
-	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName string, orgID string,
+	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName, backupLocationUID string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
@@ -212,6 +219,9 @@ type SchedulePolicy interface {
 
 	// DeleteSchedulePolicy
 	DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error)
+
+	// UpdateOwnershiSchedulePolicy updating ownership of schedule policy
+	UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error)
 }
 
 // ScheduleBackup interface
@@ -270,6 +280,9 @@ type Rule interface {
 
 	// DeleteRule deletes a rule
 	DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error)
+
+	// UpdateOwnershipRule update ownership of rule
+	UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
@@ -296,4 +309,12 @@ func Get(name string) (Driver, error) {
 		ID:   name,
 		Type: "BackupDriver",
 	}
+}
+
+func init() {
+	str, err := GetPxCentralAdminPwd()
+	if err != nil {
+		logrus.Errorf("Error fetching password from secret: %v", err)
+	}
+	PxCentralAdminPwd = str
 }

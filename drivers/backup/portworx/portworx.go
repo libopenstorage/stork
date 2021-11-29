@@ -216,6 +216,10 @@ func (p *portworx) DeleteCloudCredential(ctx context.Context, req *api.CloudCred
 	return p.cloudCredentialManager.Delete(ctx, req)
 }
 
+func (p *portworx) UpdateOwnershipCloudCredential(ctx context.Context, req *api.CloudCredentialOwnershipUpdateRequest) (*api.CloudCredentialOwnershipUpdateResponse, error) {
+	return p.cloudCredentialManager.UpdateOwnership(ctx, req)
+}
+
 func (p *portworx) CreateCluster(ctx context.Context, req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error) {
 	return p.clusterManager.Create(ctx, req)
 }
@@ -297,17 +301,23 @@ func (p *portworx) ValidateBackupLocation(ctx context.Context, req *api.BackupLo
 	return p.backupLocationManager.Validate(ctx, req)
 }
 
+func (p *portworx) UpdateOwnershipBackupLocation(ctx context.Context, req *api.BackupLocationOwnershipUpdateRequest) (*api.BackupLocationOwnershipUpdateResponse, error) {
+	return p.backupLocationManager.UpdateOwnership(ctx, req)
+}
+
 // WaitForBackupLocationDeletion waits for backup location to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForBackupLocationDeletion(
 	ctx context.Context,
 	backupLocationName,
+	UID,
 	orgID string,
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
 ) error {
 	req := &api.BackupLocationInspectRequest{
 		Name:  backupLocationName,
+		Uid:   UID,
 		OrgId: orgID,
 	}
 	var blError error
@@ -716,6 +726,10 @@ func (p *portworx) DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePo
 	return p.schedulePolicyManager.Delete(ctx, req)
 }
 
+func (p *portworx) UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error) {
+	return p.schedulePolicyManager.UpdateOwnership(ctx, req)
+}
+
 func (p *portworx) CreateBackupSchedule(ctx context.Context, req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error) {
 	return p.backupScheduleManager.Create(ctx, req)
 }
@@ -1017,6 +1031,10 @@ func (p *portworx) InspectRule(ctx context.Context, req *api.RuleInspectRequest)
 
 func (p *portworx) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error) {
 	return p.ruleManager.Delete(ctx, req)
+}
+
+func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error) {
+	return p.ruleManager.UpdateOwnership(ctx, req)
 }
 
 func init() {
