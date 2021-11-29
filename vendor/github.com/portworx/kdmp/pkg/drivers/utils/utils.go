@@ -113,6 +113,31 @@ func IsJobPending(j *batchv1.Job) bool {
 	return false
 }
 
+// JobNodeExists checks if the node associated with the job spec exists in the cluster
+func JobNodeExists(j *batchv1.Job) error {
+	// Get the node name from job spec.
+	nodeName := j.Spec.Template.Spec.NodeName
+	if len(nodeName) > 0 {
+		nodes, err := core.Instance().GetNodes()
+		if err != nil {
+			logrus.Errorf("getting all nodes failed with error: %v", err)
+			// Not returning the error, so that the job does not get marked as failed in case of flaky errors
+			return nil
+		}
+		found := false
+		for _, node := range nodes.Items {
+			if node.Name == nodeName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("node %s does not exist anymore", nodeName)
+		}
+	}
+	return nil
+}
+
 // FetchJobContainerRestartCount fetches job pod restart count
 func FetchJobContainerRestartCount(j *batchv1.Job) (int32, error) {
 	// Check if the pod is in running state
