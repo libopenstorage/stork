@@ -29,7 +29,8 @@ const (
 	// PxCentralAdminSecretNamespace namespace of PxCentralAdminSecretName
 	PxCentralAdminSecretNamespace = "px-backup"
 	// keycloakEndPoint Endpoint for keycloak
-	keycloakEndPoint = "pxcentral-keycloak-http:80"
+	// TODO: make the namespace configurable for service
+	keycloakEndPoint = "pxcentral-keycloak-http.px-backup.svc.cluster.local:80"
 	/// httpTimeout timeout for http request
 	httpTimeout = 1 * time.Minute
 )
@@ -138,6 +139,7 @@ func GetPxBackupNamespace() string {
 
 // GetToken fetches JWT token for given user credentials
 func GetToken(userName, password string) (string, error) {
+
 	fn := "GetToken"
 	values := make(url.Values)
 	values.Set("client_id", "pxcentral")
@@ -150,6 +152,7 @@ func GetToken(userName, password string) (string, error) {
 	headers := make(http.Header)
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(values.Encode()))
+	logrus.Errorf("%s: %v", fn, err)
 	if err != nil {
 		logrus.Errorf("%s: %v", fn, err)
 		return "", err
@@ -527,6 +530,7 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	if token == "" {
 		return nil, fmt.Errorf("admin token is empty")
 	}
+	logrus.Infof("Token from Admin secret: %v", token)
 	ctx := GetCtxWithToken(token)
 
 	return ctx, nil

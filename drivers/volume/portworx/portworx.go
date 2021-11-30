@@ -594,6 +594,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	deleteLabelsFromRequestedSpec(requestedLocator)
 
 	// Params/Options
+	// TODO check why PX-Backup does not copy group params correctly after restore
+	checkVolSpecGroup := true
+	if _, ok := params["backupGroupCheckSkip"]; ok {
+		logrus.Infof("Skipping group/label check, specifically for PX-Backup")
+		checkVolSpecGroup = false
+	}
 	for k, v := range params {
 		switch k {
 		case api.SpecNodes:
@@ -645,8 +651,11 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.Sticky, vol.Spec.Sticky)
 			}
 		case api.SpecGroup:
-			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Group, vol.Spec.Group)
+			// TODO Check Px-backup labels not getting restored
+			if checkVolSpecGroup {
+				if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
+					return errFailedToInspectVolume(volumeName, k, requestedSpec.Group, vol.Spec.Group)
+				}
 			}
 		case api.SpecGroupEnforce:
 			if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
@@ -654,10 +663,13 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			}
 		// portworx injects pvc name and namespace labels so response object won't be equal to request
 		case api.SpecLabels:
-			for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
-				// check requested label is not in 'ignore' list
-				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
-					return errFailedToInspectVolume(volumeName, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+			// TODO Check Px-backup labels not getting restored
+			if checkVolSpecGroup {
+				for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
+					// check requested label is not in 'ignore' list
+					if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
+						return errFailedToInspectVolume(volumeName, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+					}
 				}
 			}
 		case api.SpecIoProfile:

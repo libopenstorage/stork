@@ -358,12 +358,13 @@ var _ = BeforeSuite(func() {
 // px-license-server and px-minotor will be installed after px-central is validated
 var _ = Describe("{InstallCentral}", func() {
 	It("has to setup, validate and teardown apps", func() {
-		var context *scheduler.Context
+		//var context *scheduler.Context
 
 		centralApp := "px-central"
 		centralOptions := scheduler.ScheduleOptions{
 			AppKeys:            []string{centralApp},
 			StorageProvisioner: Inst().Provisioner,
+			Namespace:          "px-backup",
 		}
 
 		//lsApp := "px-license-server"
@@ -381,7 +382,8 @@ var _ = Describe("{InstallCentral}", func() {
 		// Setting license server and monitor options to empty for now
 
 		Step("Install px-central, px-license-server and px-monitor", func() {
-			context = installPxcentral(&centralOptions, nil, nil, true, true)
+			//context = installPxcentral(&centralOptions, nil, nil, true, true)
+			_ = installPxcentral(&centralOptions, nil, nil, true, true)
 		})
 
 		//Step("Uninstall license server and monitoring", func() {
@@ -394,9 +396,9 @@ var _ = Describe("{InstallCentral}", func() {
 		//	logrus.Infof("Successfully uninstalled px-license-server and px-monitor")
 		//})
 
-		Step("destroy apps", func() {
-			destroyPxcentral(context)
-		})
+		//Step("destroy apps", func() {
+		//	destroyPxcentral(context)
+		//})
 	})
 })
 

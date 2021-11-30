@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -865,7 +866,7 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 		if err != nil {
 			return nil, true, err
 		}
-		backupCrs, err := inst.ListApplicationBackups(namespace)
+		backupCrs, err := inst.ListApplicationBackups(namespace, metav1.ListOptions{})
 		if err != nil {
 			return nil, true, err
 		}
