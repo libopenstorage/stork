@@ -273,7 +273,6 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
 		if snapshotClassRequired {
 			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
-			volumeInfo.VolumeSnapshot = k.getSnapshotClassName(backup)
 		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
@@ -323,7 +322,10 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				if len(dataExport.Status.VolumeSnapshot) == 0 {
 					vInfo.VolumeSnapshot = ""
 				} else {
-					vInfo.VolumeSnapshot = fmt.Sprintf("%s.%s", vInfo.VolumeSnapshot, dataExport.Status.VolumeSnapshot)
+					volumeSnapshot := k.getSnapshotClassName(backup)
+					if len(volumeSnapshot) > 0 {
+						vInfo.VolumeSnapshot = fmt.Sprintf("%s.%s", volumeSnapshot, dataExport.Status.VolumeSnapshot)
+					}
 				}
 			}
 		}
