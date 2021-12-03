@@ -100,6 +100,7 @@ const (
 	boundByControllerKey      = "pv.kubernetes.io/bound-by-controller"
 	storageClassKey           = "volume.beta.kubernetes.io/storage-class"
 	storageProvisioner        = "volume.beta.kubernetes.io/storage-provisioner"
+	storageNodeAnnotation     = "volume.kubernetes.io/selected-node"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -540,6 +541,7 @@ func (k *kdmp) getRestorePVCs(
 				delete(pvc.Annotations, boundByControllerKey)
 				delete(pvc.Annotations, storageClassKey)
 				delete(pvc.Annotations, storageProvisioner)
+				delete(pvc.Annotations, storageNodeAnnotation)
 				pvc.Annotations[KdmpAnnotation] = StorkAnnotation
 			}
 			o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
@@ -571,7 +573,6 @@ func (k *kdmp) StartRestore(
 		if err != nil {
 			return nil, err
 		}
-
 		val, ok := restore.Spec.NamespaceMapping[bkpvInfo.Namespace]
 		if !ok {
 			return nil, fmt.Errorf("restore namespace mapping not found: %s", bkpvInfo.Namespace)
