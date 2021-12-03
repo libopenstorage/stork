@@ -32,7 +32,7 @@ spec:
       {{ if .VolumeSize }}
       storage: {{ .VolumeSize }}
       {{ else }}
-      storage: 7Gi{{ end }}
+      storage: 8Gi{{ end }}
 ---
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
