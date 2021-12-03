@@ -102,6 +102,7 @@ func (r *ResourceCollector) preparePVResourceForCollection(
 func (r *ResourceCollector) preparePVResourceForApply(
 	object runtime.Unstructured,
 	pvNameMappings map[string]string,
+	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
 ) (bool, error) {
 	var updatedName string
 	var present bool
@@ -120,10 +121,14 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	}
 
 	pv.Name = updatedName
-	driverName, err := volume.GetPVDriver(&pv)
-	if err != nil {
-		return false, err
+	var driverName string
+	for _, vol := range vInfo {
+		if vol.RestoreVolume == pv.Name {
+			driverName = vol.DriverName
+			break
+		}
 	}
+
 	driver, err := volume.Get(driverName)
 	if err != nil {
 		return false, err
