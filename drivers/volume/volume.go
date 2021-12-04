@@ -7,6 +7,7 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
+	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -33,7 +34,15 @@ const (
 	// LinstorDriverName is the name of the Linstor driver implementation
 	LinstorDriverName = "linstor"
 	// KDMPDriverName is the name of the kdmp driver implementation
-	KDMPDriverName = "kdmp"
+	KDMPDriverName              = "kdmp"
+	pureCSIProvisioner          = "pure-csi"
+	vSphereCSIProvisioner       = "csi.vsphere.vmware.com"
+	efsCSIProvisioner           = "efs.csi.aws.com"
+	azureFileCSIProvisioner     = "file.csi.azure.com"
+	googleFileCSIProvisioner    = "com.google.csi.filestore"
+	pureBackendParam            = "backend"
+	pureFileParam               = "file"
+	csiDriverWithOutSnapshotKey = "CSI_DRIVER_WITHOUT_SNAPSHOT"
 )
 
 var (
@@ -50,6 +59,7 @@ var (
 		CSIDriverName,
 		KDMPDriverName,
 	}
+	csiDriverWithoutSnapshotSupport = []string{vSphereCSIProvisioner, efsCSIProvisioner, azureFileCSIProvisioner, googleFileCSIProvisioner}
 )
 
 // Driver defines an external volume driver interface.
@@ -688,4 +698,46 @@ func GetPVCFromObjects(objects []runtime.Unstructured, volumeBackupInfo *storkap
 		}
 	}
 	return &pvc, nil
+}
+
+// IsCSIDriverWithoutSnapshotSupport - check whether CSI PV supports snapshot
+// This function will called in csi driver and kdmp volume driver.
+// In csi driver, this api is called to default to kdmp by not owning in CSI driver.
+// In kdmp driver, this api is called to decide whether we need to set the volumesnapclass,
+// to try local snapshot first.
+func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
+	// check if CSI volume
+	if pv.Spec.CSI != nil {
+		driverName := pv.Spec.CSI.Driver
+		// pure FB csi driver does not support snapshot
+		if driverName == pureCSIProvisioner {
+			if pv.Spec.CSI.VolumeAttributes[pureBackendParam] == pureFileParam {
+				return true
+			}
+		}
+		// vsphere, efs, azure file and google file does not support snapshot.
+		// So defaulting to kdmp by not setting volumesnapshot class.
+		for _, name := range csiDriverWithoutSnapshotSupport {
+			if name == driverName {
+				return true
+			}
+		}
+		// If csiDriverWithOutSnapshotKey is set in kdmp-config configmap,
+		// include it in the check.
+		kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
+		if err != nil {
+			logrus.Warnf("IsCSIDriverWithoutSnapshotSupport: error in reading configMap [%v/%v]",
+				drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
+			return false
+		}
+		if len(kdmpData.Data[csiDriverWithOutSnapshotKey]) != 0 {
+			nameList := strings.Split(kdmpData.Data[csiDriverWithOutSnapshotKey], ",")
+			for _, name := range nameList {
+				if driverName == name {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
