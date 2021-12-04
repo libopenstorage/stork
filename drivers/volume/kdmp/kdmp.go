@@ -91,11 +91,6 @@ const (
 	// provisioner name
 	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 	pureCSIProvisioner        = "pure-csi"
-	vSphereCSIProvisioner     = "csi.vsphere.vmware.com"
-	efsCSIProvisioner         = "efs.csi.aws.com"
-	pureBackendParam          = "backend"
-	pureFileParam             = "file"
-	proxyEndpoint             = "proxy_endpoint"
 	bindCompletedKey          = "pv.kubernetes.io/bind-completed"
 	boundByControllerKey      = "pv.kubernetes.io/bound-by-controller"
 	storageClassKey           = "volume.beta.kubernetes.io/storage-class"
@@ -181,25 +176,7 @@ func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) bool {
 		// In the case errors, we will allow the kdmp controller csi steps to decide on snapshot support.
 		return true
 	}
-	// check if CSI volume
-	if pv.Spec.CSI != nil {
-		driverName := pv.Spec.CSI.Driver
-		// pure FB csi driver does not support snapshot
-		if driverName == pureCSIProvisioner {
-			if pv.Spec.CSI.VolumeAttributes[pureBackendParam] == pureFileParam {
-				return false
-			}
-		}
-		// vSphere or aws EFS  does not support snapshot
-		if driverName == vSphereCSIProvisioner || driverName == efsCSIProvisioner {
-			return false
-		}
-
-		// For now, we know only pso file and vsphere are CSI driver that does not support snapshot.
-		// So added check. For other we will try to create CSI snapshot and if it fails, we will take generic backup.
-		return true
-	}
-	return false
+	return !storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
 }
 
 func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
