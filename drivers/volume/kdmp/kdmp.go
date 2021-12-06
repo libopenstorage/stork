@@ -314,7 +314,7 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				} else {
 					volumeSnapshot := k.getSnapshotClassName(backup)
 					if len(volumeSnapshot) > 0 {
-						vInfo.VolumeSnapshot = fmt.Sprintf("%s.%s", volumeSnapshot, dataExport.Status.VolumeSnapshot)
+						vInfo.VolumeSnapshot = fmt.Sprintf("%s,%s", volumeSnapshot, dataExport.Status.VolumeSnapshot)
 					}
 				}
 			}
@@ -903,8 +903,8 @@ func getVolumeSnapshotClassFromBackupVolumeInfo(bkvpInfo *storkapi.ApplicationBa
 	if bkvpInfo.VolumeSnapshot == "" {
 		return vsClass
 	}
-	subStrings := strings.Split(bkvpInfo.VolumeSnapshot, ".")
-	vsClass = strings.Join(subStrings[0:len(subStrings)-1], ".")
+	subStrings := strings.Split(bkvpInfo.VolumeSnapshot, ",")
+	vsClass = strings.Join(subStrings[0:len(subStrings)-1], ",")
 
 	return vsClass
 }
