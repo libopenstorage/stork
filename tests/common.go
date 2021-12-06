@@ -543,7 +543,7 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 		err = osutils.Kubectl(cmdArgs)
 		processError(err, errChan...)
 		// wait until the backends size is reflected before making the REST call
-		time.Sleep(20 * time.Second)
+		time.Sleep(90 * time.Second)
 
 		byteUsedafter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 		fmt.Println(fmt.Sprintf("after writing random bytes to the file the byteUsed is %v", byteUsedafter))
