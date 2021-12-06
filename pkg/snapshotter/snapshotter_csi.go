@@ -108,6 +108,9 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		// for this snapshot. If none is set then the volume snapshot will fail
 		o.SnapshotClassName = ""
 	} else {
+		if pv.Spec.CSI == nil {
+			return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
+		}
 		// For other snapshot class names ensure the volume snapshot class has
 		// been created
 		if err := c.ensureVolumeSnapshotClassCreated(pv.Spec.CSI.Driver, o.SnapshotClassName); err != nil {

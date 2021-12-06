@@ -529,6 +529,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						restore.Spec.NamespaceMapping,
 						nil,
 						restore.Spec.IncludeOptionalResourceTypes,
+						nil,
 					)
 					if err != nil {
 						return err
@@ -1102,6 +1103,7 @@ func (a *ApplicationRestoreController) removeCSIVolumesBeforeApply(
 			if err != nil {
 				return nil, err
 			}
+
 			// Only add this object if it's not a generic CSI PVC
 			if !isGenericCSIPVC && !isGenericDriverPVC {
 				tempObjects = append(tempObjects, o)
@@ -1135,7 +1137,9 @@ func (a *ApplicationRestoreController) applyResources(
 			objectMap,
 			restore.Spec.NamespaceMapping,
 			pvNameMappings,
-			restore.Spec.IncludeOptionalResourceTypes)
+			restore.Spec.IncludeOptionalResourceTypes,
+			restore.Status.Volumes,
+		)
 		if err != nil {
 			return err
 		}
@@ -1150,7 +1154,6 @@ func (a *ApplicationRestoreController) applyResources(
 	if err != nil {
 		return err
 	}
-
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
 	if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {

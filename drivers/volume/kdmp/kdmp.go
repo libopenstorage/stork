@@ -100,6 +100,7 @@ const (
 	boundByControllerKey      = "pv.kubernetes.io/bound-by-controller"
 	storageClassKey           = "volume.beta.kubernetes.io/storage-class"
 	storageProvisioner        = "volume.beta.kubernetes.io/storage-provisioner"
+	storageNodeAnnotation     = "volume.kubernetes.io/selected-node"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -198,17 +199,7 @@ func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) bool {
 		// So added check. For other we will try to create CSI snapshot and if it fails, we will take generic backup.
 		return true
 	}
-	// TODO: If storage class is not present, need to make volume inspect call to portworx and check.
-	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-	if storageClassName != "" {
-		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
-		if err == nil {
-			if _, ok := storageClass.Parameters[proxyEndpoint]; ok {
-				return false
-			}
-		}
-	}
-	return true
+	return false
 }
 
 func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
@@ -552,6 +543,7 @@ func (k *kdmp) getRestorePVCs(
 				delete(pvc.Annotations, boundByControllerKey)
 				delete(pvc.Annotations, storageClassKey)
 				delete(pvc.Annotations, storageProvisioner)
+				delete(pvc.Annotations, storageNodeAnnotation)
 				pvc.Annotations[KdmpAnnotation] = StorkAnnotation
 			}
 			o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
@@ -583,7 +575,6 @@ func (k *kdmp) StartRestore(
 		if err != nil {
 			return nil, err
 		}
-
 		val, ok := restore.Spec.NamespaceMapping[bkpvInfo.Namespace]
 		if !ok {
 			return nil, fmt.Errorf("restore namespace mapping not found: %s", bkpvInfo.Namespace)
