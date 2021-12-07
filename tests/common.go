@@ -547,14 +547,14 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 
 		byteUsedafter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 		fmt.Println(fmt.Sprintf("after writing random bytes to the file the byteUsed is %v", byteUsedafter))
-		err = fbVolumeExpectedSizechange(byteUsedafter - byteUsedInitial)
+		err = fbVolumeExpectedSizechange(int64(byteUsedafter) - int64(byteUsedInitial))
 		expect(err).NotTo(haveOccurred())
 
 	})
 }
 
-func fbVolumeExpectedSizechange(sizeChangeInBytes uint64) error {
-	if sizeChangeInBytes < 502*oneMegabytes || sizeChangeInBytes > 522*oneMegabytes {
+func fbVolumeExpectedSizechange(sizeChangeInBytes int64) error {
+	if sizeChangeInBytes < -15*oneMegabytes || sizeChangeInBytes > 15*oneMegabytes {
 		return errUnexpectedSizeChangeAfterFBIO
 	}
 	return nil
