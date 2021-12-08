@@ -738,6 +738,7 @@ func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
 				}
 			}
 		}
+		return false
 	}
-	return false
+	return true
 }
