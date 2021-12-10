@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/kdmp/pkg/utils"
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/sirupsen/logrus"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -73,8 +74,7 @@ func (c *Controller) Init(mgr manager.Manager) error {
 func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling DataExport %s/%s", request.Namespace, request.Name)
 
-	dataExport := &kdmpapi.DataExport{}
-	err := c.client.Get(context.TODO(), request.NamespacedName, dataExport)
+	dataExport, err := kdmp.Instance().GetDataExport(request.Name, request.Namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
