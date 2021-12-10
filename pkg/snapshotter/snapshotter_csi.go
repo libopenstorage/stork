@@ -99,6 +99,11 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		return "", "", "", fmt.Errorf("error getting pv %v: %v", pvName, err)
 	}
 
+	// In case the PV does not contain CSI secion itself, we will error out.
+	if pv.Spec.CSI == nil {
+		return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
+	}
+
 	if o.SnapshotClassName == "" {
 		return "", "", "", fmt.Errorf("snapshot class cannot be empty, use 'default' to choose the default snapshot class")
 	}
@@ -108,9 +113,6 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		// for this snapshot. If none is set then the volume snapshot will fail
 		o.SnapshotClassName = ""
 	} else {
-		if pv.Spec.CSI == nil {
-			return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
-		}
 		// For other snapshot class names ensure the volume snapshot class has
 		// been created
 		if err := c.ensureVolumeSnapshotClassCreated(pv.Spec.CSI.Driver, o.SnapshotClassName); err != nil {
