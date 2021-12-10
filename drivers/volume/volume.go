@@ -34,12 +34,15 @@ const (
 	// LinstorDriverName is the name of the Linstor driver implementation
 	LinstorDriverName = "linstor"
 	// KDMPDriverName is the name of the kdmp driver implementation
-	KDMPDriverName              = "kdmp"
-	pureCSIProvisioner          = "pure-csi"
-	vSphereCSIProvisioner       = "csi.vsphere.vmware.com"
-	efsCSIProvisioner           = "efs.csi.aws.com"
-	azureFileCSIProvisioner     = "file.csi.azure.com"
-	googleFileCSIProvisioner    = "com.google.csi.filestore"
+	KDMPDriverName             = "kdmp"
+	pureCSIProvisioner         = "pure-csi"
+	vSphereCSIProvisioner      = "csi.vsphere.vmware.com"
+	efsCSIProvisioner          = "efs.csi.aws.com"
+	azureFileCSIProvisioner    = "file.csi.azure.com"
+	azureFileIntreeProvisioner = "kubernetes.io/azure-file"
+	googleFileCSIProvisioner   = "com.google.csi.filestore"
+	// Note: filestore.csi.storage.gke.io this provisoner supports snapshot. So not adding in csiDriverWithoutSnapshotSupport list
+	gkeFileCSIProvisioner       = "filestore.csi.storage.gke.io"
 	pureBackendParam            = "backend"
 	pureFileParam               = "file"
 	csiDriverWithOutSnapshotKey = "CSI_DRIVER_WITHOUT_SNAPSHOT"
@@ -59,7 +62,13 @@ var (
 		CSIDriverName,
 		KDMPDriverName,
 	}
-	csiDriverWithoutSnapshotSupport = []string{vSphereCSIProvisioner, efsCSIProvisioner, azureFileCSIProvisioner, googleFileCSIProvisioner}
+	csiDriverWithoutSnapshotSupport = []string{
+		vSphereCSIProvisioner,
+		efsCSIProvisioner,
+		azureFileCSIProvisioner,
+		azureFileIntreeProvisioner,
+		googleFileCSIProvisioner,
+	}
 )
 
 // Driver defines an external volume driver interface.
