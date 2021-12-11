@@ -1518,16 +1518,22 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 		if checkErr != nil {
 			return "", true, checkErr
 		}
-		var sc *storagev1.StorageClass
 		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 		if storageClassName != "" {
-			sc, checkErr = storage.Instance().GetStorageClass(storageClassName)
+			sc, checkErr := storage.Instance().GetStorageClass(storageClassName)
 			if checkErr != nil {
 				return "", true, checkErr
 			}
 			logrus.Debugf("checkPVCIgnoringJobMounts: pvc name %v - storage class VolumeBindingMode %v", pvc.Name, *sc.VolumeBindingMode)
-		}
-		if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
+			if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
+				// wait for pvc to get bound
+				pvc, checkErr = waitForPVCBound(in, true)
+				if checkErr != nil {
+					return "", false, checkErr
+				}
+			}
+		} else {
+			// If sc is not set, we will direct check the pvc status
 			// wait for pvc to get bound
 			pvc, checkErr = waitForPVCBound(in, true)
 			if checkErr != nil {
