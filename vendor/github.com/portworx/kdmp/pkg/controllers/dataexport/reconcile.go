@@ -1485,6 +1485,7 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 	// wait for pvc to get bound
 	var pvc *corev1.PersistentVolumeClaim
 	var err error
+	var errMsg string
 	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
 		pvc, err = core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
 		if err != nil {
@@ -1492,7 +1493,7 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 		}
 
 		if pvc.Status.Phase != corev1.ClaimBound {
-			errMsg := fmt.Sprintf("status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
+			errMsg = fmt.Sprintf("pvc status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
 			logrus.Debugf("%v", errMsg)
 			return false, nil
 		}
@@ -1502,7 +1503,7 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 
 	if wErr != nil {
 		logrus.Errorf("%v", wErr)
-		return nil, wErr
+		return nil, fmt.Errorf("%s:%s", wErr, errMsg)
 	}
 	return pvc, nil
 }
@@ -1520,7 +1521,8 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 		}
 		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 		if storageClassName != "" {
-			sc, checkErr := storage.Instance().GetStorageClass(storageClassName)
+			var sc *storagev1.StorageClass
+			sc, checkErr = storage.Instance().GetStorageClass(storageClassName)
 			if checkErr != nil {
 				return "", true, checkErr
 			}
@@ -1540,8 +1542,8 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 				return "", false, checkErr
 			}
 		}
-
-		pods, checkErr := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		var pods []corev1.Pod
+		pods, checkErr = core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
 		if checkErr != nil {
 			return "", true, fmt.Errorf("get mounted pods: %v", checkErr)
 		}
