@@ -11,7 +11,7 @@ import (
 )
 
 // Checks if the subject is in the specified namespace
-func (r *ResourceCollector) subjectInNamespace(subject *rbacv1.Subject, namespace string) (bool, error) {
+func (r *ResourceCollector) subjectInNamespace(subject *rbacv1.Subject, namespace string, checkSubjectError bool) (bool, error) {
 	switch subject.Kind {
 	case rbacv1.ServiceAccountKind:
 		// skip check for default service account
@@ -19,6 +19,17 @@ func (r *ResourceCollector) subjectInNamespace(subject *rbacv1.Subject, namespac
 			return false, nil
 		}
 		if subject.Namespace == namespace {
+			// check if user has an access to sa in namespace
+			if checkSubjectError {
+				_, err := r.coreOps.GetServiceAccount(subject.Name, namespace)
+				if err != nil {
+					if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
+						return false, nil
+					}
+					return false, err
+				}
+				return true, nil
+			}
 			return true, nil
 		}
 	case rbacv1.UserKind:
@@ -54,7 +65,7 @@ func (r *ResourceCollector) clusterRoleBindingToBeCollected(
 	}
 	// Check if there is a subject for the namespace which is requested
 	for _, subject := range crb.Subjects {
-		collect, err := r.subjectInNamespace(&subject, namespace)
+		collect, err := r.subjectInNamespace(&subject, namespace, true)
 		if err != nil || collect {
 			return collect, err
 		}
@@ -81,7 +92,7 @@ func (r *ResourceCollector) clusterRoleToBeCollected(
 	for _, crb := range crbs.Items {
 		if crb.RoleRef.Name == name {
 			for _, subject := range crb.Subjects {
-				collect, err := r.subjectInNamespace(&subject, namespace)
+				collect, err := r.subjectInNamespace(&subject, namespace, true)
 				if err != nil || collect {
 					return collect, err
 				}
@@ -103,7 +114,7 @@ func (r *ResourceCollector) prepareClusterRoleBindingForCollection(
 	// Check if there is a subject for the namespace which is requested
 	for _, subject := range crb.Subjects {
 		for _, ns := range namespaces {
-			collect, err := r.subjectInNamespace(&subject, ns)
+			collect, err := r.subjectInNamespace(&subject, ns, true)
 			if err != nil {
 				return err
 			}
@@ -153,7 +164,7 @@ func (r *ResourceCollector) updateSubjects(
 	for sourceNamespace, destNamespace := range namespaceMappings {
 		// Check if there is a subject for the namespace which is requested
 		for _, subject := range subjects {
-			collect, err := r.subjectInNamespace(&subject, sourceNamespace)
+			collect, err := r.subjectInNamespace(&subject, sourceNamespace, false)
 			if err != nil {
 				return nil, err
 			}
