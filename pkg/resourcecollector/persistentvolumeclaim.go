@@ -50,6 +50,7 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 	object runtime.Unstructured,
 	allObjects []runtime.Unstructured,
 	pvNameMappings map[string]string,
+	storageClassMappings map[string]string,
 ) (bool, error) {
 	var pvc v1.PersistentVolumeClaim
 	var updatedName string
@@ -70,6 +71,11 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		}
 	}
 	pvc.Spec.VolumeName = updatedName
+	if len(storageClassMappings) > 0 && pvc.Spec.StorageClassName != nil {
+		if newSc, exists := storageClassMappings[*pvc.Spec.StorageClassName]; exists && len(newSc) > 0 {
+			pvc.Spec.StorageClassName = &newSc
+		}
+	}
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
 	if err != nil {
 		return false, err
