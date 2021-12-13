@@ -527,6 +527,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						objects,
 						objectMap,
 						restore.Spec.NamespaceMapping,
+						nil, // no need to set storage class mappings at this stage
 						nil,
 						restore.Spec.IncludeOptionalResourceTypes,
 						nil,
@@ -1136,6 +1137,7 @@ func (a *ApplicationRestoreController) applyResources(
 			objects,
 			objectMap,
 			restore.Spec.NamespaceMapping,
+			restore.Spec.StorageClassMapping,
 			pvNameMappings,
 			restore.Spec.IncludeOptionalResourceTypes,
 			restore.Status.Volumes,

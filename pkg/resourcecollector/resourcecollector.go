@@ -708,6 +708,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	allObjects []runtime.Unstructured,
 	includeObjects map[stork_api.ObjectInfo]bool,
 	namespaceMappings map[string]string,
+	storageClassMappings map[string]string,
 	pvNameMappings map[string]string,
 	optionalResourceTypes []string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
@@ -750,7 +751,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	case "PersistentVolume":
 		return r.preparePVResourceForApply(object, pvNameMappings, vInfo)
 	case "PersistentVolumeClaim":
-		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings)
+		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	case "RoleBinding":
