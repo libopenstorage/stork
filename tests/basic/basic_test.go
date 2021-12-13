@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -30,6 +31,12 @@ var _ = BeforeSuite(func() {
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{SetupTeardown}", func() {
+	var testrailID = 35258
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to setup, validate and teardown apps", func() {
@@ -49,12 +56,18 @@ var _ = Describe("{SetupTeardown}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDown}", func() {
+	var testrailID = 35259
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and stop volume driver on app nodes", func() {
@@ -103,13 +116,19 @@ var _ = Describe("{VolumeDriverDown}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // Volume Driver Plugin is down, unavailable on the nodes where the volumes are
 // attached - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
+	var testrailID = 35260
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35260
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
@@ -160,12 +179,18 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverCrash}", func() {
+	var testrailID = 35261
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and crash volume driver on app nodes", func() {
@@ -193,7 +218,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 		ValidateAndDestroy(contexts, opts)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -201,6 +226,12 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
 var _ = Describe("{VolumeDriverAppDown}", func() {
+	var testrailID = 35262
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35262
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
@@ -247,12 +278,18 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
 var _ = Describe("{AppTasksDown}", func() {
+	var testrailID = 35263
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule app and delete app tasks", func() {
@@ -321,12 +358,18 @@ var _ = Describe("{AppTasksDown}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
 var _ = Describe("{AppScaleUpAndDown}", func() {
+	var testrailID = 35264
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to scale up and scale down the app", func() {
@@ -386,7 +429,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

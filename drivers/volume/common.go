@@ -115,6 +115,14 @@ func (d *DefaultDriver) RecoverDriver(n node.Node) error {
 	}
 }
 
+// GetDriverVersion Returns the pxctl version
+func (d *DefaultDriver) GetDriverVersion() (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDriverVersion()",
+	}
+}
+
 // ValidateCreateVolume validates whether a volume has been created properly.
 // params are the custom volume options passed when creating the volume.
 func (d *DefaultDriver) ValidateCreateVolume(name string, params map[string]string) error {

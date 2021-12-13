@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"testing"
 	"time"
@@ -37,6 +38,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{RebootOneNode}", func() {
+	var testrailID = 35266
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35266
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and reboot node(s) with volumes", func() {
@@ -109,7 +116,7 @@ var _ = Describe("{RebootOneNode}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

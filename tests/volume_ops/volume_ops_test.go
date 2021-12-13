@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"math"
 	"os"
 	"reflect"
@@ -38,6 +39,12 @@ var _ = BeforeSuite(func() {
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
+	var testrailID = 35271
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35271
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and update replication factor and size on all volumes of the apps", func() {
@@ -163,7 +170,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

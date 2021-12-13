@@ -26,6 +26,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -121,6 +122,14 @@ const (
 	pxbackupDeploymentNamespace        = "px-backup"
 	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
 	pxbackupMongodbDeploymentNamespace = "px-backup"
+
+	milestoneFlag               = "testrail-milestone"
+	testrailRunNameFlag         = "testrail-run-name"
+	testrailRunIDFlag           = "testrail-run-id"
+	testrailJenkinsBuildURLFlag = "testrail-jeknins-build-url"
+	testRailHostFlag            = "testrail-host"
+	testRailUserNameFlag        = "testrail-username"
+	testRailPasswordFlag        = "testrail-password"
 )
 
 // Backup constants
@@ -206,6 +215,12 @@ var (
 	contextsCreated                      []*scheduler.Context
 )
 
+var (
+	testRailHostname string
+	testRailUsername string
+	testRailPassword string
+)
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
@@ -245,6 +260,17 @@ func InitInstance() {
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		expect(err).NotTo(haveOccurred())
+	}
+	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
+		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
+		if err == nil {
+			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
+				processError(fmt.Errorf("Not all details provided to update testrail"))
+			}
+			testrailuttils.CreateMilestone()
+		}
+	} else {
+		logrus.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
 }
 
@@ -1346,11 +1372,26 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 }
 
 // AfterEachTest runs collect support bundle after each test when it fails
-func AfterEachTest(contexts []*scheduler.Context) {
+func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
+	testStatus := "Pass"
 	logrus.Debugf("contexts: %v", contexts)
 	if ginkgo.CurrentGinkgoTestDescription().Failed {
 		CollectSupport()
 		DescribeNamespace(contexts)
+		testStatus = "Fail"
+	}
+	if len(ids) >= 1 {
+		driverVersion, err := Inst().V.GetDriverVersion()
+		if err != nil {
+			logrus.Errorf("Error in getting driver version")
+		}
+		testrailObject := testrailuttils.Testrail{
+			Status:        testStatus,
+			TestID:        ids[0],
+			RunID:         ids[1],
+			DriverVersion: driverVersion,
+		}
+		testrailuttils.AddTestEntry(testrailObject)
 	}
 }
 
@@ -2786,6 +2827,13 @@ func ParseFlags() {
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
+	flag.StringVar(&testrailuttils.MilestoneName, milestoneFlag, "", "Testrail milestone name")
+	flag.StringVar(&testrailuttils.RunName, testrailRunNameFlag, "", "Testrail run name, this run will be updated in testrail")
+	flag.StringVar(&testrailuttils.JobRunID, testrailRunIDFlag, "", "Run ID for the testrail run")
+	flag.StringVar(&testrailuttils.JenkinsBuildURL, testrailJenkinsBuildURLFlag, "", "Jenins job url for testrail update")
+	flag.StringVar(&testRailHostname, testRailHostFlag, "", "Testrail server hostname")
+	flag.StringVar(&testRailUsername, testRailUserNameFlag, "", "Username to be used for adding entries to testrail")
+	flag.StringVar(&testRailPassword, testRailPasswordFlag, "", "Password to be used for testrail update")
 
 	flag.Parse()
 

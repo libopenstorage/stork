@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"strings"
 	"testing"
@@ -28,6 +29,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{UpgradeVolumeDriver}", func() {
+	var testrailID = 35269
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("upgrade volume driver and ensure everything is running fine", func() {
@@ -61,7 +68,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

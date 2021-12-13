@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"testing"
 	"time"
@@ -34,6 +35,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{DriveFailure}", func() {
+	var testrailID = 35265
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35265
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	testName := "drivefailure"
@@ -114,7 +121,7 @@ var _ = Describe("{DriveFailure}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

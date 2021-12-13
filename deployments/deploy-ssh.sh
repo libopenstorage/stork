@@ -443,7 +443,14 @@ spec:
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
             "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
             "--metering_interval_mins=$METERING_INTERVAL_MINS",
-            "$APP_DESTROY_TIMEOUT_ARG"
+            "--testrail-milestone=$TESTRAIL_MILESTONE",
+            "--testrail-run-name=$TESTRAIL_RUN_NAME",
+            "--testrail-run-id=$TESTRAIL_RUN_ID",
+            "--testrail-jeknins-build-url=$TESTRAIL_JENKINS_BUILD_URL",
+            "--testrail-host=$TESTRAIL_HOST",
+            "--testrail-username=$TESTRAIL_USERNAME",
+            "--testrail-password=$TESTRAIL_PASSWORD",
+            "$APP_DESTROY_TIMEOUT_ARG",
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]

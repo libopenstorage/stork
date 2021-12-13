@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -28,6 +29,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{StopScheduler}", func() {
+	var testrailID = 35268
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35268
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	testName := "stopscheduler"
@@ -75,7 +82,7 @@ var _ = Describe("{StopScheduler}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

@@ -255,6 +255,8 @@ github.com/emicklei/go-restful/log
 github.com/evanphx/json-patch
 # github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d
 github.com/exponent-io/jsonpath
+# github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
+github.com/educlos/testrail
 # github.com/fatih/color v1.9.0
 github.com/fatih/color
 # github.com/form3tech-oss/jwt-go v3.2.2+incompatible

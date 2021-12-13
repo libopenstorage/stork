@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go v1.35.37
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
+	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
 	github.com/fatih/color v1.9.0
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gofrs/flock v0.8.1

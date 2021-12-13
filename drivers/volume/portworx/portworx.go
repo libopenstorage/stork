@@ -410,6 +410,17 @@ func isNodeNotFound(err error) bool {
 	return err != nil && (st.Code() == codes.NotFound || (st.Code() == codes.Internal && strings.Contains(err.Error(), "Unable to locate node")))
 }
 
+func (d *portworx) GetDriverVersion() (string, error) {
+	nodeList := node.GetStorageDriverNodes()
+	pxNode := nodeList[0]
+	pxVersion, err := d.getPxVersionOnNode(pxNode)
+	if err != nil {
+		return "", fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+	}
+	return pxVersion, nil
+}
+
+
 func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorageNodeClient) (string, error) {
 
 	t := func() (interface{}, bool, error) {
