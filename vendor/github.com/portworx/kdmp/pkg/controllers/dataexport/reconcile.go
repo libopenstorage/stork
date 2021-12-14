@@ -71,6 +71,7 @@ const (
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	compressionKey        = "KDMP_COMPRESSION"
+	backupPath            = "KDMP_BACKUP_PATH"
 )
 
 type updateDataExportDetail struct {
@@ -305,6 +306,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		// Read the config map to get compression type
 		var compressionType string
+		var podDataPath string
 		kdmpData, err := core.Instance().GetConfigMap(utils.KdmpConfigmapName, utils.KdmpConfigmapNamespace)
 		if err != nil {
 			logrus.Errorf("failed reading config map %v: %v", utils.KdmpConfigmapName, err)
@@ -312,9 +314,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			compressionType = utils.DefaultCompresion
 		} else {
 			compressionType = kdmpData.Data[compressionKey]
+			podDataPath = kdmpData.Data[backupPath]
 		}
+
 		// start data transfer
-		id, err := startTransferJob(driver, srcPVCName, compressionType, dataExport)
+		id, err := startTransferJob(driver, srcPVCName, compressionType, dataExport, podDataPath)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
 			logrus.Warnf(msg)
@@ -1395,7 +1399,8 @@ func startTransferJob(
 	drv drivers.Interface,
 	srcPVCName string,
 	compressionType string,
-	dataExport *kdmpapi.DataExport) (string, error) {
+	dataExport *kdmpapi.DataExport,
+	podDataPath string) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
 	}
@@ -1437,6 +1442,7 @@ func startTransferJob(
 			drivers.WithCertSecretName(drivers.CertSecretName),
 			drivers.WithCertSecretNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithCompressionType(compressionType),
+			drivers.WithPodDatapathType(podDataPath),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
@@ -1485,6 +1491,7 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 	// wait for pvc to get bound
 	var pvc *corev1.PersistentVolumeClaim
 	var err error
+	var errMsg string
 	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
 		pvc, err = core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
 		if err != nil {
@@ -1492,7 +1499,7 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 		}
 
 		if pvc.Status.Phase != corev1.ClaimBound {
-			errMsg := fmt.Sprintf("status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
+			errMsg = fmt.Sprintf("pvc status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
 			logrus.Debugf("%v", errMsg)
 			return false, nil
 		}
@@ -1502,7 +1509,7 @@ func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*c
 
 	if wErr != nil {
 		logrus.Errorf("%v", wErr)
-		return nil, wErr
+		return nil, fmt.Errorf("%s:%s", wErr, errMsg)
 	}
 	return pvc, nil
 }
@@ -1520,7 +1527,8 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 		}
 		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 		if storageClassName != "" {
-			sc, checkErr := storage.Instance().GetStorageClass(storageClassName)
+			var sc *storagev1.StorageClass
+			sc, checkErr = storage.Instance().GetStorageClass(storageClassName)
 			if checkErr != nil {
 				return "", true, checkErr
 			}
@@ -1540,8 +1548,8 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 				return "", false, checkErr
 			}
 		}
-
-		pods, checkErr := core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		var pods []corev1.Pod
+		pods, checkErr = core.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
 		if checkErr != nil {
 			return "", true, fmt.Errorf("get mounted pods: %v", checkErr)
 		}
