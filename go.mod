@@ -53,7 +53,7 @@ replace (
 	// PX dependencies
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211006132704-8a90df7acb50
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.4
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency

@@ -37,6 +37,8 @@ type PersistentVolumeClaimOps interface {
 	DeletePersistentVolume(pvName string) error
 	// GetPersistentVolumes returns all PVs in cluster
 	GetPersistentVolumes() (*corev1.PersistentVolumeList, error)
+	//UpdatePersistentVolume updates PV
+	UpdatePersistentVolume(pv *corev1.PersistentVolume) (*corev1.PersistentVolume, error)
 	// GetVolumeForPersistentVolumeClaim returns the volumeID for the given PVC
 	GetVolumeForPersistentVolumeClaim(*corev1.PersistentVolumeClaim) (string, error)
 	// GetPersistentVolumeClaimParams fetches custom parameters for the given PVC
@@ -216,6 +218,15 @@ func (c *Client) GetPersistentVolumes() (*corev1.PersistentVolumeList, error) {
 	return c.kubernetes.CoreV1().PersistentVolumes().List(context.TODO(), metav1.ListOptions{})
 }
 
+// UpdatePersistentVolumeClaim updates an existing persistent volume claim
+func (c *Client) UpdatePersistentVolume(pv *corev1.PersistentVolume) (*corev1.PersistentVolume, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubernetes.CoreV1().PersistentVolumes().Update(context.TODO(), pv, metav1.UpdateOptions{})
+}
+
 // GetVolumeForPersistentVolumeClaim returns the volumeID for the given PVC
 func (c *Client) GetVolumeForPersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim) (string, error) {
 	result, err := c.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
@@ -258,9 +269,7 @@ func (c *Client) GetPersistentVolumeClaimParams(pvc *corev1.PersistentVolumeClai
 		return nil, fmt.Errorf("failed to get storage resource for pvc: %v", result.Name)
 	}
 
-	// We explicitly send the unit with so the client can compare it with correct units
-	requestGB := uint64(roundUpSize(capacity.Value(), 1024*1024*1024))
-	params["size"] = fmt.Sprintf("%dG", requestGB)
+	params["size"] = capacity.String()
 
 	sc, err := c.GetStorageClassForPVC(result)
 	if err != nil {

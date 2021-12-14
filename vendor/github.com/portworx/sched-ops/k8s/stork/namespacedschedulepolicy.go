@@ -14,7 +14,7 @@ type NamespacedSchedulePolicyOps interface {
 	// GetNamespacedSchedulePolicy gets the NamespacedSchedulePolicy
 	GetNamespacedSchedulePolicy(string, string) (*storkv1alpha1.NamespacedSchedulePolicy, error)
 	// ListNamespacedSchedulePolicies lists all the NamespacedSchedulePolicies
-	ListNamespacedSchedulePolicies(string) (*storkv1alpha1.NamespacedSchedulePolicyList, error)
+	ListNamespacedSchedulePolicies(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.NamespacedSchedulePolicyList, error)
 	// UpdateNamespacedSchedulePolicy updates the NamespacedSchedulePolicy
 	UpdateNamespacedSchedulePolicy(*storkv1alpha1.NamespacedSchedulePolicy) (*storkv1alpha1.NamespacedSchedulePolicy, error)
 	// DeleteNamespacedSchedulePolicy deletes the NamespacedSchedulePolicy
@@ -38,11 +38,11 @@ func (c *Client) GetNamespacedSchedulePolicy(name string, namespace string) (*st
 }
 
 // ListNamespacedSchedulePolicies lists all the NamespacedSchedulePolicies
-func (c *Client) ListNamespacedSchedulePolicies(namespace string) (*storkv1alpha1.NamespacedSchedulePolicyList, error) {
+func (c *Client) ListNamespacedSchedulePolicies(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.NamespacedSchedulePolicyList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().NamespacedSchedulePolicies(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().NamespacedSchedulePolicies(namespace).List(context.TODO(), filterOptions)
 }
 
 // UpdateNamespacedSchedulePolicy updates the NamespacedSchedulePolicy
