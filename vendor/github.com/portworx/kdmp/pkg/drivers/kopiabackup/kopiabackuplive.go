@@ -30,7 +30,13 @@ func jobForLiveBackup(
 	// pod volumes reside under /var/lib/kubelet/pods/<podUID>/volumes/<volumePlugin>/<volumeName> directory.
 	// mount /var/lib/kubelet/pods/<podUID>/volumes as a /data directory to a resticexecutor job and
 	// use /data/*/<volumeName> as a backup directory and determine volume plugin by resticexecutor.
-	podVolumesPath := fmt.Sprintf("%s/%s/volumes", defaultPodsMountPath, mountPod.UID)
+	var podVolumesPath string
+	if len(jobOption.PodDataPath) == 0 {
+		podVolumesPath = fmt.Sprintf("%s/%s/volumes", defaultPodsMountPath, mountPod.UID)
+	} else {
+		logrus.Debugf("selecting pod data path %v from config map", jobOption.PodDataPath)
+		podVolumesPath = fmt.Sprintf("%s/%s/volumes", jobOption.PodDataPath, mountPod.UID)
+	}
 	backupPath := fmt.Sprintf("/data/*/%s", volDir)
 
 	backupName := jobName

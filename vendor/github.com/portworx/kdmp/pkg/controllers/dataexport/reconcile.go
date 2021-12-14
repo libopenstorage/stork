@@ -71,6 +71,7 @@ const (
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	compressionKey        = "KDMP_COMPRESSION"
+	backupPath            = "KDMP_BACKUP_PATH"
 )
 
 type updateDataExportDetail struct {
@@ -305,6 +306,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		// Read the config map to get compression type
 		var compressionType string
+		var podDataPath string
 		kdmpData, err := core.Instance().GetConfigMap(utils.KdmpConfigmapName, utils.KdmpConfigmapNamespace)
 		if err != nil {
 			logrus.Errorf("failed reading config map %v: %v", utils.KdmpConfigmapName, err)
@@ -312,9 +314,11 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			compressionType = utils.DefaultCompresion
 		} else {
 			compressionType = kdmpData.Data[compressionKey]
+			podDataPath = kdmpData.Data[backupPath]
 		}
+
 		// start data transfer
-		id, err := startTransferJob(driver, srcPVCName, compressionType, dataExport)
+		id, err := startTransferJob(driver, srcPVCName, compressionType, dataExport, podDataPath)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
 			logrus.Warnf(msg)
@@ -1395,7 +1399,8 @@ func startTransferJob(
 	drv drivers.Interface,
 	srcPVCName string,
 	compressionType string,
-	dataExport *kdmpapi.DataExport) (string, error) {
+	dataExport *kdmpapi.DataExport,
+	podDataPath string) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
 	}
@@ -1437,6 +1442,7 @@ func startTransferJob(
 			drivers.WithCertSecretName(drivers.CertSecretName),
 			drivers.WithCertSecretNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithCompressionType(compressionType),
+			drivers.WithPodDatapathType(podDataPath),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
