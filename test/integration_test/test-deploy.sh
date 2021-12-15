@@ -3,6 +3,7 @@
 snapshot_scale=10
 migration_scale=10
 backup_scale=10
+failover_failback_scale=1
 image_name="openstorage/stork:master"
 test_image_name="openstorage/stork_test:latest"
 src_config_path=""
@@ -40,6 +41,12 @@ case $i in
     --backup-scale-count)
         echo "Scale for migration scale test (default 10): $2"
         backup_scale=$2
+        shift
+        shift
+        ;;
+    --failover-failback-scale-count)
+        echo "Scale for failover failback scale test (default 1): $2"
+        failover_failback_scale=$2
         shift
         shift
         ;;
@@ -242,6 +249,7 @@ sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-tes
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -migration-scale-count=10/- -migration-scale-count='"$migration_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -backup-scale-count=10/- -backup-scale-count='"$backup_scale"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/- -failover-failback-scale-count=1/- -failover-failback-scale-count='"$failover_failback_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml

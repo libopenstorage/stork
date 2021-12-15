@@ -56,6 +56,7 @@ spec:
     - -snapshot-scale-count=10
     - -migration-scale-count=10
     - -backup-scale-count=10
+    - -failover-failback-scale-count=1
     - -volume-driver=pxd
     - -generic-csi-config=csi_config_map_name
     - -stork-version-check=false
