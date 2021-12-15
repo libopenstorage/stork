@@ -1,6 +1,6 @@
 module github.com/libopenstorage/stork
 
-go 1.15
+go 1.17
 
 require (
 	cloud.google.com/go v0.65.0
@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/go-version v1.2.1
 	github.com/heptio/ark v1.0.0
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
-	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
+	github.com/kubernetes-incubator/external-storage v0.20.11-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67
@@ -30,7 +30,7 @@ require (
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/portworx/kdmp v0.4.1-0.20211213183238-411ba8069127
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23
-	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
+	github.com/portworx/torpedo v0.20.11-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.9.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
@@ -43,15 +43,15 @@ require (
 	google.golang.org/api v0.30.0
 	google.golang.org/grpc v1.36.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.20.4
-	k8s.io/apiextensions-apiserver v0.20.4
-	k8s.io/apimachinery v0.20.4
-	k8s.io/apiserver v0.20.4
-	k8s.io/cli-runtime v0.20.4
+	k8s.io/api v0.20.11
+	k8s.io/apiextensions-apiserver v0.20.11
+	k8s.io/apimachinery v0.20.11
+	k8s.io/apiserver v0.20.11
+	k8s.io/cli-runtime v0.20.11
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/code-generator v0.21.0
 	k8s.io/kube-scheduler v0.0.0
-	k8s.io/kubectl v0.20.4
+	k8s.io/kubectl v0.20.11
 	k8s.io/kubernetes v1.20.4
 	sigs.k8s.io/controller-runtime v0.8.0
 	sigs.k8s.io/gcp-compute-persistent-disk-csi-driver v0.7.0
@@ -73,31 +73,31 @@ replace (
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
 
-	k8s.io/api => k8s.io/api v0.20.4
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.4
-	k8s.io/apimachinery => k8s.io/apimachinery v0.20.4
-	k8s.io/apiserver => k8s.io/apiserver v0.20.4
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.20.4
-	k8s.io/client-go => k8s.io/client-go v0.20.4
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.20.4
-	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.20.4
-	k8s.io/code-generator => k8s.io/code-generator v0.20.4
-	k8s.io/component-base => k8s.io/component-base v0.20.4
-	k8s.io/component-helpers => k8s.io/component-helpers v0.20.4
-	k8s.io/controller-manager => k8s.io/controller-manager v0.20.4
-	k8s.io/cri-api => k8s.io/cri-api v0.20.4
-	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.20.4
-	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.20.4
-	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.20.4
-	k8s.io/kube-proxy => k8s.io/kube-proxy v0.20.4
-	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.20.4
-	k8s.io/kubectl => k8s.io/kubectl v0.20.4
-	k8s.io/kubelet => k8s.io/kubelet v0.20.4
-	k8s.io/kubernetes => k8s.io/kubernetes v1.20.4
-	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.20.4
-	k8s.io/metrics => k8s.io/metrics v0.20.4
-	k8s.io/mount-utils => k8s.io/mount-utils v0.20.4
-	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.4
+	k8s.io/api => k8s.io/api v0.20.11
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.11
+	k8s.io/apimachinery => k8s.io/apimachinery v0.20.11
+	k8s.io/apiserver => k8s.io/apiserver v0.20.11
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.20.11
+	k8s.io/client-go => k8s.io/client-go v0.20.11
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.20.11
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.20.11
+	k8s.io/code-generator => k8s.io/code-generator v0.20.11
+	k8s.io/component-base => k8s.io/component-base v0.20.11
+	k8s.io/component-helpers => k8s.io/component-helpers v0.20.11
+	k8s.io/controller-manager => k8s.io/controller-manager v0.20.11
+	k8s.io/cri-api => k8s.io/cri-api v0.20.11
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.20.11
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.20.11
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.20.11
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.20.11
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.20.11
+	k8s.io/kubectl => k8s.io/kubectl v0.20.11
+	k8s.io/kubelet => k8s.io/kubelet v0.20.11
+	k8s.io/kubernetes => k8s.io/kubernetes v1.20.11
+	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.20.11
+	k8s.io/metrics => k8s.io/metrics v0.20.11
+	k8s.io/mount-utils => k8s.io/mount-utils v0.20.11
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.11
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.8.2
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 => sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
