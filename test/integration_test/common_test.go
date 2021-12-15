@@ -111,6 +111,7 @@ var objectStoreDriver objectstore.Driver
 var snapshotScaleCount int
 var migrationScaleCount int
 var backupScaleCount int
+var failOverFailBackScaleCount int
 var authToken string
 var authTokenConfigMap string
 var volumeDriverName string
@@ -905,6 +906,10 @@ func TestMain(m *testing.M) {
 		"backup-scale-count",
 		10,
 		"Number of different backups per app for scaled backup test")
+	flag.IntVar(&failOverFailBackScaleCount,
+		"failover-failback-scale-count",
+		1,
+		"Number of failover/failback combinations for  scaled failover failback test")
 	flag.StringVar(&volumeDriverName,
 		"volume-driver",
 		"pxd",
