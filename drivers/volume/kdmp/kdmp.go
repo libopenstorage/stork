@@ -10,6 +10,7 @@ import (
 	"github.com/aquilax/truncate"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
+	stork_driver "github.com/libopenstorage/stork/drivers"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
@@ -397,6 +398,8 @@ func deleteKdmpSnapshot(backup *storkapi.ApplicationBackup) (bool, error) {
 					drivers.WithSourcePVC(vInfo.PersistentVolumeClaim),
 					drivers.WithCredSecretName(secretName),
 					drivers.WithCredSecretNamespace(secretNamespace),
+					drivers.WithJobConfigMap(stork_driver.KdmpConfigmapName),
+					drivers.WithJobConfigMapNs(stork_driver.KdmpConfigmapNamespace),
 				)
 				if err != nil {
 					errMsg := fmt.Sprintf("failed to start kdmp snapshot delete job for snapshot [%v] for backup [%v]: %v",
