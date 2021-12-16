@@ -425,7 +425,7 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20211213183238-411ba8069127
+# github.com/portworx/kdmp v0.4.1-0.20211216172707-10f6c5c524cd
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
