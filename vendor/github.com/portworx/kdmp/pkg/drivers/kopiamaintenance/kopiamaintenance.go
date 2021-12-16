@@ -201,11 +201,11 @@ func jobFor(
 						Spec: corev1.PodSpec{
 							RestartPolicy:      corev1.RestartPolicyOnFailure,
 							ServiceAccountName: jobOption.ServiceAccountName,
-							ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
+							ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(jobOption.JobConfigMap, jobOption.JobConfigMapNs)),
 							Containers: []corev1.Container{
 								{
 									Name:  "kopiaexecutor",
-									Image: utils.KopiaExecutorImage(),
+									Image: utils.KopiaExecutorImage(jobOption.JobConfigMap, jobOption.JobConfigMapNs),
 									// TODO: Need to revert it to NotPresent. For now keep it as PullAlways.
 									ImagePullPolicy: corev1.PullAlways,
 									Command: []string{
@@ -292,7 +292,7 @@ func addJobLabels(labels map[string]string) map[string]string {
 }
 
 func buildJob(jobName string, jobOpts drivers.JobOpts) (*batchv1beta1.CronJob, error) {
-	resources, err := utils.KopiaResourceRequirements()
+	resources, err := utils.KopiaResourceRequirements(jobOpts.JobConfigMap, jobOpts.JobConfigMapNs)
 	if err != nil {
 		return nil, err
 	}

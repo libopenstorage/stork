@@ -318,7 +318,15 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 
 		// start data transfer
-		id, err := startTransferJob(driver, srcPVCName, compressionType, dataExport, podDataPath)
+		id, err := startTransferJob(
+			driver,
+			srcPVCName,
+			compressionType,
+			dataExport,
+			podDataPath,
+			utils.KdmpConfigmapName,
+			utils.KdmpConfigmapNamespace,
+		)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
 			logrus.Warnf(msg)
@@ -1400,7 +1408,9 @@ func startTransferJob(
 	srcPVCName string,
 	compressionType string,
 	dataExport *kdmpapi.DataExport,
-	podDataPath string) (string, error) {
+	podDataPath string,
+	jobConfigMap string,
+	jobConfigMapNs string) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
 	}
@@ -1443,6 +1453,8 @@ func startTransferJob(
 			drivers.WithCertSecretNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithCompressionType(compressionType),
 			drivers.WithPodDatapathType(podDataPath),
+			drivers.WithJobConfigMap(jobConfigMap),
+			drivers.WithJobConfigMapNs(jobConfigMapNs),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
@@ -1455,6 +1467,8 @@ func startTransferJob(
 			drivers.WithDataExportName(dataExport.GetName()),
 			drivers.WithCertSecretName(drivers.CertSecretName),
 			drivers.WithCertSecretNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithJobConfigMap(jobConfigMap),
+			drivers.WithJobConfigMapNs(jobConfigMapNs),
 		)
 	}
 
