@@ -107,7 +107,7 @@ func (c *ClusterPairController) handle(ctx context.Context, clusterPair *stork_a
 		return nil
 	}
 
-	if len(clusterPair.Spec.Options) == 0 {
+	if _, ok := clusterPair.Spec.Options["token"]; !ok {
 		clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusNotProvided
 		c.recorder.Event(clusterPair,
 			v1.EventTypeNormal,
