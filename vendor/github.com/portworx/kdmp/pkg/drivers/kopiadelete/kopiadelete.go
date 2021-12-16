@@ -202,11 +202,11 @@ func jobFor(
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
 					ServiceAccountName: jobOption.ServiceAccountName,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(jobOption.JobConfigMap, jobOption.JobConfigMapNs)),
 					Containers: []corev1.Container{
 						{
-							Name:            "kopiaexecutor",
-							Image:           utils.KopiaExecutorImage(),
+							Name:  "kopiaexecutor",
+							Image: utils.KopiaExecutorImage(jobOption.JobConfigMap, jobOption.JobConfigMapNs),
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command: []string{
 								"/bin/sh",
@@ -305,7 +305,7 @@ func addJobLabels(labels map[string]string, jobOpts drivers.JobOpts) map[string]
 }
 
 func buildJob(jobName string, jobOpts drivers.JobOpts) (*batchv1.Job, error) {
-	resources, err := utils.KopiaResourceRequirements()
+	resources, err := utils.KopiaResourceRequirements(jobOpts.JobConfigMap, jobOpts.JobConfigMapNs)
 	if err != nil {
 		return nil, err
 	}
