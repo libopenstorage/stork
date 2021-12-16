@@ -120,7 +120,7 @@ func jobLimitByType(jobType string) int {
 		log.Warnf("unsupported job type [%v]", jobType)
 		return DefaultJobLimit
 	}
-	value := utils.GetConfigValue(configmapKey)
+	value := utils.GetConfigValue(utils.KdmpConfigmapName, utils.KdmpConfigmapNamespace, configmapKey)
 	if value == "" {
 		return getDefaultJobLimit(jobType)
 	}

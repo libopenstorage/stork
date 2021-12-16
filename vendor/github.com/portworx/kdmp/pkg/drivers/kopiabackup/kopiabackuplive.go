@@ -84,13 +84,13 @@ func jobForLiveBackup(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret()),
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(jobOption.JobConfigMap, jobOption.JobConfigMapNs)),
 					ServiceAccountName: jobName,
 					NodeName:           mountPod.Spec.NodeName,
 					Containers: []corev1.Container{
 						{
 							Name:            "kopiaexecutor",
-							Image:           utils.KopiaExecutorImage(),
+							Image:           utils.KopiaExecutorImage(jobOption.JobConfigMap, jobOption.JobConfigMapNs),
 							ImagePullPolicy: corev1.PullAlways,
 							Command: []string{
 								"/bin/sh",
