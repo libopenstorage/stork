@@ -514,6 +514,15 @@ func (k *kdmp) getRestorePVCs(
 			if val, ok := restore.Spec.StorageClassMapping[sc]; ok {
 				pvc.Spec.StorageClassName = &val
 			}
+			// If pvc storageClassName is empty, we want to pick up the
+			// default storageclass configured on the cluster.
+			// Default storage class will not selected, if the storageclass
+			// is empty. So setting it to nil.
+			if pvc.Spec.StorageClassName != nil {
+				if len(*pvc.Spec.StorageClassName) == 0 {
+					pvc.Spec.StorageClassName = nil
+				}
+			}
 			pvc.Spec.VolumeName = ""
 			if pvc.Annotations != nil {
 				delete(pvc.Annotations, bindCompletedKey)

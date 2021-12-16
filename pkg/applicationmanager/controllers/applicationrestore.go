@@ -470,7 +470,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			backupVolumeInfoMappings[volumeBackup.DriverName] = append(backupVolumeInfoMappings[volumeBackup.DriverName], volumeBackup)
 		}
 	}
-
 	if restore.Status.Volumes == nil {
 		restore.Status.Volumes = make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	}
@@ -497,7 +496,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 
 			// Skip pv/pvc if replacepolicy is set to retain to avoid creating
 			if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyRetain {
-				backupVolInfos, existingRestoreVolInfos, err = a.skipVolumesFromRestoreList(backup, restore, objects, driver)
+				backupVolInfos, existingRestoreVolInfos, err = a.skipVolumesFromRestoreList(restore, objects, driver, vInfos)
 				if err != nil {
 					log.ApplicationRestoreLog(restore).Errorf("Error while checking pvcs: %v", err)
 					return err
@@ -527,6 +526,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						objects,
 						objectMap,
 						restore.Spec.NamespaceMapping,
+						nil, // no need to set storage class mappings at this stage
 						nil,
 						restore.Spec.IncludeOptionalResourceTypes,
 						nil,
@@ -992,14 +992,14 @@ func isGenericCSIPersistentVolumeClaim(pvc *v1.PersistentVolumeClaim, volInfos [
 }
 
 func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
-	backup *storkapi.ApplicationBackup,
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
 	driver volume.Driver,
+	volInfo []*storkapi.ApplicationBackupVolumeInfo,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, []*storkapi.ApplicationRestoreVolumeInfo, error) {
 	existingInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	newVolInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-	for _, bkupVolInfo := range backup.Status.Volumes {
+	for _, bkupVolInfo := range volInfo {
 		restoreVolInfo := &storkapi.ApplicationRestoreVolumeInfo{}
 		val, ok := restore.Spec.NamespaceMapping[bkupVolInfo.Namespace]
 		if !ok {
@@ -1136,6 +1136,7 @@ func (a *ApplicationRestoreController) applyResources(
 			objects,
 			objectMap,
 			restore.Spec.NamespaceMapping,
+			restore.Spec.StorageClassMapping,
 			pvNameMappings,
 			restore.Spec.IncludeOptionalResourceTypes,
 			restore.Status.Volumes,

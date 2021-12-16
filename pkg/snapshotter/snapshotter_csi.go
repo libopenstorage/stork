@@ -16,13 +16,16 @@ import (
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -99,6 +102,11 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		return "", "", "", fmt.Errorf("error getting pv %v: %v", pvName, err)
 	}
 
+	// In case the PV does not contain CSI secion itself, we will error out.
+	if pv.Spec.CSI == nil {
+		return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
+	}
+
 	if o.SnapshotClassName == "" {
 		return "", "", "", fmt.Errorf("snapshot class cannot be empty, use 'default' to choose the default snapshot class")
 	}
@@ -108,9 +116,6 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		// for this snapshot. If none is set then the volume snapshot will fail
 		o.SnapshotClassName = ""
 	} else {
-		if pv.Spec.CSI == nil {
-			return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
-		}
 		// For other snapshot class names ensure the volume snapshot class has
 		// been created
 		if err := c.ensureVolumeSnapshotClassCreated(pv.Spec.CSI.Driver, o.SnapshotClassName); err != nil {
@@ -360,6 +365,10 @@ func (c *csiDriver) RestoreStatus(pvcName, namespace string) (RestoreInfo, error
 	}
 
 	switch {
+	case c.pvcWaitingForFirstConsumer(pvc):
+		restoreInfo.VolumeName = pvc.Spec.VolumeName
+		restoreInfo.Size = size
+		restoreInfo.Status = StatusReady
 	case c.pvcBindFinished(pvc):
 		restoreInfo.VolumeName = pvc.Spec.VolumeName
 		restoreInfo.Size = size
@@ -523,6 +532,21 @@ func (c *csiDriver) pvcBindFinished(pvc *v1.PersistentVolumeClaim) bool {
 	bindCompleted := pvc.Annotations[annPVBindCompleted]
 	boundByController := pvc.Annotations[annPVBoundByController]
 	return pvc.Status.Phase == v1.ClaimBound && bindCompleted == "yes" && boundByController == "yes"
+}
+
+func (c *csiDriver) pvcWaitingForFirstConsumer(pvc *v1.PersistentVolumeClaim) bool {
+	var sc *storagev1.StorageClass
+	var err error
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName != "" {
+		sc, err = storage.Instance().GetStorageClass(storageClassName)
+		if err != nil {
+			logrus.Warnf("did not get the storageclass %s for pvc %s/%s, err: %v", storageClassName, pvc.Namespace, pvc.Name, err)
+			return false
+		}
+		return *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer
+	}
+	return false
 }
 
 func (c *csiDriver) getSnapshotContentError(vscName string) string {

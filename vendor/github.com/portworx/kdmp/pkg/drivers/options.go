@@ -37,6 +37,7 @@ type JobOpts struct {
 	MaintenanceType             string
 	RepoPVCName                 string
 	Compression                 string
+	PodDataPath                 string
 }
 
 // WithBackupObjectName is job parameter.
@@ -317,6 +318,14 @@ func WithMaintenanceType(maintenanceType string) JobOption {
 func WithCompressionType(compressionType string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.Compression = compressionType
+		return nil
+	}
+}
+
+// WithPodDatapathType is job parameter.
+func WithPodDatapathType(podDataPath string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.PodDataPath = podDataPath
 		return nil
 	}
 }
