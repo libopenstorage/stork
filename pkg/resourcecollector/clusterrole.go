@@ -19,14 +19,6 @@ func (r *ResourceCollector) subjectInNamespace(subject *rbacv1.Subject, namespac
 			return false, nil
 		}
 		if subject.Namespace == namespace {
-			// check if user has an access to sa in namespace
-			_, err := r.coreOps.GetServiceAccount(subject.Name, namespace)
-			if err != nil {
-				if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
-					return false, nil
-				}
-				return false, err
-			}
 			return true, nil
 		}
 	case rbacv1.UserKind:
