@@ -475,7 +475,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		cleanupTask := func() (interface{}, bool, error) {
 			cleanupErr := c.cleanUp(driver, dataExport)
 			if cleanupErr != nil {
-				errMsg := fmt.Sprintf("failed to remove resources: %s", err)
+				errMsg := fmt.Sprintf("failed to remove resources: %s", cleanupErr)
 				logrus.Errorf("%v", errMsg)
 				return "", true, fmt.Errorf("%v", errMsg)
 			}
@@ -930,7 +930,7 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 		data := updateDataExportDetail{
 			stage:  kdmpapi.DataExportStageTransferScheduled,
 			status: kdmpapi.DataExportStatusInitial,
-			reason: "going to do generic restore as restoring from local snapshot did not happen",
+			reason: "switching to restore from objectstore bucket as restoring from local snapshot did not happen",
 		}
 		return false, c.updateStatus(dataExport, data)
 	}
@@ -1154,19 +1154,24 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExport, ignorePVC bool) error {
 
 	var cleanupErr error
+	var snapshotDriverName string
+	var snapshotDriver snapshotter.Driver
+	var vb *kdmpapi.VolumeBackup
+	var bl *storkapi.BackupLocation
 	t := func() (interface{}, bool, error) {
 
-		snapshotDriverName, cleanupErr := c.getSnapshotDriverName(de)
-		if cleanupErr != nil {
-			return nil, false, fmt.Errorf("failed to get snapshot driver name: %v", cleanupErr)
+		snapshotDriverName, cleanupErr = c.getSnapshotDriverName(de)
+		if snapshotDriverName == "" {
+			logrus.Errorf("cleanupLocalRestoredSnapshotResources: snapshotDriverName is empty: %v", cleanupErr)
+			return nil, false, nil
 		}
 
-		snapshotDriver, cleanupErr := c.snapshotter.Driver(snapshotDriverName)
+		snapshotDriver, cleanupErr = c.snapshotter.Driver(snapshotDriverName)
 		if cleanupErr != nil {
 			return nil, false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, cleanupErr)
 		}
 
-		vb, cleanupErr := kdmpopts.Instance().GetVolumeBackup(context.Background(),
+		vb, cleanupErr = kdmpopts.Instance().GetVolumeBackup(context.Background(),
 			de.Spec.Source.Name, de.Spec.Source.Namespace)
 		if cleanupErr != nil {
 			msg := fmt.Sprintf("Error accessing volumebackup %s in namespace %s : %v",
@@ -1175,7 +1180,7 @@ func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExpor
 			return nil, false, fmt.Errorf(msg)
 		}
 
-		bl, cleanupErr := stork.Instance().GetBackupLocation(vb.Spec.BackupLocation.Name, vb.Spec.BackupLocation.Namespace)
+		bl, cleanupErr = stork.Instance().GetBackupLocation(vb.Spec.BackupLocation.Name, vb.Spec.BackupLocation.Namespace)
 		if cleanupErr != nil {
 			msg := fmt.Sprintf("Error while getting backuplocation %s/%s : %v",
 				de.Spec.Source.Namespace, de.Spec.Source.Name, cleanupErr)
