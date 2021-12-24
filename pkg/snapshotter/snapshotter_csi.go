@@ -23,6 +23,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
@@ -308,6 +309,22 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 	pvc.Namespace = o.RestoreNamespace
 	pvc.ResourceVersion = ""
 	pvc.Spec.VolumeName = ""
+
+	snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(o.RestoreNamespace).Get(context.TODO(), o.RestoreSnapshotName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volumesnapshot %s/%s", o.RestoreNamespace, o.RestoreSnapshotName)
+	}
+
+	// Make the pvc size  same as the restore size from the volumesnapshot
+	if !snapshot.Status.RestoreSize.IsZero() {
+		quantity, err := resource.ParseQuantity(snapshot.Status.RestoreSize.String())
+		if err != nil {
+			return nil, err
+		}
+		logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, quantity.String())
+		pvc.Spec.Resources.Requests[v1.ResourceStorage] = quantity
+	}
+
 	pvc.Spec.DataSource = &v1.TypedLocalObjectReference{
 		APIGroup: stringPtr("snapshot.storage.k8s.io"),
 		Kind:     "VolumeSnapshot",
@@ -316,7 +333,7 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 	pvc.Status = v1.PersistentVolumeClaimStatus{
 		Phase: v1.ClaimPending,
 	}
-	pvc, err := core.Instance().CreatePersistentVolumeClaim(pvc)
+	pvc, err = core.Instance().CreatePersistentVolumeClaim(pvc)
 	if err != nil {
 		if k8s_errors.IsAlreadyExists(err) {
 			return pvc, nil
