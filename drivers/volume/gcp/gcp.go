@@ -382,6 +382,7 @@ func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 
 func (g *gcp) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 ) (*v1.PersistentVolume, error) {
 	if pv.Spec.CSI != nil {
 		key, err := common.VolumeIDToKey(pv.Spec.CSI.VolumeHandle)
@@ -389,6 +390,14 @@ func (g *gcp) UpdateMigratedPersistentVolumeSpec(
 			return nil, err
 		}
 		key.Name = pv.Name
+		// Update the restore cluster's region and zone in volumehandle of PV.
+		key.Zone = vInfo.Zones[0]
+		// Update the NodeAffinity to point to restore cluster's region and zone
+		if len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms) > 0 &&
+			len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions) > 0 &&
+			len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions[0].Values) > 0 {
+			pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions[0].Values[0] = vInfo.Zones[0]
+		}
 		pv.Spec.CSI.VolumeHandle, err = common.KeyToVolumeID(key, g.projectID)
 		if err != nil {
 			return nil, err
@@ -431,7 +440,13 @@ func (g *gcp) StartRestore(
 	}
 
 	var err error
-
+	var nodeZoneList []string
+	nodeZoneList, err = storkvolume.GetNodeZones()
+	if err != nil {
+		return nil, err
+	}
+	backupZoneList := storkvolume.GetVolumeBackupZones(volumeBackupInfos)
+	zoneMap := storkvolume.MapZones(backupZoneList, nodeZoneList)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{
@@ -460,7 +475,7 @@ func (g *gcp) StartRestore(
 			if err != nil {
 				return nil, err
 			}
-			region, err := g.getRegion(backupVolumeInfo.Zones[0])
+			region, err := storkvolume.GetNodeRegion()
 			if err != nil {
 				return nil, err
 			}
@@ -476,16 +491,23 @@ func (g *gcp) StartRestore(
 				volumeInfo.RestoreVolume = disk.Name
 			}
 		} else {
+			destZoneName := strings.Split(backupVolumeInfo.Zones[0], "-")
+			destRegion, err := storkvolume.GetNodeRegion()
+			if err != nil {
+				return nil, err
+			}
+			destFullZoneName := destRegion + "-" + zoneMap[destZoneName[2]]
 			// First check if the disk has already been created with the same labels
-			if disks, err := g.service.Disks.List(g.projectID, backupVolumeInfo.Zones[0]).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
+			if disks, err := g.service.Disks.List(g.projectID, destFullZoneName).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
 				volumeInfo.RestoreVolume = disks.Items[0].Name
 			} else {
-				_, err := g.service.Disks.Insert(g.projectID, backupVolumeInfo.Zones[0], disk).Do()
+				_, err := g.service.Disks.Insert(g.projectID, destFullZoneName, disk).Do()
 				if err != nil {
 					return nil, err
 				}
 				volumeInfo.RestoreVolume = disk.Name
 			}
+			volumeInfo.Zones[0] = destFullZoneName
 		}
 	}
 	return volumeInfos, nil
@@ -518,7 +540,7 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 				vInfo.PersistentVolumeClaim,
 			)
 		} else if len(vInfo.Zones) > 1 {
-			region, err := g.getRegion(vInfo.Zones[0])
+			region, err := storkvolume.GetNodeRegion()
 			if err != nil {
 				return nil, err
 			}
