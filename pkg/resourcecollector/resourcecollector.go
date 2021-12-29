@@ -751,7 +751,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	case "PersistentVolume":
 		return r.preparePVResourceForApply(object, pvNameMappings, vInfo)
 	case "PersistentVolumeClaim":
-		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings)
+		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	case "RoleBinding":

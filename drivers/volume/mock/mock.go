@@ -8,6 +8,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -284,6 +285,16 @@ func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 // GetSnapshotType Not implemented for mock driver
 func (m *Driver) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
 	return "", &errors.ErrNotImplemented{}
+}
+
+// UpdateMigratedPersistentVolumeSpec Not implemented for mock driver
+func (m *Driver) UpdateMigratedPersistentVolumeSpec(
+	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
+) (*v1.PersistentVolume, error) {
+
+	return pv, nil
+
 }
 
 func init() {
