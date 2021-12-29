@@ -479,6 +479,7 @@ func doKdmpDeleteJob(id string, driver drivers.Interface) (bool, error) {
 
 func (k *kdmp) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 ) (*v1.PersistentVolume, error) {
 	return pv, nil
 }

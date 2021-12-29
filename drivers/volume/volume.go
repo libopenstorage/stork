@@ -171,7 +171,7 @@ type MigratePluginInterface interface {
 	CancelMigration(*storkapi.Migration) error
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
-	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume) (*v1.PersistentVolume, error)
+	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo) (*v1.PersistentVolume, error)
 }
 
 // ClusterDomainsPluginInterface Interface to manage cluster domains
@@ -750,4 +750,77 @@ func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
 		return false
 	}
 	return true
+}
+
+// GetNodeRegion - get the node region
+func GetNodeRegion() (string, error) {
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		logrus.Errorf("getNodeZones: getting node details failed: %v", err)
+		return "", fmt.Errorf("failed in getting the nodes: %v", err)
+	}
+	for _, node := range nodes.Items {
+		return node.Labels[v1.LabelTopologyRegion], nil
+	}
+	return "", fmt.Errorf("failed in getting the nodes: %v", err)
+}
+
+// GetNodeZones - get zone details of the nodes in the cluster.
+func GetNodeZones() ([]string, error) {
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		logrus.Errorf("getNodeZones: getting node details failed: %v", err)
+		return nil, fmt.Errorf("failed in getting the nodes: %v", err)
+	}
+	nodeZoneList := []string{}
+	exists := map[string]bool{}
+	for _, node := range nodes.Items {
+		nodeZone := strings.Split(node.Labels[v1.LabelTopologyZone], "-")
+		if !exists[nodeZone[2]] {
+			exists[nodeZone[2]] = true
+			nodeZoneList = append(nodeZoneList, nodeZone[2])
+		}
+	}
+	return nodeZoneList, nil
+}
+
+// GetVolumeBackupZones - Get zone details from the volumeBackupInfo
+func GetVolumeBackupZones(
+	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+) []string {
+	backupZoneList := []string{}
+	exists := map[string]bool{}
+	for _, volume := range volumeBackupInfos {
+		backupZone := strings.Split(volume.Zones[0], "-")
+		if !exists[backupZone[2]] {
+			exists[backupZone[2]] = true
+			backupZoneList = append(backupZoneList, backupZone[2])
+		}
+	}
+	return backupZoneList
+}
+
+// MapZones - return the map with a relation between the source and destination zones
+func MapZones(sourceZones, destZones []string) map[string]string {
+	zoneMap := make(map[string]string)
+	for i, sourceZone := range sourceZones {
+		foundExactMatch := false
+		for _, destZone := range destZones {
+			if destZone == sourceZone {
+				zoneMap[sourceZone] = destZone
+				foundExactMatch = true
+				break
+			}
+		}
+		if foundExactMatch {
+			continue
+		}
+		if i < len(destZones) {
+			zoneMap[sourceZone] = destZones[i]
+		} else {
+			// More zones in source
+			zoneMap[sourceZone] = destZones[i%len(destZones)]
+		} // We don't care if we have more zones in dest
+	}
+	return zoneMap
 }

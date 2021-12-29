@@ -11,6 +11,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -358,6 +359,15 @@ func (l *linstor) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
 func (l *linstor) Stop() error {
 	close(l.stopChannel)
 	return nil
+}
+
+func (l *linstor) UpdateMigratedPersistentVolumeSpec(
+	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
+) (*v1.PersistentVolume, error) {
+
+	return pv, nil
+
 }
 
 func randString(n int) string {

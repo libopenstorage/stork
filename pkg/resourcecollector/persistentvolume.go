@@ -124,8 +124,10 @@ func (r *ResourceCollector) preparePVResourceForApply(
 
 	pv.Name = updatedName
 	var driverName string
+	var volumeInfo *stork_api.ApplicationRestoreVolumeInfo
 	for _, vol := range vInfo {
 		if vol.RestoreVolume == pv.Name {
+			volumeInfo = vol
 			driverName = vol.DriverName
 			break
 		}
@@ -135,7 +137,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	if err != nil {
 		return false, err
 	}
-	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv)
+	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo)
 	if err != nil {
 		return false, err
 	}
