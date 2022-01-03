@@ -40,6 +40,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
+	"github.com/portworx/kvdb"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -2327,7 +2328,13 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 		return fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
 	}
 
-	return clusterManager.DeletePair(pair.Status.RemoteStorageID)
+	if err := clusterManager.DeletePair(pair.Status.RemoteStorageID); err != nil &&
+		err != kvdb.ErrNotFound {
+		// ignore not found errors, for everything else return the error
+		// back to the caller
+		return err
+	}
+	return nil
 }
 
 func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {

@@ -96,6 +96,14 @@ func (c *ClusterPairController) handle(ctx context.Context, clusterPair *stork_a
 		if controllers.ContainsFinalizer(clusterPair, controllers.FinalizerCleanup) {
 			if err := c.cleanup(clusterPair); err != nil {
 				logrus.Errorf("%s: %s", reflect.TypeOf(c), err)
+				c.recorder.Event(
+					clusterPair,
+					v1.EventTypeWarning,
+					string(stork_api.ClusterPairStatusDeleting),
+					fmt.Sprintf("Cluster Pair delete failed: %v", err.Error()),
+				)
+				// Do not delete the cluster pair CR
+				return nil
 			}
 		}
 
