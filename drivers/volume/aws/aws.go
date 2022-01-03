@@ -2,7 +2,6 @@ package aws
 
 import (
 	"fmt"
-	"regexp"
 	"time"
 
 	aws_sdk "github.com/aws/aws-sdk-go/aws"
@@ -212,12 +211,12 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		if err != nil {
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
-		ebsName := a.getEBSVolumeID(pv)
+		ebsName := storkvolume.GetEBSVolumeID(pv)
 		if ebsName == "" {
 			return nil, fmt.Errorf("AWS EBS info not found in PV %v", pvName)
 		}
 
-		ebsVolume, err := a.getEBSVolume(ebsName, nil)
+		ebsVolume, err := storkvolume.GetEBSVolume(ebsName, nil, a.client)
 		if err != nil {
 			return nil, err
 		}
@@ -292,36 +291,6 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfos = append(volumeInfos, volumeInfo)
 	}
 	return volumeInfos, nil
-}
-
-func (a *aws) getEBSVolumeID(pv *v1.PersistentVolume) string {
-	var volumeID string
-	if pv.Spec.AWSElasticBlockStore != nil {
-		volumeID = pv.Spec.AWSElasticBlockStore.VolumeID
-	} else if pv.Spec.CSI != nil {
-		volumeID = pv.Spec.CSI.VolumeHandle
-	}
-	return regexp.MustCompile("vol-.*").FindString(volumeID)
-}
-
-func (a *aws) getEBSVolume(volumeID string, filters map[string]string) (*ec2.Volume, error) {
-	input := &ec2.DescribeVolumesInput{}
-	if volumeID != "" {
-		input.VolumeIds = []*string{&volumeID}
-	}
-	if len(filters) > 0 {
-		input.Filters = a.getFiltersFromMap(filters)
-	}
-
-	output, err := a.client.DescribeVolumes(input)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(output.Volumes) != 1 {
-		return nil, fmt.Errorf("received %v volumes for %v", len(output.Volumes), volumeID)
-	}
-	return output.Volumes[0], nil
 }
 
 func (a *aws) getEBSSnapshot(snapshotID string, filters map[string]string) (*ec2.Snapshot, error) {
@@ -477,7 +446,7 @@ func (a *aws) StartRestore(
 
 		// First check if we've already created a volume for this restore
 		// operation
-		if output, err := a.getEBSVolume("", tags); err == nil {
+		if output, err := storkvolume.GetEBSVolume("", tags, a.client); err == nil {
 			volumeInfo.RestoreVolume = *output.VolumeId
 		} else {
 			if len(backupVolumeInfo.Zones) == 0 {
@@ -567,7 +536,7 @@ func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
-		ebsVolume, err := a.getEBSVolume(vInfo.RestoreVolume, nil)
+		ebsVolume, err := storkvolume.GetEBSVolume(vInfo.RestoreVolume, nil, a.client)
 		if err != nil {
 			if awsErr, ok := err.(awserr.Error); ok {
 				if awsErr.Code() == "InvalidVolume.NotFound" {
