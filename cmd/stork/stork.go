@@ -59,16 +59,17 @@ import (
 )
 
 const (
-	defaultLockObjectName      = "stork"
-	defaultLockObjectNamespace = "kube-system"
-	defaultAdminNamespace      = "kube-system"
-	storkVersion               = "version"
-	cmName                     = "stork-version"
-	eventComponentName         = "stork"
-	debugFilePath              = "/var/cores"
-	awsKopiaExecutorImage      = "709825985650.dkr.ecr.us-east-1.amazonaws.com/portworx/kopiaexecutor"
-	awsKopiaExecutorImageTag   = "1.0.0-a345bb2"
-	awsMarketPlace             = "aws"
+	defaultLockObjectName       = "stork"
+	defaultLockObjectNamespace  = "kube-system"
+	defaultAdminNamespace       = "kube-system"
+	storkVersion                = "version"
+	cmName                      = "stork-version"
+	eventComponentName          = "stork"
+	debugFilePath               = "/var/cores"
+	awsKopiaExecutorImage       = "709825985650.dkr.ecr.us-east-1.amazonaws.com/portworx/kopiaexecutor"
+	awsKopiaExecutorImageTag    = "1.0.0-a345bb2"
+	awsMarketPlace              = "aws"
+	defaultControllerResyncTime = 90 * time.Second
 )
 
 var ext *extender.Extender
@@ -311,7 +312,10 @@ func run(c *cli.Context) {
 		}
 	}
 	// Create operator-sdk manager that will manage all controllers.
-	mgr, err := manager.New(config, manager.Options{})
+	resyncTime := defaultControllerResyncTime
+	mgr, err := manager.New(config, manager.Options{
+		SyncPeriod: &resyncTime,
+	})
 	if err != nil {
 		log.Fatalf("Setup controller manager: %v", err)
 	}
