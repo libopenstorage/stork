@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"math/rand"
 	"os/exec"
 	"reflect"
@@ -316,8 +315,8 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						if currRep == MaxRF {
 							errExpected = true
 						}
-						expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 						err = Inst().V.SetReplicationFactor(v, currRep+1, nil, opts)
+						expReplMap[v] = currRep + 1
 						if !errExpected {
 							UpdateOutcome(event, err)
 						} else {
@@ -402,15 +401,15 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						if currRep == MinRF {
 							errExpected = true
 						}
-						expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 
 						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
+						expReplMap[v] = currRep - 1
 						if !errExpected {
 							UpdateOutcome(event, err)
 
 						} else {
 							if !expect(err).To(haveOccurred()) {
-								UpdateOutcome(event, fmt.Errorf("Expected HA reduce to fail since new repl factor is less than %v but it did not", MinRF))
+								UpdateOutcome(event, fmt.Errorf("expected HA reduce to fail since new repl factor is less than %v but it did not", MinRF))
 							}
 						}
 
