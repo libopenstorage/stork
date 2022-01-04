@@ -115,6 +115,8 @@ github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
+# github.com/blang/semver v3.5.1+incompatible
+github.com/blang/semver
 # github.com/cenkalti/backoff v2.2.1+incompatible
 github.com/cenkalti/backoff
 # github.com/cespare/xxhash/v2 v2.1.1
@@ -911,6 +913,7 @@ k8s.io/apimachinery/pkg/util/json
 k8s.io/apimachinery/pkg/util/mergepatch
 k8s.io/apimachinery/pkg/util/naming
 k8s.io/apimachinery/pkg/util/net
+k8s.io/apimachinery/pkg/util/rand
 k8s.io/apimachinery/pkg/util/remotecommand
 k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/sets
@@ -1190,6 +1193,8 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/jsonpath
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/workqueue
+# k8s.io/cloud-provider v0.20.4 => k8s.io/cloud-provider v0.20.4
+k8s.io/cloud-provider
 # k8s.io/code-generator v0.21.0 => k8s.io/code-generator v0.20.4
 ## explicit
 k8s.io/code-generator
@@ -1229,7 +1234,12 @@ k8s.io/code-generator/third_party/forked/golang/reflect
 k8s.io/component-base/config
 k8s.io/component-base/config/v1alpha1
 k8s.io/component-base/featuregate
+k8s.io/component-base/metrics
+k8s.io/component-base/metrics/legacyregistry
 k8s.io/component-base/version
+# k8s.io/component-helpers v0.20.4 => k8s.io/component-helpers v0.20.4
+k8s.io/component-helpers/scheduling/corev1
+k8s.io/component-helpers/scheduling/corev1/nodeaffinity
 # k8s.io/gengo v0.0.0-20201113003025-83324d819ded
 k8s.io/gengo/args
 k8s.io/gengo/examples/deepcopy-gen/generators
@@ -1272,27 +1282,50 @@ k8s.io/kubectl/pkg/validation
 # k8s.io/kubernetes v1.20.4 => k8s.io/kubernetes v1.20.4
 ## explicit
 k8s.io/kubernetes/pkg/api/legacyscheme
+k8s.io/kubernetes/pkg/api/v1/pod
 k8s.io/kubernetes/pkg/apis/apps
 k8s.io/kubernetes/pkg/apis/autoscaling
 k8s.io/kubernetes/pkg/apis/core
 k8s.io/kubernetes/pkg/apis/core/helper
 k8s.io/kubernetes/pkg/apis/core/v1
 k8s.io/kubernetes/pkg/apis/core/v1/helper
+k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util
 k8s.io/kubernetes/pkg/features
 k8s.io/kubernetes/pkg/printers
+k8s.io/kubernetes/pkg/proxy/util
 k8s.io/kubernetes/pkg/registry/core/service/allocator
 k8s.io/kubernetes/pkg/registry/core/service/portallocator
+k8s.io/kubernetes/pkg/securitycontext
 k8s.io/kubernetes/pkg/util/goroutinemap
 k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff
 k8s.io/kubernetes/pkg/util/node
 k8s.io/kubernetes/pkg/util/parsers
+k8s.io/kubernetes/pkg/util/resizefs
 k8s.io/kubernetes/pkg/util/slice
+k8s.io/kubernetes/pkg/util/sysctl
+k8s.io/kubernetes/pkg/volume
+k8s.io/kubernetes/pkg/volume/util
+k8s.io/kubernetes/pkg/volume/util/fs
+k8s.io/kubernetes/pkg/volume/util/fsquota
+k8s.io/kubernetes/pkg/volume/util/fsquota/common
+k8s.io/kubernetes/pkg/volume/util/hostutil
+k8s.io/kubernetes/pkg/volume/util/recyclerclient
+k8s.io/kubernetes/pkg/volume/util/subpath
+k8s.io/kubernetes/pkg/volume/util/types
+k8s.io/kubernetes/pkg/volume/util/volumepathhandler
+# k8s.io/mount-utils v0.0.0 => k8s.io/mount-utils v0.20.4
+k8s.io/mount-utils
 # k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
+k8s.io/utils/io
+k8s.io/utils/keymutex
 k8s.io/utils/net
+k8s.io/utils/nsenter
+k8s.io/utils/path
 k8s.io/utils/pointer
+k8s.io/utils/strings
 k8s.io/utils/trace
 # sigs.k8s.io/controller-runtime v0.8.0 => sigs.k8s.io/controller-runtime v0.8.2
 ## explicit

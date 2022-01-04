@@ -2514,6 +2514,7 @@ func (p *portworx) CancelMigration(migration *storkapi.Migration) error {
 
 func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 ) (*v1.PersistentVolume, error) {
 
 	if pv.Spec.CSI != nil {

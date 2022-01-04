@@ -4,9 +4,12 @@ import (
 	"fmt"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	pvutil "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
 )
 
 func (r *ResourceCollector) pvcToBeCollected(
@@ -51,6 +54,7 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 	allObjects []runtime.Unstructured,
 	pvNameMappings map[string]string,
 	storageClassMappings map[string]string,
+	vInfos []*stork_api.ApplicationRestoreVolumeInfo,
 ) (bool, error) {
 	var pvc v1.PersistentVolumeClaim
 	var updatedName string
@@ -71,6 +75,23 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		}
 	}
 	pvc.Spec.VolumeName = updatedName
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		return false, fmt.Errorf("failed in getting the nodes: %v", err)
+	}
+	for _, vol := range vInfos {
+		if vol.PersistentVolumeClaim == pvc.Name {
+			for _, node := range nodes.Items {
+				nodeZone := node.Labels[v1.LabelTopologyZone]
+				if nodeZone == vol.Zones[0] {
+					pvc.Annotations[pvutil.AnnSelectedNode] = node.Name
+					break
+				}
+			}
+		}
+
+	}
+
 	if len(storageClassMappings) > 0 && pvc.Spec.StorageClassName != nil {
 		if newSc, exists := storageClassMappings[*pvc.Spec.StorageClassName]; exists && len(newSc) > 0 {
 			pvc.Spec.StorageClassName = &newSc

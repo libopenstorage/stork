@@ -860,6 +860,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 
 func (c *csi) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 ) (*v1.PersistentVolume, error) {
 	return pv, nil
 }

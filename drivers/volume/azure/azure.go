@@ -395,6 +395,7 @@ func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 
 func (a *azure) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 ) (*v1.PersistentVolume, error) {
 	disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, pv.Name)
 	if err != nil {
