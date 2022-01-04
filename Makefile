@@ -58,7 +58,7 @@ build:
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
 
-	(mkdir -p tools && cd tools && GO111MODULE=off go get github.com/onsi/ginkgo/ginkgo)
+	(mkdir -p tools && cd tools && GO111MODULE=on go get github.com/onsi/ginkgo/ginkgo@v1.16.5)
 	(mkdir -p tools && cd tools && GO111MODULE=off go get github.com/onsi/gomega)
 	ginkgo build -r
 
