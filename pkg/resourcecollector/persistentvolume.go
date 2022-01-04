@@ -10,6 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	// added it for vendoring purpose
+	_ "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
 )
 
 func (r *ResourceCollector) pvToBeCollected(
