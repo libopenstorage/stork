@@ -83,9 +83,14 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		if vol.PersistentVolumeClaim == pvc.Name {
 			for _, node := range nodes.Items {
 				nodeZone := node.Labels[v1.LabelTopologyZone]
-				if nodeZone == vol.Zones[0] {
-					pvc.Annotations[pvutil.AnnSelectedNode] = node.Name
-					break
+				if len(vol.Zones) != 0 {
+					if nodeZone == vol.Zones[0] {
+						if pvc.Annotations == nil {
+							pvc.Annotations = make(map[string]string)
+						}
+						pvc.Annotations[pvutil.AnnSelectedNode] = node.Name
+						break
+					}
 				}
 			}
 		}
