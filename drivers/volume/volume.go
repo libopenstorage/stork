@@ -82,6 +82,9 @@ type Driver interface {
 	// ValidateGetByteUsedForVolume validates returning volume statstic succesfully
 	ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error)
 
+	// ValidatePureVolumesNoReplicaSets validates pure volumes has no replicaset
+	ValidatePureVolumesNoReplicaSets (volumeName string, params map[string]string) (error)
+
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
 
