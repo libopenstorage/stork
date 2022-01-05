@@ -178,7 +178,7 @@ func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params m
 }
 
 //ValidatePureVolumesNoReplicaSets validates Pure volumes has no replicaset.
-func (d *DefaultDriver) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) (error) {
+func (d *DefaultDriver) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidatePureVolumesNoReplicaSets()",

@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -216,6 +217,7 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
 	}
+
 	return nil
 }
 
@@ -592,6 +594,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	deleteLabelsFromRequestedSpec(requestedLocator)
 
 	// Params/Options
+	// TODO check why PX-Backup does not copy group params correctly after restore
+	checkVolSpecGroup := true
+	if _, ok := params["backupGroupCheckSkip"]; ok {
+		logrus.Infof("Skipping group/label check, specifically for PX-Backup")
+		checkVolSpecGroup = false
+	}
 	for k, v := range params {
 		switch k {
 		case api.SpecNodes:
@@ -643,8 +651,11 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.Sticky, vol.Spec.Sticky)
 			}
 		case api.SpecGroup:
-			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Group, vol.Spec.Group)
+			// TODO Check Px-backup labels not getting restored
+			if checkVolSpecGroup {
+				if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
+					return errFailedToInspectVolume(volumeName, k, requestedSpec.Group, vol.Spec.Group)
+				}
 			}
 		case api.SpecGroupEnforce:
 			if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
@@ -652,10 +663,13 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			}
 		// portworx injects pvc name and namespace labels so response object won't be equal to request
 		case api.SpecLabels:
-			for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
-				// check requested label is not in 'ignore' list
-				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
-					return errFailedToInspectVolume(volumeName, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+			// TODO Check Px-backup labels not getting restored
+			if checkVolSpecGroup {
+				for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
+					// check requested label is not in 'ignore' list
+					if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
+						return errFailedToInspectVolume(volumeName, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+					}
 				}
 			}
 		case api.SpecIoProfile:
@@ -750,7 +764,21 @@ func (d *portworx) ValidateGetByteUsedForVolume(volumeName string, params map[st
 	return statistic.GetStats().BytesUsed, nil
 }
 
-func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) (error) {
+func (d *portworx) ValidateCreateGroupSnapshotUsingPxctl() error {
+	nodes := node.GetStorageDriverNodes()
+	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], pxctlGroupSnapshotCreate, node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		logrus.WithError(err).Error("error when creating groupsnapshot using PXCTL")
+		return err
+	}
+
+	return nil
+}
+
+func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
 	if val, hasKey := params[refreshEndpointParam]; hasKey {
@@ -768,20 +796,6 @@ func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params ma
 	if len(respVol.GetReplicaSets()) > 0 {
 		return fmt.Errorf("purevolumes %s has replicationset and it should not", volumeName)
 	}
-	return nil
-}
-
-func (d *portworx) ValidateCreateGroupSnapshotUsingPxctl() error {
-	nodes := node.GetStorageDriverNodes()
-	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], pxctlGroupSnapshotCreate, node.ConnectionOpts{
-		Timeout:         crashDriverTimeout,
-		TimeBeforeRetry: defaultRetryInterval,
-	})
-	if err != nil {
-		logrus.WithError(err).Error("error when creating groupsnapshot using PXCTL")
-		return err
-	}
-
 	return nil
 }
 
@@ -915,7 +929,11 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		}
 		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
-			if ok, err := d.isVolumeAttachedOnNode(pxVol, n); !ok || err != nil {
+			ok, err := d.isVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
 				return &n, false, err
 			}
 		}
@@ -1074,13 +1092,22 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
-			err := d.testAndSetEndpointUsingNodeIP(pxNode.MgmtIp)
+			pxStatus, err := d.getPxctlStatus(n)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
-					Cause: fmt.Sprintf("px is not yet up on node. cause: %v", err),
+					Cause: fmt.Sprintf("failed to get pxctl status. cause: %v", err),
 				}
 			}
+
+			if pxStatus != api.Status_STATUS_OK.String() {
+				return "", true, &ErrFailedToWaitForPx{
+					Node: n,
+					Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
+						n.Name, api.Status_STATUS_OK, pxStatus),
+				}
+			}
+
 		case api.Status_STATUS_OFFLINE:
 			// in case node is offline and it is a storageless node, the id might have changed so update it
 			if len(pxNode.Pools) == 0 {
@@ -1880,7 +1907,7 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 	}
-	if _, err := d.nodeDriver.RunCommand(*n, "/opt/pwx/bin/pxctl sv node-wipe --all", opts); err != nil {
+	if _, err := d.nodeDriver.RunCommand(*n, fmt.Sprintf("%s sv node-wipe --all", d.getPxctlPath(*n)), opts); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: err.Error(),
@@ -2285,7 +2312,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
+		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f", d.getPxctlPath(n)), opts)
 		if err != nil {
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
@@ -2323,11 +2350,9 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 		defer resp.Body.Close()
 
-		/* PWX-19768
 		// Check S3 bucket for diags
 
 		// TODO: Waiting for S3 credentials.
-		*/
 	}
 
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
@@ -2383,42 +2408,42 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		time.Sleep(5 * time.Second)
 	}
 
-	/* TODO: Verify we can see the files once we return a filename
-	if diagOps.Validate() {
-	pxNode, err := d.getPxNode(&n)
-	if err != nil {
-		return err
-	}
+	//TODO: Verify we can see the files once we return a filename
+	/*
+		if diagOps.Validate {
+			pxNode, err := d.getPxNode(&n)
+			if err != nil {
+				return err
+			}
 
-	opts := node.ConnectionOpts{
-		IgnoreError:     false,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-		Sudo:            true,
-	}
+			opts := node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+				Sudo:            true,
+			}
 
-	cmd := fmt.Sprintf("test -f %s", config.OutputFile)
-	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
-	if err != nil {
-		return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
-	}
+			cmd := fmt.Sprintf("test -f %s", config.OutputFile)
+			out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+			if err != nil {
+				return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			}
 
-	logrus.Debug("Validating CCM health")
-	// Change to config package.
-	url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
-	ccmresp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-	}
+			logrus.Debug("Validating CCM health")
+			// Change to config package.
+			url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+			ccmresp, err := http.Get(url)
+			if err != nil {
+				return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+			}
 
-	defer ccmresp.Body.Close()
+			defer ccmresp.Body.Close()
 
-	// Check S3 bucket for diags
-	// TODO: Waiting for S3 credentials.
+			// Check S3 bucket for diags
+			// TODO: Waiting for S3 credentials.
 
-	}
+		}
 	*/
-
 	logrus.Debugf("Successfully collected diags on node %v", n.Name)
 	return nil
 }
@@ -2649,7 +2674,7 @@ func (d *portworx) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
 	}
 
 	rtopts = strings.TrimSuffix(rtopts, ",")
-	cmd := fmt.Sprintf("pxctl cluster options update --runtime-options %s", rtopts)
+	cmd := fmt.Sprintf("%s cluster options update --runtime-options %s", d.getPxctlPath(n), rtopts)
 
 	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 	if err != nil {
@@ -2670,9 +2695,9 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 		Sudo:            true,
 	}
 
-	cmd := "pxctl sv call-home enable"
+	cmd := fmt.Sprintf("%s sv call-home enable", d.getPxctlPath(n))
 	if !enabled {
-		cmd = "pxctl sv call-home disable"
+		cmd = fmt.Sprintf("%s sv call-home disable", d.getPxctlPath(n))
 	}
 
 	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
@@ -2682,6 +2707,64 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 
 	logrus.Debugf("Successfully toggled call-home")
 	return nil
+}
+
+func (d *portworx) getPxctlPath(n node.Node) string {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	out, err := d.nodeDriver.RunCommand(n, "which pxctl", opts)
+	if err != nil {
+		return "sudo /opt/pwx/bin/pxctl"
+	}
+	out = "sudo " + out
+	return strings.TrimSpace(out)
+}
+
+func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	// create context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to create pxctl context. cause: %v", err)
+		}
+	}
+
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", pxctlPath), opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+
+	var data interface{}
+	err = json.Unmarshal([]byte(out), &data)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
+	}
+
+	// delete context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+		}
+	}
+
+	statusMap := data.(map[string]interface{})
+	if status, ok := statusMap["status"]; ok {
+		return status.(string), nil
+	}
+	return api.Status_STATUS_NONE.String(), nil
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {

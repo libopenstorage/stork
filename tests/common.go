@@ -1,23 +1,29 @@
 package tests
 
 import (
+	"encoding/base64"
 	"encoding/csv"
 	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
@@ -26,6 +32,12 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
 
+	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/pkg/osutils"
 	// import aks driver to invoke it's init
@@ -64,6 +76,8 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	"github.com/portworx/torpedo/pkg/log"
 
+	context1 "context"
+	"github.com/pborman/uuid"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -96,6 +110,30 @@ const (
 	csiGenericDriverConfigMapFlag        = "csi-generic-driver-config-map"
 	licenseExpiryTimeoutHoursFlag        = "license_expiry_timeout_hours"
 	meteringIntervalMinsFlag             = "metering_interval_mins"
+	sourceClusterName                    = "source-cluster"
+	destinationClusterName               = "destination-cluster"
+	backupLocationName                   = "tp-blocation"
+	backupScheduleNamePrefix             = "tp-bkp-schedule"
+	backupScheduleScaleName              = "-scale"
+	configMapName                        = "kubeconfigs"
+
+	pxbackupDeploymentName             = "px-backup"
+	pxbackupDeploymentNamespace        = "px-backup"
+	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
+	pxbackupMongodbDeploymentNamespace = "px-backup"
+)
+
+// Backup constants
+const (
+	BackupNamePrefix                  = "tp-backup"
+	BackupRestoreCompletionTimeoutMin = 20
+	CredName                          = "tp-backup-cred"
+	KubeconfigDirectory               = "/tmp"
+	RetrySeconds                      = 10
+	BackupScheduleAllName             = "-all"
+	SchedulePolicyAllName             = "schedule-policy-all"
+	SchedulePolicyScaleName           = "schedule-policy-scale"
+	BucketNamePrefix                  = "tp-backup-bucket"
 )
 
 const (
@@ -134,16 +172,38 @@ var (
 	errPureFileSnapshotNotSupported  = errors.New("snapshot feature is not supported for pure_file volumes")
 	errUnexpectedSizeChangeAfterFBIO = errors.New("the size change in bytes is not expected after write to FB volume")
 )
+
 var (
 	context = ginkgo.Context
+	fail    = ginkgo.Fail
 	// Step is an alias for ginko "By" which represents a step in the spec
-	Step         = ginkgo.By
-	expect       = gomega.Expect
-	haveOccurred = gomega.HaveOccurred
-	beEmpty      = gomega.BeEmpty
-	beNil        = gomega.BeNil
-	equal        = gomega.Equal
-	contain      = gomega.ContainSubstring
+	Step          = ginkgo.By
+	expect        = gomega.Expect
+	haveOccurred  = gomega.HaveOccurred
+	beEmpty       = gomega.BeEmpty
+	beNil         = gomega.BeNil
+	equal         = gomega.Equal
+	contain       = gomega.ContainSubstring
+	beTrue        = gomega.BeTrue
+	beNumerically = gomega.BeNumerically
+)
+
+// Backup vars
+var (
+	// OrgID is pxbackup OrgID
+	OrgID      string
+	BucketName string
+	// CloudCredUID is pxbackup cloud cred UID
+	CloudCredUID string
+	// BackupLocationUID is pxbackup backupLocation UID
+	BackupLocationUID                    string
+	BackupScheduleAllUID                 string
+	SchedulePolicyAllUID                 string
+	ScheduledBackupAllNamespacesInterval time.Duration
+	BackupScheduleScaleUID               string
+	SchedulePolicyScaleUID               string
+	ScheduledBackupScaleInterval         time.Duration
+	contextsCreated                      []*scheduler.Context
 )
 
 // InitInstance is the ginkgo spec for initializing torpedo
@@ -303,7 +363,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("validate %s app's volums statstics", ctx.App.Key), func() {
+		Step(fmt.Sprintf("validate %s app's volums statstics ", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateVolumeStatsticsDynamicUpdate(ctx, errChan...)
 			}
@@ -522,12 +582,10 @@ func ValidateResizeFBPVC(ctx *scheduler.Context, errChan ...*chan error) {
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("validating resizing pvcs multiple times"), func() {
-			for i := 1; i < 3; i++ {
-				err = Inst().S.ResizePureVolumes(ctx)
-				if err != nil {
-					expect(err).ToNot(haveOccurred())
-				}
+		Step(fmt.Sprintf("validating resizing pvcs"), func() {
+			err = Inst().S.ResizePureVolumes(ctx)
+			if err != nil {
+				expect(err).ToNot(haveOccurred())
 			}
 		})
 	})
@@ -589,7 +647,7 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 }
 
 func fbVolumeExpectedSizechange(sizeChangeInBytes uint64) error {
-	if sizeChangeInBytes < (512 - 30) *oneMegabytes || sizeChangeInBytes > (512  + 30)*oneMegabytes {
+	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
 		return errUnexpectedSizeChangeAfterFBIO
 	}
 	return nil
@@ -623,10 +681,15 @@ func GetVolumeParameters(ctx *scheduler.Context) map[string]map[string]string {
 func UpdateVolumeInVolumeParameters(volParam map[string]map[string]string) map[string]map[string]string {
 	updatedVolumeParam := make(map[string]map[string]string)
 	for _, param := range volParam {
-		pvcName, pvcNamespace := param[k8s.PvcNameKey], param[k8s.PvcNamespaceKey]
-		PVName, err := Inst().S.GetVolumeDriverVolumeName(pvcName, pvcNamespace)
-		expect(err).NotTo(haveOccurred())
-		updatedVolumeParam[PVName] = param
+		if _, ok := param[k8s.PvcNameKey]; ok {
+			if _, ok := param[k8s.PvcNamespaceKey]; ok {
+				pvcName, pvcNamespace := param[k8s.PvcNameKey], param[k8s.PvcNamespaceKey]
+				PVName, err := Inst().S.GetVolumeDriverVolumeName(pvcName, pvcNamespace)
+				expect(err).NotTo(haveOccurred())
+				updatedVolumeParam[PVName] = param
+			}
+		}
+
 	}
 	return updatedVolumeParam
 }
@@ -1241,6 +1304,47 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
 }
 
+// DeleteCloudCredential deletes cloud credentials
+func DeleteCloudCredential(name string, orgID string, cloudCredUID string) {
+	Step(fmt.Sprintf("Delete cloud credential [%s] in org [%s]", name, orgID), func() {
+		backupDriver := Inst().Backup
+
+		credDeleteRequest := &api.CloudCredentialDeleteRequest{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   cloudCredUID,
+		}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+		// Best effort cleanup, dont fail test, if deletion fails
+		// expect(err).NotTo(haveOccurred(),
+		//  fmt.Sprintf("Failed to delete cloud credential [%s] in org [%s]", name, orgID))
+		// TODO: validate CreateCloudCredentialResponse also
+	})
+}
+
+// ValidateVolumeParametersGetErr validates volume parameters using volume driver and returns err instead of failing
+func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error {
+	var err error
+	for vol, params := range volParam {
+		if Inst().ConfigMap != "" {
+			params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+			expect(err).NotTo(haveOccurred())
+		}
+		Step(fmt.Sprintf("get volume: %s inspected by the volume driver", vol), func() {
+			err = Inst().V.ValidateCreateVolume(vol, params)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context) {
 	logrus.Debugf("contexts: %v", contexts)
@@ -1248,6 +1352,1328 @@ func AfterEachTest(contexts []*scheduler.Context) {
 		CollectSupport()
 		DescribeNamespace(contexts)
 	}
+}
+
+// SetClusterContext sets context to clusterConfigPath
+func SetClusterContext(clusterConfigPath string) {
+	err := Inst().S.SetConfig(clusterConfigPath)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to switch to context. Error: [%v]", err))
+
+	err = Inst().S.RefreshNodeRegistry()
+	expect(err).NotTo(haveOccurred())
+
+	err = Inst().V.RefreshDriverEndpoints()
+	expect(err).NotTo(haveOccurred())
+}
+
+// ValidateRestoredApplicationsGetErr validates applications restored by backup driver and updates errors instead of failing the test
+func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumeParameters map[string]map[string]string, bkpErrors map[string]error) {
+	var updatedVolumeParams map[string]map[string]string
+	volOptsMap := make(map[string]bool)
+	volOptsMap[SkipClusterScopedObjects] = true
+
+	var wg sync.WaitGroup
+	for _, ctx := range contexts {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, ctx *scheduler.Context) {
+			defer wg.Done()
+			namespace := ctx.App.SpecList[0].(*v1.PersistentVolumeClaim).Namespace
+			if err, ok := bkpErrors[namespace]; ok {
+				logrus.Infof("Skipping validating namespace %s because %s", namespace, err)
+			} else {
+				ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+
+					Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+						volOpts := mapToVolumeOptions(volOptsMap)
+						err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, volOpts)
+					})
+					if err != nil {
+						bkpErrors[namespace] = err
+						logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+						return
+					}
+
+					Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+						err = Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+					})
+					if err != nil {
+						bkpErrors[namespace] = err
+						logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+						return
+					}
+
+					updatedVolumeParams = UpdateVolumeInVolumeParameters(volumeParameters)
+					logrus.Infof("Updated parameter list: [%+v]\n", updatedVolumeParams)
+					err = ValidateVolumeParametersGetErr(updatedVolumeParams)
+					if err != nil {
+						bkpErrors[namespace] = err
+						logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+						return
+					}
+
+					Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+						var vols []*volume.Volume
+						vols, err = Inst().S.GetVolumes(ctx)
+						logrus.Infof("List of volumes from scheduler driver :[%+v] \n for context : [%+v]\n", vols, ctx)
+						if err != nil {
+							bkpErrors[namespace] = err
+							logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+						}
+
+						for _, vol := range vols {
+							Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+								err = Inst().V.ValidateVolumeSetup(vol)
+								if err != nil {
+									bkpErrors[namespace] = err
+									logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+								}
+							})
+						}
+					})
+				})
+			}
+		}(&wg, ctx)
+	}
+	wg.Wait()
+}
+
+// CreateBackupGetErr creates backup without ending the test if it errors
+func CreateBackupGetErr(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string) (err error) {
+
+	Step(fmt.Sprintf("Create backup [%s] in org [%s] from cluster [%s]",
+		backupName, orgID, clusterName), func() {
+
+		backupDriver := Inst().Backup
+		bkpCreateRequest := &api.BackupCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  backupName,
+				OrgId: orgID,
+			},
+			BackupLocationRef: &api.ObjectRef{
+				Name: bLocation,
+				Uid:  bLocationUID,
+			},
+			Cluster:        sourceClusterName,
+			Namespaces:     namespaces,
+			LabelSelectors: labelSelectors,
+		}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
+		if err != nil {
+			logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
+				backupName, orgID, err)
+		}
+	})
+
+	return err
+}
+
+// CreateScheduledBackup creates a scheduled backup with time interval
+func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID string,
+	interval time.Duration, namespaces []string) (err error) {
+	var ctx context1.Context
+	labelSelectors := make(map[string]string)
+	Step(fmt.Sprintf("Create scheduled backup %s of namespaces %v on cluster %s in organization %s",
+		backupScheduleNamePrefix+backupScheduleName, namespaces, sourceClusterName, OrgID), func() {
+		backupDriver := Inst().Backup
+
+		// Create a schedule policy
+		schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUID,
+				OrgId: OrgID,
+			},
+
+			SchedulePolicy: &api.SchedulePolicyInfo{
+				Interval: &api.SchedulePolicyInfo_IntervalPolicy{
+					// Retain 5 backups at a time for ease of inspection
+					Retain:  5,
+					Minutes: int64(interval / time.Minute),
+					IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+						Count: 0,
+					},
+				},
+			},
+		}
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+		if err != nil {
+			return
+		}
+
+		// Create a backup schedule
+		bkpScheduleCreateRequest := &api.BackupScheduleCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  backupScheduleNamePrefix + backupScheduleName,
+				Uid:   backupScheduleUID,
+				OrgId: OrgID,
+			},
+
+			Namespaces: namespaces,
+
+			ReclaimPolicy: api.BackupScheduleInfo_Delete,
+			// Name of Cluster
+			Cluster: sourceClusterName,
+			// Label selectors to choose resources
+			LabelSelectors: labelSelectors,
+
+			SchedulePolicyRef: &api.ObjectRef{
+				Name: schedulePolicyName,
+				Uid:  schedulePolicyUID,
+			},
+			BackupLocationRef: &api.ObjectRef{
+				Name: backupLocationName,
+				Uid:  BackupLocationUID,
+			},
+		}
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.CreateBackupSchedule(ctx, bkpScheduleCreateRequest)
+		if err != nil {
+			return
+		}
+	})
+	return err
+}
+
+// DeleteNamespace tears down the last nginx app
+func DeleteNamespace() error {
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	SetClusterContext(sourceClusterConfigPath)
+	if len(contextsCreated) == 0 {
+		logrus.Infof("No namespace to delete")
+		return nil
+	}
+	TearDownContext(contextsCreated[0], map[string]bool{
+		SkipClusterScopedObjects:                    true,
+		scheduler.OptionsWaitForResourceLeakCleanup: true,
+		scheduler.OptionsWaitForDestroy:             true,
+	})
+	contextsCreated = contextsCreated[1:]
+
+	SetClusterContext(sourceClusterConfigPath)
+	newNamespaceCounter++
+
+	return nil
+}
+
+// CreateNamespace creates a new nginx app
+func CreateNamespace(appKeys []string) error {
+	volumeParams := make(map[string]map[string]string)
+	taskName := fmt.Sprintf("new-%s-%d", Inst().InstanceID, newNamespaceCounter)
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	SetClusterContext(sourceClusterConfigPath)
+
+	contexts, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+		AppKeys:            appKeys,
+		StorageProvisioner: Inst().Provisioner,
+	})
+	if err != nil {
+		return err
+	}
+	// Skip volume validation until other volume providers are implemented.
+	for _, ctx := range contexts {
+		ctx.SkipVolumeValidation = true
+	}
+
+	ValidateApplications(contexts)
+	for _, ctx := range contexts {
+		for vol, params := range GetVolumeParameters(ctx) {
+			volumeParams[vol] = params
+		}
+	}
+
+	SetClusterContext(sourceClusterConfigPath)
+	contextsCreated = append(contextsCreated, contexts...)
+	newNamespaceCounter++
+
+	return nil
+}
+
+// ObjectExists returns whether err is from an object not being found by a backup api call
+func ObjectExists(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "object not found")
+}
+
+//GetBackupCreateRequest returns a backupcreaterequest
+func GetBackupCreateRequest(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string) *api.BackupCreateRequest {
+	return &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+	}
+}
+
+//CreateBackupFromRequest creates a backup using a provided request
+func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
+	//ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+	backupDriver := Inst().Backup
+	_, err = backupDriver.CreateBackup(ctx, request)
+	if err != nil {
+		logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
+			backupName, orgID, err)
+	}
+	return err
+}
+
+// InspectBackup inspects the backup name passed in
+func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResponse, err error) {
+	var ctx context1.Context
+
+	Step(fmt.Sprintf("Inspect backup %s in org %s",
+		backupName, OrgID), func() {
+		backupDriver := Inst().Backup
+
+		bkpInspectRequest := &api.BackupInspectRequest{
+			OrgId: OrgID,
+			Name:  backupName,
+		}
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectRequest)
+		if err != nil {
+			return
+		}
+	})
+	return bkpInspectResponse, err
+}
+
+// WaitForScheduledBackup waits until a new backup is taken from scheduled backup with UID backupScheduleUID
+func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Duration, timeout time.Duration) (*api.BackupObject, error) {
+	beginTime := time.Now()
+	beginTimeSec := beginTime.Unix()
+
+	t := func() (interface{}, bool, error) {
+		logrus.Infof("Enumerating backups")
+		bkpEnumerateReq := &api.BackupEnumerateRequest{
+			OrgId: OrgID}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return nil, true, err
+		}
+		curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+		if err != nil {
+			return nil, true, err
+		}
+		for _, bkp := range curBackups.GetBackups() {
+			createTime := bkp.GetCreateTime()
+			if beginTimeSec > createTime.GetSeconds() {
+				break
+			}
+			if (bkp.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_Success ||
+				bkp.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_PartialSuccess) &&
+				bkp.GetBackupSchedule().GetName() == backupScheduleName {
+				return bkp, false, nil
+			}
+		}
+		err = fmt.Errorf("unable to find backup from backup schedule with name %s after time %v",
+			backupScheduleName, beginTime)
+		return nil, true, err
+	}
+
+	bkpInterface, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	if err != nil {
+		return nil, err
+	}
+	bkp := bkpInterface.(*api.BackupObject)
+	return bkp, nil
+
+}
+
+// InspectScheduledBackup inspects the scheduled backup
+func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpScheduleInspectResponse *api.BackupScheduleInspectResponse, err error) {
+	var ctx context1.Context
+
+	Step(fmt.Sprintf("Inspect scheduled backup %s of all namespaces on cluster %s in organization %s",
+		backupScheduleNamePrefix, sourceClusterName, OrgID), func() {
+		backupDriver := Inst().Backup
+
+		bkpScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+			OrgId: OrgID,
+			Name:  backupScheduleNamePrefix + backupScheduleName,
+			Uid:   backupScheduleUID,
+		}
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		bkpScheduleInspectResponse, err = backupDriver.InspectBackupSchedule(ctx, bkpScheduleInspectRequest)
+		if err != nil {
+			return
+		}
+	})
+	return bkpScheduleInspectResponse, err
+}
+
+//DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
+func DeleteLabelFromResource(spec interface{}, key string) {
+	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+		if obj.Labels != nil {
+			_, ok := obj.Labels[key]
+			if ok {
+				logrus.Infof("Deleting label with key [%s] from PVC %s", key, obj.Name)
+				delete(obj.Labels, key)
+				core.Instance().UpdatePersistentVolumeClaim(obj)
+			}
+		}
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		if obj.Labels != nil {
+			_, ok := obj.Labels[key]
+			if ok {
+				logrus.Infof("Deleting label with key [%s] from ConfigMap %s", key, obj.Name)
+				delete(obj.Labels, key)
+				core.Instance().UpdateConfigMap(obj)
+			}
+		}
+	} else if obj, ok := spec.(*v1.Secret); ok {
+		if obj.Labels != nil {
+			_, ok := obj.Labels[key]
+			if ok {
+				logrus.Infof("Deleting label with key [%s] from Secret %s", key, obj.Name)
+				delete(obj.Labels, key)
+				core.Instance().UpdateSecret(obj)
+			}
+		}
+	}
+}
+
+// DeleteBackupAndDependencies deletes backup and dependent backups
+func DeleteBackupAndDependencies(backupName string, orgID string, clusterName string) error {
+	//ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := backup.GetAdminCtxFromSecret()
+
+	backupDeleteRequest := &api.BackupDeleteRequest{
+		Name:    backupName,
+		OrgId:   orgID,
+		Cluster: clusterName,
+	}
+	_, err = Inst().Backup.DeleteBackup(ctx, backupDeleteRequest)
+	if err != nil {
+		return err
+	}
+
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+
+	backupDelStatus := resp.GetBackup().GetStatus()
+	if backupDelStatus.GetStatus() == api.BackupInfo_StatusInfo_DeletePending {
+		reason := strings.Split(backupDelStatus.GetReason(), ": ")
+		dependency := reason[len(reason)-1]
+		err = DeleteBackupAndDependencies(dependency, orgID, clusterName)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, orgID, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteRestore creates restore
+func DeleteRestore(restoreName string, orgID string) {
+
+	Step(fmt.Sprintf("Delete restore [%s] in org [%s]",
+		restoreName, orgID), func() {
+
+		backupDriver := Inst().Backup
+		expect(backupDriver).NotTo(beNil(),
+			"Backup driver is not initialized")
+
+		deleteRestoreReq := &api.RestoreDeleteRequest{
+			OrgId: orgID,
+			Name:  restoreName,
+		}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		_, err = backupDriver.DeleteRestore(ctx, deleteRestoreReq)
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to delete restore [%s] in org [%s]. Error: [%v]",
+				restoreName, orgID, err))
+		// TODO: validate createClusterResponse also
+	})
+}
+
+// SetupBackup sets up backup location and source and destination clusters
+func SetupBackup(testName string) {
+	logrus.Infof("Backup driver: %v", Inst().Backup)
+	provider := GetProvider()
+	logrus.Infof("Run Setup backup with object store provider: %s", provider)
+	OrgID = "default"
+	BucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
+	CloudCredUID = uuid.New()
+	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
+	BackupLocationUID = uuid.New()
+	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
+
+	CreateBucket(provider, BucketName)
+	CreateOrganization(OrgID)
+	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
+	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID)
+	CreateSourceAndDestClusters(CredName, OrgID)
+}
+
+// DeleteBackup deletes backup
+func DeleteBackup(backupName string, orgID string) {
+
+	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
+		backupName, orgID), func() {
+
+		backupDriver := Inst().Backup
+		bkpDeleteRequest := &api.BackupDeleteRequest{
+			Name:  backupName,
+			OrgId: orgID,
+		}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
+		// Best effort cleanup, dont fail test, if deletion fails
+		//expect(err).NotTo(haveOccurred(),
+		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
+		// TODO: validate createClusterResponse also
+	})
+}
+
+// DeleteCluster deletes/de-registers cluster from px-backup
+func DeleteCluster(name string, orgID string) {
+
+	Step(fmt.Sprintf("Delete cluster [%s] in org [%s]", name, orgID), func() {
+		backupDriver := Inst().Backup
+		clusterDeleteReq := &api.ClusterDeleteRequest{
+			OrgId: orgID,
+			Name:  name,
+		}
+		ctx, err := backup.GetPxCentralAdminCtx()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+		// Best effort cleanup, dont fail test, if deletion fails
+		//expect(err).NotTo(haveOccurred(),
+		//	fmt.Sprintf("Failed to delete cluster [%s] in org [%s]", name, orgID))
+	})
+}
+
+// DeleteBackupLocation deletes backuplocation
+func DeleteBackupLocation(name string, orgID string) {
+	Step(fmt.Sprintf("Delete backup location [%s] in org [%s]", name, orgID), func() {
+		backupDriver := Inst().Backup
+		bLocationDeleteReq := &api.BackupLocationDeleteRequest{
+			Name:  name,
+			OrgId: orgID,
+		}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+		// Best effort cleanup, dont fail test, if deletion fails
+		//expect(err).NotTo(haveOccurred(),
+		//	fmt.Sprintf("Failed to delete backup location [%s] in org [%s]", name, orgID))
+		// TODO: validate createBackupLocationResponse also
+	})
+}
+
+// CreateSourceAndDestClusters creates source and destination cluster
+// 1st cluster in KUBECONFIGS ENV var is source cluster while
+// 2nd cluster is destination cluster
+func CreateSourceAndDestClusters(cloudCred, orgID string) {
+	// TODO: Add support for adding multiple clusters from
+	// comma separated list of kubeconfig files
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	expect(kubeconfigs).NotTo(equal(""),
+		"KUBECONFIGS Environment variable should not be empty")
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
+	expect(len(kubeconfigList)).Should(beNumerically(">=", 2), "At least minimum two kubeconfigs required")
+
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
+
+	// Register source cluster with backup driver
+	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", sourceClusterName, orgID), func() {
+		srcClusterConfigPath, err := GetSourceClusterConfigPath()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+
+		logrus.Debugf("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
+		CreateCluster(sourceClusterName, cloudCred, srcClusterConfigPath, orgID)
+	})
+
+	// Register destination cluster with backup driver
+	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", destinationClusterName, orgID), func() {
+		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+		logrus.Debugf("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+		CreateCluster(destinationClusterName, cloudCred, dstClusterConfigPath, orgID)
+	})
+}
+
+// CreateBackupLocation creates backup location
+func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string) {
+	switch provider {
+	case drivers.ProviderAws:
+		createS3BackupLocation(name, uid, credName, credUID, bucketName, orgID)
+	case drivers.ProviderAzure:
+		createAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+	}
+}
+
+// CreateCluster creates/registers cluster with px-backup
+func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID string) {
+
+	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", name, orgID), func() {
+		backupDriver := Inst().Backup
+		kubeconfigRaw, err := ioutil.ReadFile(kubeconfigPath)
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to read kubeconfig file from location [%s]. Error:[%v]",
+				kubeconfigPath, err))
+
+		clusterCreateReq := &api.ClusterCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				OrgId: orgID,
+			},
+			Kubeconfig:      base64.StdEncoding.EncodeToString(kubeconfigRaw),
+			CloudCredential: cloudCred,
+		}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		_, err = backupDriver.CreateCluster(ctx, clusterCreateReq)
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to create cluster [%s] in org [%s]. Error : [%v]",
+				name, orgID, err))
+	})
+}
+
+// createS3BackupLocation creates backup location
+func createS3BackupLocation(name string, uid, cloudCred string, cloudCredUID, bucketName string, orgID string) {
+	Step(fmt.Sprintf("Create S3 backup location [%s] in org [%s]", name, orgID), func() {
+		CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID)
+	})
+}
+
+// CreateCloudCredential creates cloud credetials
+func CreateCloudCredential(provider, name string, uid, orgID string) {
+	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
+		logrus.Printf("Create credential name %s for org %s provider %s", name, orgID, provider)
+		backupDriver := Inst().Backup
+		switch provider {
+		case drivers.ProviderAws:
+			logrus.Infof("Create creds for aws")
+			id := os.Getenv("AWS_ACCESS_KEY_ID")
+			expect(id).NotTo(equal(""),
+				"AWS_ACCESS_KEY_ID Environment variable should not be empty")
+
+			secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
+			expect(secret).NotTo(equal(""),
+				"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+
+			credCreateRequest := &api.CloudCredentialCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					Uid:   uid,
+					OrgId: orgID,
+				},
+				CloudCredential: &api.CloudCredentialInfo{
+					Type: api.CloudCredentialInfo_AWS,
+					Config: &api.CloudCredentialInfo_AwsConfig{
+						AwsConfig: &api.AWSConfig{
+							AccessKey: id,
+							SecretKey: secret,
+						},
+					},
+				},
+			}
+			//ctx, err := backup.GetPxCentralAdminCtx()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+					err))
+			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+			if err != nil && strings.Contains(err.Error(), "already exists") {
+				return
+			}
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
+		// TODO: validate CreateCloudCredentialResponse also
+		case drivers.ProviderAzure:
+			logrus.Infof("Create creds for azure")
+			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
+			credCreateRequest := &api.CloudCredentialCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					Uid:   uid,
+					OrgId: orgID,
+				},
+				CloudCredential: &api.CloudCredentialInfo{
+					Type: api.CloudCredentialInfo_Azure,
+					Config: &api.CloudCredentialInfo_AzureConfig{
+						AzureConfig: &api.AzureConfig{
+							TenantId:       tenantID,
+							ClientId:       clientID,
+							ClientSecret:   clientSecret,
+							AccountName:    accountName,
+							AccountKey:     accountKey,
+							SubscriptionId: subscriptionID,
+						},
+					},
+				},
+			}
+			//ctx, err := backup.GetPxCentralAdminCtx()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+					err))
+			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+			if err != nil && strings.Contains(err.Error(), "already exists") {
+				return
+			}
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
+			// TODO: validate CreateCloudCredentialResponse also
+		}
+	})
+}
+
+// CreateS3BackupLocation creates backuplocation for S3
+func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
+	time.Sleep(60 * time.Second)
+	backupDriver := Inst().Backup
+	//inspReq := &api.CloudCredentialInspectRequest{Name: cloudCred, Uid: cloudCredUID, OrgId: orgID, IncludeSecrets: true}
+	//credCtx, err := backup.GetAdminCtxFromSecret()
+	//obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
+	_, _, endpoint, region, disableSSLBool := GetAWSDetailsFromEnv()
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			// CloudCredential: "foo",
+			// CloudCredential: cloudCred,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+				},
+			},
+		},
+	}
+	//ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+			err))
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil && strings.Contains(err.Error(), "already exists") {
+		return
+	}
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
+}
+
+// CreateAzureBackupLocation creates backuplocation for Azure
+func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
+	backupDriver := Inst().Backup
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Azure,
+		},
+	}
+	//ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+			err))
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil && strings.Contains(err.Error(), "already exists") {
+		return
+	}
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
+}
+
+// GetProvider validates and return object store provider
+func GetProvider() string {
+	provider, ok := os.LookupEnv("OBJECT_STORE_PROVIDER")
+	expect(ok).To(beTrue(), fmt.Sprintf("No environment variable 'PROVIDER' supplied. Valid values are: %s, %s, %s",
+		drivers.ProviderAws, drivers.ProviderAzure, drivers.ProviderGke))
+	switch provider {
+	case drivers.ProviderAws, drivers.ProviderAzure, drivers.ProviderGke:
+	default:
+		fail(fmt.Sprintf("Valid values for 'PROVIDER' environment variables are: %s, %s, %s",
+			drivers.ProviderAws, drivers.ProviderAzure, drivers.ProviderGke))
+	}
+	return provider
+}
+
+// CreateOrganization creates org on px-backup
+func CreateOrganization(orgID string) {
+	Step(fmt.Sprintf("Create organization [%s]", orgID), func() {
+		backupDriver := Inst().Backup
+		req := &api.OrganizationCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name: orgID,
+			},
+		}
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		_, err = backupDriver.CreateOrganization(ctx, req)
+		//expect(err).NotTo(haveOccurred(),
+		//	fmt.Sprintf("Failed to create organization [%s]. Error: [%v]",
+		//		orgID, err))
+	})
+}
+
+// UpdateScheduledBackup updates the scheduled backup with time interval from global vars
+func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, ScheduledBackupInterval time.Duration) (err error) {
+	var ctx context1.Context
+
+	Step(fmt.Sprintf("Update schedule policy %s", schedulePolicyName), func() {
+		backupDriver := Inst().Backup
+
+		// Create a backup schedule
+		schedulePolicyUpdateRequest := &api.SchedulePolicyUpdateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUID,
+				OrgId: OrgID,
+			},
+
+			SchedulePolicy: &api.SchedulePolicyInfo{
+				Interval: &api.SchedulePolicyInfo_IntervalPolicy{
+					// Retain 5 backups at a time for ease of inspection
+					Retain:  5,
+					Minutes: int64(ScheduledBackupInterval / time.Minute),
+					IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+						Count: 0,
+					},
+				},
+			},
+		}
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.UpdateSchedulePolicy(ctx, schedulePolicyUpdateRequest)
+		if err != nil {
+			return
+		}
+	})
+	return err
+}
+
+// DeleteScheduledBackup deletes the scheduled backup and schedule policy from the CreateScheduledBackup
+func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID string) (err error) {
+	var ctx context1.Context
+
+	Step(fmt.Sprintf("Delete scheduled backup %s of all namespaces on cluster %s in organization %s",
+		backupScheduleName, sourceClusterName, OrgID), func() {
+		backupDriver := Inst().Backup
+
+		bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+			OrgId: OrgID,
+			Name:  backupScheduleName,
+			// delete_backups indicates whether the cloud backup files need to
+			// be deleted or retained.
+			DeleteBackups: true,
+			Uid:           backupScheduleUID,
+		}
+		ctx, err = backup.GetPxCentralAdminCtx()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+		if err != nil {
+			return
+		}
+
+		clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: sourceClusterName, IncludeSecrets: true}
+		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+		if err != nil {
+			return
+		}
+		clusterObj := clusterResp.GetCluster()
+
+		namespace := "*"
+		err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
+			clusterObj,
+			BackupRestoreCompletionTimeoutMin*time.Minute,
+			RetrySeconds*time.Second)
+
+		schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+			OrgId: OrgID,
+			Name:  schedulePolicyName,
+			Uid:   schedulePolicyUID,
+		}
+		ctx, err = backup.GetPxCentralAdminCtx()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
+		if err != nil {
+			return
+		}
+	})
+	return err
+}
+
+//AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
+func AddLabelToResource(spec interface{}, key string, val string) error {
+	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+		if obj.Labels == nil {
+			obj.Labels = make(map[string]string)
+		}
+		logrus.Infof("Adding label [%s=%s] to PVC %s", key, val, obj.Name)
+		obj.Labels[key] = val
+		core.Instance().UpdatePersistentVolumeClaim(obj)
+		return nil
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		if obj.Labels == nil {
+			obj.Labels = make(map[string]string)
+		}
+		logrus.Infof("Adding label [%s=%s] to ConfigMap %s", key, val, obj.Name)
+		obj.Labels[key] = val
+		core.Instance().UpdateConfigMap(obj)
+		return nil
+	} else if obj, ok := spec.(*v1.Secret); ok {
+		if obj.Labels == nil {
+			obj.Labels = make(map[string]string)
+		}
+		logrus.Infof("Adding label [%s=%s] to Secret %s", key, val, obj.Name)
+		obj.Labels[key] = val
+		core.Instance().UpdateSecret(obj)
+		return nil
+	}
+	return fmt.Errorf("Spec is of unknown resource type")
+}
+
+// GetSourceClusterConfigPath returns kubeconfig for source
+func GetSourceClusterConfigPath() (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
+		"At least minimum two kubeconfigs required")
+
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
+}
+
+// GetAzureCredsFromEnv get creds for azure
+func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
+	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
+	expect(accountName).NotTo(equal(""),
+		"AZURE_ACCOUNT_NAME Environment variable should not be empty")
+
+	accountKey = os.Getenv("AZURE_ACCOUNT_KEY")
+	expect(accountKey).NotTo(equal(""),
+		"AZURE_ACCOUNT_KEY Environment variable should not be empty")
+
+	logrus.Infof("Create creds for azure")
+	tenantID = os.Getenv("AZURE_TENANT_ID")
+	expect(tenantID).NotTo(equal(""),
+		"AZURE_TENANT_ID Environment variable should not be empty")
+
+	clientID = os.Getenv("AZURE_CLIENT_ID")
+	expect(clientID).NotTo(equal(""),
+		"AZURE_CLIENT_ID Environment variable should not be empty")
+
+	clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
+	expect(clientSecret).NotTo(equal(""),
+		"AZURE_CLIENT_SECRET Environment variable should not be empty")
+
+	subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
+	expect(clientSecret).NotTo(equal(""),
+		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
+
+	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
+}
+
+// GetDestinationClusterConfigPath get cluster config of destination cluster
+func GetDestinationClusterConfigPath() (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
+		"At least minimum two kubeconfigs required")
+
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
+}
+
+// SetScheduledBackupInterval sets scheduled backup interval
+func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
+	scheduledBackupInterval := interval
+
+	var schedulePolicyName string
+	var schedulePolicyUID string
+	if triggerType == BackupScheduleAllName {
+		schedulePolicyName = SchedulePolicyAllName
+		schedulePolicyUID = SchedulePolicyAllUID
+		ScheduledBackupAllNamespacesInterval = scheduledBackupInterval
+	} else {
+		schedulePolicyName = SchedulePolicyScaleName
+		schedulePolicyUID = SchedulePolicyScaleUID
+		ScheduledBackupScaleInterval = scheduledBackupInterval
+	}
+	_, err := InspectScheduledBackup(schedulePolicyName, schedulePolicyUID)
+	if ObjectExists(err) {
+		UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID, scheduledBackupInterval)
+	}
+}
+
+// DeleteS3Bucket deletes bucket in S3
+func DeleteS3Bucket(bucketName string) {
+	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	iter := s3manager.NewDeleteListIterator(S3Client, &s3.ListObjectsInput{
+		Bucket: aws.String(bucketName),
+	})
+
+	err = s3manager.NewBatchDeleteWithClient(S3Client).Delete(aws.BackgroundContext(), iter)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Unable to delete objects from bucket %q, %v", bucketName, err))
+
+	_, err = S3Client.DeleteBucket(&s3.DeleteBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
+}
+
+// DeleteAzureBucket delete bucket in azure
+func DeleteAzureBucket(bucketName string) {
+	// From the Azure portal, get your Storage account blob service URL endpoint.
+	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	logrus.Infof("Delete container url %s", urlStr)
+	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+	u, _ := url.Parse(urlStr)
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context1.Background() // This example uses a never-expiring context
+
+	_, err = containerURL.Delete(ctx, azblob.ContainerAccessConditions{})
+
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to delete container. Error: [%v]", err))
+}
+
+// DeleteBucket deletes bucket from the cloud
+func DeleteBucket(provider string, bucketName string) {
+	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
+		switch provider {
+		// TODO(stgleb): PTX-2359 Add DeleteAzureBucket
+		case drivers.ProviderAws:
+			DeleteS3Bucket(bucketName)
+		case drivers.ProviderAzure:
+			DeleteAzureBucket(bucketName)
+		}
+	})
+}
+
+// TearDownBackupRestoreAll enumerates backups and restores before deleting them
+func TearDownBackupRestoreAll() {
+	logrus.Infof("Enumerating scheduled backups")
+	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId:  OrgID,
+		Labels: make(map[string]string),
+		BackupLocationRef: &api.ObjectRef{
+			Name: backupLocationName,
+			Uid:  BackupLocationUID,
+		},
+	}
+	ctx, err := backup.GetPxCentralAdminCtx()
+	expect(err).NotTo(haveOccurred())
+	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
+	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
+	for _, bkpSched := range bkpSchedules {
+		schedPol := bkpSched.GetSchedulePolicyRef()
+		DeleteScheduledBackup(bkpSched.GetName(), bkpSched.GetUid(), schedPol.GetName(), schedPol.GetUid())
+	}
+
+	logrus.Infof("Enumerating backups")
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: OrgID,
+	}
+	ctx, err = backup.GetPxCentralAdminCtx()
+	expect(err).NotTo(haveOccurred())
+	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	backups := enumBkpResponse.GetBackups()
+	for _, bkp := range backups {
+		DeleteBackup(bkp.GetName(), OrgID)
+	}
+
+	logrus.Infof("Enumerating restores")
+	restoreEnumerateReq := &api.RestoreEnumerateRequest{
+		OrgId: OrgID}
+	ctx, err = backup.GetPxCentralAdminCtx()
+	expect(err).NotTo(haveOccurred())
+	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
+	restores := enumRestoreResponse.GetRestores()
+	for _, restore := range restores {
+		DeleteRestore(restore.GetName(), OrgID)
+	}
+
+	for _, bkp := range backups {
+		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), OrgID,
+			BackupRestoreCompletionTimeoutMin*time.Minute,
+			RetrySeconds*time.Second)
+	}
+	for _, restore := range restores {
+		Inst().Backup.WaitForRestoreDeletion(ctx, restore.GetName(), OrgID,
+			BackupRestoreCompletionTimeoutMin*time.Minute,
+			RetrySeconds*time.Second)
+	}
+	provider := GetProvider()
+	DeleteCluster(destinationClusterName, OrgID)
+	DeleteCluster(sourceClusterName, OrgID)
+	DeleteBackupLocation(backupLocationName, OrgID)
+	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
+	DeleteBucket(provider, BucketName)
+}
+
+// CreateBucket creates bucket on the appropriate cloud platform
+func CreateBucket(provider string, bucketName string) {
+	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
+		switch provider {
+		case drivers.ProviderAws:
+			CreateS3Bucket(bucketName)
+		case drivers.ProviderAzure:
+			CreateAzureBucket(bucketName)
+		}
+	})
+}
+
+// CreateS3Bucket creates bucket in S3
+func CreateS3Bucket(bucketName string) {
+	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create bucket [%v]. Error: [%v]", bucketName, err))
+
+	err = S3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
+}
+
+// CreateAzureBucket creates bucket in Azure
+func CreateAzureBucket(bucketName string) {
+	// From the Azure portal, get your Storage account blob service URL endpoint.
+	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	logrus.Infof("Create container url %s", urlStr)
+	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+	u, _ := url.Parse(urlStr)
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context1.Background() // This example uses a never-expiring context
+
+	_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create container. Error: [%v]", err))
+}
+
+// createAzureBackupLocation creates backup location
+func createAzureBackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID string) {
+	Step(fmt.Sprintf("Create Azure backup location [%s] in org [%s]", name, orgID), func() {
+		CreateAzureBackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID)
+	})
+}
+
+func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
+	logrus.Infof("dump kubeconfigs to file system")
+	cm, err := core.Instance().GetConfigMap(configObject, "default")
+	if err != nil {
+		logrus.Errorf("Error reading config map: %v", err)
+		return err
+	}
+	logrus.Infof("Get over kubeconfig list %v", kubeconfigList)
+	for _, kubeconfig := range kubeconfigList {
+		config := cm.Data[kubeconfig]
+		if len(config) == 0 {
+			configErr := fmt.Sprintf("Error reading kubeconfig: found empty %s in config map %s",
+				kubeconfig, configObject)
+			return fmt.Errorf(configErr)
+		}
+		filePath := fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfig)
+		logrus.Infof("Save kubeconfig to %s", filePath)
+		err := ioutil.WriteFile(filePath, []byte(config), 0644)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetAWSDetailsFromEnv returns AWS details
+func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
+	s3Region string, disableSSLBool bool) {
+
+	// TODO: add separate function to return cred object based on type
+	id = os.Getenv("AWS_ACCESS_KEY_ID")
+	expect(id).NotTo(equal(""),
+		"AWS_ACCESS_KEY_ID Environment variable should not be empty")
+
+	secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	expect(secret).NotTo(equal(""),
+		"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+
+	endpoint = os.Getenv("S3_ENDPOINT")
+	expect(endpoint).NotTo(equal(""),
+		"S3_ENDPOINT Environment variable should not be empty")
+
+	s3Region = os.Getenv("S3_REGION")
+	expect(s3Region).NotTo(equal(""),
+		"S3_REGION Environment variable should not be empty")
+
+	disableSSL := os.Getenv("S3_DISABLE_SSL")
+	expect(disableSSL).NotTo(equal(""),
+		"S3_DISABLE_SSL Environment variable should not be empty")
+
+	disableSSLBool, err := strconv.ParseBool(disableSSL)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
+
+	return id, secret, endpoint, s3Region, disableSSLBool
+}
+
+// DumpKubeconfigs gets kubeconfigs from configmap
+func DumpKubeconfigs(kubeconfigList []string) {
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
 
 // Inst returns the Torpedo instances
