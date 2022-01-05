@@ -19,7 +19,7 @@ require (
 	github.com/libopenstorage/cloudops v0.0.0-20210223183702-b9c6b74cbf1d
 	github.com/libopenstorage/openstorage v8.0.1-0.20210909003102-97e11e6485ad+incompatible
 	github.com/libopenstorage/stork v1.4.1-0.20210903185636-5a1f8a4142bf
-	github.com/onsi/ginkgo v1.15.0
+	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.10.5
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0

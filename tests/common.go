@@ -369,6 +369,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
+		Step(fmt.Sprintf("validate %s app's pure volumes has no replicaset", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeNoReplicaSet(ctx, errChan...)
+			}
+		})
+
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
 				return
@@ -423,6 +429,12 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 		Step(fmt.Sprintf("validate %s app's volums statstics ", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateVolumeStatsticsDynamicUpdate(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's pure volumes has no replicaset", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeNoReplicaSet(ctx, errChan...)
 			}
 		})
 
@@ -579,6 +591,27 @@ func ValidateResizeFBPVC(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+// ValidatePureVolumeNoReplicaSet is the ginko spec for validating empty replicaset for pure volumes
+func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an resizing pvc", func() {
+		var err error
+		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
+			processError(err, errChan...)
+		})
+		var vols []*volume.Volume
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx)
+			processError(err, errChan...)
+		})
+
+		err = Inst().V.ValidatePureVolumesNoReplicaSets(vols[0].ID, make(map[string]string))
+		expect(err).NotTo(haveOccurred())
+
+	})
+}
+
 // ValidateVolumeStatsticsDynamicUpdate is the ginkgo spec for validating dynamic update of byteUsed statstic for pure volumes
 func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an resizing pvc", func() {
@@ -614,7 +647,7 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 }
 
 func fbVolumeExpectedSizechange(sizeChangeInBytes uint64) error {
-	if sizeChangeInBytes < (512 - 30) *oneMegabytes || sizeChangeInBytes > (512  + 30)*oneMegabytes {
+	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
 		return errUnexpectedSizeChangeAfterFBIO
 	}
 	return nil

@@ -778,6 +778,27 @@ func (d *portworx) ValidateCreateGroupSnapshotUsingPxctl() error {
 	return nil
 }
 
+func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+	if err != nil {
+		return err
+	}
+
+	respVol := volumeInspectResponse.Volume
+
+	// check that replicationset is nil
+	if len(respVol.GetReplicaSets()) > 0 {
+		return fmt.Errorf("purevolumes %s has replicationset and it should not", volumeName)
+	}
+	return nil
+}
+
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {
 	var token string
 	volumeName := d.schedOps.GetVolumeName(vol)
