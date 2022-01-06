@@ -26,7 +26,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20211115213015-b317aedd1e61
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220106041357-ccb13aed2f37
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
