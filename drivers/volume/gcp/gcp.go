@@ -208,7 +208,7 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		// Get the zone from the PV, fallback to the zone where stork is running
 		// if the label is empty
-		volumeInfo.Zones = g.getZones(pv)
+		volumeInfo.Zones = storkvolume.GetGCPZones(pv)
 		if len(volumeInfo.Zones) == 0 {
 			volumeInfo.Zones = []string{g.zone}
 		}
@@ -262,41 +262,6 @@ func (g *gcp) getFilterFromMap(labels map[string]string) string {
 	}
 	// Add all the filters to one string seperated by AND
 	return strings.Join(filters, " AND ")
-}
-
-func (g *gcp) getZones(pv *v1.PersistentVolume) []string {
-	if pv.Spec.GCEPersistentDisk != nil {
-		var zone string
-		val, ok := pv.Labels[v1.LabelZoneFailureDomain]
-		if ok {
-			zone = val
-		} else if val, ok := pv.Labels[v1.LabelZoneFailureDomainStable]; ok {
-			zone = val
-		}
-		if g.isRegional(zone) {
-			return g.getRegionalZones(zone)
-		}
-		return []string{zone}
-	}
-	if pv.Spec.NodeAffinity != nil &&
-		pv.Spec.NodeAffinity.Required != nil &&
-		len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms) != 0 {
-		for _, selector := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions {
-			if selector.Key == common.TopologyKeyZone {
-				return selector.Values
-			}
-		}
-	}
-	return nil
-
-}
-
-func (g *gcp) getRegionalZones(zones string) []string {
-	return strings.Split(zones, zoneSeperator)
-}
-
-func (g *gcp) isRegional(zone string) bool {
-	return strings.Contains(zone, zoneSeperator)
 }
 
 func (g *gcp) getRegion(zone string) (string, error) {

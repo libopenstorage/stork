@@ -97,6 +97,8 @@ const (
 	storageClassKey           = "volume.beta.kubernetes.io/storage-class"
 	storageProvisioner        = "volume.beta.kubernetes.io/storage-provisioner"
 	storageNodeAnnotation     = "volume.kubernetes.io/selected-node"
+	gkeNodeLabelKey           = "cloud.google.com/gke-os-distribution"
+	awsNodeLabelKey           = "alpha.eksctl.io/cluster-name"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -104,6 +106,10 @@ var volumeAPICallBackoff = wait.Backoff{
 	Factor:   volumeFactor,
 	Steps:    volumeSteps,
 }
+
+var (
+	nonSupportedProvider = false
+)
 
 type kdmp struct {
 	storkvolume.ClusterPairNotSupported
@@ -180,6 +186,68 @@ func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) bool {
 	return !storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
 }
 
+func getZones(pv *v1.PersistentVolume) ([]string, error) {
+	// Check the cloud provider
+	gkeCluster, awsCluster, err := getCloudProvider()
+	if err != nil {
+		return nil, err
+	}
+	if !gkeCluster && !awsCluster {
+		// Not supported cluster
+		// For azure we want to skip this where multi zone is not an issue.
+		nonSupportedProvider = true
+		return nil, nil
+	}
+
+	if gkeCluster {
+		zones := storkvolume.GetGCPZones(pv)
+		return zones, nil
+	}
+
+	if awsCluster {
+		ebsName := storkvolume.GetEBSVolumeID(pv)
+		if ebsName == "" {
+			return nil, fmt.Errorf("AWS EBS info not found in PV %v", pv.Name)
+		}
+
+		client, err := storkvolume.GetAWSClient()
+		if err != nil {
+			return nil, err
+		}
+		ebsVolume, err := storkvolume.GetEBSVolume(ebsName, nil, client)
+		if err != nil {
+			return nil, err
+		}
+		logrus.Tracef("getZones: zone: %v", *ebsVolume.AvailabilityZone)
+
+		return []string{*ebsVolume.AvailabilityZone}, nil
+	}
+
+	return nil, nil
+}
+
+func getCloudProvider() (bool, bool, error) {
+	fn := "getCloudProvider"
+	gkeCluster := false
+	awsCluster := false
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		logrus.Errorf("%s: getting node details failed: %v", fn, err)
+		return gkeCluster, awsCluster, err
+	}
+	for _, node := range nodes.Items {
+		if node.Labels[gkeNodeLabelKey] != "" {
+			gkeCluster = true
+			break
+		} else if node.Labels[awsNodeLabelKey] != "" {
+			awsCluster = true
+			break
+		}
+	}
+
+	return gkeCluster, awsCluster, nil
+}
+
 func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
@@ -190,7 +258,23 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
 			continue
 		}
+		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		if err != nil {
+			return nil, fmt.Errorf("error getting PV name for PVC (%v/%v): %v", pvc.Namespace, pvc.Name, err)
+		}
+		pv, err := core.Instance().GetPersistentVolume(pvName)
+		if err != nil {
+			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
+		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
+		zones, err := getZones(pv)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching zone information: %v", err)
+		}
+		if len(zones) != 0 {
+			volumeInfo.Zones = zones
+		}
+		logrus.Infof("volumeInfo zone: %v - pv name %v", volumeInfo.Zones, pv.Name)
 		volumeInfo.Provisioner = getProvisionerName(pvc)
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
@@ -557,14 +641,59 @@ func (k *kdmp) StartRestore(
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	log.ApplicationRestoreLog(restore).Debugf("started generic restore: %v", restore.Name)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		return nil, fmt.Errorf("failed in getting the nodes: %v", err)
+	}
+	// Support only for gke and aws
+	zoneMap := map[string]string{}
+	splitDestRegion := []string{}
+	gkeCluster, awsCluster, err := getCloudProvider()
+	if err != nil {
+		return nil, err
+	}
+	if !gkeCluster && !awsCluster {
+		// Not supported cluster
+		nonSupportedProvider = true
+	}
+	if !nonSupportedProvider {
+		nodeZoneList, err := storkvolume.GetNodeZones()
+		if err != nil {
+			return nil, err
+		}
+		backupZoneList := storkvolume.GetVolumeBackupZones(volumeBackupInfos)
+		zoneMap = storkvolume.MapZones(backupZoneList, nodeZoneList)
+		nodeZone, err := storkvolume.GetNodeZone()
+		if err != nil {
+			return nil, err
+		}
+		splitDestRegion = strings.Split(nodeZone, "-")
+	}
+
 	for _, bkpvInfo := range volumeBackupInfos {
+		var destFullZoneName string
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
+		if !nonSupportedProvider {
+			destZoneName := strings.Split(bkpvInfo.Zones[0], "-")
+			splitDestRegion[2] = zoneMap[destZoneName[2]]
+			destFullZoneName = strings.Join(splitDestRegion, "-")
+			volumeInfo.Zones = append(volumeInfo.Zones, destFullZoneName)
+		}
 
 		// get corresponding pvc object from objects list
 		pvc, err := storkvolume.GetPVCFromObjects(objects, bkpvInfo)
 		if err != nil {
 			return nil, err
 		}
+		if !nonSupportedProvider {
+			for _, node := range nodes.Items {
+				zone := node.Labels[v1.LabelTopologyZone]
+				if zone == destFullZoneName {
+					pvc.Annotations[storageNodeAnnotation] = node.Name
+				}
+			}
+		}
+
 		val, ok := restore.Spec.NamespaceMapping[bkpvInfo.Namespace]
 		if !ok {
 			return nil, fmt.Errorf("restore namespace mapping not found: %s", bkpvInfo.Namespace)
