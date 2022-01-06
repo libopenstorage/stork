@@ -90,7 +90,7 @@ type Driver interface {
 	// Restore from local snapshot if present
 	RestoreFromLocalSnapshot(backupLocation *storkapi.BackupLocation, pvc *v1.PersistentVolumeClaim, snapshotDriverName, pvcUID, backupUID, objectPath, namespace string) (bool, error)
 	// Cleanup resources if restore from localsnapshot fails
-	CleanUpRestoredResources(backupLocation *storkapi.BackupLocation, pvc *v1.PersistentVolumeClaim, pvcUID, backupUID, objectPath, namespace string) error
+	CleanUpRestoredResources(backupLocation *storkapi.BackupLocation, pvcUID, backupUID, objectPath, namespace string) error
 }
 
 // Snapshotter inteface returns a Driver object

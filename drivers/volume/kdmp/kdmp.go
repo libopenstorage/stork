@@ -25,6 +25,7 @@ import (
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
@@ -41,6 +42,8 @@ const (
 	prefixBackup           = "backup"
 	prefixDelete           = "delete"
 	skipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
+	restoreCleanUpTimeOut  = 30 * time.Minute
+	restoreCleanUpInterval = 10 * time.Second
 	volumeinitialDelay     = 2 * time.Second
 	volumeFactor           = 1.5
 	volumeSteps            = 20
@@ -91,6 +94,8 @@ const (
 	// pvProvisionedByAnnotation is the annotation on PV which has the
 	// provisioner name
 	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
+	annPVBindCompleted        = "pv.kubernetes.io/bind-completed"
+	annPVBoundByController    = "pv.kubernetes.io/bound-by-controller"
 	pureCSIProvisioner        = "pure-csi"
 	bindCompletedKey          = "pv.kubernetes.io/bind-completed"
 	boundByControllerKey      = "pv.kubernetes.io/bound-by-controller"
@@ -947,26 +952,69 @@ func (k *kdmp) CleanupBackupResources(backup *storkapi.ApplicationBackup) error 
 
 // CleanupRestoreResources for specified restore
 func (k *kdmp) CleanupRestoreResources(restore *storkapi.ApplicationRestore) error {
+	cleanUpStatus := make(map[string]bool)
+	var cleanUpRequired []*storkapi.ApplicationRestoreVolumeInfo
 	for _, vInfo := range restore.Status.Volumes {
 		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
-		val, ok := restore.Spec.NamespaceMapping[vInfo.SourceNamespace]
+		restoreNamespace, ok := restore.Spec.NamespaceMapping[vInfo.SourceNamespace]
 		if !ok {
 			return fmt.Errorf("restore namespace mapping not found: %s", vInfo.SourceNamespace)
+		}
+		cleanUpStatus[fmt.Sprintf("%s-%s", restoreNamespace, vInfo.PersistentVolumeClaim)] = false
+		cleanUpRequired = append(cleanUpRequired, vInfo)
+	}
 
+	t := func() (interface{}, bool, error) {
+		cleanupDoneCount := 0
+		for _, vInfo := range cleanUpRequired {
+			// Check if volume is bound before proceeding to delete dataexport cr
+			restoreNamespace, ok := restore.Spec.NamespaceMapping[vInfo.SourceNamespace]
+			if !ok {
+				logrus.Errorf("restore namespace mapping not found for namespace: %s", vInfo.SourceNamespace)
+				continue
+			}
+			val, ok := cleanUpStatus[fmt.Sprintf("%s-%s", restoreNamespace, vInfo.PersistentVolumeClaim)]
+			if !ok {
+				logrus.Errorf("cleanup status of pvc %s/%s not found", restoreNamespace, vInfo.PersistentVolumeClaim)
+				continue
+			}
+
+			// if cleanup has not been done for the pvc, check if it is bound now
+			if !val {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(vInfo.PersistentVolumeClaim, restoreNamespace)
+				if err != nil {
+					logrus.Errorf("getting pvc %s/%s failed", vInfo.PersistentVolumeClaim, restoreNamespace)
+					continue
+				}
+				if pvcBindFinished(pvc) {
+					vInfo.RestoreVolume = pvc.Spec.VolumeName
+					crName := getGenericCRName(prefixRestore, string(restore.UID), vInfo.PersistentVolumeClaim, restoreNamespace)
+					// delete kdmp crs
+					logrus.Tracef("deleting data export CR: %s%s", restoreNamespace, crName)
+					if err := kdmpShedOps.Instance().DeleteDataExport(crName, restoreNamespace); err != nil && !k8serror.IsNotFound(err) {
+						logrus.Warnf("failed to delete data export CR:%s/%s, err: %v", restoreNamespace, crName, err)
+					}
+					err = kdmpShedOps.Instance().DeleteVolumeBackup(prefixRestore+"-"+crName, restoreNamespace)
+					if err != nil && !k8serror.IsNotFound(err) {
+						logrus.Warnf("failed to delete volume backup CR:%s/%s, err: %v", restoreNamespace, crName, err)
+					}
+					cleanUpStatus[fmt.Sprintf("%s-%s", restoreNamespace, vInfo.PersistentVolumeClaim)] = true
+					cleanupDoneCount++
+				}
+			} else {
+				cleanupDoneCount++
+			}
 		}
-		restoreNamespace := val
-		crName := getGenericCRName(prefixRestore, string(restore.UID), vInfo.PersistentVolumeClaim, restoreNamespace)
-		// delete kdmp crs
-		logrus.Tracef("deleting data export CR: %s%s", restoreNamespace, crName)
-		if err := kdmpShedOps.Instance().DeleteDataExport(crName, restoreNamespace); err != nil && !k8serror.IsNotFound(err) {
-			logrus.Warnf("failed to delete data export CR:%s/%s, err: %v", restoreNamespace, crName, err)
+		if len(cleanUpRequired) == cleanupDoneCount {
+			logrus.Debugf("clean up of all %d pvc are done", len(cleanUpRequired))
+			return "", false, nil
 		}
-		err := kdmpShedOps.Instance().DeleteVolumeBackup(prefixRestore+"-"+crName, restoreNamespace)
-		if err != nil && !k8serror.IsNotFound(err) {
-			logrus.Warnf("failed to delete volume backup CR:%s/%s, err: %v", restoreNamespace, crName, err)
-		}
+		return "", true, fmt.Errorf("cleanup required for %d pvc, done %d", len(cleanUpRequired), cleanupDoneCount)
+	}
+	if _, err := task.DoRetryWithTimeout(t, restoreCleanUpTimeOut, restoreCleanUpInterval); err != nil {
+		logrus.Tracef("timed out waiting for crs to get cleaned up: %v", err)
 	}
 	return nil
 }
@@ -1027,4 +1075,10 @@ func getVolumeSnapshotClassFromBackupVolumeInfo(bkvpInfo *storkapi.ApplicationBa
 	vsClass = strings.Join(subStrings[0:len(subStrings)-1], ",")
 
 	return vsClass
+}
+
+func pvcBindFinished(pvc *v1.PersistentVolumeClaim) bool {
+	bindCompleted := pvc.Annotations[annPVBindCompleted]
+	boundByController := pvc.Annotations[annPVBoundByController]
+	return pvc.Status.Phase == v1.ClaimBound && bindCompleted == "yes" && boundByController == "yes"
 }

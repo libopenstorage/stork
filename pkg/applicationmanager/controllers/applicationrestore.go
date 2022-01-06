@@ -21,9 +21,11 @@ import (
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -37,6 +39,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -905,11 +908,37 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 			return nil, fmt.Errorf("SourceVolume missing for restore")
 		}
 		if vInfo.RestoreVolume == "" {
-			return nil, fmt.Errorf("RestoreVolume missing for restore")
+			restoreNamespace, ok := restore.Spec.NamespaceMapping[vInfo.SourceNamespace]
+			if !ok {
+				return nil, fmt.Errorf("restore namespace mapping not found for namespace: %s", vInfo.SourceNamespace)
+			}
+			pvc, err := core.Instance().GetPersistentVolumeClaim(vInfo.PersistentVolumeClaim, restoreNamespace)
+			if err != nil {
+				return nil, fmt.Errorf("getting pvc %s/%s failed", restoreNamespace, vInfo.PersistentVolumeClaim)
+			}
+			if !isPVCWaitingForFirstConsumer(pvc) {
+				logrus.Warnf("restoreVolume missing for restore for volume %s/%s", restoreNamespace, vInfo.PersistentVolumeClaim)
+				return nil, fmt.Errorf("restoreVolume missing for restore")
+			}
 		}
 		pvNameMappings[vInfo.SourceVolume] = vInfo.RestoreVolume
 	}
 	return pvNameMappings, nil
+}
+
+func isPVCWaitingForFirstConsumer(pvc *v1.PersistentVolumeClaim) bool {
+	var sc *storagev1.StorageClass
+	var err error
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName != "" {
+		sc, err = storage.Instance().GetStorageClass(storageClassName)
+		if err != nil {
+			logrus.Warnf("did not get the storageclass %s for pvc %s/%s, err: %v", storageClassName, pvc.Namespace, pvc.Name, err)
+			return false
+		}
+		return *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer
+	}
+	return false
 }
 
 func getNamespacedPVCLocation(pvc *v1.PersistentVolumeClaim) string {
@@ -1089,7 +1118,10 @@ func (a *ApplicationRestoreController) removeCSIVolumesBeforeApply(
 			pv, ok := pvcToPVMapping[getNamespacedPVCLocation(&pvc)]
 			if !ok {
 				log.ApplicationRestoreLog(restore).Debugf("failed to find PV for PVC %s during CSI volume skip. Will not skip volume", pvc.Name)
-				tempObjects = append(tempObjects, o)
+				if !isPVCWaitingForFirstConsumer(&pvc) {
+					logrus.Warnf("volumebinding mode is not set as %s for pvc %s/%s", storagev1.VolumeBindingWaitForFirstConsumer, pvc.Namespace, pvc.Name)
+					tempObjects = append(tempObjects, o)
+				}
 				continue
 			}
 
