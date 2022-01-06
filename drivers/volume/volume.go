@@ -3,10 +3,18 @@ package volume
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 
+	aws_sdk "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
+	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud"
 	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
@@ -15,6 +23,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/gcp-compute-persistent-disk-csi-driver/pkg/common"
 )
 
 const (
@@ -34,7 +43,9 @@ const (
 	// LinstorDriverName is the name of the Linstor driver implementation
 	LinstorDriverName = "linstor"
 	// KDMPDriverName is the name of the kdmp driver implementation
-	KDMPDriverName             = "kdmp"
+	KDMPDriverName = "kdmp"
+	// ZoneSeperator zone separator
+	ZoneSeperator              = "__"
 	pureCSIProvisioner         = "pure-csi"
 	ocpCephfsProvisioner       = "openshift-storage.cephfs.csi.ceph.com"
 	ocpRbdProvisioner          = "openshift-storage.rbd.csi.ceph.com"
@@ -771,6 +782,19 @@ func GetNodeRegion() (string, error) {
 	return "", fmt.Errorf("failed in getting the nodes: %v", err)
 }
 
+// GetNodeZone gets the node zone
+func GetNodeZone() (string, error) {
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		logrus.Errorf("getNodeZones: getting node details failed: %v", err)
+		return "", fmt.Errorf("failed in getting the nodes: %v", err)
+	}
+	for _, node := range nodes.Items {
+		return node.Labels[v1.LabelTopologyZone], nil
+	}
+	return "", fmt.Errorf("failed in getting the nodes zone: %v", err)
+}
+
 // GetNodeZones - get zone details of the nodes in the cluster.
 func GetNodeZones() ([]string, error) {
 	nodes, err := core.Instance().GetNodes()
@@ -829,4 +853,114 @@ func MapZones(sourceZones, destZones []string) map[string]string {
 		} // We don't care if we have more zones in dest
 	}
 	return zoneMap
+}
+
+// GetEBSVolume gets EBS volume
+func GetEBSVolume(volumeID string, filters map[string]string, client *ec2.EC2) (*ec2.Volume, error) {
+	input := &ec2.DescribeVolumesInput{}
+	if volumeID != "" {
+		input.VolumeIds = []*string{&volumeID}
+	}
+	if len(filters) > 0 {
+		input.Filters = getFiltersFromMap(filters)
+	}
+
+	output, err := client.DescribeVolumes(input)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(output.Volumes) != 1 {
+		return nil, fmt.Errorf("received %v volumes for %v", len(output.Volumes), volumeID)
+	}
+	return output.Volumes[0], nil
+}
+
+func getFiltersFromMap(filters map[string]string) []*ec2.Filter {
+	tagFilters := make([]*ec2.Filter, 0)
+	for k, v := range filters {
+		tagFilters = append(tagFilters, &ec2.Filter{
+			Name:   aws_sdk.String(fmt.Sprintf("tag:%v", k)),
+			Values: []*string{aws_sdk.String(v)},
+		})
+	}
+	return tagFilters
+}
+
+// GetEBSVolumeID get EBS vol ID
+func GetEBSVolumeID(pv *v1.PersistentVolume) string {
+	var volumeID string
+	if pv.Spec.AWSElasticBlockStore != nil {
+		volumeID = pv.Spec.AWSElasticBlockStore.VolumeID
+	} else if pv.Spec.CSI != nil {
+		volumeID = pv.Spec.CSI.VolumeHandle
+	}
+	return regexp.MustCompile("vol-.*").FindString(volumeID)
+}
+
+// GetAWSClient client handle for EC2 instance
+func GetAWSClient() (*ec2.EC2, error) {
+	s, err := session.NewSession(&aws_sdk.Config{})
+	if err != nil {
+		return nil, err
+	}
+	creds := credentials.NewChainCredentials(
+		[]credentials.Provider{
+			&credentials.EnvProvider{},
+			&ec2rolecreds.EC2RoleProvider{
+				Client: ec2metadata.New(s),
+			},
+			&credentials.SharedCredentialsProvider{},
+		})
+	metadata, err := cloud.NewMetadata()
+	if err != nil {
+		return nil, err
+	}
+
+	s, err = session.NewSession(&aws_sdk.Config{
+		Region:      aws_sdk.String(metadata.GetRegion()),
+		Credentials: creds,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return ec2.New(s), nil
+}
+
+// GetGCPZones get zones from GCP
+func GetGCPZones(pv *v1.PersistentVolume) []string {
+	if pv.Spec.GCEPersistentDisk != nil {
+		var zone string
+		val, ok := pv.Labels[v1.LabelZoneFailureDomain]
+		if ok {
+			zone = val
+		} else if val, ok := pv.Labels[v1.LabelZoneFailureDomainStable]; ok {
+			zone = val
+		}
+		if IsRegional(zone) {
+			return GetRegionalZones(zone)
+		}
+		return []string{zone}
+	}
+	if pv.Spec.NodeAffinity != nil &&
+		pv.Spec.NodeAffinity.Required != nil &&
+		len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms) != 0 {
+		for _, selector := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions {
+			if selector.Key == common.TopologyKeyZone {
+				return selector.Values
+			}
+		}
+	}
+	return nil
+}
+
+// IsRegional is zone is regional
+func IsRegional(zone string) bool {
+	return strings.Contains(zone, ZoneSeperator)
+}
+
+// GetRegionalZones kist of regional zone
+func GetRegionalZones(zones string) []string {
+	return strings.Split(zones, ZoneSeperator)
 }
