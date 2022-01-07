@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/libopenstorage/openstorage/pkg/auth"
 	"github.com/mohae/deepcopy"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 // Strings for VolumeSpec
@@ -80,21 +81,31 @@ const (
 	// SpecMatchSrcVolProvision defaults to false. Applicable to cloudbackup restores only.
 	// If set to "true", cloudbackup restore volume gets provisioned on same pools as
 	// backup, allowing for inplace restore after.
-	SpecMatchSrcVolProvision = "match_src_vol_provision"
-	SpecNodiscard            = "nodiscard"
-	StoragePolicy            = "storagepolicy"
-	SpecCowOnDemand          = "cow_ondemand"
-	SpecDirectIo             = "direct_io"
-	SpecScanPolicyTrigger    = "scan_policy_trigger"
-	SpecScanPolicyAction     = "scan_policy_action"
-	SpecProxyWrite           = "proxy_write"
-	SpecFastpath             = "fastpath"
-	SpecSharedv4ServiceType  = "sharedv4_svc_type"
-	SpecSharedv4ServiceName  = "sharedv4_svc_name"
-	SpecBackendType          = "backend"
-	SpecBackendPureBlock     = "pure_block"
-	SpecBackendPureFile      = "pure_file"
-	SpecPureFileExportRules  = "pure_export_rules"
+	SpecMatchSrcVolProvision                = "match_src_vol_provision"
+	SpecNodiscard                           = "nodiscard"
+	StoragePolicy                           = "storagepolicy"
+	SpecCowOnDemand                         = "cow_ondemand"
+	SpecDirectIo                            = "direct_io"
+	SpecScanPolicyTrigger                   = "scan_policy_trigger"
+	SpecScanPolicyAction                    = "scan_policy_action"
+	SpecProxyWrite                          = "proxy_write"
+	SpecSharedv4ServiceType                 = "sharedv4_svc_type"
+	SpecSharedv4ServiceName                 = "sharedv4_svc_name"
+	SpecSharedv4FailoverStrategy            = "sharedv4_failover_strategy"
+	SpecSharedv4FailoverStrategyNormal      = "normal"
+	SpecSharedv4FailoverStrategyAggressive  = "aggressive"
+	SpecSharedv4FailoverStrategyUnspecified = ""
+	SpecSharedv4ExternalAccess              = "sharedv4_external_access"
+	SpecFastpath                            = "fastpath"
+	SpecAutoFstrim                          = "auto_fstrim"
+	SpecBackendType                         = "backend"
+	SpecBackendPureBlock                    = "pure_block"
+	SpecBackendPureFile                     = "pure_file"
+	SpecPureFileExportRules                 = "pure_export_rules"
+	SpecIoThrottleRdIOPS                    = "io_throttle_rd_iops"
+	SpecIoThrottleWrIOPS                    = "io_throttle_wr_iops"
+	SpecIoThrottleRdBW                      = "io_throttle_rd_bw"
+	SpecIoThrottleWrBW                      = "io_throttle_wr_bw"
 )
 
 // OptionKey specifies a set of recognized query params.
@@ -156,6 +167,8 @@ const (
 	OptCredProxy = "CredProxy"
 	// OptCredIAMPolicy if "true", indicates IAM creds to be used
 	OptCredIAMPolicy = "CredIAMPolicy"
+	// OptRemoteCredUUID is the UUID of the remote cluster credential
+	OptRemoteCredUUID = "RemoteCredUUID"
 	// OptCloudBackupID is the backID in the cloud
 	OptCloudBackupID = "CloudBackID"
 	// OptCloudBackupIgnoreCreds ignores credentials for incr backups
@@ -294,6 +307,14 @@ type CredCreateResponse struct {
 	UUID string
 }
 
+// CredUpdateRequest is the input for CredsUpdate command
+type CredUpdateRequest struct {
+	// Name or the UUID of the credential being updated
+	Name string
+	// InputParams is map describing cloud provide
+	InputParams map[string]string
+}
+
 // StatPoint represents the basic structure of a single Stat reported
 // TODO: This is the first step to introduce stats in openstorage.
 //       Follow up task is to introduce an API for logging stats
@@ -405,8 +426,8 @@ type CloudBackupGenericRequest struct {
 	// MetadataFilter indicates backups whose metadata has these kv pairs
 	MetadataFilter map[string]string
 	// CloudBackupID must be specified if one needs to enumerate known single
-	// backup (format is clusteruuidORBucketName/srcVolId-SnapId(-incr). If
-	// this is specified, everything else in the command is ignored
+	// backup (format is clusteruuidORBucketName/srcVolId-SnapId(-incr). If t\
+	// this is specified, everything else n the command is ignored
 	CloudBackupID string
 	// MissingSrcVol set to true enumerates cloudbackups for which srcVol is not
 	// present in the cluster. Either the source volume is deleted or the
@@ -433,7 +454,7 @@ type CloudBackupInfo struct {
 	Status string
 	// ClusterType indicates if the cloudbackup was uploaded by this
 	// cluster. Could be unknown with older version cloudbackups
-	ClusterType SdkCloudBackupClusterType_Value
+	ClusterType SdkCloudBackupClusterType
 	// Namespace to which this cloudbackup belongs to
 	Namespace string
 }
@@ -1329,4 +1350,9 @@ func ParseProxyEndpoint(proxyEndpoint string) (ProxyProtocol, string) {
 func (s *ProxySpec) IsPureBackend() bool {
 	return s.ProxyProtocol == ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK ||
 		s.ProxyProtocol == ProxyProtocol_PROXY_PROTOCOL_PURE_FILE
+}
+
+// GetAllEnumInfo returns an EnumInfo for every proto enum
+func GetAllEnumInfo() []protoimpl.EnumInfo {
+	return file_api_api_proto_enumTypes
 }

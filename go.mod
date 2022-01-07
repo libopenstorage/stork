@@ -18,10 +18,10 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc2
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20210223183702-b9c6b74cbf1d
-	github.com/libopenstorage/openstorage v8.0.1-0.20210909003102-97e11e6485ad+incompatible
+	github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
 	github.com/libopenstorage/stork v1.4.1-0.20210903185636-5a1f8a4142bf
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.10.5
+	github.com/onsi/gomega v1.16.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
@@ -34,8 +34,8 @@ require (
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
-	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
-	google.golang.org/genproto v0.0.0-20210916144049-3192f974c780
+	golang.org/x/net v0.0.0-20210917221730-978cfadd31cf
+	google.golang.org/genproto v0.0.0-20210921142501-181ce0d877f6
 	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
@@ -54,6 +54,7 @@ replace (
 	// PX dependencies
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220106234718-d68a25af6b6b
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.4
 
