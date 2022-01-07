@@ -25,6 +25,7 @@ import (
 
 var (
 	resyncPeriod                      = 10 * time.Second
+	requeuePeriod                     = 5 * time.Second
 	validateCRDInterval time.Duration = 10 * time.Second
 	validateCRDTimeout  time.Duration = 2 * time.Minute
 
@@ -83,7 +84,7 @@ func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return reconcile.Result{RequeueAfter: 2 * time.Second}, err
+		return reconcile.Result{RequeueAfter: requeuePeriod}, nil
 	}
 
 	if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
@@ -94,10 +95,10 @@ func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (
 	requeue, err := c.sync(context.TODO(), dataExport)
 	if err != nil {
 		logrus.Errorf("kdmp controller: %s/%s: %s", request.Namespace, request.Name, err)
-		return reconcile.Result{RequeueAfter: 2 * time.Second}, err
+		return reconcile.Result{RequeueAfter: requeuePeriod}, nil
 	}
 	if requeue {
-		return reconcile.Result{Requeue: requeue}, nil
+		return reconcile.Result{RequeueAfter: requeuePeriod}, nil
 	}
 
 	return reconcile.Result{RequeueAfter: resyncPeriod}, nil
