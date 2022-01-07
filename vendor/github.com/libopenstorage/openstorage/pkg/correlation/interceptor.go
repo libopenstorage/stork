@@ -19,6 +19,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // ContextInterceptor represents a correlation interceptor
@@ -26,15 +27,49 @@ type ContextInterceptor struct {
 	Origin Component
 }
 
-// ContextUnaryInterceptor creates a gRPC interceptor for adding
+// ContextUnaryServerInterceptor creates a gRPC interceptor for adding
 // correlation ID to each request
-func (ci *ContextInterceptor) ContextUnaryInterceptor(
+func (ci *ContextInterceptor) ContextUnaryServerInterceptor(
 	ctx context.Context,
 	req interface{},
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
 ) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		// Get request context from gRPC metadata
+		rc := RequestContextFromContextMetadata(md)
+
+		// Only add to context if an ID exists
+		if len(rc.ID) > 0 {
+			ctx = context.WithValue(ctx, ContextKey, rc)
+		}
+	}
 	ctx = WithCorrelationContext(ctx, ci.Origin)
 
 	return handler(ctx, req)
+}
+
+// ContextUnaryClientInterceptor creates a gRPC interceptor for adding
+// correlation ID to each request
+func ContextUnaryClientInterceptor(
+	ctx context.Context,
+	method string,
+	req, reply interface{},
+	cc *grpc.ClientConn,
+	invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption,
+) error {
+	// Create new metadata from request context in context
+	newContextMap := RequestContextFromContextValue(ctx).AsMap()
+	newContextMD := metadata.New(newContextMap)
+
+	// Get existing metadata if exists and join with new one
+	existingMD, ok := metadata.FromOutgoingContext(ctx)
+	if ok {
+		newContextMD = metadata.Join(newContextMD, existingMD)
+	}
+	ctx = metadata.NewOutgoingContext(ctx, newContextMD)
+
+	return invoker(ctx, method, req, reply, cc, opts...)
 }
