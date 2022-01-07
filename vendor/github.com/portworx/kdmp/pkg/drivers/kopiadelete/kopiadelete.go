@@ -205,8 +205,8 @@ func jobFor(
 					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(jobOption.JobConfigMap, jobOption.JobConfigMapNs)),
 					Containers: []corev1.Container{
 						{
-							Name:  "kopiaexecutor",
-							Image: utils.KopiaExecutorImage(jobOption.JobConfigMap, jobOption.JobConfigMapNs),
+							Name:            "kopiaexecutor",
+							Image:           utils.KopiaExecutorImage(jobOption.JobConfigMap, jobOption.JobConfigMapNs),
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command: []string{
 								"/bin/sh",
