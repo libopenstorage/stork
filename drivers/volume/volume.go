@@ -47,6 +47,8 @@ const (
 	// ZoneSeperator zone separator
 	ZoneSeperator              = "__"
 	pureCSIProvisioner         = "pure-csi"
+	ocpCephfsProvisioner       = "openshift-storage.cephfs.csi.ceph.com"
+	ocpRbdProvisioner          = "openshift-storage.rbd.csi.ceph.com"
 	vSphereCSIProvisioner      = "csi.vsphere.vmware.com"
 	efsCSIProvisioner          = "efs.csi.aws.com"
 	azureFileCSIProvisioner    = "file.csi.azure.com"
@@ -734,6 +736,10 @@ func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
 			if pv.Spec.CSI.VolumeAttributes[pureBackendParam] == pureFileParam {
 				return true
 			}
+		}
+		// For now, it is decided to take generic backup for OCP provisoiners.
+		if driverName == ocpCephfsProvisioner || driverName == ocpRbdProvisioner {
+			return true
 		}
 		// vsphere, efs, azure file and google file does not support snapshot.
 		// So defaulting to kdmp by not setting volumesnapshot class.
