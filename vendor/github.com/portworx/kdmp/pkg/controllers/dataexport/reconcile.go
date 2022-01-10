@@ -569,6 +569,25 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 	if err != nil {
 		return false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
 	}
+	// This will create a unique secret per PVC being backed up
+	// Create secret in source ns because in case of multi ns backup
+	// BL CR is created in kube-system ns
+	err = CreateCredentialsSecret(
+		dataExport.Name,
+		dataExport.Spec.Destination.Name,
+		dataExport.Spec.Destination.Namespace,
+		dataExport.Spec.Source.Namespace,
+		dataExport.Labels,
+	)
+	if err != nil {
+		msg := fmt.Sprintf("failed to create cloud credential secret during kopia backup: %v", err)
+		logrus.Errorf(msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
 
 	backupUID := getAnnotationValue(dataExport, backupObjectUIDKey)
 	pvcUID := getAnnotationValue(dataExport, pvcUIDKey)
@@ -647,6 +666,14 @@ func (c *Controller) stageSnapshotInProgress(ctx context.Context, dataExport *kd
 			reason: "",
 		}
 		return true, c.updateStatus(dataExport, data)
+	}
+	if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+		// set to the next stage
+		data := updateDataExportDetail{
+			stage:  kdmpapi.DataExportStageCleanup,
+			status: dataExport.Status.Status,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
@@ -795,6 +822,14 @@ func (c *Controller) stageSnapshotRestoreInProgress(ctx context.Context, dataExp
 			reason: "",
 		}
 		return true, c.updateStatus(dataExport, data)
+	}
+	if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+		// set to the next stage
+		data := updateDataExportDetail{
+			stage:  kdmpapi.DataExportStageCleanup,
+			status: dataExport.Status.Status,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	src := dataExport.Spec.Source
@@ -1147,6 +1182,11 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		if err != nil && !k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("delete %s job: %s", de.Status.TransferID, err)
 		}
+	}
+	if err := core.Instance().DeleteSecret(de.Name, de.Namespace); err != nil && !k8sErrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", de.Name, err)
+		logrus.Errorf(errMsg)
+		return fmt.Errorf(errMsg)
 	}
 	return nil
 }
