@@ -157,7 +157,7 @@ type Driver interface {
 	GetAggregationLevel(vol *Volume) (int64, error)
 
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
-	GetClusterPairingInfo() (map[string]string, error)
+	GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error)
 
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error

@@ -335,7 +335,7 @@ func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *DefaultDriver) GetClusterPairingInfo() (map[string]string, error) {
+func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	return pairInfo, &errors.ErrNotSupported{
 		Type:      "Function",

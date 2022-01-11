@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/csv"
 	"errors"
@@ -9,6 +10,8 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"os/exec"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -21,6 +24,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -132,6 +136,11 @@ const (
 	testRailHostFlag            = "testrail-host"
 	testRailUserNameFlag        = "testrail-username"
 	testRailPasswordFlag        = "testrail-password"
+
+	// Async DR
+	pairFileName   = "cluster-pair.yaml"
+	remotePairName = "remoteclusterpair"
+	remoteFilePath = "/tmp/kubeconfig"
 )
 
 // Backup constants
@@ -1411,6 +1420,167 @@ func SetClusterContext(clusterConfigPath string) {
 	expect(err).NotTo(haveOccurred())
 }
 
+// SetSourceKubeConfig sets current context to the kubeconfig passed as source to the torpedo test
+func SetSourceKubeConfig() {
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	expect(err).NotTo(haveOccurred())
+	SetClusterContext(sourceClusterConfigPath)
+}
+
+// SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
+func SetDestinationKubeConfig() {
+	destClusterConfigPath, err := GetDestinationClusterConfigPath()
+	expect(err).NotTo(haveOccurred())
+	SetClusterContext(destClusterConfigPath)
+}
+
+// ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
+func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
+	var kubeConfigPath string
+	var err error
+	if reverse {
+		SetSourceKubeConfig()
+		// get the kubeconfig path to get the correct pairing info
+		kubeConfigPath, err = GetSourceClusterConfigPath()
+		if err != nil {
+			return err
+		}
+	} else {
+		SetDestinationKubeConfig()
+		// get the kubeconfig path to get the correct pairing info
+		kubeConfigPath, err = GetDestinationClusterConfigPath()
+		if err != nil {
+			return err
+		}
+	}
+
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath)
+	if err != nil {
+		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
+		return err
+	}
+
+	err = CreateClusterPairFile(pairInfo, skipStorage, resetConfig, clusterPairDir, kubeConfigPath)
+	if err != nil {
+		logrus.Errorf("Error creating cluster Spec: %v", err)
+		return err
+	}
+	err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+	if err != nil {
+		logrus.Errorf("Unable to parse spec dir: %v", err)
+		return err
+	}
+
+	// Set the correct cluster context to apply the cluster pair spec
+	if reverse {
+		SetDestinationKubeConfig()
+	} else {
+		SetSourceKubeConfig()
+	}
+
+	err = Inst().S.AddTasks(ctx,
+		scheduler.ScheduleOptions{AppKeys: []string{clusterPairDir}})
+	if err != nil {
+		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
+		return err
+	}
+
+	err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		logrus.Errorf("Error waiting to get cluster pair in ready state: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// CreateClusterPairFile creates a cluster pair yaml file inside the stork test pod in path 'clusterPairDir'
+func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir string, kubeConfigPath string) error {
+	logrus.Infof("Entering cluster pair")
+	err := os.MkdirAll(path.Join(Inst().SpecDir, clusterPairDir), 0777)
+	if err != nil {
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", Inst().SpecDir+"/"+clusterPairDir, err)
+		return err
+	}
+	clusterPairFileName := path.Join(Inst().SpecDir, clusterPairDir, pairFileName)
+	pairFile, err := os.Create(clusterPairFileName)
+	if err != nil {
+		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
+		return err
+	}
+	defer func() {
+		err := pairFile.Close()
+		if err != nil {
+			logrus.Errorf("Error closing pair file: %v", err)
+		}
+	}()
+
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
+	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", kubeConfigPath})
+	if err := cmd.Execute(); err != nil {
+		logrus.Errorf("Execute storkctl failed: %v", err)
+		return err
+	}
+
+	truncCmd := `sed -i "$((` + "`wc -l " + clusterPairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + clusterPairFileName
+	logrus.Infof("trunc cmd: %v", truncCmd)
+	err = exec.Command("sh", "-c", truncCmd).Run()
+	if err != nil {
+		logrus.Errorf("truncate failed %v", err)
+		return err
+	}
+
+	if resetConfig {
+		// storkctl generate command sets sched-ops to source cluster config
+		SetSourceKubeConfig()
+	} else {
+		// Change kubeconfig to destination cluster config
+		SetDestinationKubeConfig()
+	}
+
+	if skipStorage {
+		logrus.Info("cluster-pair.yml created")
+		return nil
+	}
+
+	return addStorageOptions(pairInfo, clusterPairFileName)
+}
+
+func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
+	file, err := os.OpenFile(clusterPairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err != nil {
+		logrus.Errorf("Unable to open %v: %v", pairFileName, err)
+		return err
+	}
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			logrus.Errorf("Error closing pair file: %v", err)
+		}
+	}()
+	w := bufio.NewWriter(file)
+	for k, v := range pairInfo {
+		if k == "port" {
+			// port is integer
+			v = "\"" + v + "\""
+		}
+		_, err = fmt.Fprintf(w, "    %v: %v\n", k, v)
+		if err != nil {
+			logrus.Infof("error writing file %v", err)
+			return err
+		}
+	}
+	err = w.Flush()
+	if err != nil {
+		return err
+	}
+
+	logrus.Infof("cluster-pair.yml created with storage options in %s", clusterPairFileName)
+	return nil
+
+}
+
 // ValidateRestoredApplicationsGetErr validates applications restored by backup driver and updates errors instead of failing the test
 func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumeParameters map[string]map[string]string, bkpErrors map[string]error) {
 	var updatedVolumeParams map[string]map[string]string
@@ -2391,7 +2561,23 @@ func GetSourceClusterConfigPath() (string, error) {
 	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
 		"At least minimum two kubeconfigs required")
 
+	logrus.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
+}
+
+// GetDestinationClusterConfigPath get cluster config of destination cluster
+func GetDestinationClusterConfigPath() (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
+		"At least minimum two kubeconfigs required")
+
+	logrus.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
 // GetAzureCredsFromEnv get creds for azure
@@ -2422,20 +2608,6 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
 
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
-}
-
-// GetDestinationClusterConfigPath get cluster config of destination cluster
-func GetDestinationClusterConfigPath() (string, error) {
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	if kubeconfigs == "" {
-		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
-	}
-
-	kubeconfigList := strings.Split(kubeconfigs, ",")
-	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
-		"At least minimum two kubeconfigs required")
-
-	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
 // SetScheduledBackupInterval sets scheduled backup interval

@@ -1859,9 +1859,9 @@ func (d *portworx) upgradeStork(endpointURL string, endpointVersion string) erro
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
+func (d *portworx) GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error) {
 	pairInfo := make(map[string]string)
-	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
+	pxNodes, err := d.schedOps.GetRemotePXNodes(kubeConfigPath)
 	if err != nil {
 		logrus.Errorf("err retrieving remote px nodes: %v", err)
 		return nil, err
