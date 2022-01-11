@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
+	"github.com/portworx/sched-ops/task"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,6 +49,91 @@ func GeneratePodsOverviewString(pods []corev1.Pod) string {
 	}
 
 	return buffer.String()
+}
+
+// DeletePods deletes the given pods
+func DeletePods(client v1.CoreV1Interface, pods []corev1.Pod, force bool) error {
+	deleteOptions := metav1.DeleteOptions{}
+	if force {
+		gracePeriodSec := int64(0)
+		deleteOptions.GracePeriodSeconds = &gracePeriodSec
+	}
+
+	for _, pod := range pods {
+		if err := client.Pods(pod.Namespace).Delete(context.TODO(), pod.Name, deleteOptions); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// WaitForPodsToBeDeleted waits for pods to be deleted
+func WaitForPodsToBeDeleted(client v1.CoreV1Interface, podsToDelete []corev1.Pod, timeout time.Duration) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error)
+
+	// Wait for pods to be deleted
+	for index, pod := range podsToDelete {
+		wg.Add(1)
+		go func(pod corev1.Pod, index int) {
+			defer wg.Done()
+			if err := WaitForPodDeletion(client, pod.Name, pod.Namespace, timeout); err != nil {
+				errChan <- fmt.Errorf("Failed to delete pod %s, Err: %v", pod.Name, err)
+			}
+		}(pod, index)
+
+	}
+	wg.Wait()
+	close(errChan)
+
+	ok := true
+	var errorString string
+	for err := range errChan {
+		errorString += fmt.Sprintf("%v\n", err)
+		ok = false
+	}
+
+	if !ok {
+		return fmt.Errorf("Failed to delete pods:\n%s", errorString)
+	}
+	return nil
+}
+
+// WaitForPodDeletion waits for given timeout for given pod to be deleted
+func WaitForPodDeletion(client v1.CoreV1Interface, name string, namespace string, timeout time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		p, err := GetPodByName(client, name, namespace)
+		if err != nil {
+			if err == schederrors.ErrPodsNotFound {
+				return nil, false, nil
+			}
+
+			return nil, true, err
+		}
+
+		if p != nil {
+			return nil, true, fmt.Errorf("pod %s:%s is still present in the system", namespace, p.Name)
+		}
+
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, 5*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetPodByName returns pod for the given pod name and namespace
+func GetPodByName(client v1.CoreV1Interface, podName string, namespace string) (*corev1.Pod, error) {
+	pod, err := client.Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
+	if err != nil {
+		return nil, schederrors.ErrPodsNotFound
+	}
+
+	return pod, nil
 }
 
 // IsPodReady checks if all containers in a pod are ready (passed readiness probe).
