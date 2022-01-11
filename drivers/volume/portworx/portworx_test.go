@@ -189,7 +189,7 @@ func getTestNode(poolSize, totalDisks uint64, medium api.StorageMedium) node.Nod
 		totalDisks--
 	}
 	return node.Node{
-		StorageNode: api.StorageNode{Disks: disks},
+		StorageNode: &api.StorageNode{Disks: disks},
 	}
 }
 

@@ -40,7 +40,7 @@ type StoragePool struct {
 
 // Node encapsulates a node in the cluster
 type Node struct {
-	api.StorageNode
+	*api.StorageNode
 	uuid                     string
 	VolDriverNodeID          string
 	Name                     string

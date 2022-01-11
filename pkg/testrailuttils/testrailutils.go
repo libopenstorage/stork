@@ -12,13 +12,13 @@ var (
 	runID                        int
 	testRailConnectionSuccessful bool
 	// MilestoneName for testrail
-	MilestoneName                string
+	MilestoneName string
 	// RunName for testrail, should be jenkins job name
-	RunName                      string
+	RunName string
 	// JobRunID for testrail
-	JobRunID                     string
+	JobRunID string
 	// JenkinsBuildURL to be passed to store in testrail
-	JenkinsBuildURL              string
+	JenkinsBuildURL string
 )
 
 const (

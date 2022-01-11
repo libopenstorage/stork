@@ -240,7 +240,7 @@ func (d *portworx) RefreshDriverEndpoints() error {
 	return nil
 }
 
-func (d *portworx) updateNodes(pxNodes []api.StorageNode) error {
+func (d *portworx) updateNodes(pxNodes []*api.StorageNode) error {
 	for _, n := range node.GetNodes() {
 		if err := d.updateNode(&n, pxNodes); err != nil {
 			return err
@@ -250,7 +250,7 @@ func (d *portworx) updateNodes(pxNodes []api.StorageNode) error {
 	return nil
 }
 
-func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
+func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 	logrus.Infof("Updating node: %+v", *n)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
 	if err != nil {
@@ -385,7 +385,7 @@ func (d *portworx) CleanupVolume(volumeName string) error {
 	return nil
 }
 
-func (d *portworx) getPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient) (api.StorageNode, error) {
+func (d *portworx) getPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
 	if len(nManager) == 0 {
 		nManager = []api.OpenStorageNodeClient{d.getNodeManager()}
 	}
@@ -399,9 +399,9 @@ func (d *portworx) getPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient
 				return d.getPxNode(n, nManager...)
 			}
 		}
-		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
+		return &api.StorageNode{Status: api.Status_STATUS_NONE}, err
 	}
-	return *nodeInspectResponse.Node, nil
+	return nodeInspectResponse.Node, nil
 }
 
 func isNodeNotFound(err error) bool {
@@ -419,7 +419,6 @@ func (d *portworx) GetDriverVersion() (string, error) {
 	}
 	return pxVersion, nil
 }
-
 
 func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorageNodeClient) (string, error) {
 
@@ -577,7 +576,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	// Labels
-	var pxNodes []api.StorageNode
+	var pxNodes []*api.StorageNode
 	for _, rs := range vol.ReplicaSets {
 		for _, n := range rs.Nodes {
 			nodeResponse, err := d.getNodeManager().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkNodeInspectRequest{NodeId: n})
@@ -588,7 +587,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 
-			pxNodes = append(pxNodes, *nodeResponse.Node)
+			pxNodes = append(pxNodes, nodeResponse.Node)
 		}
 	}
 
@@ -1031,7 +1030,7 @@ func (d *portworx) RandomizeVolumeName(params string) string {
 	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New()+"${3}")
 }
 
-func (d *portworx) getStorageNodesOnStart() ([]api.StorageNode, error) {
+func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 	t := func() (interface{}, bool, error) {
 		cluster, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
 		if err != nil {
@@ -1053,14 +1052,14 @@ func (d *portworx) getStorageNodesOnStart() ([]api.StorageNode, error) {
 	return d.getPxNodes()
 }
 
-func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]api.StorageNode, error) {
+func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.StorageNode, error) {
 	var nodeManager api.OpenStorageNodeClient
 	if nManagers == nil {
 		nodeManager = d.getNodeManager()
 	} else {
 		nodeManager = nManagers[0]
 	}
-	nodes := make([]api.StorageNode, 0)
+	nodes := make([]*api.StorageNode, 0)
 	nodeEnumerateResp, err := nodeManager.Enumerate(d.getContext(), &api.SdkNodeEnumerateRequest{})
 	if err != nil {
 		return nodes, err
@@ -1080,7 +1079,7 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]api.Sto
 		if err != nil {
 			return nodes, err
 		}
-		nodes = append(nodes, *nodeResp.(*api.SdkNodeInspectResponse).Node)
+		nodes = append(nodes, nodeResp.(*api.SdkNodeInspectResponse).Node)
 	}
 	return nodes, nil
 }
