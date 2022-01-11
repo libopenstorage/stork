@@ -73,6 +73,7 @@ replace (
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
 
 	k8s.io/api => k8s.io/api v0.20.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.4

@@ -14,7 +14,7 @@ type BackupLocationMaintenanceOps interface {
 	// GetBackupLocationMaintenance gets the BackupLocationMaintenanc CR
 	GetBackupLocationMaintenance(string, string) (*kdmpv1alpha1.BackupLocationMaintenance, error)
 	// ListBackupLocationMaintenance lists all the BackupLocationMaintenance CRs
-	ListBackupLocationMaintenance(string) (*kdmpv1alpha1.BackupLocationMaintenanceList, error)
+	ListBackupLocationMaintenance(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.BackupLocationMaintenanceList, error)
 	// UpdateBackupLocationMaintenance updates the BackupLocationMaintenance CR
 	UpdateBackupLocationMaintenance(*kdmpv1alpha1.BackupLocationMaintenance) (*kdmpv1alpha1.BackupLocationMaintenance, error)
 	// DeleteBackupLocationMaintenance deletes the BackupLocationMaintenance CR
@@ -38,11 +38,11 @@ func (c *Client) GetBackupLocationMaintenance(name, namespace string) (*kdmpv1al
 }
 
 // ListBackupLocationMaintenance lists all the BackupLocationMaintenance CR
-func (c *Client) ListBackupLocationMaintenance(namespace string) (*kdmpv1alpha1.BackupLocationMaintenanceList, error) {
+func (c *Client) ListBackupLocationMaintenance(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.BackupLocationMaintenanceList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.kdmp.KdmpV1alpha1().BackupLocationMaintenances(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.kdmp.KdmpV1alpha1().BackupLocationMaintenances(namespace).List(context.TODO(), filterOptions)
 }
 
 // DeleteBackupLocationMaintenance deletes the BackupLocationMaintenance CR

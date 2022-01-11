@@ -36,6 +36,8 @@ type DeploymentOps interface {
 	DescribeDeployment(name, namespace string) (*appsv1.DeploymentStatus, error)
 	// GetDeploymentsUsingStorageClass returns all deployments using the given storage class
 	GetDeploymentsUsingStorageClass(scName string) ([]appsv1.Deployment, error)
+	// DeleteDeploymentPods deletes pods for the given deployment name and namespace
+	DeleteDeploymentPods(name, namespace string, timeout time.Duration) error
 }
 
 // ListDeployments lists all deployments for the given namespace
@@ -292,4 +294,34 @@ func (c *Client) GetDeploymentsUsingStorageClass(scName string) ([]appsv1.Deploy
 	}
 
 	return retList, nil
+}
+
+// DeleteDeploymentPods deletes pods for the given deployment name and namespace
+func (c *Client) DeleteDeploymentPods(name, namespace string, timeout time.Duration) error {
+	deployment, err := c.GetDeployment(name, namespace)
+	if err != nil {
+		return err
+	}
+
+	pods, err := c.GetDeploymentPods(deployment)
+	if err != nil {
+		return err
+	}
+
+	var podsNamesToDelete []string
+	var podsToDelete []corev1.Pod
+	for _, pod := range pods {
+		podsNamesToDelete = append(podsNamesToDelete, pod.Name)
+		podsToDelete = append(podsToDelete, pod)
+	}
+
+	if err := common.DeletePods(c.core, pods, false); err != nil {
+		return err
+	}
+
+	if err := common.WaitForPodsToBeDeleted(c.core, podsToDelete, timeout); err != nil {
+		return fmt.Errorf("Failed to wait for pods to be deleted: %s, Err: %v", podsNamesToDelete, err)
+	}
+
+	return nil
 }
