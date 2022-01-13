@@ -45,13 +45,16 @@ const (
 	// KDMPDriverName is the name of the kdmp driver implementation
 	KDMPDriverName = "kdmp"
 	// ZoneSeperator zone separator
-	ZoneSeperator              = "__"
-	pureCSIProvisioner         = "pure-csi"
-	ocpCephfsProvisioner       = "openshift-storage.cephfs.csi.ceph.com"
-	ocpRbdProvisioner          = "openshift-storage.rbd.csi.ceph.com"
-	vSphereCSIProvisioner      = "csi.vsphere.vmware.com"
-	efsCSIProvisioner          = "efs.csi.aws.com"
-	azureFileCSIProvisioner    = "file.csi.azure.com"
+	ZoneSeperator = "__"
+	// EbsProvisionerName EBS provisioner name
+	EbsProvisionerName      = "kubernetes.io/aws-ebs"
+	pureCSIProvisioner      = "pure-csi"
+	ocpCephfsProvisioner    = "openshift-storage.cephfs.csi.ceph.com"
+	ocpRbdProvisioner       = "openshift-storage.rbd.csi.ceph.com"
+	vSphereCSIProvisioner   = "csi.vsphere.vmware.com"
+	efsCSIProvisioner       = "efs.csi.aws.com"
+	azureFileCSIProvisioner = "file.csi.azure.com"
+
 	azureFileIntreeProvisioner = "kubernetes.io/azure-file"
 	googleFileCSIProvisioner   = "com.google.csi.filestore"
 	// Note: filestore.csi.storage.gke.io this provisoner supports snapshot. So not adding in csiDriverWithoutSnapshotSupport list
@@ -821,10 +824,12 @@ func GetVolumeBackupZones(
 	backupZoneList := []string{}
 	exists := map[string]bool{}
 	for _, volume := range volumeBackupInfos {
-		backupZone := strings.Split(volume.Zones[0], "-")
-		if !exists[backupZone[2]] {
-			exists[backupZone[2]] = true
-			backupZoneList = append(backupZoneList, backupZone[2])
+		if len(volume.Zones) != 0 {
+			backupZone := strings.Split(volume.Zones[0], "-")
+			if !exists[backupZone[2]] {
+				exists[backupZone[2]] = true
+				backupZoneList = append(backupZoneList, backupZone[2])
+			}
 		}
 	}
 	return backupZoneList
