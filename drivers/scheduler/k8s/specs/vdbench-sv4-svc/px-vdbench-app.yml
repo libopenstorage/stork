@@ -17,6 +17,13 @@ spec:
         - name: vdbench
           image: portworx/vdbench:torpedo
           imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 500Mi
+            requests:
+              memory: 256Mi
+              cpu: 100m
           command: ["./bench_runner.sh"]
           args: ["Basic", "5400", "$(POD_NAME)", "output/$(POD_NAME)"]
           env:
@@ -25,18 +32,14 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
           volumeMounts:
-            - name: vdbench-persistent-storage
+            - name: vdbench-persistent-storage-enc
               mountPath: /tmp
             - name: vdbench-output-persistent-storage
               mountPath: /output
-          resources:
-            limits:
-              cpu: "200m"
-              memory: "500Mi"
       volumes:
-        - name: vdbench-persistent-storage
+        - name: vdbench-persistent-storage-enc
           persistentVolumeClaim:
-            claimName: vdbench-pvc-sv4-svc
+            claimName: vdbench-pvc-enc-sv4-svc
         - name: vdbench-output-persistent-storage
           persistentVolumeClaim:
             claimName: vdbench-pvc-output-sv4-svc

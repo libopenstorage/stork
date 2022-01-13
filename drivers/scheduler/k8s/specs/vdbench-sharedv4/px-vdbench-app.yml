@@ -32,14 +32,14 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
           volumeMounts:
-            - name: vdbench-persistent-storage
+            - name: vdbench-persistent-storage-enc
               mountPath: /tmp
             - name: vdbench-output-persistent-storage
               mountPath: /output
       volumes:
-        - name: vdbench-persistent-storage
+        - name: vdbench-persistent-storage-enc
           persistentVolumeClaim:
-            claimName: vdbench-pvc-sharedv4
+            claimName: vdbench-pvc-enc-sharedv4
         - name: vdbench-output-persistent-storage
           persistentVolumeClaim:
             claimName: vdbench-pvc-output-sv4
