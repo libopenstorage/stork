@@ -97,8 +97,9 @@ const (
 	storageClassKey           = "volume.beta.kubernetes.io/storage-class"
 	storageProvisioner        = "volume.beta.kubernetes.io/storage-provisioner"
 	storageNodeAnnotation     = "volume.kubernetes.io/selected-node"
-	gkeNodeLabelKey           = "cloud.google.com/gke-os-distribution"
+	gkeNodeLabelKey           = "topology.gke.io/zone"
 	awsNodeLabelKey           = "alpha.eksctl.io/cluster-name"
+	ocpAWSNodeLabelKey        = "topology.ebs.csi.aws.com/zone"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -205,22 +206,25 @@ func getZones(pv *v1.PersistentVolume) ([]string, error) {
 	}
 
 	if awsCluster {
-		ebsName := storkvolume.GetEBSVolumeID(pv)
-		if ebsName == "" {
-			return nil, fmt.Errorf("AWS EBS info not found in PV %v", pv.Name)
-		}
+		// Zone are supported only for EBS provisioner
+		if pv.Annotations[pvProvisionedByAnnotation] == storkvolume.EbsProvisionerName {
+			ebsName := storkvolume.GetEBSVolumeID(pv)
+			if ebsName == "" {
+				return nil, fmt.Errorf("AWS EBS info not found in PV %v", pv.Name)
+			}
 
-		client, err := storkvolume.GetAWSClient()
-		if err != nil {
-			return nil, err
-		}
-		ebsVolume, err := storkvolume.GetEBSVolume(ebsName, nil, client)
-		if err != nil {
-			return nil, err
-		}
-		logrus.Tracef("getZones: zone: %v", *ebsVolume.AvailabilityZone)
+			client, err := storkvolume.GetAWSClient()
+			if err != nil {
+				return nil, err
+			}
+			ebsVolume, err := storkvolume.GetEBSVolume(ebsName, nil, client)
+			if err != nil {
+				return nil, err
+			}
+			logrus.Tracef("getZones: zone: %v", *ebsVolume.AvailabilityZone)
 
-		return []string{*ebsVolume.AvailabilityZone}, nil
+			return []string{*ebsVolume.AvailabilityZone}, nil
+		}
 	}
 
 	return nil, nil
@@ -239,7 +243,7 @@ func getCloudProvider() (bool, bool, error) {
 		if node.Labels[gkeNodeLabelKey] != "" {
 			gkeCluster = true
 			break
-		} else if node.Labels[awsNodeLabelKey] != "" {
+		} else if node.Labels[awsNodeLabelKey] != "" || node.Labels[ocpAWSNodeLabelKey] != "" {
 			awsCluster = true
 			break
 		}
@@ -673,6 +677,10 @@ func (k *kdmp) StartRestore(
 	for _, bkpvInfo := range volumeBackupInfos {
 		var destFullZoneName string
 		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
+		// zone is only applicable for EBS, skip for EFS
+		if len(bkpvInfo.Zones) == 0 {
+			nonSupportedProvider = true
+		}
 		if !nonSupportedProvider {
 			destZoneName := strings.Split(bkpvInfo.Zones[0], "-")
 			splitDestRegion[2] = zoneMap[destZoneName[2]]
