@@ -3,7 +3,6 @@ package resourcecollector
 import (
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -59,7 +58,6 @@ func (r *ResourceCollector) prepareRoleBindingForApply(
 		return err
 	}
 	rb.Subjects = append(rb.Subjects, subjectWithoutNs...)
-	logrus.Infof("sivakumar --- update rb subjects %+v", rb.Subjects)
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&rb)
 	if err != nil {
 		return err
