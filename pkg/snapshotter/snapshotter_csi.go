@@ -12,6 +12,7 @@ import (
 
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
+	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/objectstore"
@@ -52,11 +53,9 @@ const (
 	snapDeleteAnnotation = "snapshotScheduledForDeletion"
 	// snapRestoreAnnotation needs to be set if volume snapshot is scheduled for restore
 	snapRestoreAnnotation = "snapshotScheduledForRestore"
-	// kdmp config map
-	kdmpConfig = "kdmp-config"
 	// pvcNameLenLimitForJob is the max length of PVC name that the bound job
 	// will incorporate in their names
-	pvcNameLenLimitForJob = 237
+	pvcNameLenLimitForJob = 48
 	// shortRetryTimeout gets used for retry timeout
 	shortRetryTimeout = 30 * time.Second
 	// shortRetryTimeout gets used for retry timeout interval
@@ -1091,6 +1090,9 @@ func (c *csiDriver) createJob(pvc *v1.PersistentVolumeClaim, namespace string) (
 	if err == nil {
 		return job, nil
 	}
+	if !k8s_errors.IsNotFound(err) {
+		return nil, err
+	}
 
 	// Setup service account
 	if err := utils.SetupServiceAccount(jobName, namespace, roleFor()); err != nil {
@@ -1137,21 +1139,6 @@ func (c *csiDriver) deletejob(pvc *v1.PersistentVolumeClaim, namespace string) e
 		if err := utils.CleanServiceAccount(jobName, namespace); err != nil {
 			return nil, true, fmt.Errorf("deletion of service account %s/%s failed: %v", namespace, jobName, err)
 		}
-
-		if _, err := batch.Instance().GetJob(jobName, namespace); err != nil && !k8s_errors.IsNotFound(err) {
-			if err == nil {
-				errMsg := fmt.Sprintf("job %s/%s still exists after deletion: %v", namespace, jobName, err)
-				return nil, true, fmt.Errorf(errMsg)
-			}
-		}
-
-		if _, err := core.Instance().GetServiceAccount(jobName, namespace); err != nil && !k8s_errors.IsNotFound(err) {
-			if err == nil {
-				errMsg := fmt.Sprintf("service account %s/%s still exists after deletion: %v", namespace, jobName, err)
-				return nil, true, fmt.Errorf(errMsg)
-			}
-		}
-
 		pods, err := core.Instance().GetPodsUsingPVC(pvc.Name, namespace)
 		if err == nil && len(pods) > 0 {
 			logrus.Debugf("pvc %s/%s is still getting used by job pod %s", namespace, pvc.Name, pods[0].Name)
@@ -1190,13 +1177,13 @@ func buildJobSpec(
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					RestartPolicy:      v1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(kdmpConfig, "kube-system")),
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)),
 					ServiceAccountName: jobName,
 					Containers: []v1.Container{
 						{
 							Name:            "kopiaexecutor",
-							Image:           utils.KopiaExecutorImage(kdmpConfig, "kube-system"),
-							ImagePullPolicy: v1.PullAlways,
+							Image:           utils.KopiaExecutorImage(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace),
+							ImagePullPolicy: v1.PullIfNotPresent,
 							Command: []string{
 								"/bin/sh",
 								"-x",
