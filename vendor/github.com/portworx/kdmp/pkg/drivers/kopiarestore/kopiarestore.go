@@ -12,7 +12,6 @@ import (
 	"github.com/portworx/kdmp/pkg/jobratelimit"
 	kdmpops "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/batch"
-	coreops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -82,10 +81,6 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 func (d Driver) DeleteJob(id string) error {
 	namespace, name, err := utils.ParseJobID(id)
 	if err != nil {
-		return err
-	}
-
-	if err := coreops.Instance().DeleteSecret(name, namespace); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 

@@ -21,6 +21,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
@@ -51,6 +52,7 @@ const (
 	dataExportUIDAnnotation  = "portworx.io/dataexport-uid"
 	dataExportNameAnnotation = "portworx.io/dataexport-name"
 	skipResourceAnnotation   = "stork.libopenstorage.org/skip-resource"
+	baseSCAnnotation         = "volume.beta.kubernetes.io/storage-class"
 
 	pxbackupAnnotationPrefix        = "portworx.io/"
 	kdmpAnnotationPrefix            = "kdmp.portworx.com/"
@@ -64,7 +66,10 @@ const (
 
 	// pvcNameLenLimit is the max length of PVC name that DataExport related CRs
 	// will incorporate in their names
-	pvcNameLenLimit       = 247
+	pvcNameLenLimit = 247
+	// pvcNameLenLimitForJob is the max length of PVC name that the bound job
+	// will incorporate in their names
+	pvcNameLenLimitForJob = 48
 	volumeinitialDelay    = 2 * time.Second
 	volumeFactor          = 1.5
 	volumeSteps           = 15
@@ -1014,6 +1019,25 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 		return false, c.updateStatus(dataExport, data)
 	}
 
+	// This will create a unique secret per PVC being restored
+	// For restore create the secret in the ns where PVC is referenced
+	err = CreateCredentialsSecret(
+		dataExport.Name,
+		vb.Spec.BackupLocation.Name,
+		vb.Spec.BackupLocation.Namespace,
+		dataExport.Spec.Destination.Namespace,
+		dataExport.Labels,
+	)
+	if err != nil {
+		msg := fmt.Sprintf("failed to create cloud credential secret during local snapshot restore: %v", err)
+		logrus.Errorf(msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
+
 	backupUID := getAnnotationValue(dataExport, backupObjectUIDKey)
 	pvcUID := getAnnotationValue(dataExport, pvcUIDKey)
 	status, err := snapshotDriver.RestoreFromLocalSnapshot(bl, dataExport.Status.RestorePVC, snapshotDriverName, pvcUID, backupUID, getCSICRUploadDirectory(pvcUID), dataExport.Namespace)
@@ -1165,6 +1189,9 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 			}
 		}
 		if de.Status.SnapshotPVCName != "" && de.Status.SnapshotPVCNamespace != "" {
+			if err := cleanupJobBoundResources(de.Status.SnapshotPVCName, de.Status.SnapshotPVCNamespace); err != nil {
+				return fmt.Errorf("cleaning up of bound job resources failed: %v", err)
+			}
 			if err := core.Instance().DeletePersistentVolumeClaim(de.Status.SnapshotPVCName, de.Status.SnapshotPVCNamespace); err != nil && !k8sErrors.IsNotFound(err) {
 				return fmt.Errorf("delete %s/%s pvc: %s", de.Status.SnapshotPVCNamespace, de.Status.SnapshotPVCName, err)
 			}
@@ -1183,20 +1210,22 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 			return fmt.Errorf("delete %s job: %s", de.Status.TransferID, err)
 		}
 	}
+
 	if err := core.Instance().DeleteSecret(de.Name, de.Namespace); err != nil && !k8sErrors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", de.Name, err)
 		logrus.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}
+
 	return nil
 }
 
 func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExport, ignorePVC bool) error {
-
+	// ignorepvc should be set where we want to keep the pvc like in a successful restore from local snapshot
+	// else this pvc needs to be deleted so that kdmp restore can happen using another pvc without any datasource
 	var cleanupErr error
 	var snapshotDriverName string
 	var snapshotDriver snapshotter.Driver
-	var vb *kdmpapi.VolumeBackup
 	var bl *storkapi.BackupLocation
 	t := func() (interface{}, bool, error) {
 
@@ -1211,31 +1240,34 @@ func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExpor
 			return nil, false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, cleanupErr)
 		}
 
-		vb, cleanupErr = kdmpopts.Instance().GetVolumeBackup(context.Background(),
-			de.Spec.Source.Name, de.Spec.Source.Namespace)
+		// Construct the backuplocation from the secret
+		// Since we same name across the resources, using the de name and namespace as secret name and namespace
+		bl, cleanupErr = getBackuplocationFromSecret(de.Name, de.Spec.Source.Namespace)
 		if cleanupErr != nil {
-			msg := fmt.Sprintf("Error accessing volumebackup %s in namespace %s : %v",
-				de.Spec.Source.Name, de.Spec.Source.Namespace, cleanupErr)
-			logrus.Errorf(msg)
+			// If secret is not found, we assume, it is retry
+			if k8sErrors.IsNotFound(cleanupErr) {
+				return nil, false, nil
+			}
+			msg := fmt.Sprintf("error while getting backuplocation from secret %s/%s : %v",
+				de.Spec.Source.Namespace, de.Name, cleanupErr)
 			return nil, false, fmt.Errorf(msg)
 		}
 
-		bl, cleanupErr = stork.Instance().GetBackupLocation(vb.Spec.BackupLocation.Name, vb.Spec.BackupLocation.Namespace)
-		if cleanupErr != nil {
-			msg := fmt.Sprintf("Error while getting backuplocation %s/%s : %v",
-				de.Spec.Source.Namespace, de.Spec.Source.Name, cleanupErr)
-			return nil, false, fmt.Errorf(msg)
-		}
 		backupUID := getAnnotationValue(de, backupObjectUIDKey)
 		pvcUID := getAnnotationValue(de, pvcUIDKey)
 		pvcSpec := &corev1.PersistentVolumeClaim{}
+
 		if !ignorePVC {
 			pvcSpec = de.Status.RestorePVC
+			if err := cleanupJobBoundResources(pvcSpec.Name, de.Namespace); err != nil {
+				return nil, false, fmt.Errorf("cleaning up of bound job resources failed: %v", err)
+			}
 		}
 		cleanupErr = snapshotDriver.CleanUpRestoredResources(bl, pvcSpec, pvcUID, backupUID, getCSICRUploadDirectory(pvcUID), de.Namespace)
 		if cleanupErr != nil {
 			return nil, false, cleanupErr
 		}
+
 		return nil, false, nil
 	}
 
@@ -1340,11 +1372,18 @@ func (c *Controller) restoreSnapshot(ctx context.Context, snapshotDriver snapsho
 			StorageClassName: srcPvc.Spec.StorageClassName, // use the same SC as the source PVC
 		},
 	}
+
 	// We don't want other reconcilors (if any) to backup this temporary PVC
 	pvc.Annotations = make(map[string]string)
 	pvc.Annotations[skipResourceAnnotation] = "true"
 	pvc.Annotations[dataExportUIDAnnotation] = string(de.UID)
 	pvc.Annotations[dataExportNameAnnotation] = trimLabel(de.Name)
+
+	// If storage class annotation is set , then put that annotation too in the temp pvc
+	// Sometimes the spec.storageclass might be empty, in that case the temp pvc may get the sc as the default sc
+	if srcSC, ok := srcPvc.Annotations[baseSCAnnotation]; ok {
+		pvc.Annotations[baseSCAnnotation] = srcSC
+	}
 
 	pvc, err = snapshotDriver.RestoreVolumeClaim(
 		snapshotter.RestoreNamespace(de.Namespace),
@@ -1651,6 +1690,29 @@ func podBelongsToJob(pod corev1.Pod, job, namespace string) bool {
 	return false
 }
 
+// try to delete the job used for binding if it is present
+// the job name is same as the staging pvc name
+func cleanupJobBoundResources(pvcName, namespace string) error {
+	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			logrus.Warnf("cleaning up of job for pvc %s/%s failed as pvc does not exist", namespace, pvcName)
+			return nil
+		}
+		return fmt.Errorf("cleaning up of bound job for pvc %s/%s failed: %v", pvcName, namespace, err)
+	}
+
+	jobName := toBoundJobPVCName(pvc.Name, string(pvc.GetUID()))
+
+	if err := batch.Instance().DeleteJobWithForce(jobName, namespace); err != nil && !k8sErrors.IsNotFound(err) {
+		return fmt.Errorf("deletion of job %s/%s failed: %v", namespace, jobName, err)
+	}
+	if err := utils.CleanServiceAccount(jobName, namespace); err != nil {
+		return fmt.Errorf("deletion of service account %s/%s failed: %v", namespace, jobName, err)
+	}
+	return nil
+}
+
 func checkBackupLocation(ref kdmpapi.DataExportObjectReference) (*storkapi.BackupLocation, error) {
 	if err := checkNameNamespace(ref); err != nil {
 		return nil, err
@@ -1897,6 +1959,15 @@ func toSnapshotPVCName(pvcName string, dataExportUID string) string {
 	}
 	uidToken := strings.Split(dataExportUID, "-")
 	return fmt.Sprintf("%s-%s", truncatedPVCName, uidToken[0])
+}
+
+func toBoundJobPVCName(pvcName string, pvcUID string) string {
+	truncatedPVCName := pvcName
+	if len(pvcName) > pvcNameLenLimitForJob {
+		truncatedPVCName = pvcName[:pvcNameLenLimitForJob]
+	}
+	uidToken := strings.Split(pvcUID, "-")
+	return fmt.Sprintf("%s-%s-%s", "bound", truncatedPVCName, uidToken[0])
 }
 
 func trimLabel(label string) string {

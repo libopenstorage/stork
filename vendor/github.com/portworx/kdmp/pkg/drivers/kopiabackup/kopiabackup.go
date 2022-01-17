@@ -117,11 +117,6 @@ func (d Driver) DeleteJob(id string) error {
 		return fmt.Errorf(errMsg)
 	}
 
-	if err := coreops.Instance().DeleteSecret(name, namespace); err != nil && !apierrors.IsNotFound(err) {
-		errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", name, err)
-		logrus.Errorf("%s: %v", fn, errMsg)
-		return fmt.Errorf(errMsg)
-	}
 	if err := utils.CleanServiceAccount(name, namespace); err != nil {
 		errMsg := fmt.Sprintf("deletion of service account %s/%s failed: %v", namespace, name, err)
 		logrus.Errorf("%s: %v", fn, errMsg)

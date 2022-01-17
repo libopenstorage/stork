@@ -84,10 +84,6 @@ func (d Driver) DeleteJob(id string) error {
 		return err
 	}
 
-	if err := coreops.Instance().DeleteSecret(name, namespace); err != nil && !apierrors.IsNotFound(err) {
-		return err
-	}
-
 	if err := utils.CleanServiceAccount(name, namespace); err != nil {
 		return err
 	}
