@@ -17,7 +17,13 @@ func (r *ResourceCollector) roleBindingToBeCollected(
 	}
 
 	name := metadata.GetName()
-	return !strings.HasPrefix(name, "system:"), nil
+	if strings.HasPrefix(name, "system:") {
+		if strings.HasPrefix(name, "system:openshift:scc") {
+			return true, nil
+		}
+		return false, nil
+	}
+	return true, nil
 }
 
 func (r *ResourceCollector) roleToBeCollected(
