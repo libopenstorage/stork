@@ -67,6 +67,8 @@ func jobForLiveBackup(
 		cmd = strings.Join(splitCmd, " ")
 	}
 
+	privileged := true
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -109,6 +111,9 @@ func jobForLiveBackup(
 									MountPath: drivers.KopiaCredSecretMount,
 									ReadOnly:  true,
 								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: &privileged,
 							},
 						},
 					},
