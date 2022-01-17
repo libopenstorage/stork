@@ -446,6 +446,12 @@ func roleFor() *rbacv1.Role {
 				ResourceNames: []string{"hostaccess"},
 				Verbs:         []string{"use"},
 			},
+			{
+				APIGroups:     []string{"security.openshift.io"},
+				Resources:     []string{"securitycontextconstraints"},
+				ResourceNames: []string{"privileged"},
+				Verbs:         []string{"use"},
+			},
 		},
 	}
 }
