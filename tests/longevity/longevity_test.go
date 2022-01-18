@@ -13,7 +13,6 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
@@ -52,8 +51,6 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 	populateIntervals()
 	populateDisruptiveTriggers()
-	err := backup.UpdatePxBackupAdminSecret()
-	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = Describe("{Longevity}", func() {
@@ -61,30 +58,16 @@ var _ = Describe("{Longevity}", func() {
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-		DeployApps:                      TriggerDeployNewApps,
-		RebootNode:                      TriggerRebootNodes,
-		RestartVolDriver:                TriggerRestartVolDriver,
-		CrashVolDriver:                  TriggerCrashVolDriver,
-		HAIncrease:                      TriggerHAIncrease,
-		HADecrease:                      TriggerHADecrease,
-		VolumeResize:                    TriggerVolumeResize,
-		EmailReporter:                   TriggerEmailReporter,
-		AppTaskDown:                     TriggerAppTaskDown,
-		CoreChecker:                     TriggerCoreChecker,
-		BackupAllApps:                   TriggerBackupApps,
-		BackupScheduleAll:               TriggerScheduledBackupAll,
-		BackupScheduleScale:             TriggerScheduledBackupScale,
-		BackupSpecificResource:          TriggerBackupSpecificResource,
-		BackupSpecificResourceOnCluster: TriggerBackupSpecificResourceOnCluster,
-		TestInspectBackup:               TriggerInspectBackup,
-		TestInspectRestore:              TriggerInspectRestore,
-		TestDeleteBackup:                TriggerDeleteBackup,
-		RestoreNamespace:                TriggerRestoreNamespace,
-		BackupUsingLabelOnCluster:       TriggerBackupByLabel,
-		BackupRestartPX:                 TriggerBackupRestartPX,
-		BackupRestartNode:               TriggerBackupRestartNode,
-		BackupDeleteBackupPod:           TriggerBackupDeleteBackupPod,
-		BackupScaleMongo:                TriggerBackupScaleMongo,
+		DeployApps:       TriggerDeployNewApps,
+		RebootNode:       TriggerRebootNodes,
+		RestartVolDriver: TriggerRestartVolDriver,
+		CrashVolDriver:   TriggerCrashVolDriver,
+		HAIncrease:       TriggerHAIncrease,
+		HADecrease:       TriggerHADecrease,
+		VolumeResize:     TriggerVolumeResize,
+		EmailReporter:    TriggerEmailReporter,
+		AppTaskDown:      TriggerAppTaskDown,
+		CoreChecker:      TriggerCoreChecker,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -94,12 +77,6 @@ var _ = Describe("{Longevity}", func() {
 		})
 
 		TriggerDeployNewApps(&contexts, &triggerEventsChan)
-
-		Step("Setup PX backup", func() {
-			// Set cluster context to cluster where torpedo is running
-			SetClusterContext("")
-			SetupBackup("backup-test")
-		})
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
@@ -168,6 +145,7 @@ func testTrigger(wg *sync.WaitGroup,
 			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
+			logrus.Infof("Trigger Function completed for [%s]\n", triggerType)
 
 			//if isDisruptiveTrigger(triggerType) {
 			triggerLoc.Unlock()
@@ -617,7 +595,6 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 }
 
 var _ = AfterSuite(func() {
-	TearDownBackupRestoreAll()
 	PerformSystemCheck()
 	ValidateCleanup()
 })

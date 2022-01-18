@@ -536,6 +536,27 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	return ctx, nil
 }
 
+// GetAdminTokenFromSecret with provided name and namespace
+func GetAdminTokenFromSecret() (string, error) {
+	err := UpdatePxBackupAdminSecret()
+	if err != nil {
+		return "", err
+	}
+
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	if err != nil {
+		return "", err
+	}
+
+	token := string(secret.Data[OrgToken])
+	if token == "" {
+		return "", fmt.Errorf("admin token is empty")
+	}
+	logrus.Infof("Token from Admin secret: %v", token)
+
+	return token, nil
+}
+
 // GetAllGroups fetches all available groups
 func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 	fn := "GetAllGroups"
