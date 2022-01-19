@@ -22,6 +22,12 @@ import (
 const (
 	defaultCommandRetry   = 5 * time.Second
 	defaultCommandTimeout = 1 * time.Minute
+	bandwidthMBps         = 1
+	// buffered BW = 1 MBps with 10% buffer speed in KBps
+	bufferedBW = 1130
+)
+const (
+	fio = "fio-throttle-io"
 )
 
 func TestVolOps(t *testing.T) {
@@ -168,6 +174,83 @@ var _ = Describe("{VolumeUpdate}", func() {
 			}
 		})
 
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Volume IO Throttle change
+var _ = Describe("{VolumeIOThrottle}", func() {
+	var contexts []*scheduler.Context
+	var namespace string
+	var speedBeforeUpdate, speedAfterUpdate int
+	var testrailID = 58504
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58504
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	It("has to schedule IOPs and limit them to a max bandwidth", func() {
+		contexts = make([]*scheduler.Context, 0)
+		var err error
+		taskNamePrefix := "io-throttle"
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			logrus.Debugf("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			namespace = appContexts[0].ScheduleOptions.Namespace
+		}
+		ValidateApplications(contexts)
+		Step("get the BW for volume without limiting bandwidth", func() {
+			logrus.Infof("waiting for 5 sec for the pod to stablize")
+			time.Sleep(5 * time.Second)
+			speedBeforeUpdate, err = Inst().S.GetIOBandwidth(fio, namespace)
+			if err != nil {
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		logrus.Debugf("BW before update %d", speedBeforeUpdate)
+
+		Step("updating the BW", func() {
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(appVolumes).NotTo(BeEmpty())
+				})
+				logrus.Debugf("Volumes to be updated %s", appVolumes)
+				for _, v := range appVolumes {
+					err := Inst().V.SetIoBandwidth(v, bandwidthMBps, bandwidthMBps)
+					if err != nil {
+						Expect(err).NotTo(HaveOccurred())
+					}
+				}
+			}
+		})
+		logrus.Debugf("waiting for the FIO to reduce the speed to take into account the IO Throttle")
+		time.Sleep(60 * time.Second)
+		Step("get the BW for volume after limiting bandwidth", func() {
+			speedAfterUpdate, err = Inst().S.GetIOBandwidth(fio, namespace)
+			if err != nil {
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		logrus.Debugf("BW after update %d", speedAfterUpdate)
+		Step("Validate speed reduction", func() {
+			// We are setting the BW to 1 MBps so expecting the returned value to be in 10% buffer
+			Expect(speedAfterUpdate < bufferedBW).To(Equal(true), "Speed reduced below the buffer")
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)

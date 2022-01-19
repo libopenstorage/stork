@@ -833,6 +833,41 @@ func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params ma
 	return nil
 }
 
+func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error {
+	volumeName := d.schedOps.GetVolumeName(vol)
+	logrus.Infof("Setting IO Throttle for %s\n", volumeName)
+	volDriver := d.getVolDriver()
+	_, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+	if err != nil && errIsNotFound(err) {
+		return err
+	} else if err != nil {
+		return err
+	}
+	logrus.Debugf("Updating volume %s", volumeName)
+	t := func() (interface{}, bool, error) {
+		volumeSpecUpdate := &api.VolumeSpecUpdate{
+			IoThrottleOpt: &api.VolumeSpecUpdate_IoThrottle{
+				IoThrottle: &api.IoThrottle{
+					ReadBwMbytes:  readBandwidthMBps,
+					WriteBwMbytes: writeBandwidthMBps,
+				},
+			},
+		}
+		_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
+			VolumeId: volumeName,
+			Spec:     volumeSpecUpdate,
+		})
+		if err != nil {
+			return nil, true, fmt.Errorf("volume not updated yet")
+		}
+		logrus.Debug("Updated volume")
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, defaultRetryInterval); err != nil {
+		return fmt.Errorf("error in setting IOps %s", err)
+	}
+	return nil
+}
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {
 	var token string
 	volumeName := d.schedOps.GetVolumeName(vol)

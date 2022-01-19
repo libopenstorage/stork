@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fio-throttle-io
+spec:
+  schedulerName: stork
+  containers:
+    - name: fio
+      image: ljishen/fio
+      command: ["/bin/sh"]
+      resources:
+        limits:
+          cpu: "2"
+          memory: 4Gi
+        requests:
+          cpu: "1"
+          memory: 4Gi
+      args: ["-c", "for run in $(seq 1 100); do fio --name=fio-rand-W --filename=/scratch/fio.dat --status-interval=1 --rw=write --randrepeat=1 --end_fsync=1 --blocksize=4k --size=256MB --ioengine=libaio --direct=1 --iodepth=128 --output-format=json; done"]
+      volumeMounts:
+        - name: fio-config-vol
+          mountPath: /configs
+        - name: fio-data
+          mountPath: /scratch
+  volumes:
+    - name: fio-config-vol
+      configMap:
+        name: fio-job-config
+    - name: fio-data
+      persistentVolumeClaim:
+        claimName: fio-throttle-io-pvc

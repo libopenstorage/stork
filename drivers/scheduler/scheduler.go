@@ -256,6 +256,9 @@ type Driver interface {
 	// GetAutopilotNamespace gets the Autopilot namespace
 	GetAutopilotNamespace() (string, error)
 
+	// GetIOBandwidth gets container start and end time
+	GetIOBandwidth(string, string) (int, error)
+
 	// CreateAutopilotRule creates the AutopilotRule object
 	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)
 

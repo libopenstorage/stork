@@ -209,6 +209,14 @@ func (d *DefaultDriver) ValidateUpdateVolume(vol *Volume, params map[string]stri
 	}
 }
 
+// SetIoBandwidth Sets the max bandwidth for IOPS with given read and write MBps
+func (d *DefaultDriver) SetIoBandwidth(vol *Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetIoBandwidth()",
+	}
+}
+
 // ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 func (d *DefaultDriver) ValidateDeleteVolume(vol *Volume) error {
 	return &errors.ErrNotSupported{

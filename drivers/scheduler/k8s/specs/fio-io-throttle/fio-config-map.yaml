@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fio-job-config
+data:
+  fio.job: |
+    [global]
+    name=fio-rand-W
+    filename=/scratch/fio.dat
+    rw=randwrite
+    randrepeat=1
+    end_fsync=1
+    time_based=1
+    runtime=300
+    blocksize=4k
+    size=10GB
+    ioengine=libaio
+    direct=1
+    iodepth=128
+    [file1]
+    ioengine=libaio

@@ -4001,6 +4001,24 @@ func (k *K8s) createBatchObjects(
 
 		logrus.Infof("[%v] Created CronJob: %v", app.Key, cronjob.Name)
 		return cronjob, nil
+	} else if obj, ok := spec.(*batchv1.Job); ok {
+		obj.Namespace = ns.Name
+		job, err := k8sBatch.CreateJob(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if job, err = k8sBatch.GetJob(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Job: %v", app.Key, job.Name)
+				return job, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Job: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created CronJob: %v", app.Key, job.Name)
+		return job, nil
 	}
 	return nil, nil
 }
@@ -4119,6 +4137,45 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 		}
 	}
 	return nil
+}
+
+// GetIOBandwidth takes in the pod name and namespace and returns the IOPs speed
+func (k *K8s) GetIOBandwidth(podName string, namespace string) (int, error) {
+	logrus.Infof("Getting the IO Speed in pod %s", podName)
+	pod, err := k8sCore.GetPodByName(podName, namespace)
+	if err != nil {
+		return 0, fmt.Errorf("error in getting FIO PODS")
+	}
+	logOptions := corev1.PodLogOptions{
+		// Getting 250 lines from the pod logs to get the io_bytes
+		TailLines: getInt64Address(250),
+	}
+	log, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &logOptions)
+	if err != nil {
+		return 0, err
+	}
+	outputLines := strings.Split(log, "\n")
+	for _, line := range outputLines {
+		if strings.Contains(line, "iops") {
+			re := regexp.MustCompile(`[0-9]+`)
+			speedBytes := string(re.FindAll([]byte(line), -1)[0])
+			speed, err := strconv.Atoi(speedBytes)
+			if err != nil {
+				return 0, fmt.Errorf("Error in getting the speed")
+			}
+			// We need to consider non Zero number from the speeds returned,
+			// since it will return read speed, trim speed and we are performing only write operation
+			if speed == 0 {
+				continue
+			}
+			return speed, nil
+		}
+	}
+	return 0, fmt.Errorf("pod %s does not have bandwidth in logs", podName)
+}
+
+func getInt64Address(x int64) *int64 {
+	return &x
 }
 
 func validateEvents(objName string, events map[string]int32, count int32) error {

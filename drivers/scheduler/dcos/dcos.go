@@ -700,6 +700,15 @@ func (d *dcos) GetAutopilotNamespace() (string, error) {
 	}
 }
 
+// GetIOBandwidth returns the IO bandwidth for the given pod name and namespace
+func (d *dcos) GetIOBandwidth(string, string) (int, error) {
+	// TODO implement this method
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetIOBandwidth()",
+	}
+}
+
 func (d *dcos) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
