@@ -184,6 +184,9 @@ type Driver interface {
 	// ValidateRebalanceJobs validates rebalance jobs
 	ValidateRebalanceJobs() error
 
+	// ResizeStoragePoolByPercentage resizes the given stroage pool by percentage
+	ResizeStoragePoolByPercentage(string, api.SdkStoragePool_ResizeOperationType, uint64) error
+
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
 

@@ -1263,6 +1263,33 @@ func (d *portworx) ValidateRebalanceJobs() error {
 	return nil
 }
 
+func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
+
+	logrus.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
+
+	// start a task to check if pool  resize is done
+	t := func() (interface{}, bool, error) {
+		jobListResp, err := d.storagePoolManager.Resize(d.getContext(), &api.SdkStoragePoolResizeRequest{
+			Uuid: poolUUID,
+			ResizeFactor: &api.SdkStoragePoolResizeRequest_Percentage{
+				Percentage: percentage,
+			},
+			OperationType: e,
+		})
+		if err != nil {
+			return nil, true, err
+		}
+		if jobListResp.String() != "" {
+			logrus.Debugf("Resize respone: %v", jobListResp.String())
+		}
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, validateRebalanceJobsTimeout, validateRebalanceJobsInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (map[string]uint64, error) {
 	fn := "getExpectedPoolSizes"
 	var (

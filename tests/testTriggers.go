@@ -162,6 +162,10 @@ const (
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
 	CoreChecker = "coreChecker"
+	// PoolResizeDisk resize storage pool using resize-disk
+	PoolResizeDisk = "poolResizeDisk"
+	// PoolAddDisk resize storage pool using add-disk
+	PoolAddDisk = "poolAddDisk"
 	// BackupAllApps Perform backups of all deployed apps
 	BackupAllApps = "backupAllApps"
 	// BackupScheduleAll Creates and deletes namespaces and checks a scheduled backup for inclusion
@@ -2330,6 +2334,152 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 			}
 		}
 	})
+}
+
+// TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
+func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolResizeDisk,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step("get storage pools and perform resize-disk by 10 percentage on it ", func() {
+		time.Sleep(1 * time.Minute)
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			Step("Get StoragePool IDs from the app volumes", func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
+				poolSet := make(map[string]struct{})
+				var exists = struct{}{}
+				for _, vol := range appVolumes {
+					replicaSets, err := Inst().V.GetReplicaSets(vol)
+					UpdateOutcome(event, err)
+
+					for _, poolUUID := range replicaSets[0].PoolUuids {
+						logrus.Infof("Pool UUID: %v, Vol: %v", poolUUID, vol.Name)
+						poolSet[poolUUID] = exists
+
+					}
+				}
+
+				for id := range poolSet {
+					//TODO : Parametrize the resize percentage
+					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(10))
+					UpdateOutcome(event, err)
+				}
+				logrus.Infof("Waiting for 10 mins for resize to initiate and check status")
+				time.Sleep(10 * time.Minute)
+				Step("Validate the Pool status after re-size disk", func() {
+					nodeList := node.GetStorageDriverNodes()
+					if len(nodeList) == 0 {
+						UpdateOutcome(event, fmt.Errorf("unable to get node list"))
+					}
+					for _, n := range nodeList {
+						for _, p := range n.StoragePools {
+							poolID := p.GetUuid()
+							poolLastOperationType := p.GetLastOperation().GetType().String()
+							poolLastOperationStatus := p.GetLastOperation().GetStatus().String()
+							poolLastOperationMsg := p.GetLastOperation().GetMsg()
+							logrus.Infof("Pool ID: %s, LastOperation: %s, Status: %s, Message:%s", poolID, poolLastOperationType, poolLastOperationStatus, poolLastOperationMsg)
+							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" {
+								UpdateOutcome(event, fmt.Errorf("last operation %v for pool %v is failed with Msg: %v", poolLastOperationType, poolID, poolLastOperationMsg))
+							}
+						}
+					}
+
+				})
+
+			})
+		}
+	})
+
+}
+
+// TriggerPoolAddDisk peforms add-disk on the storage pools for the given contexts
+func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolResizeDisk,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step("get storage pools and perform add-disk by 10 percentage on it ", func() {
+		time.Sleep(1 * time.Minute)
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			Step("Get StoragePool IDs from the app volumes", func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
+				poolSet := make(map[string]struct{})
+				var exists = struct{}{}
+				for _, vol := range appVolumes {
+					replicaSets, err := Inst().V.GetReplicaSets(vol)
+					UpdateOutcome(event, err)
+
+					for _, poolUUID := range replicaSets[0].PoolUuids {
+						logrus.Infof("Pool UUID: %v, Vol: %v", poolUUID, vol.Name)
+						poolSet[poolUUID] = exists
+
+					}
+				}
+
+				for id := range poolSet {
+					//TODO : Parametrize the resize percentage
+					err = Inst().V.ResizeStoragePoolByPercentage(id, 1, uint64(10))
+					UpdateOutcome(event, err)
+				}
+				logrus.Infof("Waiting for 10 mins for add disk to initiate and check status")
+				time.Sleep(10 * time.Minute)
+				Step("Validate the Pool status after add disk", func() {
+					nodeList := node.GetStorageDriverNodes()
+					if len(nodeList) == 0 {
+						UpdateOutcome(event, fmt.Errorf("unable to get node list"))
+					}
+					for _, n := range nodeList {
+						for _, p := range n.StoragePools {
+							poolID := p.GetUuid()
+							poolLastOperationType := p.GetLastOperation().GetType().String()
+							poolLastOperationStatus := p.GetLastOperation().GetStatus().String()
+							poolLastOperationMsg := p.GetLastOperation().GetMsg()
+							logrus.Infof("Pool ID: %s, LastOperation: %s, Status: %s, Message:%s", poolID, poolLastOperationType, poolLastOperationStatus, poolLastOperationMsg)
+							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" {
+								UpdateOutcome(event, fmt.Errorf("last operation %v for pool %v is failed with Msg: %v", poolLastOperationType, poolID, poolLastOperationMsg))
+							}
+						}
+					}
+
+				})
+
+			})
+		}
+	})
+
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {

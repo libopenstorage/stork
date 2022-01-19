@@ -412,6 +412,14 @@ func (d *DefaultDriver) ValidateRebalanceJobs() error {
 	}
 }
 
+// ResizeStoragePoolByPercentage validates pool resize
+func (d *DefaultDriver) ResizeStoragePoolByPercentage(string, api.SdkStoragePool_ResizeOperationType, uint64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ResizeStoragePoolByPercentage()",
+	}
+}
+
 // CreateAutopilotRules creates autopilot rules
 func (d *DefaultDriver) CreateAutopilotRules([]apapi.AutopilotRule) error {
 	return &errors.ErrNotSupported{
