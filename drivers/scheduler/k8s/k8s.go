@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	yaml2 "gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
 	"os"
@@ -19,6 +18,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	yaml2 "gopkg.in/yaml.v2"
 
 	docker_types "github.com/docker/docker/api/types"
 	vaultapi "github.com/hashicorp/vault/api"
@@ -582,6 +583,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*monitoringv1.PrometheusRule); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*monitoringv1.ServiceMonitor); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*corev1.Namespace); ok {
 		return specObj, nil
 	}
 

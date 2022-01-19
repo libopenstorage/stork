@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
 	"os/exec"
 	"reflect"
 	"sort"
@@ -14,10 +15,13 @@ import (
 	"container/ring"
 
 	"github.com/onsi/ginkgo"
+
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -29,6 +33,7 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/portworx/torpedo/pkg/email"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -151,6 +156,8 @@ const (
 	RebootNode = "rebootNode"
 	// VolumeResize increases volume size
 	VolumeResize = "volumeResize"
+	// CloudSnapShot takes local snap shot of the volumes
+	CloudSnapShot = "cloudSnapShot"
 	// EmailReporter notifies via email outcome of past events
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
@@ -718,6 +725,207 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 				})
 		}
 	})
+}
+
+// TriggerCloudSnapShot deploy cloudsnap apps and validates snapshot
+func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: CloudSnapShot,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	snapshotScheduleRetryInterval := 10 * time.Second
+	snapshotScheduleRetryTimeout := 3 * time.Minute
+
+	Step("Validate Cloud Snaps", func() {
+
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			if strings.Contains(ctx.App.Key, "cloudsnap") {
+
+				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					UpdateOutcome(event, err)
+					if len(appVolumes) == 0 {
+						UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+					}
+				})
+				logrus.Infof("Got volume count : %v", len(appVolumes))
+
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				logrus.Infof("Namespace : %v", appNamespace)
+
+				for _, v := range appVolumes {
+					snapshotScheduleName := v.Name + "-interval-schedule"
+					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+						appNamespace,
+						snapshotScheduleRetryTimeout,
+						snapshotScheduleRetryInterval)
+					if err == nil {
+						for k, v := range snapStatuses {
+							logrus.Infof("Policy Type: %v", k)
+							for _, e := range v {
+								logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
+								logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
+							}
+						}
+					} else {
+						logrus.Infof("Got error while getting volume snapshot status :%v", err.Error())
+					}
+					UpdateOutcome(event, err)
+				}
+
+			}
+
+		}
+
+	})
+
+}
+
+func createCloudCredential(req *api.CloudCredentialCreateRequest) error {
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetPxCentralAdminCtx()
+
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateCloudCredential(ctx, req)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequest, error) {
+	req := &api.CloudCredentialCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  "CloudSnapTest",
+			Uid:   uid,
+			OrgId: "CloudSnapTest",
+		},
+		CloudCredential: &api.CloudCredentialInfo{},
+	}
+
+	provider, ok := os.LookupEnv("OBJECT_STORE_PROVIDER")
+	logrus.Infof("Provider for credentail secret is %s", provider)
+	if !ok {
+		return nil, &errors.ErrNotFound{
+			ID:   "OBJECT_STORE_PROVIDER",
+			Type: "Environment Variable",
+		}
+	}
+	logrus.Infof("Provider for credentail secret is %s", provider)
+
+	switch provider {
+	case "aws":
+		s3AccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+		s3SecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+		req.CloudCredential.Type = api.CloudCredentialInfo_AWS
+		req.CloudCredential.Config = &api.CloudCredentialInfo_AwsConfig{
+			AwsConfig: &api.AWSConfig{
+				AccessKey: s3AccessKey,
+				SecretKey: s3SecretKey,
+			},
+		}
+	case "azure":
+		azureAccountName, ok := os.LookupEnv("AZURE_ACCOUNT_NAME")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "AZURE_ACCOUNT_NAME",
+				Type: "Environment Variable",
+			}
+		}
+
+		azureAccountKey, ok := os.LookupEnv("AZURE_ACCOUNT_KEY")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "AZURE_ACCOUNT_NAME",
+				Type: "Environment Variable",
+			}
+		}
+		clientSecret, ok := os.LookupEnv("AZURE_CLIENT_SECRET")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "AZURE_CLIENT_SECRET",
+				Type: "Environment Variable",
+			}
+		}
+		clientID, ok := os.LookupEnv("AZURE_CLIENT_ID")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "AZURE_CLIENT_ID",
+				Type: "Environment Variable",
+			}
+		}
+		tenantID, ok := os.LookupEnv("AZURE_TENANT_ID")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "AZURE_TENANT_ID",
+				Type: "Environment Variable",
+			}
+		}
+		subscriptionID, ok := os.LookupEnv("AZURE_SUBSCRIPTION_ID")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "AZURE_SUBSCRIPTION_ID",
+				Type: "Environment Variable",
+			}
+		}
+		req.CloudCredential.Type = api.CloudCredentialInfo_Azure
+		req.CloudCredential.Config = &api.CloudCredentialInfo_AzureConfig{
+			AzureConfig: &api.AzureConfig{
+				AccountName:    azureAccountName,
+				AccountKey:     azureAccountKey,
+				ClientSecret:   clientSecret,
+				ClientId:       clientID,
+				TenantId:       tenantID,
+				SubscriptionId: subscriptionID,
+			},
+		}
+		req.CloudCredential.Type = api.CloudCredentialInfo_Azure
+	case "google":
+		projectID, ok := os.LookupEnv("GCP_PROJECT_ID_")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "GCP_PROJECT_ID_",
+				Type: "Environment Variable",
+			}
+		}
+		accountKey, ok := os.LookupEnv("GCP_ACCOUNT_KEY")
+		if !ok {
+			return nil, &errors.ErrNotFound{
+				ID:   "GCP_ACCOUNT_KEY",
+				Type: "Environment Variable",
+			}
+		}
+		req.CloudCredential.Type = api.CloudCredentialInfo_Google
+		req.CloudCredential.Config = &api.CloudCredentialInfo_GoogleConfig{
+			GoogleConfig: &api.GoogleConfig{
+				ProjectId: projectID,
+				JsonKey:   accountKey,
+			},
+		}
+	default:
+		logrus.Errorf("provider needs to be either aws, azure or google")
+	}
+	return req, nil
 }
 
 // CollectEventRecords collects eventRecords from channel
