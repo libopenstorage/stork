@@ -1167,6 +1167,8 @@ github.com/portworx/kdmp v0.4.1-0.20220117051915-f1d2037ec832 h1:9bUC6e1NSMgQbvw
 github.com/portworx/kdmp v0.4.1-0.20220117051915-f1d2037ec832/go.mod h1:RAXbeaO/JmwQPRJCDdOoY/UsmGPY/awWsL4FbDOqAVk=
 github.com/portworx/kdmp v0.4.1-0.20220117075259-3deb2cca8a36 h1:D07Xg2lehO777rsuoztNOSx5NUxQ1IDnNnIjEFCTQT4=
 github.com/portworx/kdmp v0.4.1-0.20220117075259-3deb2cca8a36/go.mod h1:RAXbeaO/JmwQPRJCDdOoY/UsmGPY/awWsL4FbDOqAVk=
+github.com/portworx/kdmp v0.4.1-0.20220119130403-b94400b98370 h1:2gnn8wYDXeNqMHzXSXIQPrnBjbpFmh91p5GM2fM5+u8=
+github.com/portworx/kdmp v0.4.1-0.20220119130403-b94400b98370/go.mod h1:RAXbeaO/JmwQPRJCDdOoY/UsmGPY/awWsL4FbDOqAVk=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200311180812-b2c72382d652 h1:NElBL34RIHlZKGtDVXT/srxuVZ1+tqmnCdm1K+MC+fU=
