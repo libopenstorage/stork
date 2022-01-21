@@ -100,6 +100,8 @@ const (
 	pxJwtIssuerApps = "apps.portworx.io"
 	// [deprecated] auth issuer to use for below px 2.6.0
 	pxJwtIssuerStork = "stork.openstorage.io"
+	// auth issuer to use for px operator
+	pxJwtIssuerOperator = "operator.portworx.io"
 
 	snapshotDataNamePrefix = "k8s-volume-snapshot"
 	readySnapshotMsg       = "Snapshot created successfully and it is ready"
@@ -248,6 +250,8 @@ func (p *portworx) Init(_ interface{}) error {
 		p.jwtIssuer = pxJwtIssuerStork
 	case pxJwtIssuerApps:
 		p.jwtIssuer = pxJwtIssuerApps
+	case pxJwtIssuerOperator:
+		p.jwtIssuer = pxJwtIssuerOperator
 	case "":
 		// default to stork issuer for older versions of PX and backwards compatibility
 		p.jwtIssuer = pxJwtIssuerStork
