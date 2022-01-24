@@ -239,6 +239,26 @@ func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	return nil
 }
 
+// CrashNode crashes given node
+func (s *SSH) CrashNode(n node.Node, options node.CrashNodeOpts) error {
+	logrus.Infof("Crashing node %s", n.SchedulerNodeName)
+	crashCmd := "echo c > /proc/sysrq-trigger"
+
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, options.ConnectionOpts, crashCmd, true)
+		return out, true, err
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+		return &node.ErrFailedToCrashNode{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+
+	return nil
+}
+
 // ShutdownNode shuts down given node
 func (s *SSH) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	shutdownCmd := "sudo shutdown"

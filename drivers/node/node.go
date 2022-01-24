@@ -68,6 +68,12 @@ type RebootNodeOpts struct {
 	ConnectionOpts
 }
 
+// CrashNodeOpts provide additional options for crash operation
+type CrashNodeOpts struct {
+	Force bool
+	ConnectionOpts
+}
+
 // ShutdownNodeOpts provide additional options for shutdown operation
 type ShutdownNodeOpts struct {
 	Force bool
@@ -119,6 +125,9 @@ type Driver interface {
 
 	// RebootNode reboots the given node
 	RebootNode(node Node, options RebootNodeOpts) error
+
+	// CrashNode Crashes the given node
+	CrashNode(node Node, options CrashNodeOpts) error
 
 	// RunCommand runs the given command on the node and returns the output
 	RunCommand(node Node, command string, options ConnectionOpts) (string, error)
@@ -215,6 +224,13 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootNode()",
+	}
+}
+
+func (d *notSupportedDriver) CrashNode(node Node, options CrashNodeOpts) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CrashNode()",
 	}
 }
 

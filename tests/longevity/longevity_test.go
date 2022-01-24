@@ -60,6 +60,7 @@ var _ = Describe("{Longevity}", func() {
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		DeployApps:       TriggerDeployNewApps,
 		RebootNode:       TriggerRebootNodes,
+		CrashNode:        TriggerCrashNodes,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
 		HAIncrease:       TriggerHAIncrease,
@@ -203,6 +204,7 @@ func populateDisruptiveTriggers() {
 		RestartVolDriver:                false,
 		CrashVolDriver:                  false,
 		RebootNode:                      true,
+		CrashNode:                       true,
 		EmailReporter:                   false,
 		AppTaskDown:                     false,
 		DeployApps:                      false,
@@ -294,6 +296,7 @@ func populateTriggers(triggers *map[string]string) error {
 func populateIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[RebootNode] = map[int]time.Duration{}
+	triggerInterval[CrashNode] = map[int]time.Duration{}
 	triggerInterval[CrashVolDriver] = map[int]time.Duration{}
 	triggerInterval[RestartVolDriver] = map[int]time.Duration{}
 	triggerInterval[HAIncrease] = map[int]time.Duration{}
@@ -454,6 +457,17 @@ func populateIntervals() {
 	triggerInterval[RebootNode][2] = 24 * baseInterval
 	triggerInterval[RebootNode][1] = 27 * baseInterval
 
+	triggerInterval[CrashNode][10] = 1 * baseInterval
+	triggerInterval[CrashNode][9] = 3 * baseInterval
+	triggerInterval[CrashNode][8] = 6 * baseInterval
+	triggerInterval[CrashNode][7] = 9 * baseInterval
+	triggerInterval[CrashNode][6] = 12 * baseInterval
+	triggerInterval[CrashNode][5] = 15 * baseInterval
+	triggerInterval[CrashNode][4] = 18 * baseInterval
+	triggerInterval[CrashNode][3] = 21 * baseInterval
+	triggerInterval[CrashNode][2] = 24 * baseInterval
+	triggerInterval[CrashNode][1] = 27 * baseInterval
+
 	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
 	triggerInterval[CrashVolDriver][9] = 3 * baseInterval
 	triggerInterval[CrashVolDriver][8] = 6 * baseInterval
@@ -596,6 +610,7 @@ func populateIntervals() {
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
+	triggerInterval[CrashNode][0] = 0
 	triggerInterval[CrashVolDriver][0] = 0
 	triggerInterval[HAIncrease][0] = 0
 	triggerInterval[HADecrease][0] = 0

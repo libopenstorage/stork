@@ -24,6 +24,16 @@ func (e *ErrFailedToRebootNode) Error() string {
 	return fmt.Sprintf("Failed to reboot node: %v. Cause: %v", e.Node.Name, e.Cause)
 }
 
+// ErrFailedToCrashNode error type when failing to reboot a node after a crash
+type ErrFailedToCrashNode struct {
+	Node  Node
+	Cause string
+}
+
+func (e *ErrFailedToCrashNode) Error() string {
+	return fmt.Sprintf("Failed to reboot node after node crash test: %v. Cause: %v", e.Node.Name, e.Cause)
+}
+
 // ErrFailedToShutdownNode error type when failing to shutdown the node
 type ErrFailedToShutdownNode struct {
 	Node  Node

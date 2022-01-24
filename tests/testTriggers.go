@@ -152,8 +152,10 @@ const (
 	RestartVolDriver = "restartVolDriver"
 	// CrashVolDriver crashes volume driver
 	CrashVolDriver = "crashVolDriver"
-	// RebootNode reboots alll nodes one by one
+	// RebootNode reboots all nodes one by one
 	RebootNode = "rebootNode"
+	// CrashNode crashes all nodes one by one
+	CrashNode = "crashNode"
 	// VolumeResize increases volume size
 	VolumeResize = "volumeResize"
 	// CloudSnapShot takes local snap shot of the volumes
@@ -661,6 +663,79 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					Step("validate apps", func() {
 						for _, ctx := range *contexts {
 							Step(fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key), func() {
+								errorChan := make(chan error, errorChannelSize)
+								ValidateContext(ctx, &errorChan)
+								for err := range errorChan {
+									UpdateOutcome(event, err)
+								}
+							})
+						}
+					})
+				}
+			}
+		})
+	})
+}
+
+// TriggerCrashNodes crashes Worker nodes
+func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CrashNode,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("get all nodes and crash one by one", func() {
+		nodesToCrash := node.GetWorkerNodes()
+
+		// Crash node and check driver status
+		Step(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash), func() {
+			// TODO: Below is the same code from existing nodeCrash test
+			for _, n := range nodesToCrash {
+				if n.IsStorageDriverInstalled {
+					Step(fmt.Sprintf("crash node: %s", n.Name), func() {
+						taskStep := fmt.Sprintf("crash node: %s.", n.MgmtIp)
+						event.Event.Type += "<br>" + taskStep
+						err := Inst().N.CrashNode(n, node.CrashNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+							},
+						})
+						UpdateOutcome(event, err)
+					})
+
+					Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+						err := Inst().N.TestConnection(n, node.ConnectionOpts{
+							Timeout:         15 * time.Minute,
+							TimeBeforeRetry: 10 * time.Second,
+						})
+						UpdateOutcome(event, err)
+					})
+
+					Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+						Inst().S.String(), Inst().V.String()), func() {
+
+						err := Inst().S.IsNodeReady(n)
+						UpdateOutcome(event, err)
+
+						err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+						UpdateOutcome(event, err)
+					})
+
+					Step("validate apps", func() {
+						for _, ctx := range *contexts {
+							Step(fmt.Sprintf("CrashNode: validating app [%s]", ctx.App.Key), func() {
 								errorChan := make(chan error, errorChannelSize)
 								ValidateContext(ctx, &errorChan)
 								for err := range errorChan {
