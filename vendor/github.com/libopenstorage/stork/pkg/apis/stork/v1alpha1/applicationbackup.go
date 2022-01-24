@@ -9,6 +9,10 @@ const (
 	ApplicationBackupResourceName = "applicationbackup"
 	// ApplicationBackupResourcePlural is plural for "applicationbackup" resource
 	ApplicationBackupResourcePlural = "applicationbackups"
+	// ApplicationBackupGeneric for using generic driver for backups/restore
+	ApplicationBackupGeneric = "Generic"
+	// GenericDriver is name for generic driver
+	GenericDriver = "kdmp"
 )
 
 // +genclient
@@ -78,18 +82,21 @@ type ApplicationBackupResourceInfo struct {
 
 // ApplicationBackupVolumeInfo is the info for the backup of a volume
 type ApplicationBackupVolumeInfo struct {
-	PersistentVolumeClaim string                      `json:"persistentVolumeClaim"`
-	Namespace             string                      `json:"namespace"`
-	Volume                string                      `json:"volume"`
-	BackupID              string                      `json:"backupID"`
-	DriverName            string                      `json:"driverName"`
-	Zones                 []string                    `json:"zones"`
-	Status                ApplicationBackupStatusType `json:"status"`
-	Reason                string                      `json:"reason"`
-	Options               map[string]string           `jons:"options"`
-	TotalSize             uint64                      `json:"totalSize"`
-	ActualSize            uint64                      `json:"actualSize"`
-	StorageClass          string                      `json:"storageClass"`
+	PersistentVolumeClaim    string                      `json:"persistentVolumeClaim"`
+	PersistentVolumeClaimUID string                      `json:"persistentVolumeClaimUID"`
+	Namespace                string                      `json:"namespace"`
+	Volume                   string                      `json:"volume"`
+	BackupID                 string                      `json:"backupID"`
+	DriverName               string                      `json:"driverName"`
+	Zones                    []string                    `json:"zones"`
+	Status                   ApplicationBackupStatusType `json:"status"`
+	Reason                   string                      `json:"reason"`
+	Options                  map[string]string           `jons:"options"`
+	TotalSize                uint64                      `json:"totalSize"`
+	ActualSize               uint64                      `json:"actualSize"`
+	StorageClass             string                      `json:"storageClass"`
+	Provisioner              string                      `json:"provisioner"`
+	VolumeSnapshot           string                      `json:"volumeSnapshot"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup

@@ -15,11 +15,12 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
-	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc2
+	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
+	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20210223183702-b9c6b74cbf1d
-	github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
-	github.com/libopenstorage/stork v1.4.1-0.20210903185636-5a1f8a4142bf
+	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
+	github.com/libopenstorage/stork v1.4.1-0.20211113171730-e02f28e240e9
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.16.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
@@ -49,12 +50,18 @@ replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 	github.com/docker/distribution => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
 	github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20190717161051-705d9623b7c1+incompatible
+	github.com/heptio/ark => github.com/heptio/ark v1.0.0
+	github.com/heptio/velero => github.com/heptio/velero v1.0.0
+	github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
 	//github.com/docker/docker => github.com/moby/moby v17.12.0-ce-rc1.0.20200618181300-9dc6525e6118+incompatible
 
 	// PX dependencies
-	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
+	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220106234718-d68a25af6b6b
+
+	// Stork dependencies
+	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20220111140954-f18bb2a55fcf
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.4
 
@@ -85,5 +92,8 @@ replace (
 	k8s.io/metrics => k8s.io/metrics v0.20.4
 	k8s.io/mount-utils => k8s.io/mount-utils v0.20.4
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.4
+	k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.8.2
+	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 => sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 
 )

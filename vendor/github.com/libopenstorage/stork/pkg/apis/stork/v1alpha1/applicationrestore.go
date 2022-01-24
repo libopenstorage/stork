@@ -30,6 +30,7 @@ type ApplicationRestoreSpec struct {
 	ReplacePolicy                ApplicationRestoreReplacePolicyType `json:"replacePolicy"`
 	IncludeOptionalResourceTypes []string                            `json:"includeOptionalResourceTypes"`
 	IncludeResources             []ObjectInfo                        `json:"includeResources"`
+	StorageClassMapping          map[string]string                   `json:"storageClassMapping"`
 }
 
 // ApplicationRestoreReplacePolicyType is the replace policy for the application restore
@@ -68,15 +69,17 @@ type ApplicationRestoreResourceInfo struct {
 
 // ApplicationRestoreVolumeInfo is the info for the restore of a volume
 type ApplicationRestoreVolumeInfo struct {
-	PersistentVolumeClaim string                       `json:"persistentVolumeClaim"`
-	SourceNamespace       string                       `json:"sourceNamespace"`
-	SourceVolume          string                       `json:"sourceVolume"`
-	RestoreVolume         string                       `json:"restoreVolume"`
-	DriverName            string                       `json:"driverName"`
-	Zones                 []string                     `json:"zones"`
-	Status                ApplicationRestoreStatusType `json:"status"`
-	Reason                string                       `json:"reason"`
-	TotalSize             uint64                       `json:"totalSize"`
+	PersistentVolumeClaim    string                       `json:"persistentVolumeClaim"`
+	PersistentVolumeClaimUID string                       `json:"persistentVolumeClaimUID"`
+	SourceNamespace          string                       `json:"sourceNamespace"`
+	SourceVolume             string                       `json:"sourceVolume"`
+	RestoreVolume            string                       `json:"restoreVolume"`
+	DriverName               string                       `json:"driverName"`
+	Zones                    []string                     `json:"zones"`
+	Status                   ApplicationRestoreStatusType `json:"status"`
+	Reason                   string                       `json:"reason"`
+	TotalSize                uint64                       `json:"totalSize"`
+	Options                  map[string]string            `json:"options"`
 }
 
 // ApplicationRestoreStatusType is the status of the application restore
