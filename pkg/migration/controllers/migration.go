@@ -60,8 +60,6 @@ const (
 	// StorkMigrationCRDDeactivateAnnotation is the annotation used to keep track of
 	// the value to be set for deactivating crds
 	StorkMigrationCRDDeactivateAnnotation = "stork.libopenstorage.org/migrationCRDDeactivate"
-	// storageClassAnnotation for pvc sc
-	storageClassAnnotation = "volume.beta.kubernetes.io/storage-class"
 	// PVReclaimAnnotation for pvc's reclaim policy
 	PVReclaimAnnotation = "stork.libopenstorage.org/reclaimPolicy"
 
@@ -898,11 +896,6 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
-		case "PersistentVolumeClaim":
-			err := m.preparePVCResource(migration, o)
-			if err != nil {
-				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
-			}
 		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
 			err := m.prepareApplicationResource(migration, o)
 			if err != nil {
@@ -1110,31 +1103,6 @@ func (m *MigrationController) preparePVResource(
 		return err
 	}
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pv)
-	if err != nil {
-		return err
-	}
-	object.SetUnstructuredContent(o)
-
-	return nil
-}
-
-func (m *MigrationController) preparePVCResource(
-	migration *stork_api.Migration,
-	object runtime.Unstructured,
-) error {
-	var pvc v1.PersistentVolumeClaim
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pvc); err != nil {
-		return err
-	}
-
-	if pvc.Annotations != nil {
-		delete(pvc.Annotations, storageClassAnnotation)
-	}
-	sc := ""
-	if pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
-		pvc.Spec.StorageClassName = &sc
-	}
-	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
 	if err != nil {
 		return err
 	}
