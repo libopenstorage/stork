@@ -21,6 +21,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -62,6 +63,9 @@ var EmailRecipients []string
 
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
+
+// ChaosMap stores mapping between test trigger and its chaos level.
+var ChaosMap map[string]int
 
 // SendGridEmailAPIKey holds API key used to interact
 // with SendGrid Email APIs
@@ -834,6 +838,39 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			var err error
 			if strings.Contains(ctx.App.Key, "cloudsnap") {
 
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				logrus.Infof("Namespace : %v", appNamespace)
+
+				Step(fmt.Sprintf("create schedule policy for %s app", ctx.App.Key), func() {
+
+					policyName := "intervalpolicy"
+
+					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+					if err != nil {
+						retain := 2
+						interval := getCloudSnapInterval(CloudSnapShot)
+						logrus.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+						schedPolicy = &storkv1.SchedulePolicy{
+							ObjectMeta: meta_v1.ObjectMeta{
+								Name: policyName,
+							},
+							Policy: storkv1.SchedulePolicyItem{
+								Interval: &storkv1.IntervalPolicy{
+									Retain:          storkv1.Retain(retain),
+									IntervalMinutes: interval,
+								},
+							}}
+
+						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+						logrus.Infof("Waiting for 10 mins for Snapshots to be completed")
+						time.Sleep(10 * time.Minute)
+					} else {
+						logrus.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+					}
+
+					UpdateOutcome(event, err)
+				})
+
 				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
 					appVolumes, err = Inst().S.GetVolumes(ctx)
 					UpdateOutcome(event, err)
@@ -842,9 +879,6 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					}
 				})
 				logrus.Infof("Got volume count : %v", len(appVolumes))
-
-				appNamespace := ctx.App.Key + "-" + ctx.UID
-				logrus.Infof("Namespace : %v", appNamespace)
 
 				for _, v := range appVolumes {
 					snapshotScheduleName := v.Name + "-interval-schedule"
@@ -2427,7 +2461,9 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get storage pools and perform resize-disk by 10 percentage on it ", func() {
+	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+
+	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
 		time.Sleep(1 * time.Minute)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -2452,8 +2488,7 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				}
 
 				for id := range poolSet {
-					//TODO : Parametrize the resize percentage
-					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(10))
+					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(chaosLevel))
 					UpdateOutcome(event, err)
 				}
 				logrus.Infof("Waiting for 10 mins for resize to initiate and check status")
@@ -2500,7 +2535,8 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get storage pools and perform add-disk by 10 percentage on it ", func() {
+	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
 		time.Sleep(1 * time.Minute)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -2525,8 +2561,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				}
 
 				for id := range poolSet {
-					//TODO : Parametrize the resize percentage
-					err = Inst().V.ResizeStoragePoolByPercentage(id, 1, uint64(10))
+					err = Inst().V.ResizeStoragePoolByPercentage(id, 1, uint64(chaosLevel))
 					UpdateOutcome(event, err)
 				}
 				logrus.Infof("Waiting for 10 mins for add disk to initiate and check status")
@@ -2554,6 +2589,68 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			})
 		}
 	})
+
+}
+
+func getPoolExpandPercentage(triggerType string) uint64 {
+	var percentageValue uint64
+
+	t := ChaosMap[triggerType]
+
+	switch t {
+	case 1:
+		percentageValue = 100
+	case 2:
+		percentageValue = 90
+	case 3:
+		percentageValue = 80
+	case 4:
+		percentageValue = 70
+	case 5:
+		percentageValue = 60
+	case 6:
+		percentageValue = 50
+	case 7:
+		percentageValue = 40
+	case 8:
+		percentageValue = 30
+	case 9:
+		percentageValue = 20
+	case 10:
+		percentageValue = 10
+	}
+	return percentageValue
+
+}
+
+func getCloudSnapInterval(triggerType string) int {
+	var interval int
+
+	t := ChaosMap[triggerType]
+
+	switch t {
+	case 1:
+		interval = 600
+	case 2:
+		interval = 500
+	case 3:
+		interval = 400
+	case 4:
+		interval = 300
+	case 5:
+		interval = 200
+	case 6:
+		interval = 100
+	case 7:
+		interval = 60
+	case 8:
+		interval = 30
+	case 9:
+		interval = 20
+	case 10:
+		interval = 10
+	}
+	return interval
 
 }
 

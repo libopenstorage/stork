@@ -118,7 +118,7 @@ const (
 	encryptionKey      = "encryption"
 
 	// Encryption annotations
-	encryptionName      = "secure"
+	encryptionName = "secure"
 
 	// In-Tree Auth annotations
 	secretName      = "openstorage.io/auth-secret-name"
