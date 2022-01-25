@@ -14,6 +14,7 @@ require (
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/aquilax/truncate v1.0.0
 	github.com/aws/aws-sdk-go v1.35.37
+	github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible // indirect
 	github.com/go-openapi/inflect v0.19.0
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/hashicorp/go-version v1.2.1
@@ -32,7 +33,7 @@ require (
 	github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
-	github.com/prometheus/client_golang v1.9.0
+	github.com/prometheus/client_golang v1.11.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/spf13/cobra v1.1.3
@@ -44,16 +45,16 @@ require (
 	google.golang.org/api v0.30.0
 	google.golang.org/grpc v1.36.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.20.4
-	k8s.io/apiextensions-apiserver v0.20.4
-	k8s.io/apimachinery v0.20.4
-	k8s.io/apiserver v0.20.4
-	k8s.io/cli-runtime v0.20.4
+	k8s.io/api v0.21.1
+	k8s.io/apiextensions-apiserver v0.21.1
+	k8s.io/apimachinery v0.21.1
+	k8s.io/apiserver v0.20.11
+	k8s.io/cli-runtime v0.20.11
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/code-generator v0.21.0
 	k8s.io/kube-scheduler v0.0.0
-	k8s.io/kubectl v0.20.4
-	k8s.io/kubernetes v1.20.4
+	k8s.io/kubectl v0.20.11
+	k8s.io/kubernetes v1.20.11
 	sigs.k8s.io/controller-runtime v0.8.0
 	sigs.k8s.io/gcp-compute-persistent-disk-csi-driver v0.7.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
@@ -74,31 +75,31 @@ replace (
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
 
-	k8s.io/api => k8s.io/api v0.20.4
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.4
-	k8s.io/apimachinery => k8s.io/apimachinery v0.20.4
-	k8s.io/apiserver => k8s.io/apiserver v0.20.4
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.20.4
-	k8s.io/client-go => k8s.io/client-go v0.20.4
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.20.4
-	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.20.4
-	k8s.io/code-generator => k8s.io/code-generator v0.20.4
-	k8s.io/component-base => k8s.io/component-base v0.20.4
-	k8s.io/component-helpers => k8s.io/component-helpers v0.20.4
-	k8s.io/controller-manager => k8s.io/controller-manager v0.20.4
-	k8s.io/cri-api => k8s.io/cri-api v0.20.4
-	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.20.4
-	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.20.4
-	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.20.4
-	k8s.io/kube-proxy => k8s.io/kube-proxy v0.20.4
-	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.20.4
-	k8s.io/kubectl => k8s.io/kubectl v0.20.4
-	k8s.io/kubelet => k8s.io/kubelet v0.20.4
-	k8s.io/kubernetes => k8s.io/kubernetes v1.20.4
+	k8s.io/api => k8s.io/api v0.20.11
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.11
+	k8s.io/apimachinery => k8s.io/apimachinery v0.20.11
+	k8s.io/apiserver => k8s.io/apiserver v0.20.11
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.20.11
+	k8s.io/client-go => k8s.io/client-go v0.20.11
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.20.11
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.20.11
+	k8s.io/code-generator => k8s.io/code-generator v0.20.11
+	k8s.io/component-base => k8s.io/component-base v0.20.11
+	k8s.io/component-helpers => k8s.io/component-helpers v0.20.11
+	k8s.io/controller-manager => k8s.io/controller-manager v0.20.11
+	k8s.io/cri-api => k8s.io/cri-api v0.20.11
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.20.11
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.20.11
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.20.11
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.20.11
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.20.11
+	k8s.io/kubectl => k8s.io/kubectl v0.20.11
+	k8s.io/kubelet => k8s.io/kubelet v0.20.11
+	k8s.io/kubernetes => k8s.io/kubernetes v1.20.11
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.20.4
-	k8s.io/metrics => k8s.io/metrics v0.20.4
-	k8s.io/mount-utils => k8s.io/mount-utils v0.20.4
-	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.4
+	k8s.io/metrics => k8s.io/metrics v0.20.11
+	k8s.io/mount-utils => k8s.io/mount-utils v0.20.11
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.11
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.8.2
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 => sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
