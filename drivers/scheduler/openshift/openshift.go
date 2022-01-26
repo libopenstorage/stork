@@ -122,13 +122,13 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	}
 
 	var contexts []*scheduler.Context
+	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
 
-		var appNamespace string
+		appNamespace := app.GetID(instanceID)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
 		} else {
-			appNamespace = app.GetID(instanceID)
 			options.Namespace = appNamespace
 		}
 
@@ -159,6 +159,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 		}
 
 		contexts = append(contexts, ctx)
+		options.Namespace = oldOptionsNamespace
 	}
 
 	return contexts, nil
