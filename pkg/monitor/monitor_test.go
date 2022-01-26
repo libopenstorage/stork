@@ -4,7 +4,6 @@
 package monitor
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -40,10 +40,11 @@ var (
 	attachmentVolumeName  = "attachmentVolume"
 	unknownPodsVolumeName = "unknownPodsVolume"
 
-	fakeStorkClient *fakeclient.Clientset
-	driver          *mock.Driver
-	monitor         *Monitor
-	nodes           *v1.NodeList
+	fakeStorkClient        *fakeclient.Clientset
+	driver                 *mock.Driver
+	monitor                *Monitor
+	nodes                  *v1.NodeList
+	testNodeOfflineTimeout time.Duration
 )
 
 func TestMonitor(t *testing.T) {
@@ -122,6 +123,16 @@ func setup(t *testing.T) {
 		IntervalSec: 30,
 		Recorder:    recorder,
 	}
+
+	// overwrite the backoff timers to speed up the tests
+	// this accounts to a backoff of 1 min
+	nodeWaitCallBackoff = wait.Backoff{
+		Duration: initialNodeWaitDelay,
+		Factor:   1,
+		Steps:    nodeWaitSteps,
+	}
+	// 30 (interval)  + 60 (backoff) + 5 (buffer)
+	testNodeOfflineTimeout = 95 * time.Second
 
 	err = monitor.Start()
 	require.NoError(t, err, "failed to start monitor")
@@ -288,7 +299,7 @@ func testOfflineStorageNode(t *testing.T) {
 		require.NoError(t, err, "Error setting node status to Online")
 	}()
 
-	time.Sleep(95 * time.Second)
+	time.Sleep(testNodeOfflineTimeout)
 	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 	_, err = core.Instance().GetPodByName(noStoragePod.Name, "")
@@ -383,7 +394,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	})
 	require.NoError(t, err, "failed to create healthy pod volume attachment")
 
-	healthyPodDetached := newPod("testVolumeAttachmentCleanHealtyupDetached", []string{driverVolumeName})
+	healthyPodDetached := newPod("testVolumeAttachmentCleanupHealthyDetached", []string{driverVolumeName})
 	healthyPodDetached.Spec.NodeName = nodeToKeepOnline
 	_, err = core.Instance().CreatePod(healthyPodDetached)
 	require.NoError(t, err, "failed to create healthy detached pod")
@@ -449,10 +460,9 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	}()
 
 	// VolumeAttachments (VA) for N2 and N3 should be deleted, but VA for N1 should remain.
-	time.Sleep(95 * time.Second)
+	time.Sleep(testNodeOfflineTimeout)
 
 	vaList, err := storage.Instance().ListVolumeAttachments()
-	fmt.Println("va list: ", vaList)
 	require.NoError(t, err, "expected no error from list vol attachments")
 
 	// There should be exactly one attachment left - the healthy one.
