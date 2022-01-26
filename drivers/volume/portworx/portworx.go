@@ -1748,7 +1748,7 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, ena
 	}
 
 	if enableStork {
-		if err := d.upgradeStork(endpointURL, endpointVersion); err != nil {
+		if err := d.UpgradeStork(endpointURL, endpointVersion); err != nil {
 			return err
 		}
 	} else {
@@ -1810,8 +1810,8 @@ func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) e
 	return nil
 }
 
-// upgradeStork upgrades stork
-func (d *portworx) upgradeStork(endpointURL string, endpointVersion string) error {
+// UpgradeStork upgrades stork
+func (d *portworx) UpgradeStork(endpointURL string, endpointVersion string) error {
 	storkSpecFileName := "/stork.yaml"
 	nodeList := node.GetStorageDriverNodes()
 	pxNode := nodeList[0]

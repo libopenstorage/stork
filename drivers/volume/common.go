@@ -334,6 +334,14 @@ func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string
 	}
 }
 
+// UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
+func (d *DefaultDriver) UpgradeStork(endpointURL string, endpointVersion string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpgradeDriver()",
+	}
+}
+
 // GetClusterPairingInfo returns cluster pair information
 func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error) {
 	pairInfo := make(map[string]string)

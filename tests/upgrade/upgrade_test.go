@@ -10,9 +10,18 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
+)
+
+var storkLabel = map[string]string{"name": "stork"}
+
+const (
+	storkDeploymentName = "stork"
+	storkNamespace      = "kube-system"
 )
 
 func TestUpgrade(t *testing.T) {
@@ -67,6 +76,58 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{UpgradeStork}", func() {
+	var testrailID = 11111
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
+	var runID int
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+
+		It("upgrade volume driver and ensure everything is running fine", func() {
+			contexts = make([]*scheduler.Context, 0)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradestorkdeployment-%d", i))...)
+
+			ValidateApplications(contexts)
+
+			Step("start the upgrade of stork deployment", func() {
+				err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
+					Inst().StorageDriverUpgradeEndpointVersion)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Step("validate all apps after upgrade", func() {
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+			})
+
+			Step("destroy apps", func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for _, ctx := range contexts {
+					TearDownContext(ctx, opts)
+				}
+			})
+
+			Step("validate stork pods after upgrade", func() {
+				k8sApps := apps.Instance()
+				storkDeploy, err := k8sApps.GetDeployment(storkDeploymentName, storkNamespace)
+				Expect(err).NotTo(HaveOccurred())
+				err = k8sApps.ValidateDeployment(storkDeploy, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+		})
+	}
 	JustAfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})

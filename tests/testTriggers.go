@@ -200,6 +200,8 @@ const (
 	BackupDeleteBackupPod = "backupDeleteBackupPod"
 	// BackupScaleMongo deletes px-backup pod during a backup
 	BackupScaleMongo = "backupScaleMongo"
+	// UpgradeStork  upgrade stork version based on PX and k8s version
+	UpgradeStork = "upgradeStork"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -2590,6 +2592,31 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		}
 	})
 
+}
+
+// TriggerUpgradeStork peforms add-disk on the storage pools for the given contexts
+func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolResizeDisk,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step(fmt.Sprintf("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version "),
+		func() {
+			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
+				Inst().StorageDriverUpgradeEndpointVersion)
+			UpdateOutcome(event, err)
+
+		})
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {
