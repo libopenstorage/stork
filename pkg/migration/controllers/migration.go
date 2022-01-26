@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1811,6 +1812,10 @@ func (m *MigrationController) applyResources(
 	numObjects := len(updatedObjects)
 	objectChan := make(chan runtime.Unstructured, 100)
 	errorChan := make(chan error, 100)
+
+	// Shuffle Object order before applying so we can get parallelism between resource types
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(updatedObjects), func(i, j int) { updatedObjects[i], updatedObjects[j] = updatedObjects[j], updatedObjects[i] })
 
 	logrus.Infof("Updating %v objects with %v workers", numObjects, m.migrationMaxThreads)
 	for w := 0; w < m.migrationMaxThreads; w++ {
