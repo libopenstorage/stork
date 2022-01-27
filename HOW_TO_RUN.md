@@ -44,3 +44,65 @@ To run all tests: ``ginkgo -v bin/*.test --  -spec-dir `pwd`/drivers/scheduler/k
 To run just the reboot tests: ``ginkgo -v bin/reboot.test --  -spec-dir `pwd`/drivers/scheduler/k8s/specs``
 
 To dry-run all tests: ``ginkgo -dryRun   -v bin/*.test --  -spec-dir `pwd`/drivers/scheduler/k8s/specs``
+
+### Running torpedo on EKS
+
+```text
+NOTE: perform the steps below if cluster was created using eksctl or any tool, other than dedicated eks jenkins job 
+```
+
+(if cluster was not provisioned with spawn)
+
+1. Provision a cluster of nodes n+1 (more than you need)
+2. Create a "master" node. Torpedo contains a test which reboots all px nodes, hence it needs to be alive. We don't have a master node on EKS, so we just `simulate` it :
+    1. Pick a node
+    2. disable PX on it
+    3. taint
+
+    ```
+    kubectl get nodes '--output=jsonpath={.items[0].metadata.name}'
+    
+    kubectl label node <node_name> px/enabled=false
+    
+    kubectl taint node <node_name> apps=false:NoSchedule
+    ```
+
+3. Install PX in a usual way
+4. Add the following parameters to the `[deploy-ssh.sh](http://deploy-ssh.sh)` script at the very beginning of the file
+
+```jsx
+#KUBECONFIG=/tmp/kubeconfig # if you don't specify the config, torpedo will pick up the system config
+TORPEDO_IMG=portworx/torpedo:master # override with your image if needed
+VERBOSE=true
+FOCUS_TESTS=SetupTeardown,AppTasksDown,VolumeDriverDown,VolumeDriverAppDown,VolumeDriverDownAttachedNode,VolumeDriverCrash,AppScaleUpAndDown,VolumeUpdate
+SCALE_FACTOR=1
+FAIL_FAST=true
+APP_LIST=postgres,sysbench,nginx-sharedv4,vdbench-sharedv4
+K8S_VENDOR=eks
+```
+
+5. In the same file search for the test list and disable tests you don't need by removing `.test` files
+
+```jsx
+TEST_SUITE='"bin/asg.test",
+            "bin/autopilot.test",
+            "bin/basic.test",
+            "bin/backup.test",
+            "bin/reboot.test",
+            "bin/upgrade.test",
+            "bin/drive_failure.test",
+            "bin/volume_ops.test",
+            "bin/sched.test",
+            "bin/scheduler_upgrade.test",
+            "bin/node_decommission.test",
+            "bin/license.test",
+            "bin/upgrade_cluster.test",
+            "bin/sharedv4.test",
+            "bin/telemetry.test",
+            "bin/upgrade_cluster.test",
+            "bin/pxcentral.test",'
+```
+6. Add your test to the `FOCUS_TESTS`:  
+   `FOCUS_TESTS=SetupTeardown,AppTasksDown,...,<YOUR_TEST_NAME>`
+   
+7. Run `./deploy-ssh.sh`
