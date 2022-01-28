@@ -22,6 +22,7 @@ import (
 	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 )
@@ -40,6 +41,8 @@ func testMigration(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	t.Run("deploymentTest", deploymentMigrationTest)
+	t.Run("pvcResizeTest", pvcResizeMigrationTest)
+
 	t.Run("deploymentMigrationReverseTest", deploymentMigrationReverseTest)
 	t.Run("statefulsetTest", statefulsetMigrationTest)
 	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
@@ -1037,4 +1040,111 @@ func WaitForMigration(migrationList []*v1alpha1.Migration) error {
 	}
 	_, err := task.DoRetryWithTimeout(checkMigrations, migrationRetryTimeout, migrationRetryInterval)
 	return err
+}
+
+// pvcResizeMigrationTest validate migrated pvcs size get
+// reflected correctly after change on source pvc
+// it also make sure that sc param is kept for migrated pvcs
+func pvcResizeMigrationTest(t *testing.T) {
+	var err error
+	var namespace string
+	var pvcs *v1.PersistentVolumeClaimList
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	// the schedule interval for these specs it set to 5 minutes
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"mysql-migration-schedule-interval",
+		"mysql-1-pvc",
+		[]string{"cassandra"},
+		[]string{"mysql-migration-schedule-interval"},
+		true,
+		false,
+		false,
+		false,
+	)
+
+	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+
+	// Get pvc lists from source cluster
+	for _, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			namespace = obj.GetNamespace()
+			pvcs, err = core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			require.NoError(t, err, "error retriving pvc list from %s namespace", namespace)
+			break
+		}
+	}
+
+	// resize pvcs
+	for _, pvc := range pvcs.Items {
+		cap := pvc.Status.Capacity[v1.ResourceName(v1.ResourceStorage)]
+		currSize := cap.Value()
+		pvc.Spec.Resources.Requests[v1.ResourceStorage] = *resource.NewQuantity(int64(currSize*2), resource.BinarySI)
+		_, err := core.Instance().UpdatePersistentVolumeClaim(&pvc)
+		require.NoError(t, err, "Error updating pvc: %s/%s", pvc.GetNamespace(), pvc.GetName())
+	}
+
+	// bump time of the world by 5 minutes
+	mockNow := time.Now().Add(6 * time.Minute)
+	err = setMockTime(&mockNow)
+	require.NoError(t, err, "Error setting mock time")
+
+	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// verify resized pvcs
+	for _, pvc := range pvcs.Items {
+		cap := pvc.Status.Capacity[v1.ResourceName(v1.ResourceStorage)]
+		pvcSize := cap.Value()
+
+		migratedPvc, err := core.Instance().GetPersistentVolumeClaim(pvc.GetName(), pvc.GetNamespace())
+		require.NoError(t, err, "error retriving pvc %s/%s", pvc.GetNamespace(), pvc.GetName())
+
+		cap = migratedPvc.Status.Capacity[v1.ResourceName(v1.ResourceStorage)]
+		migrSize := cap.Value()
+
+		if migrSize != pvcSize*2 {
+			resizeErr := fmt.Errorf("pvc %s/%s is not resized. Expected: %v, Current: %v", pvc.GetNamespace(), pvc.GetName(), pvcSize*2, migrSize)
+			require.NoError(t, resizeErr, resizeErr)
+		}
+		srcSC, err := getStorageClassNameForPVC(&pvc)
+		require.NoError(t, err, "error retriving sc for %s/%s", pvc.GetNamespace(), pvc.GetName())
+
+		destSC, err := getStorageClassNameForPVC(migratedPvc)
+		require.NoError(t, err, "error retriving sc for %s/%s", migratedPvc.GetNamespace(), migratedPvc.GetName())
+
+		if srcSC != destSC {
+			scErr := fmt.Errorf("migrated pvc storage class does not match")
+			require.NoError(t, scErr, "SC Expected: %v, Current: %v", srcSC, destSC)
+		}
+	}
+
+	logrus.Infof("Successfully verified migrated pvcs on destination cluster")
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+}
+
+func getStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
+	var scName string
+	if pvc.Spec.StorageClassName != nil && len(*pvc.Spec.StorageClassName) > 0 {
+		scName = *pvc.Spec.StorageClassName
+	} else {
+		scName = pvc.Annotations[v1.BetaStorageClassAnnotation]
+	}
+
+	if len(scName) == 0 {
+		return "", fmt.Errorf("PVC: %s does not have a storage class", pvc.Name)
+	}
+	return scName, nil
 }
