@@ -1809,21 +1809,31 @@ func (m *MigrationController) applyResources(
 		}
 	}
 
-	numObjects := len(updatedObjects)
+	return m.parallelWorker(worker, updatedObjects, true)
+}
+
+func (m *MigrationController) parallelWorker(
+	worker func(<-chan runtime.Unstructured, chan<- error),
+	objects []runtime.Unstructured,
+	shuffle bool,
+) error {
+	numObjects := len(objects)
 	objectChan := make(chan runtime.Unstructured, 100)
 	errorChan := make(chan error, 100)
 
-	// Shuffle Object order before applying so we can get parallelism between resource types
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(updatedObjects), func(i, j int) { updatedObjects[i], updatedObjects[j] = updatedObjects[j], updatedObjects[i] })
+	if shuffle {
+		// Shuffle Object order before applying so we can get parallelism between resource types
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(len(objects), func(i, j int) { objects[i], objects[j] = objects[j], objects[i] })
+	}
 
-	logrus.Infof("Updating %v objects with %v workers", numObjects, m.migrationMaxThreads)
+	logrus.Infof("Updating %v objects with %v parallel workers", numObjects, m.migrationMaxThreads)
 	for w := 0; w < m.migrationMaxThreads; w++ {
 		go worker(objectChan, errorChan)
 	}
 
 	go func() {
-		for _, o := range updatedObjects {
+		for _, o := range objects {
 			objectChan <- o
 		}
 		close(objectChan)
@@ -1835,7 +1845,6 @@ func (m *MigrationController) applyResources(
 			return workerErr
 		}
 	}
-
 	return nil
 }
 
