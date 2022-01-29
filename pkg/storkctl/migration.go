@@ -47,7 +47,7 @@ var (
 	migrRetryTimeout = 30 * time.Second
 )
 
-var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED"}
+var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED", "TOTAL BYTES TRANSFERRED"}
 var migrationSubcommand = "migrations"
 var migrationAliases = []string{"migration"}
 
@@ -638,52 +638,76 @@ func migrationPrinter(
 
 	rows := make([]metav1beta1.TableRow, 0)
 	for _, migration := range migrationList.Items {
-		volumeStatus := "N/A"
-		if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
-			totalVolumes := len(migration.Status.Volumes)
-			doneVolumes := 0
-			for _, volume := range migration.Status.Volumes {
-				if volume.Status == storkv1.MigrationStatusSuccessful {
-					doneVolumes++
-				}
-			}
-			volumeStatus = fmt.Sprintf("%v/%v", doneVolumes, totalVolumes)
-		}
-
-		resourceStatus := "N/A"
-		if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
-			totalResources := len(migration.Status.Resources)
-			doneResources := 0
-			for _, resource := range migration.Status.Resources {
-				if resource.Status == storkv1.MigrationStatusSuccessful {
-					doneResources++
-				}
-			}
-			resourceStatus = fmt.Sprintf("%v/%v", doneResources, totalResources)
-		}
-
-		elapsed := ""
-		if !migration.CreationTimestamp.IsZero() {
-			if migration.Status.Stage == storkv1.MigrationStageFinal {
-				if !migration.Status.FinishTimestamp.IsZero() {
-					elapsed = migration.Status.FinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
-				}
-			} else {
-				elapsed = time.Since(migration.CreationTimestamp.Time).String()
-			}
-		}
-
+		var row metav1beta1.TableRow
 		creationTime := toTimeString(migration.CreationTimestamp.Time)
-		row := getRow(&migration,
-			[]interface{}{migration.Name,
-				migration.Spec.ClusterPair,
-				migration.Status.Stage,
-				migration.Status.Status,
-				volumeStatus,
-				resourceStatus,
-				creationTime,
-				elapsed},
-		)
+		if migration.Status.Summary != nil {
+			resourceStatus := strconv.FormatUint(migration.Status.Summary.NumberOfMigratedResources, 10) +
+				"/" + strconv.FormatUint(migration.Status.Summary.TotalNumberOfResources, 10)
+			volumeStatus := strconv.FormatUint(migration.Status.Summary.NumberOfMigratedVolumes, 10) +
+				"/" + strconv.FormatUint(migration.Status.Summary.TotalNumberOfVolumes, 10)
+
+			row = getRow(&migration,
+				[]interface{}{migration.Name,
+					migration.Spec.ClusterPair,
+					migration.Status.Stage,
+					migration.Status.Status,
+					volumeStatus,
+					resourceStatus,
+					creationTime,
+					migration.Status.Summary.ElapsedTime,
+					strconv.FormatUint(migration.Status.Summary.TotalBytesMigrated, 10),
+				},
+			)
+		} else {
+			// Keeping this else for backward compatibility where there
+			// is a migration object which does not have MigrationSummary
+			volumeStatus := "N/A"
+			if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+				totalVolumes := len(migration.Status.Volumes)
+				doneVolumes := 0
+				for _, volume := range migration.Status.Volumes {
+					if volume.Status == storkv1.MigrationStatusSuccessful {
+						doneVolumes++
+					}
+				}
+				volumeStatus = fmt.Sprintf("%v/%v", doneVolumes, totalVolumes)
+			}
+
+			resourceStatus := "N/A"
+			if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
+				totalResources := len(migration.Status.Resources)
+				doneResources := 0
+				for _, resource := range migration.Status.Resources {
+					if resource.Status == storkv1.MigrationStatusSuccessful {
+						doneResources++
+					}
+				}
+				resourceStatus = fmt.Sprintf("%v/%v", doneResources, totalResources)
+			}
+
+			elapsed := ""
+			if !migration.CreationTimestamp.IsZero() {
+				if migration.Status.Stage == storkv1.MigrationStageFinal {
+					if !migration.Status.FinishTimestamp.IsZero() {
+						elapsed = migration.Status.FinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
+					}
+				} else {
+					elapsed = time.Since(migration.CreationTimestamp.Time).String()
+				}
+			}
+			row = getRow(&migration,
+				[]interface{}{migration.Name,
+					migration.Spec.ClusterPair,
+					migration.Status.Stage,
+					migration.Status.Status,
+					volumeStatus,
+					resourceStatus,
+					creationTime,
+					elapsed,
+					"Available with stork v2.9.0+",
+				},
+			)
+		}
 		rows = append(rows, row)
 	}
 	return rows, nil

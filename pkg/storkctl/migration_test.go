@@ -64,8 +64,8 @@ func TestGetMigrationsOneMigration(t *testing.T) {
 	defer resetTest()
 	createMigrationAndVerify(t, "getmigrationtest", "test", "clusterpair1", []string{"namespace1"}, "preExec", "postExec")
 
-	expected := "NAME               CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"getmigrationtest   clusterpair1                    0/0       0/0                   \n"
+	expected := "NAME               CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED   TOTAL BYTES TRANSFERRED\n" +
+		"getmigrationtest   clusterpair1                    0/0       0/0                             Available with stork v2.9.0+\n"
 	cmdArgs := []string{"get", "migrations", "-n", "test"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -78,9 +78,9 @@ func TestGetMigrationsMultiple(t *testing.T) {
 	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"}, "", "")
 	createMigrationAndVerify(t, "getmigrationtest2", "default", "clusterpair2", []string{"namespace1"}, "", "")
 
-	expected := "NAME                CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"getmigrationtest1   clusterpair1                    0/0       0/0                   \n" +
-		"getmigrationtest2   clusterpair2                    0/0       0/0                   \n"
+	expected := "NAME                CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED   TOTAL BYTES TRANSFERRED\n" +
+		"getmigrationtest1   clusterpair1                    0/0       0/0                             Available with stork v2.9.0+\n" +
+		"getmigrationtest2   clusterpair2                    0/0       0/0                             Available with stork v2.9.0+\n"
 	cmdArgs := []string{"get", "migrations", "getmigrationtest1", "getmigrationtest2"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
@@ -88,8 +88,8 @@ func TestGetMigrationsMultiple(t *testing.T) {
 	cmdArgs = []string{"get", "migrations"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	expected = "NAME                CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"getmigrationtest1   clusterpair1                    0/0       0/0                   \n"
+	expected = "NAME                CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED   TOTAL BYTES TRANSFERRED\n" +
+		"getmigrationtest1   clusterpair1                    0/0       0/0                             Available with stork v2.9.0+\n"
 	// Should get only one migration if name given
 	cmdArgs = []string{"get", "migrations", "getmigrationtest1"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -98,10 +98,11 @@ func TestGetMigrationsMultiple(t *testing.T) {
 	require.NoError(t, err, "Error creating ns1 namespace")
 	createMigrationAndVerify(t, "getmigrationtest21", "ns1", "clusterpair2", []string{"namespace1"}, "", "")
 	cmdArgs = []string{"get", "migrations", "--all-namespaces"}
-	expected = "NAMESPACE   NAME                 CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"default     getmigrationtest1    clusterpair1                    0/0       0/0                   \n" +
-		"default     getmigrationtest2    clusterpair2                    0/0       0/0                   \n" +
-		"ns1         getmigrationtest21   clusterpair2                    0/0       0/0                   \n"
+	expected = "NAMESPACE   NAME                 CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED" +
+		"   TOTAL BYTES TRANSFERRED\ndefault     getmigrationtest1    clusterpair1                    0/0       0/0" +
+		"                             Available with stork v2.9.0+\ndefault     getmigrationtest2    clusterpair2  " +
+		"                  0/0       0/0                             Available with stork v2.9.0+\nns1         " +
+		"getmigrationtest21   clusterpair2                    0/0       0/0                             Available with stork v2.9.0+\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -110,9 +111,8 @@ func TestGetMigrationsWithClusterPair(t *testing.T) {
 	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"}, "", "")
 	createMigrationAndVerify(t, "getmigrationtest2", "default", "clusterpair2", []string{"namespace1"}, "", "")
 
-	expected := "NAME                CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"getmigrationtest1   clusterpair1                    0/0       0/0                   \n"
-
+	expected := "NAME                CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED   " +
+		"TOTAL BYTES TRANSFERRED\ngetmigrationtest1   clusterpair1                    0/0       0/0                             Available with stork v2.9.0+\n"
 	cmdArgs := []string{"get", "migrations", "-c", "clusterpair1"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -132,8 +132,36 @@ func TestGetMigrationsWithStatusAndProgress(t *testing.T) {
 	_, err = storkops.Instance().UpdateMigration(migration)
 	require.NoError(t, err, "Error updating migration")
 
-	expected := "NAME                     CLUSTERPAIR    STAGE   STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED\n" +
-		"getmigrationstatustest   clusterpair1   Final   Successful   0/0       0/0         " + toTimeString(migration.CreationTimestamp.Time) + "   5m0s\n"
+	expected := "NAME                     CLUSTERPAIR    STAGE   STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED   TOTAL BYTES TRANSFERRED\n" +
+		"getmigrationstatustest   clusterpair1   Final   Successful   0/0       0/0         " + toTimeString(migration.CreationTimestamp.Time) + "   5m0s      Available with stork v2.9.0+\n"
+	cmdArgs := []string{"get", "migrations", "getmigrationstatustest"}
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func TestGetMigrationsWithSummary(t *testing.T) {
+	defer resetTest()
+	createMigrationAndVerify(t, "getmigrationstatustest", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	migration, err := storkops.Instance().GetMigration("getmigrationstatustest", "default")
+	require.NoError(t, err, "Error getting migration")
+
+	// Update the status of the migration
+	migration.Status.FinishTimestamp = metav1.Now()
+	migration.CreationTimestamp = metav1.NewTime(migration.Status.FinishTimestamp.Add(-5 * time.Minute))
+	migration.Status.Stage = storkv1.MigrationStageFinal
+	migration.Status.Status = storkv1.MigrationStatusSuccessful
+	migration.Status.Summary = &storkv1.MigrationSummary{
+		TotalBytesMigrated:        uint64(12345),
+		TotalNumberOfVolumes:      uint64(5),
+		TotalNumberOfResources:    uint64(6),
+		NumberOfMigratedVolumes:   uint64(5),
+		NumberOfMigratedResources: uint64(6),
+		ElapsedTime:               "5m0s",
+	}
+	_, err = storkops.Instance().UpdateMigration(migration)
+	require.NoError(t, err, "Error updating migration")
+
+	expected := "NAME                     CLUSTERPAIR    STAGE   STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED   TOTAL BYTES TRANSFERRED\n" +
+		"getmigrationstatustest   clusterpair1   Final   Successful   5/5       6/6         " + toTimeString(migration.CreationTimestamp.Time) + "   5m0s      12345\n"
 	cmdArgs := []string{"get", "migrations", "getmigrationstatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -230,8 +258,8 @@ func TestExclueVolumesForMigrations(t *testing.T) {
 	_, err = storkops.Instance().UpdateMigration(migration)
 	require.NoError(t, err, "Error updating migration")
 
-	expected := "NAME                 CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		name + "   clusterpair1                    N/A       0/0                   \n"
+	expected := "NAME                 CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED" +
+		"   TOTAL BYTES TRANSFERRED\nexcludevolumestest   clusterpair1                    N/A       0/0                             Available with stork v2.9.0+\n"
 
 	cmdArgs := []string{"get", "migrations", "-n", namespace}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -250,9 +278,8 @@ func TestExclueResourcesForMigrations(t *testing.T) {
 	_, err = storkops.Instance().UpdateMigration(migration)
 	require.NoError(t, err, "Error updating migration")
 
-	expected := "NAME                  CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"excluderesourcstest   clusterpair1                    0/0       N/A                   \n"
-
+	expected := "NAME                  CLUSTERPAIR    STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED" +
+		"   TOTAL BYTES TRANSFERRED\nexcluderesourcstest   clusterpair1                    0/0       N/A                             Available with stork v2.9.0+\n"
 	cmdArgs := []string{"get", "migrations", "-n", namespace}
 	testCommon(t, cmdArgs, nil, expected, false)
 }

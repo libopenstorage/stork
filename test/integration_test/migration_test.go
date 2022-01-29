@@ -152,6 +152,36 @@ func triggerMigration(
 	return ctxs, preMigrationCtx
 }
 
+//
+// validateMigrationSummary validats the migration summary
+// currently we don't have an automated way to find out how many resources got deployed
+// through torpedo specs. For ex. a statefulset can have an inline PVC and that should
+// get counted as a resource in Migration, but torpedo won't count it as a separate resource
+// in its context. The caller is expected provide the counts
+func validateMigrationSummary(
+	t *testing.T,
+	preMigrationCtx *scheduler.Context,
+	expectedResources uint64,
+	expectedVolumes uint64,
+	migrationName, namespace string,
+) {
+	if preMigrationCtx == nil {
+		return
+	}
+	if preMigrationCtx.App == nil {
+		return
+	}
+	migObj, err := storkops.Instance().GetMigration(migrationName, namespace)
+	require.NoError(t, err, "get migration failed")
+	require.NotNil(t, migObj.Status.Summary, "migration summary is nil")
+	require.Equal(t, migObj.Status.Summary.NumberOfMigratedResources, expectedResources, "unexpected number of resources migrated")
+	require.Equal(t, migObj.Status.Summary.NumberOfMigratedVolumes, expectedVolumes, "unexpected number of volumes migrated")
+	require.Equal(t, migObj.Status.Summary.TotalNumberOfResources, expectedResources, "unexpected number of total resources")
+	require.Equal(t, migObj.Status.Summary.TotalNumberOfVolumes, expectedVolumes, "unexpected number of total volumes")
+	require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
+
+}
+
 func validateAndDestroyMigration(
 	t *testing.T,
 	ctxs []*scheduler.Context,
@@ -196,6 +226,9 @@ func validateAndDestroyMigration(
 			err = schedulerDriver.InspectVolumes(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
 			require.NoError(t, err, "Error validating storage components on remote cluster after migration")
 		}*/
+
+		// Validate the migration summary
+
 		// destroy mysql app on cluster 2
 		if !skipAppDeletion && !skipDestDeletion {
 			destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
