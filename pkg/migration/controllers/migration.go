@@ -193,6 +193,11 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 	return spec
 }
 
+func (m *MigrationController) updateMigrationCR(ctx context.Context, migration *stork_api.Migration) error {
+	migration.Status.Summary = m.getMigrationSummary(migration)
+	return m.client.Update(ctx, migration)
+}
+
 func (m *MigrationController) handle(ctx context.Context, migration *stork_api.Migration) error {
 	if migration.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(migration, controllers.FinalizerCleanup) {
@@ -260,7 +265,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 						string(stork_api.MigrationStatusFailed),
 						msg)
 					log.MigrationLog(migration).Warn(msg)
-					return m.client.Update(context.TODO(), migration)
+					return m.updateMigrationCR(context.TODO(), migration)
 				}
 			}
 		}
@@ -281,7 +286,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 					v1.EventTypeWarning,
 					string(stork_api.MigrationStatusFailed),
 					err.Error())
-				err = m.client.Update(context.Background(), migration)
+				err = m.updateMigrationCR(context.Background(), migration)
 				if err != nil {
 					log.MigrationLog(migration).Errorf("Error updating")
 				}
@@ -325,7 +330,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 				message)
 			migration.Status.Stage = stork_api.MigrationStageInitial
 			migration.Status.Status = stork_api.MigrationStatusInitial
-			err := m.client.Update(context.Background(), migration)
+			err := m.updateMigrationCR(context.Background(), migration)
 			if err != nil {
 				return err
 			}
@@ -347,7 +352,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		} else {
 			migration.Status.Stage = stork_api.MigrationStageApplications
 			migration.Status.Status = stork_api.MigrationStatusInitial
-			err := m.client.Update(context.Background(), migration)
+			err := m.updateMigrationCR(context.Background(), migration)
 			if err != nil {
 				return err
 			}
@@ -542,7 +547,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			// gets retriggered in the next cycle
 			if migration.Spec.PreExecRule != "" {
 				migration.Status.Stage = stork_api.MigrationStageInitial
-				err := m.client.Update(context.TODO(), migration)
+				err := m.updateMigrationCR(context.TODO(), migration)
 				if err != nil {
 					return err
 				}
@@ -560,7 +565,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 		}
 		migration.Status.Volumes = volumeInfos
 		migration.Status.Status = stork_api.MigrationStatusInProgress
-		err = m.client.Update(context.TODO(), migration)
+		err = m.updateMigrationCR(context.TODO(), migration)
 		if err != nil {
 			return err
 		}
@@ -590,7 +595,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 				migration.Status.Stage = stork_api.MigrationStageFinal
 				migration.Status.FinishTimestamp = metav1.Now()
 				migration.Status.Status = stork_api.MigrationStatusFailed
-				err = m.client.Update(context.TODO(), migration)
+				err = m.updateMigrationCR(context.TODO(), migration)
 				if err != nil {
 					return err
 				}
@@ -612,7 +617,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 		}
 		migration.Status.Volumes = volumeInfos
 		// Store the new status
-		err = m.client.Update(context.TODO(), migration)
+		err = m.updateMigrationCR(context.TODO(), migration)
 		if err != nil {
 			return err
 		}
@@ -652,7 +657,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			migration.Status.Status = stork_api.MigrationStatusInProgress
 			// Update the current state and then move on to migrating
 			// resources
-			err := m.client.Update(context.TODO(), migration)
+			err := m.updateMigrationCR(context.TODO(), migration)
 			if err != nil {
 				return err
 			}
@@ -673,14 +678,14 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 		}
 	}
 
-	return m.client.Update(context.TODO(), migration)
+	return m.updateMigrationCR(context.TODO(), migration)
 }
 
 func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]chan bool, error) {
 	if migration.Spec.PreExecRule == "" {
 		migration.Status.Stage = stork_api.MigrationStageVolumes
 		migration.Status.Status = stork_api.MigrationStatusPending
-		err := m.client.Update(context.TODO(), migration)
+		err := m.updateMigrationCR(context.TODO(), migration)
 		if err != nil {
 			return nil, err
 		}
@@ -693,7 +698,7 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]
 	if migration.Status.Stage == stork_api.MigrationStagePreExecRule {
 		if migration.Status.Status == stork_api.MigrationStatusPending {
 			migration.Status.Status = stork_api.MigrationStatusInProgress
-			err := m.client.Update(context.TODO(), migration)
+			err := m.updateMigrationCR(context.TODO(), migration)
 			if err != nil {
 				return nil, err
 			}
@@ -823,7 +828,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 	}
 
 	migration.Status.Resources = resourceInfos
-	err = m.client.Update(context.TODO(), migration)
+	err = m.updateMigrationCR(context.TODO(), migration)
 	if err != nil {
 		return err
 	}
@@ -868,7 +873,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		}
 	}
 
-	err = m.client.Update(context.TODO(), migration)
+	err = m.updateMigrationCR(context.TODO(), migration)
 	if err != nil {
 		return err
 	}
@@ -1436,7 +1441,7 @@ func (m *MigrationController) applyResources(
 			migration.Status.Stage = stork_api.MigrationStageFinal
 			migration.Status.FinishTimestamp = metav1.Now()
 			migration.Status.Status = stork_api.MigrationStatusFailed
-			return m.client.Update(context.TODO(), migration)
+			return m.updateMigrationCR(context.TODO(), migration)
 		}
 		m.updateResourceStatus(
 			migration,
@@ -1815,6 +1820,53 @@ func (m *MigrationController) parallelWorker(
 	}
 	close(objectChan)
 	return nil
+}
+
+func (m *MigrationController) getMigrationSummary(migration *stork_api.Migration) *stork_api.MigrationSummary {
+	migrationSummary := &stork_api.MigrationSummary{}
+	var totalBytes uint64
+	if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+		totalVolumes := uint64(len(migration.Status.Volumes))
+		doneVolumes := uint64(0)
+		for _, volume := range migration.Status.Volumes {
+			if volume.Status == stork_api.MigrationStatusSuccessful {
+				doneVolumes++
+				totalBytes = totalBytes + volume.BytesTotal
+			}
+		}
+		if totalVolumes > 0 {
+			migrationSummary.TotalNumberOfVolumes = totalVolumes
+			migrationSummary.NumberOfMigratedVolumes = doneVolumes
+		}
+	}
+
+	if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
+		totalResources := uint64(len(migration.Status.Resources))
+		doneResources := uint64(0)
+		for _, resource := range migration.Status.Resources {
+			if resource.Status == stork_api.MigrationStatusSuccessful {
+				doneResources++
+			}
+		}
+		if totalResources > 0 {
+			migrationSummary.TotalNumberOfResources = totalResources
+			migrationSummary.NumberOfMigratedResources = doneResources
+		}
+	}
+
+	elapsed := ""
+	if !migration.CreationTimestamp.IsZero() {
+		if migration.Status.Stage == stork_api.MigrationStageFinal {
+			if !migration.Status.FinishTimestamp.IsZero() {
+				elapsed = migration.Status.FinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
+			}
+		} else {
+			elapsed = time.Since(migration.CreationTimestamp.Time).String()
+		}
+	}
+	migrationSummary.ElapsedTime = elapsed
+	migrationSummary.TotalBytesMigrated = totalBytes
+	return migrationSummary
 }
 
 func (m *MigrationController) cleanup(migration *stork_api.Migration) error {

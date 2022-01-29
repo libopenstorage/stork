@@ -2473,6 +2473,11 @@ func (p *portworx) GetMigrationStatus(migration *storkapi.Migration) ([]*storkap
 						mInfo.BytesDone,
 						mInfo.BytesTotal,
 						mInfo.EtaSeconds)
+					if mInfo.BytesTotal > 0 {
+						// PX ends up re-setting the BytesTotal value to 0
+						// Only set the bytes total if PX sends a +ve value
+						vInfo.BytesTotal = mInfo.BytesTotal
+					}
 				}
 				break
 			}
