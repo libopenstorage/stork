@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-sv4-dep-svc
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: test-sv4-app-svc
+  template:
+    metadata:
+      labels:
+        app: test-sv4-app-svc
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - test-sv4-app-svc
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: sv4test
+        image: portworx/sharedv4-test:torpedo
+        imagePullPolicy: Always
+        command: ["python", "/app/fileio.py"]
+        args: ["--lock", "--interval=0.25", "$(MY_FILE)"]
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: MY_FILE
+            value: "/test-sv4-vol-svc/$(MY_POD_NAME)"
+        volumeMounts:
+        - name: test-sv4-vol-svc
+          mountPath: /test-sv4-vol-svc
+      volumes:
+      - name: test-sv4-vol-svc
+        persistentVolumeClaim:
+          claimName: test-sv4-pvc-svc

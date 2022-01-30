@@ -328,6 +328,18 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	return false, nil
 }
 
+func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
+	defer cancel()
+
+	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	if err != nil {
+		return nil, err
+	}
+
+	return response.Volume, nil
+}
+
 func (d *portworx) CleanupVolume(volumeName string) error {
 	volDriver := d.getVolDriver()
 	volumes, err := volDriver.Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{}, nil)

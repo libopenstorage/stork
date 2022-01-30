@@ -53,6 +53,9 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
+	// InspectVolume inspects the volume with the given name
+	InspectVolume(name string) (*api.Volume, error)
+
 	// CleanupVolume forcefully unmounts/detaches and deletes a storage volume.
 	// This is only called by Torpedo during cleanup operations, it is not
 	// used during orchestration simulations.

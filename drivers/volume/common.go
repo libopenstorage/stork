@@ -94,6 +94,14 @@ func (d *DefaultDriver) CleanupVolume(name string) error {
 	}
 }
 
+// InspectVolume inspects the volume with the given name
+func (d *DefaultDriver) InspectVolume(name string) (*api.Volume, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InspectVolume()",
+	}
+}
+
 // GetStorageDevices returns the list of storage devices used by the given node.
 func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 	// TODO: Implement

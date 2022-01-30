@@ -163,7 +163,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 						time.Sleep(20 * time.Second)
 					})
 
-					Step(fmt.Sprintf("validate app %s", appNode.Name), func() {
+					Step(fmt.Sprintf("validate app %s", ctx.App.Key), func() {
 						ValidateContext(ctx)
 					})
 				}

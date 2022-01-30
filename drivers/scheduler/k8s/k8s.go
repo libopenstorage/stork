@@ -3080,6 +3080,27 @@ func (k *K8s) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 	return k8sCore.GetPodsUsingPVC(pvcname, namespace)
 }
 
+// GetPodLog returns logs for all the pods in the specified context
+func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64) (map[string]string, error) {
+	var sinceSecondsArg *int64
+	if sinceSeconds > 0 {
+		sinceSecondsArg = &sinceSeconds
+	}
+	pods, err := k.getPodsForApp(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logsByPodName := map[string]string{}
+	for _, pod := range pods {
+		output, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &v1.PodLogOptions{SinceSeconds: sinceSecondsArg})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get logs for the pod %s/%s: %w", pod.Namespace, pod.Name, err)
+		}
+		logsByPodName[pod.Name] = output
+	}
+	return logsByPodName, nil
+}
+
 // Describe describe the test case
 func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 	var buf bytes.Buffer
