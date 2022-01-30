@@ -22,9 +22,16 @@ import (
 )
 
 const (
-	defaultCommandRetry   = 5 * time.Second
-	defaultCommandTimeout = 1 * time.Minute
-	exportPathPrefix      = "/var/lib/osd/pxns/"
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	defaultWaitRebootTimeout     = 5 * time.Minute
+	defaultWaitRebootRetry       = 10 * time.Second
+	defaultTestConnectionTimeout = 15 * time.Minute
+	exportPathPrefix             = "/var/lib/osd/pxns/"
+
+	// failover methods
+	reboot        = "reboot"
+	volDriverStop = "volDriverStop"
 )
 
 var _ = Describe("{NFSServerFailover}", func() {
@@ -209,7 +216,7 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
+	It("has to verify no I/O disruption for test-sv4-svc apps after PX restart or reboot on NFS server node", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("failover-io-%d", i))...)
@@ -259,7 +266,7 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 			}
 		})
 
-		Step("for each context, restart volume driver on NFS server node and verify I/O", func() {
+		Step("for each context, induce multiple sharedv4 service failovers and verify I/O", func() {
 			for _, ctx := range testSv4Contexts {
 				vols, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
@@ -268,63 +275,80 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// verify failover and failback by repeating the steps below
-				for i := 0; i < 2; i++ {
+				for i := 0; i < 4; i++ {
 					var countersBefore, countersAfter map[string]appCounter
 					var attachedNodeBefore, attachedNodeAfter *node.Node
+					var failoverMethod string
 
-					// get the attached node before the failover
-					attachedNodeBefore, err = Inst().V.GetNodeForVolume(vols[0],
-						defaultCommandTimeout, defaultCommandRetry)
-					Expect(err).NotTo(HaveOccurred())
+					// The first 2 failovers are done by stopping PX on the NFS server node.
+					// The next 2 failovers are done by rebooting the node.
+					if i < 2 {
+						failoverMethod = volDriverStop
+					} else {
+						failoverMethod = reboot
+					}
+					failoverLog := fmt.Sprintf("the failover #%d by %s", i, failoverMethod)
 
-					Step(
-						fmt.Sprintf("get counter values from node %v for app %s's volume before failover",
-							attachedNodeBefore.Name, ctx.App.Key),
+					Step(fmt.Sprintf("get the attached node for app %s's volume %s before %s",
+						ctx.App.Key, vols[0].ID, failoverLog),
+						func() {
+							attachedNodeBefore, err = Inst().V.GetNodeForVolume(vols[0],
+								defaultCommandTimeout, defaultCommandRetry)
+							Expect(err).NotTo(HaveOccurred())
+							logrus.Infof("volume %v (%v) is attached to node %v before %s",
+								vols[0].ID, apiVol.Id, attachedNodeBefore.Name, failoverLog)
+						})
+
+					Step(fmt.Sprintf("get counters from node %v for app %s's volume before %s",
+						attachedNodeBefore.Name, ctx.App.Key, failoverLog),
 						func() {
 							countersBefore = getAppCounters(apiVol, attachedNodeBefore,
 								3*time.Duration(numPods)*time.Second)
 						})
 
-					Step(
-						fmt.Sprintf("failover #%d for app %s by stopping the volume driver on node %s",
+					if failoverMethod == volDriverStop {
+						Step(fmt.Sprintf("failover #%d by restarting the volume driver %s on node where app %s's "+
+							"volume is attached: %s", i, Inst().V.String(), ctx.App.Key, attachedNodeBefore.Name),
+							func() {
+								restartVolumeDriverOnNode(attachedNodeBefore)
+							})
+					} else if failoverMethod == reboot {
+						Step(fmt.Sprintf("failover #%d by rebooting the node where app %s's volume is attached: %s",
 							i, ctx.App.Key, attachedNodeBefore.Name),
-						func() {
-							StopVolDriverAndWait([]node.Node{*attachedNodeBefore})
-						})
+							func() {
+								rebootNodeAndWaitForReady(attachedNodeBefore)
+							})
+					} else {
+						Fail(fmt.Sprintf("unknown failover method %v", failoverMethod))
+					}
 
-					Step(
-						fmt.Sprintf("start volume driver %s on node where app %s's volume was attached: %s",
-							Inst().V.String(), ctx.App.Key, attachedNodeBefore.Name),
-						func() {
-							StartVolDriverAndWait([]node.Node{*attachedNodeBefore})
-						})
-
-					Step("Giving few seconds for volume driver and the app pods to stabilize",
-						func() {
-							time.Sleep(60 * time.Second)
-						})
-
-					Step(fmt.Sprintf("validate app %s", ctx.App.Key),
+					Step(fmt.Sprintf("validate app %s after %s", ctx.App.Key, failoverLog),
 						func() {
 							ValidateContext(ctx)
 						})
 
-					Step(
-						fmt.Sprintf("get counter values for app %s's volume after failover #%d", ctx.App.Key, 0),
+					Step(fmt.Sprintf("get counter values for app %s's volume after %s", ctx.App.Key, failoverLog),
 						func() {
 							attachedNodeAfter, err = Inst().V.GetNodeForVolume(vols[0],
 								defaultCommandTimeout, defaultCommandRetry)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(attachedNodeAfter.Name).NotTo(Equal(attachedNodeBefore.Name))
+							logrus.Infof("volume %v (%v) is attached to node %v after %s",
+								vols[0].ID, apiVol.Id, attachedNodeAfter.Name, failoverLog)
 							countersAfter = getAppCounters(apiVol, attachedNodeAfter,
 								3*time.Duration(numPods)*time.Second)
 						})
 
-					Step(fmt.Sprintf("validate no I/O disruption for app %s after failover #%d", ctx.App.Key, i),
+					Step(fmt.Sprintf("validate no I/O disruption for app %s after %s", ctx.App.Key, failoverLog),
 						func() {
-							// 2 pods (1 on the old NFS server and 1 on the new NFS server) should get restarted,
-							// others should not be interrupted
-							validateAppCounters(ctx, countersBefore, countersAfter, numPods, 2)
+							// Usually 2 pods, one on the old NFS server and one on the new NFS server, should be deleted.
+							numDeletions := []int{2}
+							if failoverMethod == reboot {
+								// 1 or 2 pods may get deleted depending on what kubelet does on the rebooted node.
+								// It could set up the mount for the same pod or it could create a new pod.
+								numDeletions = append(numDeletions, 1)
+							}
+							validateAppCounters(ctx, countersBefore, countersAfter, numPods, numDeletions)
 							validateAppLogs(ctx, numPods)
 							validateExports(apiVol, attachedNodeBefore, attachedNodeAfter)
 						})
@@ -535,14 +559,19 @@ func getAppCounters(vol *api.Volume, attachedNode *node.Node, sleepInterval time
 func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string]int {
 	counterByPodName := map[string]int{}
 	// We find all the files in the root dir where the pods are writing their counters.
-	// Exclude the common file, tmp files. Use grep '' to get the lines in "fileName:counter" format.
 	// Example:
-	// # find /var/lib/osd/pxns/283170809327294682 -maxdepth 1 -type f | grep -v -e common -e tmp | xargs grep ''
-	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-n5gkc:478941
-	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-5bgxn:5437
-	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-48br7:521419
+	// # find /var/lib/osd/pxns/1088228603475411556 -maxdepth 1 -type f -exec tail -1 {} \; -exec echo -n ':' \; -print
+	// 1500:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-vmdn5
+	// 2458:/var/lib/osd/pxns/1088228603475411556/common
+	// 1404:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-m9kzc
+	// 1436:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-g79kh
+	// 71:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-mwxn2
+	// 1395:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-4ck8x
+	// 77:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-d6598
+	// 91:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-68nwv
+	// 1406:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-h6hgx
 	//
-	cmd := fmt.Sprintf("find %s%s -maxdepth 1 -type f | grep -v -e common -e tmp | xargs grep ''",
+	cmd := fmt.Sprintf("find %s%s -maxdepth 1 -type f -exec tail -1 {} \\; -exec echo -n ':' \\; -print",
 		exportPathPrefix, vol.Id)
 	output, err := runCmd(cmd, *attachedNode)
 	Expect(err).NotTo(HaveOccurred())
@@ -553,10 +582,14 @@ func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string
 		parts := strings.Split(line, ":")
 		Expect(len(parts)).To(Equal(2))
 
-		val, err := strconv.Atoi(parts[1])
+		podName := path.Base(parts[1])
+		if podName == "common" {
+			// ignore the common file that all pods write to
+			continue
+		}
+		val, err := strconv.Atoi(parts[0])
 		Expect(err).NotTo(HaveOccurred())
 
-		podName := path.Base(parts[0])
 		counterByPodName[podName] = val
 	}
 	return counterByPodName
@@ -567,7 +600,7 @@ func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string
 // - the specified number of pods should have stopped incrementing their counters and the same number of
 //   new pods should have started incrementing the counters
 func validateAppCounters(ctx *scheduler.Context, countersBefore, countersAfter map[string]appCounter,
-	numPods, expectedPodRestarts int) {
+	numPods int, numDeletions []int) {
 
 	var survivingPods []string
 	var terminatedPods []string
@@ -596,10 +629,18 @@ func validateAppCounters(ctx *scheduler.Context, countersBefore, countersAfter m
 			newPods = append(newPods, podName)
 		}
 	}
-	// pods on old and new NFS server should have been terminated and new ones should have replaced them
-	Expect(len(terminatedPods)).To(Equal(expectedPodRestarts))
-	Expect(len(newPods)).To(Equal(expectedPodRestarts))
-	Expect(len(survivingPods) + len(newPods)).To(Equal(numPods))
+	Expect(len(terminatedPods)).To(BeElementOf(numDeletions),
+		"len of actual terminated pods %v was not one of %v: countersBefore=%v, countersAfter=%v",
+		terminatedPods, numDeletions, countersBefore, countersAfter)
+
+	Expect(len(newPods)).To(Equal(len(terminatedPods)),
+		"len of actual new pods %v did not match len of %v: countersBefore=%v, countersAfter=%v",
+		newPods, terminatedPods, countersBefore, countersAfter)
+
+	currentPods := len(survivingPods) + len(newPods)
+	Expect(currentPods).To(Equal(numPods),
+		"count of current pods %d did not match %d: countersBefore=%v, countersAfter=%v",
+		currentPods, numPods, countersBefore, countersAfter)
 }
 
 // There should not be any errors in the pod logs.
@@ -650,6 +691,49 @@ func getExportsOnNode(vol *api.Volume, node *node.Node) []string {
 		}
 	}
 	return nil
+}
+
+func restartVolumeDriverOnNode(nodeObj *node.Node) {
+	logrus.Infof("Stopping volume driver on node %s", nodeObj.Name)
+	StopVolDriverAndWait([]node.Node{*nodeObj})
+
+	logrus.Infof("Sleep to allow the failover before restarting the volume driver on node %s", nodeObj.Name)
+	time.Sleep(30 * time.Second)
+
+	logrus.Infof("Starting volume driver on node %s", nodeObj.Name)
+	StartVolDriverAndWait([]node.Node{*nodeObj})
+
+	logrus.Infof("Giving volume driver and the app pods some time to settle down on node %s", nodeObj.Name)
+	time.Sleep(30 * time.Second)
+}
+
+func rebootNodeAndWaitForReady(nodeObj *node.Node) {
+	logrus.Infof("Rebooting node %s", nodeObj.Name)
+	err := Inst().N.RebootNode(*nodeObj, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         defaultCommandTimeout,
+			TimeBeforeRetry: defaultCommandRetry,
+		},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Testing connection to node %s", nodeObj.Name)
+	err = Inst().N.TestConnection(*nodeObj, node.ConnectionOpts{
+		Timeout:         defaultTestConnectionTimeout,
+		TimeBeforeRetry: defaultWaitRebootRetry,
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Waiting for node %s to be ready", nodeObj.Name)
+	err = Inst().S.IsNodeReady(*nodeObj)
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Waiting for driver to be up on node %s", nodeObj.Name)
+	err = Inst().V.WaitDriverUpOnNode(*nodeObj, Inst().DriverStartTimeout)
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Successfully rebooted the node %s", nodeObj.Name)
 }
 
 func runCmd(cmd string, n node.Node) (string, error) {
