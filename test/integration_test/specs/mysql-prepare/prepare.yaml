@@ -29,6 +29,6 @@ spec:
         - --mysql-port=3306
         - --mysql-user=root
         - --mysql-password=password
-        - /usr/share/sysbench/tests/include/oltp_legacy/parallel_prepare.lua
+        - /usr/share/sysbench/tests/include/oltp_legacy/oltp.lua
         - run
   restartPolicy: Never
