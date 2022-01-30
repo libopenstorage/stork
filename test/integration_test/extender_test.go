@@ -79,7 +79,7 @@ func statefulsetTest(t *testing.T) {
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	require.NoError(t, err, "Error getting node for app")
-	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
+	require.GreaterOrEqual(t, 3, len(scheduledNodes), "App should be scheduled on one node")
 
 	// TODO: torpedo doesn't return correct volumes here
 	volumeNames := getVolumeNames(t, ctxs[0])
