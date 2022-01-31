@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v2"
+	"io"
 	"math"
 	"net/http"
+	"net/url"
+	"path"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -21,8 +25,11 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -39,7 +46,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -95,6 +104,7 @@ const (
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 	asyncTimeout                      = 15 * time.Minute
+	validateStorageClusterTimeout     = 40 * time.Minute
 )
 
 const (
@@ -125,6 +135,8 @@ var deleteVolumeLabelList = []string{
 }
 
 var k8sCore = core.Instance()
+var pxOperator = operator.Instance()
+var apiExtentions = apiextensions.Instance()
 
 type portworx struct {
 	legacyClusterManager  cluster.Cluster
@@ -2757,6 +2769,35 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 	return nil
 }
 
+func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) error {
+	// check if storagecluster CRD is present, in case yes, we continue validation
+	// otherwise px was deployed using daemonset, we skip this validation
+	_, err := apiExtentions.GetCRD("storageclusters.core.libopenstorage.org", metav1.GetOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get storagecluster CRD. cause: %v", err)
+	} else if k8serrors.IsNotFound(err) {
+		return nil
+	}
+	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+	if err != nil {
+		return err
+	}
+	if len(pxOps.Items) > 0 {
+		k8sVersion, err := k8sCore.GetVersion()
+		if err != nil {
+			return err
+		}
+		imageList, err := getImageList(endpointURL, endpointVersion, k8sVersion.String())
+		if err != nil {
+			return err
+		}
+		if err = optest.ValidateStorageCluster(imageList, &pxOps.Items[0], validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (d *portworx) getPxctlPath(n node.Node) string {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -2888,6 +2929,41 @@ func getSDKContainerPort() (int32, error) {
 		}
 	}
 	return 0, fmt.Errorf("px-sdk target port not found in service")
+}
+
+func getImageList(endpointURL, pxVersion, k8sVersion string) (map[string]string, error) {
+	var imageList map[string]string
+	client := &http.Client{}
+	u, err := url.Parse(endpointURL)
+	if err != nil {
+		return imageList, fmt.Errorf("failed to parse URL %s request. Cause: %v", endpointURL, err)
+	}
+	q := u.Query()
+	q.Set("kbver", k8sVersion)
+	u.RawQuery = q.Encode()
+	u.Path = path.Join(pxVersion, "version")
+	resp, err := client.Get(u.String())
+	if err != nil {
+		return imageList, fmt.Errorf("error while downloading version file from %s. Cause: %v", u.String(), err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err!= nil {
+		return imageList, fmt.Errorf("error while reading response body. Cause: %v", err)
+	}
+	logrus.Debugf(string(body))
+
+	yamlMap := make(map[string]interface{})
+	if err := yaml.Unmarshal(body, &yamlMap); err != nil {
+		return imageList, err
+	}
+
+	imageList = make(map[string]string)
+	for key, value := range yamlMap["components"].(map[interface{}]interface{}) {
+		imageList[key.(string)] = value.(string)
+	}
+	imageList["version"] = fmt.Sprintf("portworx/oci-monitor:%s", yamlMap["version"].(string))
+	return imageList, nil
 }
 
 func init() {

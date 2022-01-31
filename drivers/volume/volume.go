@@ -210,6 +210,9 @@ type Driver interface {
 
 	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
+
+	// ValidateStorageCluster validates all the storage cluster components
+	ValidateStorageCluster(endpointURL, endpointVersion string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

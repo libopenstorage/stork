@@ -50,6 +50,11 @@ var _ = Describe("{UpgradeCluster}", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			Step("validate storage components", func() {
+				err := Inst().V.ValidateStorageCluster(Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)
 			})
