@@ -1818,8 +1818,8 @@ func (m *MigrationController) parallelWorker(
 	shuffle bool,
 ) error {
 	numObjects := len(objects)
-	objectChan := make(chan runtime.Unstructured, 100)
-	errorChan := make(chan error, 100)
+	objectChan := make(chan runtime.Unstructured)
+	errorChan := make(chan error)
 
 	if shuffle {
 		// Shuffle Object order before applying so we can get parallelism between resource types
@@ -1836,15 +1836,16 @@ func (m *MigrationController) parallelWorker(
 		for _, o := range objects {
 			objectChan <- o
 		}
-		close(objectChan)
 	}()
 
 	for result := 0; result < numObjects; result++ {
 		workerErr := <-errorChan
 		if workerErr != nil {
+			close(objectChan)
 			return workerErr
 		}
 	}
+	close(objectChan)
 	return nil
 }
 
