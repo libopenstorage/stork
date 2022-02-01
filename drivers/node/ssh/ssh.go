@@ -467,36 +467,29 @@ func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error)
 
 func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	var debugPod *v1.Pod
-
-	findDebugPodFunc := func() (interface{}, bool, error) {
-		allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
-		if err != nil {
-			logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
-			return nil, true, err
-		}
-		for _, pod := range allPodsForNode.Items {
-			if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
-				debugPod = &pod
-				break
+	t := func() (interface{}, bool, error) {
+		if debugPod == nil {
+			logrus.Debugf("Finding the debug pod to run command on node %s", n.Name)
+			allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
+			if err != nil {
+				logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+				return nil, true, err
+			}
+			for _, pod := range allPodsForNode.Items {
+				if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
+					debugPod = &pod
+					break
+				}
 			}
 		}
-
 		if debugPod == nil {
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node:  n,
 				Cause: fmt.Sprintf("debug pod not found in node %v", n),
 			}
 		}
-		return nil, false, nil
-	}
-
-	logrus.Debugf("Finding the debug pod to run command on node %s", n.Name)
-	if _, err := task.DoRetryWithTimeout(findDebugPodFunc, options.Timeout, options.TimeBeforeRetry); err != nil {
-		return "", err
-	}
-
-	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
-	t := func() (interface{}, bool, error) {
+		cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
+		logrus.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if !ignoreErr && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
@@ -505,11 +498,9 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 					cmds, err, debugPod),
 			}
 		}
-
 		return output, false, nil
 	}
 
-	logrus.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
 		return "", err
