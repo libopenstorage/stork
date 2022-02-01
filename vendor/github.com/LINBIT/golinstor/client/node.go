@@ -16,7 +16,11 @@
 
 package client
 
-import "context"
+import (
+	"context"
+
+	"github.com/LINBIT/golinstor/devicelayerkind"
+)
 
 // copy & paste from generated code
 
@@ -31,17 +35,24 @@ type Node struct {
 	// Enum describing the current connection status.
 	ConnectionStatus string `json:"connection_status,omitempty"`
 	// unique object id
-	Uuid                 string                    `json:"uuid,omitempty"`
-	StorageProviders     []ProviderKind            `json:"storage_providers,omitempty"`
-	ResourceLayers       []LayerType               `json:"resource_layers,omitempty"`
-	UnsupportedProviders map[ProviderKind][]string `json:"unsupported_providers,omitempty"`
-	UnsupportedLayers    map[LayerType][]string    `json:"unsupported_layers,omitempty"`
+	Uuid                 string                                       `json:"uuid,omitempty"`
+	StorageProviders     []ProviderKind                               `json:"storage_providers,omitempty"`
+	ResourceLayers       []devicelayerkind.DeviceLayerKind            `json:"resource_layers,omitempty"`
+	UnsupportedProviders map[ProviderKind][]string                    `json:"unsupported_providers,omitempty"`
+	UnsupportedLayers    map[devicelayerkind.DeviceLayerKind][]string `json:"unsupported_layers,omitempty"`
+	// milliseconds since unix epoch in UTC
+	EvictionTimestamp *TimeStampMs `json:"eviction_timestamp,omitempty"`
 }
 
 type NodeModify struct {
 	NodeType string `json:"node_type,omitempty"`
 	// A string to string property map.
 	GenericPropsModify
+}
+
+type NodeRestore struct {
+	DeleteResources *bool `json:"delete_resources,omitempty"`
+	DeleteSnapshots *bool `json:"delete_snapshots,omitempty"`
 }
 
 // NetInterface represents a node's network interface.
@@ -77,6 +88,10 @@ type StoragePool struct {
 	Reports []ApiCallRc `json:"reports,omitempty"`
 	// true if the storage pool supports snapshots. false otherwise
 	SupportsSnapshots bool `json:"supports_snapshots,omitempty"`
+	// name of the shared space or null if none given
+	SharedSpace string `json:"shared_space,omitempty"`
+	// true if a shared storage pool uses linstor-external locking, like cLVM
+	ExternalLocking bool `json:"external_locking,omitempty"`
 }
 
 // ProviderKind is a type that represents various types of storage.
@@ -95,20 +110,69 @@ const (
 	SPDK            ProviderKind = "SPDK"
 )
 
-// ControllerVersion represents version information of the LINSTOR controller
-type ControllerVersion struct {
-	Version        string `json:"version,omitempty"`
-	GitHash        string `json:"git_hash,omitempty"`
-	BuildTime      string `json:"build_time,omitempty"`
-	RestApiVersion string `json:"rest_api_version,omitempty"`
-}
-
 // custom code
+
+// NodeProvider acts as an abstraction for a NodeService. It can be swapped out
+// for another NodeService implementation, for example for testing.
+type NodeProvider interface {
+	// GetAll gets information for all registered nodes.
+	GetAll(ctx context.Context, opts ...*ListOpts) ([]Node, error)
+	// Get gets information for a particular node.
+	Get(ctx context.Context, nodeName string, opts ...*ListOpts) (Node, error)
+	// Create creates a new node object.
+	Create(ctx context.Context, node Node) error
+	// Modify modifies the given node and sets/deletes the given properties.
+	Modify(ctx context.Context, nodeName string, props NodeModify) error
+	// Delete deletes the given node.
+	Delete(ctx context.Context, nodeName string) error
+	// Lost marks the given node as lost to delete an unrecoverable node.
+	Lost(ctx context.Context, nodeName string) error
+	// Reconnect reconnects a node to the controller.
+	Reconnect(ctx context.Context, nodeName string) error
+	// GetNetInterfaces gets information about all network interfaces of a given node.
+	GetNetInterfaces(ctx context.Context, nodeName string, opts ...*ListOpts) ([]NetInterface, error)
+	// GetNetInterface gets information about a particular network interface on a given node.
+	GetNetInterface(ctx context.Context, nodeName, nifName string, opts ...*ListOpts) (NetInterface, error)
+	// CreateNetInterface creates the given network interface on a given node.
+	CreateNetInterface(ctx context.Context, nodeName string, nif NetInterface) error
+	// ModifyNetInterface modifies the given network interface on a given node.
+	ModifyNetInterface(ctx context.Context, nodeName, nifName string, nif NetInterface) error
+	// DeleteNetinterface deletes the given network interface on a given node.
+	DeleteNetinterface(ctx context.Context, nodeName, nifName string) error
+	// GetStoragePoolView gets information about all storage pools in the cluster.
+	GetStoragePoolView(ctx context.Context, opts ...*ListOpts) ([]StoragePool, error)
+	// GetStoragePools gets information about all storage pools on a given node.
+	GetStoragePools(ctx context.Context, nodeName string, opts ...*ListOpts) ([]StoragePool, error)
+	// GetStoragePool gets information about a specific storage pool on a given node.
+	GetStoragePool(ctx context.Context, nodeName, spName string, opts ...*ListOpts) (StoragePool, error)
+	// CreateStoragePool creates a storage pool on a given node.
+	CreateStoragePool(ctx context.Context, nodeName string, sp StoragePool) error
+	// ModifyStoragePool modifies a storage pool on a given node.
+	ModifyStoragePool(ctx context.Context, nodeName, spName string, sp StoragePool) error
+	// DeleteStoragePool deletes a storage pool on a given node.
+	DeleteStoragePool(ctx context.Context, nodeName, spName string) error
+	// CreateDevicePool creates an LVM, LVM-thin or ZFS pool, optional VDO under it on a given node.
+	CreateDevicePool(ctx context.Context, nodeName string, psc PhysicalStorageCreate) error
+	// GetPhysicalStorage gets a grouped list of physical storage that can be turned into a LINSTOR storage-pool
+	GetPhysicalStorage(ctx context.Context, opts ...*ListOpts) ([]PhysicalStorage, error)
+	// GetStoragePoolPropsInfos gets meta information about the properties
+	// that can be set on a storage pool on a particular node.
+	GetStoragePoolPropsInfos(ctx context.Context, nodeName string, opts ...*ListOpts) ([]PropsInfo, error)
+	// GetPropsInfos gets meta information about the properties that can be
+	// set on a node.
+	GetPropsInfos(ctx context.Context, opts ...*ListOpts) ([]PropsInfo, error)
+	// Evict the given node, migrating resources to the remaining nodes, if possible.
+	Evict(ctx context.Context, nodeName string) error
+	// Restore an evicted node, optionally keeping existing resources.
+	Restore(ctx context.Context, nodeName string, restore NodeRestore) error
+}
 
 // NodeService is the service that deals with node related tasks.
 type NodeService struct {
 	client *Client
 }
+
+var _ NodeProvider = &NodeService{}
 
 // GetAll gets information for all registered nodes.
 func (n *NodeService) GetAll(ctx context.Context, opts ...*ListOpts) ([]Node, error) {
@@ -164,7 +228,7 @@ func (n *NodeService) GetNetInterfaces(ctx context.Context, nodeName string, opt
 // GetNetInterface gets information about a particular network interface on a given node.
 func (n *NodeService) GetNetInterface(ctx context.Context, nodeName, nifName string, opts ...*ListOpts) (NetInterface, error) {
 	var nif NetInterface
-	_, err := n.client.doGET(ctx, "/v1/nodes/"+nodeName+"/net-interfaces/"+nifName, nif, opts...)
+	_, err := n.client.doGET(ctx, "/v1/nodes/"+nodeName+"/net-interfaces/"+nifName, &nif, opts...)
 	return nif, err
 }
 
@@ -225,37 +289,30 @@ func (n *NodeService) DeleteStoragePool(ctx context.Context, nodeName, spName st
 	return err
 }
 
-// GetControllerVersion queries version information for the controller.
-func (n *NodeService) GetControllerVersion(ctx context.Context, opts ...*ListOpts) (ControllerVersion, error) {
-	var vers ControllerVersion
-	_, err := n.client.doGET(ctx, "/v1/controller/version", &vers, opts...)
-	return vers, err
+// GetStoragePoolPropsInfos gets meta information about the properties that can
+// be set on a storage pool on a particular node.
+func (n *NodeService) GetStoragePoolPropsInfos(ctx context.Context, nodeName string, opts ...*ListOpts) ([]PropsInfo, error) {
+	var infos []PropsInfo
+	_, err := n.client.doGET(ctx, "/v1/nodes/"+nodeName+"/storage-pools/properties/info", &infos, opts...)
+	return infos, err
 }
 
-// GetControllerConfig queries the configuration of a controller
-func (n *NodeService) GetControllerConfig(ctx context.Context, opts ...*ListOpts) (ControllerConfig, error) {
-	var cfg ControllerConfig
-	_, err := n.client.doGET(ctx, "/v1/controller/config", &cfg, opts...)
-	return cfg, err
+// GetPropsInfos gets meta information about the properties that can be set on
+// a node.
+func (n *NodeService) GetPropsInfos(ctx context.Context, opts ...*ListOpts) ([]PropsInfo, error) {
+	var infos []PropsInfo
+	_, err := n.client.doGET(ctx, "/v1/nodes/properties/info", &infos, opts...)
+	return infos, err
 }
 
-// ModifyController modifies the controller node and sets/deletes the given properties.
-func (n *NodeService) ModifyController(ctx context.Context, props GenericPropsModify) error {
-	_, err := n.client.doPOST(ctx, "/v1/controller/properties", props)
+// Evict the given node, migrating resources to the remaining nodes, if possible.
+func (n NodeService) Evict(ctx context.Context, nodeName string) error {
+	_, err := n.client.doPUT(ctx, "/v1/nodes/"+nodeName+"/evict", nil)
 	return err
 }
 
-type ControllerProps map[string]string
-
-// GetControllerProps gets all properties of a controller
-func (n *NodeService) GetControllerProps(ctx context.Context, opts ...*ListOpts) (ControllerProps, error) {
-	var props ControllerProps
-	_, err := n.client.doGET(ctx, "/v1/controller/properties", &props, opts...)
-	return props, err
-}
-
-// DeleteControllerProp deletes the given property/key from the controller object.
-func (n *NodeService) DeleteControllerProp(ctx context.Context, prop string) error {
-	_, err := n.client.doDELETE(ctx, "/v1/controller/properties/"+prop, nil)
+// Restore an evicted node, optionally keeping existing resources.
+func (n *NodeService) Restore(ctx context.Context, nodeName string, restore NodeRestore) error {
+	_, err := n.client.doPUT(ctx, "/v1/nodes/"+nodeName+"/restore", restore)
 	return err
 }

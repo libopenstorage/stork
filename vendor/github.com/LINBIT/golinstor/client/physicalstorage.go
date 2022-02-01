@@ -26,6 +26,10 @@ type PhysicalStorageStoragePoolCreate struct {
 	Name string `json:"name,omitempty"`
 	// A string to string property map.
 	Props map[string]string `json:"props,omitempty"`
+	// Name of the shared space
+	SharedSpace string `json:"shared_space,omitempty"`
+	// true if a shared storage pool uses linstor-external locking, like cLVM
+	ExternalLocking bool `json:"external_locking,omitempty"`
 }
 
 // PhysicalStorageCreate is a configuration struct used to represent pysical storage on a given node.
@@ -37,8 +41,8 @@ type PhysicalStorageCreate struct {
 	RaidLevel         string                           `json:"raid_level,omitempty"`
 	PoolName          string                           `json:"pool_name,omitempty"`
 	VdoEnable         bool                             `json:"vdo_enable,omitempty"`
-	VdoSlabSizeKib    int32                            `json:"vdo_slab_size_kib,omitempty"`
-	VdoLogicalSizeKib int32                            `json:"vdo_logical_size_kib,omitempty"`
+	VdoSlabSizeKib    int64                            `json:"vdo_slab_size_kib,omitempty"`
+	VdoLogicalSizeKib int64                            `json:"vdo_logical_size_kib,omitempty"`
 	WithStoragePool   PhysicalStorageStoragePoolCreate `json:"with_storage_pool,omitempty"`
 }
 

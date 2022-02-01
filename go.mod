@@ -61,7 +61,7 @@ require (
 )
 
 replace (
-	github.com/LINBIT/golinstor => github.com/LINBIT/golinstor v0.26.0
+	github.com/LINBIT/golinstor => github.com/LINBIT/golinstor v0.39.0
 	github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 	github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible

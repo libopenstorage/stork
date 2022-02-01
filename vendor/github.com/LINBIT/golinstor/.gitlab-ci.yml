@@ -1,0 +1,13 @@
+# Use the same image version as the minimum version on go.mod
+image: golang:1.13
+
+test:
+  stage: test
+  cache:
+    paths:
+      - .mygo/pkg/mod
+  script:
+    - GOPATH=$(pwd)/.mygo go mod tidy
+    - git diff --exit-code go.mod go.sum || (echo "Run go mod tidy!" >&2 ; exit 1)
+    - GOPATH=$(pwd)/.mygo go test -coverprofile .testCoverage.txt ./client
+    - GOPATH=$(pwd)/.mygo go tool cover -func=.testCoverage.txt
