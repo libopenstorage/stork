@@ -120,10 +120,9 @@ var genericCsiConfigMap string
 var externalTest bool
 var storkVersionCheck bool
 
-func TestSnapshotMigration(t *testing.T) {
+func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
 	t.Run("testSnapshotRestore", testSnapshotRestore)
-	t.Run("testMigration", testMigration)
 	t.Run("testWebhook", testWebhook)
 }
 
