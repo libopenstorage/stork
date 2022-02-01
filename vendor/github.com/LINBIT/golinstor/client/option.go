@@ -26,12 +26,20 @@ import (
 
 // ListOpts is a struct primarily used to define parameters used for pagination. It is also used for filtering (e.g., the /view/ calls)
 type ListOpts struct {
-	Page    int `url:"offset"`
-	PerPage int `url:"limit"`
+	// Number of items to skip. Only used if Limit is a positive value
+	Offset int `url:"offset"`
+	// Maximum number of items to retrieve
+	Limit int `url:"limit"`
 
 	StoragePool []string `url:"storage_pools"`
 	Resource    []string `url:"resources"`
 	Node        []string `url:"nodes"`
+	Prop        []string `url:"props"`
+	Snapshots   []string `url:"snapshots"`
+	Status      string   `url:"status,omitempty"`
+
+	// Content is used in the files API. If true, fetching files will include the content.
+	Content bool `url:"content,omitempty"`
 }
 
 func genOptions(opts ...*ListOpts) *ListOpts {

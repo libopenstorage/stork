@@ -47,11 +47,16 @@ type ResourceGroupSpawn struct {
 	// External name can be used to have native resource names. If you need to store a non Linstor compatible resource name use this field and Linstor will generate a compatible name.
 	ResourceDefinitionExternalName string `json:"resource_definition_external_name,omitempty"`
 	// sizes (in kib) of the resulting volume-definitions
-	VolumeSizes []int64 `json:"volume_sizes,omitempty"`
+	VolumeSizes  []int64          `json:"volume_sizes,omitempty"`
+	SelectFilter AutoSelectFilter `json:"select_filter,omitempty"`
 	// If false, the length of the vlm_sizes has to match the number of volume-groups or an error is returned.  If true and there are more vlm_sizes than volume-groups, the additional volume-definitions will simply have no pre-set properties (i.e. \"empty\" volume-definitions) If true and there are less vlm_sizes than volume-groups, the additional volume-groups won't be used.  If the count of vlm_sizes matches the number of volume-groups, this \"partial\" parameter has no effect.
 	Partial bool `json:"partial,omitempty"`
 	// If true, the spawn command will only create the resource-definition with the volume-definitions but will not perform an auto-place, even if it is configured.
 	DefinitionsOnly bool `json:"definitions_only,omitempty"`
+}
+
+type ResourceGroupAdjust struct {
+	SelectFilter *AutoSelectFilter `json:"select_filter,omitempty"`
 }
 
 type VolumeGroup struct {
@@ -73,6 +78,45 @@ type VolumeGroupModify struct {
 }
 
 // custom code
+
+// ResourceGroupProvider acts as an abstraction for a
+// ResourceGroupService. It can be swapped out for another
+// ResourceGroupService implementation, for example for testing.
+type ResourceGroupProvider interface {
+	// GetAll lists all resource-groups
+	GetAll(ctx context.Context, opts ...*ListOpts) ([]ResourceGroup, error)
+	// Get return information about a resource-defintion
+	Get(ctx context.Context, resGrpName string, opts ...*ListOpts) (ResourceGroup, error)
+	// Create adds a new resource-group
+	Create(ctx context.Context, resGrp ResourceGroup) error
+	// Modify allows to modify a resource-group
+	Modify(ctx context.Context, resGrpName string, props ResourceGroupModify) error
+	// Delete deletes a resource-group
+	Delete(ctx context.Context, resGrpName string) error
+	// Spawn creates a new resource-definition and auto-deploys if configured to do so
+	Spawn(ctx context.Context, resGrpName string, resGrpSpwn ResourceGroupSpawn) error
+	// GetVolumeGroups lists all volume-groups for a resource-group
+	GetVolumeGroups(ctx context.Context, resGrpName string, opts ...*ListOpts) ([]VolumeGroup, error)
+	// GetVolumeGroup lists a volume-group for a resource-group
+	GetVolumeGroup(ctx context.Context, resGrpName string, volNr int, opts ...*ListOpts) (VolumeGroup, error)
+	// Create adds a new volume-group to a resource-group
+	CreateVolumeGroup(ctx context.Context, resGrpName string, volGrp VolumeGroup) error
+	// Modify allows to modify a volume-group of a resource-group
+	ModifyVolumeGroup(ctx context.Context, resGrpName string, volNr int, props VolumeGroupModify) error
+	DeleteVolumeGroup(ctx context.Context, resGrpName string, volNr int) error
+	// GetPropsInfos gets meta information about the properties that can be
+	// set on a resource group.
+	GetPropsInfos(ctx context.Context, opts ...*ListOpts) ([]PropsInfo, error)
+	// GetVolumeGroupPropsInfos gets meta information about the properties
+	// that can be set on a resource group.
+	GetVolumeGroupPropsInfos(ctx context.Context, resGrpName string, opts ...*ListOpts) ([]PropsInfo, error)
+	// Adjust all resource-definitions (calls autoplace for) of the given resource-group
+	Adjust(ctx context.Context, resGrpName string, adjust ResourceGroupAdjust) error
+	// AdjustAll adjusts all resource-definitions (calls autoplace) according to their associated resource group.
+	AdjustAll(ctx context.Context, adjust ResourceGroupAdjust) error
+}
+
+var _ ResourceGroupProvider = &ResourceGroupService{}
 
 // ResourceGroupService is the service that deals with resource group related tasks.
 type ResourceGroupService struct {
@@ -145,5 +189,33 @@ func (n *ResourceGroupService) ModifyVolumeGroup(ctx context.Context, resGrpName
 
 func (n *ResourceGroupService) DeleteVolumeGroup(ctx context.Context, resGrpName string, volNr int) error {
 	_, err := n.client.doDELETE(ctx, "/v1/resource-groups/"+resGrpName+"/volume-groups/"+strconv.Itoa(volNr), nil)
+	return err
+}
+
+// GetPropsInfos gets meta information about the properties that can be set on
+// a resource group.
+func (n *ResourceGroupService) GetPropsInfos(ctx context.Context, opts ...*ListOpts) ([]PropsInfo, error) {
+	var infos []PropsInfo
+	_, err := n.client.doGET(ctx, "/v1/resource-groups/properties/info", &infos, opts...)
+	return infos, err
+}
+
+// GetVolumeGroupPropsInfos gets meta information about the properties that can
+// be set on a resource group.
+func (n *ResourceGroupService) GetVolumeGroupPropsInfos(ctx context.Context, resGrpName string, opts ...*ListOpts) ([]PropsInfo, error) {
+	var infos []PropsInfo
+	_, err := n.client.doGET(ctx, "/v1/resource-groups/"+resGrpName+"/volume-groups/properties/info", &infos, opts...)
+	return infos, err
+}
+
+// Adjust all resource-definitions (calls autoplace for) of the given resource-group
+func (n *ResourceGroupService) Adjust(ctx context.Context, resGrpName string, adjust ResourceGroupAdjust) error {
+	_, err := n.client.doPOST(ctx, "/v1/resource-groups/"+resGrpName+"/adjust", adjust)
+	return err
+}
+
+// AdjustAll adjusts all resource-definitions (calls autoplace) according to their associated resource group.
+func (n *ResourceGroupService) AdjustAll(ctx context.Context, adjust ResourceGroupAdjust) error {
+	_, err := n.client.doPOST(ctx, "/v1/resource-groups/adjustall", adjust)
 	return err
 }

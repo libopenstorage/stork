@@ -27,29 +27,39 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/donovanhide/eventsource"
 	"github.com/moul/http2curl"
 	"golang.org/x/time/rate"
 )
 
 // Client is a struct representing a LINSTOR REST client.
 type Client struct {
-	httpClient *http.Client
-	baseURL    *url.URL
-	basicAuth  *BasicAuthCfg
-	lim        *rate.Limiter
-	log        interface{} // must be either Logger or LeveledLogger
+	httpClient  *http.Client
+	baseURL     *url.URL
+	basicAuth   *BasicAuthCfg
+	controllers []*url.URL
+	lim         *rate.Limiter
+	log         interface{} // must be either Logger or LeveledLogger
 
-	Nodes                  *NodeService
-	ResourceDefinitions    *ResourceDefinitionService
-	Resources              *ResourceService
-	ResourceGroups         *ResourceGroupService
-	StoragePoolDefinitions *StoragePoolDefinitionService
-	Encryption             *EncryptionService
+	Nodes                  NodeProvider
+	ResourceDefinitions    ResourceDefinitionProvider
+	Resources              ResourceProvider
+	ResourceGroups         ResourceGroupProvider
+	StoragePoolDefinitions StoragePoolDefinitionProvider
+	Encryption             EncryptionProvider
+	Controller             ControllerProvider
+	Events                 EventProvider
+	Vendor                 VendorProvider
+	Remote                 RemoteProvider
+	Backup                 BackupProvider
 }
 
 // Logger represents a standard logger interface
@@ -74,8 +84,22 @@ type clientError string
 
 func (e clientError) Error() string { return string(e) }
 
-// NotFoundError is the error type returned in case of a 404 error. This is required to test for this kind of error.
-const NotFoundError = clientError("404 Not Found")
+const (
+	// NotFoundError is the error type returned in case of a 404 error. This is required to test for this kind of error.
+	NotFoundError = clientError("404 Not Found")
+	// Name of the environment variable that stores the certificate used for TLS client authentication
+	UserCertEnv = "LS_USER_CERTIFICATE"
+	// Name of the environment variable that stores the key used for TLS client authentication
+	UserKeyEnv = "LS_USER_KEY"
+	// Name of the environment variable that stores the certificate authority for the LINSTOR HTTPS API
+	RootCAEnv = "LS_ROOT_CA"
+	// Name of the environment variable that holds the URL(s) of LINSTOR controllers
+	ControllerUrlEnv = "LS_CONTROLLERS"
+	// Name of the environment variable that holds the username for authentication
+	UsernameEnv = "LS_USERNAME"
+	// Name of the environment variable that holds the password for authentication
+	PasswordEnv = "LS_PASSWORD"
+)
 
 // For example:
 // u, _ := url.Parse("http://somehost:3370")
@@ -133,6 +157,14 @@ func Limit(r rate.Limit, b int) Option {
 	}
 }
 
+func Controllers(controllers []string) Option {
+	return func(c *Client) error {
+		var err error
+		c.controllers, err = parseURLs(controllers)
+		return err
+	}
+}
+
 // buildHttpClient constructs an HTTP client which will be used to connect to
 // the LINSTOR controller. It recongnizes some environment variables which can
 // be used to configure the HTTP client at runtime. If an invalid key or
@@ -140,31 +172,158 @@ func Limit(r rate.Limit, b int) Option {
 // If none or not all of the environment variables are passed, the default
 // client is used as a fallback.
 func buildHttpClient() (*http.Client, error) {
-	certPEM, cert := os.LookupEnv("LS_USER_CERTIFICATE")
-	keyPEM, key := os.LookupEnv("LS_USER_KEY")
-	caPEM, ca := os.LookupEnv("LS_ROOT_CA")
-	if !(cert && key && ca) {
-		// not all environment variables found: fall back to default client
+	certPEM, cert := os.LookupEnv(UserCertEnv)
+	keyPEM, key := os.LookupEnv(UserKeyEnv)
+	caPEM, ca := os.LookupEnv(RootCAEnv)
+
+	if key != cert {
+		return nil, fmt.Errorf("'%s', '%s': specify both or none", UserKeyEnv, UserCertEnv)
+	}
+
+	if !cert && !key && !ca {
+		// Non of the special variables was set -> if TLS is used, default configuration can be used
 		return http.DefaultClient, nil
 	}
 
-	keyPair, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
-	if err != nil {
-		return nil, fmt.Errorf("failed to load keys: %w", err)
+	tlsConfig := &tls.Config{}
+
+	if ca {
+		caPool := x509.NewCertPool()
+		ok := caPool.AppendCertsFromPEM([]byte(caPEM))
+		if !ok {
+			return nil, fmt.Errorf("failed to get a valid certificate from '%s'", RootCAEnv)
+		}
+		tlsConfig.RootCAs = caPool
 	}
-	caPool := x509.NewCertPool()
-	ok := caPool.AppendCertsFromPEM([]byte(caPEM))
-	if !ok {
-		return nil, fmt.Errorf("failed to get a valid certificate from LS_ROOT_CA")
+
+	if key && cert {
+		keyPair, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load keys: %w", err)
+		}
+		tlsConfig.Certificates = append(tlsConfig.Certificates, keyPair)
 	}
+
 	return &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				Certificates: []tls.Certificate{keyPair},
-				RootCAs:      caPool,
-			},
+			TLSClientConfig: tlsConfig,
 		},
 	}, nil
+}
+
+// Return the default scheme to access linstor
+// If one of the HTTPS environment variables is set, will return "https".
+// If not, will return "http"
+func defaultScheme() string {
+	_, ca := os.LookupEnv(RootCAEnv)
+	_, cert := os.LookupEnv(UserCertEnv)
+	_, key := os.LookupEnv(UserKeyEnv)
+	if ca || cert || key {
+		return "https"
+	}
+	return "http"
+}
+
+const defaultHost = "localhost"
+
+// Return the default port to access linstor.
+// Defaults are:
+// "https": 3371
+// "http":  3370
+func defaultPort(scheme string) string {
+	if scheme == "https" {
+		return "3371"
+	}
+	return "3370"
+}
+
+// tryConnect takes a slice of urls and tries to Dial each one of the hosts.
+// If a working URL is found, it is returned.
+// If the slice contains no working URL, a list of all connection errors is returned.
+func tryConnect(urls []*url.URL) (*url.URL, []error) {
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	errChan := make(chan error)
+	indexChan := make(chan int)
+	doneChan := make(chan bool)
+	wg.Add(len(urls))
+	for i := range urls {
+		i := i
+		go func() {
+			defer wg.Done()
+			conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", urls[i].Host)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			cancel()
+			conn.Close()
+			indexChan <- i
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		doneChan <- true
+	}()
+
+	var errs []error
+	for {
+		select {
+		case result := <-indexChan:
+			return urls[result], nil
+		case err := <-errChan:
+			errs = append(errs, err)
+		case <-doneChan:
+			return nil, errs
+		}
+	}
+}
+
+func parseBaseURL(urlString string) (*url.URL, error) {
+	// Check scheme
+	urlSplit := strings.Split(urlString, "://")
+
+	if len(urlSplit) == 1 {
+		if urlSplit[0] == "" {
+			urlSplit[0] = defaultHost
+		}
+		urlSplit = []string{defaultScheme(), urlSplit[0]}
+	}
+
+	if len(urlSplit) != 2 {
+		return nil, fmt.Errorf("URL with multiple scheme separators. parts: %v", urlSplit)
+	}
+	scheme, endpoint := urlSplit[0], urlSplit[1]
+	if scheme == "linstor" {
+		scheme = defaultScheme()
+	}
+
+	// Check port
+	endpointSplit := strings.Split(endpoint, ":")
+	if len(endpointSplit) == 1 {
+		endpointSplit = []string{endpointSplit[0], defaultPort(scheme)}
+	}
+	if len(endpointSplit) != 2 {
+		return nil, fmt.Errorf("URL with multiple port separators. parts: %v", endpointSplit)
+	}
+	host, port := endpointSplit[0], endpointSplit[1]
+
+	return url.Parse(fmt.Sprintf("%s://%s:%s", scheme, host, port))
+}
+
+func parseURLs(urls []string) ([]*url.URL, error) {
+	var result []*url.URL
+	for _, controller := range urls {
+		url, err := parseBaseURL(controller)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, url)
+	}
+
+	return result, nil
 }
 
 // NewClient takes an arbitrary number of options and returns a Client or an error.
@@ -172,7 +331,6 @@ func buildHttpClient() (*http.Client, error) {
 // the client at runtime:
 //
 // - LS_CONTROLLERS: a comma-separated list of LINSTOR controllers to connect to.
-// Currently, golinstor will only use the first one.
 //
 // - LS_USERNAME, LS_PASSWORD: can be used to authenticate against the LINSTOR
 // controller using HTTP basic authentication.
@@ -188,41 +346,42 @@ func NewClient(options ...Option) (*Client, error) {
 		return nil, fmt.Errorf("failed to build http client: %w", err)
 	}
 
-	hostPort := "localhost:3370"
-	controllers := os.Getenv("LS_CONTROLLERS")
-	// we could ping them, for now use the first if possible
-	if controllers != "" {
-		hostPort = strings.Split(controllers, ",")[0]
+	c := &Client{
+		httpClient: httpClient,
+		basicAuth: &BasicAuthCfg{
+			Username: os.Getenv(UsernameEnv),
+			Password: os.Getenv(PasswordEnv),
+		},
+		lim: rate.NewLimiter(rate.Inf, 0),
+		log: log.New(os.Stderr, "", 0),
+	}
 
-		lsPrefix := "linstor://"
-		if strings.HasPrefix(hostPort, lsPrefix) {
-			hostPort = strings.TrimPrefix(hostPort, lsPrefix)
+	for _, opt := range options {
+		if err := opt(c); err != nil {
+			return nil, err
 		}
 	}
 
-	if !strings.Contains(hostPort, ":") {
-		hostPort += ":3370"
-	}
+	if c.baseURL == nil {
+		if len(c.controllers) == 0 {
+			// if not already set by option, get from environment...
+			controllersStr := os.Getenv(ControllerUrlEnv)
+			if controllersStr == "" {
+				// ... or fall back to defaults
+				controllersStr = fmt.Sprintf("%v://%v:%v", defaultScheme(), defaultHost, defaultPort(defaultScheme()))
+			}
 
-	u := hostPort
-	if !strings.HasPrefix(hostPort, "http://") {
-		u = "http://" + hostPort
-	}
+			c.controllers, err = parseURLs(strings.Split(controllersStr, ","))
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse controller URLs: %w", err)
+			}
+		}
 
-	baseURL, err := url.Parse(u)
-	if err != nil {
-		return nil, err
-	}
-
-	c := &Client{
-		httpClient: httpClient,
-		baseURL:    baseURL,
-		basicAuth: &BasicAuthCfg{
-			Username: os.Getenv("LS_USERNAME"),
-			Password: os.Getenv("LS_PASSWORD"),
-		},
-		lim: rate.NewLimiter(rate.Inf, 0),
-		log: log.New(os.Stdout, "", 0),
+		// if we have exactly one controller, use that directly, otherwise the
+		// controller will be figured out in findRespondingController().
+		if len(c.controllers) == 1 {
+			c.baseURL = c.controllers[0]
+		}
 	}
 
 	c.Nodes = &NodeService{client: c}
@@ -231,12 +390,11 @@ func NewClient(options ...Option) (*Client, error) {
 	c.Encryption = &EncryptionService{client: c}
 	c.ResourceGroups = &ResourceGroupService{client: c}
 	c.StoragePoolDefinitions = &StoragePoolDefinitionService{client: c}
-
-	for _, opt := range options {
-		if err := opt(c); err != nil {
-			return nil, err
-		}
-	}
+	c.Controller = &ControllerService{client: c}
+	c.Events = &EventService{client: c}
+	c.Vendor = &VendorService{client: c}
+	c.Remote = &RemoteService{client: c}
+	c.Backup = &BackupService{client: c}
 
 	return c, nil
 }
@@ -245,6 +403,17 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	rel, err := url.Parse(path)
 	if err != nil {
 		return nil, err
+	}
+
+	if c.baseURL == nil {
+		if err := c.findRespondingController(); err != nil {
+			return nil, fmt.Errorf("failed to connect: %w", err)
+		}
+		if c.baseURL == nil {
+			// should not happen since findRespondingController()
+			// always either sets baseURL or errors out, but just in case...
+			return nil, fmt.Errorf("failed to determine base URL")
+		}
 	}
 	u := c.baseURL.ResolveReference(rel)
 
@@ -288,6 +457,39 @@ func (c *Client) curlify(req *http.Request) (string, error) {
 	return cc.String(), nil
 }
 
+// findRespondingController scans the list of controllers for a working LINSTOR
+// controller. It sets the baseURL of the client to the first working controller
+// that is found.  If there is only exactly one controller in the controller
+// list, it is used directly.
+func (c *Client) findRespondingController() error {
+	switch num := len(c.controllers); {
+	case num > 1:
+		url, errors := tryConnect(c.controllers)
+		if errors != nil {
+			logError := func(msg string) {
+				switch l := c.log.(type) {
+				case LeveledLogger:
+					l.Errorf(msg)
+				case Logger:
+					l.Printf("[ERROR] %s", msg)
+				}
+			}
+			logError("Unable to connect to any of the given controller hosts:")
+			for _, e := range errors {
+				logError(fmt.Sprintf("   - %v", e))
+			}
+			return fmt.Errorf("could not connect to any controller")
+		}
+		c.baseURL = url
+	case num == 1:
+		c.baseURL = c.controllers[0]
+	default:
+		return fmt.Errorf("no controller to connect to")
+	}
+
+	return nil
+}
+
 func (c *Client) logCurlify(req *http.Request) {
 	var msg string
 	if curl, err := c.curlify(req); err != nil {
@@ -302,6 +504,23 @@ func (c *Client) logCurlify(req *http.Request) {
 	case Logger:
 		l.Printf("[DEBUG] %s", msg)
 	}
+}
+
+func (c *Client) retry(origErr error, req *http.Request) (*http.Response, error) {
+	// only retry on network errors and if we even have another controller to choose from
+	if _, ok := origErr.(net.Error); !ok || len(c.controllers) <= 1 {
+		return nil, origErr
+	}
+
+	prevBaseURL := c.baseURL
+	e := c.findRespondingController()
+	// if findRespondingController failed, or we just got the same base URL, don't bother retrying
+	if e != nil && c.baseURL == prevBaseURL {
+		return nil, origErr
+	}
+
+	req.URL.Host = c.baseURL.Host
+	return c.httpClient.Do(req)
 }
 
 func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) (*http.Response, error) {
@@ -320,7 +539,11 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) (*htt
 		default:
 		}
 
-		return nil, err
+		// if this was a connectivity issue, attempt a retry
+		resp, err = c.retry(err, req)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defer resp.Body.Close()
 
@@ -364,6 +587,22 @@ func (c *Client) doGET(ctx context.Context, url string, ret interface{}, opts ..
 		return nil, err
 	}
 	return c.do(ctx, req, ret)
+}
+
+func (c *Client) doEvent(ctx context.Context, url, lastEventId string) (*eventsource.Stream, error) {
+	req, err := c.newRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req = req.WithContext(ctx)
+
+	stream, err := eventsource.SubscribeWith(lastEventId, c.httpClient, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return stream, nil
 }
 
 func (c *Client) doPOST(ctx context.Context, url string, body interface{}) (*http.Response, error) {
