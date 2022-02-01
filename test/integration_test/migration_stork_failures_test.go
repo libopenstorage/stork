@@ -34,8 +34,6 @@ func TestMigrationStorkFailures(t *testing.T) {
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
 
-	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
-	t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
 }
 
 func deleteStorkPodsSourceDuringMigrationTest(t *testing.T) {

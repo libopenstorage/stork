@@ -32,6 +32,19 @@ const (
 	migrationRetryTimeout  = 5 * time.Minute
 )
 
+func TestMigration(t *testing.T) {
+	// reset mock time before running any tests
+	err := setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+
+	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
+	logrus.Infof("Backup path being used: %s", backupLocationPath)
+
+	t.Run("testMigration", testMigration)
+	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
+	t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
+}
+
 func testMigration(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
