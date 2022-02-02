@@ -177,7 +177,7 @@ var _ = Describe("{NFSServerFailover}", func() {
 	})
 })
 
-// Test below uses test-sharedv4 app https://github.com/portworx/test-sharedv4 .
+// Below tests uses test-sharedv4 app https://github.com/portworx/test-sharedv4 .
 //
 // The test-sharedv4 app has the following properties:
 // - uses node anti-affinity to ensure that each pod is on a different node
@@ -340,6 +340,164 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Bring PX down on the node where the volume is attached. Verify that pods on client nodes unmount the volume
+// and teardown successfully
+var _ = Describe("{Sharedv4ClientTeardownWhenServerOffline}", func() {
+	var testrailID = 54780
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54780
+	var runID, numPods int
+	var testSv4Contexts, contexts []*scheduler.Context
+
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to schedule apps, stop volume driver on node where volume is attached, teardown the application", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("clientteardown-%d", i))...)
+		}
+		testSv4Contexts = getTestSv4Contexts(contexts)
+
+		Step("scale the sharedv4 apps so that one pod runs on each worker node", func() {
+			if len(testSv4Contexts) == 0 {
+				Skip("No sharedv4 apps were found")
+			}
+			numPods = len(node.GetWorkerNodes())
+			for _, ctx := range testSv4Contexts {
+				Step(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, numPods), func() {
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(numPods)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			}
+
+			ValidateApplications(testSv4Contexts)
+		})
+
+		Step("change the sharedv4 failover strategy to normal", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+				err = Inst().V.UpdateSharedv4FailoverStrategyUsingPxctl(vols[0].ID, api.Sharedv4FailoverStrategy_NORMAL)
+				Expect(err).NotTo(HaveOccurred(), "failed in updating sharedv4 strategy for volume %v: %v", vols[0].ID, err)
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+				Expect(apiVol.Spec.Sharedv4Spec.FailoverStrategy == api.Sharedv4FailoverStrategy_NORMAL).To(BeTrue(), "unexpected failover strategy")
+			}
+		})
+
+		var attachedNode *node.Node
+		Step("stop the volume driver on attached node and verify application teardown succeeds", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				attachedNode, err = Inst().V.GetNodeForVolume(
+					vols[0],
+					defaultCommandTimeout,
+					defaultCommandRetry,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Step(
+					fmt.Sprintf("stopping volume driver on node %s", attachedNode.Name),
+					func() {
+						StopVolDriverAndWait([]node.Node{*attachedNode})
+					},
+				)
+
+				Step(fmt.Sprintf("scale down app %s to 0", ctx.App.Key), func() {
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(0)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				Step(
+					fmt.Sprintf("ensure client pods have terminated"),
+					func() {
+						err = Inst().S.SelectiveWaitForTermination(
+							ctx,
+							Inst().DestroyAppTimeout,
+							[]node.Node{*attachedNode},
+						)
+						Expect(err).NotTo(HaveOccurred())
+					},
+				)
+				Step(
+					fmt.Sprintf("ensure volume is detached"),
+					func() {
+						vols, err := Inst().S.GetVolumes(ctx)
+						Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+						apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+						Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+						Expect(len(apiVol.AttachedOn) == 0).To(BeTrue(), "expected volume %v to be detached", vols[0].Name)
+					},
+				)
+				Step(
+					fmt.Sprintf("starting volume driver on node %s", attachedNode.Name),
+					func() {
+						StartVolDriverAndWait([]node.Node{*attachedNode})
+					},
+				)
+
+				numPods = len(node.GetWorkerNodes())
+				Step(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, numPods), func() {
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(numPods)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				ValidateApplications([]*scheduler.Context{ctx})
+
+			}
+		})
+
+		Step("change the sharedv4 failover strategy back to aggressive", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+				err = Inst().V.UpdateSharedv4FailoverStrategyUsingPxctl(vols[0].ID, api.Sharedv4FailoverStrategy_AGGRESSIVE)
+				Expect(err).NotTo(HaveOccurred(), "failed in updating sharedv4 strategy for volume %v: %v", vols[0].ID, err)
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+				Expect(apiVol.Spec.Sharedv4Spec.FailoverStrategy == api.Sharedv4FailoverStrategy_AGGRESSIVE).To(BeTrue(), "unexpected failover strategy")
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+
 	JustAfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})

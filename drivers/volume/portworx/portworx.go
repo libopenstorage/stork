@@ -74,6 +74,7 @@ const (
 	formattingCommandPxctlLocalSnapshotCreate = "pxctl volume snapshot create %s --name %s"
 	formattingCommandPxctlCloudSnapCreate     = "pxctl cloudsnap backup %s"
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
+	pxctlVolumeUpdate                         = "pxctl volume update "
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 )
@@ -865,6 +866,31 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
 	})
+	if err != nil {
+		logrus.WithError(err).Error("error when creating local snapshot using PXCTL")
+		return err
+	}
+	return nil
+}
+
+func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
+	nodes := node.GetStorageDriverNodes()
+	var strategyStr string
+	if strategy == api.Sharedv4FailoverStrategy_NORMAL {
+		strategyStr = "normal"
+	} else if strategy == api.Sharedv4FailoverStrategy_AGGRESSIVE {
+		strategyStr = "aggressive"
+	} else {
+		return fmt.Errorf("invalid failover strategy: %v", strategy)
+	}
+	cmd := fmt.Sprintf("%s %s --sharedv4_failover_strategy %s", pxctlVolumeUpdate, volumeName, strategyStr)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
 	if err != nil {
 		logrus.WithError(err).Error("error when creating local snapshot using PXCTL")
 		return err

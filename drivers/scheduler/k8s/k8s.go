@@ -32,6 +32,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	k8sCommon "github.com/portworx/sched-ops/k8s/common"
 	"github.com/portworx/sched-ops/k8s/core"
+	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/networking"
 	"github.com/portworx/sched-ops/k8s/rbac"
@@ -2249,6 +2250,89 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 	}
 
 	return nil
+}
+
+// SelectiveWaitForTermination waits for application pods to be terminated except on the nodes
+// provided in the exclude list
+func (k *K8s) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.Duration, excludeList []node.Node) error {
+	t := func() (interface{}, bool, error) {
+		podNames, err := filterPodsByNodes(ctx, excludeList)
+		if err != nil {
+			return nil, true, err
+		}
+		if len(podNames) > 0 {
+			return nil, true, fmt.Errorf("pods %s still present in the system", podNames)
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
+// filterPodsByNodes returns a list of pod names started as part of the provided context
+// and not running on the nodes provided in the exclude list
+func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]string, error) {
+	allPods := make(map[types.UID]corev1.Pod)
+	namespaces := make(map[string]string)
+	for _, specObj := range ctx.App.SpecList {
+		var pods []corev1.Pod
+		var err error
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			if pods, err = k8sApps.GetDeploymentPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get deployment: %v. Err: %v", obj.Name, err),
+				}
+			}
+			namespaces[obj.Namespace] = ""
+
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			if pods, err = k8sApps.GetStatefulSetPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get statefulset: %v. Err: %v", obj.Name, err),
+				}
+			}
+			namespaces[obj.Namespace] = ""
+
+		} else if obj, ok := specObj.(*corev1.Pod); ok {
+			pod, err := k8sCore.GetPodByUID(obj.UID, obj.Namespace)
+			if err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get pod: %v. Err: %v", obj.Name, err),
+				}
+			}
+			if pod != nil {
+				pods = []corev1.Pod{*pod}
+				namespaces[obj.Namespace] = ""
+			}
+		}
+		for _, pod := range pods {
+			allPods[pod.UID] = pod
+		}
+	}
+
+	// Compare the two pod maps. Create a list of pod names which are not running
+	// on the excluded nodes
+	var podList []string
+	for _, pod := range allPods {
+		excludePod := false
+		for _, excludedNode := range excludeList {
+			if pod.Spec.NodeName == excludedNode.Name {
+				excludePod = true
+				break
+			}
+		}
+		if !excludePod {
+			podInfo := pod.Namespace + "/" + pod.Name + " (" + pod.Spec.NodeName + ")"
+			podList = append(podList, podInfo)
+		}
+	}
+	return podList, nil
 }
 
 // DeleteTasks delete the task

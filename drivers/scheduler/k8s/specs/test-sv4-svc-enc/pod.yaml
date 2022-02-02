@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-sv4-dep-svc-enc
+spec:
+  {{ if .Replicas }}
+  replicas: {{ .Replicas }}
+  {{ else }}
+  replicas: 3{{ end }}
+  selector:
+    matchLabels:
+      app: test-sv4-app-svc-enc
+  template:
+    metadata:
+      labels:
+        app: test-sv4-app-svc-enc
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - test-sv4-app-svc-enc
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: sv4test
+        image: portworx/sharedv4-test:torpedo
+        imagePullPolicy: Always
+        command: ["python", "/app/fileio.py"]
+        args: ["--lock", "--interval=0.25", "$(SHARED_FILE)", "$(LOCAL_FILE)"]
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: SHARED_FILE
+            value: "/test-sv4-vol-svc/$(MY_POD_NAME)"
+          - name: LOCAL_FILE
+            value: "/local-vol/$(MY_POD_NAME)"
+        volumeMounts:
+        - name: test-sv4-vol-svc
+          mountPath: /test-sv4-vol-svc
+        - name: local-vol
+          mountPath: /local-vol
+      volumes:
+      - name: test-sv4-vol-svc
+        persistentVolumeClaim:
+          claimName: test-sv4-pvc-svc-enc
+      - name: local-vol
+        emptyDir: {}

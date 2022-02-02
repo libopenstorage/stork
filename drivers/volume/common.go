@@ -544,3 +544,11 @@ func (d *DefaultDriver) ToggleCallHome(n node.Node, enabled bool) error {
 		Operation: "ToggleCallHome()",
 	}
 }
+
+// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
+func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateSharedv4FailoverStrategyUsingPxctl",
+	}
+}
