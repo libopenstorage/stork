@@ -71,6 +71,7 @@ var _ = Describe("{Longevity}", func() {
 		PoolResizeDisk:   TriggerPoolResizeDisk,
 		PoolAddDisk:      TriggerPoolAddDisk,
 		UpgradeStork:     TriggerUpgradeStork,
+		VolumesDelete:    TriggerVolumeDelete,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -323,6 +324,7 @@ func populateIntervals() {
 	triggerInterval[BackupScaleMongo] = map[int]time.Duration{}
 	triggerInterval[CloudSnapShot] = make(map[int]time.Duration)
 	triggerInterval[UpgradeStork] = make(map[int]time.Duration)
+	triggerInterval[VolumesDelete] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -618,6 +620,17 @@ func populateIntervals() {
 	triggerInterval[UpgradeStork][6] = 5 * baseInterval
 	triggerInterval[UpgradeStork][5] = 6 * baseInterval
 
+	triggerInterval[VolumesDelete][10] = 1 * baseInterval
+	triggerInterval[VolumesDelete][9] = 3 * baseInterval
+	triggerInterval[VolumesDelete][8] = 6 * baseInterval
+	triggerInterval[VolumesDelete][7] = 9 * baseInterval
+	triggerInterval[VolumesDelete][6] = 12 * baseInterval
+	triggerInterval[VolumesDelete][5] = 15 * baseInterval
+	triggerInterval[VolumesDelete][4] = 18 * baseInterval
+	triggerInterval[VolumesDelete][3] = 21 * baseInterval
+	triggerInterval[VolumesDelete][2] = 24 * baseInterval
+	triggerInterval[VolumesDelete][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -646,6 +659,8 @@ func populateIntervals() {
 	triggerInterval[BackupScaleMongo][0] = 0
 	triggerInterval[CloudSnapShot][0] = 0
 	triggerInterval[UpgradeStork][0] = 0
+	triggerInterval[VolumesDelete][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

@@ -162,6 +162,8 @@ const (
 	CrashNode = "crashNode"
 	// VolumeResize increases volume size
 	VolumeResize = "volumeResize"
+	// VolumesDelete deletes the columes of the context
+	VolumesDelete = "volumesDelete"
 	// CloudSnapShot takes local snap shot of the volumes
 	CloudSnapShot = "cloudSnapShot"
 	// EmailReporter notifies via email outcome of past events
@@ -268,9 +270,11 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		}
 
 		for _, ctx := range *contexts {
+			logrus.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
+				logrus.Info("Error: %v", err.Error())
 				UpdateOutcome(event, err)
 			}
 		}
@@ -909,6 +913,48 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	})
 
+}
+
+// TriggerVolumeDelete delete the volumes
+func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: VolumesDelete,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Validate Delete Volumes", func() {
+		opts := make(map[string]bool)
+
+		for _, ctx := range *contexts {
+
+			opts[SkipClusterScopedObjects] = true
+			options := mapToVolumeOptions(opts)
+
+			// Tear down storage objects
+			vols := DeleteVolumes(ctx, options)
+
+			// Tear down application
+			Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
+				err := Inst().S.Destroy(ctx, opts)
+				UpdateOutcome(event, err)
+			})
+
+			ValidateVolumesDeleted(ctx.App.Key, vols)
+		}
+		*contexts = nil
+		TriggerDeployNewApps(contexts, recordChan)
+	})
 }
 
 func createCloudCredential(req *api.CloudCredentialCreateRequest) error {
