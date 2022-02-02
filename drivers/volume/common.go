@@ -13,6 +13,7 @@ import (
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DiagRequestConfig is a request object which provides all the configuration details
@@ -202,7 +203,7 @@ func (d *DefaultDriver) ValidateCreateGroupSnapshotUsingPxctl() error {
 	}
 }
 
-//ValidateGetByteUsedForVolume validates and returns byteUsed for given volume.
+// ValidateGetByteUsedForVolume validates and returns byteUsed for given volume.
 func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error) {
 	return 0, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -210,7 +211,7 @@ func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params m
 	}
 }
 
-//ValidatePureVolumesNoReplicaSets validates Pure volumes has no replicaset.
+// ValidatePureVolumesNoReplicaSets validates Pure volumes has no replicaset.
 func (d *DefaultDriver) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -445,6 +446,22 @@ func (d *DefaultDriver) ValidateStoragePools() error {
 	}
 }
 
+// ExpandPool resizes a pool of a given ID
+func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExpandPool()",
+	}
+}
+
+// ListStoragePools lists all existing storage pools
+func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListStoragePools()",
+	}
+}
+
 // ValidateRebalanceJobs validates rebalance jobs
 func (d *DefaultDriver) ValidateRebalanceJobs() error {
 	return &errors.ErrNotSupported{
@@ -512,7 +529,7 @@ func (d *DefaultDriver) RestartDriver(n node.Node, triggerOpts *driver_api.Trigg
 	}
 }
 
-//SetClusterOpts sets cluster options
+// SetClusterOpts sets cluster options
 func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -520,7 +537,7 @@ func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) er
 	}
 }
 
-//ToggleCallHome toggles Call-home
+// ToggleCallHome toggles Call-home
 func (d *DefaultDriver) ToggleCallHome(n node.Node, enabled bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",

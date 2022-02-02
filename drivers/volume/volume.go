@@ -10,6 +10,7 @@ import (
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Volume is a generic struct encapsulating volumes in the cluster
@@ -215,14 +216,20 @@ type Driver interface {
 	// GetLicenseSummary returns the activated license SKU and Features
 	GetLicenseSummary() (LicenseSummary, error)
 
-	//SetClusterOpts sets cluster options
+	// SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, rtOpts map[string]string) error
 
-	//ToggleCallHome toggles Call-home
+	// ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
 
 	// ValidateStorageCluster validates all the storage cluster components
 	ValidateStorageCluster(endpointURL, endpointVersion string) error
+
+	// ExpandPool resizes a pool of a given ID
+	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+
+	// ListStoragePools lists all existing storage pools
+	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
