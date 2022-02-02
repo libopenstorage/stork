@@ -646,7 +646,6 @@ func populateIntervals() {
 	triggerInterval[BackupScaleMongo][0] = 0
 	triggerInterval[CloudSnapShot][0] = 0
 	triggerInterval[UpgradeStork][0] = 0
-
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

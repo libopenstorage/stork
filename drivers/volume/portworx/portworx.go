@@ -1228,10 +1228,10 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 
 		for _, addr := range n.Addresses {
 			err := d.testAndSetEndpointUsingNodeIP(addr)
-			if err == nil || !strings.Contains(err.Error(), "connect: connection refused") {
+			if (err == nil || !strings.Contains(err.Error(), "connect: connection refused")) && (err == nil || !strings.Contains(err.Error(), "i/o timeout")) {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
-					Cause: fmt.Sprintf("px is not yet down on node"),
+					Cause: "px is not yet down on node",
 				}
 			}
 			logrus.Warn(err.Error())
