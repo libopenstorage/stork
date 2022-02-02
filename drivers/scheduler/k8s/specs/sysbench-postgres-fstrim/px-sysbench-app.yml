@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sysbench
+  labels:
+    app: sysbench
+spec:
+  selector:
+    matchLabels:
+      app: sysbench
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: sysbench
+    spec:
+      schedulerName: stork
+      containers:
+        - image: postgres:9.5
+          name: postgres
+          ports:
+          - containerPort: 5432
+          resources:
+            limits:
+              memory: 4096Mi
+              cpu: 100m
+          env:
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            value: superpostgres
+          - name: PGBENCH_PASSWORD
+            value: superpostgres
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+          - mountPath: /var/lib/postgresql/data
+            name: sysbenchdb
+        - image: docker.pwx.dev.purestorage.com/portworx/sysbench_postgres
+          name: sysbench 
+          resources:
+            limits:
+              memory: 2048Mi
+              cpu: 50m
+          env:
+          - name: PGPORT
+            value: "5432"
+          - name: SYSTABSIZE
+            value: "1000000"
+          - name: SYSBENCHTIM
+            value: "7200"
+          - name: PG_HOST
+            value: 127.0.0.1
+          volumeMounts:
+          - mountPath: /var/lib/postgresql/data
+            name: sysbenchdb
+      volumes:
+        - name: sysbenchdb
+          persistentVolumeClaim:
+            claimName: sysbench-data

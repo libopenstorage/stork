@@ -1,0 +1,32 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vdbench-sharedv4
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: vdbench-sharedv4
+  template:
+    metadata:
+      labels:
+        app: vdbench-sharedv4
+    spec:
+      containers:
+        - name: vdbench
+          image: openebs/tests-vdbench
+          command: ["/bin/sh"] 
+          args: ["-c","COUNTER=0;echo \"create_anchors=yes,fsd=fsd1,anchor=/tmp/$(POD_NAME),depth=1,width=1,files=10,size=1G,fwd=fwd1,fsd=fsd1,rdpct=50,xfersize=(4k,50,8k,50),fileselect=random,fileio=random,threads=4,rd=rd1,fwd=fwd1,fwdrate=max,format=yes,elapsed=1200,interval=1,foroperations=(create,write,read,delete,rmdir)\">/tmp/File-OLTP;while true; do echo \"Starting iteration $COUNTER\"; ./vdbench -f /tmp/File-OLTP -o /tmp/output-File-OLTP;echo Completed-ietration $COUNTER;COUNTER=$((COUNTER+1));sleep 600;done"]           
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: vdbench-persistent-storage
+              mountPath: /tmp
+      volumes:
+        - name: vdbench-persistent-storage
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-sharedv4
