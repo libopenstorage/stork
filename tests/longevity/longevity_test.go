@@ -63,6 +63,7 @@ var _ = Describe("{Longevity}", func() {
 		CrashVolDriver:   TriggerCrashVolDriver,
 		HAIncrease:       TriggerHAIncrease,
 		HADecrease:       TriggerHADecrease,
+		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		EmailReporter:    TriggerEmailReporter,
 		AppTaskDown:      TriggerAppTaskDown,
@@ -305,6 +306,7 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 	triggerInterval[DeployApps] = map[int]time.Duration{}
 	triggerInterval[CoreChecker] = map[int]time.Duration{}
+	triggerInterval[VolumeClone] = map[int]time.Duration{}
 	triggerInterval[VolumeResize] = make(map[int]time.Duration)
 	triggerInterval[PoolResizeDisk] = make(map[int]time.Duration)
 	triggerInterval[PoolAddDisk] = make(map[int]time.Duration)
@@ -525,6 +527,17 @@ func populateIntervals() {
 	triggerInterval[HADecrease][2] = 24 * baseInterval
 	triggerInterval[HADecrease][1] = 27 * baseInterval
 
+	triggerInterval[VolumeClone][10] = 1 * baseInterval
+	triggerInterval[VolumeClone][9] = 3 * baseInterval
+	triggerInterval[VolumeClone][8] = 6 * baseInterval
+	triggerInterval[VolumeClone][7] = 9 * baseInterval
+	triggerInterval[VolumeClone][6] = 12 * baseInterval
+	triggerInterval[VolumeClone][5] = 15 * baseInterval
+	triggerInterval[VolumeClone][4] = 18 * baseInterval
+	triggerInterval[VolumeClone][3] = 21 * baseInterval
+	triggerInterval[VolumeClone][2] = 24 * baseInterval
+	triggerInterval[VolumeClone][1] = 27 * baseInterval
+
 	triggerInterval[VolumeResize][10] = 1 * baseInterval
 	triggerInterval[VolumeResize][9] = 3 * baseInterval
 	triggerInterval[VolumeResize][8] = 6 * baseInterval
@@ -640,6 +653,7 @@ func populateIntervals() {
 	triggerInterval[HADecrease][0] = 0
 	triggerInterval[RestartVolDriver][0] = 0
 	triggerInterval[AppTaskDown][0] = 0
+	triggerInterval[VolumeClone][0] = 0
 	triggerInterval[VolumeResize][0] = 0
 	triggerInterval[PoolResizeDisk][0] = 0
 	triggerInterval[PoolAddDisk][0] = 0

@@ -160,6 +160,8 @@ const (
 	RebootNode = "rebootNode"
 	// CrashNode crashes all nodes one by one
 	CrashNode = "crashNode"
+	//VolumeClone Clones volumes
+	VolumeClone = "volumeClone"
 	// VolumeResize increases volume size
 	VolumeResize = "volumeResize"
 	// VolumesDelete deletes the columes of the context
@@ -757,6 +759,59 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			}
 		})
+	})
+}
+
+// TriggerVolumeClone clones all volumes, validates and destorys the clone
+func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: VolumeClone,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step("get volumes for all apps in test and clone them", func() {
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
+			})
+			for _, vol := range appVolumes {
+				var clonedVolID string
+				Step(fmt.Sprintf("Clone Volume %s", vol.Name), func() {
+					logrus.Infof("Calling CloneVolume()...")
+					clonedVolID, err = Inst().V.CloneVolume(vol.ID)
+					UpdateOutcome(event, err)
+				})
+				Step(
+					fmt.Sprintf("Validate successful clone %s", clonedVolID), func() {
+						params := make(map[string]string)
+						if Inst().ConfigMap != "" {
+							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+							UpdateOutcome(event, err)
+						}
+						err = Inst().V.ValidateCreateVolume(clonedVolID, params)
+						UpdateOutcome(event, err)
+					})
+				Step(
+					fmt.Sprintf("cleanup the cloned volume %s", clonedVolID), func() {
+						err = Inst().V.DeleteVolume(clonedVolID)
+						UpdateOutcome(event, err)
+					})
+			}
+		}
 	})
 }
 

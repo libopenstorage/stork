@@ -84,6 +84,23 @@ func (d *DefaultDriver) RefreshDriverEndpoints() error {
 
 }
 
+// CloneVolume clones the volume specified in VolumeId paramerter
+// returns the volume_id of the cloned volume
+func (d *DefaultDriver) CloneVolume(volumeID string) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CloneVolume()",
+	}
+}
+
+// DeleteVolume deletes the volume specified by volumeID
+func (d *DefaultDriver) DeleteVolume(volumeID string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteVolume()",
+	}
+}
+
 // CleanupVolume forcefully unmounts/detaches and deletes a storage volume.
 // This is only called by Torpedo during cleanup operations, it is not
 // used during orchestration simulations.

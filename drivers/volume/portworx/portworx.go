@@ -340,6 +340,60 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	return false, nil
 }
 
+func (d *portworx) CloneVolume(volumeID string) (string, error) {
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
+	if err != nil {
+		return "", fmt.Errorf("failed to find volume %v due to %v", volumeID, err)
+	}
+	pxVolume := volumeInspectResponse.Volume
+
+	volID := pxVolume.Id
+	cloneVolumeName := pxVolume.Locator.Name + "_clone"
+
+	volumeCloneResp, err := volDriver.Clone(d.getContext(), &api.SdkVolumeCloneRequest{ParentId: volID, Name: cloneVolumeName})
+	if err != nil {
+		err = fmt.Errorf(
+			"error while Cloning %v because of: %v",
+			pxVolume.Id,
+			err,
+		)
+		logrus.Infof("Error returned: %v", err)
+		return "", err
+	}
+	if volumeCloneResp.VolumeId == "" {
+		logrus.Infof("Cloned volume id returned was null")
+		return "", fmt.Errorf("cloned volume id returned was null")
+	}
+	logrus.Infof("successfully clone %v as %v", volumeID, volumeCloneResp.VolumeId)
+	return volumeCloneResp.VolumeId, nil
+}
+
+func (d *portworx) DeleteVolume(volumeID string) error {
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
+	if err != nil {
+		return fmt.Errorf("failed to find volume %v due to %v", volumeID, err)
+	}
+
+	pxVolume := volumeInspectResponse.Volume
+	volID := pxVolume.Id
+	_, err = volDriver.Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: volID})
+	if err != nil {
+		logrus.Infof("Error %v", err)
+		err = fmt.Errorf(
+			"error while Delete %v because of: %v",
+			pxVolume.Id,
+			err,
+		)
+		logrus.Infof("Error returned: %v", err)
+		return err
+	}
+
+	logrus.Infof("successfully deleted Portworx volume %v ", volID)
+	return nil
+}
+
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
 	defer cancel()
