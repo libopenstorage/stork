@@ -276,7 +276,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
-				logrus.Info("Error: %v", err.Error())
+				logrus.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
 			}
 		}

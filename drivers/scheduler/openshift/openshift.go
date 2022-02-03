@@ -2,6 +2,8 @@ package openshift
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -225,6 +227,10 @@ func (k *openshift) UpgradeScheduler(version string) error {
 	}
 
 	if err := fixOCPClusterStorageOperator(upgradeVersion); err != nil {
+		return err
+	}
+
+	if err := ackAPIRemoval(upgradeVersion); err != nil {
 		return err
 	}
 
@@ -508,17 +514,7 @@ func downloadOCP4Client(ocpVersion string) error {
 // workaround for https://portworx.atlassian.net/browse/PWX-20465
 func fixOCPClusterStorageOperator(version string) error {
 
-	if versionReg.MatchString(version) {
-		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", version)
-		command := []string{"-c", fmt.Sprintf("curl --silent -L %s | grep \"Name:\" || true", url)}
-		stdout, err := exec.Command("bash", command...).CombinedOutput()
-		if err != nil {
-			return err
-		}
-		version = strings.TrimSpace(strings.ReplaceAll(string(stdout), "Name:", ""))
-	}
-
-	parsedVersion, err := semver.Parse(version)
+	parsedVersion, err := getParsedVersion(version)
 	if err != nil {
 		return err
 	}
@@ -572,6 +568,57 @@ func fixOCPClusterStorageOperator(version string) error {
 		}
 	}
 	return nil
+}
+
+func ackAPIRemoval(version string) error {
+	parsedVersion, err := getParsedVersion(version)
+	if err != nil {
+		return err
+	}
+	// this issue happens on OCP 4.9
+	parsedVersion49, _ := semver.Parse("4.9.0")
+
+	if parsedVersion.GTE(parsedVersion49) {
+		t := func() (interface{}, bool, error) {
+			var output []byte
+			patchData := "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
+			args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
+			if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
+				return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
+			}
+			logrus.Info(string(output))
+			return nil, false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	}
+	return err
+}
+
+func getParsedVersion(version string) (semver.Version, error) {
+	if versionReg.MatchString(version) {
+		cli := &http.Client{}
+		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", version)
+		resp, err := cli.Get(url)
+		if err != nil {
+			return semver.Version{}, err
+		}
+		defer resp.Body.Close()
+		output, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return semver.Version{}, err
+		}
+		var re = regexp.MustCompile(`(?m)Name:\s+([\d.]+)`)
+		match := re.FindStringSubmatch(string(output))
+		if len(match) > 1 {
+			version = match[1]
+		}
+	}
+
+	parsedVersion, err := semver.Parse(version)
+	if err != nil {
+		return semver.Version{}, err
+	}
+	return parsedVersion, nil
 }
 
 func init() {
