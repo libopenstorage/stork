@@ -59,7 +59,7 @@ replace (
 	// PX dependencies
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220106234718-d68a25af6b6b
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220204053814-097a5af93b1e
 	github.com/libopenstorage/operator => github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 
 	// Stork dependencies
