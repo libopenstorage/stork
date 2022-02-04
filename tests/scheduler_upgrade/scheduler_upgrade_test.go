@@ -11,6 +11,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 
@@ -36,6 +37,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{UpgradeScheduler}", func() {
+	var testrailID = 58849
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58849
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("upgrade scheduler and ensure everything is running fine", func() {
@@ -94,7 +101,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 	})
 
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

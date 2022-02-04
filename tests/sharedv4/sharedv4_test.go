@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
@@ -36,6 +37,13 @@ var _ = BeforeSuite(func() {
 
 // This test performs multi volume mounts to a single deployment
 var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
+	var testrailID = 58846
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58846
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
 
 	It("has to create multiple sharedv4 volumes and mount to single pod", func() {
 		// set frequency mins depending on the chaos level
@@ -82,7 +90,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 		}
 
 		provider := Inst().V.String()
-		contexts := []*scheduler.Context{}
+		contexts = []*scheduler.Context{}
 		// there should be only 1 app
 		Expect(len(Inst().AppList)).To(Equal(1))
 		appName := Inst().AppList[0]
@@ -146,6 +154,9 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 				}
 			}
 		})
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

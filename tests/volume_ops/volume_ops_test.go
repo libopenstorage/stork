@@ -2,12 +2,13 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"math"
 	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -259,6 +260,12 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 
 // Volume replication change
 var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
+	var testrailID = 58838
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58838
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and update replication factor for attached node", func() {
@@ -424,7 +431,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

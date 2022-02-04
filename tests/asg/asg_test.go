@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 
 	// https://github.com/kubernetes/client-go/issues/242
@@ -39,6 +40,12 @@ var _ = BeforeSuite(func() {
 
 // This test performs basic test of scaling up and down the asg cluster
 var _ = Describe("{ClusterScaleUpDown}", func() {
+	var testrailID = 58847
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58847
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
@@ -99,13 +106,19 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		ValidateAndDestroy(contexts, opts)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // This test randomly kills one volume driver node and ensures cluster remains
 // intact by ASG
 var _ = Describe("{ASGKillRandomNodes}", func() {
+	var testrailID = 58848
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58848
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("keeps killing worker nodes", func() {
@@ -194,7 +207,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

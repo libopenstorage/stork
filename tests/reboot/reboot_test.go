@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -121,9 +122,17 @@ var _ = Describe("{RebootOneNode}", func() {
 })
 
 var _ = Describe("{ReallocateSharedMount}", func() {
+
+	var testrailID = 58844
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58844
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and reboot node(s) with shared volume mounts", func() {
+
 		//var err error
 		contexts = make([]*scheduler.Context, 0)
 
@@ -183,7 +192,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
