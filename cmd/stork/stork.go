@@ -189,6 +189,11 @@ func main() {
 			Name:  "kdmp-controller",
 			Usage: "Start the kdmp controller (default: true)",
 		},
+		cli.IntFlag{
+			Name:  "migration-max-threads",
+			Value: 4,
+			Usage: "Max threads for apply resources during migration (default: 4)",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -435,7 +440,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 				Recorder:          recorder,
 				ResourceCollector: resourceCollector,
 			}
-			if err := migration.Init(mgr, adminNamespace); err != nil {
+			if err := migration.Init(mgr, adminNamespace, c.Int("migration-max-threads")); err != nil {
 				log.Fatalf("Error initializing migration: %v", err)
 			}
 		}
