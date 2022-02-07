@@ -190,8 +190,7 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 	updated := false
 	for _, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
 		for _, snapshot := range policyVolumeSnapshot {
-			// Get the updated status if we see it as not completed
-			if !s.isVolumeSnapshotComplete(snapshot.Status) {
+			if snapshot.Status != snapv1.VolumeSnapshotConditionReady {
 				pendingVolumeSnapshotStatus, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
 				if err != nil {
 					return err
