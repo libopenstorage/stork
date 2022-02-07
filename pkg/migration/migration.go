@@ -21,7 +21,7 @@ type Migration struct {
 }
 
 // Init init
-func (m *Migration) Init(mgr manager.Manager, migrationAdminNamespace string) error {
+func (m *Migration) Init(mgr manager.Manager, migrationAdminNamespace string, migrationMaxThreads int) error {
 	m.clusterPairController = controllers.NewClusterPair(mgr, m.Driver, m.Recorder)
 	err := m.clusterPairController.Init(mgr)
 	if err != nil {
@@ -29,7 +29,7 @@ func (m *Migration) Init(mgr manager.Manager, migrationAdminNamespace string) er
 	}
 
 	m.migrationController = controllers.NewMigration(mgr, m.Driver, m.Recorder, m.ResourceCollector)
-	err = m.migrationController.Init(mgr, migrationAdminNamespace)
+	err = m.migrationController.Init(mgr, migrationAdminNamespace, migrationMaxThreads)
 	if err != nil {
 		return fmt.Errorf("error initializing migration controller: %v", err)
 	}
