@@ -345,58 +345,76 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 				return
 			}
 			for _, o := range objects.Items {
-				specPath := strings.Split(crd.SuspendOptions.Path, ".")
-				if len(specPath) > 1 {
-					var disableVersion interface{}
-					if crd.SuspendOptions.Type == "bool" {
-						disableVersion = !activate
-					} else if crd.SuspendOptions.Type == "int" {
-						replicas, _ := getSuspendIntOpts(o.GetAnnotations(), activate, ioStreams)
-						disableVersion = replicas
-					} else if crd.SuspendOptions.Type == "string" {
-						suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, ioStreams)
-						if err != nil {
-							util.CheckErr(err)
+				annotations := o.GetAnnotations()
+				if annotations == nil {
+					printMsg(fmt.Sprintf("Warn: Skipping CR update %s-%s/%s, annotations not found", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName()), ioStreams.ErrOut)
+					continue
+				}
+				if crd.SuspendOptions.Path != "" {
+					crd.NestedSuspendOptions = append(crd.NestedSuspendOptions, crd.SuspendOptions)
+				}
+				if len(crd.NestedSuspendOptions) == 0 {
+					continue
+				}
+				for _, suspend := range crd.NestedSuspendOptions {
+					specPath := strings.Split(suspend.Path, ".")
+					if len(specPath) > 1 {
+						var disableVersion interface{}
+						if suspend.Type == "bool" {
+							if val, err := strconv.ParseBool(suspend.Value); err != nil {
+								disableVersion = !activate
+							} else {
+								disableVersion = val
+								if activate {
+									disableVersion = !val
+								}
+							}
+						} else if suspend.Type == "int" {
+							replicas, _ := getSuspendIntOpts(o.GetAnnotations(), activate, suspend.Path, ioStreams)
+							disableVersion = replicas
+						} else if suspend.Type == "string" {
+							suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, suspend.Path, ioStreams)
+							if err != nil {
+								util.CheckErr(err)
+								return
+							}
+							disableVersion = suspend
+						} else {
+							util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
 							return
 						}
-						disableVersion = suspend
-					} else {
-						util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
-						return
-					}
-					err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
-					if err != nil {
-						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
-						continue
-					}
-
-					_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
-					if err != nil {
-						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
-						continue
-					}
-					printMsg(fmt.Sprintf("Updated \"%v\" for %v %v/%v to %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion), ioStreams.Out)
-					if !activate {
-						if crd.PodsPath == "" {
-							continue
-						}
-						podpath := strings.Split(crd.PodsPath, ".")
-						pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
+						err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
 						if err != nil {
-							printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-							continue
-						}
-						if !found {
-							continue
-						}
-						for _, pod := range pods {
-							err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
-							printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+							printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", suspend.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
 							continue
 						}
 					}
 				}
-
+				_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
+				if err != nil {
+					printMsg(fmt.Sprintf("Error updating CR %v %v/%v: %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+					continue
+				}
+				printMsg(fmt.Sprintf("Updated CR for %v %v/%v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName()), ioStreams.Out)
+				if !activate {
+					if crd.PodsPath == "" {
+						continue
+					}
+					podpath := strings.Split(crd.PodsPath, ".")
+					pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
+					if err != nil {
+						printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+						continue
+					}
+					if !found {
+						continue
+					}
+					for _, pod := range pods {
+						err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
+						printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+						continue
+					}
+				}
 			}
 
 		}
@@ -451,7 +469,18 @@ func updateCronJobObjects(namespace string, activate bool, ioStreams genericclio
 	}
 
 }
-func getSuspendStringOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (string, error) {
+func getSuspendStringOpts(annotations map[string]string, activate bool, path string, ioStreams genericclioptions.IOStreams) (string, error) {
+	if val, present := annotations[migration.StorkAnnotationPrefix+path]; present {
+		suspend := strings.Split(val, ",")
+		if len(suspend) != 2 {
+			return "", fmt.Errorf("migrated annotation does not have proper values %s/%s", migration.StorkAnnotationPrefix+path, val)
+		}
+		if activate {
+			return suspend[0], nil
+		}
+		return suspend[1], nil
+	}
+	// for backward compatibility of old migrated cr's
 	crdOpts := migration.StorkMigrationCRDActivateAnnotation
 	if !activate {
 		crdOpts = migration.StorkMigrationCRDDeactivateAnnotation
@@ -463,23 +492,28 @@ func getSuspendStringOpts(annotations map[string]string, activate bool, ioStream
 	return suspend, nil
 }
 
-func getSuspendIntOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int64, bool) {
-	if intOpts, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
-		var replicas int64
-		if activate {
-			parsedReplicas, err := strconv.Atoi(intOpts)
-			if err != nil {
-				printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
-				return 0, false
-			}
-			replicas = int64(parsedReplicas)
-		} else {
-			replicas = 0
-		}
-		return replicas, true
+func getSuspendIntOpts(annotations map[string]string, activate bool, path string, ioStreams genericclioptions.IOStreams) (int64, bool) {
+	intOpts := ""
+	if val, present := annotations[migration.StorkAnnotationPrefix+path]; present {
+		intOpts = strings.Split(val, ",")[0]
+	} else if val, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
+		// for old migrated cr compatibility
+		intOpts = val
+	} else {
+		return 0, false
 	}
-
-	return 0, false
+	var replicas int64
+	if activate {
+		parsedReplicas, err := strconv.Atoi(intOpts)
+		if err != nil {
+			printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
+			return 0, false
+		}
+		replicas = int64(parsedReplicas)
+	} else {
+		replicas = 0
+	}
+	return replicas, true
 }
 
 func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {

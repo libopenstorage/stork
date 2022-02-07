@@ -256,18 +256,6 @@ func GetSupportedCRD() map[string][]stork_api.ApplicationResource {
 				Path: "spec.pause",
 				Type: "bool",
 			},
-			CustomSuspendOptions: []stork_api.SuspendOptions{
-				{
-					Path:  "spec.haproxy.enabled",
-					Type:  "bool",
-					Value: "false",
-				},
-				{
-					Path:  "spec.logcollector.enabled",
-					Type:  "bool",
-					Value: "false",
-				},
-			},
 		},
 	}
 	// prometheus app crds

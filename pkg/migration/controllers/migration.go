@@ -62,6 +62,8 @@ const (
 	StorkMigrationCRDDeactivateAnnotation = "stork.libopenstorage.org/migrationCRDDeactivate"
 	// PVReclaimAnnotation for pvc's reclaim policy
 	PVReclaimAnnotation = "stork.libopenstorage.org/reclaimPolicy"
+	// StorkAnnotationPrefix for resources created/managed by stork
+	StorkAnnotationPrefix = "stork.libopenstorage.org/"
 
 	// Max number of times to retry applying resources on the desination
 	maxApplyRetries      = 10
@@ -974,7 +976,8 @@ func (m *MigrationController) prepareResources(
 				if v.Kind == resource.Kind &&
 					v.Version == resource.Version &&
 					v.Group == resource.Group {
-					if err := m.prepareCRDClusterResource(migration, o, v.SuspendOptions); err != nil {
+					v.NestedSuspendOptions = append(v.NestedSuspendOptions, v.SuspendOptions)
+					if err := m.prepareCRDClusterResource(migration, o, v.NestedSuspendOptions); err != nil {
 						return fmt.Errorf("error preparing %v resource %v: %v",
 							o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 					}
@@ -1233,52 +1236,61 @@ func (m *MigrationController) prepareApplicationResource(
 func (m *MigrationController) prepareCRDClusterResource(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
-	suspend stork_api.SuspendOptions,
+	suspendOpts []stork_api.SuspendOptions,
+
 ) error {
 	if *migration.Spec.StartApplications {
 		return nil
 	}
-	content := object.UnstructuredContent()
-	fields := strings.Split(suspend.Path, ".")
-	var currVal string
-	if len(fields) > 1 {
-		var disableVersion interface{}
-		if suspend.Type == "bool" {
-			disableVersion = true
-		} else if suspend.Type == "int" {
-			curr, found, err := unstructured.NestedInt64(content, fields...)
-			if err != nil || !found {
-				return fmt.Errorf("unable to find suspend path, err: %v", err)
-			}
-			disableVersion = int64(0)
-			currVal = fmt.Sprintf("%v", curr)
-		} else if suspend.Type == "string" {
-			curr, found, err := unstructured.NestedString(content, fields...)
-			if err != nil || !found {
-				return fmt.Errorf("unable to find suspend path, err: %v", err)
-			}
-			disableVersion = suspend.Value
-			currVal = curr
-		} else {
-			return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
-		}
-
-		if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
-			return err
-		}
-		annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
-		if err != nil {
-			return err
-		}
-		if !found {
-			annotations = make(map[string]string)
-		}
-		annotations[StorkMigrationCRDDeactivateAnnotation] = suspend.Value
-		annotations[StorkMigrationCRDActivateAnnotation] = currVal
-		return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
+	if len(suspendOpts) == 0 {
+		return nil
 	}
+	content := object.UnstructuredContent()
+	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+	if err != nil {
+		return err
+	}
+	if !found {
+		annotations = make(map[string]string)
+	}
+	for _, suspend := range suspendOpts {
+		fields := strings.Split(suspend.Path, ".")
+		var currVal string
+		if len(fields) > 1 {
+			var disableVersion interface{}
+			if suspend.Type == "bool" {
+				if val, err := strconv.ParseBool(suspend.Value); err != nil {
+					disableVersion = true
+				} else {
+					disableVersion = val
+				}
+			} else if suspend.Type == "int" {
+				curr, found, err := unstructured.NestedInt64(content, fields...)
+				if err != nil || !found {
+					return fmt.Errorf("unable to find suspend path, err: %v", err)
+				}
+				disableVersion = int64(0)
+				currVal = fmt.Sprintf("%v", curr)
+			} else if suspend.Type == "string" {
+				curr, found, err := unstructured.NestedString(content, fields...)
+				if err != nil || !found {
+					return fmt.Errorf("unable to find suspend path, err: %v", err)
+				}
+				disableVersion = suspend.Value
+				currVal = curr
+			} else {
+				return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
+			}
 
-	return nil
+			if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
+				return err
+			}
+
+			// path : activate/deactivate value
+			annotations[StorkAnnotationPrefix+suspend.Path] = currVal + "," + suspend.Value
+		}
+	}
+	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
 
 func (m *MigrationController) getPrunedAnnotations(annotations map[string]string) map[string]string {
