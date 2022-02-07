@@ -29,10 +29,14 @@ type ApplicationResource struct {
 	// KeepStatus if set to true collect status
 	// while doing backup/migration/restore etc
 	KeepStatus bool `json:"keepStatus"`
-	// SuspendOptions to disable CRD upon migration/restore/clone
+	// SuspendOptions to disable parent CR upon migration/restore/clone
 	SuspendOptions SuspendOptions `json:"suspendOptions"`
 	// PodsPath to help activate/deactivate crd upon migration
 	PodsPath string `json:"podsPath"`
+	// Some CRs can have child servers which can be enabled/disabled
+	// in addition to parent server
+	// CustomSuspendOptions allow way to suspend such CR server
+	CustomSuspendOptions []SuspendOptions `json:"customSuspendOptions"`
 }
 
 // SuspendOptions to disable CRD upon migration/restore/clone
