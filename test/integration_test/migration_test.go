@@ -78,6 +78,7 @@ func testMigration(t *testing.T) {
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
+	t.Run("operatorMigrationTest", operatorMigrationTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -990,6 +991,20 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 }
+
+func operatorMigrationTest(t *testing.T) {
+	triggerMigrationTest(
+		t,
+		"migration",
+		"mongo-operator",
+		nil,
+		"mongo-op-migration",
+		true,
+		true,
+		true,
+	)
+}
+
 func createMigration(
 	t *testing.T,
 	name string,
