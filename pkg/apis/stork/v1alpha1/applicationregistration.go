@@ -33,10 +33,10 @@ type ApplicationResource struct {
 	SuspendOptions SuspendOptions `json:"suspendOptions"`
 	// PodsPath to help activate/deactivate crd upon migration
 	PodsPath string `json:"podsPath"`
-	// Some CRs can have child servers which can be enabled/disabled
+	// Some CRs can have nested servers which can be enabled/disabled
 	// in addition to parent server
-	// CustomSuspendOptions allow way to suspend such CR server
-	CustomSuspendOptions []SuspendOptions `json:"customSuspendOptions"`
+	// NestedSuspendOptions allow way to suspend such CR server
+	NestedSuspendOptions []SuspendOptions `json:"customSuspendOptions"`
 }
 
 // SuspendOptions to disable CRD upon migration/restore/clone
