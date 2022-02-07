@@ -487,6 +487,64 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 	})
 })
 
+var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
+	var contexts []*scheduler.Context
+
+	It("has to cordon all storage nodes, deploy and destroy app", func() {
+
+		Step("Cordon all storage nodes", func() {
+			nodes := node.GetNodes()
+			storageNodes := node.GetStorageNodes()
+			if len(nodes) == len(storageNodes) {
+				Skip("No storageless nodes detected. Skipping..")
+			}
+			for _, n := range storageNodes {
+				err := Inst().S.DisableSchedulingOnNode(n)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("Deploy applications", func() {
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cordondeploydestroy-%d", i))...)
+			}
+			ValidateApplications(contexts)
+
+		})
+		Step("Destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForDestroy] = false
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = false
+			for _, ctx := range contexts {
+				err := Inst().S.Destroy(ctx, opts)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("Validate destroy", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+		Step("Uncordon all nodes", func() {
+			nodes := node.GetWorkerNodes()
+			for _, node := range nodes {
+				err := Inst().S.EnableSchedulingOnNode(node)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()

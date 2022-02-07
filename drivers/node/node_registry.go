@@ -78,6 +78,22 @@ func GetStorageDriverNodes() []Node {
 	return nodeList
 }
 
+// IsStorageNode returns true if the node is a storage node, false otherwise
+func IsStorageNode(n Node) bool {
+	return len(n.StoragePools) > 0
+}
+
+// GetStorageNodes gets all the nodes with non-empty StoragePools
+func GetStorageNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if IsStorageNode(n) {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetMetadataNodes gets all the nodes which serves as internal kvdb metadata node
 func GetMetadataNodes() []Node {
 	var nodeList []Node
