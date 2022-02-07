@@ -70,7 +70,9 @@ func (l *linstor) Init(_ interface{}) error {
 	// * LS_USER_CERTIFICATE
 	// * LS_USER_KEY
 	// * LS_ROOT_CA
-	client, err := lclient.NewClient()
+	client, err := lclient.NewClient(
+		lclient.Log(logrus.StandardLogger()),
+	)
 	if err != nil {
 		return fmt.Errorf("error creating linstor client: %w", err)
 	}
