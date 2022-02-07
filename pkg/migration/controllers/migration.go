@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
@@ -59,8 +60,6 @@ const (
 	// StorkMigrationCRDDeactivateAnnotation is the annotation used to keep track of
 	// the value to be set for deactivating crds
 	StorkMigrationCRDDeactivateAnnotation = "stork.libopenstorage.org/migrationCRDDeactivate"
-	// storageClassAnnotation for pvc sc
-	storageClassAnnotation = "volume.beta.kubernetes.io/storage-class"
 	// PVReclaimAnnotation for pvc's reclaim policy
 	PVReclaimAnnotation = "stork.libopenstorage.org/reclaimPolicy"
 
@@ -90,15 +89,17 @@ type MigrationController struct {
 	recorder                record.EventRecorder
 	resourceCollector       resourcecollector.ResourceCollector
 	migrationAdminNamespace string
+	migrationMaxThreads     int
 }
 
 // Init Initialize the migration controller
-func (m *MigrationController) Init(mgr manager.Manager, migrationAdminNamespace string) error {
+func (m *MigrationController) Init(mgr manager.Manager, migrationAdminNamespace string, migrationMaxThreads int) error {
 	err := m.createCRD()
 	if err != nil {
 		return err
 	}
 
+	m.migrationMaxThreads = migrationMaxThreads
 	m.migrationAdminNamespace = migrationAdminNamespace
 	if err := m.performRuleRecovery(); err != nil {
 		logrus.Errorf("Failed to perform recovery for migration rules: %v", err)
@@ -895,11 +896,6 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
-		case "PersistentVolumeClaim":
-			err := m.preparePVCResource(migration, o)
-			if err != nil {
-				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
-			}
 		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
 			err := m.prepareApplicationResource(migration, o)
 			if err != nil {
@@ -1107,31 +1103,6 @@ func (m *MigrationController) preparePVResource(
 		return err
 	}
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pv)
-	if err != nil {
-		return err
-	}
-	object.SetUnstructuredContent(o)
-
-	return nil
-}
-
-func (m *MigrationController) preparePVCResource(
-	migration *stork_api.Migration,
-	object runtime.Unstructured,
-) error {
-	var pvc v1.PersistentVolumeClaim
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pvc); err != nil {
-		return err
-	}
-
-	if pvc.Annotations != nil {
-		delete(pvc.Annotations, storageClassAnnotation)
-	}
-	sc := ""
-	if pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
-		pvc.Spec.StorageClassName = &sc
-	}
-	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
 	if err != nil {
 		return err
 	}
@@ -1697,111 +1668,152 @@ func (m *MigrationController) applyResources(
 	}
 
 	// apply remaining objects
-	for _, o := range updatedObjects {
-		metadata, err := meta.Accessor(o)
-		if err != nil {
-			return err
-		}
-		objectType, err := meta.TypeAccessor(o)
-		if err != nil {
-			return err
-		}
-		resource := &metav1.APIResource{
-			Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
-			Namespaced: len(metadata.GetNamespace()) > 0,
-		}
-		var dynamicClient dynamic.ResourceInterface
-		if resource.Namespaced {
-			dynamicClient = remoteInterface.Resource(
-				o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
-		} else {
-			dynamicClient = remoteAdminInterface.Resource(
-				o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
-		}
+	worker := func(objectChan <-chan runtime.Unstructured, errorChan chan<- error) {
+		for o := range objectChan {
+			metadata, err := meta.Accessor(o)
+			if err != nil {
+				errorChan <- err
+			}
+			objectType, err := meta.TypeAccessor(o)
+			if err != nil {
+				errorChan <- err
+			}
+			resource := &metav1.APIResource{
+				Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
+				Namespaced: len(metadata.GetNamespace()) > 0,
+			}
+			var dynamicClient dynamic.ResourceInterface
+			if resource.Namespaced {
+				dynamicClient = remoteInterface.Resource(
+					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+			} else {
+				dynamicClient = remoteAdminInterface.Resource(
+					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
+			}
 
-		unstructured, ok := o.(*unstructured.Unstructured)
-		if !ok {
-			return fmt.Errorf("unable to cast object to unstructured: %v", o)
-		}
+			unstructured, ok := o.(*unstructured.Unstructured)
+			if !ok {
+				errorChan <- fmt.Errorf("unable to cast object to unstructured: %v", o)
+			}
 
-		// set migration annotations
-		migrAnnot := metadata.GetAnnotations()
-		if migrAnnot == nil {
-			migrAnnot = make(map[string]string)
-		}
-		migrAnnot[StorkMigrationAnnotation] = "true"
-		migrAnnot[StorkMigrationName] = migration.GetName()
-		migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
-		objHash, err := hashstructure.Hash(o, &hashstructure.HashOptions{})
-		if err != nil {
-			log.MigrationLog(migration).Warnf("unable to generate hash for an object %v %v, err: %v", objectType.GetKind(), metadata.GetName(), err)
-		}
-		migrAnnot[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
-		unstructured.SetAnnotations(migrAnnot)
-		retries := 0
-		log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
-		for {
-			_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
-			if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
-				switch objectType.GetKind() {
-				case "ServiceAccount":
-					err = m.checkAndUpdateDefaultSA(migration, o)
-				case "Service":
-					var skipUpdate bool
-					skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
-					if err == nil && skipUpdate {
-						break
-					}
-					fallthrough
-				default:
-					// Delete the resource if it already exists on the destination
-					// cluster and try creating again
-					deleteStart := metav1.Now()
-					err = dynamicClient.Delete(context.TODO(), metadata.GetName(), metav1.DeleteOptions{})
-					if err != nil && !errors.IsNotFound(err) {
-						log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
-					} else {
-						// wait for resources to get deleted
-						// 2 mins
-						for i := 0; i < deletedMaxRetries; i++ {
-							obj, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
-							if err != nil && errors.IsNotFound(err) {
-								break
-							}
-							createTime := obj.GetCreationTimestamp()
-							if deleteStart.Before(&createTime) {
-								log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
-									obj.GetName(), deleteStart, createTime)
-								break
-							}
-							log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
-							time.Sleep(deletedRetryInterval)
+			// set migration annotations
+			migrAnnot := metadata.GetAnnotations()
+			if migrAnnot == nil {
+				migrAnnot = make(map[string]string)
+			}
+			migrAnnot[StorkMigrationAnnotation] = "true"
+			migrAnnot[StorkMigrationName] = migration.GetName()
+			migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
+			objHash, err := hashstructure.Hash(o, &hashstructure.HashOptions{})
+			if err != nil {
+				log.MigrationLog(migration).Warnf("unable to generate hash for an object %v %v, err: %v", objectType.GetKind(), metadata.GetName(), err)
+			}
+			migrAnnot[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
+			unstructured.SetAnnotations(migrAnnot)
+			retries := 0
+			log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
+			for {
+				_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
+				if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
+					switch objectType.GetKind() {
+					case "ServiceAccount":
+						err = m.checkAndUpdateDefaultSA(migration, o)
+					case "Service":
+						var skipUpdate bool
+						skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
+						if err == nil && skipUpdate {
+							break
 						}
-						_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
+						fallthrough
+					default:
+						// Delete the resource if it already exists on the destination
+						// cluster and try creating again
+						deleteStart := metav1.Now()
+						err = dynamicClient.Delete(context.TODO(), metadata.GetName(), metav1.DeleteOptions{})
+						if err != nil && !errors.IsNotFound(err) {
+							log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+						} else {
+							// wait for resources to get deleted
+							// 2 mins
+							for i := 0; i < deletedMaxRetries; i++ {
+								obj, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
+								if err != nil && errors.IsNotFound(err) {
+									break
+								}
+								createTime := obj.GetCreationTimestamp()
+								if deleteStart.Before(&createTime) {
+									log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+										obj.GetName(), deleteStart, createTime)
+									break
+								}
+								log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+								time.Sleep(deletedRetryInterval)
+							}
+							_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
+						}
 					}
 				}
+				// Retry a few times for Unauthorized errors
+				if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
+					retries++
+					continue
+				}
+				break
 			}
-			// Retry a few times for Unauthorized errors
-			if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
-				retries++
-				continue
+			if err != nil {
+				m.updateResourceStatus(
+					migration,
+					o,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", err))
+			} else {
+				m.updateResourceStatus(
+					migration,
+					o,
+					stork_api.MigrationStatusSuccessful,
+					"Resource migrated successfully")
 			}
-			break
-		}
-		if err != nil {
-			m.updateResourceStatus(
-				migration,
-				o,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", err))
-		} else {
-			m.updateResourceStatus(
-				migration,
-				o,
-				stork_api.MigrationStatusSuccessful,
-				"Resource migrated successfully")
+			errorChan <- nil
 		}
 	}
+
+	return m.parallelWorker(worker, updatedObjects, true)
+}
+
+func (m *MigrationController) parallelWorker(
+	worker func(<-chan runtime.Unstructured, chan<- error),
+	objects []runtime.Unstructured,
+	shuffle bool,
+) error {
+	numObjects := len(objects)
+	objectChan := make(chan runtime.Unstructured)
+	errorChan := make(chan error)
+
+	if shuffle {
+		// Shuffle Object order before applying so we can get parallelism between resource types
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(len(objects), func(i, j int) { objects[i], objects[j] = objects[j], objects[i] })
+	}
+
+	logrus.Infof("Updating %v objects with %v parallel workers", numObjects, m.migrationMaxThreads)
+	for w := 0; w < m.migrationMaxThreads; w++ {
+		go worker(objectChan, errorChan)
+	}
+
+	go func() {
+		for _, o := range objects {
+			objectChan <- o
+		}
+	}()
+
+	for result := 0; result < numObjects; result++ {
+		workerErr := <-errorChan
+		if workerErr != nil {
+			close(objectChan)
+			return workerErr
+		}
+	}
+	close(objectChan)
 	return nil
 }
 
