@@ -193,10 +193,22 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 			if snapshot.Status != snapv1.VolumeSnapshotConditionReady {
 				pendingVolumeSnapshotStatus, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
 				if err != nil {
-					return err
+					s.recorder.Event(snapshotSchedule,
+						v1.EventTypeWarning,
+						err.Error(),
+						fmt.Sprintf("Error updating snapshot (%s) status", snapshot.Name))
+					if errors.IsNotFound(err) {
+						snapshot.Status = snapv1.VolumeSnapshotConditionError
+						updated = true
+					}
+					continue
 				}
 
 				// Check again and update the status if it is completed
+				if snapshot.Status == pendingVolumeSnapshotStatus {
+					// latest snapshot status is same, lets not update volumesnapshotschedule CR
+					continue
+				}
 				snapshot.Status = pendingVolumeSnapshotStatus
 				if s.isVolumeSnapshotComplete(snapshot.Status) {
 					snapshot.FinishTimestamp = meta.NewTime(schedule.GetCurrentTime())
