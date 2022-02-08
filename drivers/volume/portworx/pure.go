@@ -1,6 +1,7 @@
 package portworx
 
 const (
+	// PureDriverName is the name of the portworx-pure driver implementation
 	PureDriverName = "pure"
 )
 

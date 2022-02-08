@@ -17,7 +17,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: mysql-pvc-1
 spec:
-  storageClassName: worpress-sc
+  storageClassName: wordpress-sc
   accessModes:
     - ReadWriteOnce
   resources:
