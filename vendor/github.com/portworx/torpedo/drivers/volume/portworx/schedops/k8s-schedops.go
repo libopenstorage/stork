@@ -138,7 +138,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	}
 }
 
-func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.StorageNode, vol *api.Volume) error {
+func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []*api.StorageNode, vol *api.Volume) error {
 	pvc, ok := vol.Locator.VolumeLabels[pvcLabel]
 	if !ok {
 		return nil
@@ -295,6 +295,10 @@ PodLoop:
 		if err != nil && err == k8serrors.ErrPodsNotFound {
 			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
 			continue
+		} else if !pod.DeletionTimestamp.IsZero() {
+			// pod is being terminated, skip
+			logrus.Warnf("pod %s/%s is being terminated, not validating the mounts...", p.Namespace, p.Name)
+			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
 			printStatus(*pod)
@@ -303,10 +307,10 @@ PodLoop:
 			return validatedMountPods, err
 		}
 
+		logrus.Debugf("validating the mounts in pod %s/%s", p.Namespace, p.Name)
 		containerPaths := getContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
-		for containerName, path := range containerPaths {
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
+		for containerName, paths := range containerPaths {
 			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
@@ -316,21 +320,26 @@ PodLoop:
 				return validatedMountPods, err
 			}
 			mounts := strings.Split(output, "\n")
-			pxMountFound := false
-			for _, line := range mounts {
-				pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
-				if len(pxMounts) > 0 {
-					logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
-					pxMountFound = true
-					// in case there are two pods running with non shared volume, one of them will be in read-only
-					skipHostMountCheck = isMountReadOnly(line)
-					break
+			for _, path := range paths {
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s ", path))
+				pxMountFound := false
+				for _, line := range mounts {
+					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
+
+					if len(pxMounts) > 0 {
+						logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
+						pxMountFound = true
+						// in case there are two pods running with non shared volume, one of them will be in read-only
+						skipHostMountCheck = isMountReadOnly(line)
+						break
+					}
+				}
+
+				if !pxMountFound {
+					return validatedMountPods, fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", pod.Namespace, pod.Name, mounts)
 				}
 			}
 
-			if !pxMountFound {
-				return validatedMountPods, fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", pod.Namespace, pod.Name, mounts)
-			}
 		}
 
 		if skipHostMountCheck {
@@ -350,7 +359,7 @@ PodLoop:
 		}
 
 		volMount, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_)' | grep %s", pvName), connOpts)
 		if len(volMount) == 0 {
 			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
 		}
@@ -725,8 +734,8 @@ func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, erro
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
-func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
-	containerPaths := make(map[string]string)
+func getContainerPVCMountMap(pod corev1.Pod) map[string][]string {
+	containerPaths := make(map[string][]string)
 
 	// Each pvc in a pod spec has a associated name (which is different from the actual PVC name).
 	// These names get referenced by containers in a pod. So first let's get a map of these names.
@@ -746,7 +755,7 @@ func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
 	for _, c := range pod.Spec.Containers {
 		for _, cMount := range c.VolumeMounts {
 			if _, ok := pvcNamesInSpec[cMount.Name]; ok {
-				containerPaths[c.Name] = cMount.MountPath
+				containerPaths[c.Name] = append(containerPaths[c.Name], cMount.MountPath)
 			}
 		}
 	}

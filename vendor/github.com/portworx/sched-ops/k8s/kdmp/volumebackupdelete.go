@@ -14,7 +14,7 @@ type VolumeBackupDeleteOps interface {
 	// GetVolumeBackupDelete gets the VolumeBackupDelete CR
 	GetVolumeBackupDelete(string, string) (*kdmpv1alpha1.VolumeBackupDelete, error)
 	// ListVolumeBackupDelete lists all the VolumeBackupDelete CRs
-	ListVolumeBackupDelete(string) (*kdmpv1alpha1.VolumeBackupDeleteList, error)
+	ListVolumeBackupDelete(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.VolumeBackupDeleteList, error)
 	// UpdateVolumeBackupDelete updates the VolumeBackupDelete CR
 	UpdateVolumeBackupDelete(*kdmpv1alpha1.VolumeBackupDelete) (*kdmpv1alpha1.VolumeBackupDelete, error)
 	// DeleteVolumeBackupDelete deletes the VolumeBackupDelete CR
@@ -38,11 +38,11 @@ func (c *Client) GetVolumeBackupDelete(name, namespace string) (*kdmpv1alpha1.Vo
 }
 
 // ListVolumeBackupDelete lists all the VolumeBackupDelete CR
-func (c *Client) ListVolumeBackupDelete(namespace string) (*kdmpv1alpha1.VolumeBackupDeleteList, error) {
+func (c *Client) ListVolumeBackupDelete(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.VolumeBackupDeleteList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.kdmp.KdmpV1alpha1().VolumeBackupDeletes(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.kdmp.KdmpV1alpha1().VolumeBackupDeletes(namespace).List(context.TODO(), filterOptions)
 }
 
 // DeleteVolumeBackupDelete deletes the VolumeBackupDelete CR

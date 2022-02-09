@@ -10,6 +10,7 @@ import (
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Volume is a generic struct encapsulating volumes in the cluster
@@ -53,6 +54,16 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
+	// CloneVolume creates a clone of the volume whose volumeName is passed as arg.
+	// returns volume_id of the cloned volume and error if there is any
+	CloneVolume(volumeID string) (string, error)
+
+	// Delete the volume of the Volume ID provided
+	DeleteVolume(volumeID string) error
+
+	// InspectVolume inspects the volume with the given name
+	InspectVolume(name string) (*api.Volume, error)
+
 	// CleanupVolume forcefully unmounts/detaches and deletes a storage volume.
 	// This is only called by Torpedo during cleanup operations, it is not
 	// used during orchestration simulations.
@@ -62,8 +73,34 @@ type Driver interface {
 	// params are the custom volume options passed when creating the volume.
 	ValidateCreateVolume(name string, params map[string]string) error
 
+	// ValidateCreateSnapshot validates whether a snapshot has been created properly.
+	// params are the custom volume options passed
+	ValidateCreateSnapshot(name string, params map[string]string) error
+
+	// ValidateCreateSnapshotUsingPxctl validates whether a snapshot has been created properly using pxctl.
+	ValidateCreateSnapshotUsingPxctl(name string) error
+
+	// ValidateCreateCloudsnap validates whether a cloudsnap backup can be created properly(or errored expectely)
+	// params are the custom backup options passed
+	ValidateCreateCloudsnap(name string, params map[string]string) error
+
+	// ValidateCreateCloudsnapUsingPxctl validates whether a cloudsnap backup can be created properly(or errored expectely) using pxctl
+	ValidateCreateCloudsnapUsingPxctl(name string) error
+
+	// ValidateCreateGroupSnapshotUsingPxctl validates whether a groupsnap backup can be created properly (or errored expectedly) using pxctl
+	ValidateCreateGroupSnapshotUsingPxctl() error
+
+	// ValidateGetByteUsedForVolume validates returning volume statstic succesfully
+	ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error)
+
+	// ValidatePureVolumesNoReplicaSets validates pure volumes has no replicaset
+	ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error
+
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
+
+	// SetIoThrottle validates if volume changes has been applied
+	SetIoBandwidth(vol *Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error
 
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
@@ -101,6 +138,9 @@ type Driver interface {
 	// UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
 	UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error
 
+	// UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
+	UpgradeStork(endpointURL string, endpointVersion string) error
+
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
 
@@ -108,6 +148,9 @@ type Driver interface {
 	// This could be used by a volume driver to recover itself from any underlying storage
 	// failure.
 	RecoverDriver(n node.Node) error
+
+	// GetDriverVersion will return the pxctl version from the node
+	GetDriverVersion() (string, error)
 
 	// RefreshDriverEndpoints refreshes volume driver endpoint
 	RefreshDriverEndpoints() error
@@ -118,8 +161,8 @@ type Driver interface {
 	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
 
-	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
-	SetReplicationFactor(vol *Volume, rf int64, opts ...Options) error
+	// SetReplicationFactor sets the volume's replication factor to the passed param rf and nodes.
+	SetReplicationFactor(vol *Volume, rf int64, nodesToBeUpdated []string, opts ...Options) error
 
 	// GetMaxReplicationFactor returns the max supported repl factor of a volume
 	GetMaxReplicationFactor() int64
@@ -131,7 +174,7 @@ type Driver interface {
 	GetAggregationLevel(vol *Volume) (int64, error)
 
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
-	GetClusterPairingInfo() (map[string]string, error)
+	GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error)
 
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error
@@ -150,10 +193,16 @@ type Driver interface {
 	ValidateVolumeSnapshotRestore(vol string, snapData *snapv1.VolumeSnapshotData, timeStart time.Time) error
 
 	// CollectDiags collects live diags on a node
-	CollectDiags(n node.Node) error
+	CollectDiags(n node.Node, config *DiagRequestConfig, diagOps DiagOps) error
 
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error
+
+	// ValidateRebalanceJobs validates rebalance jobs
+	ValidateRebalanceJobs() error
+
+	// ResizeStoragePoolByPercentage resizes the given stroage pool by percentage
+	ResizeStoragePoolByPercentage(string, api.SdkStoragePool_ResizeOperationType, uint64) error
 
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
@@ -163,6 +212,27 @@ type Driver interface {
 
 	// EstimatePoolExpandSize calculates expected volume size based on autopilot rule, initial and workload sizes
 	EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize, workloadSize uint64) (uint64, int, error)
+
+	// GetLicenseSummary returns the activated license SKU and Features
+	GetLicenseSummary() (LicenseSummary, error)
+
+	// SetClusterOpts sets cluster options
+	SetClusterOpts(n node.Node, rtOpts map[string]string) error
+
+	// ToggleCallHome toggles Call-home
+	ToggleCallHome(n node.Node, enabled bool) error
+
+	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
+	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
+
+	// ValidateStorageCluster validates all the storage cluster components
+	ValidateStorageCluster(endpointURL, endpointVersion string) error
+
+	// ExpandPool resizes a pool of a given ID
+	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+
+	// ListStoragePools lists all existing storage pools
+	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

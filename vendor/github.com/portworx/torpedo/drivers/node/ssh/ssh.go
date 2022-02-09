@@ -37,7 +37,6 @@ const (
 const (
 	execPodDaemonSetLabel   = "debug"
 	execPodDefaultNamespace = "kube-system"
-	defaultSpecsRoot        = "../drivers/scheduler/k8s/specs"
 )
 
 const (
@@ -52,6 +51,7 @@ type SSH struct {
 	password  string
 	keyPath   string
 	sshConfig *ssh_pkg.ClientConfig
+	specDir   string
 	// TODO keyPath-based ssh
 }
 
@@ -88,7 +88,8 @@ func useSSH() bool {
 }
 
 // Init initializes SSH node driver
-func (s *SSH) Init() error {
+func (s *SSH) Init(nodeOpts node.InitOptions) error {
+	s.specDir = nodeOpts.SpecDir
 
 	nodes := node.GetWorkerNodes()
 	var err error
@@ -124,8 +125,8 @@ func (s *SSH) initExecPod() error {
 	var ds *appsv1_api.DaemonSet
 	var err error
 	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
-		s, err := scheduler.Get(k8s_driver.SchedName)
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), s)
+		d, err := scheduler.Get(k8s_driver.SchedName)
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", s.specDir, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), d)
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
 		}
@@ -217,6 +218,7 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 
 // RebootNode reboots given node
 func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
+	logrus.Infof("Rebooting node %s", n.SchedulerNodeName)
 	rebootCmd := "sudo reboot"
 	if options.Force {
 		rebootCmd = rebootCmd + " -f"
@@ -229,6 +231,26 @@ func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
 		return &node.ErrFailedToRebootNode{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+
+	return nil
+}
+
+// CrashNode crashes given node
+func (s *SSH) CrashNode(n node.Node, options node.CrashNodeOpts) error {
+	logrus.Infof("Crashing node %s", n.SchedulerNodeName)
+	crashCmd := "echo c > /proc/sysrq-trigger"
+
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, options.ConnectionOpts, crashCmd, true)
+		return out, true, err
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+		return &node.ErrFailedToCrashNode{
 			Node:  n,
 			Cause: err.Error(),
 		}
@@ -323,6 +345,14 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	return output.(string), nil
 }
 
+// RunCommandWithNoRetry runs given command on given node but with no retries
+func (s *SSH) RunCommandWithNoRetry(n node.Node, command string, options node.ConnectionOpts) (string, error) {
+	if useSSH() {
+		return s.doCmdSSH(n, options, command, options.IgnoreError)
+	}
+	return s.doCmdUsingPodWithoutRetry(n, command)
+}
+
 // FindFiles finds files from give path on given node
 func (s *SSH) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	findCmd := "sudo find " + path
@@ -365,7 +395,10 @@ func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
-		return out, true, err
+		if err != nil {
+			return out, true, err
+		}
+		return out, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t,
@@ -379,6 +412,27 @@ func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 	return nil
 }
 
+// SystemctlUnitExist checks if a given service exists on the node
+func (s *SSH) SystemctlUnitExist(n node.Node, service string, options node.SystemctlOpts) (bool, error) {
+	systemctlCmd := fmt.Sprintf("sudo systemctl list-units --full --all | grep \"%s.service\" || true", service)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
+		if err != nil {
+			return out, true, err
+		}
+		return out, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, options.ConnectionOpts.Timeout, options.ConnectionOpts.TimeBeforeRetry)
+	if err != nil {
+		return false, &node.ErrFailedToRunSystemctlOnNode{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+
+	return len(out.(string)) > 0, nil
+}
+
 func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 
 	if useSSH() {
@@ -387,9 +441,8 @@ func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 	return s.doCmdUsingPod(n, options, cmd, ignoreErr)
 }
 
-func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error) {
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
-
 	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
 	if err != nil {
 		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
@@ -409,21 +462,45 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 			Cause: fmt.Sprintf("debug pod not found in node %v", n),
 		}
 	}
+	return k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
+}
 
+func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+	var debugPod *v1.Pod
 	t := func() (interface{}, bool, error) {
+		if debugPod == nil {
+			logrus.Debugf("Finding the debug pod to run command on node %s", n.Name)
+			allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
+			if err != nil {
+				logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+				return nil, true, err
+			}
+			for _, pod := range allPodsForNode.Items {
+				if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
+					debugPod = &pod
+					break
+				}
+			}
+		}
+		if debugPod == nil {
+			return nil, true, &node.ErrFailedToRunCommand{
+				Node:  n,
+				Cause: fmt.Sprintf("debug pod not found in node %v", n),
+			}
+		}
+		cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
+		logrus.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
-		if ignoreErr == false && err != nil {
+		if !ignoreErr && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node: n,
 				Cause: fmt.Sprintf("failed to run command in pod. command: %v , err: %v, pod: %v",
 					cmds, err, debugPod),
 			}
 		}
-
 		return output, false, nil
 	}
 
-	logrus.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
 		return "", err

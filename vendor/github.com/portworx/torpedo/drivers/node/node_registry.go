@@ -55,12 +55,39 @@ func GetWorkerNodes() []Node {
 	return nodeList
 }
 
+// GetMasterNodes returns only the master nodes/agent nodes
+func GetMasterNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if n.Type == TypeMaster {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetStorageDriverNodes returns only the worker node where storage
 // driver is installed
 func GetStorageDriverNodes() []Node {
 	var nodeList []Node
 	for _, n := range nodeRegistry {
 		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
+// IsStorageNode returns true if the node is a storage node, false otherwise
+func IsStorageNode(n Node) bool {
+	return len(n.StoragePools) > 0
+}
+
+// GetStorageNodes gets all the nodes with non-empty StoragePools
+func GetStorageNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if IsStorageNode(n) {
 			nodeList = append(nodeList, n)
 		}
 	}

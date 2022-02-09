@@ -2,13 +2,22 @@ package aututils
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/autopilot"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"strings"
+	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
+	eventCheckInterval                = 2 * time.Second
+	eventCheckTimeout                 = 30 * time.Minute
+	actionApprovalObjectCheckInterval = 1 * time.Second
+	actionApprovalObjectTimeout       = 30 * time.Second
+
 	// RuleScaleTypeAddDisk is name for add disk scale type
 	RuleScaleTypeAddDisk = "add-disk"
 	// RuleScaleTypeResizeDisk is name for resize disk scale type
@@ -27,13 +36,41 @@ const (
 	RuleActionsScalePercentage = "scalepercentage"
 	// RuleActionsScaleSize is name for scale size rule action
 	RuleActionsScaleSize = "scalesize"
-
 	// RuleScaleType is name for scale type
 	RuleScaleType = "scaletype"
+	// RulePoolProvDeviationPercKeyAlias is the key alias for pool provision deviation percentage
+	RulePoolProvDeviationPercKeyAlias = "PoolProvDeviationPerc"
+	// RulePoolUsageDeviationPercKeyAlias  is the key alias for pool usage deviation percentage
+	RulePoolUsageDeviationPercKeyAlias = "PoolUsageDeviationPerc"
 	// VolumeSpecAction is name for volume spec action
 	VolumeSpecAction = "openstorage.io.action.volume/resize"
 	// StorageSpecAction is name for storage spec action
 	StorageSpecAction = "openstorage.io.action.storagepool/expand"
+	// RebalanceSpecAction is name for rebalance spec action
+	RebalanceSpecAction = "openstorage.io.action.storagepool/rebalance"
+)
+
+var (
+	// AnyToTriggeredEvent is an event which contains "=> Triggered" message
+	AnyToTriggeredEvent = fmt.Sprintf(" => %s", apapi.RuleStateTriggered)
+	// NormalToTriggeredEvent is an event which contains "Normal => Triggered" message
+	NormalToTriggeredEvent = fmt.Sprintf("%s => %s", apapi.RuleStateNormal, apapi.RuleStateTriggered)
+	// TriggeredToActionAwaitingApprovalEvent is an event which contains "Triggered => ActionAwaitingApproval" message
+	TriggeredToActionAwaitingApprovalEvent = fmt.Sprintf("%s => %s", apapi.RuleStateTriggered, apapi.RuleStateActionAwaitingApproval)
+	// ActionDeclinedToTriggeredEvent is an event which contains "ActionDeclined => Triggered" message
+	ActionDeclinedToTriggeredEvent = fmt.Sprintf("%s => %s", apapi.RuleStateActionsDeclined, apapi.RuleStateTriggered)
+	// ActionAwaitingApprovalToActiveActionsPending is an event which contains "ActionAwaitingApproval => ActiveActionsPending" message
+	ActionAwaitingApprovalToActiveActionsPending = fmt.Sprintf("%s => %s", apapi.RuleStateActionAwaitingApproval, apapi.RuleStateActiveActionsPending)
+	// ActiveActionsPendingToActiveActionsInProgress is an event which contains "ActiveActionsPending => ActiveActionsInProgress" message
+	ActiveActionsPendingToActiveActionsInProgress = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsPending, apapi.RuleStateActiveActionsInProgress)
+	// ActiveActionsInProgressToActiveActionsPending is an event which contains "ActiveActionsInProgress => ActiveActionsPending" message
+	ActiveActionsInProgressToActiveActionsPending = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsInProgress, apapi.RuleStateActiveActionsPending)
+	// ActiveActionsInProgressToActiveActionsTaken is an event which contains "ActiveActionsInProgress => ActiveActionsTaken" message
+	ActiveActionsInProgressToActiveActionsTaken = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsInProgress, apapi.RuleStateActiveActionsTaken)
+	// ActiveActionTakenToNormalEvent is an event which contains "ActiveActionTaken => Normal" message
+	ActiveActionTakenToNormalEvent = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsTaken, apapi.RuleStateNormal)
+	// FailedToExecuteActionEvent is an event for failed action
+	FailedToExecuteActionEvent = "failed to execute Action for rule"
 )
 
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
@@ -72,7 +109,7 @@ func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, label
 
 // PoolRuleFixedScaleSizeByTotalSize returns an autopilot pool expand rule that
 // uses total pool size and fixed scale size action
-func PoolRuleFixedScaleSizeByTotalSize(total int, scaleSize, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
+func PoolRuleFixedScaleSizeByTotalSize(total uint64, scaleSize, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: fmt.Sprintf("pool-%s-fixedsize-%s-total-%d", expandType, strings.ToLower(scaleSize), total),
@@ -164,6 +201,66 @@ func PoolRuleFixedScaleSizeByAvailableCapacity(usage int, scaleSize, expandType 
 	}
 }
 
+// PoolRuleRebalanceByProvisionedMean returns an autopilot pool rebalance rule that
+// uses provision deviation percentage alias key
+func PoolRuleRebalanceByProvisionedMean(values []string, approvalRequired bool) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-rebalance-provisioned-mean-%s", strings.Join(values, "-")),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						KeyAlias: RulePoolProvDeviationPercKeyAlias,
+						Operator: apapi.LabelSelectorOpNotInRange,
+						Values:   values,
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: RebalanceSpecAction,
+				},
+			},
+		},
+	}
+	if approvalRequired {
+		apRuleObject.Spec.Enforcement = apapi.ApprovalRequired
+	}
+	return apRuleObject
+}
+
+// PoolRuleRebalanceByUsageMean returns an autopilot pool rebalance rule that
+// uses usage deviation percentage alias key
+func PoolRuleRebalanceByUsageMean(values []string, approvalRequired bool) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-rebalance-usage-mean-%s", strings.Join(values, "-")),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						KeyAlias: RulePoolUsageDeviationPercKeyAlias,
+						Operator: apapi.LabelSelectorOpNotInRange,
+						Values:   values,
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: RebalanceSpecAction,
+				},
+			},
+		},
+	}
+	if approvalRequired {
+		apRuleObject.Spec.Enforcement = apapi.ApprovalRequired
+	}
+	return apRuleObject
+}
+
 // PVCRuleByTotalSize resizes volume by its total size
 func PVCRuleByTotalSize(capacity int, scalePercentage int, maxSize string) apapi.AutopilotRule {
 	apRuleObject := apapi.AutopilotRule{
@@ -232,4 +329,81 @@ func PVCRuleByUsageCapacity(usagePercentage int, scalePercentage int, maxSize st
 		}
 	}
 	return apRuleObject
+}
+
+// WaitForAutopilotEvent waits for event which contains a reason and messages for given autopilot rule
+func WaitForAutopilotEvent(apRule apapi.AutopilotRule, reason string, messages []string) error {
+	t := func() (interface{}, bool, error) {
+		ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+		})
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		for _, ruleEvent := range ruleEvents.Items {
+			// skip old events and verify only events which were in last 20 seconds
+			if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-20 {
+				continue
+			}
+			ruleReasonFound := false
+			ruleMessageFound := false
+
+			if reason != "" {
+				if strings.Contains(ruleEvent.Reason, reason) {
+					ruleReasonFound = true
+				}
+			} else {
+				ruleReasonFound = true
+			}
+			for _, message := range messages {
+				if !strings.Contains(ruleEvent.Message, message) {
+					ruleMessageFound = false
+					break
+				} else {
+					ruleMessageFound = true
+				}
+			}
+			if ruleReasonFound && ruleMessageFound {
+				return nil, false, nil
+			}
+		}
+
+		return nil, true, fmt.Errorf("autopilot rule has no event with %s reason and %v message", reason, messages)
+	}
+	if _, err := task.DoRetryWithTimeout(t, eventCheckTimeout, eventCheckInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
+// WaitForActionApprovalsObjects waits until action approvals object shows up
+// if name is supplied it will wait for action approval object for the given name
+func WaitForActionApprovalsObjects(namespace, name string) error {
+	t := func() (interface{}, bool, error) {
+		actionApprovalsList, err := autopilot.Instance().ListActionApprovals(namespace)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		if len(actionApprovalsList.Items) == 0 {
+			return nil, true, fmt.Errorf("action approval object is empty")
+		}
+
+		if name != "" {
+			for _, actionApproval := range actionApprovalsList.Items {
+				if strings.Contains(name, actionApproval.Name) {
+					return nil, false, nil
+				}
+			}
+			return nil, true, fmt.Errorf("no action approval objects with %s name found", name)
+		}
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, actionApprovalObjectTimeout, actionApprovalObjectCheckInterval); err != nil {
+		return err
+	}
+	return nil
 }

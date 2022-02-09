@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"context"
 	"errors"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -23,6 +24,8 @@ var (
 	ErrEinval = errors.New("Invalid argument")
 	// ErrVolDetached returned when volume is in detached state
 	ErrVolDetached = errors.New("Volume is detached")
+	// ErrAttachedHostSpecNotFound returned when the attached host's spec is not found
+	ErrAttachedHostSpecNotFound = errors.New("Spec of the attached host is not found")
 	// ErrVolAttached returned when volume is in attached state
 	ErrVolAttached = errors.New("Volume is attached")
 	// ErrVolAttachedOnRemoteNode returned when volume is in attached on different node
@@ -66,6 +69,8 @@ const (
 	LocationConstraint = "LocationConstraint"
 	// LocalNode is an alias for this node - similar to localhost.
 	LocalNode = "LocalNode"
+	// FromTrashCan is a label that specified a volume being in the TrashCan
+	FromTrashCan = "FromTrashCan"
 )
 
 // Store defines the interface for basic volume store operations
@@ -139,6 +144,9 @@ type StatsDriver interface {
 	// VolumeUsageByNode returns capacity usage of all volumes and snaps for a
 	// given node
 	VolumeUsageByNode(nodeID string) (*api.VolumeUsageByNode, error)
+	// RelaxedReclaimPurge triggers the purge of RelaxedReclaim queue for a
+	// given node
+	RelaxedReclaimPurge(nodeID string) (*api.RelaxedReclaimPurge, error)
 }
 
 type QuiesceDriver interface {
@@ -208,6 +216,12 @@ type FilesystemTrimDriver interface {
 	// FilesystemTrimStatus returns the status of a filesystem trim
 	// background operation on a specified volume, if any
 	FilesystemTrimStatus(request *api.SdkFilesystemTrimStatusRequest) (*api.SdkFilesystemTrimStatusResponse, error)
+	// AutoFilesystemTrimStatus returns the status of auto fs trim
+	// operations on volumes
+	AutoFilesystemTrimStatus(request *api.SdkAutoFSTrimStatusRequest) (*api.SdkAutoFSTrimStatusResponse, error)
+	// AutoFilesystemTrimUsage returns the volume usage and trimmable
+	// space of locally mounted pxd volumes
+	AutoFilesystemTrimUsage(request *api.SdkAutoFSTrimUsageRequest) (*api.SdkAutoFSTrimUsageResponse, error)
 	// FilesystemTrimStop stops a filesystem trim background operation on
 	// a specified volume, if any
 	FilesystemTrimStop(request *api.SdkFilesystemTrimStopRequest) (*api.SdkFilesystemTrimStopResponse, error)
@@ -252,12 +266,12 @@ type ProtoDriver interface {
 	Delete(volumeID string) error
 	// Mount volume at specified path
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
-	Mount(volumeID string, mountPath string, options map[string]string) error
+	Mount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error
 	// MountedAt return volume mounted at specified mountpath.
-	MountedAt(mountPath string) string
+	MountedAt(ctx context.Context, mountPath string) string
 	// Unmount volume at specified path
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
-	Unmount(volumeID string, mountPath string, options map[string]string) error
+	Unmount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error
 	// Update not all fields of the spec are supported, ErrNotSupported will be thrown for unsupported
 	// updates.
 	Set(volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error
@@ -296,17 +310,19 @@ type BlockDriver interface {
 	// Attach map device to the host.
 	// On success the devicePath specifies location where the device is exported
 	// Errors ErrEnoEnt, ErrVolAttached may be returned.
-	Attach(volumeID string, attachOptions map[string]string) (string, error)
+	Attach(ctx context.Context, volumeID string, attachOptions map[string]string) (string, error)
 	// Detach device from the host.
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
-	Detach(volumeID string, options map[string]string) error
+	Detach(ctx context.Context, volumeID string, options map[string]string) error
 }
 
 // CredsDriver provides methods to handle credentials
 type CredsDriver interface {
 	// CredsCreate creates credential for a given cloud provider
 	CredsCreate(params map[string]string) (string, error)
-	// CredsList lists the configured credentials in the cluster
+	// CredsUpdate updates credential for an already configured credential
+	CredsUpdate(name string, params map[string]string) error
+	// CredsEnumerate lists the configured credentials in the cluster
 	CredsEnumerate() (map[string]interface{}, error)
 	// CredsDelete deletes the credential associated credUUID
 	CredsDelete(credUUID string) error

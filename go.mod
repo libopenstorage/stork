@@ -8,13 +8,14 @@ require (
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
 	github.com/Azure/azure-storage-blob-go v0.9.0
-	github.com/Azure/go-autorest/autorest v0.11.1
-	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2
-	github.com/Azure/go-autorest/autorest/to v0.3.0
+	github.com/Azure/go-autorest/autorest v0.11.13
+	github.com/Azure/go-autorest/autorest/azure/auth v0.5.5
+	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/aquilax/truncate v1.0.0
 	github.com/aws/aws-sdk-go v1.35.37
 	github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible // indirect
+	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/go-openapi/inflect v0.19.0
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/hashicorp/go-version v1.2.1
@@ -30,8 +31,9 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/portworx/kdmp v0.4.1-0.20220117074354-94dab8b8d98e
-	github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23
+	github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194 // indirect
+	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af // indirect
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220106041357-ccb13aed2f37
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sirupsen/logrus v1.8.1
@@ -43,7 +45,7 @@ require (
 	gocloud.dev v0.20.0
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	google.golang.org/api v0.30.0
-	google.golang.org/grpc v1.36.0
+	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.21.1
 	k8s.io/apiextensions-apiserver v0.21.1
@@ -67,11 +69,17 @@ replace (
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
 	github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
+	github.com/heptio/ark => github.com/heptio/ark v1.0.0
+	github.com/heptio/velero => github.com/heptio/velero v1.0.0
+	github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
 	github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220207235829-fb542b05ced2
+	github.com/libopenstorage/operator => github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220204053814-097a5af93b1e
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
 
@@ -98,6 +106,7 @@ replace (
 	k8s.io/kubernetes => k8s.io/kubernetes v1.20.11
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.20.4
 	k8s.io/metrics => k8s.io/metrics v0.20.11
+	k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
 	k8s.io/mount-utils => k8s.io/mount-utils v0.20.11
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.11
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.8.2

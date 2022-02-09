@@ -40,7 +40,7 @@ type StoragePool struct {
 
 // Node encapsulates a node in the cluster
 type Node struct {
-	api.StorageNode
+	*api.StorageNode
 	uuid                     string
 	VolDriverNodeID          string
 	Name                     string
@@ -64,6 +64,12 @@ type ConnectionOpts struct {
 
 // RebootNodeOpts provide additional options for reboot operation
 type RebootNodeOpts struct {
+	Force bool
+	ConnectionOpts
+}
+
+// CrashNodeOpts provide additional options for crash operation
+type CrashNodeOpts struct {
 	Force bool
 	ConnectionOpts
 }
@@ -99,10 +105,17 @@ var (
 	nodeDrivers = make(map[string]Driver)
 )
 
+// InitOptions initialization options
+type InitOptions struct {
+
+	// SpecDir app spec directory
+	SpecDir string
+}
+
 // Driver provides the node driver interface
 type Driver interface {
 	// Init initializes the node driver under the given scheduler
-	Init() error
+	Init(nodeOpts InitOptions) error
 
 	// DeleteNode deletes the given node
 	DeleteNode(node Node, timeout time.Duration) error
@@ -113,8 +126,14 @@ type Driver interface {
 	// RebootNode reboots the given node
 	RebootNode(node Node, options RebootNodeOpts) error
 
+	// CrashNode Crashes the given node
+	CrashNode(node Node, options CrashNodeOpts) error
+
 	// RunCommand runs the given command on the node and returns the output
 	RunCommand(node Node, command string, options ConnectionOpts) (string, error)
+
+	// RunCommandWithNoRetry runs the given command on the node but with no retry
+	RunCommandWithNoRetry(node Node, command string, options ConnectionOpts) (string, error)
 
 	// ShutdownNode shuts down the given node
 	ShutdownNode(node Node, options ShutdownNodeOpts) error
@@ -158,6 +177,9 @@ type Driver interface {
 
 	// PowerOffVM powers VM
 	PowerOffVM(node Node) error
+
+	// SystemctlUnitExist checks if a given service exists in a node
+	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 }
 
 // Register registers the given node driver
@@ -187,7 +209,7 @@ type notSupportedDriver struct{}
 // NotSupportedDriver provides the default driver with none of the operations supported
 var NotSupportedDriver = &notSupportedDriver{}
 
-func (d *notSupportedDriver) Init() error {
+func (d *notSupportedDriver) Init(nodeOpts InitOptions) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Init()",
@@ -205,10 +227,24 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	}
 }
 
+func (d *notSupportedDriver) CrashNode(node Node, options CrashNodeOpts) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CrashNode()",
+	}
+}
+
 func (d *notSupportedDriver) RunCommand(node Node, command string, options ConnectionOpts) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RunCommand()",
+	}
+}
+
+func (d *notSupportedDriver) RunCommandWithNoRetry(node Node, command string, options ConnectionOpts) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RunCommandWithNoRetry()",
 	}
 }
 
@@ -323,5 +359,12 @@ func (d *notSupportedDriver) RebootVM(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootVM()",
+	}
+}
+
+func (d *notSupportedDriver) SystemctlUnitExist(node Node, service string, options SystemctlOpts) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SystemctlUnitExist()",
 	}
 }
