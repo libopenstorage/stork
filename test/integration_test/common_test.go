@@ -156,7 +156,7 @@ func setup() error {
 		return fmt.Errorf("Error getting node driver %v: %v", nodeDriverName, err)
 	}
 
-	if err = nodeDriver.Init(); err != nil {
+	if err = nodeDriver.Init(node.InitOptions{}); err != nil {
 		return fmt.Errorf("Error initializing node driver %v: %v", nodeDriverName, err)
 	}
 
@@ -546,24 +546,34 @@ func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) e
 }
 
 func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
+	config := remoteFilePath
 	if reverse {
-		err := setSourceKubeConfig()
+		// err := setSourceKubeConfig()
+		// if err != nil {
+		// 	return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+		// }
+		// Change kubeconfig to source cluster
+		err := dumpRemoteKubeConfig(srcConfig)
 		if err != nil {
-			return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+			return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
 		}
 	} else {
-		err := setDestinationKubeConfig()
+		// err := setDestinationKubeConfig()
+		// if err != nil {
+		// 	return fmt.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+		// }
+		// Change kubeconfig to source cluster
+		err := dumpRemoteKubeConfig(destConfig)
 		if err != nil {
-			return fmt.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+			return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
 		}
 	}
 
-	info, err := volumeDriver.GetClusterPairingInfo()
+	info, err := volumeDriver.GetClusterPairingInfo(config)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
 	}
-
 	err = createClusterPair(info, skipStorage, resetConfig, clusterPairDir)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)
@@ -640,7 +650,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 	}
 
 	// Get cluster pair details for source cluster
-	srcInfo, err := volumeDriver.GetClusterPairingInfo()
+	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcConfig)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -672,7 +682,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 	}
 
 	// Get cluster pair details for destination cluster
-	destInfo, err := volumeDriver.GetClusterPairingInfo()
+	destInfo, err := volumeDriver.GetClusterPairingInfo(destConfig)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err

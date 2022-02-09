@@ -149,7 +149,7 @@ func setKind(snap *stork_api.ApplicationBackup) {
 // performRuleRecovery terminates potential background commands running pods for
 // all applicationBackup objects
 func (a *ApplicationBackupController) performRuleRecovery() error {
-	applicationBackups, err := storkops.Instance().ListApplicationBackups(v1.NamespaceAll)
+	applicationBackups, err := storkops.Instance().ListApplicationBackups(v1.NamespaceAll, metav1.ListOptions{})
 	if err != nil {
 		logrus.Errorf("Failed to list all application backups during rule recovery: %v", err)
 		return err

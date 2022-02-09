@@ -6,6 +6,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -54,7 +55,7 @@ func newGetBackupLocationCommand(cmdFactory Factory, ioStreams genericclioptions
 
 				var tempBackupLocations storkv1.BackupLocationList
 				for _, ns := range namespaces {
-					backupLocations, err := storkops.Instance().ListBackupLocations(ns)
+					backupLocations, err := storkops.Instance().ListBackupLocations(ns, v1.ListOptions{})
 					if err != nil {
 						util.CheckErr(err)
 						return
