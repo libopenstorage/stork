@@ -120,6 +120,10 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 	PortworxCsi:     "pxd.portworx.com",
 }
 
+var csiProvisionerOnly = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+	PortworxCsi:     "pxd.portworx.com",
+}
+
 var deleteVolumeLabelList = []string{
 	"auth-token",
 	"pv.kubernetes.io",
@@ -3155,5 +3159,5 @@ func getImageList(endpointURL, pxVersion, k8sVersion string) (map[string]string,
 
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &portworx{})
-	torpedovolume.Register(PureDriverName, provisioners, &pure{portworx: portworx{}})
+	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
 }
