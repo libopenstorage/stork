@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fio
+spec:
+  serviceName: fio
+  {{ if .Replicas }}
+  replicas: {{ .Replicas }}
+  {{ else }}
+  replicas: 1{{ end }}
+  selector:
+    matchLabels:
+      app: fio
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      schedulerName: stork
+      containers:
+      - name: fio
+        image: portworx/fio_drv
+        command: ["fio"]
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
+        args: ["/configs/fio.job", "--status-interval=1", "--eta=never", "--output=/logs/fio.log"]
+        volumeMounts:
+        - name: fio-config-vol
+          mountPath: /configs
+        - name: fio-data
+          mountPath: /scratch
+        - name: fio-log
+          mountPath: /logs
+      - name: grok
+        image: pwxvin/grok-exporter:v1.0.0-RC4
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: grok-port
+          containerPort: 9144
+          protocol: TCP
+        volumeMounts:
+        - name: grok-config-volume
+          mountPath: /etc/grok_exporter
+        - name: fio-log
+          mountPath: /logs
+      volumes:
+      - name: fio-config-vol
+        configMap:
+          name: fio-job-config
+      - name: grok-config-volume
+        configMap:
+          name: grok-exporter
+  volumeClaimTemplates:
+  - metadata:
+      name: fio-data
+    spec:
+      storageClassName: fio-sc
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+        {{ if .VolumeSize }}
+          storage: {{ .VolumeSize }}
+        {{ else }}
+          storage: 50Gi{{ end }}
+  - metadata:
+      name: fio-log
+    spec:
+      storageClassName: fio-log
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grok-exporter-svc
+  labels:
+      app: fio
+spec:
+  clusterIP: None
+  selector: 
+    app: fio
+  ports:
+  - name: grok-port
+    port: 9144
+    targetPort: 9144
