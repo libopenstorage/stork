@@ -1,0 +1,23 @@
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+  priority_io: "high"
+  io_profile: "db_remote"
+allowVolumeExpansion: true
+---
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-log
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+  priority_io: "high"
+  io_profile: "db_remote"
+allowVolumeExpansion: true
