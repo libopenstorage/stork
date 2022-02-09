@@ -35,6 +35,12 @@ const (
 	skipResource                = "stork.libopenstorage.org/skip-resource"
 	appsReplicas                = "stork.libopenstorage.org/replicas"
 	domainsMaxRetries           = 5
+
+	// StorkMigrationScheduleCopied indicating migrated migrationscheduleobject
+	StorkMigrationScheduleCopied = "stork.libopenstorage.org/static-copy-"
+	// StorkMigrationScheduleName is the annotation to keep track of child migration
+	// objects triggered by migration schedule
+	StorkMigrationScheduleName = "stork.libopenstorage.org/migration-schedule-name"
 )
 
 // NewMigrationSchedule creates a new instance of MigrationScheduleController.
@@ -113,7 +119,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 	}
 	migrationSchedule.Spec = setScheduleDefaults(migrationSchedule.Spec)
 	if migrationSchedule.GetAnnotations() != nil {
-		if _, ok := migrationSchedule.GetAnnotations()[StorkMigrationAnnotation]; ok {
+		if _, ok := migrationSchedule.GetAnnotations()[StorkMigrationScheduleCopied]; ok {
 			// check status of all migrated app in cluster
 			logrus.Infof("Migration schedule is on dr cluster")
 			isActivated, err := getMigratedAppStatus(migrationSchedule)
@@ -151,47 +157,50 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				err.Error())
 			return nil
 		}
-		migrSched, err := remoteOps.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
-		if errors.IsNotFound(err) {
-			// TODO:generate event?
-			namespace, err := core.Instance().GetNamespace(migrationSchedule.Namespace)
-			if err != nil {
-				return err
-			}
-			namespace.ResourceVersion = ""
-			_, err = coreOps.CreateNamespace(namespace)
-			if err != nil && !errors.IsAlreadyExists(err) {
-				return err
-			}
-			// create new
-			remoteMigrSched := migrationSchedule.DeepCopy()
-			remoteMigrSched.ResourceVersion = ""
-			if remoteMigrSched.Annotations == nil {
-				remoteMigrSched.Annotations = make(map[string]string)
-			}
-			remoteMigrSched.Annotations[StorkMigrationAnnotation] = "true"
-			suspend := true
-			remoteMigrSched.Spec.Suspend = &suspend
-			remoteMigrSched.Status = stork_api.MigrationScheduleStatus{}
-			if _, err := remoteOps.CreateMigrationSchedule(remoteMigrSched); err != nil {
-				return err
-			}
+		if migrationSchedule.Spec.AutoSuspend {
+			var remoteMigrSched *stork_api.MigrationSchedule
+			remoteMigrSched, err = remoteOps.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
+			if errors.IsNotFound(err) {
+				namespace, err := core.Instance().GetNamespace(migrationSchedule.Namespace)
+				if err != nil {
+					return err
+				}
+				namespace.ResourceVersion = ""
+				_, err = coreOps.CreateNamespace(namespace)
+				if err != nil && !errors.IsAlreadyExists(err) {
+					return err
+				}
+				// create new migrationschedule on remote cluster
+				remoteMigrSched = migrationSchedule.DeepCopy()
+				remoteMigrSched.ResourceVersion = ""
+				remoteMigrSched.UID = ""
+				if remoteMigrSched.Annotations == nil {
+					remoteMigrSched.Annotations = make(map[string]string)
+				}
+				remoteMigrSched.Annotations[StorkMigrationScheduleCopied] = "true"
+				suspend := true
+				remoteMigrSched.Spec.Suspend = &suspend
+				remoteMigrSched.Status = stork_api.MigrationScheduleStatus{}
+				if _, err := remoteOps.CreateMigrationSchedule(remoteMigrSched); err != nil {
+					return err
+				}
 
-		} else if err != nil {
-			return err
-		}
-		if migrSched.Status.ApplicationActivated {
-			suspend := true
-			migrationSchedule.Spec.Suspend = &suspend
-			msg := "Suspending migration schedule since migrated apps on remote cluster are active"
-			m.recorder.Event(migrationSchedule,
-				v1.EventTypeWarning,
-				"Suspended",
-				msg)
-			log.MigrationScheduleLog(migrationSchedule).Warn(msg)
-			// deactivate apps in namespace
-			// TODO: suspend deploy/sts,crds
-			return m.client.Update(context.TODO(), migrationSchedule)
+			} else if err != nil {
+				return err
+			}
+			if remoteMigrSched.Status.ApplicationActivated {
+				suspend := true
+				migrationSchedule.Spec.Suspend = &suspend
+				msg := "Suspending migration schedule since migrated apps on remote cluster are active"
+				m.recorder.Event(migrationSchedule,
+					v1.EventTypeWarning,
+					"Suspended",
+					msg)
+				log.MigrationScheduleLog(migrationSchedule).Warn(msg)
+				// deactivate apps in namespace
+				// TODO: suspend deploy/sts,crds
+				return m.client.Update(context.TODO(), migrationSchedule)
+			}
 		}
 	}
 	// First update the status of any pending migrations
@@ -441,7 +450,7 @@ func (m *MigrationScheduleController) startMigration(
 	for k, v := range migrationSchedule.Annotations {
 		migration.Annotations[k] = v
 	}
-	migration.Annotations[StorkMigrationName] = migrationSchedule.GetName()
+	migration.Annotations[StorkMigrationScheduleName] = migrationSchedule.GetName()
 	log.MigrationScheduleLog(migrationSchedule).Infof("Starting migration %s", migrationName)
 	_, err = storkops.Instance().CreateMigration(migration)
 	return err
