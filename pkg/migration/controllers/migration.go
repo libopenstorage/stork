@@ -209,47 +209,57 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		return nil
 	}
 
-	// TODO: verify if appActivated flags need to be set as default
 	migration.Spec = setDefaults(migration.Spec)
 
 	if migration.GetAnnotations() != nil {
-		remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
-		if err != nil {
-			return err
-		}
-		remoteOps, err := storkops.NewForConfig(remoteConfig)
-		if err != nil {
-			m.recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				err.Error())
-			return nil
-		}
-		// get remote cluster migration schedule object
-		migrSched, err := remoteOps.GetMigrationSchedule(migration.GetAnnotations()[StorkMigrationName], migration.Namespace)
-		if err != nil {
-			m.recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				err.Error())
-			return nil
-		}
-		// check status of migrated app on remote cluster
-		if migrSched.Status.ApplicationActivated {
-			migration.Status.Status = stork_api.MigrationStatusFailed
-			migration.Status.Stage = stork_api.MigrationStageFinal
-			migration.Status.FinishTimestamp = metav1.Now()
-			err = fmt.Errorf("migrated applications are active on remote cluster")
-			log.MigrationLog(migration).Errorf(err.Error())
-			m.recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				err.Error())
-			err = m.client.Update(context.Background(), migration)
+		if schedName, ok := migration.GetAnnotations()[StorkMigrationScheduleName]; ok {
+			remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 			if err != nil {
-				log.MigrationLog(migration).Errorf("Error updating")
+				return err
 			}
-			return nil
+			remoteOps, err := storkops.NewForConfig(remoteConfig)
+			if err != nil {
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					err.Error())
+				return nil
+			}
+			autoSuspend := true
+			// get remote cluster migration schedule object
+			remoteMigrSched, err := remoteOps.GetMigrationSchedule(schedName, migration.Namespace)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					// migrSchedule object not present on remote,
+					// that means autosuspend feature is disabled
+					autoSuspend = false
+				} else {
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					return nil
+				}
+			}
+			// check status of migrated app on remote cluster
+			// if apps are online mark status of current migration as failed
+			// if its in progress state
+			if autoSuspend && remoteMigrSched.Status.ApplicationActivated && migration.Status.Stage != stork_api.MigrationStageFinal {
+				migration.Status.Status = stork_api.MigrationStatusFailed
+				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
+				err = fmt.Errorf("migrated applications are active on remote cluster")
+				log.MigrationLog(migration).Errorf(err.Error())
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					err.Error())
+				err = m.client.Update(context.Background(), migration)
+				if err != nil {
+					log.MigrationLog(migration).Errorf("Error updating")
+				}
+				return nil
+			}
 		}
 	}
 

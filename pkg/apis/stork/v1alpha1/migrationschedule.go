@@ -16,6 +16,7 @@ type MigrationScheduleSpec struct {
 	Template           MigrationTemplateSpec `json:"template"`
 	SchedulePolicyName string                `json:"schedulePolicyName"`
 	Suspend            *bool                 `json:"suspend"`
+	AutoSuspend        bool                  `json:"autoSuspend"`
 }
 
 // MigrationTemplateSpec describes the data a Migration should have when created
