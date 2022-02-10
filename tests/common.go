@@ -141,6 +141,8 @@ const (
 	pairFileName   = "cluster-pair.yaml"
 	remotePairName = "remoteclusterpair"
 	remoteFilePath = "/tmp/kubeconfig"
+
+	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 )
 
 // Backup constants
@@ -188,7 +190,6 @@ const (
 )
 
 var (
-	errPureBlockNotSupported         = errors.New("pure_block pass through volume not supported")
 	errPureFileSnapshotNotSupported  = errors.New("snapshot feature is not supported for pure_file volumes")
 	errUnexpectedSizeChangeAfterFBIO = errors.New("the size change in bytes is not expected after write to FB volume")
 )
@@ -276,7 +277,7 @@ func InitInstance() {
 		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
 		if err == nil {
 			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
-				processError(fmt.Errorf("Not all details provided to update testrail"))
+				processError(fmt.Errorf("not all details provided to update testrail"))
 			}
 			testrailuttils.CreateMilestone()
 		}
@@ -287,7 +288,7 @@ func InitInstance() {
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
-	Step(fmt.Sprintf("validate cleanup of resources used by the test suite"), func() {
+	Step("validate cleanup of resources used by the test suite", func() {
 		t := func() (interface{}, bool, error) {
 			if err := Inst().V.ValidateVolumeCleanup(); err != nil {
 				return "", true, err
@@ -600,7 +601,7 @@ func ValidateFBSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 			})
 		}
-		Step(fmt.Sprintf("validating groupsnap for using pxctl"), func() {
+		Step("validating groupsnap for using pxctl", func() {
 			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
 			if err != nil {
 				expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
@@ -619,7 +620,7 @@ func ValidateResizeFBPVC(ctx *scheduler.Context, errChan ...*chan error) {
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("validating resizing pvcs"), func() {
+		Step("validating resizing pvcs", func() {
 			err = Inst().S.ResizePureVolumes(ctx)
 			if err != nil {
 				expect(err).ToNot(haveOccurred())
@@ -664,7 +665,7 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 			processError(err, errChan...)
 		})
 		byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Println(fmt.Sprintf("initially the byteUsed is %v", byteUsedInitial))
+		fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
 		// get the pod for this pvc
 		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
 
@@ -676,7 +677,7 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 		time.Sleep(125 * time.Second)
 
 		byteUsedafter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Println(fmt.Sprintf("after writing random bytes to the file the byteUsed is %v", byteUsedafter))
+		fmt.Printf("after writing random bytes to the file the byteUsed is %v\n", byteUsedafter)
 		err = fbVolumeExpectedSizechange(byteUsedafter - byteUsedInitial)
 		expect(err).NotTo(haveOccurred())
 
@@ -1066,7 +1067,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
 func DescribeNamespace(contexts []*scheduler.Context) {
-	context(fmt.Sprintf("generating namespace info..."), func() {
+	context("generating namespace info...", func() {
 		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
 			for _, ctx := range contexts {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
@@ -1136,7 +1137,14 @@ func GetStorageNodes() ([]node.Node, error) {
 
 // CollectSupport creates a support bundle
 func CollectSupport() {
-	context(fmt.Sprintf("generating support bundle..."), func() {
+	context("generating support bundle...", func() {
+		skipStr := os.Getenv(envSkipDiagCollection)
+		if skipStr != "" {
+			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
+				logrus.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
+				return
+			}
+		}
 		nodes := node.GetWorkerNodes()
 		expect(nodes).NotTo(beEmpty())
 
@@ -1196,8 +1204,8 @@ func runCmd(cmd string, n node.Node) {
 
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
-	context(fmt.Sprintf("checking for core files..."), func() {
-		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
+	context("checking for core files...", func() {
+		Step("verifying if core files are present on each node", func() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
@@ -2547,14 +2555,14 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		core.Instance().UpdateSecret(obj)
 		return nil
 	}
-	return fmt.Errorf("Spec is of unknown resource type")
+	return fmt.Errorf("spec is of unknown resource type")
 }
 
 // GetSourceClusterConfigPath returns kubeconfig for source
 func GetSourceClusterConfigPath() (string, error) {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	if kubeconfigs == "" {
-		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
+		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
@@ -2569,7 +2577,7 @@ func GetSourceClusterConfigPath() (string, error) {
 func GetDestinationClusterConfigPath() (string, error) {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	if kubeconfigs == "" {
-		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
+		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
@@ -3105,7 +3113,7 @@ func splitCsv(in string) ([]string, error) {
 	if err != nil || len(records) < 1 {
 		return []string{}, err
 	} else if len(records) > 1 {
-		return []string{}, fmt.Errorf("Multiline CSV not supported")
+		return []string{}, fmt.Errorf("multiline CSV not supported")
 	}
 	return records[0], err
 }
