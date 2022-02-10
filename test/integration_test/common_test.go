@@ -90,11 +90,13 @@ const (
 	defaultWaitInterval      time.Duration = 10 * time.Second
 	backupWaitInterval       time.Duration = 2 * time.Second
 
-	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
-	storageProvisioner       = "STORAGE_PROVISIONER"
-	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
-	backupPathVar            = "BACKUP_LOCATION_PATH"
-	externalTestCluster      = "EXTERNAL_TEST_CLUSTER"
+	enableClusterDomainTests        = "ENABLE_CLUSTER_DOMAIN_TESTS"
+	storageProvisioner              = "STORAGE_PROVISIONER"
+	authSecretConfigMap             = "AUTH_SECRET_CONFIGMAP"
+	backupPathVar                   = "BACKUP_LOCATION_PATH"
+	externalTestCluster             = "EXTERNAL_TEST_CLUSTER"
+	backupLocation                  = "backuplocation"
+	enableClusterPairBackupLocation = "ENABLE_CLUSTER_PAIR_BACKUP_LOCATION"
 
 	tokenKey    = "token"
 	clusterIP   = "ip"
@@ -545,7 +547,16 @@ func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) e
 	return nil
 }
 
-func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
+func scheduleClusterPair(t *testing.T, ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
+	info := make(map[string]string)
+	enabled, err := strconv.ParseBool(os.Getenv(enableClusterPairBackupLocation))
+	if enabled && err == nil {
+		bkp := "pair-backuplocation"
+		_, err := createBackupLocation(t, bkp, ctx.GetID(), defaultBackupLocation, defaultSecretName)
+		require.NoError(t, err, "Error creating backuplocation")
+		info[backupLocation] = bkp
+	}
+
 	if reverse {
 		err := setSourceKubeConfig()
 		if err != nil {
@@ -558,12 +569,11 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		}
 	}
 
-	info, err := volumeDriver.GetClusterPairingInfo()
+	info, err = volumeDriver.GetClusterPairingInfo()
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
 	}
-
 	err = createClusterPair(info, skipStorage, resetConfig, clusterPairDir)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)

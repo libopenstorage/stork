@@ -141,7 +141,7 @@ func triggerMigration(
 		preMigrationCtx = ctxs[0].DeepCopy()
 	}
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, pairReverse)
+	err = scheduleClusterPair(t, ctxs[0], skipStoragePair, true, defaultClusterPairDir, pairReverse)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -259,7 +259,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", true)
+	err = scheduleClusterPair(t, ctxsReverse[0], false, false, "cluster-pair-reverse", true)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -821,7 +821,7 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 		appCtxs = append(appCtxs, preMigrationCtx)
 
 		// create, apply and validate cluster pair specs
-		err = scheduleClusterPair(currCtxs[0], false, true, defaultClusterPairDir, false)
+		err = scheduleClusterPair(t, currCtxs[0], false, true, defaultClusterPairDir, false)
 		require.NoError(t, err, "Error scheduling cluster pair")
 		ctxs = append(ctxs, currCtxs...)
 

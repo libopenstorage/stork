@@ -61,7 +61,7 @@ func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStor
 	require.NoError(t, err, "Error waiting for app to get to running state")
 
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxs[0], false, true, defaultClusterPairDir, false)
+	err = scheduleClusterPair(t, ctxs[0], false, true, defaultClusterPairDir, false)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
