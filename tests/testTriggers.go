@@ -167,7 +167,12 @@ const (
 	// VolumesDelete deletes the columes of the context
 	VolumesDelete = "volumesDelete"
 	// CloudSnapShot takes local snap shot of the volumes
+	// CloudSnapShot takes cloud snapshot of the volumes
 	CloudSnapShot = "cloudSnapShot"
+	// LocalSnapShot takes local snapshot of the volumes
+	LocalSnapShot = "localSnapShot"
+	// DeleteLocalSnapShot deletes local snapshots of the volumes
+	DeleteLocalSnapShot = "deleteLocalSnapShot"
 	// EmailReporter notifies via email outcome of past events
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
@@ -871,7 +876,221 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 	})
 }
 
-// TriggerCloudSnapShot deploy cloudsnap apps and validates snapshot
+// TriggerLocalSnapShot takes local snapshots of the volumes and validates snapshot
+func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: LocalSnapShot,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Create and Validate LocalSnapshots", func() {
+
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			if strings.Contains(ctx.App.Key, "localsnap") {
+
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				logrus.Infof("Namespace : %v", appNamespace)
+
+				Step(fmt.Sprintf("create schedule policy for %s app", ctx.App.Key), func() {
+
+					policyName := "localintervalpolicy"
+
+					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+					if err != nil {
+						retain := 2
+						interval := getCloudSnapInterval(LocalSnapShot)
+						logrus.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+						schedPolicy = &storkv1.SchedulePolicy{
+							ObjectMeta: meta_v1.ObjectMeta{
+								Name: policyName,
+							},
+							Policy: storkv1.SchedulePolicyItem{
+								Interval: &storkv1.IntervalPolicy{
+									Retain:          storkv1.Retain(retain),
+									IntervalMinutes: interval,
+								},
+							}}
+
+						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+						logrus.Infof("Waiting for 10 mins for Snapshots to be completed")
+						time.Sleep(10 * time.Minute)
+					} else {
+						logrus.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+					}
+
+					UpdateOutcome(event, err)
+				})
+				logrus.Infof("Waiting for 2 mins for Snapshots to be completed")
+				time.Sleep(2 * time.Minute)
+
+				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					UpdateOutcome(event, err)
+					if len(appVolumes) == 0 {
+						UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+					}
+				})
+				logrus.Infof("Got volume count : %v", len(appVolumes))
+
+				snapshotScheduleRetryInterval := 10 * time.Second
+				snapshotScheduleRetryTimeout := 3 * time.Minute
+
+				for _, v := range appVolumes {
+					snapshotScheduleName := v.Name + "-interval-schedule"
+					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+						appNamespace,
+						snapshotScheduleRetryTimeout,
+						snapshotScheduleRetryInterval)
+					if err == nil {
+						for k, v := range snapStatuses {
+							logrus.Infof("Policy Type: %v", k)
+							for _, e := range v {
+								logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
+								logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
+								snapData, err := Inst().S.GetSnapShotData(ctx, e.Name, appNamespace)
+								UpdateOutcome(event, err)
+
+								snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+								logrus.Infof("Snapshot Type: %v", snapType)
+								if snapType != "local" {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+									}
+									UpdateOutcome(event, err)
+
+								}
+
+								snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+								logrus.Infof("Snapshot ID: %v", snapID)
+
+								if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+									len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+									}
+									UpdateOutcome(event, err)
+								}
+							}
+						}
+
+					} else {
+						logrus.Infof("Got error while getting volume snapshot status :%v", err.Error())
+					}
+					UpdateOutcome(event, err)
+				}
+
+			}
+
+		}
+
+	})
+
+}
+
+// TriggerDeleteLocalSnapShot deletes local snapshots and snapshot schedules
+func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: DeleteLocalSnapShot,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Delete Schedule Policy and LocalSnapshots and Validate", func() {
+
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+
+			if strings.Contains(ctx.App.Key, "localsnap") {
+
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				logrus.Infof("Namespace : %v", appNamespace)
+				Step(fmt.Sprintf("delete schedule policy for %s app", ctx.App.Key), func() {
+
+					policyName := "localintervalpolicy"
+					err := storkops.Instance().DeleteSchedulePolicy(policyName)
+					UpdateOutcome(event, err)
+					Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+						appVolumes, err = Inst().S.GetVolumes(ctx)
+						UpdateOutcome(event, err)
+						if len(appVolumes) == 0 {
+							UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+						}
+					})
+					snapshotScheduleRetryInterval := 10 * time.Second
+					snapshotScheduleRetryTimeout := 3 * time.Minute
+					for _, v := range appVolumes {
+						snapshotScheduleName := v.Name + "-interval-schedule"
+						logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+						snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+							appNamespace,
+							snapshotScheduleRetryTimeout,
+							snapshotScheduleRetryInterval)
+
+						if err == nil {
+							for _, v := range snapStatuses {
+								for _, e := range v {
+									logrus.Infof("Deleting ScheduledVolumeSnapShot: %v", e.Name)
+									err = Inst().S.DeleteSnapShot(ctx, e.Name, appNamespace)
+									UpdateOutcome(event, err)
+
+								}
+							}
+							err = storkops.Instance().DeleteSnapshotSchedule(snapshotScheduleName, appNamespace)
+							UpdateOutcome(event, err)
+
+						} else {
+							logrus.Infof("Got error while getting volume snapshot status :%v", err.Error())
+						}
+					}
+
+					snapshotList, err := Inst().S.GetShapShotsInNameSpace(ctx, appNamespace)
+					UpdateOutcome(event, err)
+					if len(snapshotList.Items) != 0 {
+						logrus.Infof("Failed to delete snapshots in namespace %v", appNamespace)
+						err = &scheduler.ErrFailedToDeleteTasks{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Failed to delete snapshots in namespace %v", appNamespace),
+						}
+						UpdateOutcome(event, err)
+
+					}
+
+				})
+			}
+		}
+
+	})
+
+}
+
+// TriggerCloudSnapShot deploy Interval Policy and validates snapshot
 func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	uuid := GenerateUUID()

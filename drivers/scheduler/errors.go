@@ -224,6 +224,42 @@ func (e *ErrFailedToGetVolumeParameters) Error() string {
 	return fmt.Sprintf("Failed to get volume parameters for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
+// ErrFailedToGetSnapShotData error type for failing to get snapshotdata of the volume
+type ErrFailedToGetSnapShotData struct {
+	// App is the app for which we failed to get volume parameters
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetSnapShotData) Error() string {
+	return fmt.Sprintf("Failed to get snapshot data for app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToGetSnapShot error type for failing to get snapshot of the volume
+type ErrFailedToGetSnapShot struct {
+	// App is the app for which we failed to get volume parameters
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetSnapShot) Error() string {
+	return fmt.Sprintf("Failed to get snapshot for app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToGetSnapShotDataName error type for failing to get snapshotdata name of the snapshot
+type ErrFailedToGetSnapShotDataName struct {
+	// App is the app for which we failed to get volume parameters
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetSnapShotDataName) Error() string {
+	return fmt.Sprintf("Failed to get snapshot data name for app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
 // ErrFailedToGetStorageStatus error type for failing to get the status of the app's storage
 type ErrFailedToGetStorageStatus struct {
 	// App whose storage status couldn't be obtained

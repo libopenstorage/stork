@@ -56,23 +56,25 @@ var _ = Describe("{Longevity}", func() {
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-		DeployApps:       TriggerDeployNewApps,
-		RebootNode:       TriggerRebootNodes,
-		CrashNode:        TriggerCrashNodes,
-		RestartVolDriver: TriggerRestartVolDriver,
-		CrashVolDriver:   TriggerCrashVolDriver,
-		HAIncrease:       TriggerHAIncrease,
-		HADecrease:       TriggerHADecrease,
-		VolumeClone:      TriggerVolumeClone,
-		VolumeResize:     TriggerVolumeResize,
-		EmailReporter:    TriggerEmailReporter,
-		AppTaskDown:      TriggerAppTaskDown,
-		CoreChecker:      TriggerCoreChecker,
-		CloudSnapShot:    TriggerCloudSnapShot,
-		PoolResizeDisk:   TriggerPoolResizeDisk,
-		PoolAddDisk:      TriggerPoolAddDisk,
-		UpgradeStork:     TriggerUpgradeStork,
-		VolumesDelete:    TriggerVolumeDelete,
+		DeployApps:          TriggerDeployNewApps,
+		RebootNode:          TriggerRebootNodes,
+		CrashNode:           TriggerCrashNodes,
+		RestartVolDriver:    TriggerRestartVolDriver,
+		CrashVolDriver:      TriggerCrashVolDriver,
+		HAIncrease:          TriggerHAIncrease,
+		HADecrease:          TriggerHADecrease,
+		VolumeClone:         TriggerVolumeClone,
+		VolumeResize:        TriggerVolumeResize,
+		EmailReporter:       TriggerEmailReporter,
+		AppTaskDown:         TriggerAppTaskDown,
+		CoreChecker:         TriggerCoreChecker,
+		CloudSnapShot:       TriggerCloudSnapShot,
+		LocalSnapShot:       TriggerLocalSnapShot,
+		DeleteLocalSnapShot: TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:      TriggerPoolResizeDisk,
+		PoolAddDisk:         TriggerPoolAddDisk,
+		UpgradeStork:        TriggerUpgradeStork,
+		VolumesDelete:       TriggerVolumeDelete,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -327,6 +329,8 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShot] = make(map[int]time.Duration)
 	triggerInterval[UpgradeStork] = make(map[int]time.Duration)
 	triggerInterval[VolumesDelete] = make(map[int]time.Duration)
+	triggerInterval[LocalSnapShot] = make(map[int]time.Duration)
+	triggerInterval[DeleteLocalSnapShot] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -567,12 +571,34 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShot][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShot][1] = 27 * baseInterval
 
+	triggerInterval[LocalSnapShot][10] = 1 * baseInterval
+	triggerInterval[LocalSnapShot][9] = 3 * baseInterval
+	triggerInterval[LocalSnapShot][8] = 6 * baseInterval
+	triggerInterval[LocalSnapShot][7] = 9 * baseInterval
+	triggerInterval[LocalSnapShot][6] = 12 * baseInterval
+	triggerInterval[LocalSnapShot][5] = 15 * baseInterval
+	triggerInterval[LocalSnapShot][4] = 18 * baseInterval
+	triggerInterval[LocalSnapShot][3] = 21 * baseInterval
+	triggerInterval[LocalSnapShot][2] = 24 * baseInterval
+	triggerInterval[LocalSnapShot][1] = 27 * baseInterval
+
+	triggerInterval[DeleteLocalSnapShot][10] = 1 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][9] = 3 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][8] = 6 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][7] = 9 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][6] = 12 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[DeleteLocalSnapShot][4] = 18 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][3] = 21 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][2] = 24 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][1] = 27 * baseInterval
+
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
 	triggerInterval[EmailReporter][8] = 3 * baseInterval
 	triggerInterval[EmailReporter][7] = 4 * baseInterval
 	triggerInterval[EmailReporter][6] = 5 * baseInterval
-	triggerInterval[EmailReporter][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[EmailReporter][5] = 6 * baseInterval
 	triggerInterval[EmailReporter][4] = 7 * baseInterval
 	triggerInterval[EmailReporter][3] = 8 * baseInterval
 	triggerInterval[EmailReporter][2] = 9 * baseInterval
@@ -674,7 +700,8 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShot][0] = 0
 	triggerInterval[UpgradeStork][0] = 0
 	triggerInterval[VolumesDelete][0] = 0
-
+	triggerInterval[LocalSnapShot][0] = 0
+	triggerInterval[DeleteLocalSnapShot][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

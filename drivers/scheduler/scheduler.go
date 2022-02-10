@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -180,6 +181,15 @@ type Driver interface {
 
 	// ValidateVolumes validates storage volumes in the provided context
 	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration, options *VolumeOptions) error
+
+	// GetSnapShotData retruns volumesnapshotdata
+	GetSnapShotData(ctx *Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error)
+
+	//DeleteSnapshots  delete the snapshots
+	DeleteSnapShot(ctx *Context, snapshotName, snapshotNameSpace string) error
+
+	//GetShapShotsInNameSpace get the snapshots list for the namespace
+	GetShapShotsInNameSpace(ctx *Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error)
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)
