@@ -504,14 +504,6 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	}
 }
 
-func (d *dcos) GetPureVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
-	// TODO: Add implementation
-	return nil, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetPureVolumes()",
-	}
-}
-
 func (d *dcos) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
@@ -534,14 +526,6 @@ func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ResizeVolume()",
-	}
-}
-
-func (d *dcos) ResizePureVolumes(cxt *scheduler.Context) error {
-	// TODO implement this method
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ResizePureVolumes()",
 	}
 }
 

@@ -582,7 +582,7 @@ func ValidateFBSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 
 		var vols []*volume.Volume
 		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
-			vols, err = Inst().S.GetPureVolumes(ctx)
+			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
 
@@ -621,7 +621,7 @@ func ValidateResizeFBPVC(ctx *scheduler.Context, errChan ...*chan error) {
 		})
 
 		Step("validating resizing pvcs", func() {
-			err = Inst().S.ResizePureVolumes(ctx)
+			_, err = Inst().S.ResizeVolume(ctx, "")
 			if err != nil {
 				expect(err).ToNot(haveOccurred())
 			}
@@ -640,7 +640,7 @@ func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan err
 		})
 		var vols []*volume.Volume
 		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
-			vols, err = Inst().S.GetPureVolumes(ctx)
+			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
 
@@ -661,7 +661,7 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 		})
 		var vols []*volume.Volume
 		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
-			vols, err = Inst().S.GetPureVolumes(ctx)
+			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
 		byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
