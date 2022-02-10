@@ -32,6 +32,7 @@ const (
 	azureSecretName      = "azuresecret"
 	googleSecretName     = "googlesecret"
 	prepare              = "prepare"
+	fio                  = "fio"
 	verify               = "verify"
 	secretNameKey        = "secret_name"
 	secretNamespaceKey   = "secret_namespace"
@@ -136,7 +137,7 @@ func triggerBackupRestoreTest(
 
 		// Add preparation pods after app context snapshot is ready
 		logrus.Infof("Prepare app %s for running", appKey)
-		prepareVerifyApp(t, ctxs, appKey, prepare)
+		prepareVerifyApp(t, ctxs, appKey, fio)
 
 		logrus.Infof("All Apps created %v. Starting backup.", ctx.GetID())
 
