@@ -27,19 +27,22 @@ const (
 	filter     = "filter"
 	prioritize = "prioritize"
 	// nodePriorityScore Score by which each node is bumped if it has data for a volume
-	nodePriorityScore = 100
+	nodePriorityScore float64 = 100
 	// rackPriorityScore Score by which each node is bumped if it is in the same
 	// rack as a node which has data for the volume
-	rackPriorityScore = 50
+	rackPriorityScore float64 = 50
 	// zonePriorityScore Score by which each node is bumped if it lies in the
 	// same zone as a node which has data for the volume
-	zonePriorityScore = 25
+	zonePriorityScore float64 = 25
 	// regionPriorityScore Score by which each node is bumped if it lies in the
 	// same region as a node which has data for the volume
-	regionPriorityScore = 10
+	regionPriorityScore float64 = 10
 	// defaultScore Score assigned to a node which doesn't have data for any volume
-	defaultScore                 = 5
-	schedulingFailureEventReason = "FailedScheduling"
+	defaultScore float64 = 5
+	// degradedNodeScorePenaltyPercentage is the percentage by which a node's score
+	// will take a hit if the node's status is degraded
+	degradedNodeScorePenaltyPercentage float64 = 50
+	schedulingFailureEventReason               = "FailedScheduling"
 	// annotation to check if only local nodes should be used to schedule a pod
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
 	// annotation to skip a volume and its local node replicas for scoring while
@@ -251,7 +254,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			for _, node := range args.Nodes.Items {
 				for _, driverNode := range driverNodes {
 					storklog.PodLog(pod).Debugf("nodeInfo: %v", driverNode)
-					if driverNode.Status == volume.NodeOnline &&
+					if (driverNode.Status == volume.NodeOnline || driverNode.Status == volume.NodeDegraded) &&
 						volume.IsNodeMatch(&node, driverNode) {
 						// If only nodes with replicas are to be preferred,
 						// filter out all nodes that don't have a replica
@@ -393,8 +396,8 @@ func (e *Extender) getNodeScore(
 	rackInfo *localityInfo,
 	zoneInfo *localityInfo,
 	regionInfo *localityInfo,
-	idMap map[string]*volume.NodeInfo,
-) int {
+	storageNode *volume.NodeInfo,
+) float64 {
 	for _, address := range node.Status.Addresses {
 		if address.Type != v1.NodeHostName {
 			continue
@@ -409,22 +412,39 @@ func (e *Extender) getNodeScore(
 					if zone == nodeZone || nodeZone == "" {
 						for _, rack := range rackInfo.PreferredLocality {
 							if rack == nodeRack || nodeRack == "" {
-								for _, datanode := range volumeInfo.DataNodes {
-									if volume.IsNodeMatch(&node, idMap[datanode]) {
+								for _, datanodeID := range volumeInfo.DataNodes {
+									if storageNode.StorageID == datanodeID {
+										if storageNode.Status == volume.NodeDegraded {
+											// Even if the volume data is local to the node
+											// the node is in degraded state. So the app won't benefit
+											// from hyperconvergence on this node. So we will not use
+											// the nodePriorityScore but instead rackPriorityScore and
+											// penalize based on that.
+											return rackPriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+										}
 										return nodePriorityScore
 									}
 								}
 								if nodeRack != "" {
+									if storageNode.Status == volume.NodeDegraded {
+										return rackPriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+									}
 									return rackPriorityScore
 								}
 							}
 						}
 						if nodeZone != "" {
+							if storageNode.Status == volume.NodeDegraded {
+								return zonePriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+							}
 							return zonePriorityScore
 						}
 					}
 				}
 				if nodeRegion != "" {
+					if storageNode.Status == volume.NodeDegraded {
+						return regionPriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+					}
 					return regionPriorityScore
 				}
 			}
@@ -509,12 +529,15 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			rackInfo.HostnameMap = make(map[string]string)
 			zoneInfo.HostnameMap = make(map[string]string)
 			regionInfo.HostnameMap = make(map[string]string)
+			// Create a map for k8s node index to StorageNode
+			k8sNodeIndexStorageNodeMap := make(map[int]*volume.NodeInfo)
 			for _, dnode := range driverNodes {
 				// Replace driver's hostname with the kubernetes hostname to make it
 				// easier to match nodes when calculating scores
-				for _, knode := range args.Nodes.Items {
+				for k8sNodeIndex, knode := range args.Nodes.Items {
 					if volume.IsNodeMatch(&knode, dnode) {
 						dnode.Hostname = e.getHostname(&knode)
+						k8sNodeIndexStorageNodeMap[k8sNodeIndex] = dnode
 						break
 					}
 				}
@@ -522,7 +545,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 				storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
 				// For any node that is offline remove the locality info so that we
 				// don't prioritize nodes close to it
-				if dnode.Status == volume.NodeOnline {
+				if dnode.Status == volume.NodeOnline || dnode.Status == volume.NodeDegraded {
 					// Add region info into zone and zone info into rack so that we can
 					// differentiate same names in different localities
 					regionInfo.HostnameMap[dnode.Hostname] = dnode.Region
@@ -577,8 +600,9 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 				storklog.PodLog(pod).Debugf("Volume %v allocated in zones: %v", volume.VolumeName, zoneInfo.PreferredLocality)
 				storklog.PodLog(pod).Debugf("Volume %v allocated in regions: %v", volume.VolumeName, regionInfo.PreferredLocality)
 
-				for _, node := range args.Nodes.Items {
-					priorityMap[node.Name] += e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, idMap)
+				for k8sNodeIndex, node := range args.Nodes.Items {
+					storageNode := k8sNodeIndexStorageNodeMap[k8sNodeIndex]
+					priorityMap[node.Name] += int(e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, storageNode))
 				}
 			}
 		}
@@ -591,7 +615,7 @@ sendResponse:
 	for _, node := range args.Nodes.Items {
 		score, ok := priorityMap[node.Name]
 		if !ok || score == 0 {
-			score = defaultScore
+			score = int(defaultScore)
 		}
 		hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: int64(score)}
 		respList = append(respList, hostPriority)
