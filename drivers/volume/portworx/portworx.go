@@ -40,7 +40,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
-	"github.com/portworx/kvdb"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -2333,7 +2332,7 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 	}
 
 	if err := clusterManager.DeletePair(pair.Status.RemoteStorageID); err != nil &&
-		err != kvdb.ErrNotFound {
+		!strings.Contains(err.Error(), "not found") {
 		// ignore not found errors, for everything else return the error
 		// back to the caller
 		return err

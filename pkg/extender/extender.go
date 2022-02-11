@@ -45,6 +45,8 @@ const (
 	// annotation to skip a volume and its local node replicas for scoring while
 	// scheduling a pod
 	skipScoringLabel = "stork.libopenstorage.org/skipSchedulerScoring"
+	// annotation to disable hyperconvergence for a pod
+	disableHyperconvergenceAnnotation = "stork.libopenstorage.org/disableHyperconvergence"
 )
 
 var (
@@ -469,99 +471,115 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
-	if err != nil {
-		msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
-		storklog.PodLog(pod).Warnf(msg)
-		e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
-		if _, ok := err.(*volume.ErrPVCPending); ok {
-			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
-			return
+	// Score all nodes the same if hyperconvergence is disabled
+	disableHyperconvergence := false
+	var err error
+	if pod.Annotations != nil {
+		if value, ok := pod.Annotations[disableHyperconvergenceAnnotation]; ok {
+			if disableHyperconvergence, err = strconv.ParseBool(value); err != nil {
+				disableHyperconvergence = false
+			}
 		}
+	}
+	if disableHyperconvergence {
 		goto sendResponse
-	} else if len(driverVolumes) > 0 {
-		driverNodes, err := e.Driver.GetNodes()
+	}
+
+	{ // Put these variables in their own scope so we can use the goto above
+		driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
 		if err != nil {
-			storklog.PodLog(pod).Errorf("Error getting nodes for driver: %v", err)
+			msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
+			storklog.PodLog(pod).Warnf(msg)
+			e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+			if _, ok := err.(*volume.ErrPVCPending); ok {
+				http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
+				return
+			}
 			goto sendResponse
-		}
-
-		// Create a map for ID->Node and Hostname->Rack/Zone/Region
-		idMap := make(map[string]*volume.NodeInfo)
-		var rackInfo, zoneInfo, regionInfo localityInfo
-		rackInfo.HostnameMap = make(map[string]string)
-		zoneInfo.HostnameMap = make(map[string]string)
-		regionInfo.HostnameMap = make(map[string]string)
-		for _, dnode := range driverNodes {
-			// Replace driver's hostname with the kubernetes hostname to make it
-			// easier to match nodes when calculating scores
-			for _, knode := range args.Nodes.Items {
-				if volume.IsNodeMatch(&knode, dnode) {
-					dnode.Hostname = e.getHostname(&knode)
-					break
-				}
+		} else if len(driverVolumes) > 0 {
+			driverNodes, err := e.Driver.GetNodes()
+			if err != nil {
+				storklog.PodLog(pod).Errorf("Error getting nodes for driver: %v", err)
+				goto sendResponse
 			}
-			idMap[dnode.StorageID] = dnode
-			storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
-			// For any node that is offline remove the locality info so that we
-			// don't prioritize nodes close to it
-			if dnode.Status == volume.NodeOnline {
-				// Add region info into zone and zone info into rack so that we can
-				// differentiate same names in different localities
-				regionInfo.HostnameMap[dnode.Hostname] = dnode.Region
-				if regionInfo.HostnameMap[dnode.Hostname] != "" {
-					zoneInfo.HostnameMap[dnode.Hostname] = regionInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Zone
+
+			// Create a map for ID->Node and Hostname->Rack/Zone/Region
+			idMap := make(map[string]*volume.NodeInfo)
+			var rackInfo, zoneInfo, regionInfo localityInfo
+			rackInfo.HostnameMap = make(map[string]string)
+			zoneInfo.HostnameMap = make(map[string]string)
+			regionInfo.HostnameMap = make(map[string]string)
+			for _, dnode := range driverNodes {
+				// Replace driver's hostname with the kubernetes hostname to make it
+				// easier to match nodes when calculating scores
+				for _, knode := range args.Nodes.Items {
+					if volume.IsNodeMatch(&knode, dnode) {
+						dnode.Hostname = e.getHostname(&knode)
+						break
+					}
+				}
+				idMap[dnode.StorageID] = dnode
+				storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
+				// For any node that is offline remove the locality info so that we
+				// don't prioritize nodes close to it
+				if dnode.Status == volume.NodeOnline {
+					// Add region info into zone and zone info into rack so that we can
+					// differentiate same names in different localities
+					regionInfo.HostnameMap[dnode.Hostname] = dnode.Region
+					if regionInfo.HostnameMap[dnode.Hostname] != "" {
+						zoneInfo.HostnameMap[dnode.Hostname] = regionInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Zone
+					} else {
+						zoneInfo.HostnameMap[dnode.Hostname] = dnode.Zone
+					}
+					if zoneInfo.HostnameMap[dnode.Hostname] != "" {
+						rackInfo.HostnameMap[dnode.Hostname] = zoneInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Rack
+					} else {
+						rackInfo.HostnameMap[dnode.Hostname] = dnode.Rack
+					}
 				} else {
-					zoneInfo.HostnameMap[dnode.Hostname] = dnode.Zone
+					rackInfo.HostnameMap[dnode.Hostname] = ""
+					zoneInfo.HostnameMap[dnode.Hostname] = ""
+					regionInfo.HostnameMap[dnode.Hostname] = ""
 				}
-				if zoneInfo.HostnameMap[dnode.Hostname] != "" {
-					rackInfo.HostnameMap[dnode.Hostname] = zoneInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Rack
-				} else {
-					rackInfo.HostnameMap[dnode.Hostname] = dnode.Rack
-				}
-			} else {
-				rackInfo.HostnameMap[dnode.Hostname] = ""
-				zoneInfo.HostnameMap[dnode.Hostname] = ""
-				regionInfo.HostnameMap[dnode.Hostname] = ""
 			}
-		}
 
-		storklog.PodLog(pod).Debugf("rackMap: %v", rackInfo.HostnameMap)
-		storklog.PodLog(pod).Debugf("zoneMap: %v", zoneInfo.HostnameMap)
-		storklog.PodLog(pod).Debugf("regionMap: %v", regionInfo.HostnameMap)
+			storklog.PodLog(pod).Debugf("rackMap: %v", rackInfo.HostnameMap)
+			storklog.PodLog(pod).Debugf("zoneMap: %v", zoneInfo.HostnameMap)
+			storklog.PodLog(pod).Debugf("regionMap: %v", regionInfo.HostnameMap)
 
-		for _, volume := range driverVolumes {
-			skipVolumeScoring := false
-			if value, exists := volume.Labels[skipScoringLabel]; exists {
-				if skipVolumeScoring, err = strconv.ParseBool(value); err != nil {
-					skipVolumeScoring = false
+			for _, volume := range driverVolumes {
+				skipVolumeScoring := false
+				if value, exists := volume.Labels[skipScoringLabel]; exists {
+					if skipVolumeScoring, err = strconv.ParseBool(value); err != nil {
+						skipVolumeScoring = false
+					}
 				}
-			}
-			if skipVolumeScoring {
-				storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
-				continue
-			}
-			storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
-			// Get the racks, zones and regions where the volume is located
-			rackInfo.PreferredLocality = rackInfo.PreferredLocality[:0]
-			zoneInfo.PreferredLocality = zoneInfo.PreferredLocality[:0]
-			regionInfo.PreferredLocality = regionInfo.PreferredLocality[:0]
-			for _, node := range volume.DataNodes {
-				if _, ok := idMap[node]; ok {
-					log.Debugf("ID: %v Hostname: %v", node, idMap[node].Hostname)
-					regionInfo.PreferredLocality = append(regionInfo.PreferredLocality, regionInfo.HostnameMap[idMap[node].Hostname])
-					zoneInfo.PreferredLocality = append(zoneInfo.PreferredLocality, zoneInfo.HostnameMap[idMap[node].Hostname])
-					rackInfo.PreferredLocality = append(rackInfo.PreferredLocality, rackInfo.HostnameMap[idMap[node].Hostname])
-				} else {
-					log.Warnf("Node %v not found in list of nodes, skipping", node)
+				if skipVolumeScoring {
+					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
+					continue
 				}
-			}
-			storklog.PodLog(pod).Debugf("Volume %v allocated on racks: %v", volume.VolumeName, rackInfo.PreferredLocality)
-			storklog.PodLog(pod).Debugf("Volume %v allocated in zones: %v", volume.VolumeName, zoneInfo.PreferredLocality)
-			storklog.PodLog(pod).Debugf("Volume %v allocated in regions: %v", volume.VolumeName, regionInfo.PreferredLocality)
+				storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
+				// Get the racks, zones and regions where the volume is located
+				rackInfo.PreferredLocality = rackInfo.PreferredLocality[:0]
+				zoneInfo.PreferredLocality = zoneInfo.PreferredLocality[:0]
+				regionInfo.PreferredLocality = regionInfo.PreferredLocality[:0]
+				for _, node := range volume.DataNodes {
+					if _, ok := idMap[node]; ok {
+						log.Debugf("ID: %v Hostname: %v", node, idMap[node].Hostname)
+						regionInfo.PreferredLocality = append(regionInfo.PreferredLocality, regionInfo.HostnameMap[idMap[node].Hostname])
+						zoneInfo.PreferredLocality = append(zoneInfo.PreferredLocality, zoneInfo.HostnameMap[idMap[node].Hostname])
+						rackInfo.PreferredLocality = append(rackInfo.PreferredLocality, rackInfo.HostnameMap[idMap[node].Hostname])
+					} else {
+						log.Warnf("Node %v not found in list of nodes, skipping", node)
+					}
+				}
+				storklog.PodLog(pod).Debugf("Volume %v allocated on racks: %v", volume.VolumeName, rackInfo.PreferredLocality)
+				storklog.PodLog(pod).Debugf("Volume %v allocated in zones: %v", volume.VolumeName, zoneInfo.PreferredLocality)
+				storklog.PodLog(pod).Debugf("Volume %v allocated in regions: %v", volume.VolumeName, regionInfo.PreferredLocality)
 
-			for _, node := range args.Nodes.Items {
-				priorityMap[node.Name] += e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, idMap)
+				for _, node := range args.Nodes.Items {
+					priorityMap[node.Name] += e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, idMap)
+				}
 			}
 		}
 	}

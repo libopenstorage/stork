@@ -158,9 +158,9 @@ func main() {
 			Name:  "pvc-watcher",
 			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
 		},
-		cli.BoolFlag{
+		cli.BoolTFlag{
 			Name:  "webhook-controller",
-			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: false)",
+			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: true)",
 		},
 		cli.StringFlag{
 			Name:  "webhook-skip-resources-annotation",
@@ -188,6 +188,11 @@ func main() {
 		cli.BoolTFlag{
 			Name:  "kdmp-controller",
 			Usage: "Start the kdmp controller (default: true)",
+		},
+		cli.IntFlag{
+			Name:  "migration-max-threads",
+			Value: 4,
+			Usage: "Max threads for apply resources during migration (default: 4)",
 		},
 	}
 
@@ -435,7 +440,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 				Recorder:          recorder,
 				ResourceCollector: resourceCollector,
 			}
-			if err := migration.Init(mgr, adminNamespace); err != nil {
+			if err := migration.Init(mgr, adminNamespace, c.Int("migration-max-threads")); err != nil {
 				log.Fatalf("Error initializing migration: %v", err)
 			}
 		}
