@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -760,6 +761,47 @@ var _ = Describe("{Shared4 service apps}", func() {
 		})
 	})
 
+	// Delete k8s service
+	Context("{Sharedv4SvcDeleteK8sService}", func() {
+		BeforeEach(func() {
+			testrailID = 55050
+			namespacePrefix = "deletek8s-"
+		})
+
+		It("has to delete k8s service", func() {
+			for _, ctx := range testSv4Contexts {
+				Step("Delete service and verify deletion", func() {
+					ns := ctx.GetID()
+
+					services, err := core.Instance().ListServices(ns, metav1.ListOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(len(services.Items)).To(Equal(1))
+
+					serviceName := services.Items[0].Name
+					core.Instance().DeleteService(serviceName, ns)
+
+					// verify the deletetionTimestamp is there
+					deletionTimestamp := getDeletionTimestampFromContext(ctx)
+					Expect(deletionTimestamp).NotTo(BeNil())
+				})
+
+				Step("rescale apps", func() {
+					scaleApp(ctx, 0)
+					ValidateContext(ctx)
+
+					scaleApp(ctx, numPods)
+					ValidateContext(ctx)
+				})
+
+				Step("get service and verify deletion is gone", func() {
+					// verify the deletetionTimestamp is empty
+					deletionTimestamp := getDeletionTimestampFromContext(ctx)
+					Expect(deletionTimestamp).To(BeNil())
+				})
+			}
+		})
+	})
+
 	// Template for additional tests
 	// Context("{}", func() {
 	// 	BeforeEach(func() {
@@ -1084,6 +1126,17 @@ func updateFailoverStrategyForApps(contexts []*scheduler.Context, val api.Shared
 		Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
 		Expect(apiVol.Spec.Sharedv4Spec.FailoverStrategy == val).To(BeTrue(), "unexpected failover strategy")
 	}
+}
+
+func getDeletionTimestampFromContext(ctx *scheduler.Context) *metav1.Time {
+	ns := ctx.GetID()
+	services, err := core.Instance().ListServices(ns, metav1.ListOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(services.Items)).To(Equal(1))
+
+	deletionTimestamp := services.Items[0].DeletionTimestamp
+	logrus.Infof("deletion timestamp: %v", deletionTimestamp)
+	return deletionTimestamp
 }
 
 func runCmd(cmd string, n node.Node) (string, error) {
