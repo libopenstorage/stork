@@ -30,6 +30,7 @@ import (
 const (
 	migrationRetryInterval = 10 * time.Second
 	migrationRetryTimeout  = 5 * time.Minute
+	rabbitmqNamespace      = "rabbitmq-operator-migration"
 )
 
 func TestMigration(t *testing.T) {
@@ -79,7 +80,8 @@ func testMigration(t *testing.T) {
 	t.Run("scaleTest", migrationScaleTest)
 	t.Run("suspendMigrationTest", suspendMigrationTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
-	t.Run("operatorMigrationTest", operatorMigrationTest)
+	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
+	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -1026,13 +1028,40 @@ func bidirectionalClusterPairTest(t *testing.T) {
 
 }
 
-func operatorMigrationTest(t *testing.T) {
+func operatorMigrationMongoTest(t *testing.T) {
 	triggerMigrationTest(
 		t,
 		"migration",
 		"mongo-operator",
 		nil,
 		"mongo-op-migration",
+		true,
+		true,
+		true,
+	)
+}
+
+func operatorMigrationRabbitmqTest(t *testing.T) {
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: rabbitmqNamespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/component": "rabbitmq-operator",
+				"app.kubernetes.io/name":      "rabbitmq-system",
+				"app.kubernetes.io/part-of":   "rabbitmq",
+			},
+		},
+	})
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create namespace %s for rabbitmq", rabbitmqNamespace)
+	}
+
+	triggerMigrationTest(
+		t,
+		"migration",
+		"rabbitmq-operator",
+		nil,
+		"rabbitmq-migration",
 		true,
 		true,
 		true,

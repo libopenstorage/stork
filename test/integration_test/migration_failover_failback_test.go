@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -33,13 +34,17 @@ func TestMigrationFailoverFailback(t *testing.T) {
 		},
 	}
 	_, err = core.Instance().CreateSecret(secret)
-	require.NoError(t, err, "failed to create secret for volumes")
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create secret for volumes")
+	}
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	_, err = core.Instance().CreateSecret(secret)
-	require.NoError(t, err, "failed to create secret for volumes")
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create secret for volumes")
+	}
 
 	t.Run("failoverAndFailbackMigrationTest", failoverAndFailbackMigrationTest)
 }
