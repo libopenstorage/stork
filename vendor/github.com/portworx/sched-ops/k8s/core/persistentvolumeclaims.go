@@ -269,7 +269,9 @@ func (c *Client) GetPersistentVolumeClaimParams(pvc *corev1.PersistentVolumeClai
 		return nil, fmt.Errorf("failed to get storage resource for pvc: %v", result.Name)
 	}
 
-	params["size"] = capacity.String()
+	// We explicitly send the unit with so the client can compare it with correct units
+	requestGB := uint64(roundUpSize(capacity.Value(), 1024*1024*1024))
+	params["size"] = fmt.Sprintf("%dG", requestGB)
 
 	sc, err := c.GetStorageClassForPVC(result)
 	if err != nil {

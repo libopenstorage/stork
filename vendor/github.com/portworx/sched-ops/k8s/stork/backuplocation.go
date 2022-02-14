@@ -18,7 +18,7 @@ type BackupLocationOps interface {
 	// GetBackupLocation gets the BackupLocation
 	GetBackupLocation(string, string) (*storkv1alpha1.BackupLocation, error)
 	// ListBackupLocations lists all the BackupLocations
-	ListBackupLocations(string) (*storkv1alpha1.BackupLocationList, error)
+	ListBackupLocations(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.BackupLocationList, error)
 	// UpdateBackupLocation updates the BackupLocation
 	UpdateBackupLocation(*storkv1alpha1.BackupLocation) (*storkv1alpha1.BackupLocation, error)
 	// DeleteBackupLocation deletes the BackupLocation
@@ -54,11 +54,11 @@ func (c *Client) GetBackupLocation(name string, namespace string) (*storkv1alpha
 }
 
 // ListBackupLocations lists all the BackupLocations
-func (c *Client) ListBackupLocations(namespace string) (*storkv1alpha1.BackupLocationList, error) {
+func (c *Client) ListBackupLocations(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.BackupLocationList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	backupLocations, err := c.stork.StorkV1alpha1().BackupLocations(namespace).List(context.TODO(), metav1.ListOptions{})
+	backupLocations, err := c.stork.StorkV1alpha1().BackupLocations(namespace).List(context.TODO(), filterOptions)
 	if err != nil {
 		return nil, err
 	}

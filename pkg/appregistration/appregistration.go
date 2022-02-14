@@ -253,8 +253,8 @@ func GetSupportedCRD() map[string][]stork_api.ApplicationResource {
 			},
 			KeepStatus: false,
 			SuspendOptions: stork_api.SuspendOptions{
-				Path: "spec.pxc.size",
-				Type: "int",
+				Path: "spec.pause",
+				Type: "bool",
 			},
 		},
 	}

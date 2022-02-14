@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	defaultIntervalSec   = 120
-	minimumIntervalSec   = 30
+	defaultIntervalSec = 120
+	minimumIntervalSec = 30
+	// This will result into a total 2.5 minutes of backoff
 	initialNodeWaitDelay = 10 * time.Second
-	nodeWaitFactor       = 1
+	nodeWaitFactor       = 2
 	nodeWaitSteps        = 5
 
 	storageDriverOfflineReason = "StorageDriverOffline"
@@ -153,6 +154,7 @@ func (m *Monitor) podMonitor() error {
 			storklog.PodLog(pod).Infof(msg)
 
 			// delete volume attachments if the node is down for this pod
+
 			err = m.cleanupVolumeAttachmentsByPod(pod)
 			if err != nil {
 				storklog.PodLog(pod).Errorf("Error cleaning up volume attachments: %v", err)
@@ -208,6 +210,9 @@ func (m *Monitor) driverMonitor() {
 			}
 			// lets all node to finish processing and then start sleep
 			m.wg.Wait()
+
+			// With this default sleep of 2 minutes and the backoff of 2.5 minutes
+			// stork will delete the pods if a driver is down within 4.5 minutes
 			time.Sleep(time.Duration(m.IntervalSec) * time.Second)
 		case <-m.stopChannel:
 			return
