@@ -646,6 +646,8 @@ func migrationPrinter(
 			volumeStatus := strconv.FormatUint(migration.Status.Summary.NumberOfMigratedVolumes, 10) +
 				"/" + strconv.FormatUint(migration.Status.Summary.TotalNumberOfVolumes, 10)
 
+			elapsed := "Volumes (" + migration.Status.Summary.ElapsedTimeForVolumeMigration + ") " +
+				"Resources (" + migration.Status.Summary.ElapsedTimeForResourceMigration + ")"
 			row = getRow(&migration,
 				[]interface{}{migration.Name,
 					migration.Spec.ClusterPair,
@@ -654,7 +656,7 @@ func migrationPrinter(
 					volumeStatus,
 					resourceStatus,
 					creationTime,
-					migration.Status.Summary.ElapsedTime,
+					elapsed,
 					strconv.FormatUint(migration.Status.Summary.TotalBytesMigrated, 10),
 				},
 			)

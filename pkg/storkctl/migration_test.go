@@ -150,18 +150,20 @@ func TestGetMigrationsWithSummary(t *testing.T) {
 	migration.Status.Stage = storkv1.MigrationStageFinal
 	migration.Status.Status = storkv1.MigrationStatusSuccessful
 	migration.Status.Summary = &storkv1.MigrationSummary{
-		TotalBytesMigrated:        uint64(12345),
-		TotalNumberOfVolumes:      uint64(5),
-		TotalNumberOfResources:    uint64(6),
-		NumberOfMigratedVolumes:   uint64(5),
-		NumberOfMigratedResources: uint64(6),
-		ElapsedTime:               "5m0s",
+		TotalBytesMigrated:              uint64(12345),
+		TotalNumberOfVolumes:            uint64(5),
+		TotalNumberOfResources:          uint64(6),
+		NumberOfMigratedVolumes:         uint64(5),
+		NumberOfMigratedResources:       uint64(6),
+		ElapsedTimeForVolumeMigration:   "5m0s",
+		ElapsedTimeForResourceMigration: "1m0s",
 	}
 	_, err = storkops.Instance().UpdateMigration(migration)
 	require.NoError(t, err, "Error updating migration")
 
-	expected := "NAME                     CLUSTERPAIR    STAGE   STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED   TOTAL BYTES TRANSFERRED\n" +
-		"getmigrationstatustest   clusterpair1   Final   Successful   5/5       6/6         " + toTimeString(migration.CreationTimestamp.Time) + "   5m0s      12345\n"
+	expected := "NAME                     CLUSTERPAIR    STAGE   STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED" +
+		"                           TOTAL BYTES TRANSFERRED\ngetmigrationstatustest   clusterpair1   Final" +
+		"   Successful   5/5       6/6         " + toTimeString(migration.CreationTimestamp.Time) + "   Volumes (5m0s) Resources (1m0s)   12345\n"
 	cmdArgs := []string{"get", "migrations", "getmigrationstatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
