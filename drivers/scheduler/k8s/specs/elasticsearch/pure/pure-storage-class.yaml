@@ -1,0 +1,15 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: elasticsearch-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  iops_limit: "30000"
+  bandwidth_limit: "10G"
+  csi.storage.k8s.io/fstype: ext4
+  createoptions: -b 4096
+mountOptions:
+  - nosuid
+  - discard
+allowVolumeExpansion: true

@@ -1,0 +1,23 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wordpress-sc-legacy-shared
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  iops_limit: "30000"
+  bandwidth_limit: "10G"
+  csi.storage.k8s.io/fstype: xfs
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wordpress-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  iops_limit: "30000"
+  bandwidth_limit: "10G"
+  csi.storage.k8s.io/fstype: xfs
+allowVolumeExpansion: true

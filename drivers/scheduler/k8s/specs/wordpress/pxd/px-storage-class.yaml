@@ -13,7 +13,7 @@ allowVolumeExpansion: true
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: worpress-sc
+  name: wordpress-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"

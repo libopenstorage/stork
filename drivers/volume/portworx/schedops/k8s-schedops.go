@@ -67,6 +67,11 @@ const (
 	talismanServiceAccount      = "talisman-account"
 	talismanImage               = "portworx/talisman:latest"
 	rancherControlPlaneLabelKey = "node-role.kubernetes.io/controlplane"
+
+	// pureVolumeOUID is used to identify if a mapper device is of Pure origin
+	// (if it leads with /dev/mapper/3624a9370, it's a Pure volume, if it's some other prefix it's not)
+	pureVolumeOUID = "3624a9370"
+	pureMapperPrefix = "/dev/mapper/"+pureVolumeOUID
 )
 
 const (
@@ -321,7 +326,7 @@ PodLoop:
 			}
 			mounts := strings.Split(output, "\n")
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s ", path))
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s ", pureMapperPrefix, path))
 				pxMountFound := false
 				for _, line := range mounts {
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
@@ -329,8 +334,17 @@ PodLoop:
 					if len(pxMounts) > 0 {
 						logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
 						pxMountFound = true
+
+						// If we encounter a Pure volume, we should skip the host mount check as we can't get the
+						// volume serial to confirm which volume it is (which is what the path contains)
+						if strings.Contains(line, pureMapperPrefix) {
+							skipHostMountCheck = true
+						}
+
 						// in case there are two pods running with non shared volume, one of them will be in read-only
-						skipHostMountCheck = isMountReadOnly(line)
+						if isMountReadOnly(line) {
+							skipHostMountCheck = true
+						}
 						break
 					}
 				}
@@ -343,6 +357,7 @@ PodLoop:
 		}
 
 		if skipHostMountCheck {
+			validatedMountPods = append(validatedMountPods, pod.Name)
 			continue
 		}
 

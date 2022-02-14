@@ -120,6 +120,10 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 	PortworxCsi:     "pxd.portworx.com",
 }
 
+var csiProvisionerOnly = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+	PortworxCsi:     "pxd.portworx.com",
+}
+
 var deleteVolumeLabelList = []string{
 	"auth-token",
 	"pv.kubernetes.io",
@@ -240,7 +244,8 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
+// init is all the functionality of Init, but allowing you to set a custom driver name
+func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string) error {
 	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
 
@@ -286,19 +291,23 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 			n.Status,
 		)
 	}
-	torpedovolume.StorageDriver = DriverName
+	torpedovolume.StorageDriver = driverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
 			torpedovolume.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
+			return fmt.Errorf("driver %s, does not support provisioner %s", driverName, storageProvisioner)
 		}
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
 	}
 
 	return nil
+}
+
+func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
+	return d.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, DriverName)
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
@@ -3150,4 +3159,5 @@ func getImageList(endpointURL, pxVersion, k8sVersion string) (map[string]string,
 
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &portworx{})
+	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
 }
