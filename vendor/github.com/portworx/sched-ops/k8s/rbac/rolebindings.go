@@ -17,6 +17,8 @@ type RoleBindingOps interface {
 	GetRoleBinding(name, namespace string) (*rbacv1.RoleBinding, error)
 	// DeleteRoleBinding deletes the given role binding
 	DeleteRoleBinding(name, namespace string) error
+	// ListRoleBinding returns the list of role bindings
+	ListRoleBinding(namespace string, filterOptions metav1.ListOptions) (*rbacv1.RoleBindingList, error)
 }
 
 // CreateRoleBinding creates the given role binding
@@ -55,4 +57,13 @@ func (c *Client) DeleteRoleBinding(name, namespace string) error {
 	return c.rbac.RoleBindings(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+// ListRoleBinding returns the list of role bindings
+func (c *Client) ListRoleBinding(namespace string, filterOptions metav1.ListOptions) (*rbacv1.RoleBindingList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.rbac.RoleBindings(namespace).List(context.TODO(), filterOptions)
 }

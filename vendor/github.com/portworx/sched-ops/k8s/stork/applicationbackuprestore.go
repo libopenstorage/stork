@@ -20,7 +20,7 @@ type ApplicationBackupRestoreOps interface {
 	// GetApplicationBackup gets the ApplicationBackup
 	GetApplicationBackup(string, string) (*storkv1alpha1.ApplicationBackup, error)
 	// ListApplicationBackups lists all the ApplicationBackups
-	ListApplicationBackups(string) (*storkv1alpha1.ApplicationBackupList, error)
+	ListApplicationBackups(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.ApplicationBackupList, error)
 	// UpdateApplicationBackup updates the ApplicationBackup
 	UpdateApplicationBackup(*storkv1alpha1.ApplicationBackup) (*storkv1alpha1.ApplicationBackup, error)
 	// DeleteApplicationBackup deletes the ApplicationBackup
@@ -34,7 +34,7 @@ type ApplicationBackupRestoreOps interface {
 	// GetApplicationRestore gets the ApplicationRestore
 	GetApplicationRestore(string, string) (*storkv1alpha1.ApplicationRestore, error)
 	// ListApplicationRestores lists all the ApplicationRestores
-	ListApplicationRestores(string) (*storkv1alpha1.ApplicationRestoreList, error)
+	ListApplicationRestores(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.ApplicationRestoreList, error)
 	// UpdateApplicationRestore updates the ApplicationRestore
 	UpdateApplicationRestore(*storkv1alpha1.ApplicationRestore) (*storkv1alpha1.ApplicationRestore, error)
 	// DeleteApplicationRestore deletes the ApplicationRestore
@@ -50,7 +50,7 @@ type ApplicationBackupRestoreOps interface {
 	// UpdateApplicationBackupSchedule updates the ApplicationBackupSchedule
 	UpdateApplicationBackupSchedule(*storkv1alpha1.ApplicationBackupSchedule) (*storkv1alpha1.ApplicationBackupSchedule, error)
 	// ListApplicationBackupSchedules lists all the ApplicationBackupSchedules
-	ListApplicationBackupSchedules(string) (*storkv1alpha1.ApplicationBackupScheduleList, error)
+	ListApplicationBackupSchedules(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.ApplicationBackupScheduleList, error)
 	// DeleteApplicationBackupSchedule deletes the ApplicationBackupSchedule
 	DeleteApplicationBackupSchedule(string, string) error
 	// ValidateApplicationBackupSchedule validates the given ApplicationBackupSchedule. It checks the status of each of
@@ -80,11 +80,11 @@ func (c *Client) GetApplicationBackup(name string, namespace string) (*storkv1al
 }
 
 // ListApplicationBackups lists all the ApplicationBackups
-func (c *Client) ListApplicationBackups(namespace string) (*storkv1alpha1.ApplicationBackupList, error) {
+func (c *Client) ListApplicationBackups(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.ApplicationBackupList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).List(context.TODO(), filterOptions)
 }
 
 // DeleteApplicationBackup deletes the ApplicationBackup
@@ -143,11 +143,11 @@ func (c *Client) GetApplicationRestore(name string, namespace string) (*storkv1a
 }
 
 // ListApplicationRestores lists all the ApplicationRestores
-func (c *Client) ListApplicationRestores(namespace string) (*storkv1alpha1.ApplicationRestoreList, error) {
+func (c *Client) ListApplicationRestores(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.ApplicationRestoreList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).List(context.TODO(), filterOptions)
 }
 
 // CreateApplicationRestore creates the ApplicationRestore
@@ -216,11 +216,11 @@ func (c *Client) GetApplicationBackupSchedule(name string, namespace string) (*s
 }
 
 // ListApplicationBackupSchedules lists all the ApplicationBackupSchedules
-func (c *Client) ListApplicationBackupSchedules(namespace string) (*storkv1alpha1.ApplicationBackupScheduleList, error) {
+func (c *Client) ListApplicationBackupSchedules(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.ApplicationBackupScheduleList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).List(context.TODO(), filterOptions)
 }
 
 // CreateApplicationBackupSchedule creates an ApplicationBackupSchedule

@@ -77,6 +77,7 @@ func testMigration(t *testing.T) {
 	}
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
+	t.Run("suspendMigrationTest", suspendMigrationTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
 	t.Run("operatorMigrationTest", operatorMigrationTest)
 
@@ -1175,4 +1176,75 @@ func getStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
 		return "", fmt.Errorf("PVC: %s does not have a storage class", pvc.Name)
 	}
 	return scName, nil
+}
+
+func suspendMigrationTest(t *testing.T) {
+	var err error
+	var namespace string
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	// the schedule interval for these specs it set to 5 minutes
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"mysql-migration-schedule-interval",
+		"mysql-1-pvc",
+		[]string{"cassandra"},
+		[]string{"mysql-migration-schedule-interval"},
+		true,
+		false,
+		false,
+		false,
+	)
+
+	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// start sts on dr cluster
+	for _, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			scale := int32(1)
+			sts, err := apps.Instance().GetStatefulSet(obj.GetName(), obj.GetNamespace())
+			require.NoError(t, err, "Error retriving sts: %s/%s", obj.GetNamespace(), obj.GetName())
+			sts.Spec.Replicas = &scale
+			namespace = obj.GetNamespace()
+			_, err = apps.Instance().UpdateStatefulSet(sts)
+			require.NoError(t, err, "Error updating sts: %s/%s", obj.GetNamespace(), obj.GetName())
+			break
+		}
+	}
+
+	// verify migration status on DR cluster
+	migrSched, err := storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval", namespace)
+	require.NoError(t, err, "failed to retrive migration schedule: %v", err)
+
+	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
+		// fail test
+		suspendErr := fmt.Errorf("migrationschedule is not in suspended state on DR cluster: %s/%s", migrSched.GetName(), migrSched.GetNamespace())
+		require.NoError(t, err, "Failed: %v", suspendErr)
+	}
+
+	// validate if migrationschedule is suspended on source cluster
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	migrSched, err = storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval", namespace)
+	require.NoError(t, err, "failed to retrive migration schedule: %v", err)
+
+	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
+		// fail test
+		suspendErr := fmt.Errorf("migrationschedule is not suspended on source cluster : %s/%s", migrSched.GetName(), migrSched.GetNamespace())
+		require.NoError(t, err, "Failed: %v", suspendErr)
+	}
+
+	logrus.Infof("Successfully verified suspend migration case")
+
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
 }
