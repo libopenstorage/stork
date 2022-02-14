@@ -434,7 +434,7 @@ func updateIBPObjects(kind string, namespace string, activate bool, ioStreams ge
 }
 
 func updateCronJobObjects(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	cronJobs, err := batch.Instance().ListCronJobs(namespace)
+	cronJobs, err := batch.Instance().ListCronJobs(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
 		return

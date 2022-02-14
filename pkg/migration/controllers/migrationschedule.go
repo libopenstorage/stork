@@ -37,7 +37,7 @@ const (
 	domainsMaxRetries           = 5
 
 	// StorkMigrationScheduleCopied indicating migrated migrationscheduleobject
-	StorkMigrationScheduleCopied = "stork.libopenstorage.org/static-copy-"
+	StorkMigrationScheduleCopied = "stork.libopenstorage.org/static-copy"
 	// StorkMigrationScheduleName is the annotation to keep track of child migration
 	// objects triggered by migration schedule
 	StorkMigrationScheduleName = "stork.libopenstorage.org/migration-schedule-name"
@@ -121,7 +121,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 	if migrationSchedule.GetAnnotations() != nil {
 		if _, ok := migrationSchedule.GetAnnotations()[StorkMigrationScheduleCopied]; ok {
 			// check status of all migrated app in cluster
-			logrus.Infof("Migration schedule is on dr cluster")
+			logrus.Infof("Migration schedule is on dr cluster, checking migrated app status")
 			isActivated, err := getMigratedAppStatus(migrationSchedule)
 			if err != nil {
 				return err
@@ -134,6 +134,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				msg)
 			log.MigrationScheduleLog(migrationSchedule).Warn(msg)
 			return m.client.Update(context.TODO(), migrationSchedule)
+
 		}
 	}
 	if !(*migrationSchedule.Spec.Suspend) {
