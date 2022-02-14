@@ -41,6 +41,8 @@ type StatefulSetOps interface {
 	GetPVCsForStatefulSet(ss *appsv1.StatefulSet) (*corev1.PersistentVolumeClaimList, error)
 	// ValidatePVCsForStatefulSet validates the PVCs for the given stateful set
 	ValidatePVCsForStatefulSet(ss *appsv1.StatefulSet, timeout, retryInterval time.Duration) error
+	// DeleteStatefulSetPods deletes pods for the given statefulset name and namespace
+	DeleteStatefulSetPods(name, namespace string, timeout time.Duration) error
 }
 
 // ListStatefulSets lists all the statefulsets for a given namespace
@@ -326,5 +328,28 @@ func (c *Client) validatePersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+// DeleteStatefulSetPods deletes pods for the given statefulset name and namespace
+func (c *Client) DeleteStatefulSetPods(name, namespace string, timeout time.Duration) error {
+	sset, err := c.GetStatefulSet(name, namespace)
+	if err != nil {
+		return err
+	}
+
+	pods, err := c.GetStatefulSetPods(sset)
+	if err != nil {
+		return err
+	}
+
+	if err := common.DeletePods(c.core, pods, false); err != nil {
+		return err
+	}
+
+	if err := common.WaitForPodsToBeDeleted(c.core, pods, timeout); err != nil {
+		return fmt.Errorf("Failed to wait for pods to be deleted, Err: %v", err)
+	}
+
 	return nil
 }
