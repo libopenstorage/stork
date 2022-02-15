@@ -116,7 +116,7 @@ func Kubectl(arguments []string) error {
 	}
 	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	logrus.Debugf("%s", string(output))
+	logrus.Debugf("command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}

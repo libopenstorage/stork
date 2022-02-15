@@ -121,7 +121,7 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 }
 
 var csiProvisionerOnly = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	PortworxCsi:     "pxd.portworx.com",
+	PortworxCsi: "pxd.portworx.com",
 }
 
 var deleteVolumeLabelList = []string{
@@ -860,6 +860,7 @@ func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]s
 		refreshEndpoint, _ := strconv.ParseBool(val)
 		d.refreshEndpoint = refreshEndpoint
 	}
+
 	volDriver := d.getVolDriver()
 	_, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "_snapshot"})
 	if err != nil {

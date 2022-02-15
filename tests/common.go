@@ -190,8 +190,9 @@ const (
 )
 
 var (
-	errPureFileSnapshotNotSupported  = errors.New("snapshot feature is not supported for pure_file volumes")
-	errUnexpectedSizeChangeAfterFBIO = errors.New("the size change in bytes is not expected after write to FB volume")
+	errPureFileSnapshotNotSupported    = errors.New("snapshot feature is not supported for pure_file volumes")
+	errPureCloudsnapNotSupported       = errors.New("cloudsnap feature is not supported for pure volumes")
+	errUnexpectedSizeChangeAfterPureIO = errors.New("the size change in bytes is not expected after write to Pure volume")
 )
 
 var (
@@ -386,13 +387,13 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		}
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidateFBSnapshotsSDK(ctx, errChan...)
+				ValidatePureSnapshotsSDK(ctx, errChan...)
 			}
 		})
 
 		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidateResizeFBPVC(ctx, errChan...)
+				ValidateResizePurePVC(ctx, errChan...)
 			}
 		})
 
@@ -401,9 +402,9 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("validate %s app's volums statstics ", ctx.App.Key), func() {
+		Step(fmt.Sprintf("validate %s app's volumes statistics ", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidateVolumeStatsticsDynamicUpdate(ctx, errChan...)
+				ValidatePureVolumeStatisticsDynamicUpdate(ctx, errChan...)
 			}
 		})
 
@@ -449,13 +450,13 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 		Step(fmt.Sprintf("validate %s app's volumes for pxctl", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidateFBSnapshotsPXCTL(ctx, errChan...)
+				ValidatePureSnapshotsPXCTL(ctx, errChan...)
 			}
 		})
 
 		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidateResizeFBPVC(ctx, errChan...)
+				ValidateResizePurePVC(ctx, errChan...)
 			}
 		})
 
@@ -464,9 +465,9 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("validate %s app's volums statstics ", ctx.App.Key), func() {
+		Step(fmt.Sprintf("validate %s app's volumes statistics ", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidateVolumeStatsticsDynamicUpdate(ctx, errChan...)
+				ValidatePureVolumeStatisticsDynamicUpdate(ctx, errChan...)
 			}
 		})
 
@@ -526,8 +527,8 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
-// ValidateFBSnapshotsSDK is the ginkgo spec for validating FB volume snapshots using API for a context
-func ValidateFBSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
+// ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
+func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
@@ -556,22 +557,25 @@ func ValidateFBSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateSnapshot(vol, params)
-				if err != nil {
-					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+				if params["backend"] == k8s.PureBlock {
+					expect(err).To(beNil())
+				} else if params["backend"] == k8s.PureFile {
+					expect(err).NotTo(beNil())
+					if err != nil {
+						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+					}
 				}
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnap(vol, params)
-				if err != nil {
-					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
-				}
+				expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()))
 			})
 		}
 	})
 }
 
-// ValidateFBSnapshotsPXCTL is the ginkgo spec for validating FB volume snapshots using PXCTL for a context
-func ValidateFBSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+// ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FB volume snapshots using PXCTL for a context
+func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
@@ -580,38 +584,47 @@ func ValidateFBSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 			processError(err, errChan...)
 		})
 
-		var vols []*volume.Volume
-		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
-			vols, err = Inst().S.GetVolumes(ctx)
+		var vols map[string]map[string]string
+		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+			vols, err = Inst().S.GetVolumeParameters(ctx)
 			processError(err, errChan...)
 		})
 
-		for _, vol := range vols {
-
+		for vol, params := range vols {
 			Step(fmt.Sprintf("get %s app's volume: %s then create snapshot using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshotUsingPxctl(vol.ID)
-				if err != nil {
-					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+				err = Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
+				if params["backend"] == k8s.PureBlock {
+					expect(err).To(beNil())
+				} else if params["backend"] == k8s.PureFile {
+					expect(err).NotTo(beNil())
+					if err != nil {
+						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+					}
 				}
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol.ID)
+				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
+				expect(err).NotTo(beNil())
 				if err != nil {
-					expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()))
 				}
 			})
 		}
-		Step("validating groupsnap for using pxctl", func() {
-			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-			if err != nil {
-				expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
-			}
-		})
+		// TODO: This is broken for now, doesn't properly return an error
+		//       Output error message is correct, but returns exit code 0
+		//       See https://portworx.atlassian.net/browse/PWX-22950
+		//Step("validating groupsnap for using pxctl", func() {
+		//	err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
+		//	expect(err).NotTo(beNil())
+		//	if err != nil {
+		//		expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+		//	}
+		//})
 	})
 }
 
-// ValidateResizeFBPVC is the ginkgo spec for validating resize of volumes
-func ValidateResizeFBPVC(ctx *scheduler.Context, errChan ...*chan error) {
+// ValidateResizePurePVC is the ginkgo spec for validating resize of volumes
+func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
@@ -650,9 +663,9 @@ func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan err
 	})
 }
 
-// ValidateVolumeStatsticsDynamicUpdate is the ginkgo spec for validating dynamic update of byteUsed statstic for pure volumes
-func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an resizing pvc", func() {
+// ValidatePureVolumeStatisticsDynamicUpdate is the ginkgo spec for validating dynamic update of byteUsed statistic for pure volumes
+func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of a resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -668,25 +681,26 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 		fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
 		// get the pod for this pvc
 		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
+		processError(err, errChan...)
 
 		// write to the FB volume
 		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", "dd bs=512 count=1048576 </dev/urandom > " + getMountPath(pods[0].Namespace) + "/myfile"}
 		err = osutils.Kubectl(cmdArgs)
 		processError(err, errChan...)
+		fmt.Println("sleeping to let volume usage get reflected")
 		// wait until the backends size is reflected before making the REST call
 		time.Sleep(125 * time.Second)
 
-		byteUsedafter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("after writing random bytes to the file the byteUsed is %v\n", byteUsedafter)
-		err = fbVolumeExpectedSizechange(byteUsedafter - byteUsedInitial)
-		expect(err).NotTo(haveOccurred())
+		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
+		expect(byteUsedAfter > byteUsedInitial).To(beTrue())
 
 	})
 }
 
-func fbVolumeExpectedSizechange(sizeChangeInBytes uint64) error {
+func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
-		return errUnexpectedSizeChangeAfterFBIO
+		return errUnexpectedSizeChangeAfterPureIO
 	}
 	return nil
 }
@@ -697,11 +711,14 @@ func fbVolumeExpectedSizechange(sizeChangeInBytes uint64) error {
 func getMountPath(namespace string) string {
 	if strings.HasPrefix(namespace, "nginx-without-enc") {
 		return "/usr/share/nginx/html"
-	} else if strings.HasPrefix(namespace, "wordpress") {
-		return "/var/www/html"
-	} else {
-		return ""
 	}
+	if strings.HasPrefix(namespace, "wordpress") {
+		return "/var/www/html"
+	}
+	if strings.HasPrefix(namespace, "elasticsearch") {
+		return "/usr/share/elasticsearch/data"
+	}
+	return ""
 }
 
 // GetVolumeParameters returns volume parameters for all volumes for given context
