@@ -30,11 +30,14 @@ const (
 	rebootRetry          = 10 * time.Second
 	testConnTimeout      = 15 * time.Minute
 	offlineClientTimeout = 15 * time.Minute // as defined in ref.go
-	exportPathPrefix     = "/var/lib/osd/pxns/"
+	exportPathPrefix     = "/var/lib/osd/pxns"
 )
 
-var _ = Describe("{NFSServerFailover}", func() {
+// Verify that the pods on old and new NFS servers get terminated after a failover.
+var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 	var contexts []*scheduler.Context
+	var nodeReplicaMap map[string]bool
+
 	It("has to setup, validate, failover, make sure pods on old and new server got restarted, and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 
@@ -45,15 +48,27 @@ var _ = Describe("{NFSServerFailover}", func() {
 		ValidateApplications(contexts)
 
 		for _, ctx := range contexts {
-			var nodeReplicaMap map[string]bool
 			var volume *volume.Volume
-			Step("disable scheduling on non replica nodes", func() {
+
+			Step(fmt.Sprintf("checking the HA level for app %s's volume", ctx.App.Key), func() {
 				vols, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(len(vols)).To(Equal(1))
 				volume = vols[0]
 				nodeReplicaMap = getReplicaNodeIDs(volume)
-				// make sure there are 2 replicas
-				Expect(len(nodeReplicaMap)).To(Equal(2))
+				if len(nodeReplicaMap) != 2 {
+					setHALevel(volume, 2)
+					// ValidateContext() will fail with error "volume has invalid repl value. Expected:3 Actual:2"
+					// without the line below.
+					ctx.SkipVolumeValidation = true
+
+					// get the replica map again
+					nodeReplicaMap = getReplicaNodeIDs(volume)
+					Expect(len(nodeReplicaMap)).To(Equal(2))
+				}
+			})
+
+			Step("disable scheduling on non replica nodes", func() {
 				allNodes := node.GetWorkerNodes()
 				for _, node := range allNodes {
 					if !nodeReplicaMap[node.VolDriverNodeID] {
@@ -165,6 +180,7 @@ var _ = Describe("{NFSServerFailover}", func() {
 						Inst().S.EnableSchedulingOnNode(node)
 					}
 				}
+				nodeReplicaMap = nil
 			})
 		}
 
@@ -174,6 +190,17 @@ var _ = Describe("{NFSServerFailover}", func() {
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts)
+	})
+	AfterEach(func() {
+		if nodeReplicaMap == nil {
+			return
+		}
+		// re-enable scheduling on non replica nodes
+		for _, node := range node.GetWorkerNodes() {
+			if !nodeReplicaMap[node.VolDriverNodeID] {
+				Inst().S.EnableSchedulingOnNode(node)
+			}
+		}
 	})
 })
 
@@ -200,6 +227,7 @@ type appCounter struct {
 type failoverMethod interface {
 	doFailover(attachedNode *node.Node)
 	getExpectedPodDeletions() []int
+	sleepBetweenFailovers() time.Duration
 	String() string
 }
 
@@ -219,6 +247,10 @@ func (fm *failoverMethodRestartVolDriver) getExpectedPodDeletions() []int {
 	return []int{2}
 }
 
+func (fm *failoverMethodRestartVolDriver) sleepBetweenFailovers() time.Duration {
+	return 30 * time.Second
+}
+
 type failoverMethodReboot struct {
 }
 
@@ -236,7 +268,11 @@ func (fm *failoverMethodReboot) getExpectedPodDeletions() []int {
 	return []int{1, 2}
 }
 
-var _ = Describe("{Shared4 service apps}", func() {
+func (fm *failoverMethodReboot) sleepBetweenFailovers() time.Duration {
+	return 2 * time.Minute
+}
+
+var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	var testrailID, runID int
 	var contexts, testSv4Contexts []*scheduler.Context
 	var workers []node.Node
@@ -249,7 +285,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 		// Set up all apps
 		contexts = nil
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s%d", namespacePrefix, i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
 		}
 
 		// Skip the test if there are no test-sharedv4 apps
@@ -266,7 +302,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 		ValidateApplications(contexts)
 	})
 
-	Context("{Shared4SvcFailoverFailback}", func() {
+	Context("{Sharedv4SvcFailoverFailback}", func() {
 		var numFailovers int
 		var fm failoverMethod
 
@@ -298,21 +334,26 @@ var _ = Describe("{Shared4 service apps}", func() {
 			Specify("no I/O disruption after failover and failback", func() {
 				for _, ctx := range testSv4Contexts {
 					Step(fmt.Sprintf("test failover and failback for app %s", ctx.App.Key), func() {
-						vols, err := Inst().S.GetVolumes(ctx)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(len(vols)).To(Equal(1))
-						vol := vols[0]
 
-						apiVol, err := Inst().V.InspectVolume(vol.ID)
-						Expect(err).NotTo(HaveOccurred())
+						vol, apiVol, _ := getSv4TestAppVol(ctx)
 
 						// Since the HA level is 2, we can verify failover and failback by repeating the steps below.
 						for i := 0; i < numFailovers; i++ {
 							var countersBefore, countersAfter map[string]appCounter
 							var attachedNodeBefore, attachedNodeAfter *node.Node
+							var err error
 
 							counterCollectionInterval := 3 * time.Duration(numPods) * time.Second
 							failoverLog := fmt.Sprintf("failover #%d by %s for app %s", i, fm, ctx.App.Key)
+
+							if i > 0 {
+								Step("sleep between the failovers",
+									func() {
+										dur := fm.sleepBetweenFailovers()
+										logrus.Infof("sleeping for %v between the failovers", dur)
+										time.Sleep(dur)
+									})
+							}
 
 							Step(fmt.Sprintf("get the attached node for volume %s before %s", vol.ID, failoverLog),
 								func() {
@@ -361,9 +402,9 @@ var _ = Describe("{Shared4 service apps}", func() {
 		}
 
 		// test failover/failback by restarting the volume driver
-		Context("{Shared4SvcRestartVolDriver}", func() {
+		Context("{Sharedv4SvcRestartVolDriver}", func() {
 			BeforeEach(func() {
-				namespacePrefix = "restartvoldriver-"
+				namespacePrefix = "restartvoldriver"
 				fm = &failoverMethodRestartVolDriver{}
 				testrailID = 54374
 			})
@@ -371,9 +412,9 @@ var _ = Describe("{Shared4 service apps}", func() {
 		})
 
 		// test failover/failback by rebooting the node
-		Context("{Shared4SvcRebootNode}", func() {
+		Context("{Sharedv4SvcRebootNode}", func() {
 			BeforeEach(func() {
-				namespacePrefix = "rebootnode-"
+				namespacePrefix = "rebootnode"
 				fm = &failoverMethodReboot{}
 				testrailID = 54385
 			})
@@ -386,7 +427,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 	Context("{Sharedv4ClientTeardownWhenServerOffline}", func() {
 		BeforeEach(func() {
 			testrailID = 54780
-			namespacePrefix = "clientteardown-"
+			namespacePrefix = "clientteardown"
 
 		})
 
@@ -397,22 +438,11 @@ var _ = Describe("{Shared4 service apps}", func() {
 		})
 
 		It("has to schedule apps, stop volume driver on node where volume is attached, teardown the application", func() {
-			var attachedNode *node.Node
 			for _, ctx := range testSv4Contexts {
 				Step(
 					fmt.Sprintf("stop the volume driver on attached node and verify app %s teardown succeeds", ctx.App.Key),
 					func() {
-						vols, err := Inst().S.GetVolumes(ctx)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(len(vols)).To(Equal(1))
-						vol := vols[0]
-
-						attachedNode, err = Inst().V.GetNodeForVolume(
-							vol,
-							cmdTimeout,
-							cmdRetry,
-						)
-						Expect(err).NotTo(HaveOccurred())
+						vol, _, attachedNode := getSv4TestAppVol(ctx)
 
 						Step(fmt.Sprintf("stopping volume driver on node %s", attachedNode.Name),
 							func() {
@@ -426,7 +456,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 
 						Step(fmt.Sprintf("ensure client pods have terminated for app %s", ctx.App.Key),
 							func() {
-								err = Inst().S.SelectiveWaitForTermination(
+								err := Inst().S.SelectiveWaitForTermination(
 									ctx,
 									Inst().DestroyAppTimeout,
 									[]node.Node{*attachedNode},
@@ -459,28 +489,17 @@ var _ = Describe("{Shared4 service apps}", func() {
 	})
 
 	// Bring PX down on the client nodes one by one. Verify that there is no I/O disruption.
-	Context("{Shared4SvcClientRestart}", func() {
+	Context("{Sharedv4SvcClientRestart}", func() {
 		BeforeEach(func() {
 			testrailID = 54383
-			namespacePrefix = "clientrestart-"
+			namespacePrefix = "clientrestart"
 		})
 
 		It("has to verify no I/O disruption for test-sv4-svc apps after PX restart on NFS client node", func() {
 			for _, ctx := range testSv4Contexts {
 				Step(fmt.Sprintf("restart client nodes one by one and verify I/O for app %s", ctx.App.Key), func() {
-					var attachedNode *node.Node
 
-					vols, err := Inst().S.GetVolumes(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(len(vols)).To(Equal(1))
-					vol := vols[0]
-
-					apiVol, err := Inst().V.InspectVolume(vol.ID)
-					Expect(err).NotTo(HaveOccurred())
-
-					attachedNode, err = Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
-					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("volume %v (%v) is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
+					vol, apiVol, attachedNode := getSv4TestAppVol(ctx)
 
 					// restart PX on the client nodes one at a time
 					for _, worker := range workers {
@@ -530,44 +549,44 @@ var _ = Describe("{Shared4 service apps}", func() {
 
 	// Scale app down and verify that the server removed the export for client node. Then,
 	// scale the app up again and verify that the server added the export back.
-	Context("{Shared4SvcUnexportExport}", func() {
+	Context("{Sharedv4SvcUnexportExport}", func() {
 		BeforeEach(func() {
 			testrailID = 54776
-			namespacePrefix = "unexport-"
+			namespacePrefix = "unexport"
 		})
 
 		It("has to verify that the server unexports and re-exports volume to the client node "+
 			"after pod goes away and comes back", func() {
 			for _, ctx := range testSv4Contexts {
 				Step(fmt.Sprintf("scale the deployment down and then up for app %s", ctx.App.Key), func() {
-					var attachedNode *node.Node
-					var nodeWithNoPod *node.Node
 
-					vols, err := Inst().S.GetVolumes(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(len(vols)).To(Equal(1))
-					vol := vols[0]
-
-					apiVol, err := Inst().V.InspectVolume(vol.ID)
-					Expect(err).NotTo(HaveOccurred())
-
-					attachedNode, err = Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
-					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("volume %v (%v) is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
-
-					exportsBeforeScaleDown := getExportsOnNode(apiVol, attachedNode)
+					vol, apiVol, attachedNode := getSv4TestAppVol(ctx)
 
 					// Scale down the app by 1 and check if the pod on NFS client node got removed.
 					// If not, scale down by 1 more. It should not take more than 2 attempts since
 					// there is no more than 1 pod running on each node.
+					var nodeWithNoPod *node.Node
+					var exportsBeforeScaleDown []string
 				Outer:
 					for i := 1; i < 3; i++ {
-						scaleApp(ctx, len(workers)-i)
+						exportsBeforeScaleDown = getExportsOnNode(apiVol, attachedNode)
+						newNumPods := len(workers) - i
+						scaleApp(ctx, newNumPods)
+
+						// give some time for the pod to terminate
+						var pods []corev1.Pod
+						var err error
+						Eventually(func() (int, error) {
+							pods, err = core.Instance().GetPodsUsingPV(vol.ID)
+							return len(pods), err
+						}, 3*time.Minute, 10*time.Second).Should(BeNumerically("==", newNumPods),
+							"number of pods did not reach %v for volume %v (%v) for app %v",
+							newNumPods, vol.ID, apiVol.Id, ctx.App.Key)
+
+						// ensure that all pods are running
 						ValidateContext(ctx)
 
-						pods, err := core.Instance().GetPodsUsingPV(vol.ID)
-						Expect(err).NotTo(HaveOccurred())
-
+						// check which node/s have no pod; we are looking for a client pod to be gone
 						podsByWorker := map[string]corev1.Pod{}
 						for _, pod := range pods {
 							podsByWorker[pod.Spec.NodeName] = pod
@@ -581,7 +600,9 @@ var _ = Describe("{Shared4 service apps}", func() {
 					}
 					Expect(nodeWithNoPod).NotTo(BeNil(), "did not find NFS client node whose pod was removed")
 
-					// IPs that were exported before scaling down the app that we expect to remain exported
+					// IPs that were exported before scaling down the app that we expect to remain exported.
+					// Note that this may include 2 IPs (data and mgmt) for the attached node
+					// depending on whether we deleted the bind-mounted pod above.
 					var otherClients []string
 					for _, export := range exportsBeforeScaleDown {
 						if export != nodeWithNoPod.DataIp {
@@ -619,10 +640,10 @@ var _ = Describe("{Shared4 service apps}", func() {
 
 	// Stop PX on the client node and wait for the server to remove the export for client.
 	// Then, do a failover and restart PX on the client node.
-	Context("{Shared4SvcClientOfflineTooLong}", func() {
+	Context("{Sharedv4SvcClientOfflineTooLong}", func() {
 		BeforeEach(func() {
 			testrailID = 54778
-			namespacePrefix = "clientoffline-"
+			namespacePrefix = "clientoffline"
 		})
 
 		JustBeforeEach(func() {
@@ -643,16 +664,12 @@ var _ = Describe("{Shared4 service apps}", func() {
 			for _, ctx := range testSv4Contexts {
 				var vol *volume.Volume
 				var apiVol *api.Volume
-				var err error
 				var replicaNodeIDs map[string]bool
 				var attachedNode, clientNode *node.Node
 				var failover bool
 
 				Step(fmt.Sprintf("get replica nodes for app %s's volume", ctx.App.Key), func() {
-					vols, err := Inst().S.GetVolumes(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(len(vols)).To(Equal(1))
-					vol = vols[0]
+					vol, apiVol, attachedNode = getSv4TestAppVol(ctx)
 					replicaNodeIDs = getReplicaNodeIDs(vol)
 					Expect(len(replicaNodeIDs)).To(Equal(2))
 				})
@@ -661,13 +678,6 @@ var _ = Describe("{Shared4 service apps}", func() {
 					// We need at least 5 nodes to do a failover after stopping PX on the client node.
 					// Otherwise, PX will lose quorum. (This assumes that there are 3 internal kvdb nodes.)
 					failover = len(workers) >= 5
-
-					apiVol, err = Inst().V.InspectVolume(vol.ID)
-					Expect(err).NotTo(HaveOccurred())
-
-					attachedNode, err = Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
-					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("volume %v (%v) is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
 
 					// When failover=true, we will be stopping PX on 2 nodes: the node where volume is attached and
 					// a node where a pod with NFS mount (client node) is running.
@@ -705,8 +715,9 @@ var _ = Describe("{Shared4 service apps}", func() {
 
 					// TODO: offlineClientTimeout = 15 * time.Minute in ref.go
 					// need to make it configurable so that we don't have to sleep for that long in the test
-					logrus.Infof("sleep to allow the server to remove client %v's export", clientNode.Name)
-					time.Sleep(offlineClientTimeout + 1*time.Minute)
+					dur := offlineClientTimeout + 1*time.Minute
+					logrus.Infof("sleep for %v to allow the server to remove client %v's export", dur, clientNode.Name)
+					time.Sleep(dur)
 
 					// We don't expect a failover
 					validateAttachedNode(vol, attachedNode)
@@ -736,8 +747,9 @@ var _ = Describe("{Shared4 service apps}", func() {
 					logrus.Infof("Starting volume driver on node %s", clientNode.Name)
 					StartVolDriverAndWait([]node.Node{*clientNode})
 
-					logrus.Infof("Giving some time for app and PX to settle down on node %s", clientNode.Name)
-					time.Sleep(60 * time.Second)
+					dur := 60 * time.Second
+					logrus.Infof("sleeping for %v for app and PX to settle down on node %s", dur, clientNode.Name)
+					time.Sleep(dur)
 				})
 
 				Step(fmt.Sprintf("validate app %s after all nodes are up", ctx.App.Key), func() {
@@ -761,11 +773,12 @@ var _ = Describe("{Shared4 service apps}", func() {
 		})
 	})
 
-	// Delete k8s service
+	// Verify the recovery procedure after user accidentally deletes the sharedv4 k8s service object
+	// Recovery is done by scaling deployment to 0 and then back up.
 	Context("{Sharedv4SvcDeleteK8sService}", func() {
 		BeforeEach(func() {
 			testrailID = 55050
-			namespacePrefix = "deletek8s-"
+			namespacePrefix = "deletek8ssvc"
 		})
 
 		It("has to delete k8s service", func() {
@@ -802,16 +815,198 @@ var _ = Describe("{Shared4 service apps}", func() {
 		})
 	})
 
+	// Induce a failover while the NFS server node is in resync.
+	Context("{Sharedv4SvcResync}", func() {
+		// There are 3 replica nodes for the test-sharedv4 app's volume. We designate them as:
+		//
+		// - attachedNodeOrig: node where the volume was attached initially when the app was deployed
+		//
+		// - resyncReplica: node that will be resync'ing the volume while the volume fails over to
+		//                  this node and then fails over again to another node
+		//
+		// - otherReplica: node that stays up the whole time
+		//
+		var otherReplica *node.Node
+
+		BeforeEach(func() {
+			testrailID = 54379
+			namespacePrefix = "resyncfailover"
+		})
+
+		It("fails over while NFS server node is in resync", func() {
+			for _, ctx := range testSv4Contexts {
+				var replicaNodeIDs map[string]bool
+				var resyncReplica, attachedNodeOrig *node.Node
+
+				vol, apiVol, attachedNode := getSv4TestAppVol(ctx)
+				attachedNodeOrig = attachedNode
+
+				// directory on the export path in which we will dump data to make the volume
+				// go into Resync state
+				testDir := fmt.Sprintf("%s/%s/resync_test_dir", exportPathPrefix, apiVol.Id)
+
+				replicaNodeIDs = getReplicaNodeIDs(vol)
+				Expect(len(replicaNodeIDs)).To(Equal(3))
+
+				Step(fmt.Sprintf("pick a replica node for resync for app %s", ctx.App.Key), func() {
+					for _, worker := range workers {
+						if replicaNodeIDs[worker.VolDriverNodeID] && worker.VolDriverNodeID != attachedNode.Id {
+							// make a copy so that we get a fresh pointer
+							worker := worker
+							if resyncReplica == nil {
+								resyncReplica = &worker
+							} else {
+								otherReplica = &worker
+								break
+							}
+						}
+					}
+					Expect(resyncReplica).ToNot(BeNil())
+					Expect(otherReplica).ToNot(BeNil())
+					logrus.Infof("Volume %v (%v), resyncReplica=%v, otherReplica=%v, attachedNodeOrig=%v",
+						vol.ID, apiVol.Id, resyncReplica.Name, otherReplica.Name, attachedNodeOrig.Name)
+				})
+
+				Step(fmt.Sprintf("stop PX on the replica node for app %s", ctx.App.Key), func() {
+					StopVolDriverAndWait([]node.Node{*resyncReplica})
+					// We don't expect a failover
+					validateAttachedNode(vol, attachedNode)
+				})
+
+				Step(fmt.Sprintf("dump data on app %s volume", ctx.App.Key), func() {
+					cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=20000 iflag=fullblock",
+						testDir, testDir)
+					output, err := runCmd(cmd, *attachedNode)
+					Expect(err).NotTo(HaveOccurred(), output)
+				})
+
+				Step(fmt.Sprintf("cordon attachments on the other replica for app %s", ctx.App.Key), func() {
+					// this ensures that the volume will fail over to the resyncReplica node
+					cmd := fmt.Sprintf("pxctl service node cordon-attachments --node  %s", otherReplica.Id)
+					output, err := runCmd(cmd, *otherReplica)
+					Expect(err).NotTo(HaveOccurred(), output)
+				})
+
+				Step(fmt.Sprintf("start volume driver on node %s for app %s", resyncReplica.Name, ctx.App.Key), func() {
+					// PX will start resync'ing the volume when it comes back up on this node
+					StartVolDriverAndWait([]node.Node{*resyncReplica})
+				})
+
+				Step(fmt.Sprintf("failover to the node in resync for app %s", ctx.App.Key), func() {
+					// call "systemctl" directly to avoid delays built into other utility functions
+					// that can cause the node to finish resyncing before we do the failover
+					err := Inst().N.Systemctl(*attachedNode, "portworx.service", node.SystemctlOpts{
+						Action: "restart",
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         5 * time.Minute,
+							TimeBeforeRetry: 10 * time.Second,
+						}})
+					Expect(err).NotTo(HaveOccurred())
+
+					// wait for failover
+					logrus.Infof("waiting for failover to the resync node %v", resyncReplica.Name)
+					var attachedNodeNow *node.Node
+					Eventually(func() (string, error) {
+						attachedNodeNow, err = Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
+						if err != nil {
+							return "", err
+						}
+						return attachedNodeNow.Name, nil
+					}, 1*time.Minute, 10*time.Second).ShouldNot(Equal(attachedNode.Name),
+						"volume %v (%v) for app %v did not fail over", vol.ID, apiVol.Id, ctx.App.Key)
+
+					logrus.Infof("volume %v (%v) is attached to node %v after failover",
+						vol.ID, apiVol.Id, attachedNodeNow.Name)
+
+					// ensure that we failed over to the node in resync
+					Expect(attachedNodeNow.Name).To(Equal(resyncReplica.Name),
+						"volume %v (%v) did not fail over to the node in resync", vol.ID, apiVol.Id)
+					attachedNode = attachedNodeNow
+				})
+
+				Step(fmt.Sprintf("uncordon attachments on the other replica for app %s", ctx.App.Key), func() {
+					cmd := fmt.Sprintf("pxctl service node uncordon-attachments --node  %s", otherReplica.Id)
+					output, err := runCmd(cmd, *otherReplica)
+					Expect(err).NotTo(HaveOccurred(), output)
+				})
+
+				Step(fmt.Sprintf("wait for the orig attached node %s to come back up", attachedNodeOrig.Name), func() {
+					err := Inst().V.WaitDriverUpOnNode(*attachedNodeOrig, Inst().DriverStartTimeout)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				Step(fmt.Sprintf("verify that the volume %v (%v) is still in resync", vol.ID, apiVol.Id), func() {
+					cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
+					replStatus, err := runCmd(cmd, *resyncReplica)
+					Expect(err).NotTo(HaveOccurred(), replStatus)
+					Expect(replStatus).To(ContainSubstring("Resync"))
+				})
+
+				Step(fmt.Sprintf("failover from the node in resync for app %s", ctx.App.Key), func() {
+					// restart vol driver to induce a failover
+					restartVolumeDriverOnNode(resyncReplica)
+
+					// attached node should have changed
+					attachedNodeNow, err := Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(attachedNodeNow.Name).ToNot(Equal(resyncReplica.Name),
+						"volume %v (%v) for app %v did not fail over", vol.ID, apiVol.Id, ctx.App.Key)
+
+					logrus.Infof("volume %v (%v) is attached to node %v after failover from the node in resync",
+						vol.ID, apiVol.Id, attachedNodeNow.Name)
+					attachedNode = attachedNodeNow
+				})
+
+				Step(fmt.Sprintf("validate app %s after all nodes are up", ctx.App.Key), func() {
+					ValidateContext(ctx)
+				})
+
+				Step(fmt.Sprintf("verify that app %s's pods are active", ctx.App.Key), func() {
+					numPods := len(workers)
+					counters := getAppCounters(apiVol, attachedNode, 3*time.Duration(numPods)*time.Second)
+					activePods := getActivePods(counters)
+					Expect(len(activePods)).To(Equal(numPods))
+				})
+
+				Step(fmt.Sprintf("remove data on app %s's volume", ctx.App.Key), func() {
+					cmd := fmt.Sprintf("rm -rf %s", testDir)
+					output, err := runCmd(cmd, *attachedNode)
+					Expect(err).NotTo(HaveOccurred(), output)
+				})
+
+				Step(fmt.Sprintf("verify resync done for volume %v (%v)", vol.ID, apiVol.Id), func() {
+					Eventually(func() (string, error) {
+						cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
+						return runCmd(cmd, *resyncReplica)
+					}, 10*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
+						"resync not done for volume %v (%v) for app %v", vol.ID, apiVol.Id, ctx.App.Key)
+				})
+			}
+		})
+
+		AfterEach(func() {
+			// Do the cleanup in case the test failed before doing this.
+			Step("uncordon attachments on the other replica node", func() {
+				if otherReplica == nil {
+					return
+				}
+				cmd := fmt.Sprintf("pxctl service node uncordon-attachments --node  %s", otherReplica.Id)
+				output, err := runCmd(cmd, *otherReplica)
+				Expect(err).NotTo(HaveOccurred(), output)
+			})
+		})
+	})
+
 	// Template for additional tests
 	// Context("{}", func() {
 	// 	BeforeEach(func() {
 	// 		testrailID = 0
-	//      namespace_prefix = ""
+	//      namespacePrefix = ""
 	// 	})
 	//
 	// 	JustBeforeEach(func() {
 	//		// since the apps are deployed by JustBeforeEach in the outer block,
-	// 		// any changes to the deployed apps go here in JustBeforeEach() as well.
+	// 		// any test-specific changes to the deployed apps should go here.
 	// 	})
 	//
 	// 	It("", func() {
@@ -855,8 +1050,13 @@ func getTestSv4Contexts(contexts []*scheduler.Context) []*scheduler.Context {
 // returns the appCounter structs for the app pods by scanning the export path on the NFS server
 func getAppCounters(vol *api.Volume, attachedNode *node.Node, sleepInterval time.Duration) map[string]appCounter {
 	snap1 := getAppCountersSnapshot(vol, attachedNode)
+	logrus.Infof("app counters snapshot 1 for volume %v: %v", vol.Id, snap1)
+
+	logrus.Infof("sleeping for %v between the app counter snaps", sleepInterval)
 	time.Sleep(sleepInterval)
+
 	snap2 := getAppCountersSnapshot(vol, attachedNode)
+	logrus.Infof("app counters snapshot 2 for volume %v: %v", vol.Id, snap2)
 	Expect(len(snap1)).To(Equal(len(snap2)), "unexpected change in the number of pods when collecting counters")
 
 	ret := map[string]appCounter{}
@@ -878,13 +1078,8 @@ func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string
 	// 2458:/var/lib/osd/pxns/1088228603475411556/common
 	// 1404:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-m9kzc
 	// 1436:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-g79kh
-	// 71:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-mwxn2
-	// 1395:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-4ck8x
-	// 77:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-d6598
-	// 91:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-68nwv
-	// 1406:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-h6hgx
 	//
-	cmd := fmt.Sprintf("find %s%s -maxdepth 1 -type f -exec tail -1 {} \\; -exec echo -n ':' \\; -print",
+	cmd := fmt.Sprintf("find %s/%s -maxdepth 1 -type f -exec tail -1 {} \\; -exec echo -n \":\" \\; -print",
 		exportPathPrefix, vol.Id)
 	output, err := runCmd(cmd, *attachedNode)
 	Expect(err).NotTo(HaveOccurred())
@@ -1012,7 +1207,7 @@ func getExportsOnNode(vol *api.Volume, node *node.Node) []string {
 	// /var/lib/osd/pxns/366303365379384956  192.168.121.219,192.168.121.38,192.168.121.98,192.168.121.243,192.168.121.124
 	//
 	for _, line := range strings.Split(output, "\n") {
-		clientsStr := strings.TrimPrefix(line, exportPathPrefix+vol.Id+" ")
+		clientsStr := strings.TrimPrefix(line, exportPathPrefix+"/"+vol.Id+" ")
 		if clientsStr != line {
 			// prefix was found
 			return strings.Split(strings.TrimSpace(clientsStr), ",")
@@ -1025,14 +1220,16 @@ func restartVolumeDriverOnNode(nodeObj *node.Node) {
 	logrus.Infof("Stopping volume driver on node %s", nodeObj.Name)
 	StopVolDriverAndWait([]node.Node{*nodeObj})
 
-	logrus.Infof("Sleep to allow the failover before restarting the volume driver on node %s", nodeObj.Name)
-	time.Sleep(30 * time.Second)
+	dur := 30 * time.Second
+	logrus.Infof("sleep for %v to allow the failover before restarting the volume driver on node %s", dur, nodeObj.Name)
+	time.Sleep(dur)
 
 	logrus.Infof("Starting volume driver on node %s", nodeObj.Name)
 	StartVolDriverAndWait([]node.Node{*nodeObj})
 
-	logrus.Infof("Giving volume driver and the app pods some time to settle down on node %s", nodeObj.Name)
-	time.Sleep(60 * time.Second)
+	dur = 60 * time.Second
+	logrus.Infof("sleep for %v to allow volume driver and the app pods to settle down on node %s", dur, nodeObj.Name)
+	time.Sleep(dur)
 }
 
 func rebootNodeAndWaitForReady(nodeObj *node.Node) {
@@ -1137,6 +1334,22 @@ func getDeletionTimestampFromContext(ctx *scheduler.Context) *metav1.Time {
 	deletionTimestamp := services.Items[0].DeletionTimestamp
 	logrus.Infof("deletion timestamp: %v", deletionTimestamp)
 	return deletionTimestamp
+}
+
+func getSv4TestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Volume, *node.Node) {
+	vols, err := Inst().S.GetVolumes(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(vols)).To(Equal(1))
+	vol := vols[0]
+
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
+	Expect(err).NotTo(HaveOccurred())
+
+	attachedNode, err := Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
+	Expect(err).NotTo(HaveOccurred())
+	logrus.Infof("volume %v (%v) is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
+
+	return vol, apiVol, attachedNode
 }
 
 func runCmd(cmd string, n node.Node) (string, error) {

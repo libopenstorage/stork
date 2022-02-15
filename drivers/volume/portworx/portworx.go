@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io"
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
@@ -77,6 +79,7 @@ const (
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
+	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
 )
 
 const (
@@ -162,6 +165,7 @@ type portworx struct {
 	nodeDriver            node.Driver
 	refreshEndpoint       bool
 	token                 string
+	skipPXSvcEndpoint     bool
 }
 
 // TODO temporary solution until sdk supports metadataNode response
@@ -248,6 +252,10 @@ func (d *portworx) String() string {
 func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string) error {
 	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
+
+	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
+		d.skipPXSvcEndpoint, _ = strconv.ParseBool(skipStr)
+	}
 
 	d.token = token
 
@@ -1801,19 +1809,18 @@ func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
 }
 
 func (d *portworx) setDriver() error {
-	var err error
-	var endpoint string
-
-	// Try portworx-service first
-	endpoint, err = d.schedOps.GetServiceEndpoint()
-	if err == nil && endpoint != "" {
-		if err = d.testAndSetEndpointUsingService(endpoint); err == nil {
-			d.refreshEndpoint = false
-			return nil
+	if !d.skipPXSvcEndpoint {
+		// Try portworx-service first
+		endpoint, err := d.schedOps.GetServiceEndpoint()
+		if err == nil && endpoint != "" {
+			if err = d.testAndSetEndpointUsingService(endpoint); err == nil {
+				d.refreshEndpoint = false
+				return nil
+			}
+			logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
+		} else if err != nil && len(node.GetWorkerNodes()) == 0 {
+			return err
 		}
-		logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
-	} else if err != nil && len(node.GetWorkerNodes()) == 0 {
-		return err
 	}
 
 	// Try direct address of cluster nodes
@@ -1824,10 +1831,11 @@ func (d *portworx) setDriver() error {
 	logrus.Infof("Getting new driver.")
 	for _, n := range node.GetWorkerNodes() {
 		for _, addr := range n.Addresses {
-			if err = d.testAndSetEndpointUsingNodeIP(addr); err == nil {
-				return nil
+			if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
+				logrus.Infof("testAndSetEndpoint failed for %v: %v", addr, err)
+				continue
 			}
-			logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
+			return nil
 		}
 	}
 
@@ -2315,15 +2323,18 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 }
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
+	var err error
 	// TODO replace by sdk call whenever it is available
 	pxdRestPort, err := getRestPort()
 	if err != nil {
 		return err
 	}
-	endpoint, err := d.schedOps.GetServiceEndpoint()
-	var url string
-	if err != nil {
-		logrus.Warnf("unable to get service endpoint falling back to node addr %v", err)
+	var url, endpoint string
+	if !d.skipPXSvcEndpoint {
+		endpoint, err = d.schedOps.GetServiceEndpoint()
+	}
+	if err != nil || endpoint == "" {
+		logrus.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
 		pxdRestPort, err = getRestContainerPort()
 		if err != nil {
 			return err
@@ -2491,15 +2502,18 @@ func hasIgnorePrefix(str string) bool {
 }
 
 func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) {
+	var err error
 	kvdbMembers := make(map[string]metadataNode)
 	pxdRestPort, err := getRestPort()
 	if err != nil {
 		return kvdbMembers, err
 	}
-	endpoint, err := d.schedOps.GetServiceEndpoint()
-	var url string
-	if err != nil {
-		logrus.Warnf("unable to get service endpoint falling back to node addr %v", err)
+	var url, endpoint string
+	if !d.skipPXSvcEndpoint {
+		endpoint, err = d.schedOps.GetServiceEndpoint()
+	}
+	if err != nil || endpoint == "" {
+		logrus.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
 		pxdRestPort, err = getRestContainerPort()
 		if err != nil {
 			return kvdbMembers, err
