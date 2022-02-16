@@ -157,7 +157,7 @@ func setup() error {
 		return fmt.Errorf("Error getting node driver %v: %v", nodeDriverName, err)
 	}
 
-	if err = nodeDriver.Init(); err != nil {
+	if err = nodeDriver.Init(node.InitOptions{}); err != nil {
 		return fmt.Errorf("Error initializing node driver %v: %v", nodeDriverName, err)
 	}
 
@@ -559,7 +559,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		}
 	}
 
-	info, err := volumeDriver.GetClusterPairingInfo()
+	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -641,7 +641,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 	}
 
 	// Get cluster pair details for source cluster
-	srcInfo, err := volumeDriver.GetClusterPairingInfo()
+	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcKubeconfigPath)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -673,7 +673,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 	}
 
 	// Get cluster pair details for destination cluster
-	destInfo, err := volumeDriver.GetClusterPairingInfo()
+	destInfo, err := volumeDriver.GetClusterPairingInfo(destKubeconfigPath)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err

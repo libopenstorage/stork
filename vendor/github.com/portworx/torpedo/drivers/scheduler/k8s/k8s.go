@@ -506,8 +506,6 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := apapi.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
-<<<<<<< HEAD
-=======
 
 		if err := monitoringv1.AddToScheme(schemeObj); err != nil {
 			return nil, err
@@ -520,7 +518,6 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := apiextensionsv1.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
->>>>>>> c722885a (Update px vendor libs)
 
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
@@ -594,8 +591,6 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
 		return specObj, nil
-<<<<<<< HEAD
-=======
 	} else if specObj, ok := in.(*monitoringv1.Prometheus); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*monitoringv1.PrometheusRule); ok {
@@ -608,7 +603,6 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		return specObj, nil
->>>>>>> c722885a (Update px vendor libs)
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))

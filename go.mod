@@ -99,7 +99,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220210005610-4c63cd58298c
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220310041017-b5bae9ba82a7
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220216035740-bdc80fafd64c
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
