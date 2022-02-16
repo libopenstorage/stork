@@ -639,7 +639,7 @@ github.com/portworx/kdmp/pkg/version
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20220310041017-b5bae9ba82a7 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220310041017-b5bae9ba82a7
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1692,18 +1692,17 @@ sigs.k8s.io/yaml
 # github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 # github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
 # github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
+# github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
 # github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 # github.com/heptio/velero => github.com/heptio/velero v1.0.0
 # github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8
+# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220210005610-4c63cd58298c
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220310041017-b5bae9ba82a7
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220216035740-bdc80fafd64c
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
-# github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
-# k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
-# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220210005610-4c63cd58298c
 # k8s.io/api => k8s.io/api v0.20.11
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.11
 # k8s.io/apimachinery => k8s.io/apimachinery v0.20.11
@@ -1718,6 +1717,7 @@ sigs.k8s.io/yaml
 # k8s.io/controller-manager => k8s.io/controller-manager v0.20.11
 # k8s.io/cri-api => k8s.io/cri-api v0.20.11
 # k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.20.11
+# k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
 # k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.20.11
 # k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.20.11
 # k8s.io/kube-proxy => k8s.io/kube-proxy v0.20.11
