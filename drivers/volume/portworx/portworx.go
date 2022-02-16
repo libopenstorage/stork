@@ -124,7 +124,7 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 }
 
 var csiProvisionerOnly = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	PortworxCsi:     "pxd.portworx.com",
+	PortworxCsi: "pxd.portworx.com",
 }
 
 var deleteVolumeLabelList = []string{

@@ -70,8 +70,8 @@ const (
 
 	// pureVolumeOUID is used to identify if a mapper device is of Pure origin
 	// (if it leads with /dev/mapper/3624a9370, it's a Pure volume, if it's some other prefix it's not)
-	pureVolumeOUID = "3624a9370"
-	pureMapperPrefix = "/dev/mapper/"+pureVolumeOUID
+	pureVolumeOUID   = "3624a9370"
+	pureMapperPrefix = "/dev/mapper/" + pureVolumeOUID
 )
 
 const (
