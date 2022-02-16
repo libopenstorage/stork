@@ -1,0 +1,65 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: es-exporter
+  labels:
+    component: elasticsearch
+    role: exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: elasticsearch
+      role: exporter
+  template:
+    metadata:
+      labels:
+        component: elasticsearch
+        role: exporter
+    spec:
+      containers:
+        - name: es-exporter
+          image: quay.io/prometheuscommunity/elasticsearch-exporter:latest
+          args:
+            - '--es.uri=http://elasticsearch:9200'
+            - --es.all
+            - --es.indices
+          ports:
+            - containerPort: 9114
+              name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: es-exporter-nodeport
+  labels:
+    component: elasticsearch
+    role: exporter
+spec:
+  type: NodePort
+  ports:
+  - port: 9114
+    name: metrics
+  # clusterIP: None
+  selector:
+    component: elasticsearch
+    role: exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: es-exporter-metrics-sm
+  namespace: kube-system
+  labels:
+    name: portworx-prometheus-sm
+spec:
+  selector:
+    matchLabels:
+      component: elasticsearch
+      role: exporter
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: metrics
+    targetPort: 9114

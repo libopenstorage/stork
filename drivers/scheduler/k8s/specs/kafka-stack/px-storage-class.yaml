@@ -1,0 +1,19 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: elasticsearch-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+   repl: "3"
+   priority_io: "high"
+   io_profile: "db"
+allowVolumeExpansion: true
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: zk-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+   repl: "2"
+allowVolumeExpansion: true

@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer
+  labels:
+    component: producer
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      component: producer
+  template:
+    metadata:
+      labels:
+        component: producer
+    spec:
+      containers:
+        - name: producer
+          image: docker.pwx.dev.purestorage.com/portworx/kafka-producer
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8083
+          env:
+            - name: KAFKA_TOPIC
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-hs:9092"
+            - name: CONNECTOR_SERVER
+              value: "kafka-es-connect:8083"
+            - name: ES_SERVER
+              value: "elasticsearch:9200"

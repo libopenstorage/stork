@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-es-connect
+  labels:
+    component: es-connector
+spec:
+  selector:
+    component: es-connector
+  ports:
+    - name: http
+      port: 8083
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-es-connector
+  labels:
+    component: es-connector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: es-connector
+  template:
+    metadata:
+      labels:
+        component: es-connector
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: component
+                      operator: In
+                      values:
+                        - es-connector
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: es-connector
+          image: docker.pwx.dev.purestorage.com/portworx/kafka-es-connector:10.0.3
+          ports:
+            - containerPort: 8083
+          env:
+            - name: CONNECT_BOOTSTRAP_SERVERS
+              value: "kafka-hs:9092"
+            - name: CONNECT_REST_PORT
+              value: "8083"
+            - name: CONNECT_GROUP_ID
+              value: kafka-es-connect
+            - name: CONNECT_CONFIG_STORAGE_TOPIC
+              value: docker-kafka-connect-configs
+            - name: CONNECT_OFFSET_STORAGE_TOPIC
+              value: docker-kafka-connect-offsets
+            - name: CONNECT_STATUS_STORAGE_TOPIC
+              value: docker-kafka-connect-status
+            - name: CONNECT_KEY_CONVERTER
+              value: "org.apache.kafka.connect.storage.StringConverter"
+            - name: CONNECT_VALUE_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: CONNECT_INTERNAL_KEY_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: CONNECT_INTERNAL_VALUE_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: CONNECT_KEY_CONVERTER-SCHEMAS_ENABLE
+              value: "false"
+            - name: CONNECT_VALUE_CONVERTER-SCHEMAS_ENABLE
+              value: "false"
+            - name: CONNECT_REST_ADVERTISED_HOST_NAME
+              value: "kafka-es-connect"

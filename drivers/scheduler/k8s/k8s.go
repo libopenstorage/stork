@@ -35,6 +35,8 @@ import (
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/networking"
+	"github.com/portworx/sched-ops/k8s/policy"
+	"github.com/portworx/sched-ops/k8s/prometheus"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
@@ -54,6 +56,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -164,6 +167,8 @@ var (
 	k8sRbac            = rbac.Instance()
 	k8sNetworking      = networking.Instance()
 	k8sBatch           = batch.Instance()
+	k8sMonitoring      = prometheus.Instance()
+	k8sPolicy          = policy.Instance()
 )
 
 // K8s  The kubernetes structure
@@ -269,13 +274,14 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	}
 	k8sCore.SetConfig(config)
 	k8sApps.SetConfig(config)
-	k8sCore.SetConfig(config)
 	k8sApps.SetConfig(config)
 	k8sStork.SetConfig(config)
 	k8sStorage.SetConfig(config)
 	k8sExternalStorage.SetConfig(config)
 	k8sAutopilot.SetConfig(config)
 	k8sRbac.SetConfig(config)
+	k8sMonitoring.SetConfig(config)
+	k8sPolicy.SetConfig(config)
 
 	return nil
 }
@@ -603,6 +609,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*policyv1beta1.PodDisruptionBudget); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
@@ -867,6 +875,44 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createBatchObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createServiceMonitorObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createPodDisruptionBudgetObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -2171,6 +2217,34 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyBackupObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyServiceMonitorObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyPodDisruptionBudgetObjects(appSpec, ctx.App)
 			if err != nil {
 				return nil, true, err
 			}
@@ -4118,6 +4192,95 @@ func (k *K8s) createBatchObjects(
 		return job, nil
 	}
 	return nil, nil
+}
+
+func (k *K8s) createServiceMonitorObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
+		if obj.Namespace == "" {
+			obj.Namespace = ns.Name
+		}
+		serviceMonitor, err := k8sMonitoring.CreateServiceMonitor(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if serviceMonitor, err = k8sMonitoring.GetServiceMonitor(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing ServiceMonitor: %v", app.Key, serviceMonitor.Name)
+				return serviceMonitor, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ServiceMonitor: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created ServiceMonitor: %v", app.Key, serviceMonitor.Name)
+		return serviceMonitor, nil
+	}
+	return nil, nil
+}
+
+func (k *K8s) createPodDisruptionBudgetObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+		if obj.Namespace == "" {
+			obj.Namespace = ns.Name
+		}
+		podDisruptionBudget, err := k8sPolicy.CreatePodDisruptionBudget(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if podDisruptionBudget, err = k8sPolicy.GetPodDisruptionBudget(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing PodDisruptionBudget: %v", app.Key, podDisruptionBudget.Name)
+				return podDisruptionBudget, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create PodDisruptionBudget: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created PodDisruptionBudget: %v", app.Key, podDisruptionBudget.Name)
+		return podDisruptionBudget, nil
+	}
+	return nil, nil
+}
+
+func (k *K8s) destroyPodDisruptionBudgetObjects(
+	spec interface{},
+	app *spec.AppSpec,
+) error {
+	if obj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+		err := k8sPolicy.DeletePodDisruptionBudget(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy PodDisruptionBudget: %v. Err: %v", obj.Name, err),
+			}
+		}
+	}
+	return nil
+}
+
+func (k *K8s) destroyServiceMonitorObjects(spec interface{},
+	app *spec.AppSpec,
+) error {
+	if obj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
+		err := k8sMonitoring.DeleteServiceMonitor(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ServiceMonitor: %v. Err: %v", obj.Name, err),
+			}
+		}
+	}
+	return nil
 }
 
 // EstimatePVCExpansion calculates expected size of PVC based on autopilot rule and workload

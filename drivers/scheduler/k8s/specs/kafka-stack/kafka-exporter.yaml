@@ -1,0 +1,65 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-exporter
+  labels:
+    component: kafka
+    role: exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: kafka
+      role: exporter
+  template:
+    metadata:
+      labels:
+        component: kafka
+        role: exporter
+    spec:
+      containers:
+        - name: kafka-exporter
+          image: danielqsj/kafka-exporter:latest
+          # command: ["sleep", "infinity"]
+          args:
+           - '--kafka.server=kafka-hs:9092'
+           - '--kafka.version=0.10.2.1'
+          ports:
+            - containerPort: 9308
+              name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-exporter-nodeport
+  labels:
+    component: kafka
+    role: exporter
+spec:
+  type: NodePort
+  ports:
+  - port: 9308
+    name: metrics
+  # clusterIP: None
+  selector:
+    component: kafka
+    role: exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kafka-exp-metrics-sm
+  namespace: kube-system
+  labels:
+    name: portworx-prometheus-sm
+spec:
+  selector:
+    matchLabels:
+      component: kafka
+      role: exporter
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: metrics
+    targetPort: 9308
