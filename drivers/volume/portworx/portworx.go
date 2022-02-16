@@ -1736,7 +1736,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			}
 		}
 		if !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
-			return 0, false, fmt.Errorf("Volume didn't successfully change to replication factor of %d", replFactor)
+			return 0, false, fmt.Errorf("volume didn't successfully change to replication factor of %d", replFactor)
 		}
 		return 0, false, nil
 	}

@@ -67,6 +67,9 @@ var RunningTriggers map[string]time.Duration
 // ChaosMap stores mapping between test trigger and its chaos level.
 var ChaosMap map[string]int
 
+// coresMap stores mapping between node name and cores generated.
+var coresMap map[string]string
+
 // SendGridEmailAPIKey holds API key used to interact
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
@@ -117,6 +120,7 @@ type nodeInfo struct {
 	NodeName  string
 	PxVersion string
 	Status    string
+	Cores     string
 }
 
 type triggerInfo struct {
@@ -132,8 +136,11 @@ func GenerateUUID() string {
 
 // UpdateOutcome updates outcome based on error
 func UpdateOutcome(event *EventRecord, err error) {
+
 	if err != nil {
-		event.Outcome = append(event.Outcome, err)
+		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
+		er := fmt.Errorf(err.Error() + "<br>")
+		event.Outcome = append(event.Outcome, er)
 	}
 }
 
@@ -228,13 +235,17 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	coresMap = nil
+	coresMap = make(map[string]string)
 
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
+			logrus.Infof("len nodes: %v", len(nodes))
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
+					logrus.Infof("%v is not storage driver", n.Name)
 					continue
 				}
 				logrus.Infof("looking for core files on node %s", n.Name)
@@ -245,7 +256,11 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				UpdateOutcome(event, err)
 
 				if len(file) != 0 {
-					UpdateOutcome(event, fmt.Errorf("[%s] found on node [%s]", file, n.Name))
+					logrus.Warnf("[%s] found on node [%s]", file, n.Name)
+					coresMap[n.Name] = "1"
+				} else {
+					coresMap[n.Name] = ""
+
 				}
 			}
 		})
@@ -344,9 +359,13 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						//Calulating Max Replication Factor allowed
 						MaxRF = int64(len(storageNodes)) / currAggr
 
+						if MaxRF > 3 {
+							MaxRF = 3
+						}
+
 						expRF := currRep + 1
 
-						if expRF > 3 || expRF > MaxRF {
+						if expRF > MaxRF {
 							errExpected = true
 							expRF = currRep
 						}
@@ -355,10 +374,12 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						expReplMap[v] = expRF
 						if !errExpected {
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, opts)
+							if err != nil {
+								logrus.Errorf("There is a error setting repl [%v]", err.Error())
+							}
 							UpdateOutcome(event, err)
 						} else {
 							logrus.Infof("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
-							UpdateOutcome(event, fmt.Errorf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF))
 						}
 					})
 				Step(
@@ -370,7 +391,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 						if newRepl != expReplMap[v] {
 							err = fmt.Errorf("volume [%s] has invalid repl value for volume. Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl)
-							UpdateOutcome(event, err)
+							logrus.Infof("Error while matching repl [%v]", err.Error())
 						} else {
 							logrus.Infof("Successfully validated repl for volume %s", v.Name)
 						}
@@ -385,6 +406,9 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ValidateContext(ctx, &errorChan)
 				logrus.Infof("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
 				for err := range errorChan {
+					if err != nil {
+						logrus.Errorf("There is a error in context validation [%v]", err.Error())
+					}
 					UpdateOutcome(event, err)
 					logrus.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
 				}
@@ -446,10 +470,12 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						logrus.Infof("Min Replication factor %v", MinRF)
 						if !errExpected {
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
+							if err != nil {
+								logrus.Errorf("There is an error decreasing repl [%v]", err.Error())
+							}
 							UpdateOutcome(event, err)
 						} else {
 							logrus.Infof("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF)
-							UpdateOutcome(event, fmt.Errorf("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF))
 						}
 
 					})
@@ -461,7 +487,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						UpdateOutcome(event, err)
 
 						if newRepl != expReplMap[v] {
-							UpdateOutcome(event, fmt.Errorf("volume [%s] has invalid repl value . Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl))
+							logrus.Infof(fmt.Errorf("volume [%s] has invalid repl value . Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl).Error())
 						}
 						logrus.Infof("repl decrease validation completed on app %s", v.Name)
 
@@ -509,7 +535,7 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		Step(fmt.Sprintf("validating context after delete tasks for app: [%s]",
 			ctx.App.Key), func() {
 			errorChan := make(chan error, errorChannelSize)
-			ctx.SkipVolumeValidation = false
+			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
 				UpdateOutcome(event, err)
@@ -606,6 +632,7 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 			for _, ctx := range *contexts {
 				Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
 					errorChan := make(chan error, errorChannelSize)
+					ctx.ReadinessTimeout = time.Minute * 10
 					ValidateContext(ctx, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -651,6 +678,9 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 								TimeBeforeRetry: 5 * time.Second,
 							},
 						})
+						if err != nil {
+							logrus.Errorf("Error while rebooting node %v, err: %v", n.Name, err.Error())
+						}
 						UpdateOutcome(event, err)
 					})
 
@@ -659,6 +689,9 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 							Timeout:         15 * time.Minute,
 							TimeBeforeRetry: 10 * time.Second,
 						})
+						if err != nil {
+							logrus.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
+						}
 						UpdateOutcome(event, err)
 					})
 
@@ -855,7 +888,9 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 				func() {
 					logrus.Info("increasing volume size")
 					requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
-					UpdateOutcome(event, err)
+					if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
+						UpdateOutcome(event, err)
+					}
 				})
 			Step(
 				fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
@@ -1397,7 +1432,7 @@ func TriggerEmailReporter(contexts *[]*scheduler.Context, recordChan *chan *Even
 		}
 
 		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
-			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus})
+			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus, Cores: coresMap[n.Name]})
 	}
 
 	for k, v := range RunningTriggers {
@@ -2794,12 +2829,17 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
-					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+					err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
+					logrus.Errorf(err.Error())
+					UpdateOutcome(event, err)
 				}
 				poolSet := make(map[string]struct{})
 				var exists = struct{}{}
 				for _, vol := range appVolumes {
 					replicaSets, err := Inst().V.GetReplicaSets(vol)
+					if err != nil {
+						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
+					}
 					UpdateOutcome(event, err)
 
 					for _, poolUUID := range replicaSets[0].PoolUuids {
@@ -2811,6 +2851,10 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 
 				for id := range poolSet {
 					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(chaosLevel))
+					if err != nil {
+						err = fmt.Errorf("error pool [%v ]resize-disk: [%v]", id, err.Error())
+						logrus.Error(err.Error())
+					}
 					UpdateOutcome(event, err)
 				}
 				logrus.Infof("Waiting for 10 mins for resize to initiate and check status")
@@ -2818,7 +2862,9 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				Step("Validate the Pool status after re-size disk", func() {
 					nodeList := node.GetStorageDriverNodes()
 					if len(nodeList) == 0 {
-						UpdateOutcome(event, fmt.Errorf("unable to get node list"))
+						err = fmt.Errorf("unable to get node list")
+						logrus.Errorf("Error getting nodelist while pool resize : [%v]", err.Error())
+						UpdateOutcome(event, err)
 					}
 					for _, n := range nodeList {
 						for _, p := range n.StoragePools {
@@ -2827,7 +2873,7 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 							poolLastOperationStatus := p.GetLastOperation().GetStatus().String()
 							poolLastOperationMsg := p.GetLastOperation().GetMsg()
 							logrus.Infof("Pool ID: %s, LastOperation: %s, Status: %s, Message:%s", poolID, poolLastOperationType, poolLastOperationStatus, poolLastOperationMsg)
-							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" {
+							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" && poolLastOperationStatus != "OPERATION_PENDING" {
 								UpdateOutcome(event, fmt.Errorf("last operation %v for pool %v is failed with Msg: %v", poolLastOperationType, poolID, poolLastOperationMsg))
 							}
 						}
@@ -2867,12 +2913,17 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
-					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+					err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
+					logrus.Errorf(err.Error())
+					UpdateOutcome(event, err)
 				}
 				poolSet := make(map[string]struct{})
 				var exists = struct{}{}
 				for _, vol := range appVolumes {
 					replicaSets, err := Inst().V.GetReplicaSets(vol)
+					if err != nil {
+						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
+					}
 					UpdateOutcome(event, err)
 
 					for _, poolUUID := range replicaSets[0].PoolUuids {
@@ -2884,6 +2935,10 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 				for id := range poolSet {
 					err = Inst().V.ResizeStoragePoolByPercentage(id, 1, uint64(chaosLevel))
+					if err != nil {
+						err = fmt.Errorf("error pool [%v ]add-disk: [%v]", id, err.Error())
+						logrus.Error(err.Error())
+					}
 					UpdateOutcome(event, err)
 				}
 				logrus.Infof("Waiting for 10 mins for add disk to initiate and check status")
@@ -2891,7 +2946,9 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				Step("Validate the Pool status after add disk", func() {
 					nodeList := node.GetStorageDriverNodes()
 					if len(nodeList) == 0 {
-						UpdateOutcome(event, fmt.Errorf("unable to get node list"))
+						err = fmt.Errorf("unable to get node list")
+						logrus.Errorf("Error getting nodelist while pool resize : [%v]", err.Error())
+						UpdateOutcome(event, err)
 					}
 					for _, n := range nodeList {
 						for _, p := range n.StoragePools {
@@ -2900,7 +2957,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 							poolLastOperationStatus := p.GetLastOperation().GetStatus().String()
 							poolLastOperationMsg := p.GetLastOperation().GetMsg()
 							logrus.Infof("Pool ID: %s, LastOperation: %s, Status: %s, Message:%s", poolID, poolLastOperationType, poolLastOperationStatus, poolLastOperationMsg)
-							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" {
+							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" && poolLastOperationStatus != "OPERATION_PENDING" {
 								UpdateOutcome(event, fmt.Errorf("last operation %v for pool %v is failed with Msg: %v", poolLastOperationType, poolID, poolLastOperationMsg))
 							}
 						}
@@ -3089,10 +3146,24 @@ tbody tr:last-child {
    <td align="center"><h4>PX Node Name </h4></td>
    <td align="center"><h4>PX Version </h4></td>
    <td align="center"><h4>PX Status </h4></td>
+   <td align="center"><h4>Cores </h4></td>
  </tr>
-{{range .NodeInfo}}<tr>
-{{range rangeStruct .}} <td>{{.}}</td>
-{{end}}</tr>
+{{range .NodeInfo}}
+<tr>
+<td>{{ .MgmtIP }}</td>
+<td>{{ .NodeName }}</td>
+<td>{{ .PxVersion }}</td>
+{{ if eq .Status "STATUS_OK"}}
+<td bgcolor="green">{{ .Status }}</td>
+{{ else }}
+<td bgcolor="red">{{ .Status }}</td>
+{{ end }}
+{{ if .Cores }}
+<td bgcolor="red">1</td>
+{{ else }}
+<td>0</td>
+{{ end }}
+</tr>
 {{end}}
 </table>
 <hr/>
@@ -3111,10 +3182,10 @@ tbody tr:last-child {
 <h3>Event Details</h3>
 <table border=1 width: 100%>
 <tr>
-   <td class="wrapper" width="600" align="center"><h4>Event </h4></td>
+   <td class="wrapper" width="200" align="center"><h4>Event </h4></td>
    <td align="center"><h4>Start Time </h4></td>
    <td align="center"><h4>End Time </h4></td>
-   <td align="center"><h4>Errors </h4></td>
+   <td class="wrapper" width="600" align="center"><h4>Errors </h4></td>
  </tr>
 {{range .EmailRecords.Records}}<tr>
 {{range rangeStruct .}} <td>{{.}}</td>

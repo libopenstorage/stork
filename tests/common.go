@@ -348,7 +348,10 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-			processError(err, errChan...)
+			if err != nil {
+				processError(err, errChan...)
+				return
+			}
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {

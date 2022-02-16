@@ -587,7 +587,7 @@ func populateIntervals() {
 	triggerInterval[DeleteLocalSnapShot][8] = 6 * baseInterval
 	triggerInterval[DeleteLocalSnapShot][7] = 9 * baseInterval
 	triggerInterval[DeleteLocalSnapShot][6] = 12 * baseInterval
-	triggerInterval[DeleteLocalSnapShot][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[DeleteLocalSnapShot][5] = 15 * baseInterval
 	triggerInterval[DeleteLocalSnapShot][4] = 18 * baseInterval
 	triggerInterval[DeleteLocalSnapShot][3] = 21 * baseInterval
 	triggerInterval[DeleteLocalSnapShot][2] = 24 * baseInterval
