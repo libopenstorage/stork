@@ -141,6 +141,22 @@ func (d *DefaultDriver) RecoverDriver(n node.Node) error {
 	}
 }
 
+// EnterMaintenance puts the given node in maintenance mode
+func (d *DefaultDriver) EnterMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnterMaintenance()",
+	}
+}
+
+// ExitMaintenance exits the given node from maintenance mode
+func (d *DefaultDriver) ExitMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExitMaintenance()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{

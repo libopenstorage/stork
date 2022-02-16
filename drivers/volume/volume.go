@@ -149,6 +149,12 @@ type Driver interface {
 	// failure.
 	RecoverDriver(n node.Node) error
 
+	// EnterMaintenance puts the given node in maintenance mode
+	EnterMaintenance(n node.Node) error
+
+	// ExitMaintenance exits the given node from maintenance mode
+	ExitMaintenance(n node.Node) error
+
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
 

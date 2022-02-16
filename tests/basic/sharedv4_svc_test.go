@@ -285,6 +285,26 @@ func (fm *failoverMethodReboot) sleepBetweenFailovers() time.Duration {
 	return 2 * time.Minute
 }
 
+type failoverMethodMaintenance struct {
+}
+
+func (fm *failoverMethodMaintenance) doFailover(attachedNode *node.Node) {
+	maintainVolumeDriverOnNode(attachedNode)
+}
+
+func (fm *failoverMethodMaintenance) String() string {
+	return "maintenance"
+}
+
+func (fm *failoverMethodMaintenance) getExpectedPodDeletions() []int {
+	// 2 pods, one on the old NFS server and one on the new NFS server should be deleted.
+	return []int{2}
+}
+
+func (fm *failoverMethodMaintenance) sleepBetweenFailovers() time.Duration {
+	return 30 * time.Second
+}
+
 var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	var testrailID, runID int
 	var contexts, testSv4Contexts []*scheduler.Context
@@ -430,6 +450,16 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 				namespacePrefix = "rebootnode"
 				fm = &failoverMethodReboot{}
 				testrailID = 54385
+			})
+			testFailoverFailback()
+		})
+
+		// test failover/failback by putting the node in maintenance mode
+		Context("{Shared4SvcMaintainNode}", func() {
+			BeforeEach(func() {
+				namespacePrefix = "maintainnode"
+				fm = &failoverMethodMaintenance{}
+				testrailID = 54375
 			})
 			testFailoverFailback()
 		})
@@ -1243,6 +1273,22 @@ func restartVolumeDriverOnNode(nodeObj *node.Node) {
 	dur = 60 * time.Second
 	logrus.Infof("sleep for %v to allow volume driver and the app pods to settle down on node %s", dur, nodeObj.Name)
 	time.Sleep(dur)
+}
+
+func maintainVolumeDriverOnNode(nodeObj *node.Node) {
+	logrus.Infof("Putting node %s in maintenance mode", nodeObj.Name)
+	err := Inst().V.EnterMaintenance(*nodeObj)
+	Expect(err).NotTo(HaveOccurred())
+
+	dur := 30 * time.Second
+	logrus.Infof("sleep for %v to allow the failover before exiting node %s from maintenance mode", dur, nodeObj.Name)
+	time.Sleep(dur)
+
+	err = Inst().V.ExitMaintenance(*nodeObj)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = Inst().V.WaitDriverUpOnNode(*nodeObj, Inst().DriverStartTimeout)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func rebootNodeAndWaitForReady(nodeObj *node.Node) {
