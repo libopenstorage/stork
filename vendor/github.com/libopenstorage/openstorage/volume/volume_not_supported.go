@@ -1,6 +1,8 @@
 package volume
 
 import (
+	"context"
+
 	"github.com/libopenstorage/openstorage/api"
 )
 
@@ -38,11 +40,11 @@ var (
 
 type blockNotSupported struct{}
 
-func (b *blockNotSupported) Attach(volumeID string, attachOptions map[string]string) (string, error) {
+func (b *blockNotSupported) Attach(ctx context.Context, volumeID string, attachOptions map[string]string) (string, error) {
 	return "", ErrNotSupported
 }
 
-func (b *blockNotSupported) Detach(volumeID string, options map[string]string) error {
+func (b *blockNotSupported) Detach(ctx context.Context, volumeID string, options map[string]string) error {
 	return ErrNotSupported
 }
 
@@ -110,6 +112,12 @@ func (s *statsNotSupported) VolumeUsageByNode(
 	return nil, ErrNotSupported
 }
 
+func (v *statsNotSupported) RelaxedReclaimPurge(
+	nodeID string,
+) (*api.RelaxedReclaimPurge, error) {
+	return nil, ErrNotSupported
+}
+
 type quiesceNotSupported struct{}
 
 func (s *quiesceNotSupported) Quiesce(
@@ -130,6 +138,13 @@ func (c *credsNotSupported) CredsCreate(
 	params map[string]string,
 ) (string, error) {
 	return "", ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsUpdate(
+	name string,
+	params map[string]string,
+) error {
+	return ErrNotSupported
 }
 
 func (c *credsNotSupported) CredsDelete(
@@ -276,6 +291,12 @@ func (cl *filesystemTrimNotSupported) FilesystemTrimStart(request *api.SdkFilesy
 	return nil, ErrNotSupported
 }
 func (cl *filesystemTrimNotSupported) FilesystemTrimStatus(request *api.SdkFilesystemTrimStatusRequest) (*api.SdkFilesystemTrimStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemTrimNotSupported) AutoFilesystemTrimStatus(request *api.SdkAutoFSTrimStatusRequest) (*api.SdkAutoFSTrimStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemTrimNotSupported) AutoFilesystemTrimUsage(request *api.SdkAutoFSTrimUsageRequest) (*api.SdkAutoFSTrimUsageResponse, error) {
 	return nil, ErrNotSupported
 }
 func (cl *filesystemTrimNotSupported) FilesystemTrimStop(request *api.SdkFilesystemTrimStopRequest) (*api.SdkFilesystemTrimStopResponse, error) {

@@ -24,6 +24,16 @@ func (e *ErrFailedToRebootNode) Error() string {
 	return fmt.Sprintf("Failed to reboot node: %v. Cause: %v", e.Node.Name, e.Cause)
 }
 
+// ErrFailedToCrashNode error type when failing to reboot a node after a crash
+type ErrFailedToCrashNode struct {
+	Node  Node
+	Cause string
+}
+
+func (e *ErrFailedToCrashNode) Error() string {
+	return fmt.Sprintf("Failed to reboot node after node crash test: %v. Cause: %v", e.Node.Name, e.Cause)
+}
+
 // ErrFailedToShutdownNode error type when failing to shutdown the node
 type ErrFailedToShutdownNode struct {
 	Node  Node
@@ -93,4 +103,14 @@ type ErrFailedToSystemCheck struct {
 
 func (e *ErrFailedToSystemCheck) Error() string {
 	return fmt.Sprintf("System check failed on: %v. Cause: %v", e.Node.Name, e.Cause)
+}
+
+// ErrFailedToDeleteNode error type when failing to delete the node
+type ErrFailedToDeleteNode struct {
+	Node  Node
+	Cause string
+}
+
+func (e *ErrFailedToDeleteNode) Error() string {
+	return fmt.Sprintf("Failed to delete node: %v. Cause: %v", e.Node.Name, e.Cause)
 }

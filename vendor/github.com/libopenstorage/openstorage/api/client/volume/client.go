@@ -2,6 +2,7 @@ package volume
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	ost_errors "github.com/libopenstorage/openstorage/api/errors"
+	"github.com/libopenstorage/openstorage/pkg/correlation"
 	"github.com/libopenstorage/openstorage/volume"
 )
 
@@ -298,6 +300,12 @@ func (v *volumeClient) VolumeUsageByNode(
 
 }
 
+func (v *volumeClient) RelaxedReclaimPurge(
+	nodeID string,
+) (*api.RelaxedReclaimPurge, error) {
+	return nil, volume.ErrNotSupported
+}
+
 // Shutdown and cleanup.
 func (v *volumeClient) Shutdown() {}
 
@@ -348,8 +356,9 @@ func (v *volumeClient) SnapEnumerate(ids []string,
 // Attach map device to the host.
 // On success the devicePath specifies location where the device is exported
 // Errors ErrEnoEnt, ErrVolAttached may be returned.
-func (v *volumeClient) Attach(volumeID string, attachOptions map[string]string) (string, error) {
+func (v *volumeClient) Attach(ctx context.Context, volumeID string, attachOptions map[string]string) (string, error) {
 	response, err := v.doVolumeSetGetResponse(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -373,8 +382,9 @@ func (v *volumeClient) Attach(volumeID string, attachOptions map[string]string) 
 
 // Detach device from the host.
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Detach(volumeID string, options map[string]string) error {
+func (v *volumeClient) Detach(ctx context.Context, volumeID string, options map[string]string) error {
 	return v.doVolumeSet(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -385,14 +395,15 @@ func (v *volumeClient) Detach(volumeID string, options map[string]string) error 
 	)
 }
 
-func (v *volumeClient) MountedAt(mountPath string) string {
+func (v *volumeClient) MountedAt(ctx context.Context, mountPath string) string {
 	return ""
 }
 
 // Mount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Mount(volumeID string, mountPath string, options map[string]string) error {
+func (v *volumeClient) Mount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error {
 	return v.doVolumeSet(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -406,8 +417,9 @@ func (v *volumeClient) Mount(volumeID string, mountPath string, options map[stri
 
 // Unmount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Unmount(volumeID string, mountPath string, options map[string]string) error {
+func (v *volumeClient) Unmount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error {
 	return v.doVolumeSet(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -422,7 +434,7 @@ func (v *volumeClient) Unmount(volumeID string, mountPath string, options map[st
 // Update volume
 func (v *volumeClient) Set(volumeID string, locator *api.VolumeLocator,
 	spec *api.VolumeSpec) error {
-	return v.doVolumeSet(
+	return v.doVolumeSet(correlation.TODO(),
 		volumeID,
 		&api.VolumeSetRequest{
 			Locator: locator,
@@ -431,16 +443,23 @@ func (v *volumeClient) Set(volumeID string, locator *api.VolumeLocator,
 	)
 }
 
-func (v *volumeClient) doVolumeSet(volumeID string,
+func (v *volumeClient) doVolumeSet(ctx context.Context, volumeID string,
 	request *api.VolumeSetRequest) error {
-	_, err := v.doVolumeSetGetResponse(volumeID, request)
+	_, err := v.doVolumeSetGetResponse(ctx, volumeID, request)
 	return err
 }
 
-func (v *volumeClient) doVolumeSetGetResponse(volumeID string,
+func (v *volumeClient) doVolumeSetGetResponse(ctx context.Context, volumeID string,
 	request *api.VolumeSetRequest) (*api.VolumeSetResponse, error) {
 	response := &api.VolumeSetResponse{}
-	if err := v.c.Put().Resource(volumePath).Instance(volumeID).Body(request).Do().Unmarshal(response); err != nil {
+	rc := correlation.RequestContextFromContextValue(ctx)
+	if err := v.c.Put().Resource(volumePath).
+		Instance(volumeID).
+		Body(request).
+		SetHeader(correlation.ContextIDKey, rc.ID).
+		SetHeader(correlation.ContextOriginKey, string(rc.Origin)).
+		Do().
+		Unmarshal(response); err != nil {
 		return nil, err
 	}
 	if response.VolumeResponse != nil && response.VolumeResponse.Error != "" {
@@ -503,6 +522,20 @@ func (v *volumeClient) CredsCreate(params map[string]string) (string, error) {
 		return "", err
 	}
 	return createResponse.UUID, nil
+}
+
+// CredsUpdate updates a previsiously configured credentials
+func (v *volumeClient) CredsUpdate(name string, params map[string]string) error {
+	request := &api.CredUpdateRequest{
+		Name:        name,
+		InputParams: params,
+	}
+	req := v.c.Put().Resource(api.OsdCredsPath).Instance(name).Body(request)
+	response := req.Do()
+	if response.Error() != nil {
+		return response.FormatError()
+	}
+	return nil
 }
 
 // CredsDelete deletes the credential with given UUID

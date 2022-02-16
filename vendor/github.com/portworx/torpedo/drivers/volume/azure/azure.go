@@ -5,6 +5,7 @@ import (
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,6 +36,14 @@ func (d *azure) ValidateVolumeCleanup() error {
 
 func (d *azure) RefreshDriverEndpoints() error {
 	return nil
+}
+
+func (d *azure) ValidateStorageCluster(endpointURL, endpointVersion string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateStorageCluster()",
+	}
 }
 
 func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
