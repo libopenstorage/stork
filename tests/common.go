@@ -1398,7 +1398,9 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
 	logrus.Debugf("contexts: %v", contexts)
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
+	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
+	if ginkgoTestDescr.Failed {
+		logrus.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"

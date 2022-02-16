@@ -45,7 +45,19 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsserverfailover-%d", i))...)
 		}
 
+		// scale all the apps to have 2 pods since later we will have only 2 nodes where the pods can run
+		Step("scale all apps to 2", func() {
+			scaleApps(contexts, 2)
+		})
+
 		ValidateApplications(contexts)
+
+		// wait until each app has 2 pods (some pods may be still terminating)
+		for _, ctx := range contexts {
+			Step(fmt.Sprintf("wait for app %s to have 2 pods", ctx.App.Key), func() {
+				waitForNumPodsToEqual(ctx, 2)
+			})
+		}
 
 		for _, ctx := range contexts {
 			var volume *volume.Volume
@@ -79,24 +91,17 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 
 			// scale down and then scale up the app, so that pods are only scheduled on replica nodes
 			Step(fmt.Sprintf("scale down app: %s to 0 ", ctx.App.Key), func() {
-				applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				for name := range applicationScaleUpMap {
-					applicationScaleUpMap[name] = int32(0)
-				}
-				err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-				Expect(err).NotTo(HaveOccurred())
+				scaleApp(ctx, 0)
 			})
 
-			Step(fmt.Sprintf("scale up app: %s to 2, and re-enable scheduling on all nodes", ctx.App.Key), func() {
-				applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				for name := range applicationScaleUpMap {
-					applicationScaleUpMap[name] = int32(2)
-				}
-				err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-				Expect(err).NotTo(HaveOccurred())
-				ValidateApplications(contexts)
+			// wait until all pods are gone
+			Step(fmt.Sprintf("wait for app %s to have 0 pods", ctx.App.Key), func() {
+				waitForNumPodsToEqual(ctx, 0)
+			})
+
+			Step(fmt.Sprintf("scale up app: %s to 2", ctx.App.Key), func() {
+				scaleApp(ctx, 2)
+				ValidateContext(ctx)
 			})
 
 			Step("fail over nfs server, and make sure the pod on server gets restarted", func() {
@@ -105,6 +110,10 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 				logrus.Infof("old nfs server %v [%v]", oldServer.SchedulerNodeName, oldServer.Addresses[0])
 				pods, err := core.Instance().GetPodsUsingPV(volume.ID)
 				Expect(err).NotTo(HaveOccurred())
+				for _, pod := range pods {
+					logrus.Infof("pod %s/%s in phase %v on node %v before the failover",
+						pod.Namespace, pod.Name, pod.Status.Phase, pod.Spec.NodeName)
+				}
 				var oldPodOnOldServer corev1.Pod
 				for _, pod := range pods {
 					if pod.Spec.NodeName == oldServer.Name {
@@ -155,6 +164,10 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 				// make sure the pods on both old and new server are restarted
 				pods, err = core.Instance().GetPodsUsingPV(volume.ID)
 				Expect(err).NotTo(HaveOccurred())
+				for _, pod := range pods {
+					logrus.Infof("pod %s/%s in phase %v on node %v after the failover",
+						pod.Namespace, pod.Name, pod.Status.Phase, pod.Spec.NodeName)
+				}
 				podRestartedOnOldServer := false
 				podRestartedOnNewServer := false
 				for _, pod := range pods {
@@ -1334,6 +1347,28 @@ func getDeletionTimestampFromContext(ctx *scheduler.Context) *metav1.Time {
 	deletionTimestamp := services.Items[0].DeletionTimestamp
 	logrus.Infof("deletion timestamp: %v", deletionTimestamp)
 	return deletionTimestamp
+}
+
+func waitForNumPodsToEqual(ctx *scheduler.Context, numPods int) {
+	var vol *volume.Volume
+	var pods []corev1.Pod
+
+	Eventually(func() (int, error) {
+		var err error
+		if vol == nil || vol.ID == "" {
+			vols, err := Inst().S.GetVolumes(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(vols)).To(Equal(1))
+			vol = vols[0]
+		}
+		if vol.ID == "" {
+			// PVC not bound yet?
+			return 0, fmt.Errorf("empty vol.ID in volume %v, PVC not bound?", vol)
+		}
+		pods, err = core.Instance().GetPodsUsingPV(vol.ID)
+		return len(pods), err
+	}, 3*time.Minute, 10*time.Second).Should(BeNumerically("==", numPods),
+		"number of pods did not reach %v for app %v", numPods, ctx.App.Key)
 }
 
 func getSv4TestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Volume, *node.Node) {
