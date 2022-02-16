@@ -434,6 +434,13 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 })
 
 var _ = Describe("{CordonDeployDestroy}", func() {
+	var testrailID = 54373
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54373
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
 	var contexts []*scheduler.Context
 
 	It("has to cordon all nodes but one, deploy and destroy app", func() {
@@ -483,7 +490,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
