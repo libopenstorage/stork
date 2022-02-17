@@ -22,14 +22,14 @@ require (
 	github.com/libopenstorage/cloudops v0.0.0-20210223183702-b9c6b74cbf1d
 	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
 	github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
-	github.com/libopenstorage/stork v1.4.1-0.20211113171730-e02f28e240e9
+	github.com/libopenstorage/stork v1.4.1-0.20220216141154-b9773cd69de9
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.16.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20220106041357-ccb13aed2f37
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220216223110-573630bffd87
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
@@ -42,9 +42,9 @@ require (
 	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
-	k8s.io/api v0.20.4
-	k8s.io/apiextensions-apiserver v0.20.4
-	k8s.io/apimachinery v0.20.4
+	k8s.io/api v0.21.1
+	k8s.io/apiextensions-apiserver v0.21.1
+	k8s.io/apimachinery v0.21.1
 	k8s.io/client-go v12.0.0+incompatible
 )
 
@@ -65,8 +65,8 @@ replace (
 	github.com/libopenstorage/operator => github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 
 	// Stork dependencies
-	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20220111140954-f18bb2a55fcf
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
+	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20220216141154-b9773cd69de9
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220216223110-573630bffd87
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.4
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency

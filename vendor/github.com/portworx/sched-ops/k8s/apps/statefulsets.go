@@ -18,7 +18,7 @@ import (
 // StatefulSetOps is an interface to perform k8s stateful set operations
 type StatefulSetOps interface {
 	// ListStatefulSets lists all the statefulsets for a given namespace
-	ListStatefulSets(namespace string) (*appsv1.StatefulSetList, error)
+	ListStatefulSets(namespace string, options metav1.ListOptions) (*appsv1.StatefulSetList, error)
 	// GetStatefulSet returns a statefulset for given name and namespace
 	GetStatefulSet(name, namespace string) (*appsv1.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
@@ -41,15 +41,17 @@ type StatefulSetOps interface {
 	GetPVCsForStatefulSet(ss *appsv1.StatefulSet) (*corev1.PersistentVolumeClaimList, error)
 	// ValidatePVCsForStatefulSet validates the PVCs for the given stateful set
 	ValidatePVCsForStatefulSet(ss *appsv1.StatefulSet, timeout, retryInterval time.Duration) error
+	// DeleteStatefulSetPods deletes pods for the given statefulset name and namespace
+	DeleteStatefulSetPods(name, namespace string, timeout time.Duration) error
 }
 
 // ListStatefulSets lists all the statefulsets for a given namespace
-func (c *Client) ListStatefulSets(namespace string) (*appsv1.StatefulSetList, error) {
+func (c *Client) ListStatefulSets(namespace string, options metav1.ListOptions) (*appsv1.StatefulSetList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
 
-	return c.apps.StatefulSets(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.apps.StatefulSets(namespace).List(context.TODO(), options)
 }
 
 // GetStatefulSet returns a statefulset for given name and namespace
@@ -326,5 +328,28 @@ func (c *Client) validatePersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+// DeleteStatefulSetPods deletes pods for the given statefulset name and namespace
+func (c *Client) DeleteStatefulSetPods(name, namespace string, timeout time.Duration) error {
+	sset, err := c.GetStatefulSet(name, namespace)
+	if err != nil {
+		return err
+	}
+
+	pods, err := c.GetStatefulSetPods(sset)
+	if err != nil {
+		return err
+	}
+
+	if err := common.DeletePods(c.core, pods, false); err != nil {
+		return err
+	}
+
+	if err := common.WaitForPodsToBeDeleted(c.core, pods, timeout); err != nil {
+		return fmt.Errorf("Failed to wait for pods to be deleted, Err: %v", err)
+	}
+
 	return nil
 }

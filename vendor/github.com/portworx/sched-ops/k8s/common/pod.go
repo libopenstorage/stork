@@ -78,7 +78,7 @@ func WaitForPodsToBeDeleted(client v1.CoreV1Interface, podsToDelete []corev1.Pod
 		wg.Add(1)
 		go func(pod corev1.Pod, index int) {
 			defer wg.Done()
-			if err := WaitForPodDeletion(client, pod.Name, pod.Namespace, timeout); err != nil {
+			if err := WaitForPodDeletion(client, pod, timeout); err != nil {
 				errChan <- fmt.Errorf("Failed to delete pod %s, Err: %v", pod.Name, err)
 			}
 		}(pod, index)
@@ -101,9 +101,9 @@ func WaitForPodsToBeDeleted(client v1.CoreV1Interface, podsToDelete []corev1.Pod
 }
 
 // WaitForPodDeletion waits for given timeout for given pod to be deleted
-func WaitForPodDeletion(client v1.CoreV1Interface, name string, namespace string, timeout time.Duration) error {
+func WaitForPodDeletion(client v1.CoreV1Interface, pod corev1.Pod, timeout time.Duration) error {
 	t := func() (interface{}, bool, error) {
-		p, err := GetPodByName(client, name, namespace)
+		p, err := GetPodByName(client, pod.Name, pod.Namespace)
 		if err != nil {
 			if err == schederrors.ErrPodsNotFound {
 				return nil, false, nil
@@ -112,8 +112,8 @@ func WaitForPodDeletion(client v1.CoreV1Interface, name string, namespace string
 			return nil, true, err
 		}
 
-		if p != nil {
-			return nil, true, fmt.Errorf("pod %s:%s is still present in the system", namespace, p.Name)
+		if p != nil && p.UID == pod.UID {
+			return nil, true, fmt.Errorf("pod %s:%s is still present in the system", p.Namespace, p.Name)
 		}
 
 		return nil, false, nil
