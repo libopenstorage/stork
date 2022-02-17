@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -80,8 +81,12 @@ func statefulsetTest(t *testing.T) {
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	require.NoError(t, err, "Error getting node for app")
-	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
-
+	// TODO: There is no qurantee that all pods will be scheduled on
+	// different nodes, we should restrict pvc to repl1 and one px node
+	// use preferLocalNode flag to ensure pod is getting scheduled on node
+	// where replicas exist
+	// require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
+	logrus.Infof("sts pod scheduled on %d nodes", len(scheduledNodes))
 	// TODO: torpedo doesn't return correct volumes here
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should have 3 volumes")
@@ -137,11 +142,9 @@ func driverNodeErrorTest(t *testing.T) {
 	err = volumeDriver.StopDriver(scheduledNodes, false, nil)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 	stoppedNode := scheduledNodes[0]
-
-	time.Sleep(1 * time.Minute)
-	err = schedulerDriver.DeleteTasks(ctxs[0], nil)
-	require.NoError(t, err, "Error deleting pod")
-	time.Sleep(10 * time.Second)
+	// node timeout bumped to 4 mins from stork 2.9.0
+	// ref: https://github.com/libopenstorage/stork/pull/1028
+	time.Sleep(5 * time.Minute)
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state after deletion")
@@ -191,9 +194,7 @@ func pvcOwnershipTest(t *testing.T) {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			updatePVC, err := core.Instance().GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			require.NoError(t, err, "Error getting persistent volume claim.")
-			if _, hasKey := updatePVC.Annotations[annotationStorageProvisioner]; hasKey {
-				delete(updatePVC.Annotations, "storage-provisioner")
-			}
+			delete(updatePVC.Annotations, annotationStorageProvisioner)
 			_, err = core.Instance().UpdatePersistentVolumeClaim(updatePVC)
 			require.NoError(t, err, "Error updating annotations in PVC.")
 		}
@@ -201,8 +202,14 @@ func pvcOwnershipTest(t *testing.T) {
 
 	err = volumeDriver.StopDriver(scheduledNodes, false, nil)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
-
-	time.Sleep(3 * time.Minute)
+	// make sure to start driver if test failed
+	defer func() {
+		err = volumeDriver.StartDriver(scheduledNodes[0])
+		require.NoError(t, err, "Error starting driver on scheduled Node %+v", scheduledNodes[0])
+	}()
+	// node timeout bumped to 4 mins from stork 2.9.0
+	// ref: https://github.com/libopenstorage/stork/pull/1028
+	time.Sleep(5 * time.Minute)
 
 	var errUnscheduledPod bool
 	for _, spec := range ctxs[0].App.SpecList {

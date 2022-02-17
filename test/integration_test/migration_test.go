@@ -55,8 +55,6 @@ func testMigration(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	t.Run("deploymentTest", deploymentMigrationTest)
-	t.Run("pvcResizeTest", pvcResizeMigrationTest)
-
 	t.Run("deploymentMigrationReverseTest", deploymentMigrationReverseTest)
 	t.Run("statefulsetTest", statefulsetMigrationTest)
 	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
@@ -78,10 +76,11 @@ func testMigration(t *testing.T) {
 	}
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
+	t.Run("pvcResizeTest", pvcResizeMigrationTest)
 	t.Run("suspendMigrationTest", suspendMigrationTest)
-	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
 	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
 	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
+	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -1180,12 +1179,14 @@ func pvcResizeMigrationTest(t *testing.T) {
 		_, err := core.Instance().UpdatePersistentVolumeClaim(&pvc)
 		require.NoError(t, err, "Error updating pvc: %s/%s", pvc.GetNamespace(), pvc.GetName())
 	}
-
+	logrus.Infof("Resized PVCs on source cluster")
 	// bump time of the world by 5 minutes
 	mockNow := time.Now().Add(6 * time.Minute)
 	err = setMockTime(&mockNow)
 	require.NoError(t, err, "Error setting mock time")
 
+	time.Sleep(10 * time.Second)
+	logrus.Infof("Trigger second migration")
 	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
 
 	// Change kubeconfig to destination
@@ -1253,17 +1254,17 @@ func suspendMigrationTest(t *testing.T) {
 	// the schedule interval for these specs it set to 5 minutes
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-schedule-interval",
+		"mysql-migration-schedule-interval-autosuspend",
 		"mysql-1-pvc",
 		[]string{"cassandra"},
-		[]string{"mysql-migration-schedule-interval"},
+		[]string{"mysql-migration-schedule-interval-autosuspend"},
 		true,
 		false,
 		false,
 		false,
 	)
 
-	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+	validateMigration(t, "mysql-migration-schedule-interval-autosuspend", preMigrationCtx.GetID())
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
@@ -1284,7 +1285,7 @@ func suspendMigrationTest(t *testing.T) {
 	}
 
 	// verify migration status on DR cluster
-	migrSched, err := storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval", namespace)
+	migrSched, err := storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval-autosuspend", namespace)
 	require.NoError(t, err, "failed to retrive migration schedule: %v", err)
 
 	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
@@ -1297,7 +1298,7 @@ func suspendMigrationTest(t *testing.T) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
-	migrSched, err = storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval", namespace)
+	migrSched, err = storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval-autosuspend", namespace)
 	require.NoError(t, err, "failed to retrive migration schedule: %v", err)
 
 	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
