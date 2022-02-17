@@ -222,10 +222,10 @@ type Driver interface {
 	// GetLicenseSummary returns the activated license SKU and Features
 	GetLicenseSummary() (LicenseSummary, error)
 
-	// SetClusterOpts sets cluster options
+	//SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, rtOpts map[string]string) error
 
-	// ToggleCallHome toggles Call-home
+	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
 
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
@@ -239,6 +239,30 @@ type Driver interface {
 
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
+
+	// GetPxNode return api.StorageNode
+	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
+
+	// GetStoragelessNodes() return list of storageless nodes
+	GetStoragelessNodes() ([]*api.StorageNode, error)
+
+	// RecyclePXHost Recycle a node and validate the storageless node picked all it drives
+	//RecyclePXHost(*node.Node) error
+
+	// Contains check if StorageNode list conatins a give node or not
+	Contains([]*api.StorageNode, *api.StorageNode) bool
+
+	// UpdateNodeWithStorageInfo update a new node object
+	UpdateNodeWithStorageInfo(n node.Node, skipNodename string) error
+
+	// WaitForNodeIDToBePickedByAnotherNode wait for another node to pick the down node nodeID
+	WaitForNodeIDToBePickedByAnotherNode(n *api.StorageNode) (*api.StorageNode, error)
+
+	// ValidateNodeAfterPickingUpNodeID validates the new node pick the correct drives and pools
+	ValidateNodeAfterPickingUpNodeID(n1 *api.StorageNode, n2 *api.StorageNode, snList []*api.StorageNode) error
+
+	// WaitForPxPodsToBeUp waits for px pod to be up in given node
+	WaitForPxPodsToBeUp(n node.Node) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

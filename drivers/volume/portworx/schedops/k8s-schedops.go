@@ -661,18 +661,24 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 
 // IsPXReadyOnNode validates if Portworx pod is up and running
 func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
+	var isPxPodPresent bool = false
 	pxPods, err := k8sCore.GetPodsByNode(n.Name, PXNamespace)
 	if err != nil {
 		logrus.Errorf("Failed to get apps on node %s", n.Name)
 		return false
 	}
+	// Need to make sure if px pod is present or not
 	for _, pod := range pxPods.Items {
+		if pod.Labels["name"] == PXDaemonSet {
+			isPxPodPresent = true
+		}
+
 		if pod.Labels["name"] == PXDaemonSet && !k8sCore.IsPodReady(pod) {
 			printStatus(pod)
 			return false
 		}
 	}
-	return true
+	return isPxPodPresent
 }
 
 // IsPXEnabled returns true  if px is enabled on given node
