@@ -180,6 +180,12 @@ type Driver interface {
 
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
+
+	// AddMachine adds the new machine instance to existing map
+	AddMachine(machineName string) error
+
+	// PowerOnVMByName power on the VM using the vm name
+	PowerOnVMByName(vmName string) error
 }
 
 // Register registers the given node driver
@@ -366,5 +372,19 @@ func (d *notSupportedDriver) SystemctlUnitExist(node Node, service string, optio
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SystemctlUnitExist()",
+	}
+}
+
+func (d *notSupportedDriver) AddMachine(machineName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddMachine()",
+	}
+}
+
+func (d *notSupportedDriver) PowerOnVMByName(vmName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "PowerOnVmByName()",
 	}
 }

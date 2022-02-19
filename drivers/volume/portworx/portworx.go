@@ -75,8 +75,8 @@ const (
 	pxMinVersionForStorkUpgrade               = "2.1"
 	formattingCommandPxctlLocalSnapshotCreate = "pxctl volume snapshot create %s --name %s"
 	formattingCommandPxctlCloudSnapCreate     = "pxctl cloudsnap backup %s"
-	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
 	pxctlVolumeUpdate                         = "pxctl volume update "
+	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
@@ -347,6 +347,214 @@ func (d *portworx) updateNodes(pxNodes []*api.StorageNode) error {
 	return nil
 }
 
+func (d *portworx) printNodes(pxnodes []*api.StorageNode) {
+	logrus.Infof("The following Portworx nodes are in the cluster:")
+	for _, n := range pxnodes {
+		logrus.Infof(
+			"Node UID: %v Node IP: %v Node Status: %v",
+			n.Id,
+			n.DataIp,
+			n.Status,
+		)
+	}
+}
+
+// getStoragelessNode filter out storageless nodes from all px nodes and return it
+func (d *portworx) GetStoragelessNodes() ([]*api.StorageNode, error) {
+
+	storagelessNodes := make([]*api.StorageNode, 0)
+
+	pxnodes, err := d.getPxNodes()
+	if err != nil {
+		return storagelessNodes, err
+	}
+
+	for _, pxnode := range pxnodes {
+		if len(pxnode.Pools) == 0 {
+			storagelessNodes = append(storagelessNodes, pxnode)
+		}
+	}
+	return storagelessNodes, nil
+}
+
+// UpdateNodeWithStorageInfo update nthe storage info to a new node object
+func (d *portworx) UpdateNodeWithStorageInfo(n node.Node, skipNodeName string) error {
+
+	logrus.Infof("Updating the storage info for new node: [%s] ", n.Name)
+
+	// Getting all PX nodes
+	storageNodes, err := d.getPxNodes()
+	if err != nil {
+		return err
+	}
+
+	// Deleted node should be removed from storageNodes otherwise updateNode fails
+	// finding the deletedNode index and need to remove from slice
+	skipIdx := -1
+	for idx, sn := range storageNodes {
+		if len(skipNodeName) > 0 && sn.Hostname == skipNodeName {
+			skipIdx = idx
+			break
+		}
+	}
+
+	// Removing from slice if it is present on slice.
+	if skipIdx >= 0 {
+		storageNodes = append(storageNodes[:skipIdx], storageNodes[skipIdx:]...)
+	}
+
+	if err = d.updateNode(&n, storageNodes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *portworx) WaitForPxPodsToBeUp(n node.Node) error {
+
+	// Check if PX pod is up
+	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
+	t := func() (interface{}, bool, error) {
+		if !d.schedOps.IsPXReadyOnNode(n) {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: fmt.Sprintf("px pod is not ready on node: %s after %v", n.Name, validatePXStartTimeout),
+			}
+		}
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
+		return fmt.Errorf("PX pod failed to come up on node : [%s]. Error: [%v]", n.Name, err)
+	}
+	return nil
+}
+
+// ValidateNodeAfterPickingUpNodeID validates the pools and drives
+func (d *portworx) ValidateNodeAfterPickingUpNodeID(delNode *api.StorageNode,
+	newNode *api.StorageNode, storagelessNodes []*api.StorageNode) error {
+
+	// If node is a storageless node below validation steps not needed
+	if !d.validateNodeIDMigration(delNode, newNode, storagelessNodes) {
+		return fmt.Errorf("validation failed: NodeId:[%s] pick-up failed by new Node: [%s]",
+			delNode.Id, newNode.Hostname,
+		)
+	}
+	logrus.Infof("Pools and Disks are matching after new node:[%s] picked the NodeId: [%s]",
+		newNode.Hostname, newNode.Id,
+	)
+	logrus.Infof("After recyling a node, Node [%s] is having following pools:",
+		newNode.Hostname,
+	)
+	for _, pool := range newNode.Pools {
+		logrus.Infof("Node [%s] is having pool id: [%s]", newNode.Hostname, pool.Uuid)
+	}
+
+	logrus.Infof("After recyling a node, Node [%s] is having disks: [%v]",
+		newNode.Hostname, newNode.Disks,
+	)
+
+	return nil
+}
+
+// Contains checks if px node is present in the given list of px nodes
+func (d *portworx) Contains(nodes []*api.StorageNode, n *api.StorageNode) bool {
+	for _, value := range nodes {
+		if value.Hostname == n.Hostname {
+			return true
+		}
+	}
+	return false
+}
+
+// comparePoolsAndDisks compares pools and disks between two StorageNode objects
+func (d *portworx) comparePoolsAndDisks(srcNode *api.StorageNode,
+	dstNode *api.StorageNode) bool {
+	srcPools := srcNode.Pools
+	dstPools := dstNode.Pools
+
+	// comparing pool ids
+	if len(srcPools) != len(dstPools) {
+		return false
+	}
+
+	for x, pool := range srcPools {
+		if pool.Uuid != dstPools[x].Uuid {
+			logrus.Errorf("Source pools: [%v] not macthing with Destination pools: [%v]",
+				srcPools, dstPools)
+			return false
+		}
+	}
+
+	// Comparing disks
+	srcDisks := srcNode.Disks
+	dstDisks := dstNode.Disks
+
+	for disk, value := range srcDisks {
+		if !srcDisks[disk].Metadata && !dstDisks[disk].Metadata {
+			if value.Id != dstDisks[disk].Id {
+				return false
+			}
+		} else if srcDisks[disk].Metadata && dstDisks[disk].Metadata {
+			if value.Id != dstDisks[disk].Id {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// validateNodeIDMigration validate the nodeID is picked by another storageless node
+func (d *portworx) validateNodeIDMigration(delNode *api.StorageNode, newNode *api.StorageNode,
+	storagelessNodes []*api.StorageNode) bool {
+	// delNode is a deleted node and newNode is a node which picked the NodeId from delNode
+
+	// Validate that nodeID is picked up by the storage-less node
+	if len(storagelessNodes) != 0 && !d.Contains(storagelessNodes, newNode) {
+		logrus.Errorf("Delete NodeId [%s] is not pick up by storageless node", delNode.Id)
+		return false
+	}
+
+	// Validate that dirves and pool IDs are same after picking up by storage-less node
+	if !d.comparePoolsAndDisks(delNode, newNode) {
+		logrus.Errorf(
+			"Pools [%v] in deleted node are not macthing with new node pools [%v]",
+			delNode.Pools, newNode.Pools,
+		)
+		return false
+	}
+	return true
+}
+
+// waitForNodeIDToBePickedByAnotherNode Waits for a given nodeID to be picked up by another node
+func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
+	delNode *api.StorageNode) (*api.StorageNode, error) {
+
+	t := func() (interface{}, bool, error) {
+		nNode, err := d.getPxNodeByID(delNode.Id)
+		if err != nil {
+			return nil, true, err
+		}
+		if nNode.Hostname == delNode.Hostname {
+			return nil, true, fmt.Errorf("waiting for NodeId %v to be picked by another node", delNode.Id)
+		}
+		if len(nNode.Pools) == 0 {
+			return nil, true, fmt.Errorf("waiting for storage to be up in node: [%s]", nNode.Hostname)
+		}
+		return nNode, false, nil
+	}
+
+	result, err := task.DoRetryWithTimeout(t, asyncTimeout, validateStoragePoolSizeInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		return nil, fmt.Errorf("failed to pick NodeId: [%s] by PX nodes in a cluster", delNode.Id)
+	}
+
+	return result.(*api.StorageNode), nil
+}
+
 func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 	logrus.Infof("Updating node: %+v", *n)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
@@ -548,7 +756,7 @@ func (d *portworx) CleanupVolume(volumeName string) error {
 	return nil
 }
 
-func (d *portworx) getPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
+func (d *portworx) GetPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
 	if len(nManager) == 0 {
 		nManager = []api.OpenStorageNodeClient{d.getNodeManager()}
 	}
@@ -559,7 +767,7 @@ func (d *portworx) getPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient
 			logrus.Warnf("node %s with ID %s not found, trying to update node ID...", n.Name, n.VolDriverNodeID)
 			n, err = d.updateNodeID(n, nManager...)
 			if err == nil {
-				return d.getPxNode(n, nManager...)
+				return d.GetPxNode(n, nManager...)
 			}
 		}
 		return &api.StorageNode{Status: api.Status_STATUS_NONE}, err
@@ -587,7 +795,7 @@ func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorag
 
 	t := func() (interface{}, bool, error) {
 		logrus.Debugf("Getting PX Version on node [%s]", n.Name)
-		pxNode, err := d.getPxNode(&n, nodeManager...)
+		pxNode, err := d.GetPxNode(&n, nodeManager...)
 		if err != nil {
 			return "", false, err
 		}
@@ -606,7 +814,7 @@ func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorag
 }
 
 func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
-	pxNode, err := d.getPxNode(&n)
+	pxNode, err := d.GetPxNode(&n)
 	if err != nil {
 		return nil, err
 	}
@@ -643,7 +851,7 @@ func (d *portworx) EnterMaintenance(n node.Node) error {
 		return err
 	}
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.getPxNode(&n)
+		apiNode, err := d.GetPxNode(&n)
 		if err != nil {
 			return nil, true, err
 		}
@@ -675,7 +883,7 @@ func (d *portworx) ExitMaintenance(n node.Node) error {
 	}
 
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.getPxNode(&n)
+		apiNode, err := d.GetPxNode(&n)
 		if err != nil {
 			return nil, true, err
 		}
@@ -1164,7 +1372,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
-// GetNodeForVolume returns the node on which volume is attached
+//GetNodeForVolume returns the node on which volume is attached
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
@@ -1291,6 +1499,23 @@ func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 	return d.getPxNodes()
 }
 
+// getPxNodeByID return px node by provding node id
+func (d *portworx) getPxNodeByID(nodeID string) (*api.StorageNode, error) {
+
+	logrus.Infof("Getting the node using nodeId: [%s]", nodeID)
+	var nodeManager api.OpenStorageNodeClient = d.getNodeManager()
+
+	nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: nodeID})
+	if err != nil {
+		return nil, err
+	}
+
+	if nodeResponse.Node.MgmtIp == "" {
+		return nil, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest")
+	}
+	return nodeResponse.Node, nil
+}
+
 func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.StorageNode, error) {
 	var nodeManager api.OpenStorageNodeClient
 	if nManagers == nil {
@@ -1326,7 +1551,7 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("Getting node info: %s", n.Name)
+		logrus.Debugf("Getting node info for node: [%s]", n.Name)
 		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 
 		if err != nil {
@@ -2575,7 +2800,7 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
 	var err error
 
-	pxNode, err := d.getPxNode(&n)
+	pxNode, err := d.GetPxNode(&n)
 	if err != nil {
 		return err
 	}
@@ -2645,7 +2870,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 	diagsMgr := d.getDiagsManager()
 	jobMgr := d.getDiagsJobManager()
 
-	pxNode, err := d.getPxNode(&n)
+	pxNode, err := d.GetPxNode(&n)
 	if err != nil {
 		return err
 	}
@@ -2691,9 +2916,9 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		time.Sleep(5 * time.Second)
 	}
 
-	// TODO: Verify we can see the files once we return a filename
+	//TODO: Verify we can see the files once we return a filename
 	if diagOps.Validate {
-		pxNode, err := d.getPxNode(&n)
+		pxNode, err := d.GetPxNode(&n)
 		if err != nil {
 			return err
 		}

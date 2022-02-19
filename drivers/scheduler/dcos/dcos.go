@@ -841,6 +841,14 @@ func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	}
 }
 
+func (d *dcos) RecycleNode(n node.Node) error {
+	//Recycle is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RecycleNode()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

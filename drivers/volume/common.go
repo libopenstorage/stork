@@ -568,3 +568,60 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 		Operation: "UpdateSharedv4FailoverStrategyUsingPxctl",
 	}
 }
+
+// GetPxNode return api.Storage Node
+func (d *DefaultDriver) GetPxNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxNode()",
+	}
+}
+
+// Contains return
+func (d *DefaultDriver) Contains(nodes []*api.StorageNode, n *api.StorageNode) bool {
+	return false
+}
+
+// GetStoragelessNodes return storageless node list
+func (d *DefaultDriver) GetStoragelessNodes() ([]*api.StorageNode, error) {
+	return []*api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetStoragelessNodes()",
+	}
+}
+
+// UpdateNodeWithStorageInfo updates storage info in new node object
+func (d *DefaultDriver) UpdateNodeWithStorageInfo(n node.Node, skipNode string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateNodeWithStorageInfo()",
+	}
+
+}
+
+// WaitForNodeIDToBePickedByAnotherNode wait for new node to pick up the drives.
+func (d *DefaultDriver) WaitForNodeIDToBePickedByAnotherNode(
+	n *api.StorageNode) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForNodeIdToBePickedByAnotherNode()",
+	}
+}
+
+// ValidateNodeAfterPickingUpNodeID validates the node.
+func (d *DefaultDriver) ValidateNodeAfterPickingUpNodeID(
+	n1 *api.StorageNode, n2 *api.StorageNode, sn []*api.StorageNode) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateNodeAfterPickingUpNodeId()",
+	}
+}
+
+// WaitForPxPodsToBeUp waits for px pods to be up
+func (d *DefaultDriver) WaitForPxPodsToBeUp(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForPxPodsToBeUp()",
+	}
+
+}

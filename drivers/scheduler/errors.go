@@ -431,3 +431,52 @@ type ErrFailedToGetEvents struct {
 func (e *ErrFailedToGetEvents) Error() string {
 	return fmt.Sprintf("Failed to get Events for: [%v]%v due to err: %v", e.Type, e.Name, e.Cause)
 }
+
+// ErrFailedToDeleteNode error when we are unable to delete node
+type ErrFailedToDeleteNode struct {
+	// Node which failed to delete
+	Node node.Node
+
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDeleteNode) Error() string {
+	return fmt.Sprintf("Failed to Delete a Node : [%v] due to err: %v", e.Node.Name, e.Cause)
+}
+
+// ErrFailedToGetNode error when we are unable to get a new node
+type ErrFailedToGetNode struct {
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetNode) Error() string {
+	return fmt.Sprintf("Failed to Get a Node due to err: %v", e.Cause)
+}
+
+// ErrFailedToUpdateNodeList error when we are unable to update a new node in node list
+type ErrFailedToUpdateNodeList struct {
+	// Node which failed to update
+	Node string
+
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToUpdateNodeList) Error() string {
+	return fmt.Sprintf("Failed to Update a Node : [%v] due to err: %v", e.Node, e.Cause)
+}
+
+// ErrFailedToBringUpNode error when node failed to be up
+type ErrFailedToBringUpNode struct {
+	// Node which failed to start
+	Node string
+
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToBringUpNode) Error() string {
+	return fmt.Sprintf("Failed to bring up a Node : [%v] due to err: %v", e.Node, e.Cause)
+}

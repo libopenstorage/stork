@@ -119,14 +119,14 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 	return err
 }
 
-func (v *vsphere) connect() error {
-
+// getVMFinder return find.Finder instance
+func (v *vsphere) getVMFinder() (*find.Finder, error) {
 	login := fmt.Sprintf("%s%s:%s@%s/sdk", Protocol, v.vsphereUsername, v.vspherePassword, v.vsphereHostIP)
 	logrus.Infof("Logging in to ESXi using: %s", login)
 
 	u, err := url.Parse(login)
 	if err != nil {
-		return fmt.Errorf("error parsing url %s", login)
+		return nil, fmt.Errorf("error parsing url %s", login)
 	}
 
 	v.ctx, v.cancel = context.WithCancel(context.Background())
@@ -134,7 +134,7 @@ func (v *vsphere) connect() error {
 
 	c, err := govmomi.NewClient(v.ctx, u, true)
 	if err != nil {
-		return fmt.Errorf("logging in error: %s", err.Error())
+		return nil, fmt.Errorf("logging in error: %s", err.Error())
 	}
 	logrus.Infof("Log in successful to vsphere:  %s:\n", v.vsphereHostIP)
 
@@ -143,11 +143,24 @@ func (v *vsphere) connect() error {
 	// Find one and only datacenter
 	dc, err := f.DefaultDatacenter(v.ctx)
 	if err != nil {
-		return fmt.Errorf("Failed to find data center: %v", err)
+		return nil, fmt.Errorf("Failed to find data center: %v", err)
 	}
 
 	// Make future calls local to this datacenter
 	f.SetDatacenter(dc)
+
+	return f, nil
+
+}
+
+func (v *vsphere) connect() error {
+	var f *find.Finder
+
+	// Getting finder instance
+	f, err := v.getVMFinder()
+	if err != nil {
+		return err
+	}
 
 	// Find virtual machines in datacenter
 	vms, err := f.VirtualMachineList(v.ctx, "*")
@@ -168,10 +181,30 @@ func (v *vsphere) connect() error {
 	return nil
 }
 
+// AddVM adds a new VM object to vmMap
+func (v *vsphere) AddMachine(vmName string) error {
+	var f *find.Finder
+
+	logrus.Infof("Adding VM: %s into vmMap  ", vmName)
+
+	f, err := v.getVMFinder()
+	if err != nil {
+		return err
+	}
+
+	vm, err := f.VirtualMachine(v.ctx, vmName)
+	if err != nil {
+		return err
+	}
+
+	vmMap[vm.Name()] = vm
+	return nil
+}
+
 // RebootVM reboots vsphere VM
 func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	if _, ok := vmMap[n.Name]; !ok {
-		return fmt.Errorf("Could not fetch VM for node: %s", n.Name)
+		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
 	}
 
 	vm := vmMap[n.Name]
@@ -187,23 +220,55 @@ func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	return nil
 }
 
+// powerOnVM powers on VM by providing VM object
+func (v *vsphere) powerOnVM(vm *object.VirtualMachine) error {
+	// Checking the VM state before powering it On
+	powerState, err := vm.PowerState(v.ctx)
+	if err != nil {
+		return err
+	}
+
+	if powerState == types.VirtualMachinePowerStatePoweredOn {
+		logrus.Warn("VM is already in powered-on state: ", vm.Name())
+		return nil
+	}
+
+	tsk, err := vm.PowerOn(v.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to power on %s: %v", vm.Name(), err)
+	}
+	if _, err := tsk.WaitForResult(v.ctx); err != nil {
+		return fmt.Errorf("failed to reboot VM %s. cause %v", vm.Name(), err)
+	}
+	return nil
+}
+
 // PowerOnVM powers on the VM if not already on
 func (v *vsphere) PowerOnVM(n node.Node) error {
 	var err error
 	vm := vmMap[n.Name]
 
 	logrus.Infof("Powering on VM: %s  ", vm.Name())
-	tsk, err := vm.PowerOn(v.ctx)
-	if err != nil {
-		return fmt.Errorf("Failed to power on %s: %v", vm.Name(), err)
-	}
-	if _, err := tsk.WaitForResult(v.ctx); err != nil {
+	if err = v.powerOnVM(vm); err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to reboot VM %s. cause %v", vm.Name(), err),
 		}
 	}
 
+	return nil
+}
+
+// PowerOnVMByName powers on VM by using name
+func (v *vsphere) PowerOnVMByName(vmName string) error {
+	// Make sure vmName is part of vmMap before using this method
+	var err error
+	vm := vmMap[vmName]
+
+	logrus.Infof("Powering on VM: %s  ", vm.Name())
+	if err = v.powerOnVM(vm); err != nil {
+		return err
+	}
 	return nil
 }
 

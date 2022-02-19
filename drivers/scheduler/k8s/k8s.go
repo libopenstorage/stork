@@ -228,7 +228,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	}
 
 	for _, n := range nodes.Items {
-		if err = k.addNewNode(n); err != nil {
+		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -247,7 +247,8 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	return nil
 }
 
-func (k *K8s) addNewNode(newNode corev1.Node) error {
+// AddNewNode method parse and add node to node registry
+func (k *K8s) AddNewNode(newNode corev1.Node) error {
 	n := k.parseK8SNode(newNode)
 	if err := k.IsNodeReady(n); err != nil {
 		return err
@@ -309,7 +310,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 	node.CleanupRegistry()
 
 	for _, n := range nodes.Items {
-		if err = k.addNewNode(n); err != nil {
+		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -4673,7 +4674,7 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 			}
 		}
 		if err != nil {
-			return nil, true, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
+			return nil, true, fmt.Errorf("failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
 		}
 		return aRule, false, nil
 	}
@@ -4781,6 +4782,15 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 	return err
 }
 
+// RecycleNode method not supported for K8s scheduler
+func (k *K8s) RecycleNode(n node.Node) error {
+	//Recycle is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RecycleNode()",
+	}
+}
+
 func substituteImageWithInternalRegistry(spec interface{}) {
 	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
 	if internalDockerRegistry != "" {
@@ -4850,7 +4860,7 @@ func createDockerRegistrySecret(secretName, secretNamespace string) (*v1.Secret,
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("Failed to create Docker registry secret: %s. Err: %v", secretName, err)
+			return nil, fmt.Errorf("failed to create Docker registry secret: %s. Err: %v", secretName, err)
 		}
 		logrus.Infof("Created Docker registry secret: %s", secret.Name)
 		return secret, nil
