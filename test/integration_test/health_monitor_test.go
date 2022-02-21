@@ -19,7 +19,7 @@ import (
 const (
 	// node offline timeout just above 4.5 minutes
 	// which is the max time stork could take to delete a app pod.
-	nodeOfflineTimeout = 271 * time.Second
+	nodeOfflineTimeout = 295 * time.Second
 )
 
 func TestHealthMonitor(t *testing.T) {
@@ -62,6 +62,7 @@ func stopDriverTest(t *testing.T) {
 
 	time.Sleep(nodeOfflineTimeout)
 
+	logrus.Infof("Checking if pod got reschedule to online driver node ")
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state after stopping driver")
 
