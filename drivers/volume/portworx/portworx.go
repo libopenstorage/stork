@@ -791,6 +791,14 @@ func (d *portworx) GetDriverVersion() (string, error) {
 	return pxVersion, nil
 }
 
+func (d *portworx) GetPxVersionOnNode(n node.Node) (string, error) {
+	pxVersion, err := d.getPxVersionOnNode(n)
+	if err != nil {
+		return "", fmt.Errorf("error on getting PX Version on node %s with err: %v", n.Name, err)
+	}
+	return pxVersion, nil
+}
+
 func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorageNodeClient) (string, error) {
 
 	t := func() (interface{}, bool, error) {
@@ -3213,6 +3221,43 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 
 	logrus.Debugf("Successfully toggled call-home")
 	return nil
+}
+
+func (d *portworx) IsOperatorBasedInstall() (bool, error) {
+	_, err := apiExtentions.GetCRD("storageclusters.core.libopenstorage.org", metav1.GetOptions{})
+
+	return err == nil, err
+
+}
+
+func (d *portworx) UpdateStorageClusterImage(imageName string) error {
+	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+	if err != nil {
+		er := fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
+		logrus.Error(er.Error())
+		return er
+
+	}
+
+	stc, err := pxOperator.GetStorageCluster(pxOps.Items[0].Name, pxOps.Items[0].Namespace)
+	if err != nil {
+		er := fmt.Errorf("error getting Storage Clusters [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
+		logrus.Error(er.Error())
+		return er
+
+	}
+	logrus.Infof("Current Storage Cluster Image: %v", stc.Spec.Image)
+	stc.Spec.Image = imageName
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		er := fmt.Errorf("error upgrading Storage Cluster [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
+		logrus.Error(er.Error())
+		return er
+
+	}
+	logrus.Infof("Storage Cluster Image updated to [%v]", imageName)
+	return nil
+
 }
 
 func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) error {

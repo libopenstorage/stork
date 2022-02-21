@@ -625,3 +625,27 @@ func (d *DefaultDriver) WaitForPxPodsToBeUp(n node.Node) error {
 	}
 
 }
+
+// IsOperatorBasedInstall eturns if px is operator based
+func (d *DefaultDriver) IsOperatorBasedInstall() (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsOperatorBasedInstall()",
+	}
+}
+
+//UpdateStorageClusterImage update storage cluster image version
+func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateStorageClusterImage()",
+	}
+}
+
+//GetPxVersionOnNode retruns PxVersion on the given node
+func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxVersionOnNode()",
+	}
+}

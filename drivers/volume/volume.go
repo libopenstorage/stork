@@ -164,6 +164,9 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
+	//GetPxVersionOnNode get PXVersion on the given node
+	GetPxVersionOnNode(n node.Node) (string, error)
+
 	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
 
@@ -230,6 +233,12 @@ type Driver interface {
 
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
+
+	//IsOperatorBasedInstall returns if px is operator based
+	IsOperatorBasedInstall() (bool, error)
+
+	//UpdateStorageClusterImage update storage cluster image version
+	UpdateStorageClusterImage(string) error
 
 	// ValidateStorageCluster validates all the storage cluster components
 	ValidateStorageCluster(endpointURL, endpointVersion string) error
