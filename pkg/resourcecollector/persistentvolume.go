@@ -130,6 +130,15 @@ func (r *ResourceCollector) preparePVResourceForApply(
 			break
 		}
 	}
+	// in case of non-restore call make sure resourcecollector
+	// checks proper driver by looking at pv name
+	if driverName == "" {
+		var err error
+		driverName, err = volume.GetPVDriver(&pv)
+		if err != nil {
+			return false, err
+		}
+	}
 
 	driver, err := volume.Get(driverName)
 	if err != nil {
