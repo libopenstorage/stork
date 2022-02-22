@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
+	"github.com/sirupsen/logrus"
 )
 
 func TestBasic(t *testing.T) {
@@ -27,6 +28,24 @@ func TestBasic(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	InitInstance()
+
+	// package installation hangs when using nsenter to run command on nodes
+	if Inst().N.IsUsingSSH() {
+		for _, anode := range node.GetWorkerNodes() {
+			// TODO: support other OS'es
+			logrus.Infof("installing tcpdump on node %s", anode.Name)
+			cmd := "yum install -y tcpdump"
+			_, err := Inst().N.RunCommandWithNoRetry(anode, cmd, node.ConnectionOpts{
+				Timeout:         cmdTimeout,
+				TimeBeforeRetry: cmdRetry,
+				Sudo:            true,
+			})
+			if err != nil {
+				logrus.Warnf("failed to install tcpdump on node %s: %v", anode.Name, err)
+				break
+			}
+		}
+	}
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)

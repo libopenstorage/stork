@@ -129,6 +129,9 @@ type Driver interface {
 	// CrashNode Crashes the given node
 	CrashNode(node Node, options CrashNodeOpts) error
 
+	// IsUsingSSH returns true if the command will be run using ssh
+	IsUsingSSH() bool
+
 	// RunCommand runs the given command on the node and returns the output
 	RunCommand(node Node, command string, options ConnectionOpts) (string, error)
 
@@ -387,4 +390,9 @@ func (d *notSupportedDriver) PowerOnVMByName(vmName string) error {
 		Type:      "Function",
 		Operation: "PowerOnVmByName()",
 	}
+}
+
+// IsUsingSSH returns true if the command will be run using ssh
+func (d *notSupportedDriver) IsUsingSSH() bool {
+	return false
 }

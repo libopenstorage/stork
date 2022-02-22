@@ -6,6 +6,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -82,9 +83,9 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 
 			Step("disable scheduling on non replica nodes", func() {
 				allNodes := node.GetWorkerNodes()
-				for _, node := range allNodes {
-					if !nodeReplicaMap[node.VolDriverNodeID] {
-						Inst().S.DisableSchedulingOnNode(node)
+				for _, aNode := range allNodes {
+					if !nodeReplicaMap[aNode.VolDriverNodeID] {
+						Inst().S.DisableSchedulingOnNode(aNode)
 					}
 				}
 			})
@@ -188,9 +189,9 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 				Expect(podRestartedOnNewServer).To(BeTrue())
 
 				// re-enable scheduling on non replica nodes
-				for _, node := range node.GetWorkerNodes() {
-					if !nodeReplicaMap[node.VolDriverNodeID] {
-						Inst().S.EnableSchedulingOnNode(node)
+				for _, aNode := range node.GetWorkerNodes() {
+					if !nodeReplicaMap[aNode.VolDriverNodeID] {
+						Inst().S.EnableSchedulingOnNode(aNode)
 					}
 				}
 				nodeReplicaMap = nil
@@ -209,9 +210,9 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 			return
 		}
 		// re-enable scheduling on non replica nodes
-		for _, node := range node.GetWorkerNodes() {
-			if !nodeReplicaMap[node.VolDriverNodeID] {
-				Inst().S.EnableSchedulingOnNode(node)
+		for _, aNode := range node.GetWorkerNodes() {
+			if !nodeReplicaMap[aNode.VolDriverNodeID] {
+				Inst().S.EnableSchedulingOnNode(aNode)
 			}
 		}
 	})
@@ -338,6 +339,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	Context("{Sharedv4SvcFailoverFailback}", func() {
 		var numFailovers int
 		var fm failoverMethod
+		var wg *sync.WaitGroup
 
 		JustBeforeEach(func() {
 			var err error
@@ -403,6 +405,8 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 							Step(fmt.Sprintf("failover #%d by %s", i, fm),
 								func() {
+									pcapFile := fmt.Sprintf("/var/cores/%s.%d.pcap", ctx.ScheduleOptions.Namespace, i)
+									wg = startPacketCapture(pcapFile)
 									fm.doFailover(attachedNodeBefore)
 								})
 
@@ -427,6 +431,14 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 									validateAppCounters(ctx, countersBefore, countersAfter, numPods, numDeletions)
 									validateAppLogs(ctx, numPods)
 									validateExports(apiVol, attachedNodeBefore, attachedNodeAfter)
+								})
+
+							Step(fmt.Sprintf("wait for the packet capture goroutines to finish after %s", failoverLog),
+								func() {
+									if wg != nil {
+										wg.Wait()
+										wg = nil
+									}
 								})
 						}
 					})
@@ -462,6 +474,14 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 				testrailID = 54375
 			})
 			testFailoverFailback()
+		})
+
+		AfterEach(func() {
+			if wg != nil {
+				logrus.Infof("waiting for the packet capture goroutines to finish")
+				wg.Wait()
+				wg = nil
+			}
 		})
 	})
 
@@ -1361,8 +1381,8 @@ func getReplicaNodeIDs(vol *volume.Volume) map[string]bool {
 	replicaSets, err := Inst().V.GetReplicaSets(vol)
 	Expect(err).NotTo(HaveOccurred())
 	for _, replicaSet := range replicaSets {
-		for _, node := range replicaSet.Nodes {
-			replicaNodes[node] = true
+		for _, aNode := range replicaSet.Nodes {
+			replicaNodes[aNode] = true
 		}
 	}
 	return replicaNodes
@@ -1431,6 +1451,26 @@ func getSv4TestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Volume, *nod
 	logrus.Infof("volume %v (%v) is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
 
 	return vol, apiVol, attachedNode
+}
+
+func startPacketCapture(filePath string) *sync.WaitGroup {
+	var wg sync.WaitGroup
+
+	logrus.Infof("capturing packet trace in file %s", filePath)
+	// command below exits after 4 minutes since filecount -W is 1
+	cmd := fmt.Sprintf("tcpdump -i any -s 4096 -w %s -G 240 -W 1 port 2049", filePath)
+	for _, aNode := range node.GetWorkerNodes() {
+		aNode := aNode
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			logrus.Infof("starting packet capture on node %s", aNode.Name)
+			if _, err := runCmd(cmd, aNode); err != nil {
+				logrus.Warnf("failed to run tcpdump on node %s: %v", aNode.Name, err)
+			}
+		}()
+	}
+	return &wg
 }
 
 func runCmd(cmd string, n node.Node) (string, error) {

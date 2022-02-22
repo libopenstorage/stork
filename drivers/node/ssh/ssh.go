@@ -83,7 +83,8 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	return pubkey, nil
 }
 
-func useSSH() bool {
+// IsUsingSSH returns true if the command will be run using ssh
+func IsUsingSSH() bool {
 	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
 }
 
@@ -93,7 +94,7 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 
 	nodes := node.GetWorkerNodes()
 	var err error
-	if useSSH() {
+	if IsUsingSSH() {
 		err = s.initSSH()
 	} else {
 		err = s.initExecPod()
@@ -200,7 +201,7 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	var cmd string
 
-	if useSSH() {
+	if IsUsingSSH() {
 		cmd = "hostname"
 	} else {
 		cmd = "date"
@@ -347,7 +348,7 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 
 // RunCommandWithNoRetry runs given command on given node but with no retries
 func (s *SSH) RunCommandWithNoRetry(n node.Node, command string, options node.ConnectionOpts) (string, error) {
-	if useSSH() {
+	if IsUsingSSH() {
 		return s.doCmdSSH(n, options, command, options.IgnoreError)
 	}
 	return s.doCmdUsingPodWithoutRetry(n, command)
@@ -435,7 +436,7 @@ func (s *SSH) SystemctlUnitExist(n node.Node, service string, options node.Syste
 
 func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 
-	if useSSH() {
+	if IsUsingSSH() {
 		return s.doCmdSSH(n, options, cmd, ignoreErr)
 	}
 	return s.doCmdUsingPod(n, options, cmd, ignoreErr)

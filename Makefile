@@ -18,6 +18,12 @@ ifndef PKGS
 PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/tests')
 endif
 
+# To build just one test binary, use GINKGO_BUILD_ONE=<name> e.g. GINKGO_BUILD_ONE=basic make build
+GINKGO_BUILD_DIR=.
+ifdef GINKGO_BUILD_ONE
+	GINKGO_BUILD_DIR=./tests/$(GINKGO_BUILD_ONE)
+endif
+
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS := -gcflags "-N -l"
 endif
@@ -60,9 +66,9 @@ build:
 
 	(mkdir -p tools && cd tools && GO111MODULE=on go get github.com/onsi/ginkgo/ginkgo@v1.16.5)
 	(mkdir -p tools && cd tools && GO111MODULE=off go get github.com/onsi/gomega)
-	ginkgo build -r
+	ginkgo build -r $(GINKGO_BUILD_DIR)
 
-	find . -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
 
 vendor-update:
