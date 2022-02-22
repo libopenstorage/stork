@@ -1,0 +1,23 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: MigrationSchedule
+metadata:
+  name: mysql-migration-schedule-interval-autosuspend
+spec:
+  schedulePolicyName: migrate-every-5m-suspend
+  autoSuspend: true
+  template:
+    spec:
+      # This should be the name of the cluster pair
+      clusterPair: remoteclusterpair
+      # If set to false this will migrate only the volumes. No PVCs, apps, etc will be migrated
+      includeResources: true
+      # If set to false, the deployments and stateful set replicas will be set to
+      # 0 on the destination. There will be an annotation with
+      # "stork.openstorage.org/migrationReplicas" to store the replica count from the source
+      startApplications: false
+      # If set to true, migration will also delete resources which are no longer
+      # present on source cluster. Only resource which are earlier migrated by stork will be cleaned up
+      purgeDeletedResources: true
+      # List of namespaces to migrate
+      namespaces:
+      - mysql-1-pvc-mysql-migration-schedule-interval-autosuspend

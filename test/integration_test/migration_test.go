@@ -30,6 +30,7 @@ import (
 const (
 	migrationRetryInterval = 10 * time.Second
 	migrationRetryTimeout  = 5 * time.Minute
+	rabbitmqNamespace      = "rabbitmq-operator-migration"
 )
 
 func TestMigration(t *testing.T) {
@@ -54,8 +55,6 @@ func testMigration(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	t.Run("deploymentTest", deploymentMigrationTest)
-	t.Run("pvcResizeTest", pvcResizeMigrationTest)
-
 	t.Run("deploymentMigrationReverseTest", deploymentMigrationReverseTest)
 	t.Run("statefulsetTest", statefulsetMigrationTest)
 	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
@@ -77,8 +76,11 @@ func testMigration(t *testing.T) {
 	}
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
+	t.Run("pvcResizeTest", pvcResizeMigrationTest)
+	t.Run("suspendMigrationTest", suspendMigrationTest)
+	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
+	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
-	t.Run("operatorMigrationTest", operatorMigrationTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -151,6 +153,36 @@ func triggerMigration(
 	return ctxs, preMigrationCtx
 }
 
+//
+// validateMigrationSummary validats the migration summary
+// currently we don't have an automated way to find out how many resources got deployed
+// through torpedo specs. For ex. a statefulset can have an inline PVC and that should
+// get counted as a resource in Migration, but torpedo won't count it as a separate resource
+// in its context. The caller is expected provide the counts
+func validateMigrationSummary(
+	t *testing.T,
+	preMigrationCtx *scheduler.Context,
+	expectedResources uint64,
+	expectedVolumes uint64,
+	migrationName, namespace string,
+) {
+	if preMigrationCtx == nil {
+		return
+	}
+	if preMigrationCtx.App == nil {
+		return
+	}
+	migObj, err := storkops.Instance().GetMigration(migrationName, namespace)
+	require.NoError(t, err, "get migration failed")
+	require.NotNil(t, migObj.Status.Summary, "migration summary is nil")
+	require.Equal(t, migObj.Status.Summary.NumberOfMigratedResources, expectedResources, "unexpected number of resources migrated")
+	require.Equal(t, migObj.Status.Summary.NumberOfMigratedVolumes, expectedVolumes, "unexpected number of volumes migrated")
+	require.Equal(t, migObj.Status.Summary.TotalNumberOfResources, expectedResources, "unexpected number of total resources")
+	require.Equal(t, migObj.Status.Summary.TotalNumberOfVolumes, expectedVolumes, "unexpected number of total volumes")
+	require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
+
+}
+
 func validateAndDestroyMigration(
 	t *testing.T,
 	ctxs []*scheduler.Context,
@@ -195,6 +227,9 @@ func validateAndDestroyMigration(
 			err = schedulerDriver.InspectVolumes(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
 			require.NoError(t, err, "Error validating storage components on remote cluster after migration")
 		}*/
+
+		// Validate the migration summary
+
 		// destroy mysql app on cluster 2
 		if !skipAppDeletion && !skipDestDeletion {
 			destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
@@ -992,13 +1027,40 @@ func bidirectionalClusterPairTest(t *testing.T) {
 
 }
 
-func operatorMigrationTest(t *testing.T) {
+func operatorMigrationMongoTest(t *testing.T) {
 	triggerMigrationTest(
 		t,
 		"migration",
 		"mongo-operator",
 		nil,
 		"mongo-op-migration",
+		true,
+		true,
+		true,
+	)
+}
+
+func operatorMigrationRabbitmqTest(t *testing.T) {
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: rabbitmqNamespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/component": "rabbitmq-operator",
+				"app.kubernetes.io/name":      "rabbitmq-system",
+				"app.kubernetes.io/part-of":   "rabbitmq",
+			},
+		},
+	})
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create namespace %s for rabbitmq", rabbitmqNamespace)
+	}
+
+	triggerMigrationTest(
+		t,
+		"migration",
+		"rabbitmq-operator",
+		nil,
+		"rabbitmq-migration",
 		true,
 		true,
 		true,
@@ -1117,12 +1179,14 @@ func pvcResizeMigrationTest(t *testing.T) {
 		_, err := core.Instance().UpdatePersistentVolumeClaim(&pvc)
 		require.NoError(t, err, "Error updating pvc: %s/%s", pvc.GetNamespace(), pvc.GetName())
 	}
-
+	logrus.Infof("Resized PVCs on source cluster")
 	// bump time of the world by 5 minutes
 	mockNow := time.Now().Add(6 * time.Minute)
 	err = setMockTime(&mockNow)
 	require.NoError(t, err, "Error setting mock time")
 
+	time.Sleep(10 * time.Second)
+	logrus.Infof("Trigger second migration")
 	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
 
 	// Change kubeconfig to destination
@@ -1175,4 +1239,75 @@ func getStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
 		return "", fmt.Errorf("PVC: %s does not have a storage class", pvc.Name)
 	}
 	return scName, nil
+}
+
+func suspendMigrationTest(t *testing.T) {
+	var err error
+	var namespace string
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	// the schedule interval for these specs it set to 5 minutes
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"mysql-migration-schedule-interval-autosuspend",
+		"mysql-1-pvc",
+		[]string{"cassandra"},
+		[]string{"mysql-migration-schedule-interval-autosuspend"},
+		true,
+		false,
+		false,
+		false,
+	)
+
+	validateMigration(t, "mysql-migration-schedule-interval-autosuspend", preMigrationCtx.GetID())
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// start sts on dr cluster
+	for _, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			scale := int32(1)
+			sts, err := apps.Instance().GetStatefulSet(obj.GetName(), obj.GetNamespace())
+			require.NoError(t, err, "Error retriving sts: %s/%s", obj.GetNamespace(), obj.GetName())
+			sts.Spec.Replicas = &scale
+			namespace = obj.GetNamespace()
+			_, err = apps.Instance().UpdateStatefulSet(sts)
+			require.NoError(t, err, "Error updating sts: %s/%s", obj.GetNamespace(), obj.GetName())
+			break
+		}
+	}
+
+	// verify migration status on DR cluster
+	migrSched, err := storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval-autosuspend", namespace)
+	require.NoError(t, err, "failed to retrive migration schedule: %v", err)
+
+	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
+		// fail test
+		suspendErr := fmt.Errorf("migrationschedule is not in suspended state on DR cluster: %s/%s", migrSched.GetName(), migrSched.GetNamespace())
+		require.NoError(t, err, "Failed: %v", suspendErr)
+	}
+
+	// validate if migrationschedule is suspended on source cluster
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	migrSched, err = storkops.Instance().GetMigrationSchedule("mysql-migration-schedule-interval-autosuspend", namespace)
+	require.NoError(t, err, "failed to retrive migration schedule: %v", err)
+
+	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
+		// fail test
+		suspendErr := fmt.Errorf("migrationschedule is not suspended on source cluster : %s/%s", migrSched.GetName(), migrSched.GetNamespace())
+		require.NoError(t, err, "Failed: %v", suspendErr)
+	}
+
+	logrus.Infof("Successfully verified suspend migration case")
+
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
 }

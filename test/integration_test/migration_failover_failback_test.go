@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,13 +34,17 @@ func TestMigrationFailoverFailback(t *testing.T) {
 		},
 	}
 	_, err = core.Instance().CreateSecret(secret)
-	require.NoError(t, err, "failed to create secret for volumes")
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create secret for volumes")
+	}
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	_, err = core.Instance().CreateSecret(secret)
-	require.NoError(t, err, "failed to create secret for volumes")
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create secret for volumes")
+	}
 
 	t.Run("failoverAndFailbackMigrationTest", failoverAndFailbackMigrationTest)
 }
@@ -63,6 +69,24 @@ func failoverAndFailbackMigrationTest(t *testing.T) {
 	// - app starts on cluster 1
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, true, true)
 
+	var migrationObj *v1alpha1.Migration
+	var ok bool
+	for _, specObj := range ctxs[0].App.SpecList {
+		if migrationObj, ok = specObj.(*v1alpha1.Migration); ok {
+			break
+		}
+	}
+
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// 1 sts, 1 service, 1 pvc, 1 pv
+	expectedResources := uint64(4)
+	// 1 volume
+	expectedVolumes := uint64(1)
+	// validate the migration summary based on the application specs that were deployed by the test
+	validateMigrationSummary(t, preMigrationCtx, expectedResources, expectedVolumes, migrationObj.Name, migrationObj.Namespace)
+
 	scaleFactor := testMigrationFailover(t, preMigrationCtx, ctxs)
 
 	testMigrationFailback(t, preMigrationCtx, ctxs, scaleFactor)
@@ -76,8 +100,6 @@ func testMigrationFailover(
 	// Failover the application
 
 	// Reduce the replicas on cluster 1
-	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
 	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
@@ -157,6 +179,21 @@ func testMigrationFailback(
 
 	err = schedulerDriver.WaitForRunning(ctxsReverse[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for migration to complete")
+
+	var migrationObj *v1alpha1.Migration
+	var ok bool
+	for _, specObj := range ctxsReverse[0].App.SpecList {
+		if migrationObj, ok = specObj.(*v1alpha1.Migration); ok {
+			break
+		}
+	}
+
+	// 1 sts, 1 service, 1 pvc, 1 pv
+	expectedResources := uint64(4)
+	// 1 volume
+	expectedVolumes := uint64(1)
+	// validate the migration summary
+	validateMigrationSummary(t, postMigrationCtx, expectedResources, expectedVolumes, migrationObj.Name, migrationObj.Namespace)
 
 	// destroy the app on cluster 2
 	err = schedulerDriver.Destroy(preMigrationCtx, nil)

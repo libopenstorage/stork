@@ -47,7 +47,7 @@ var (
 	migrRetryTimeout = 30 * time.Second
 )
 
-var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED"}
+var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED", "TOTAL BYTES TRANSFERRED"}
 var migrationSubcommand = "migrations"
 var migrationAliases = []string{"migration"}
 
@@ -168,7 +168,22 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 			} else {
 				activationNamespaces = append(activationNamespaces, cmdFactory.GetNamespace())
 			}
-
+			for _, ns := range activationNamespaces {
+				migrSched, err := storkops.Instance().ListMigrationSchedules(ns)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				for _, migr := range migrSched.Items {
+					migr.Status.ApplicationActivated = true
+					_, err := storkops.Instance().UpdateMigrationSchedule(&migr)
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+					printMsg(fmt.Sprintf("Updated migrationschedule status for %v/%v to activated", migr.Namespace, migr.Name), ioStreams.Out)
+				}
+			}
 			for _, ns := range activationNamespaces {
 				updateStatefulSets(ns, true, ioStreams)
 				updateDeployments(ns, true, ioStreams)
@@ -236,7 +251,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 }
 
 func updateStatefulSets(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	statefulSets, err := apps.Instance().ListStatefulSets(namespace)
+	statefulSets, err := apps.Instance().ListStatefulSets(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
 		return
@@ -330,58 +345,76 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 				return
 			}
 			for _, o := range objects.Items {
-				specPath := strings.Split(crd.SuspendOptions.Path, ".")
-				if len(specPath) > 1 {
-					var disableVersion interface{}
-					if crd.SuspendOptions.Type == "bool" {
-						disableVersion = !activate
-					} else if crd.SuspendOptions.Type == "int" {
-						replicas, _ := getSuspendIntOpts(o.GetAnnotations(), activate, ioStreams)
-						disableVersion = replicas
-					} else if crd.SuspendOptions.Type == "string" {
-						suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, ioStreams)
-						if err != nil {
-							util.CheckErr(err)
+				annotations := o.GetAnnotations()
+				if annotations == nil {
+					printMsg(fmt.Sprintf("Warn: Skipping CR update %s-%s/%s, annotations not found", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName()), ioStreams.ErrOut)
+					continue
+				}
+				if crd.SuspendOptions.Path != "" {
+					crd.NestedSuspendOptions = append(crd.NestedSuspendOptions, crd.SuspendOptions)
+				}
+				if len(crd.NestedSuspendOptions) == 0 {
+					continue
+				}
+				for _, suspend := range crd.NestedSuspendOptions {
+					specPath := strings.Split(suspend.Path, ".")
+					if len(specPath) > 1 {
+						var disableVersion interface{}
+						if suspend.Type == "bool" {
+							if val, err := strconv.ParseBool(suspend.Value); err != nil {
+								disableVersion = !activate
+							} else {
+								disableVersion = val
+								if activate {
+									disableVersion = !val
+								}
+							}
+						} else if suspend.Type == "int" {
+							replicas, _ := getSuspendIntOpts(o.GetAnnotations(), activate, suspend.Path, ioStreams)
+							disableVersion = replicas
+						} else if suspend.Type == "string" {
+							suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, suspend.Path, ioStreams)
+							if err != nil {
+								util.CheckErr(err)
+								return
+							}
+							disableVersion = suspend
+						} else {
+							util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
 							return
 						}
-						disableVersion = suspend
-					} else {
-						util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
-						return
-					}
-					err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
-					if err != nil {
-						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
-						continue
-					}
-
-					_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
-					if err != nil {
-						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
-						continue
-					}
-					printMsg(fmt.Sprintf("Updated \"%v\" for %v %v/%v to %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion), ioStreams.Out)
-					if !activate {
-						if crd.PodsPath == "" {
-							continue
-						}
-						podpath := strings.Split(crd.PodsPath, ".")
-						pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
+						err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
 						if err != nil {
-							printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-							continue
-						}
-						if !found {
-							continue
-						}
-						for _, pod := range pods {
-							err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
-							printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+							printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", suspend.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
 							continue
 						}
 					}
 				}
-
+				_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
+				if err != nil {
+					printMsg(fmt.Sprintf("Error updating CR %v %v/%v: %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+					continue
+				}
+				printMsg(fmt.Sprintf("Updated CR for %v %v/%v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName()), ioStreams.Out)
+				if !activate {
+					if crd.PodsPath == "" {
+						continue
+					}
+					podpath := strings.Split(crd.PodsPath, ".")
+					pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
+					if err != nil {
+						printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+						continue
+					}
+					if !found {
+						continue
+					}
+					for _, pod := range pods {
+						err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
+						printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+						continue
+					}
+				}
 			}
 
 		}
@@ -419,7 +452,7 @@ func updateIBPObjects(kind string, namespace string, activate bool, ioStreams ge
 }
 
 func updateCronJobObjects(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	cronJobs, err := batch.Instance().ListCronJobs(namespace)
+	cronJobs, err := batch.Instance().ListCronJobs(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
 		return
@@ -436,7 +469,18 @@ func updateCronJobObjects(namespace string, activate bool, ioStreams genericclio
 	}
 
 }
-func getSuspendStringOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (string, error) {
+func getSuspendStringOpts(annotations map[string]string, activate bool, path string, ioStreams genericclioptions.IOStreams) (string, error) {
+	if val, present := annotations[migration.StorkAnnotationPrefix+path]; present {
+		suspend := strings.Split(val, ",")
+		if len(suspend) != 2 {
+			return "", fmt.Errorf("migrated annotation does not have proper values %s/%s", migration.StorkAnnotationPrefix+path, val)
+		}
+		if activate {
+			return suspend[0], nil
+		}
+		return suspend[1], nil
+	}
+	// for backward compatibility of old migrated cr's
 	crdOpts := migration.StorkMigrationCRDActivateAnnotation
 	if !activate {
 		crdOpts = migration.StorkMigrationCRDDeactivateAnnotation
@@ -448,23 +492,28 @@ func getSuspendStringOpts(annotations map[string]string, activate bool, ioStream
 	return suspend, nil
 }
 
-func getSuspendIntOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int64, bool) {
-	if intOpts, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
-		var replicas int64
-		if activate {
-			parsedReplicas, err := strconv.Atoi(intOpts)
-			if err != nil {
-				printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
-				return 0, false
-			}
-			replicas = int64(parsedReplicas)
-		} else {
-			replicas = 0
-		}
-		return replicas, true
+func getSuspendIntOpts(annotations map[string]string, activate bool, path string, ioStreams genericclioptions.IOStreams) (int64, bool) {
+	intOpts := ""
+	if val, present := annotations[migration.StorkAnnotationPrefix+path]; present {
+		intOpts = strings.Split(val, ",")[0]
+	} else if val, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
+		// for old migrated cr compatibility
+		intOpts = val
+	} else {
+		return 0, false
 	}
-
-	return 0, false
+	var replicas int64
+	if activate {
+		parsedReplicas, err := strconv.Atoi(intOpts)
+		if err != nil {
+			printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
+			return 0, false
+		}
+		replicas = int64(parsedReplicas)
+	} else {
+		replicas = 0
+	}
+	return replicas, true
 }
 
 func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
@@ -623,52 +672,78 @@ func migrationPrinter(
 
 	rows := make([]metav1beta1.TableRow, 0)
 	for _, migration := range migrationList.Items {
-		volumeStatus := "N/A"
-		if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
-			totalVolumes := len(migration.Status.Volumes)
-			doneVolumes := 0
-			for _, volume := range migration.Status.Volumes {
-				if volume.Status == storkv1.MigrationStatusSuccessful {
-					doneVolumes++
-				}
-			}
-			volumeStatus = fmt.Sprintf("%v/%v", doneVolumes, totalVolumes)
-		}
-
-		resourceStatus := "N/A"
-		if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
-			totalResources := len(migration.Status.Resources)
-			doneResources := 0
-			for _, resource := range migration.Status.Resources {
-				if resource.Status == storkv1.MigrationStatusSuccessful {
-					doneResources++
-				}
-			}
-			resourceStatus = fmt.Sprintf("%v/%v", doneResources, totalResources)
-		}
-
-		elapsed := ""
-		if !migration.CreationTimestamp.IsZero() {
-			if migration.Status.Stage == storkv1.MigrationStageFinal {
-				if !migration.Status.FinishTimestamp.IsZero() {
-					elapsed = migration.Status.FinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
-				}
-			} else {
-				elapsed = time.Since(migration.CreationTimestamp.Time).String()
-			}
-		}
-
+		var row metav1beta1.TableRow
 		creationTime := toTimeString(migration.CreationTimestamp.Time)
-		row := getRow(&migration,
-			[]interface{}{migration.Name,
-				migration.Spec.ClusterPair,
-				migration.Status.Stage,
-				migration.Status.Status,
-				volumeStatus,
-				resourceStatus,
-				creationTime,
-				elapsed},
-		)
+		if migration.Status.Summary != nil {
+			resourceStatus := strconv.FormatUint(migration.Status.Summary.NumberOfMigratedResources, 10) +
+				"/" + strconv.FormatUint(migration.Status.Summary.TotalNumberOfResources, 10)
+			volumeStatus := strconv.FormatUint(migration.Status.Summary.NumberOfMigratedVolumes, 10) +
+				"/" + strconv.FormatUint(migration.Status.Summary.TotalNumberOfVolumes, 10)
+
+			elapsed := "Volumes (" + migration.Status.Summary.ElapsedTimeForVolumeMigration + ") " +
+				"Resources (" + migration.Status.Summary.ElapsedTimeForResourceMigration + ")"
+			row = getRow(&migration,
+				[]interface{}{migration.Name,
+					migration.Spec.ClusterPair,
+					migration.Status.Stage,
+					migration.Status.Status,
+					volumeStatus,
+					resourceStatus,
+					creationTime,
+					elapsed,
+					strconv.FormatUint(migration.Status.Summary.TotalBytesMigrated, 10),
+				},
+			)
+		} else {
+			// Keeping this else for backward compatibility where there
+			// is a migration object which does not have MigrationSummary
+			volumeStatus := "N/A"
+			if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+				totalVolumes := len(migration.Status.Volumes)
+				doneVolumes := 0
+				for _, volume := range migration.Status.Volumes {
+					if volume.Status == storkv1.MigrationStatusSuccessful {
+						doneVolumes++
+					}
+				}
+				volumeStatus = fmt.Sprintf("%v/%v", doneVolumes, totalVolumes)
+			}
+
+			resourceStatus := "N/A"
+			if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
+				totalResources := len(migration.Status.Resources)
+				doneResources := 0
+				for _, resource := range migration.Status.Resources {
+					if resource.Status == storkv1.MigrationStatusSuccessful {
+						doneResources++
+					}
+				}
+				resourceStatus = fmt.Sprintf("%v/%v", doneResources, totalResources)
+			}
+
+			elapsed := ""
+			if !migration.CreationTimestamp.IsZero() {
+				if migration.Status.Stage == storkv1.MigrationStageFinal {
+					if !migration.Status.FinishTimestamp.IsZero() {
+						elapsed = migration.Status.FinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
+					}
+				} else {
+					elapsed = time.Since(migration.CreationTimestamp.Time).String()
+				}
+			}
+			row = getRow(&migration,
+				[]interface{}{migration.Name,
+					migration.Spec.ClusterPair,
+					migration.Status.Stage,
+					migration.Status.Status,
+					volumeStatus,
+					resourceStatus,
+					creationTime,
+					elapsed,
+					"Available with stork v2.9.0+",
+				},
+			)
+		}
 		rows = append(rows, row)
 	}
 	return rows, nil

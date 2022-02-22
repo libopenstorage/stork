@@ -21,6 +21,8 @@ type ConfigMapOps interface {
 	UpdateConfigMap(configMap *corev1.ConfigMap) (*corev1.ConfigMap, error)
 	// WatchConfigMap sets up a watcher that listens for changes on the config map
 	WatchConfigMap(configMap *corev1.ConfigMap, fn WatchFunc) error
+	//ListConfigMap returns the list of ConfigMaps
+	ListConfigMap(namespace string, filterOptions metav1.ListOptions) (*corev1.ConfigMapList, error)
 }
 
 // GetConfigMap gets the config map object for the given name and namespace
@@ -95,4 +97,14 @@ func (c *Client) WatchConfigMap(configMap *corev1.ConfigMap, fn WatchFunc) error
 	// fire off watch function
 	go c.handleWatch(watchInterface, configMap, "", fn, listOptions)
 	return nil
+}
+
+// ListConfigMap returns the list of ConfigMaps
+func (c *Client) ListConfigMap(namespace string, filterOptions metav1.ListOptions) (*corev1.ConfigMapList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubernetes.CoreV1().ConfigMaps(namespace).List(context.TODO(), filterOptions)
+
 }

@@ -51,6 +51,8 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -389,6 +391,13 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := apapi.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
+		if err := apiextensionsv1beta1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
+		if err := apiextensionsv1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
 
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
@@ -459,6 +468,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*corev1.LimitRange); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		return specObj, nil
 	}
 

@@ -461,7 +461,7 @@ github.com/portworx/kdmp/pkg/version
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
