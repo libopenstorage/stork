@@ -70,7 +70,9 @@ func (l *linstor) Init(_ interface{}) error {
 	// * LS_USER_CERTIFICATE
 	// * LS_USER_KEY
 	// * LS_ROOT_CA
-	client, err := lclient.NewClient()
+	client, err := lclient.NewClient(
+		lclient.Log(logrus.StandardLogger()),
+	)
 	if err != nil {
 		return fmt.Errorf("error creating linstor client: %w", err)
 	}
@@ -384,7 +386,7 @@ func (l *linstor) GetClusterID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	props, err := cli.Nodes.GetControllerProps(context.TODO())
+	props, err := cli.Controller.GetProps(context.TODO())
 	if err != nil {
 		return "", fmt.Errorf("failed to query linstor controller properties: %w", err)
 	}
@@ -400,7 +402,7 @@ func (l *linstor) GetClusterID() (string, error) {
 	if id == "" {
 		id = randString(16)
 		logrus.Debugf("linstor: no cluster ID found, generating new (%s)", id)
-		err := cli.Nodes.ModifyController(context.TODO(), lclient.GenericPropsModify{
+		err := cli.Controller.Modify(context.TODO(), lclient.GenericPropsModify{
 			OverrideProps: lclient.OverrideProps{
 				"Aux/StorkClusterId": id,
 			},

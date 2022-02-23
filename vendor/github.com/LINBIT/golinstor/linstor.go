@@ -16,7 +16,7 @@
 
 package linstor
 
-//go:generate ./linstor-common/genconsts.py golang apiconsts.go
+//go:generate ./linstor-common/genconsts.py golang .
 
 import (
 	"encoding/json"
@@ -32,6 +32,8 @@ import (
 
 	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/LINBIT/golinstor/connectionstatus"
 )
 
 // ResourceDeployment contains all the information needed to query and assign/deploy
@@ -274,8 +276,8 @@ type ResDef struct {
 
 type nodeInfo []struct {
 	Nodes []struct {
-		ConnectionStatus int    `json:"connection_status"`
-		UUID             string `json:"uuid"`
+		ConnectionStatus connectionstatus.ConnectionStatus `json:"connection_status"`
+		UUID             string                            `json:"uuid"`
 		NetInterfaces    []struct {
 			StltPort           int    `json:"stlt_port"`
 			StltEncryptionType string `json:"stlt_encryption_type"`
