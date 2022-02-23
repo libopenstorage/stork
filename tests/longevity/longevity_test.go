@@ -79,6 +79,7 @@ var _ = Describe("{Longevity}", func() {
 		AppTasksDown:         TriggerAppTasksDown,
 		AutoFsTrim:           TriggerAutoFsTrim,
 		RestartManyVolDriver: TriggerRestartManyVolDriver,
+		RebootManyNodes:      TriggerRebootManyNodes,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -231,6 +232,7 @@ func populateDisruptiveTriggers() {
 		BackupScaleMongo:                false,
 		AppTasksDown:                    false,
 		RestartManyVolDriver:            true,
+		RebootManyNodes:                 true,
 	}
 }
 
@@ -341,6 +343,7 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
+	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -485,6 +488,17 @@ func populateIntervals() {
 	triggerInterval[RebootNode][3] = 21 * baseInterval
 	triggerInterval[RebootNode][2] = 24 * baseInterval
 	triggerInterval[RebootNode][1] = 27 * baseInterval
+
+	triggerInterval[RebootManyNodes][10] = 1 * baseInterval
+	triggerInterval[RebootManyNodes][9] = 3 * baseInterval
+	triggerInterval[RebootManyNodes][8] = 6 * baseInterval
+	triggerInterval[RebootManyNodes][7] = 9 * baseInterval
+	triggerInterval[RebootManyNodes][6] = 12 * baseInterval
+	triggerInterval[RebootManyNodes][5] = 15 * baseInterval
+	triggerInterval[RebootManyNodes][4] = 18 * baseInterval
+	triggerInterval[RebootManyNodes][3] = 21 * baseInterval
+	triggerInterval[RebootManyNodes][2] = 24 * baseInterval
+	triggerInterval[RebootManyNodes][1] = 27 * baseInterval
 
 	triggerInterval[CrashNode][10] = 1 * baseInterval
 	triggerInterval[CrashNode][9] = 3 * baseInterval
@@ -753,6 +767,7 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown][0] = 0
 	triggerInterval[AutoFsTrim][0] = 0
 	triggerInterval[RestartManyVolDriver][0] = 0
+	triggerInterval[RebootManyNodes][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

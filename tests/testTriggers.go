@@ -177,6 +177,8 @@ const (
 	CrashVolDriver = "crashVolDriver"
 	// RebootNode reboots all nodes one by one
 	RebootNode = "rebootNode"
+	// RebootManyNodes reboots one or more nodes at time
+	RebootManyNodes = "rebootManyNodes"
 	// CrashNode crashes all nodes one by one
 	CrashNode = "crashNode"
 	//VolumeClone Clones volumes
@@ -819,6 +821,105 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					})
 				}
 			}
+		})
+	})
+}
+
+// TriggerRebootManyNodes reboots one or more nodes on which apps are running
+func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RebootManyNodes,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("get all nodes and reboot one by one", func() {
+		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
+		// Reboot node and check driver status
+		Step(fmt.Sprintf("reboot the node(s): %v", nodesToReboot), func() {
+			var wg sync.WaitGroup
+			for _, n := range nodesToReboot {
+				wg.Add(1)
+				go func(n node.Node) {
+					defer wg.Done()
+					Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
+						event.Event.Type += "<br>" + taskStep
+						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+							},
+						})
+						if err != nil {
+							logrus.Errorf("Error while rebooting node %v, err: %v", n.Name, err.Error())
+						}
+						UpdateOutcome(event, err)
+					})
+				}(n)
+			}
+
+			Step("wait all the nodes to be rebooted", func() {
+				wg.Wait()
+			})
+
+			for _, n := range nodesToReboot {
+				wg.Add(1)
+				go func(n node.Node) {
+					defer wg.Done()
+					Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+						err := Inst().N.TestConnection(n, node.ConnectionOpts{
+							Timeout:         15 * time.Minute,
+							TimeBeforeRetry: 10 * time.Second,
+						})
+						if err != nil {
+							logrus.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
+						}
+						UpdateOutcome(event, err)
+					})
+
+					Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+						err := Inst().V.WaitDriverDownOnNode(n)
+						UpdateOutcome(event, err)
+					})
+
+					Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+						Inst().S.String(), Inst().V.String()), func() {
+
+						err := Inst().S.IsNodeReady(n)
+						UpdateOutcome(event, err)
+
+						err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+						UpdateOutcome(event, err)
+					})
+				}(n)
+			}
+
+			Step("wait all the nodes to be up", func() {
+				wg.Wait()
+			})
+
+			Step("validate apps", func() {
+				for _, ctx := range *contexts {
+					Step(fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key), func() {
+						errorChan := make(chan error, errorChannelSize)
+						ValidateContext(ctx, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+					})
+				}
+			})
 		})
 	})
 }
