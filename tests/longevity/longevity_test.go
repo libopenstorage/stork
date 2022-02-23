@@ -56,28 +56,29 @@ var _ = Describe("{Longevity}", func() {
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-		DeployApps:          TriggerDeployNewApps,
-		RebootNode:          TriggerRebootNodes,
-		CrashNode:           TriggerCrashNodes,
-		RestartVolDriver:    TriggerRestartVolDriver,
-		CrashVolDriver:      TriggerCrashVolDriver,
-		HAIncrease:          TriggerHAIncrease,
-		HADecrease:          TriggerHADecrease,
-		VolumeClone:         TriggerVolumeClone,
-		VolumeResize:        TriggerVolumeResize,
-		EmailReporter:       TriggerEmailReporter,
-		AppTaskDown:         TriggerAppTaskDown,
-		CoreChecker:         TriggerCoreChecker,
-		CloudSnapShot:       TriggerCloudSnapShot,
-		LocalSnapShot:       TriggerLocalSnapShot,
-		DeleteLocalSnapShot: TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:      TriggerPoolResizeDisk,
-		PoolAddDisk:         TriggerPoolAddDisk,
-		UpgradeStork:        TriggerUpgradeStork,
-		VolumesDelete:       TriggerVolumeDelete,
-		UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
-		AppTasksDown:        TriggerAppTasksDown,
-		AutoFsTrim:          TriggerAutoFsTrim,
+		DeployApps:           TriggerDeployNewApps,
+		RebootNode:           TriggerRebootNodes,
+		CrashNode:            TriggerCrashNodes,
+		RestartVolDriver:     TriggerRestartVolDriver,
+		CrashVolDriver:       TriggerCrashVolDriver,
+		HAIncrease:           TriggerHAIncrease,
+		HADecrease:           TriggerHADecrease,
+		VolumeClone:          TriggerVolumeClone,
+		VolumeResize:         TriggerVolumeResize,
+		EmailReporter:        TriggerEmailReporter,
+		AppTaskDown:          TriggerAppTaskDown,
+		CoreChecker:          TriggerCoreChecker,
+		CloudSnapShot:        TriggerCloudSnapShot,
+		LocalSnapShot:        TriggerLocalSnapShot,
+		DeleteLocalSnapShot:  TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:       TriggerPoolResizeDisk,
+		PoolAddDisk:          TriggerPoolAddDisk,
+		UpgradeStork:         TriggerUpgradeStork,
+		VolumesDelete:        TriggerVolumeDelete,
+		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
+		AppTasksDown:         TriggerAppTasksDown,
+		AutoFsTrim:           TriggerAutoFsTrim,
+		RestartManyVolDriver: TriggerRestartManyVolDriver,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -229,6 +230,7 @@ func populateDisruptiveTriggers() {
 		BackupDeleteBackupPod:           false,
 		BackupScaleMongo:                false,
 		AppTasksDown:                    false,
+		RestartManyVolDriver:            true,
 	}
 }
 
@@ -338,6 +340,7 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
+	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -515,6 +518,17 @@ func populateIntervals() {
 	triggerInterval[RestartVolDriver][3] = 21 * baseInterval
 	triggerInterval[RestartVolDriver][2] = 24 * baseInterval
 	triggerInterval[RestartVolDriver][1] = 27 * baseInterval
+
+	triggerInterval[RestartManyVolDriver][10] = 1 * baseInterval
+	triggerInterval[RestartManyVolDriver][9] = 3 * baseInterval
+	triggerInterval[RestartManyVolDriver][8] = 6 * baseInterval
+	triggerInterval[RestartManyVolDriver][7] = 9 * baseInterval
+	triggerInterval[RestartManyVolDriver][6] = 12 * baseInterval
+	triggerInterval[RestartManyVolDriver][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RestartManyVolDriver][4] = 18 * baseInterval
+	triggerInterval[RestartManyVolDriver][3] = 21 * baseInterval
+	triggerInterval[RestartManyVolDriver][2] = 24 * baseInterval
+	triggerInterval[RestartManyVolDriver][1] = 27 * baseInterval
 
 	triggerInterval[AppTaskDown][10] = 1 * baseInterval
 	triggerInterval[AppTaskDown][9] = 3 * baseInterval
@@ -738,6 +752,7 @@ func populateIntervals() {
 	triggerInterval[DeleteLocalSnapShot][0] = 0
 	triggerInterval[AppTasksDown][0] = 0
 	triggerInterval[AutoFsTrim][0] = 0
+	triggerInterval[RestartManyVolDriver][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

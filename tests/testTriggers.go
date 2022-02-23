@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -170,6 +171,8 @@ const (
 	AppTaskDown = "appTaskDown"
 	// RestartVolDriver restart volume driver
 	RestartVolDriver = "restartVolDriver"
+	// RestartManyVolDriver restarts one or more volume drivers at time
+	RestartManyVolDriver = "restartManyVolDriver"
 	// CrashVolDriver crashes volume driver
 	CrashVolDriver = "crashVolDriver"
 	// RebootNode reboots all nodes one by one
@@ -659,6 +662,83 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 	})
 }
 
+// TriggerRestartManyVolDriver restarts one or more volume drivers and validates app
+func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RestartManyVolDriver,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver)
+	var wg sync.WaitGroup
+	Step("get nodes bounce volume driver", func() {
+		for _, appNode := range driverNodesToRestart {
+			wg.Add(1)
+			go func(appNode node.Node) {
+				defer wg.Done()
+				Step(fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name), func() {
+					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
+					errorChan := make(chan error, errorChannelSize)
+					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			}(appNode)
+		}
+
+		Step("wait all the storage drivers to be stopped", func() {
+			wg.Wait()
+		})
+
+		for _, appNode := range driverNodesToRestart {
+			wg.Add(1)
+			go func(appNode node.Node) {
+				defer wg.Done()
+				Step(fmt.Sprintf("starting volume %s driver on node %s", Inst().V.String(), appNode.Name), func() {
+					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
+					errorChan := make(chan error, errorChannelSize)
+					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+
+				Step("Giving few seconds for volume driver to stabilize", func() {
+					time.Sleep(20 * time.Second)
+				})
+			}(appNode)
+		}
+		Step("wait all the storage drivers to be up", func() {
+			wg.Wait()
+		})
+		for _, ctx := range *contexts {
+			Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.ReadinessTimeout = time.Minute * 10
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
+		}
+
+	})
+}
+
 // TriggerRebootNodes reboots node on which apps are running
 func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -741,6 +821,61 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 		})
 	})
+}
+
+func randIntn(n, maxNo int) []int {
+	if n > maxNo {
+		n = maxNo
+	}
+	rand.Seed(time.Now().UnixNano())
+	generated := make(map[int]bool)
+	for i := 0; i < n; i++ {
+		randUniq := rand.Intn(maxNo)
+		if !generated[randUniq] {
+			generated[randUniq] = true
+		}
+	}
+	generatedNs := make([]int, 0)
+	for key := range generated {
+		generatedNs = append(generatedNs, key)
+	}
+	return generatedNs
+}
+
+func getNodesByChaosLevel(triggerType string) []node.Node {
+	t := ChaosMap[triggerType]
+	stNodes := node.GetStorageNodes()
+	stNodesLen := len(stNodes)
+	nodes := make([]node.Node, 0)
+	var nodeLen float32
+	switch t {
+	case 10:
+		index := randIntn(1, stNodesLen)[0]
+		return []node.Node{stNodes[index]}
+	case 9:
+		nodeLen = float32(stNodesLen) * 0.2
+	case 8:
+		nodeLen = float32(stNodesLen) * 0.3
+	case 7:
+		nodeLen = float32(stNodesLen) * 0.4
+	case 6:
+		nodeLen = float32(stNodesLen) * 0.5
+	case 5:
+		nodeLen = float32(stNodesLen) * 0.6
+	case 4:
+		nodeLen = float32(stNodesLen) * 0.7
+	case 3:
+		nodeLen = float32(stNodesLen) * 0.8
+	case 2:
+		nodeLen = float32(stNodesLen) * 0.9
+	case 1:
+		return stNodes
+	}
+	generatedNodeIndexes := randIntn(int(nodeLen), stNodesLen)
+	for i := 0; i < len(generatedNodeIndexes); i++ {
+		nodes = append(nodes, stNodes[generatedNodeIndexes[i]])
+	}
+	return nodes
 }
 
 // TriggerCrashNodes crashes Worker nodes
