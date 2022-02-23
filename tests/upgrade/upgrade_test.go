@@ -63,10 +63,11 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		Step("validate all apps after upgrade", func() {
-			for _, ctx := range contexts {
-				ValidateContext(ctx)
+		Step("reinstall and validate all apps after upgrade", func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriverreinstall-%d", i))...)
 			}
+			ValidateApplications(contexts)
 		})
 
 		Step("destroy apps", func() {
@@ -129,52 +130,6 @@ var _ = Describe("{UpgradeStork}", func() {
 
 		})
 	}
-	JustAfterEach(func() {
-		AfterEachTest(contexts, testrailID, runID)
-	})
-})
-
-// UpgradeVolumeDriverReinstall test validates the scheduled app and re-install them. Making sure the operation and
-// new installation runs smoothly
-var _ = Describe("{UpgradeVolumeDriverReinstall}", func() {
-	var testrailID = 54370
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54370
-	var runID int
-	JustBeforeEach(func() {
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
-	})
-	var contexts []*scheduler.Context
-
-	It("validate apps, upgrade volume driver, re-install apps, and ensure everything is running fine", func() {
-		contexts = make([]*scheduler.Context, 0)
-
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("b4upgradevolumedriverreinstall-%d", i))...)
-		}
-
-		ValidateApplications(contexts)
-
-		Step("start the upgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
-				Inst().StorageDriverUpgradeEndpointVersion,
-				Inst().EnableStorkUpgrade)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		Step("re-install and validate all apps after upgrade", func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriverreinstall-%d", i))...)
-			}
-
-			ValidateApplications(contexts)
-		})
-
-		Step("destroy apps", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, map[string]bool{"scheduler.OptionsWaitForResourceLeakCleanup": true})
-			}
-		})
-	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
