@@ -84,7 +84,7 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 }
 
 // IsUsingSSH returns true if the command will be run using ssh
-func IsUsingSSH() bool {
+func (s *SSH) IsUsingSSH() bool {
 	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
 }
 
@@ -94,7 +94,7 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 
 	nodes := node.GetWorkerNodes()
 	var err error
-	if IsUsingSSH() {
+	if s.IsUsingSSH() {
 		err = s.initSSH()
 	} else {
 		err = s.initExecPod()
@@ -201,7 +201,7 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	var cmd string
 
-	if IsUsingSSH() {
+	if s.IsUsingSSH() {
 		cmd = "hostname"
 	} else {
 		cmd = "date"
@@ -348,7 +348,7 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 
 // RunCommandWithNoRetry runs given command on given node but with no retries
 func (s *SSH) RunCommandWithNoRetry(n node.Node, command string, options node.ConnectionOpts) (string, error) {
-	if IsUsingSSH() {
+	if s.IsUsingSSH() {
 		return s.doCmdSSH(n, options, command, options.IgnoreError)
 	}
 	return s.doCmdUsingPodWithoutRetry(n, command)
@@ -436,7 +436,7 @@ func (s *SSH) SystemctlUnitExist(n node.Node, service string, options node.Syste
 
 func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 
-	if IsUsingSSH() {
+	if s.IsUsingSSH() {
 		return s.doCmdSSH(n, options, cmd, ignoreErr)
 	}
 	return s.doCmdUsingPod(n, options, cmd, ignoreErr)
@@ -605,12 +605,17 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 	return file, nil
 }
 
-func init() {
-	s := &SSH{
-		Driver:   node.NotSupportedDriver,
-		username: DefaultUsername,
-		keyPath:  DefaultSSHKey,
+// New returns a new SSH object
+func New() *SSH {
+	return &SSH{
+		Driver: node.NotSupportedDriver,
 	}
+}
+
+func init() {
+	s := New()
+	s.username = DefaultUsername
+	s.keyPath = DefaultSSHKey
 
 	node.Register(DriverName, s)
 }

@@ -105,7 +105,7 @@ func (g *gke) GetZones() ([]string, error) {
 
 func init() {
 	g := &gke{
-		SSH: ssh.SSH{},
+		SSH: *ssh.New(),
 	}
 
 	node.Register(DriverName, g)

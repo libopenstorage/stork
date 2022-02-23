@@ -79,7 +79,7 @@ func (a *aks) GetZones() ([]string, error) {
 
 func init() {
 	a := &aks{
-		SSH: ssh.SSH{},
+		SSH: *ssh.New(),
 	}
 
 	node.Register(DriverName, a)

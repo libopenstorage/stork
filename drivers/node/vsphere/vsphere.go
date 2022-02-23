@@ -313,7 +313,7 @@ func (v *vsphere) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error
 
 func init() {
 	v := &vsphere{
-		SSH: ssh.SSH{},
+		SSH: *ssh.New(),
 	}
 
 	node.Register(DriverName, v)
