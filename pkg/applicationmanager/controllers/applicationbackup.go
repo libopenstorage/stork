@@ -218,7 +218,9 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			canDelete, err := a.deleteBackup(backup)
-			logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
+			if err != nil {
+				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
+			}
 			if !canDelete {
 				return nil
 			}
