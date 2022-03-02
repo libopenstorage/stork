@@ -2573,25 +2573,15 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	var err error
-	// TODO replace by sdk call whenever it is available
-	pxdRestPort, err := getRestPort()
+	// we are removing using service endpoint because services would
+	// return a random node endpoint the service chooses and puts it in maintenance.
+	// this would fail the status check in `EnterMaintenanc` and `ExitMaintenance`
+	pxdRestPort, err := getRestContainerPort()
 	if err != nil {
 		return err
 	}
-	var url, endpoint string
-	if !d.skipPXSvcEndpoint {
-		endpoint, err = d.schedOps.GetServiceEndpoint()
-	}
-	if err != nil || endpoint == "" {
-		logrus.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
-		pxdRestPort, err = getRestContainerPort()
-		if err != nil {
-			return err
-		}
-		url = fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
-	} else {
-		url = fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
-	}
+	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return err
