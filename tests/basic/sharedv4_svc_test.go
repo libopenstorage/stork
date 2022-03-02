@@ -1458,15 +1458,21 @@ func startPacketCapture(filePath string) *sync.WaitGroup {
 
 	logrus.Infof("capturing packet trace in file %s", filePath)
 	// command below exits after 4 minutes since filecount -W is 1
-	cmd := fmt.Sprintf("tcpdump -i any -s 4096 -w %s -G 240 -W 1 port 2049", filePath)
+	runForSeconds := 240
+	cmd := fmt.Sprintf("tcpdump -i any -s 4096 -w %s -G %v -W 1 port 2049", filePath, runForSeconds)
 	for _, aNode := range node.GetWorkerNodes() {
 		aNode := aNode
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			logrus.Infof("starting packet capture on node %s", aNode.Name)
-			if _, err := runCmd(cmd, aNode); err != nil {
-				logrus.Warnf("failed to run tcpdump on node %s: %v", aNode.Name, err)
+			output, err := Inst().N.RunCommandWithNoRetry(aNode, cmd, node.ConnectionOpts{
+				Timeout:         time.Duration(runForSeconds+60) * time.Second,
+				TimeBeforeRetry: cmdRetry,
+				Sudo:            true,
+			})
+			if err != nil {
+				logrus.Warnf("failed to start tcpdump (%q) on node %v: %v: %v", cmd, aNode.Name, output, err)
 			}
 		}()
 	}

@@ -49,41 +49,17 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 		// set frequency mins depending on the chaos level
 		var frequency int
 		var timeout time.Duration
-		switch Inst().ChaosLevel {
-		case 10:
-			frequency = 100
-			timeout = 10 * time.Minute
-		case 9:
-			frequency = 90
-			timeout = 9 * time.Minute
-		case 8:
-			frequency = 80
-			timeout = 8 * time.Minute
-		case 7:
-			frequency = 70
-			timeout = 7 * time.Minute
-		case 6:
-			frequency = 60
-			timeout = 6 * time.Minute
-		case 5:
-			frequency = 50
-			timeout = 5 * time.Minute
-		case 4:
-			frequency = 40
-			timeout = 4 * time.Minute
-		case 3:
-			frequency = 30
-			timeout = 3 * time.Minute
-		case 2:
-			frequency = 20
-			timeout = 2 * time.Minute
-		case 1:
-			frequency = 10
-			timeout = 1 * time.Minute
-		default:
+
+		chaosLevel := Inst().ChaosLevel
+		if chaosLevel != 0 {
+			frequency = 10 * chaosLevel
+			timeout = (15 * time.Duration(chaosLevel) * time.Minute) / 10
+		} else {
 			frequency = 10
 			timeout = 1 * time.Minute
 		}
+		logrus.Infof("setting number of volumes=%v and app readiness timeout=%v for chaos level %v",
+			frequency, timeout, chaosLevel)
 
 		customAppConfig := scheduler.AppConfig{
 			ClaimsCount: frequency,

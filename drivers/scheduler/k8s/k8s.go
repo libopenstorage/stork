@@ -101,7 +101,7 @@ const (
 	k8sNodeReadyTimeout    = 5 * time.Minute
 	volDirCleanupTimeout   = 5 * time.Minute
 	k8sObjectCreateTimeout = 2 * time.Minute
-	k8sDestroyTimeout      = 2 * time.Minute
+	k8sDestroyTimeout      = 5 * time.Minute
 	// FindFilesOnWorkerTimeout timeout for find files on worker
 	FindFilesOnWorkerTimeout = 1 * time.Minute
 	deleteTasksWaitTimeout   = 3 * time.Minute
@@ -2133,6 +2133,31 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 		}
 	}
 
+	isPodTerminating := func() (interface{}, bool, error) {
+		var terminatingPods []string
+		pods, err := k.getPodsForApp(ctx)
+		// sadly, getPodsForApp returns an error if there are no pods
+		if err != schederrors.ErrPodsNotFound {
+			return nil, false, nil
+		} else if err != nil {
+			return nil, true, fmt.Errorf("failed to get pods for app %v: %w", ctx.App.Key, err)
+		}
+		for _, pod := range pods {
+			if !pod.DeletionTimestamp.IsZero() {
+				terminatingPods = append(terminatingPods, fmt.Sprintf("%s/%s", pod.Namespace, pod.Name))
+			}
+		}
+		if len(terminatingPods) > 0 {
+			return nil, true, fmt.Errorf("terminating pods: %v", terminatingPods)
+		}
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(isPodTerminating, k8sDestroyTimeout, DefaultRetryInterval)
+	if err != nil {
+		logrus.Warnf("Timed out waiting for app %v's pods to terminate: %v", ctx.App.Key, err)
+		return err
+	}
 	return nil
 }
 
