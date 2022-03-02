@@ -16,6 +16,12 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 )
 
+const (
+	// node offline timeout just above 4.5 minutes
+	// which is the max time stork could take to delete a app pod.
+	nodeOfflineTimeout = 295 * time.Second
+)
+
 func TestHealthMonitor(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
@@ -54,8 +60,9 @@ func stopDriverTest(t *testing.T) {
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 	stoppedNode := scheduledNodes[0]
 
-	time.Sleep(3 * time.Minute)
+	time.Sleep(nodeOfflineTimeout)
 
+	logrus.Infof("Checking if pod got reschedule to online driver node ")
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state after stopping driver")
 

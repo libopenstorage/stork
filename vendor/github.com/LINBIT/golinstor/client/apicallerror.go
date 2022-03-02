@@ -35,3 +35,13 @@ func (e ApiCallError) Is(mask uint64) bool {
 // Refer to package apiconsts.go in package linstor for a list of possible
 // mask values.
 func (r ApiCallRc) Is(mask uint64) bool { return (uint64(r.RetCode) & mask) == mask }
+
+// IsApiCallError checks if an error is a specific type of LINSTOR error.
+func IsApiCallError(err error, mask uint64) bool {
+	e, ok := err.(ApiCallError)
+	if !ok {
+		return false
+	}
+
+	return e.Is(mask)
+}

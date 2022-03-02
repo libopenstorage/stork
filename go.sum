@@ -134,6 +134,8 @@ github.com/JeffAshton/win_pdh v0.0.0-20161109143554-76bb4ee9f0ab/go.mod h1:3VYc5
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
 github.com/LINBIT/golinstor v0.26.0 h1:xEGzYg+M5+wbkV33t3FMP0y+zbqWgpZJVNHs1KvHWqE=
 github.com/LINBIT/golinstor v0.26.0/go.mod h1:p2V1Y5ppce3isjO7IBiZGOwY8R8oIm+nYZqOa77bpXM=
+github.com/LINBIT/golinstor v0.39.0 h1:coDeBklMkETBdpsB0u2dFMZSqoQnjot5rCWA5AdP8w8=
+github.com/LINBIT/golinstor v0.39.0/go.mod h1:GspbEuOx6efhdqvnBm9SUA4NPsMfdmEm8utSMfmb8eI=
 github.com/MakeNowJust/heredoc v0.0.0-20170808103936-bb23615498cd/go.mod h1:64YHyfSL2R96J44Nlwm39UHepQbyR5q10x7iYa1ks2E=
 github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e h1:eb0Pzkt15Bm7f2FFYv7sjY7NPFi3cPkS3tv1CcrFBWA=
 github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e/go.mod h1:64YHyfSL2R96J44Nlwm39UHepQbyR5q10x7iYa1ks2E=
@@ -336,6 +338,7 @@ github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96/go.mod h1:Qh8CwZ
 github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c h1:ZfSZ3P3BedhKGUhzj7BQlPSU4OvT6tfOKe3DVHzOA7s=
 github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c/go.mod h1:Qh8CwZgvJUkLughtfhJv5dyTYa91l1fOUCrgjqmcifM=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
+github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b h1:eR1P/A4QMYF2/LpHRhYAts9wyYEtF7qNk/tVNiYCWc8=
 github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b/go.mod h1:56wL82FO0bfMU5RvfXoIwSOP2ggqqxT+tAfNEIyxuHw=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
@@ -1218,6 +1221,10 @@ github.com/portworx/sched-ops v1.20.4-rc1.0.20211026113317-db80e47fe929 h1:yl7Lb
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211026113317-db80e47fe929/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23 h1:CvUosdpqAPPiGiDWuDuWUQXyEJcuDuTMqel378aiFUA=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23/go.mod h1:5xy8TTt9m/8UGG8Hw5NHxwc/mctjCsmj7mpcR7jIFjI=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220208024433-611d861089d4 h1:riohTP9IIoLnh/W0C/vJv4+ANEORHO3QXBl+OGf5gt8=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220208024433-611d861089d4/go.mod h1:5E/BwC3d4ysXce1fzNFjR2OU8rz7Kx6mt8T10HEiA0E=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8 h1:L85Dd2o3WmUDqHm4xnYG6rLO8FtBRo+GaGGFDIBJlbU=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8/go.mod h1:5E/BwC3d4ysXce1fzNFjR2OU8rz7Kx6mt8T10HEiA0E=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224/go.mod h1:OjpMH9Uh5o9ntVGktm4FbjLNwubJ3ITih2OfYrAeWtA=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 h1:J5D0JPZWueVAK8/Dr5s84I7/tCfin6NjIGbKKCSyyJ0=
@@ -1344,10 +1351,12 @@ github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e h1:jrZSSgP
 github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e/go.mod h1:d8hQseuYt4rJoOo21lFzYJdhMjmDqLY++ayArbgYjWI=
 github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d h1:zE9ykElWQ6/NYmHa3jpm/yHnI4xSofP+UP6SpjHcSeM=
 github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d/go.mod h1:OnSkiWE9lh6wB0YB77sQom3nweQdgAjqCqsofrRNTgc=
+github.com/smartystreets/assertions v1.2.0/go.mod h1:tcbTF8ujkAEcZ8TElKY+i30BzYlVhC/LOxJk7iOWnoo=
 github.com/smartystreets/goconvey v0.0.0-20180222194500-ef6db91d284a/go.mod h1:XDJAKZRPZ1CvBcN2aX5YOUTYGHki24fSF0Iv48Ibg0s=
 github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a/go.mod h1:syvi0/a8iFYH4r/RixwvyeAJjdLS9QV7WQ/tjFTllLA=
 github.com/smartystreets/goconvey v1.6.4 h1:fv0U8FUIMPNf1L9lnHLvLhgicrIVChEkdzIKYqbNC9s=
 github.com/smartystreets/goconvey v1.6.4/go.mod h1:syvi0/a8iFYH4r/RixwvyeAJjdLS9QV7WQ/tjFTllLA=
+github.com/smartystreets/goconvey v1.7.2/go.mod h1:Vw0tHAZW6lzCRk3xgdin6fKYcG+G3Pg9vgXWeJpQFMM=
 github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4kGIyLM=
 github.com/sony/gobreaker v0.4.1/go.mod h1:ZKptC7FHNvhBz7dN2LGjPVBz2sZJmc0/PkyDJOjmxWY=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=

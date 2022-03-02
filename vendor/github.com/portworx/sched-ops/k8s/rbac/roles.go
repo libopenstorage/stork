@@ -17,6 +17,8 @@ type RoleOps interface {
 	GetRole(name, namespace string) (*rbac_v1.Role, error)
 	// DeleteRole deletes the given role
 	DeleteRole(name, namespace string) error
+	// ListRoles returns the list of roles
+	ListRoles(namespace string, filterOptions metav1.ListOptions) (*rbac_v1.RoleList, error)
 }
 
 // CreateRole creates the given role
@@ -55,4 +57,13 @@ func (c *Client) DeleteRole(name, namespace string) error {
 	return c.rbac.Roles(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+// ListRoles returns the list of roles
+func (c *Client) ListRoles(namespace string, filterOptions metav1.ListOptions) (*rbac_v1.RoleList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.rbac.Roles(namespace).List(context.TODO(), filterOptions)
 }

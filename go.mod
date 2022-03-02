@@ -30,8 +30,8 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/portworx/kdmp v0.4.1-0.20220117074354-94dab8b8d98e
-	github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20211116074603-2b6905763b23
+	github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194 // indirect
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sirupsen/logrus v1.8.1
@@ -61,7 +61,7 @@ require (
 )
 
 replace (
-	github.com/LINBIT/golinstor => github.com/LINBIT/golinstor v0.26.0
+	github.com/LINBIT/golinstor => github.com/LINBIT/golinstor v0.39.0
 	github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 	github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible

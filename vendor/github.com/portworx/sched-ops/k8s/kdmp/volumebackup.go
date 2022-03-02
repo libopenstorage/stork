@@ -14,7 +14,7 @@ type VolumeBackupOps interface {
 	// GetVolumeBackup gets the VolumeBackup CR
 	GetVolumeBackup(string, string) (*kdmpv1alpha1.VolumeBackup, error)
 	// ListVolumeBackup lists all the VolumeBackup CRs
-	ListVolumeBackup(string) (*kdmpv1alpha1.VolumeBackupList, error)
+	ListVolumeBackup(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.VolumeBackupList, error)
 	// UpdateVolumeBackup updates the VolumeBackup CR
 	UpdateVolumeBackup(*kdmpv1alpha1.VolumeBackup) (*kdmpv1alpha1.VolumeBackup, error)
 	// DeleteVolumeBackup deletes the VolumeBackup CR
@@ -38,11 +38,11 @@ func (c *Client) GetVolumeBackup(name, namespace string) (*kdmpv1alpha1.VolumeBa
 }
 
 // ListVolumeBackup lists all the VolumeBackup CR
-func (c *Client) ListVolumeBackup(namespace string) (*kdmpv1alpha1.VolumeBackupList, error) {
+func (c *Client) ListVolumeBackup(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.VolumeBackupList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.kdmp.KdmpV1alpha1().VolumeBackups(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.kdmp.KdmpV1alpha1().VolumeBackups(namespace).List(context.TODO(), filterOptions)
 }
 
 // DeleteVolumeBackup deletes the VolumeBackup CR

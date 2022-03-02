@@ -21,6 +21,18 @@ import "context"
 
 // custom code
 
+// EncryptionProvider acts as an abstraction for an EncryptionService. It can be
+// swapped out for another EncryptionService implementation, for example for
+// testing.
+type EncryptionProvider interface {
+	// Create creates an encryption with the given passphrase
+	Create(ctx context.Context, passphrase Passphrase) error
+	// Modify modifies an existing passphrase
+	Modify(ctx context.Context, passphrase Passphrase) error
+	// Enter is used to enter a password so that content can be decrypted
+	Enter(ctx context.Context, password string) error
+}
+
 // EncryptionService is the service that deals with encyrption related tasks.
 type EncryptionService struct {
 	client *Client

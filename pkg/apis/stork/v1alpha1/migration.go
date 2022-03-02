@@ -29,11 +29,15 @@ type MigrationSpec struct {
 
 // MigrationStatus is the status of a migration operation
 type MigrationStatus struct {
-	Stage           MigrationStageType       `json:"stage"`
-	Status          MigrationStatusType      `json:"status"`
-	Resources       []*MigrationResourceInfo `json:"resources"`
-	Volumes         []*MigrationVolumeInfo   `json:"volumes"`
-	FinishTimestamp meta.Time                `json:"finishTimestamp"`
+	Stage                            MigrationStageType       `json:"stage"`
+	Status                           MigrationStatusType      `json:"status"`
+	Resources                        []*MigrationResourceInfo `json:"resources"`
+	Volumes                          []*MigrationVolumeInfo   `json:"volumes"`
+	FinishTimestamp                  meta.Time                `json:"finishTimestamp"`
+	VolumeMigrationFinishTimestamp   meta.Time                `json:"volumeMigrationFinishTimestamp"`
+	ResourceMigrationFinishTimestamp meta.Time                `json:"resourceMigrationFinishTimestamp"`
+	// Summary provides a short summary on the migration
+	Summary *MigrationSummary `json:"summary"`
 }
 
 // MigrationResourceInfo is the info for the migration of a resource
@@ -45,12 +49,35 @@ type MigrationResourceInfo struct {
 	Reason                string              `json:"reason"`
 }
 
+// MigrationSummary provides a short summary on the migration
+type MigrationSummary struct {
+	// TotalNumberOfVolumes gives the total count of volumes
+	TotalNumberOfVolumes uint64 `json:"totalNumberOfVolumes"`
+	// NumberOfMigratedVolumes gives the total count of successfully migrated volumes
+	NumberOfMigratedVolumes uint64 `json:"numOfMigratedVolumes"`
+	// TotalNumberOfResources gives the total count of resourcs
+	TotalNumberOfResources uint64 `json:"totalNumberOfResources"`
+	// NumberOfMigratedResources gives the total count of migrated k8s resources
+	NumberOfMigratedResources uint64 `json:"numOfMigratedResources"`
+	// TotalBytesMigrated gives the total amount of bytes migrated across all the volumes
+	TotalBytesMigrated uint64 `json:"totalBytesMigrated"`
+	// ElapsedTimeForVolumeMigration provides the total time the
+	// volume migration stage has been running or the total time
+	// taken for the volume migration to complete if the volume migration has finished
+	ElapsedTimeForVolumeMigration string `json:"elapsedTimeForVolumeMigration"`
+	// ElapsedTimeForResourceMigration provides the total time the
+	// resource migration stage has been running or the total time
+	// taken for the resource migration to complete if the volume migration has finished
+	ElapsedTimeForResourceMigration string `json:"elapsedTimeForResourceMigration"`
+}
+
 // MigrationVolumeInfo is the info for the migration of a volume
 type MigrationVolumeInfo struct {
 	PersistentVolumeClaim string              `json:"persistentVolumeClaim"`
 	Namespace             string              `json:"namespace"`
 	Volume                string              `json:"volume"`
 	Status                MigrationStatusType `json:"status"`
+	BytesTotal            uint64              `json:"bytesTotal"`
 	Reason                string              `json:"reason"`
 }
 

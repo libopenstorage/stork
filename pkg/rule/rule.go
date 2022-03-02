@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -36,9 +37,13 @@ import (
 const (
 	validateCRDInterval time.Duration = 5 * time.Second
 	validateCRDTimeout  time.Duration = 1 * time.Minute
-
+	// environment variable for command executor image registry and image registry secret.
+	cmdExecutorImageRegistryEnvVar       = "CMD-EXECUTOR-IMAGE-REGISTRY"
+	cmdExecutorImageRegistrySecretEnvVar = "CMD-EXECUTOR-IMAGE-REGISTRY-SECRET"
 	defaultCmdExecutorImage              = "openstorage/cmdexecutor:0.1"
+	// annotation key value for command executor image registry and image registry secret.
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
+	cmdExecutorImageOverrideSecretKey    = "stork.libopenstorage.org/cmdexecutor-image-secret"
 	storkServiceAccount                  = "stork-account"
 	podsWithRunningCommandsKeyDeprecated = "stork/pods-with-running-cmds"
 	podsWithRunningCommandsKey           = "stork.libopenstorage.org/pods-with-running-cmds"
@@ -51,6 +56,8 @@ const (
 	execPodStepLow          = 12
 	execPodStepMed          = 36
 	execPodStepsHigh        = math.MaxInt32
+	maxRetry                = 10
+	retrySleep              = 30 * time.Second
 )
 
 // Type The type of rule to be executed
@@ -326,12 +333,39 @@ func executeCommandAction(
 	} else {
 		podsForAction = append(podsForAction, pods...)
 	}
-
-	cmdExecutorImage := defaultCmdExecutorImage
+	var cmdExecutorImage string
+	var cmdExecutorImageSecret string
+	// The order of priority for image location value is Job annotation, environmental variable
+	// and then if both of them are missing, default to stork image repo
+	if len(os.Getenv(cmdExecutorImageRegistryEnvVar)) == 0 {
+		// If env is not set get the values from stork deployment spec.
+		registry, registrySecret, err := k8sutils.GetImageRegistryFromDeployment(
+			k8sutils.StorkDeploymentName,
+			k8sutils.DefaultAdminNamespace,
+		)
+		if err != nil {
+			return err
+		}
+		if len(registry) != 0 {
+			cmdExecutorImage = registry + "/" + defaultCmdExecutorImage
+		} else {
+			cmdExecutorImage = defaultCmdExecutorImage
+		}
+		cmdExecutorImageSecret = registrySecret
+	} else {
+		// if env is set get it from env variable.
+		cmdExecutorImage = os.Getenv(cmdExecutorImageRegistryEnvVar) + "/" + defaultCmdExecutorImage
+		cmdExecutorImageSecret = os.Getenv(cmdExecutorImageRegistrySecretEnvVar)
+	}
 	ruleAnnotations := rule.GetAnnotations()
 	if ruleAnnotations != nil {
+		// get the image registry name, if the annotation is present.
 		if imageOverride, ok := ruleAnnotations[cmdExecutorImageOverrideKey]; ok && len(imageOverride) > 0 {
 			cmdExecutorImage = imageOverride
+		}
+		// get the image registry secret, if the annotation is present.
+		if imageOverrideSecret, ok := ruleAnnotations[cmdExecutorImageOverrideSecretKey]; ok && len(imageOverrideSecret) > 0 {
+			cmdExecutorImageSecret = imageOverrideSecret
 		}
 	}
 
@@ -379,7 +413,7 @@ func executeCommandAction(
 			log.RuleLog(rule, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 		}
 
-		err = runBackgroundCommandOnPods(podsForAction, container, action.Value, taskID.String(), cmdExecutorImage)
+		err = runBackgroundCommandOnPods(podsForAction, container, action.Value, taskID.String(), cmdExecutorImage, cmdExecutorImageSecret)
 		if err != nil {
 			return err
 		}
@@ -565,9 +599,22 @@ func runCommandOnPods(pods []v1.Pod, container string, cmd string, numRetries in
 	return nil, nil
 }
 
+// ToImagePullSecret converts a secret name to the ImagePullSecret struct.
+func ToImagePullSecret(name string) []v1.LocalObjectReference {
+	if name == "" {
+		return nil
+	}
+	return []v1.LocalObjectReference{
+		{
+			Name: name,
+		},
+	}
+
+}
+
 // runBackgroundCommandOnPods will start the given "cmd" on all the given "pods". The taskID is given to
 // the executor pod so it can have unique status files in the target pods where it runs the actual commands
-func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecutorImage string) error {
+func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecutorImage, cmdExecutorImageSecret string) error {
 	executorArgs := []string{
 		"/cmdexecutor",
 		"-timeout", strconv.FormatInt(perPodCommandExecTimeout, 10),
@@ -590,6 +637,7 @@ func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecut
 			Labels:    labels,
 		},
 		Spec: v1.PodSpec{
+			ImagePullSecrets: ToImagePullSecret(cmdExecutorImageSecret),
 			Containers: []v1.Container{
 				{
 					Name:            "cmdexecutor",
@@ -629,6 +677,29 @@ func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecut
 	}()
 
 	logrus.Infof("Created pod command executor: [%s] %s", createdPod.GetNamespace(), createdPod.GetName())
+	// Check whether the cmd executor pod is struck in pending state for more than five mintues
+	// If struck, delete the pod and return error.
+	for i := 0; i < maxRetry; i++ {
+		p, err := core.Instance().GetPodByUID(createdPod.GetUID(), createdPod.GetNamespace())
+		if err != nil {
+			return err
+		}
+		if p.Status.Phase == v1.PodPending {
+			if i == (maxRetry - 1) {
+				var err error
+				if len(p.Status.ContainerStatuses) != 0 {
+					err = fmt.Errorf("rule command executor is struck in pending state, reason: %v", p.Status.ContainerStatuses[0].State.Waiting.Reason)
+				} else {
+					err = fmt.Errorf("rule command executor is struck in pending state")
+				}
+				logrus.Errorf("%v", err)
+				return err
+			}
+			time.Sleep(retrySleep)
+			continue
+		}
+	}
+
 	err = waitForExecPodCompletion(createdPod)
 	if err != nil {
 		// Since the command executor failed, fetch it's status using the pod's name as the key. The fetched status

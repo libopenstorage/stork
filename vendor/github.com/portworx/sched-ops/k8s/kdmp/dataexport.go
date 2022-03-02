@@ -19,7 +19,7 @@ type DataExportOps interface {
 	// GetDataExport gets the DataExport CR
 	GetDataExport(string, string) (*kdmpv1alpha1.DataExport, error)
 	// ListDataExport lists all the DataExport CRs
-	ListDataExport(string) (*kdmpv1alpha1.DataExportList, error)
+	ListDataExport(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.DataExportList, error)
 	// UpdateDataExport updates the DataExport CR
 	UpdateDataExport(*kdmpv1alpha1.DataExport) (*kdmpv1alpha1.DataExport, error)
 	// DeleteDataExport deletes the DataExport CR
@@ -45,11 +45,11 @@ func (c *Client) GetDataExport(name, namespace string) (*kdmpv1alpha1.DataExport
 }
 
 // ListDataExport lists all the DataExport CR
-func (c *Client) ListDataExport(namespace string) (*kdmpv1alpha1.DataExportList, error) {
+func (c *Client) ListDataExport(namespace string, filterOptions metav1.ListOptions) (*kdmpv1alpha1.DataExportList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.kdmp.KdmpV1alpha1().DataExports(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.kdmp.KdmpV1alpha1().DataExports(namespace).List(context.TODO(), filterOptions)
 }
 
 // DeleteDataExport deletes the DataExport CR

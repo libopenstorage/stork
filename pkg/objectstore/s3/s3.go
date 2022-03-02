@@ -60,3 +60,27 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 	}
 	return err
 }
+
+// GetObjLockInfo fetches the object lock configuration of a S3 bucket
+func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*s3.GetObjectLockConfigurationOutput, error) {
+	sess, err := getSession(backupLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	input := &s3.GetObjectLockConfigurationInput{
+		Bucket: &backupLocation.Location.Path,
+	}
+
+	out, err := s3.New(sess).GetObjectLockConfiguration(input)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			if awsErr.Code() == "ObjectLockConfigurationNotFoundError" {
+				// for a non-objectlocked bucket we needn't throw error
+				return nil, nil
+			}
+		}
+		return nil, err
+	}
+	return out, err
+}
