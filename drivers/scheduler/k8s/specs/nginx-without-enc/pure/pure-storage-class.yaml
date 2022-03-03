@@ -5,8 +5,7 @@ metadata:
   name: nginx-sc
 provisioner: pxd.portworx.com
 parameters:
-  backend: "pure_block"
-  iops_limit: "30000"
-  bandwidth_limit: "10G"
-  csi.storage.k8s.io/fstype: xfs
+  # Tests:
+  # * FlashBlade Direct Access
+  backend: "pure_file"
 allowVolumeExpansion: true
