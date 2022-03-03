@@ -854,6 +854,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 }
 
 func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]string) error {
+	// TODO: this should be refactored so we apply snapshot specs from the app specs instead
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
 	if val, hasKey := params[refreshEndpointParam]; hasKey {
@@ -871,6 +872,7 @@ func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]s
 }
 
 func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
+	// TODO: this should be refactored so we apply snapshot specs from the app specs instead
 	nodes := node.GetStorageDriverNodes()
 	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], fmt.Sprintf(formattingCommandPxctlLocalSnapshotCreate, volumeName, constructSnapshotName(volumeName)), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
