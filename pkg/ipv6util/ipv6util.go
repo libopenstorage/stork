@@ -233,7 +233,7 @@ func AreAddressesIPv6(addrs []string) bool {
 
 // Process 'service kvdb enpoints output' consisting of lines 'http://<ip>:<port>'
 func parseIPAddressInPxctlServiceKvdbEndpoints(kvdbEndpointsOutput string) ([]string, error) {
-      	// Parse out all <ip>:<port> strings from URLs "http(s)://<ip>:<port>" in the line
+	// Parse out all <ip>:<port> strings from URLs "http(s)://<ip>:<port>" in the line
 	kvdbEndPts := kvdbEndPtsRgx.FindAllSubmatch([]byte(kvdbEndpointsOutput), -1)
 
 	kvdbEndPtsIPs := []string{}
@@ -255,7 +255,7 @@ func parseIPAddressInPxctlServiceKvdbMembers(kvdbMembersOutput string) ([]string
 		if strings.Contains(line, "http") {
 			cols := strings.Fields(strings.TrimSpace(line))
 			if len(cols) >= 2 {
-			      	// Parse out <ip>:<port> from URL "http(s)://<ip>:<port>" in the line	
+				// Parse out <ip>:<port> from URL "http(s)://<ip>:<port>" in the line
 				endPt := kvdbEndPtsRgx.FindSubmatch([]byte(strings.Trim(cols[2], "[]")))
 				ip, _, err := net.SplitHostPort(string(bytes.TrimSpace(endPt[1])))
 				if err != nil {
@@ -270,7 +270,7 @@ func parseIPAddressInPxctlServiceKvdbMembers(kvdbMembersOutput string) ([]string
 
 // ParseIPAddressInPxctlResourceDownAlert extract IP address from specific resource down alert description
 func ParseIPAddressInPxctlResourceDownAlert(alertsOutput, resource string) (string, error) {
-        // Parse out alert line 'NODE ... NodeStateChange ... <resource> ... Node <IP> has an Operational Status: Down'
+	// Parse out alert line 'NODE ... NodeStateChange ... <resource> ... Node <IP> has an Operational Status: Down'
 	findNodeDownRgx := regexp.MustCompile(`NODE.*NodeStateChange.*` + resource + `.*` + nodeDown)
 	if fstr := findNodeDownRgx.FindStringIndex(alertsOutput); fstr != nil {
 		nodeDownStr := alertsOutput[fstr[0]:fstr[1]]

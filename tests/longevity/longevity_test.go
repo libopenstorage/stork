@@ -233,6 +233,7 @@ func populateDisruptiveTriggers() {
 		AppTasksDown:                    false,
 		RestartManyVolDriver:            true,
 		RebootManyNodes:                 true,
+		RestartKvdbVolDriver:            true,
 	}
 }
 
@@ -310,6 +311,7 @@ func populateIntervals() {
 	triggerInterval[CrashNode] = map[int]time.Duration{}
 	triggerInterval[CrashVolDriver] = map[int]time.Duration{}
 	triggerInterval[RestartVolDriver] = map[int]time.Duration{}
+	triggerInterval[RestartKvdbVolDriver] = map[int]time.Duration{}
 	triggerInterval[HAIncrease] = map[int]time.Duration{}
 	triggerInterval[HADecrease] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
@@ -544,6 +546,17 @@ func populateIntervals() {
 	triggerInterval[RestartManyVolDriver][2] = 24 * baseInterval
 	triggerInterval[RestartManyVolDriver][1] = 27 * baseInterval
 
+	triggerInterval[RestartKvdbVolDriver][10] = 1 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][9] = 3 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][8] = 6 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][7] = 9 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][6] = 12 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RestartKvdbVolDriver][4] = 18 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][3] = 21 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][2] = 24 * baseInterval
+	triggerInterval[RestartKvdbVolDriver][1] = 27 * baseInterval
+
 	triggerInterval[AppTaskDown][10] = 1 * baseInterval
 	triggerInterval[AppTaskDown][9] = 3 * baseInterval
 	triggerInterval[AppTaskDown][8] = 6 * baseInterval
@@ -740,6 +753,7 @@ func populateIntervals() {
 	triggerInterval[HAIncrease][0] = 0
 	triggerInterval[HADecrease][0] = 0
 	triggerInterval[RestartVolDriver][0] = 0
+	triggerInterval[RestartKvdbVolDriver][0] = 0
 	triggerInterval[AppTaskDown][0] = 0
 	triggerInterval[VolumeClone][0] = 0
 	triggerInterval[VolumeResize][0] = 0

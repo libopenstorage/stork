@@ -173,6 +173,8 @@ const (
 	RestartVolDriver = "restartVolDriver"
 	// RestartManyVolDriver restarts one or more volume drivers at time
 	RestartManyVolDriver = "restartManyVolDriver"
+	// RestartKvdbVolDriver restarat kvdb volume driver
+	RestartKvdbVolDriver = "restartKvdbVolDriver"
 	// CrashVolDriver crashes volume driver
 	CrashVolDriver = "crashVolDriver"
 	// RebootNode reboots all nodes one by one
@@ -738,6 +740,70 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			})
 		}
 
+	})
+}
+
+// TriggerRestartKvdbVolDriver restarts volume driver where kvdb resides and validates app
+func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RestartKvdbVolDriver,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step("get kvdb nodes bounce volume driver", func() {
+		for _, appNode := range node.GetMetadataNodes() {
+			Step(
+				fmt.Sprintf("stop volume driver %s on node: %s",
+					Inst().V.String(), appNode.Name),
+				func() {
+					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
+					errorChan := make(chan error, errorChannelSize)
+					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+
+			Step(
+				fmt.Sprintf("starting volume %s driver on node %s",
+					Inst().V.String(), appNode.Name),
+				func() {
+					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
+					errorChan := make(chan error, errorChannelSize)
+					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+
+			Step("Giving few seconds for volume driver to stabilize", func() {
+				time.Sleep(20 * time.Second)
+			})
+
+			for _, ctx := range *contexts {
+				Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
+					errorChan := make(chan error, errorChannelSize)
+					ctx.ReadinessTimeout = time.Minute * 10
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			}
+		}
 	})
 }
 
@@ -3442,7 +3508,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
 							if err != nil {
 
-								logrus.Info("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
+								logrus.Infof("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
 								n2, err = Inst().V.GetNodeForVolume(vol, 3*time.Minute, 10*time.Second)
 								if err != nil {
 									err = fmt.Errorf("Error while getting node for volume %v, Error: %v", vol.ID, err)
