@@ -6,14 +6,7 @@ provisioner: pxd.portworx.com
 parameters:
   # Tests:
   # * FlashArray Direct Access w/ filesystem
-  # * Specifying filesystem type, creation options, and mount options
-  # * Specifying QoS
+  # * Default filesystem type (XFS), mount options and create options
+  # * No QoS
   backend: "pure_block"
-  max_iops: "30000"
-  max_bandwidth: "10G"
-  csi.storage.k8s.io/fstype: ext4
-  createoptions: -b 4096
-mountOptions:
-  - nosuid
-  - discard
 allowVolumeExpansion: true

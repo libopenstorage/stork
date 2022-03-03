@@ -5,8 +5,8 @@ metadata:
 provisioner: pxd.portworx.com
 parameters:
   backend: "pure_block"
-  iops_limit: "30000"
-  bandwidth_limit: "10G"
+  max_iops: "30000"
+  max_bandwidth: "10G"
   csi.storage.k8s.io/fstype: xfs
 allowVolumeExpansion: true
 ---
@@ -17,7 +17,7 @@ metadata:
 provisioner: pxd.portworx.com
 parameters:
   backend: "pure_block"
-  iops_limit: "30000"
-  bandwidth_limit: "10G"
+  max_iops: "30000"
+  max_bandwidth: "10G"
   csi.storage.k8s.io/fstype: xfs
 allowVolumeExpansion: true
