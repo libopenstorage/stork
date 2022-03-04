@@ -207,9 +207,12 @@ func pvcOwnershipTest(t *testing.T) {
 		err = volumeDriver.StartDriver(scheduledNodes[0])
 		require.NoError(t, err, "Error starting driver on scheduled Node %+v", scheduledNodes[0])
 	}()
-	// node timeout bumped to 4 mins from stork 2.9.0
+	// node timeout bumped to 4.5 mins from stork 2.9.0
 	// ref: https://github.com/libopenstorage/stork/pull/1028
-	time.Sleep(5 * time.Minute)
+	// volumeDriver.StopDriver waits for 10 seconds for driver
+	// to go down gracefully
+	// lets wait for at least 2.5 mins for PX to go down
+	time.Sleep(7 * time.Minute)
 
 	var errUnscheduledPod bool
 	for _, spec := range ctxs[0].App.SpecList {
