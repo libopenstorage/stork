@@ -4,10 +4,11 @@ metadata:
   name: wordpress-sc-legacy-shared
 provisioner: pxd.portworx.com
 parameters:
-  backend: "pure_block"
-  max_iops: "30000"
-  max_bandwidth: "10G"
-  csi.storage.k8s.io/fstype: xfs
+  # Tests:
+  # * FlashArray Direct Access w/ filesystem
+  # * Default filesystem type (ext4), mount options and create options
+  # * No QoS
+  backend: "pure_file"
 allowVolumeExpansion: true
 ---
 apiVersion: storage.k8s.io/v1
@@ -16,8 +17,9 @@ metadata:
   name: wordpress-sc
 provisioner: pxd.portworx.com
 parameters:
+  # Tests:
+  # * FlashArray Direct Access w/ filesystem
+  # * Default filesystem type (ext4), mount options and create options
+  # * No QoS
   backend: "pure_block"
-  max_iops: "30000"
-  max_bandwidth: "10G"
-  csi.storage.k8s.io/fstype: xfs
 allowVolumeExpansion: true
