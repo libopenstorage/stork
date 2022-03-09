@@ -40,8 +40,32 @@ type JobOpts struct {
 	PodDataPath                 string
 	// JobConfigMap holds any config needs to be provided to job
 	// from the caller. Eg: executor image name, secret, etc..
-	JobConfigMap   string
-	JobConfigMapNs string
+	JobConfigMap               string
+	JobConfigMapNs             string
+	KopiaImageExecutorSource   string
+	KopiaImageExecutorSourceNs string
+}
+
+// WithKopiaImageExecutorSource is job parameter.
+func WithKopiaImageExecutorSource(source string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(source) == "" {
+			return fmt.Errorf("kopia image executor source should be set")
+		}
+		opts.KopiaImageExecutorSource = strings.TrimSpace(source)
+		return nil
+	}
+}
+
+// WithKopiaImageExecutorSourceNs is job parameter.
+func WithKopiaImageExecutorSourceNs(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(namespace) == "" {
+			return fmt.Errorf("kopia image executor source namespace should be set")
+		}
+		opts.KopiaImageExecutorSourceNs = strings.TrimSpace(namespace)
+		return nil
+	}
 }
 
 // WithBackupObjectName is job parameter.

@@ -170,6 +170,21 @@ func jobFor(
 		jobOption.MaintenanceType,
 	}, " ")
 
+	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+		jobOption.KopiaImageExecutorSource,
+		jobOption.KopiaImageExecutorSourceNs,
+	)
+	if err != nil {
+		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during maintenance: %v", err)
+		return nil, err
+	}
+	var kopiaExecutorImage string
+	if len(imageRegistry) != 0 {
+		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
+	} else {
+		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+	}
+
 	job := &batchv1beta1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -201,11 +216,11 @@ func jobFor(
 						Spec: corev1.PodSpec{
 							RestartPolicy:      corev1.RestartPolicyOnFailure,
 							ServiceAccountName: jobOption.ServiceAccountName,
-							ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(jobOption.JobConfigMap, jobOption.JobConfigMapNs)),
+							ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
 							Containers: []corev1.Container{
 								{
 									Name:  "kopiaexecutor",
-									Image: utils.KopiaExecutorImage(jobOption.JobConfigMap, jobOption.JobConfigMapNs),
+									Image: kopiaExecutorImage,
 									// TODO: Need to revert it to NotPresent. For now keep it as PullAlways.
 									ImagePullPolicy: corev1.PullAlways,
 									Command: []string{
