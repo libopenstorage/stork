@@ -9,6 +9,7 @@ import (
 	"github.com/aquilax/truncate"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/version"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
@@ -21,6 +22,12 @@ import (
 const (
 	defaultPXNamespace = "kube-system"
 	kdmpConfig         = "kdmp-config"
+	// TriggeredFromStork - denotes the kopia job is triggered from stork module
+	TriggeredFromStork = "stork"
+	// TriggeredFromPxBackup - denotes the kopia job is triggered from px-backup module
+	TriggeredFromPxBackup                  = "px-backup"
+	kopiaExecutorImageRegistryEnvVar       = "KOPIA-EXECUTOR-IMAGE-REGISTRY"
+	kopiaExecutorImageRegistrySecretEnvVar = "KOPIA-EXECUTOR-IMAGE-REGISTRY-SECRET"
 )
 
 var (
@@ -218,18 +225,47 @@ func ResticExecutorImageSecret() string {
 	return strings.TrimSpace(os.Getenv(drivers.ResticExecutorImageSecretKey))
 }
 
-// KopiaExecutorImage returns a docker image that contains kopiaexecutor binary.
-func KopiaExecutorImage(configMap, ns string) string {
-	if customImage := strings.TrimSpace(GetConfigValue(configMap, ns, drivers.KopiaExecutorImageKey)); customImage != "" {
-		return customImage
+// GetImageRegistryFromDeployment - extract image registry and image registry secret from deployment spec
+func GetImageRegistryFromDeployment(name, namespace string) (string, string, error) {
+	deploy, err := apps.Instance().GetDeployment(name, namespace)
+	if err != nil {
+		return "", "", err
 	}
-	// use a versioned docker image
-	return strings.Join([]string{drivers.KopiaExecutorImage, version.Get().GitVersion}, ":")
+	imageFields := strings.Split(deploy.Spec.Template.Spec.Containers[0].Image, "/")
+	var registry string
+	// Here the assumption is that the image format will be <registry-name>/<repo-name>/image:tag
+	// or <repo-name>/image:tag. If repo name contains any path (<registry-name>/<repo-name>/<extra-dir-name>/image:tag), below logic will not work.
+	if len(imageFields) == 3 {
+		registry = imageFields[0]
+	}
+	imageSecret := deploy.Spec.Template.Spec.ImagePullSecrets
+	if imageSecret != nil {
+		return registry, imageSecret[0].Name, nil
+	}
+	return registry, "", nil
 }
 
-// KopiaExecutorImageSecret returns an image pull secret for the resticexecutor image.
-func KopiaExecutorImageSecret(configMap, ns string) string {
-	return strings.TrimSpace(GetConfigValue(configMap, ns, drivers.KopiaExecutorImageSecretKey))
+// GetKopiaExecutorImageRegistryAndSecret - will return the kopia image registry and image secret
+func GetKopiaExecutorImageRegistryAndSecret(source, sourceNs string) (string, string, error) {
+	var registry, registrySecret string
+	var err error
+	if len(os.Getenv(kopiaExecutorImageRegistryEnvVar)) == 0 || len(os.Getenv(kopiaExecutorImageRegistrySecretEnvVar)) == 0 {
+		registry, registrySecret, err = GetImageRegistryFromDeployment(source, sourceNs)
+		if err != nil {
+			logrus.Errorf("GetKopiaExecutorImageRegistryAndSecret: error in getting image registory from %v:%v deployment", sourceNs, source)
+			return "", "", err
+		}
+		return registry, registrySecret, nil
+	}
+	registry = os.Getenv(kopiaExecutorImageRegistryEnvVar)
+	registrySecret = os.Getenv(kopiaExecutorImageRegistrySecretEnvVar)
+	return registry, registrySecret, nil
+
+}
+
+// GetKopiaExecutorImageName - will return the default kopia executor image
+func GetKopiaExecutorImageName() string {
+	return strings.Join([]string{drivers.KopiaExecutorImage, version.Get().GitVersion}, ":")
 }
 
 // RsyncImage returns a docker image that contains rsync binary.
