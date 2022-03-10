@@ -14,6 +14,7 @@ import (
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/controllers/dataexport"
@@ -308,6 +309,13 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 
 		dataExport.Labels = labels
+		dataExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
+		storkPodNs, err := k8sutils.GetStorkPodNamespace()
+		if err != nil {
+			logrus.Errorf("error in getting stork pod namespace: %v", err)
+			return nil, err
+		}
+		dataExport.Spec.TriggeredFromNs = storkPodNs
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
 		dataExport.Annotations[backupObjectUIDKey] = string(backup.Annotations[pxbackupObjectUIDKey])
@@ -763,6 +771,13 @@ func (k *kdmp) StartRestore(
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
 		dataExport.Labels = labels
+		dataExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
+		storkPodNs, err := k8sutils.GetStorkPodNamespace()
+		if err != nil {
+			logrus.Errorf("error in getting stork pod namespace: %v", err)
+			return nil, err
+		}
+		dataExport.Spec.TriggeredFromNs = storkPodNs
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[skipResourceAnnotation] = "true"
 		dataExport.Annotations[backupObjectUIDKey] = backupUID
