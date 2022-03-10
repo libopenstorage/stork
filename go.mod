@@ -31,7 +31,7 @@ require (
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/portworx/kdmp v0.4.1-0.20220309093511-f7b925b9e53e
 	github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194 // indirect
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20220214075149-396c0f59a6a8
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220310041017-b5bae9ba82a7
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sirupsen/logrus v1.8.1
