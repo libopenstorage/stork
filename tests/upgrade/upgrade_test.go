@@ -65,7 +65,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 		Step("reinstall and validate all apps after upgrade", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriverreinstall-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
 			}
 			ValidateApplications(contexts)
 		})
