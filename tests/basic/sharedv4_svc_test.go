@@ -11,6 +11,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -400,7 +401,14 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 							Step(fmt.Sprintf("get counters from node %v before %s", attachedNodeBefore.Name, failoverLog),
 								func() {
-									countersBefore = getAppCounters(apiVol, attachedNodeBefore, counterCollectionInterval)
+									Eventually(func() bool {
+										countersBefore = getAppCounters(apiVol, attachedNodeBefore, counterCollectionInterval)
+										activePods := getActivePods(countersBefore)
+										return (len(activePods) == numPods)
+									}, 3*time.Minute, 10*time.Second).Should(BeTrue(),
+										"number of active keys did not match for volume %v (%v) for app %v. countersBefore map: %v",
+										vol.ID, apiVol.Id, ctx.App.Key, countersBefore)
+
 								})
 
 							Step(fmt.Sprintf("failover #%d by %s", i, fm),
@@ -1207,6 +1215,13 @@ func validateAppCounters(ctx *scheduler.Context, countersBefore, countersAfter m
 	Expect(len(terminatedPods)).To(BeElementOf(numDeletions),
 		"len of actual terminated pods %v was not one of %v: countersBefore=%v, countersAfter=%v",
 		terminatedPods, numDeletions, countersBefore, countersAfter)
+
+	for _, terminatedPod := range terminatedPods {
+		_, err := core.Instance().GetPodByName(terminatedPod, ctx.GetID())
+		Expect(err).To(Equal(errors.ErrPodsNotFound),
+			"pod %v is expected to be terminated (not found) but did not get terminated: terminatedPods=%v, countersBefore=%v, countersAfter=%v",
+			terminatedPod, terminatedPods, countersBefore, countersAfter)
+	}
 
 	Expect(len(newPods)).To(Equal(len(terminatedPods)),
 		"len of actual new pods %v did not match len of %v: countersBefore=%v, countersAfter=%v",
