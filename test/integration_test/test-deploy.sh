@@ -8,6 +8,7 @@ test_image_name="openstorage/stork_test:latest"
 src_config_path=""
 dest_config_path=""
 run_cluster_domain_test=false
+pair_enable_clusterpair_backup_location=false
 environment_variables=""
 storage_provisioner="portworx"
 focus_tests=""
@@ -70,6 +71,12 @@ case $i in
     --cluster_domain_tests)
         echo "Flag for clusterdomain test: $2"
         run_cluster_domain_test=true
+        shift
+        shift
+        ;;
+    --enable_cluster_pair_backup_location)
+        echo "Flag for enabling clusterpairing with BackupLocation: $2"
+        pair_enable_clusterpair_backup_location=true
         shift
         shift
         ;;
@@ -217,6 +224,13 @@ if [ "$run_cluster_domain_test" == "true" ] ; then
 else 
 	sed -i 's/'enable_cluster_domain'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
+
+if [ "$pair_enable_clusterpair_backup_location" == "true" ] ; then
+	sed -i 's/'pair_enable_clusterpair_backup_location'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
+else
+	sed -i 's/'pair_enable_clusterpair_backup_location'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
 
 if [ "$focus_tests" != "" ] ; then
      echo "Running focussed test: ${focus_tests}"

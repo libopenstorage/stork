@@ -76,6 +76,8 @@ spec:
       value: http://linstor-op-cs.default:3370/
     - name: ENABLE_CLUSTER_DOMAIN_TESTS
       value: enable_cluster_domain 
+    - name: ENABLE_CLUSTER_PAIR_BACKUP_LOCATION
+      value: pair_enable_clusterpair_backup_location
     - name: STORAGE_PROVISIONER 
       value: storage_provisioner 
     - name: AUTH_SECRET_CONFIGMAP

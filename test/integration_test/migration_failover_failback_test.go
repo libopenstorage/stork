@@ -169,7 +169,7 @@ func testMigrationFailback(
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", true)
+	err = scheduleClusterPair(t, ctxsReverse[0], false, false, "cluster-pair-reverse", true)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
