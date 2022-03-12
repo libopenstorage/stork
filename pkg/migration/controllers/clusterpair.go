@@ -204,7 +204,7 @@ func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*r
 func getClusterPairStorageStatus(clusterPairName string, namespace string) (stork_api.ClusterPairStatusType, error) {
 	clusterPair, err := storkops.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
-		return stork_api.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
+		return stork_api.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair %v (%v): %v", clusterPairName, namespace, err)
 	}
 	return clusterPair.Status.StorageStatus, nil
 }

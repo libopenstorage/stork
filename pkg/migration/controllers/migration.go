@@ -222,6 +222,10 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		if schedName, ok := migration.GetAnnotations()[StorkMigrationScheduleName]; ok {
 			remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 			if err != nil {
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					err.Error())
 				return err
 			}
 			remoteOps, err := storkops.NewForConfig(remoteConfig)
