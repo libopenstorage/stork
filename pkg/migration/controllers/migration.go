@@ -1920,6 +1920,17 @@ func (m *MigrationController) getMigrationSummary(migration *stork_api.Migration
 			migrationSummary.TotalNumberOfVolumes = totalVolumes
 			migrationSummary.NumberOfMigratedVolumes = doneVolumes
 		}
+		elapsedTimeVolume := "NA"
+		if !migration.CreationTimestamp.IsZero() {
+			if migration.Status.Stage == stork_api.MigrationStageApplications {
+				if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
+					elapsedTimeVolume = migration.Status.VolumeMigrationFinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
+				}
+			} else {
+				elapsedTimeVolume = time.Since(migration.CreationTimestamp.Time).String()
+			}
+		}
+		migrationSummary.ElapsedTimeForVolumeMigration = elapsedTimeVolume
 	}
 
 	if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
@@ -1934,32 +1945,19 @@ func (m *MigrationController) getMigrationSummary(migration *stork_api.Migration
 			migrationSummary.TotalNumberOfResources = totalResources
 			migrationSummary.NumberOfMigratedResources = doneResources
 		}
+		elapsedTimeResources := "NA"
+		if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
+			if migration.Status.Stage == stork_api.MigrationStageFinal {
+				if !migration.Status.ResourceMigrationFinishTimestamp.IsZero() {
+					elapsedTimeResources = migration.Status.ResourceMigrationFinishTimestamp.Sub(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
+				}
+			} else {
+				elapsedTimeResources = time.Since(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
+			}
+		}
+		migrationSummary.ElapsedTimeForResourceMigration = elapsedTimeResources
 	}
 
-	elapsedTimeVolume := ""
-	if !migration.CreationTimestamp.IsZero() {
-		if migration.Status.Stage == stork_api.MigrationStageApplications {
-			if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
-				elapsedTimeVolume = migration.Status.VolumeMigrationFinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
-			}
-		} else {
-			elapsedTimeVolume = time.Since(migration.CreationTimestamp.Time).String()
-		}
-	}
-	migrationSummary.ElapsedTimeForVolumeMigration = elapsedTimeVolume
-
-	elapsedTimeResources := ""
-	if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
-		if migration.Status.Stage == stork_api.MigrationStageFinal {
-			if !migration.Status.ResourceMigrationFinishTimestamp.IsZero() {
-				elapsedTimeResources = migration.Status.ResourceMigrationFinishTimestamp.Sub(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
-			}
-		} else {
-			elapsedTimeResources = time.Since(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
-		}
-	}
-	migrationSummary.ElapsedTimeForVolumeMigration = elapsedTimeVolume
-	migrationSummary.ElapsedTimeForResourceMigration = elapsedTimeResources
 	migrationSummary.TotalBytesMigrated = totalBytes
 	return migrationSummary
 }
