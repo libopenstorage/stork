@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -36,6 +38,9 @@ const (
 	// ApplicationBackupSchedulePolicyTypeAnnotation Annotation used to specify the type of the
 	// policy that triggered the backup
 	ApplicationBackupSchedulePolicyTypeAnnotation = annotationPrefix + "applicationBackupSchedulePolicyType"
+	// ApplicationBackupObjectLockRetentionAnnotation - object lock retention period annotation
+	// Since this annotation is used in the px-backup, creating with portworx.io annotation prefix.
+	ApplicationBackupObjectLockRetentionAnnotation = "portworx.io/" + "object-lock-retention-period"
 )
 
 // NewApplicationBackupSchedule creates a new instance of ApplicationBackupScheduleController.
@@ -266,6 +271,19 @@ func (s *ApplicationBackupScheduleController) formatApplicationBackupName(backup
 	return strings.Join([]string{backupSchedule.Name, strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
 }
 
+func getBackupLocationCR(backupSchedule *stork_api.ApplicationBackupSchedule) (*stork_api.BackupLocation, error) {
+	fn := "getBackupLocationCR"
+	// Get the backuplocation CR name
+	backuplocationCRName := backupSchedule.Spec.Template.Spec.BackupLocation
+	// Get the backuplocation CR content
+	backuplocationCR, err := storkops.Instance().GetBackupLocation(backuplocationCRName, backupSchedule.Namespace)
+	if err != nil {
+		logrus.Errorf("%s: failed in getting backuplocation CR %v/%v: %v", fn, backuplocationCRName, backupSchedule.Namespace, err)
+		return nil, err
+	}
+	return backuplocationCR, nil
+}
+
 func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSchedule *stork_api.ApplicationBackupSchedule, policyType stork_api.SchedulePolicyType) error {
 	backupName := s.formatApplicationBackupName(backupSchedule, policyType)
 	if backupSchedule.Status.Items == nil {
@@ -323,6 +341,26 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 			},
 		}
 	}
+	backupLocationCR, err := getBackupLocationCR(backupSchedule)
+	if err != nil {
+		return err
+	}
+	// Update the objectLock rentention period annotation
+	objectLockInfo, err := objectstore.GetObjLockInfo(backupLocationCR)
+	if err != nil {
+		return err
+	}
+	var retentionPeriod int64
+	if objectLockInfo.RetentionPeriodYears != 0 {
+		currTime := time.Now()
+		lastRetentionDate := currTime.AddDate(int(objectLockInfo.RetentionPeriodYears), 0, 0)
+		// duration works till 290 years, any duration beyond that will be floored
+		duration := lastRetentionDate.Sub(currTime)
+		retentionPeriod = int64(duration.Hours() / 24)
+	} else {
+		retentionPeriod = objectLockInfo.RetentionPeriodDays
+	}
+	backup.Annotations[ApplicationBackupObjectLockRetentionAnnotation] = strconv.FormatInt(retentionPeriod, 10)
 	_, err = storkops.Instance().CreateApplicationBackup(backup)
 	return err
 }
