@@ -17,7 +17,7 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestMigrationFailoverFailback(t *testing.T) {
+func testMigrationFailoverFailback(t *testing.T) {
 	// Create secrets on source and destination
 	// Since the secrets need to be created on the destination before migration
 	// is triggered using the API instead of spec factory in torpedo

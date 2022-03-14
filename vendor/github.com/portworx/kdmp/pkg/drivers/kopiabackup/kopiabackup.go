@@ -274,6 +274,20 @@ func jobFor(
 		splitCmd = append(splitCmd, "--compression", jobOption.Compression)
 		cmd = strings.Join(splitCmd, " ")
 	}
+	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+		jobOption.KopiaImageExecutorSource,
+		jobOption.KopiaImageExecutorSourceNs,
+	)
+	if err != nil {
+		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during backup: %v", err)
+		return nil, err
+	}
+	var kopiaExecutorImage string
+	if len(imageRegistry) != 0 {
+		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
+	} else {
+		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+	}
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -292,12 +306,12 @@ func jobFor(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(jobOption.JobConfigMap, jobOption.JobConfigMapNs)),
+					ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
 					ServiceAccountName: jobName,
 					Containers: []corev1.Container{
 						{
 							Name:            "kopiaexecutor",
-							Image:           utils.KopiaExecutorImage(jobOption.JobConfigMap, jobOption.JobConfigMapNs),
+							Image:           kopiaExecutorImage,
 							ImagePullPolicy: corev1.PullAlways,
 							Command: []string{
 								"/bin/sh",

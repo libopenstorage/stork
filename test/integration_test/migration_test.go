@@ -42,6 +42,7 @@ func TestMigration(t *testing.T) {
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
 
 	t.Run("testMigration", testMigration)
+	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
 	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
 	t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
 }

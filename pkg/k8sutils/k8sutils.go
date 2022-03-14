@@ -23,6 +23,8 @@ const (
 	retryInterval = 5 * time.Second
 	// StorkDeploymentName - stork deployment name
 	StorkDeploymentName = "stork"
+	storkPodLabelKey    = "name"
+	storkPodLabelValue  = "stork"
 	// DefaultAdminNamespace - default admin namespace, where stork will be installed
 	DefaultAdminNamespace = "kube-system"
 )
@@ -181,4 +183,25 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 		return registry, imageSecret[0].Name, nil
 	}
 	return registry, "", nil
+}
+
+// GetStorkPodNamespace - will return the stork pod namespace.
+func GetStorkPodNamespace() (string, error) {
+	var ns string
+	pods, err := core.Instance().ListPods(
+		map[string]string{
+			storkPodLabelKey: storkPodLabelValue,
+		},
+	)
+	if err != nil {
+		return ns, err
+	}
+	if len(pods.Items) > 0 {
+		ns = pods.Items[0].Namespace
+	}
+	if len(ns) == 0 {
+		return ns, fmt.Errorf("error: stork namespace is empty")
+	}
+	return ns, nil
+
 }

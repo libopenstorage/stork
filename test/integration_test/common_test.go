@@ -70,6 +70,7 @@ const (
 	srcConfig                   = "sourceconfigmap"
 	destConfig                  = "destinationconfigmap"
 	specDir                     = "./specs"
+	tempDir                     = "/tmp"
 	defaultClusterPairDir       = "cluster-pair"
 	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
 	pairFileName                = "cluster-pair.yaml"
@@ -614,12 +615,12 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 	}
 
 	// Create directory to store kubeconfig files
-	err = os.MkdirAll(path.Join(specDir, bidirectionalClusterPairDir), 0777)
+	err = os.MkdirAll(path.Join(tempDir, bidirectionalClusterPairDir), 0777)
 	if err != nil {
-		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", specDir+"/"+bidirectionalClusterPairDir, err)
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", tempDir+"/"+bidirectionalClusterPairDir, err)
 		return err
 	}
-	srcKubeconfigPath := path.Join(specDir, bidirectionalClusterPairDir, "src_kubeconfig")
+	srcKubeconfigPath := path.Join(tempDir, bidirectionalClusterPairDir, "src_kubeconfig")
 	srcKubeConfig, err := os.Create(srcKubeconfigPath)
 	if err != nil {
 		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
@@ -646,7 +647,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 		return err
 	}
 
-	destKubeconfigPath := path.Join(specDir, bidirectionalClusterPairDir, "dest_kubeconfig")
+	destKubeconfigPath := path.Join(tempDir, bidirectionalClusterPairDir, "dest_kubeconfig")
 	destKubeConfig, err := os.Create(destKubeconfigPath)
 	if err != nil {
 		logrus.Errorf("Unable to write source kubeconfig file: %v", err)

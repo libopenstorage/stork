@@ -12,9 +12,9 @@ import (
 
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
-	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/crypto"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -1163,7 +1163,25 @@ func buildJobSpec(
 	}, " ")
 
 	jobPodBackOffLimit := int32(1)
-
+	storkPodNs, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		logrus.Errorf("error in getting stork pod namespace: %v", err)
+		return nil, err
+	}
+	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+		utils.TriggeredFromStork,
+		storkPodNs,
+	)
+	if err != nil {
+		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during live backup: %v", err)
+		return nil, err
+	}
+	var kopiaExecutorImage string
+	if len(imageRegistry) != 0 {
+		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
+	} else {
+		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -1177,12 +1195,12 @@ func buildJobSpec(
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					RestartPolicy:      v1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.KopiaExecutorImageSecret(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)),
+					ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
 					ServiceAccountName: jobName,
 					Containers: []v1.Container{
 						{
 							Name:            "kopiaexecutor",
-							Image:           utils.KopiaExecutorImage(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace),
+							Image:           kopiaExecutorImage,
 							ImagePullPolicy: v1.PullIfNotPresent,
 							Command: []string{
 								"/bin/sh",

@@ -95,11 +95,15 @@ type DataExport struct {
 
 // DataExportSpec defines configuration parameters for DataExport.
 type DataExportSpec struct {
-	Type                 DataExportType            `json:"type,omitempty"`
-	ClusterPair          string                    `json:"clusterPair,omitempty"`
-	SnapshotStorageClass string                    `json:"snapshotStorageClass,omitempty"`
-	Source               DataExportObjectReference `json:"source,omitempty"`
-	Destination          DataExportObjectReference `json:"destination,omitempty"`
+	Type                 DataExportType `json:"type,omitempty"`
+	ClusterPair          string         `json:"clusterPair,omitempty"`
+	SnapshotStorageClass string         `json:"snapshotStorageClass,omitempty"`
+	// TriggeredFrom is to know which module is created the dataexport CR.
+	// The use-case is to know from where to get the kopia executor image
+	TriggeredFrom   string                    `json:"triggerFrom,omitempty"`
+	TriggeredFromNs string                    `json:"triggerFromNs,omitempty"`
+	Source          DataExportObjectReference `json:"source,omitempty"`
+	Destination     DataExportObjectReference `json:"destination,omitempty"`
 }
 
 // DataExportObjectReference contains enough information to let you inspect the referred object.

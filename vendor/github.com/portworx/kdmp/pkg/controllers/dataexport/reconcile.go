@@ -1526,6 +1526,8 @@ func startTransferJob(
 		)
 	case drivers.KopiaBackup:
 		return drv.StartJob(
+			drivers.WithKopiaImageExecutorSource(dataExport.Spec.TriggeredFrom),
+			drivers.WithKopiaImageExecutorSourceNs(dataExport.Spec.TriggeredFromNs),
 			drivers.WithSourcePVC(srcPVCName),
 			drivers.WithRepoPVC(getRepoPVCName(dataExport, srcPVCName)),
 			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
@@ -1542,6 +1544,8 @@ func startTransferJob(
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
+			drivers.WithKopiaImageExecutorSource(dataExport.Spec.TriggeredFrom),
+			drivers.WithKopiaImageExecutorSourceNs(dataExport.Spec.TriggeredFromNs),
 			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
 			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithVolumeBackupName(dataExport.Spec.Source.Name),
