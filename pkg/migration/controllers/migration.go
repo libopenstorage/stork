@@ -313,7 +313,8 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		if err == nil {
 			for _, domainInfo := range clusterDomains.ClusterDomainInfos {
 				if domainInfo.Name == clusterDomains.LocalDomain &&
-					domainInfo.State == stork_api.ClusterDomainInactive {
+					domainInfo.State == stork_api.ClusterDomainInactive &&
+					migration.Status.Stage != stork_api.MigrationStageFinal {
 					migration.Status.Status = stork_api.MigrationStatusFailed
 					migration.Status.Stage = stork_api.MigrationStageFinal
 					migration.Status.FinishTimestamp = metav1.Now()
