@@ -514,14 +514,12 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 		fallthrough
 	case api.Status_STATUS_NEEDS_REBOOT:
 		return storkvolume.NodeOffline
-
 	case api.Status_STATUS_NONE:
 		fallthrough
 	case api.Status_STATUS_OK:
-		fallthrough
-	case api.Status_STATUS_STORAGE_DOWN:
 		return storkvolume.NodeOnline
-
+	case api.Status_STATUS_STORAGE_DOWN:
+		fallthrough
 	case api.Status_STATUS_STORAGE_DEGRADED:
 		fallthrough
 	case api.Status_STATUS_STORAGE_REBALANCE:
