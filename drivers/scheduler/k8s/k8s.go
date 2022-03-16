@@ -2231,14 +2231,14 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	}
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+		if err := k.WaitForDestroy(ctx, k8sDestroyTimeout); err != nil {
 			return err
 		}
 		if err := k.waitForCleanup(ctx, podList); err != nil {
 			return err
 		}
 	} else if value, ok = opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+		if err := k.WaitForDestroy(ctx, k8sDestroyTimeout); err != nil {
 			return err
 		}
 	}
