@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/objectstore/common"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/azureblob"
 )
@@ -55,4 +56,9 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 		}
 	}
 	return err
+}
+
+// GetObjLockInfo fetches the object lock configuration of a bucket
+func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockInfo, error) {
+	return nil, fmt.Errorf("object lock is not supported for azure provider")
 }

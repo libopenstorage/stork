@@ -67,8 +67,8 @@ func PerformTask(userTask func() error, opts *TriggerOptions) error {
 
 		triggered, err := task.DoRetryWithTimeout(userTaskWithTriggerChecks, opts.TriggerCheckTimeout, opts.TriggerCheckInterval)
 		if err != nil {
-			if !triggered.(bool) {
-				// timeout error is expected if the trigger conditions don'userTaskWithTriggerChecks meet within above timeouts. For any other error,
+			if triggered == nil {
+				// timeout error is expected if the trigger conditions don't meet within above timeouts. For any other error,
 				// return the error
 				_, timedOut := err.(*task.ErrTimedOut)
 				if timedOut {

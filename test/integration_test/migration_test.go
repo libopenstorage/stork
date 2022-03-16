@@ -904,22 +904,18 @@ func clusterPairFailuresTest(t *testing.T) {
 	require.NoError(t, err, "Error waiting for app to get to running state")
 
 	var clusterPairCtx = &scheduler.Context{
-		UID: ctxs[0].UID,
+		UID:             ctxs[0].UID,
+		ScheduleOptions: scheduler.ScheduleOptions{Namespace: "cp-failure"},
 		App: &spec.AppSpec{
 			Key:      ctxs[0].App.Key,
 			SpecList: []interface{}{},
 		}}
 
-	// create, apply and validate cluster pair specs
-	err = setDestinationKubeConfig()
-	require.NoError(t, err, "during cluster pair setting kubeconfig to destination failed %v")
-
-	badTokenInfo, errPairing := volumeDriver.GetClusterPairingInfo()
+	badTokenInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	// Change token value to an incorrect token
 	badTokenInfo[tokenKey] = "randomtoken"
-
 	err = createClusterPair(badTokenInfo, false, true, defaultClusterPairDir)
 	require.NoError(t, err, "Error creating cluster Spec: %v")
 
@@ -936,7 +932,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 
-	badIPInfo, errPairing := volumeDriver.GetClusterPairingInfo()
+	badIPInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	badIPInfo[clusterIP] = "0.0.0.0"
@@ -957,7 +953,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 
-	badPortInfo, errPairing := volumeDriver.GetClusterPairingInfo()
+	badPortInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	badPortInfo[clusterPort] = "0000"

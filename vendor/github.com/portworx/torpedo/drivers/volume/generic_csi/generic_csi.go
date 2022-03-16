@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -38,6 +39,14 @@ func (d *genericCsi) ValidateVolumeCleanup() error {
 
 func (d *genericCsi) RefreshDriverEndpoints() error {
 	return nil
+}
+
+func (d *genericCsi) ValidateStorageCluster(endpointURL, endpointVersion string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateStorageCluster()",
+	}
 }
 
 func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
