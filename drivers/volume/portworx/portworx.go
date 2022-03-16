@@ -659,26 +659,32 @@ func (p *portworx) GetClusterID() (string, error) {
 }
 
 func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
-	return p.OwnsPVC(coreOps, pvc)
+	return p.IsSupportedPVC(coreOps, pvc, true)
 }
 
 func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
+	return p.IsSupportedPVC(coreOps, pvc, false)
+}
 
+// IsSupportedPVC returns PX driver supported pvcs for backup/migrtion/scheduling decisions
+// Backup is not supported for FA/FB backed PX PVC, so one can use
+// skipFBVols flag to omit such pvcs from decision matrix
+func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, skipDirectAccessVolumes bool) bool {
 	provisioner := ""
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName != "" {
 		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
 		if err == nil {
-			if _, ok := storageClass.Parameters[proxyEndpoint]; ok {
+			if _, ok := storageClass.Parameters[proxyEndpoint]; ok && skipDirectAccessVolumes {
 				logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
 				return false
-			} else if val, ok := storageClass.Parameters[pureBackendParam]; ok && val == pureFileParam {
+			} else if val, ok := storageClass.Parameters[pureBackendParam]; ok && val == pureFileParam && skipDirectAccessVolumes {
 				logrus.Tracef("pure file backend param set, not classifying it as pxd for pvc [%v]", pvc.Name)
 				return false
 			}
 			provisioner = storageClass.Provisioner
 		} else {
-			logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
+			logrus.Tracef("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
 		}
 	}
 	// Check for the provisioner in the PVC annotation. If not populated
