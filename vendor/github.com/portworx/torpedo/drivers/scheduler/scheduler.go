@@ -124,8 +124,6 @@ type ScheduleOptions struct {
 	Upgrade bool
 	// Namespace to schedule app installation if not empty
 	Namespace string
-	// DryRun
-	DryRun []string
 }
 
 // Driver must be implemented to provide test support to various schedulers.

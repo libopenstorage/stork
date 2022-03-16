@@ -21,6 +21,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +58,15 @@ type azure struct {
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.CloneNotSupported
 	storkvolume.SnapshotRestoreNotSupported
+}
+
+type azureSession struct {
+	clientSecret   string
+	clientID       string
+	tenantID       string
+	subscriptionID string
+	diskClient     compute.DisksClient
+	snapshotClient compute.SnapshotsClient
 }
 
 func (a *azure) Init(_ interface{}) error {
@@ -213,8 +223,8 @@ func isCsiProvisioner(provisioner string) bool {
 	return csiProvisionerName == provisioner
 }
 
-func (a *azure) findExistingSnapshot(tags map[string]string) (*compute.Snapshot, error) {
-	snapshotList, err := a.snapshotClient.List(context.TODO())
+func (a *azure) findExistingSnapshot(tags map[string]string, snapshotClient compute.SnapshotsClient) (*compute.Snapshot, error) {
+	snapshotList, err := snapshotClient.List(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -248,11 +258,12 @@ func (a *azure) StartBackup(
 	backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	if !a.initDone {
-		if err := a.Init(nil); err != nil {
-			return nil, err
-		}
+	azureSession, err := a.getAzureSession(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	snapshotClient := azureSession.snapshotClient
+	diskClient := azureSession.diskClient
 
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
@@ -283,7 +294,7 @@ func (a *azure) StartBackup(
 		}
 		tags := storkvolume.GetApplicationBackupLabels(backup, &pvc)
 
-		if snapshot, err := a.findExistingSnapshot(tags); err == nil && snapshot != nil {
+		if snapshot, err := a.findExistingSnapshot(tags, snapshotClient); err == nil && snapshot != nil {
 			volumeInfo.BackupID = *snapshot.Name
 		} else {
 			var volume string
@@ -298,7 +309,7 @@ func (a *azure) StartBackup(
 			} else {
 				return nil, fmt.Errorf("azure disk info not found in PV %v", pvName)
 			}
-			disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, volume)
+			disk, err := diskClient.Get(context.TODO(), a.resourceGroup, volume)
 			if err != nil {
 				return nil, err
 			}
@@ -317,7 +328,7 @@ func (a *azure) StartBackup(
 			for k, v := range tags {
 				snapshot.Tags[k] = to.StringPtr(v)
 			}
-			_, err = a.snapshotClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *snapshot.Name, snapshot)
+			_, err = snapshotClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *snapshot.Name, snapshot)
 			if err != nil {
 				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
 			}
@@ -328,11 +339,11 @@ func (a *azure) StartBackup(
 }
 
 func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	if !a.initDone {
-		if err := a.Init(nil); err != nil {
-			return nil, err
-		}
+	azureSession, err := a.getAzureSession(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	snapshotClient := azureSession.snapshotClient
 
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
@@ -340,7 +351,7 @@ func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi
 		if vInfo.DriverName != storkvolume.AzureDriverName {
 			continue
 		}
-		snapshot, err := a.snapshotClient.Get(context.TODO(), a.resourceGroup, vInfo.BackupID)
+		snapshot, err := snapshotClient.Get(context.TODO(), a.resourceGroup, vInfo.BackupID)
 		if err != nil {
 			return nil, err
 		}
@@ -370,17 +381,17 @@ func (a *azure) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
-	if !a.initDone {
-		if err := a.Init(nil); err != nil {
-			return true, err
-		}
+	azureSession, err := a.getAzureSession(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return true, err
 	}
+	snapshotClient := azureSession.snapshotClient
 
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.AzureDriverName {
 			continue
 		}
-		_, err := a.snapshotClient.Delete(context.TODO(), a.resourceGroup, vInfo.BackupID)
+		_, err := snapshotClient.Delete(context.TODO(), a.resourceGroup, vInfo.BackupID)
 		if err != nil {
 			// Ignore if the snaphot has already been deleted
 			if azureErr, ok := err.(autorest.DetailedError); ok {
@@ -417,8 +428,8 @@ func (a *azure) generatePVName() string {
 	return pvNamePrefix + string(uuid.NewUUID())
 }
 
-func (a *azure) findExistingDisk(tags map[string]string) (*compute.Disk, error) {
-	diskList, err := a.diskClient.List(context.TODO())
+func (a *azure) findExistingDisk(tags map[string]string, diskClient compute.DisksClient) (*compute.Disk, error) {
+	diskList, err := diskClient.List(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -461,11 +472,12 @@ func (a *azure) StartRestore(
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
-	if !a.initDone {
-		if err := a.Init(nil); err != nil {
-			return nil, err
-		}
+	azureSession, err := a.getAzureSession(restore.Spec.BackupLocation, restore.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	snapshotClient := azureSession.snapshotClient
+	diskClient := azureSession.diskClient
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
@@ -477,7 +489,7 @@ func (a *azure) StartRestore(
 			logrus.Warnf("missing resource group in snapshot %v, will use current resource group", backupVolumeInfo.BackupID)
 		}
 
-		snapshot, err := a.snapshotClient.Get(context.TODO(), resourceGroup, backupVolumeInfo.BackupID)
+		snapshot, err := snapshotClient.Get(context.TODO(), resourceGroup, backupVolumeInfo.BackupID)
 		if err != nil {
 			return nil, err
 		}
@@ -492,7 +504,7 @@ func (a *azure) StartRestore(
 
 		tags := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
 
-		if disk, err := a.findExistingDisk(tags); err == nil && disk != nil {
+		if disk, err := a.findExistingDisk(tags, diskClient); err == nil && disk != nil {
 			volumeInfo.RestoreVolume = *disk.Name
 		} else {
 			disk := compute.Disk{
@@ -511,7 +523,7 @@ func (a *azure) StartRestore(
 			for k, v := range tags {
 				disk.Tags[k] = to.StringPtr(v)
 			}
-			_, err = a.diskClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *disk.Name, disk)
+			_, err = diskClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *disk.Name, disk)
 			if err != nil {
 				return nil, fmt.Errorf("error triggering restore for volume: %v: %v",
 					backupVolumeInfo.Volume, err)
@@ -528,11 +540,11 @@ func (a *azure) CancelRestore(*storkapi.ApplicationRestore) error {
 }
 
 func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
-	if !a.initDone {
-		if err := a.Init(nil); err != nil {
-			return nil, err
-		}
+	azureSession, err := a.getAzureSession(restore.Spec.BackupLocation, restore.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	diskClient := azureSession.diskClient
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
@@ -543,7 +555,7 @@ func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*stork
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
-		disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, vInfo.RestoreVolume)
+		disk, err := diskClient.Get(context.TODO(), a.resourceGroup, vInfo.RestoreVolume)
 		if err != nil {
 			if azureErr, ok := err.(autorest.DetailedError); ok {
 				if azureErr.StatusCode == http.StatusNotFound {
@@ -615,6 +627,50 @@ func (a *azure) CleanupBackupResources(*storkapi.ApplicationBackup) error {
 // CleanupBackupResources for specified restore
 func (a *azure) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
 	return nil
+}
+
+func (a *azure) getAzureClientFromBackupLocation(backupLocationName, ns string) *azureSession {
+	azureSessionWithCred := &azureSession{}
+	backupLocation, err := storkops.Instance().GetBackupLocation(backupLocationName, ns)
+	if err != nil {
+		logrus.Errorf("error getting backup location %s resource: %v", backupLocationName, err)
+		return nil
+	}
+
+	azureSessionWithCred.clientID = backupLocation.Cluster.AzureClusterConfig.ClientID
+	azureSessionWithCred.clientSecret = backupLocation.Cluster.AzureClusterConfig.ClientSecret
+	azureSessionWithCred.subscriptionID = backupLocation.Cluster.AzureClusterConfig.SubscriptionID
+	azureSessionWithCred.tenantID = backupLocation.Cluster.AzureClusterConfig.TenantID
+
+	if len(backupLocation.Cluster.SecretConfig) > 0 {
+		config := auth.NewClientCredentialsConfig(azureSessionWithCred.clientID, azureSessionWithCred.clientSecret, azureSessionWithCred.tenantID)
+		config.AADEndpoint = azure_rest.PublicCloud.ActiveDirectoryEndpoint
+		authorizer, err := config.Authorizer()
+		if err != nil {
+			logrus.Errorf("error creating azure client session for backuplocation %s: %v", backupLocationName, err)
+			return nil
+		}
+		azureSessionWithCred.snapshotClient = compute.NewSnapshotsClient(azureSessionWithCred.subscriptionID)
+		azureSessionWithCred.diskClient = compute.NewDisksClient(azureSessionWithCred.subscriptionID)
+		azureSessionWithCred.snapshotClient.Authorizer = authorizer
+		azureSessionWithCred.diskClient.Authorizer = authorizer
+	}
+	return azureSessionWithCred
+}
+
+func (a *azure) getAzureSession(backupLocationName, ns string) (*azureSession, error) {
+	// if backuplocation has creds wrt the cluster, need to use that
+	azureSession := a.getAzureClientFromBackupLocation(backupLocationName, ns)
+	if len(azureSession.clientID) == 0 {
+		if !a.initDone {
+			if err := a.Init(nil); err != nil {
+				return nil, err
+			}
+		}
+		azureSession.snapshotClient = a.snapshotClient
+		azureSession.diskClient = a.diskClient
+	}
+	return azureSession, nil
 }
 
 func init() {
