@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-sharedv4-dep
+spec:
+  {{ if .Replicas }}
+  replicas: {{ .Replicas }}
+  {{ else }}
+  replicas: 3{{ end }}
+  selector:
+    matchLabels:
+      app: test-sharedv4-app
+  template:
+    metadata:
+      labels:
+        app: test-sharedv4-app
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - test-sharedv4-app
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: sv4test
+        image: portworx/sharedv4-test:torpedo
+        imagePullPolicy: Always
+        command: ["python", "/app/fileio.py"]
+        args: ["--lock", "--interval=0.25", "$(SHARED_FILE)", "$(LOCAL_FILE)"]
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: SHARED_FILE
+            value: "/test-sharedv4-vol/$(MY_POD_NAME)"
+          - name: LOCAL_FILE
+            value: "/local-vol/$(MY_POD_NAME)"
+        volumeMounts:
+        - name: test-sharedv4-vol
+          mountPath: /test-sharedv4-vol
+        - name: local-vol
+          mountPath: /local-vol
+      volumes:
+      - name: test-sharedv4-vol
+        persistentVolumeClaim:
+          claimName: test-sharedv4-pvc
+      - name: local-vol
+        emptyDir: {}
