@@ -50,6 +50,10 @@ func (c *Client) GetBackupLocation(name string, namespace string) (*storkv1alpha
 	if err != nil {
 		return nil, err
 	}
+	err = backupLocation.UpdateFromClusterSecret(c.kube)
+	if err != nil {
+		return nil, err
+	}
 	return backupLocation, nil
 }
 
@@ -64,6 +68,12 @@ func (c *Client) ListBackupLocations(namespace string, filterOptions metav1.List
 	}
 	for i := range backupLocations.Items {
 		err = backupLocations.Items[i].UpdateFromSecret(c.kube)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for i := range backupLocations.Items {
+		err = backupLocations.Items[i].UpdateFromClusterSecret(c.kube)
 		if err != nil {
 			return nil, err
 		}

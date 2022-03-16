@@ -15,6 +15,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
@@ -52,6 +53,11 @@ type gcp struct {
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.CloneNotSupported
 	storkvolume.SnapshotRestoreNotSupported
+}
+
+type gcpSession struct {
+	projectID string
+	service   *compute.Service
 }
 
 func (g *gcp) Init(_ interface{}) error {
@@ -162,11 +168,12 @@ func isCsiProvisioner(provisioner string) bool {
 func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	if g.service == nil {
-		if err := g.Init(nil); err != nil {
-			return nil, err
-		}
+	gcpSession, err := g.getGCPSession(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	service := gcpSession.service
+	projectID := gcpSession.projectID
 
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
@@ -181,7 +188,7 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = storkvolume.GCEDriverName
 		volumeInfo.Options = map[string]string{
-			"projectID": g.projectID,
+			"projectID": projectID,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 
@@ -216,7 +223,7 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 		labels := storkvolume.GetApplicationBackupLabels(backup, &pvc)
 		filter := g.getFilterFromMap(labels)
 		// First check if the snapshot has already been created with the same labels
-		if snapshots, err := g.service.Snapshots.List(g.projectID).Filter(filter).Do(); err == nil && len(snapshots.Items) == 1 {
+		if snapshots, err := service.Snapshots.List(projectID).Filter(filter).Do(); err == nil && len(snapshots.Items) == 1 {
 			volumeInfo.BackupID = snapshots.Items[0].Name
 		} else {
 			if len(volumeInfo.Zones) > 1 {
@@ -228,7 +235,7 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 				if err != nil {
 					return nil, err
 				}
-				snapshotCall := g.service.RegionDisks.CreateSnapshot(g.projectID, region, pdName, snapshot)
+				snapshotCall := service.RegionDisks.CreateSnapshot(projectID, region, pdName, snapshot)
 
 				_, err = snapshotCall.Do()
 				if err != nil {
@@ -240,7 +247,7 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 					Name:   "stork-snapshot-" + string(uuid.NewUUID()),
 					Labels: labels,
 				}
-				snapshotCall := g.service.Disks.CreateSnapshot(g.projectID, volumeInfo.Zones[0], pdName, snapshot)
+				snapshotCall := service.Disks.CreateSnapshot(projectID, volumeInfo.Zones[0], pdName, snapshot)
 
 				_, err = snapshotCall.Do()
 				if err != nil {
@@ -272,10 +279,10 @@ func (g *gcp) getRegion(zone string) (string, error) {
 	return strings.Join(s[0:2], "-"), nil
 }
 
-func (g *gcp) getZoneURLs(zones []string) ([]string, error) {
+func (g *gcp) getZoneURLs(zones []string, service *compute.Service, projectID string) ([]string, error) {
 	zoneURLs := make([]string, 0)
 	for _, zone := range zones {
-		zoneInfo, err := g.service.Zones.Get(g.projectID, zone).Do()
+		zoneInfo, err := service.Zones.Get(projectID, zone).Do()
 		if err != nil {
 			return nil, err
 		}
@@ -285,11 +292,12 @@ func (g *gcp) getZoneURLs(zones []string) ([]string, error) {
 }
 
 func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	if g.service == nil {
-		if err := g.Init(nil); err != nil {
-			return nil, err
-		}
+	gcpSession, err := g.getGCPSession(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	service := gcpSession.service
+	projectID := gcpSession.projectID
 
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
@@ -297,7 +305,7 @@ func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		if vInfo.DriverName != storkvolume.GCEDriverName {
 			continue
 		}
-		snapshot, err := g.service.Snapshots.Get(g.projectID, vInfo.BackupID).Do()
+		snapshot, err := service.Snapshots.Get(projectID, vInfo.BackupID).Do()
 		if err != nil {
 			return nil, err
 		}
@@ -327,17 +335,17 @@ func (g *gcp) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
-	if g.service == nil {
-		if err := g.Init(nil); err != nil {
-			return true, err
-		}
+	gcpSession, err := g.getGCPSession(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return true, err
 	}
+	service := gcpSession.service
 
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.GCEDriverName {
 			continue
 		}
-		_, err := g.service.Snapshots.Delete(vInfo.Options["projectID"], vInfo.BackupID).Do()
+		_, err := service.Snapshots.Delete(vInfo.Options["projectID"], vInfo.BackupID).Do()
 		if err != nil {
 			return true, err
 		}
@@ -398,13 +406,13 @@ func (g *gcp) StartRestore(
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
-	if g.service == nil {
-		if err := g.Init(nil); err != nil {
-			return nil, err
-		}
+	gcpSession, err := g.getGCPSession(restore.Spec.BackupLocation, restore.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	service := gcpSession.service
+	projectID := gcpSession.projectID
 
-	var err error
 	var nodeZoneList []string
 	nodeZoneList, err = storkvolume.GetNodeZones()
 	if err != nil {
@@ -436,7 +444,7 @@ func (g *gcp) StartRestore(
 				backupVolumeInfo.PersistentVolumeClaim,
 			)
 		} else if len(backupVolumeInfo.Zones) > 1 {
-			disk.ReplicaZones, err = g.getZoneURLs(backupVolumeInfo.Zones)
+			disk.ReplicaZones, err = g.getZoneURLs(backupVolumeInfo.Zones, service, projectID)
 			if err != nil {
 				return nil, err
 			}
@@ -446,10 +454,10 @@ func (g *gcp) StartRestore(
 			}
 
 			// First check if the disk has already been created with the same labels
-			if disks, err := g.service.RegionDisks.List(g.projectID, region).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
+			if disks, err := service.RegionDisks.List(projectID, region).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
 				volumeInfo.RestoreVolume = disks.Items[0].Name
 			} else {
-				_, err = g.service.RegionDisks.Insert(g.projectID, region, disk).Do()
+				_, err = service.RegionDisks.Insert(projectID, region, disk).Do()
 				if err != nil {
 					return nil, err
 				}
@@ -463,10 +471,10 @@ func (g *gcp) StartRestore(
 			}
 			destFullZoneName := destRegion + "-" + zoneMap[destZoneName[2]]
 			// First check if the disk has already been created with the same labels
-			if disks, err := g.service.Disks.List(g.projectID, destFullZoneName).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
+			if disks, err := service.Disks.List(projectID, destFullZoneName).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
 				volumeInfo.RestoreVolume = disks.Items[0].Name
 			} else {
-				_, err := g.service.Disks.Insert(g.projectID, destFullZoneName, disk).Do()
+				_, err := service.Disks.Insert(projectID, destFullZoneName, disk).Do()
 				if err != nil {
 					return nil, err
 				}
@@ -484,11 +492,12 @@ func (g *gcp) CancelRestore(restore *storkapi.ApplicationRestore) error {
 }
 
 func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
-	if g.service == nil {
-		if err := g.Init(nil); err != nil {
-			return nil, err
-		}
+	gcpSession, err := g.getGCPSession(restore.Spec.BackupLocation, restore.Namespace)
+	if err != nil {
+		return nil, err
 	}
+	service := gcpSession.service
+	projectID := gcpSession.projectID
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
@@ -509,7 +518,7 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			if err != nil {
 				return nil, err
 			}
-			disk, err := g.service.RegionDisks.Get(g.projectID, region, vInfo.RestoreVolume).Do()
+			disk, err := service.RegionDisks.Get(projectID, region, vInfo.RestoreVolume).Do()
 			if err != nil {
 				if googleErr, ok := err.(*googleapi.Error); ok {
 					if googleErr.Code == http.StatusNotFound {
@@ -527,7 +536,7 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			size := disk.SizeGb * 1024 * 1024
 			vInfo.TotalSize = uint64(size)
 		} else {
-			disk, err := g.service.Disks.Get(g.projectID, vInfo.Zones[0], vInfo.RestoreVolume).Do()
+			disk, err := service.Disks.Get(projectID, vInfo.Zones[0], vInfo.RestoreVolume).Do()
 			if err != nil {
 				if googleErr, ok := err.(*googleapi.Error); ok {
 					if googleErr.Code == http.StatusNotFound {
@@ -602,6 +611,43 @@ func (g *gcp) CleanupBackupResources(*storkapi.ApplicationBackup) error {
 func (g *gcp) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
 	return nil
 }
+
+// getGCPClientFromBackupLocation will return a client object using creds referred in backuplocation
+func (g *gcp) getGCPClientFromBackupLocation(backupLocationName, ns string) *gcpSession {
+	gcpSessionWithCred := &gcpSession{}
+	backupLocation, err := storkops.Instance().GetBackupLocation(backupLocationName, ns)
+	if err != nil {
+		logrus.Errorf("error getting backup location %s resource: %v", backupLocationName, err)
+		return nil
+	}
+
+	if len(backupLocation.Cluster.SecretConfig) > 0 {
+		ctx := context.Background()
+		gcpSessionWithCred.service, err = compute.NewService(ctx, option.WithCredentialsJSON([]byte(backupLocation.Cluster.GCPClusterConfig.AccountKey)))
+		if err != nil {
+			logrus.Errorf("error creating gcp client session for backuplocation %s: %v", backupLocationName, err)
+			return nil
+		}
+	}
+	gcpSessionWithCred.projectID = backupLocation.Cluster.GCPClusterConfig.ProjectID
+	return gcpSessionWithCred
+}
+
+func (g *gcp) getGCPSession(backupLocationName, ns string) (*gcpSession, error) {
+	// if backuplocation has creds wrt the cluster, need to use that
+	gcpSession := g.getGCPClientFromBackupLocation(backupLocationName, ns)
+	if gcpSession.service == nil {
+		if g.service == nil {
+			if err := g.Init(nil); err != nil {
+				return nil, err
+			}
+		}
+		gcpSession.service = g.service
+		gcpSession.projectID = g.projectID
+	}
+	return gcpSession, nil
+}
+
 func init() {
 	g := &gcp{}
 	err := g.Init(nil)
