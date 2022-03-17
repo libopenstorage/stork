@@ -74,6 +74,7 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 		Bucket: &backupLocation.Location.Path,
 	}
 
+	objLockInfo := &common.ObjLockInfo{}
 	out, err := s3.New(sess).GetObjectLockConfiguration(input)
 	if err != nil {
 		if awsErr, ok := err.(awserr.Error); ok {
@@ -82,12 +83,11 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 			// normal buckets too hence we need to ignore this for now.
 			if awsErr.Code() == "ObjectLockConfigurationNotFoundError" || awsErr.Code() == "MethodNotAllowed" {
 				// for a non-objectlocked bucket we needn't throw error
-				return nil, nil
+				return objLockInfo, nil
 			}
 		}
 		return nil, err
 	}
-	objLockInfo := &common.ObjLockInfo{}
 	if (out != nil) && (out.ObjectLockConfiguration != nil) {
 		if aws.StringValue(out.ObjectLockConfiguration.ObjectLockEnabled) == "Enabled" {
 			objLockInfo.LockEnabled = true
