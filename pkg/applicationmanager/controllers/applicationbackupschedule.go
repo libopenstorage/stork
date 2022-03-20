@@ -41,6 +41,8 @@ const (
 	// ApplicationBackupObjectLockRetentionAnnotation - object lock retention period annotation
 	// Since this annotation is used in the px-backup, creating with portworx.io annotation prefix.
 	ApplicationBackupObjectLockRetentionAnnotation = "portworx.io/" + "object-lock-retention-period"
+	incrementalCountAnnotation                     = "portworx.io/cloudsnap-incremental-count"
+	dayInSec                                       = 86400
 )
 
 // NewApplicationBackupSchedule creates a new instance of ApplicationBackupScheduleController.
@@ -125,7 +127,6 @@ func (s *ApplicationBackupScheduleController) handle(ctx context.Context, backup
 			log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
 			return nil
 		}
-
 		// Start a backup for a policy if required
 		if start {
 			err := s.startApplicationBackup(backupSchedule, policyType)
@@ -284,6 +285,28 @@ func getBackupLocationCR(backupSchedule *stork_api.ApplicationBackupSchedule) (*
 	return backuplocationCR, nil
 }
 
+// isPeriodicSchedule - isPeriodicSchedule will check whether the sp has interval type is set.
+func isPeriodicSchedule(schedulePolicyCR *stork_api.SchedulePolicy) bool {
+	return schedulePolicyCR.Policy.Interval != nil
+}
+
+// getLatestSuccessfullbackupTime - will check return the last successful backup for backupschedule.
+// It will check the backup list present in the applicationbackupschedule CR.
+func getLatestSuccessfullbackupTime(backupSchedule *stork_api.ApplicationBackupSchedule) int64 {
+	var lastSuccessfulBackupCreateTime int64
+	for _, statusItems := range backupSchedule.Status.Items {
+		i := len(statusItems) - 1
+		for i >= 0 {
+			if statusItems[i].Status == stork_api.ApplicationBackupStatusSuccessful {
+				lastSuccessfulBackupCreateTime = statusItems[i].CreationTimestamp.Unix()
+				return lastSuccessfulBackupCreateTime
+			}
+			i = i - 1
+		}
+	}
+	return lastSuccessfulBackupCreateTime
+}
+
 func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSchedule *stork_api.ApplicationBackupSchedule, policyType stork_api.SchedulePolicyType) error {
 	backupName := s.formatApplicationBackupName(backupSchedule, policyType)
 	if backupSchedule.Status.Items == nil {
@@ -350,17 +373,58 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 	if err != nil {
 		return err
 	}
-	var retentionPeriod int64
-	if objectLockInfo.RetentionPeriodYears != 0 {
-		currTime := time.Now()
-		lastRetentionDate := currTime.AddDate(int(objectLockInfo.RetentionPeriodYears), 0, 0)
-		// duration works till 290 years, any duration beyond that will be floored
-		duration := lastRetentionDate.Sub(currTime)
-		retentionPeriod = int64(duration.Hours() / 24)
-	} else {
-		retentionPeriod = objectLockInfo.RetentionPeriodDays
+	if objectLockInfo.LockEnabled {
+		// Add applicationBackupObjectLockRetentionAnnotation in the applicationbackup CR with configured bucket retention value
+		var retentionPeriod int64
+		if objectLockInfo.RetentionPeriodYears != 0 {
+			currTime := time.Now()
+			lastRetentionDate := currTime.AddDate(int(objectLockInfo.RetentionPeriodYears), 0, 0)
+			// duration works till 290 years, any duration beyond that will be floored
+			duration := lastRetentionDate.Sub(currTime)
+			retentionPeriod = int64(duration.Hours() / 24)
+		} else {
+			retentionPeriod = objectLockInfo.RetentionPeriodDays
+		}
+		backup.Annotations[ApplicationBackupObjectLockRetentionAnnotation] = strconv.FormatInt(retentionPeriod, 10)
+		var lastSuccessfulBackupCreateTime int64
+		// If it is a periodic type schedule, we need to force the first backup in a day slot to be full backup.
+		// The day slot definition is twenty four hours from the time the backupschedule created.
+		// Check whether it is periodic schedule type
+		schedulePolicyObj, err := storkops.Instance().GetSchedulePolicy(backupSchedule.Spec.SchedulePolicyName)
+		if err != nil {
+			return err
+		}
+		periodic := isPeriodicSchedule(schedulePolicyObj)
+		if periodic {
+			// Get the last successfull backup create time from backup list of applicationbackupschedule CR.
+			lastSuccessfulBackupCreateTime = getLatestSuccessfullbackupTime(backupSchedule)
+			// Get the currentTime
+			currentTime := time.Now().Unix()
+			// Get the applicationbackupschedule CR creation time, to get the 24 hour slot details.
+			backupscheduleCreationTime := backupSchedule.CreationTimestamp.Unix()
+			diff := currentTime - backupscheduleCreationTime
+			// elaspedDays represents the number days elapsed from the starting of applicationbackupschedule CR.
+			elaspedDays := diff / dayInSec
+			elaspedDaysInSecs := elaspedDays * dayInSec
+			// Current day's start time in sec
+			currentDayStartTime := backupscheduleCreationTime + elaspedDaysInSecs
+			// Check whether lastSuccessfulBackupCreateTime value is less than currentDayStartTime value
+			// If yes, that means there is no successful backup in the current day.
+			// If there is a successful, then it will be full backup as we are force it below.
+			// TODO: Need to remove or move the below debug statement to Tracef level before release.
+			// For now adding it as it will be helpful for debugging the issue.
+			logrus.Infof("backupschedule name: %v - backup name: %v - lastSuccessfulBackupCreateTime: %v - currentTime %v",
+				backupSchedule.Name, backup.Name, lastSuccessfulBackupCreateTime, currentTime)
+			logrus.Infof("backupscheduleCreationTime: %v - diff: %v - elaspedDays: %v - elaspedDaysInSecs: %v - currentDayStartTime: %v",
+				backupscheduleCreationTime, diff, elaspedDays, elaspedDaysInSecs, currentDayStartTime)
+
+			if lastSuccessfulBackupCreateTime < currentDayStartTime {
+				// forcing it to be full backup, by setting the incrementalCountAnnotation to zero
+				backup.Spec.Options[incrementalCountAnnotation] = fmt.Sprintf("%v", 0)
+			}
+		}
 	}
-	backup.Annotations[ApplicationBackupObjectLockRetentionAnnotation] = strconv.FormatInt(retentionPeriod, 10)
+
 	_, err = storkops.Instance().CreateApplicationBackup(backup)
 	return err
 }
