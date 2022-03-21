@@ -64,11 +64,21 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 		for _, ctx := range contexts {
 			var volume *volume.Volume
 
-			Step(fmt.Sprintf("checking the HA level for app %s's volume", ctx.App.Key), func() {
+			Step(fmt.Sprintf("getting app %s's volume", ctx.App.Key), func() {
 				vols, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(vols)).To(Equal(1))
 				volume = vols[0]
+			})
+
+			aggrLevel, err := Inst().V.GetAggregationLevel(volume)
+			Expect(err).NotTo(HaveOccurred())
+			if aggrLevel > 1 {
+				logrus.Infof("skipping app %s because volume %s has aggr level %d", ctx.App.Key, volume.ID, aggrLevel)
+				continue
+			}
+
+			Step(fmt.Sprintf("checking the HA level for app %s's volume", ctx.App.Key), func() {
 				nodeReplicaMap = getReplicaNodeIDs(volume)
 				if len(nodeReplicaMap) != 2 {
 					setHALevel(volume, 2)
@@ -739,8 +749,14 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 				var attachedNode, clientNode *node.Node
 				var failover bool
 
+				vol, apiVol, attachedNode = getSv4TestAppVol(ctx)
+				if apiVol.Spec.AggregationLevel > 1 {
+					logrus.Infof("skipping app %s because volume %s has aggr level %d",
+						ctx.App.Key, vol.ID, apiVol.Spec.AggregationLevel)
+					continue
+				}
+
 				Step(fmt.Sprintf("get replica nodes for app %s's volume", ctx.App.Key), func() {
-					vol, apiVol, attachedNode = getSv4TestAppVol(ctx)
 					replicaNodeIDs = getReplicaNodeIDs(vol)
 					Expect(len(replicaNodeIDs)).To(Equal(2))
 				})
@@ -910,6 +926,12 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 				var resyncReplica, attachedNodeOrig *node.Node
 
 				vol, apiVol, attachedNode := getSv4TestAppVol(ctx)
+				if apiVol.Spec.AggregationLevel > 1 {
+					logrus.Infof("skipping app %s because volume %s has aggr level %d",
+						ctx.App.Key, vol.ID, apiVol.Spec.AggregationLevel)
+					continue
+				}
+
 				attachedNodeOrig = attachedNode
 
 				// directory on the export path in which we will dump data to make the volume
@@ -1381,8 +1403,16 @@ func validateAttachedNode(vol *volume.Volume, attachedNode *node.Node) {
 }
 
 func setHALevel(vol *volume.Volume, haLevel int64) {
+	currentRepl, err := Inst().V.GetReplicationFactor(vol)
+	Expect(err).NotTo(HaveOccurred())
+
+	if currentRepl == haLevel {
+		logrus.Infof("HA level on volume %s is already %d", vol.ID, haLevel)
+		return
+	}
+
 	logrus.Infof("setting HA level to 2 on volume %s", vol.ID)
-	err := Inst().V.SetReplicationFactor(vol, haLevel, nil)
+	err = Inst().V.SetReplicationFactor(vol, haLevel, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	logrus.Infof("validating successful update of HA level on volume %s", vol.ID)
