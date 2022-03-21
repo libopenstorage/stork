@@ -122,6 +122,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 
 				Step(fmt.Sprintf("restart vol driver %s", ctx.App.Key), func() {
 					restartVolumeDriverOnNode(attachedNode)
+					ValidateContext(ctx)
 				})
 
 				Step(fmt.Sprintf("validate counter are active for %s", ctx.App.Key), func() {
