@@ -1180,7 +1180,7 @@ func CollectSupport() {
 					OutputFile:    fmt.Sprintf("/var/cores/diags-%s-%d.tar.gz", n.Name, time.Now().Unix()),
 					ContainerName: "",
 					Profile:       false,
-					Live:          true,
+					Live:          false,
 					Upload:        false,
 					All:           true,
 					Force:         true,
