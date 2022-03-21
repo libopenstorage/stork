@@ -235,7 +235,7 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 			}
 		}
 	}
-	if !skipDelete {
+	if !skipDelete && clusterPair.Status.RemoteStorageID != "" {
 		return c.volDriver.DeletePair(clusterPair)
 	}
 	return nil
