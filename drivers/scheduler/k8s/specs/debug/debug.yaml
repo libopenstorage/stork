@@ -17,19 +17,10 @@ spec:
       labels:
         name: debug
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/master
-                operator: DoesNotExist
-              - key: px/enabled
-                operator: NotIn
-                values:
-                - "false"
       hostNetwork: true
       hostPID: true
+      tolerations:
+      - operator: Exists
       priorityClassName: system-cluster-critical
       containers:
       - name: debug

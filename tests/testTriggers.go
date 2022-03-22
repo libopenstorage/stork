@@ -1417,6 +1417,7 @@ func TriggerEmailReporter(contexts *[]*scheduler.Context, recordChan *chan *Even
 	// emailRecords stores events to be notified
 
 	emailData := emailData{}
+	Inst().S.RefreshNodeRegistry()
 	logrus.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
 
 	var masterNodeList []string
