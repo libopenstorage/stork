@@ -43,6 +43,10 @@ const (
 	ApplicationBackupObjectLockRetentionAnnotation = "portworx.io/" + "object-lock-retention-period"
 	incrementalCountAnnotation                     = "portworx.io/cloudsnap-incremental-count"
 	dayInSec                                       = 86400
+	//ObjectLockDefaultIncrementalCount default incremental backup count
+	ObjectLockDefaultIncrementalCount = 5
+	// InsufficientRetentionPeriod status message signifies user has set a improper retention period on the bucket
+	InsufficientRetentionPeriod = "Failed due to insufficient bucket retention period"
 )
 
 // NewApplicationBackupSchedule creates a new instance of ApplicationBackupScheduleController.
@@ -308,6 +312,7 @@ func getLatestSuccessfullbackupTime(backupSchedule *stork_api.ApplicationBackupS
 }
 
 func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSchedule *stork_api.ApplicationBackupSchedule, policyType stork_api.SchedulePolicyType) error {
+	funct := "startApplicationBackup"
 	backupName := s.formatApplicationBackupName(backupSchedule, policyType)
 	if backupSchedule.Status.Items == nil {
 		backupSchedule.Status.Items = make(map[stork_api.SchedulePolicyType][]*stork_api.ScheduledApplicationBackupStatus)
@@ -374,6 +379,26 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 		return err
 	}
 	if objectLockInfo.LockEnabled {
+		// In case of object locked bucket, verify the minimum retention period is set on bucket or not
+		// If user set in years no need of any validity check.
+		if objectLockInfo.RetentionPeriodDays != 0 {
+			valid, err := k8sutils.IsValidBucketRetentionPeriod(objectLockInfo.RetentionPeriodDays)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to check validity of bucket retention period %v", err)
+				logrus.Errorf("%s: %v", funct, errMsg)
+				return fmt.Errorf("%v", errMsg)
+			}
+			if !valid {
+				errMsg := fmt.Sprintf("invalid bucket retention period set for backup location %s, it needs more than minimum number of retention period in days", backupLocationCR.GetName())
+				logrus.Errorf("%s: %v", funct, errMsg)
+				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Reason = InsufficientRetentionPeriod
+				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				// Don't need to process anything further
+				_, err = storkops.Instance().CreateApplicationBackup(backup)
+				return err
+			}
+		}
 		// Add applicationBackupObjectLockRetentionAnnotation in the applicationbackup CR with configured bucket retention value
 		var retentionPeriod int64
 		if objectLockInfo.RetentionPeriodYears != 0 {

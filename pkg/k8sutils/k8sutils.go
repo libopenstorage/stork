@@ -3,6 +3,7 @@ package k8sutils
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,14 @@ const (
 	storkPodLabelValue  = "stork"
 	// DefaultAdminNamespace - default admin namespace, where stork will be installed
 	DefaultAdminNamespace = "kube-system"
+	// StorkConfigMapName holds any generic config specific to stork module
+	StorkConfigMapName = "stork-objLock-config"
+	// ObjectLockIncrBackupCountKey defines scheduleBackup's incremental backup count
+	ObjectLockIncrBackupCountKey = "object-lock-incr-backup-count"
+	// ObjectLockDefaultIncrementalCount defines default incremental backup count
+	ObjectLockDefaultIncrementalCount = 5
+	//minProtectionPeriod defines minimum number of days, the backup are protected via object-lock feature
+	minProtectionPeriod = 1
 )
 
 // GetPVCsForGroupSnapshot returns all PVCs in given namespace that match the given matchLabels. All PVCs need to be bound.
@@ -204,4 +213,42 @@ func GetStorkPodNamespace() (string, error) {
 	}
 	return ns, nil
 
+}
+
+// GetConfigValue read configmap and return the value of the requested parameter
+func GetConfigValue(cm, ns, key string) (string, error) {
+	configMap, err := core.Instance().GetConfigMap(
+		cm,
+		ns,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to get value for key [%v] from configmap[%v]", key, cm)
+	}
+	return configMap.Data[key], nil
+}
+
+// IsValidBucketRetentionPeriod - returns the sanity of retention period
+// for a object locked bucket this function returns true if retention
+// period set on the bucket is more than the minimum retention period
+func IsValidBucketRetentionPeriod(bucketRetentionPeriod int64) (bool, error) {
+	var incrBkpCnt int64
+	var i string
+	var err error
+	ns := DefaultAdminNamespace
+	if i, err = GetConfigValue(StorkConfigMapName, ns, ObjectLockIncrBackupCountKey); err != nil {
+		return false, fmt.Errorf("failed to get %s key from px-backup-configmap: %v", ObjectLockIncrBackupCountKey, err)
+	}
+	if i != "" {
+		incrBkpCnt, err = strconv.ParseInt(i, 10, 64)
+		if err != nil {
+			return false, fmt.Errorf("failed to convert backup incremental count: %v", err)
+		}
+	} else {
+		incrBkpCnt = ObjectLockDefaultIncrementalCount
+	}
+	// Considering at least a day of protection, no. incremental backup each day
+	// and a full backup following it makes up the minimum number of retention period
+	// user should set.
+	minRetentionDays := minProtectionPeriod + incrBkpCnt + 1
+	return (bucketRetentionPeriod >= minRetentionDays), nil
 }

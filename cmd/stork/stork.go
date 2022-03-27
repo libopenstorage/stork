@@ -26,6 +26,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/metrics"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
@@ -244,6 +245,16 @@ func run(c *cli.Context) {
 	_, err = schedops.Instance().CreateConfigMap(kdmpConfig)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		log.Warnf("Unable to create kdmp config configmap: %v", err)
+	}
+	storkConfig := &api_v1.ConfigMap{}
+	storkConfig.Name = k8sutils.StorkConfigMapName
+	storkConfig.Namespace = k8sutils.DefaultAdminNamespace
+	storkConfig.Data = make(map[string]string)
+	storkConfig.Data[k8sutils.ObjectLockIncrBackupCountKey] = ""
+	// ConfigMap create failure should not fail the bring up
+	_, err = schedops.Instance().CreateConfigMap(storkConfig)
+	if err != nil && !k8s_errors.IsAlreadyExists(err) {
+		log.Warnf("Unable to create stork config configmap: %v", err)
 	}
 
 	driverName := c.String("driver")
