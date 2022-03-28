@@ -23,6 +23,7 @@ var (
 type Ops interface {
 	JobOps
 	CronOps
+	CronV1beta1Ops
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)

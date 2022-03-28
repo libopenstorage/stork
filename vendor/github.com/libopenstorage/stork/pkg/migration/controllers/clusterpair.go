@@ -204,7 +204,7 @@ func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*r
 func getClusterPairStorageStatus(clusterPairName string, namespace string) (stork_api.ClusterPairStatusType, error) {
 	clusterPair, err := storkops.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
-		return stork_api.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
+		return stork_api.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair %v (%v): %v", clusterPairName, namespace, err)
 	}
 	return clusterPair.Status.StorageStatus, nil
 }
@@ -218,7 +218,24 @@ func getClusterPairSchedulerStatus(clusterPairName string, namespace string) (st
 }
 
 func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) error {
+	skipDelete := false
 	if clusterPair.Status.RemoteStorageID != "" {
+		// verify if any other cluster pair using the same RemoteStorageID
+		cpList, err := storkops.Instance().ListClusterPairs("")
+		if err != nil {
+			return err
+		}
+		for _, cp := range cpList.Items {
+			// No need to handle current reconciled clusterpair
+			// Since clusterPair will have deleteTimeStamp set and will be ignored
+			if cp.Status.RemoteStorageID == clusterPair.Status.RemoteStorageID &&
+				cp.DeletionTimestamp == nil {
+				skipDelete = true
+				break
+			}
+		}
+	}
+	if !skipDelete && clusterPair.Status.RemoteStorageID != "" {
 		return c.volDriver.DeletePair(clusterPair)
 	}
 	return nil

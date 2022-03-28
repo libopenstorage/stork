@@ -2,10 +2,12 @@ package google
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"cloud.google.com/go/storage"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/objectstore/common"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/gcsblob"
 	"gocloud.dev/gcp"
@@ -58,4 +60,9 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 		}
 	}
 	return err
+}
+
+// GetObjLockInfo fetches the object lock configuration of a bucket
+func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockInfo, error) {
+	return nil, fmt.Errorf("object lock is not supported for google provider")
 }

@@ -25,6 +25,7 @@ type BackupLocation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Location          BackupLocationItem `json:"location"`
+	Cluster           ClusterItem        `json:"cluster"`
 }
 
 // BackupLocationItem is the spec used to store a backup location
@@ -44,6 +45,21 @@ type BackupLocationItem struct {
 	RepositoryPassword string        `json:"repositoryPassword"`
 }
 
+// ClusterItem is the spec used to store a the credentials associated with the cluster
+// Only one of AWSClusterConfig, AzureClusterConfig or GCPClusterConfig should be specified and
+// should match the Type field. Members of the config can be specified inline or
+// through the SecretConfig
+type ClusterItem struct {
+	Type ClusterType `json:"type"`
+	// Path is either the bucket or any other path for the backup location
+	EncryptionKey      string              `json:"encryptionKey"`
+	AWSClusterConfig   *AWSClusterConfig   `json:"awsClusterConfig,omitempty"`
+	AzureClusterConfig *AzureClusterConfig `json:"azureClusterConfig,omitempty"`
+	GCPClusterConfig   *GCPClusterConfig   `json:"gcpClusterConfig,omitempty"`
+	SecretConfig       string              `json:"secretConfig"`
+	Sync               bool                `json:"sync"`
+}
+
 // BackupLocationType is the type of the backup location
 type BackupLocationType string
 
@@ -54,6 +70,18 @@ const (
 	BackupLocationAzure BackupLocationType = "azure"
 	// BackupLocationGoogle stores the backup in Google Cloud Storage
 	BackupLocationGoogle BackupLocationType = "google"
+)
+
+// ClusterType is the type of the cluster
+type ClusterType string
+
+const (
+	// AWSCluster type represents the cluster has aws volumes
+	AWSCluster ClusterType = "aws"
+	// GCPCluster type represents the cluster has gcp volumes
+	GCPCluster ClusterType = "gcp"
+	// AzureCluster type represents the cluster has azure volumes
+	AzureCluster ClusterType = "azure"
 )
 
 // S3Config speficies the config required to connect to an S3-compliant
@@ -83,6 +111,26 @@ type AzureConfig struct {
 type GoogleConfig struct {
 	ProjectID  string `json:"projectID"`
 	AccountKey string `json:"accountKey"`
+}
+
+// AWSClusterConfig speficies the config required to do aws apis for snapshot and restore
+type AWSClusterConfig struct {
+	AccessKeyID     string `json:"accessKeyID"`
+	SecretAccessKey string `json:"secretAccessKey"`
+}
+
+// GCPClusterConfig speficies the config required to do google apis for snapshot and restore
+type GCPClusterConfig struct {
+	ProjectID  string `json:"projectID"`
+	AccountKey string `json:"accountKey"`
+}
+
+// AzureClusterConfig speficies the config required to do azure apis for snapshot and restore
+type AzureClusterConfig struct {
+	TenantID       string `json:"tenantID"`
+	SubscriptionID string `json:"subscriptionID"`
+	ClientID       string `json:"clientID"`
+	ClientSecret   string `json:"clientSecret"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -119,6 +167,23 @@ func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 	default:
 		return fmt.Errorf("Invalid BackupLocation type %v", bl.Location.Type)
 	}
+
+}
+
+// UpdateFromClusterSecret updated the config information from the cluster secret if not provided inline
+func (bl *BackupLocation) UpdateFromClusterSecret(client kubernetes.Interface) error {
+	if bl.Cluster.SecretConfig != "" {
+		switch bl.Cluster.Type {
+		case AWSCluster:
+			return bl.getMergedAWSClusterCred(client)
+		case GCPCluster:
+			return bl.getMergedGCPClusterCred(client)
+		case AzureCluster:
+			return bl.getMergedAzureClusterCred(client)
+		default:
+		}
+	}
+	return nil
 }
 
 func (bl *BackupLocation) getMergedS3Config(client kubernetes.Interface) error {
@@ -175,6 +240,7 @@ func (bl *BackupLocation) getMergedAzureConfig(client kubernetes.Interface) erro
 		}
 	}
 	return nil
+
 }
 
 func (bl *BackupLocation) getMergedGoogleConfig(client kubernetes.Interface) error {
@@ -191,6 +257,60 @@ func (bl *BackupLocation) getMergedGoogleConfig(client kubernetes.Interface) err
 		}
 		if val, ok := secretConfig.Data["accountKey"]; ok && val != nil {
 			bl.Location.GoogleConfig.AccountKey = strings.TrimSuffix(string(val), "\n")
+		}
+	}
+	return nil
+}
+
+func (bl *BackupLocation) getMergedAWSClusterCred(client kubernetes.Interface) error {
+	if bl.Cluster.SecretConfig != "" {
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(context.TODO(), bl.Cluster.SecretConfig, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting secretConfig for cluster from backuplocation:  %v", err)
+		}
+		if val, ok := secretConfig.Data["accessKeyID"]; ok && val != nil {
+			bl.Cluster.AWSClusterConfig.AccessKeyID = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["secretAccessKey"]; ok && val != nil {
+			bl.Cluster.AWSClusterConfig.SecretAccessKey = strings.TrimSuffix(string(val), "\n")
+		}
+	}
+	return nil
+}
+
+func (bl *BackupLocation) getMergedGCPClusterCred(client kubernetes.Interface) error {
+	if bl.Cluster.SecretConfig != "" {
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(context.TODO(), bl.Cluster.SecretConfig, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting secretConfig for cluster from backuplocation: %v", err)
+		}
+		if val, ok := secretConfig.Data["projectID"]; ok && val != nil {
+			bl.Cluster.GCPClusterConfig.ProjectID = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["accountKey"]; ok && val != nil {
+			bl.Cluster.GCPClusterConfig.AccountKey = strings.TrimSuffix(string(val), "\n")
+		}
+	}
+	return nil
+}
+
+func (bl *BackupLocation) getMergedAzureClusterCred(client kubernetes.Interface) error {
+	if bl.Cluster.SecretConfig != "" {
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(context.TODO(), bl.Cluster.SecretConfig, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
+		}
+		if val, ok := secretConfig.Data["tenantId"]; ok && val != nil {
+			bl.Cluster.AzureClusterConfig.TenantID = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["ClientId"]; ok && val != nil {
+			bl.Cluster.AzureClusterConfig.ClientID = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["ClientSecret"]; ok && val != nil {
+			bl.Cluster.AzureClusterConfig.ClientSecret = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["SubscriptionID"]; ok && val != nil {
+			bl.Cluster.AzureClusterConfig.SubscriptionID = strings.TrimSuffix(string(val), "\n")
 		}
 	}
 	return nil
