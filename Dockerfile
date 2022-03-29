@@ -10,7 +10,7 @@ LABEL name="Stork" \
        summary="Storage Operator Runtime for Kubernetes" \
        description="Stork is a Cloud Native storage operator runtime scheduler plugin"
 
-RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip
+RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip openssl
 
 RUN python3 -m pip install awscli  && python3 -m pip install rsa --upgrade
 
