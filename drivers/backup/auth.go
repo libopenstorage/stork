@@ -28,11 +28,12 @@ const (
 	PxCentralAdminSecretName = "px-central-admin"
 	// PxCentralAdminSecretNamespace namespace of PxCentralAdminSecretName
 	PxCentralAdminSecretNamespace = "px-backup"
-	// keycloakEndPoint Endpoint for keycloak
-	// TODO: make the namespace configurable for service
-	keycloakEndPoint = "pxcentral-keycloak-http.px-backup.svc.cluster.local:80"
 	/// httpTimeout timeout for http request
 	httpTimeout = 1 * time.Minute
+	// DefaultsecretName - Default secret name for px-backup
+	DefaultsecretName = "pxc-backup-secret"
+	// Issuer - OIDC issuer
+	Issuer = "OIDC_ENDPOINT"
 )
 
 const (
@@ -51,6 +52,8 @@ const (
 	defaultWaitInterval time.Duration = 5 * time.Second
 	// pxBackupNamespace where px backup is running
 	pxBackupNamespace = "PX_BACKUP_NAMESPACE"
+	// OidcSecretName where secrets for OIDC auth cred info resides
+	oidcSecretName = "SECRET_NAME"
 )
 
 type tokenResponse struct {
@@ -128,6 +131,35 @@ type KeycloakGroupToUser struct {
 	Realm   string `json:"realm"`
 }
 
+// getOidcSecretName returns OIDC secret name
+func getOidcSecretName() string {
+	name := os.Getenv(oidcSecretName)
+	if name == "" {
+		name = DefaultsecretName
+	}
+	return name
+}
+
+func getKeycloakEndPoint(admin bool) (string, error) {
+	name := getOidcSecretName()
+	ns := GetPxBackupNamespace()
+	// check and validate oidc details
+	secret, err := k8s.Instance().GetSecret(name, ns)
+	if err != nil {
+		return "", err
+	}
+	if admin {
+		url := string(secret.Data[Issuer])
+		// admin url: http://pxcentral-keycloak-http:80/auth/realms/master
+		// non-adming url: http://pxcentral-keycloak-http:80/auth/admin/realms/master
+		split := strings.Split(url, "auth")
+		newURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
+		return newURL, nil
+	}
+	return string(secret.Data[Issuer]), nil
+
+}
+
 // GetPxBackupNamespace returns namespace of px-backup deployment.
 func GetPxBackupNamespace() string {
 	ns := os.Getenv(pxBackupNamespace)
@@ -147,7 +179,11 @@ func GetToken(userName, password string) (string, error) {
 	values.Set("password", password)
 	values.Set("grant_type", "password")
 	values.Set("token-duration", "365d")
-	reqURL := fmt.Sprintf("http://%s/auth/realms/master/protocol/openid-connect/token", keycloakEndPoint)
+	keycloakEndPoint, err := getKeycloakEndPoint(false)
+	if err != nil {
+		return "", err
+	}
+	reqURL := fmt.Sprintf("%s/protocol/openid-connect/token", keycloakEndPoint)
 	method := "POST"
 	headers := make(http.Header)
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -207,7 +243,11 @@ func GetAllRoles() ([]KeycloakRoleRepresentation, error) {
 		logrus.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/roles", keycloakEndPoint)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+	reqURL := fmt.Sprintf("%s/roles", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
@@ -255,7 +295,11 @@ func GetUserRole(userName string) error {
 		return err
 	}
 
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users", keycloakEndPoint)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
@@ -276,7 +320,11 @@ func GetUserRole(userName string) error {
 		}
 	}
 	// Now fetch all the roles for the fetched client ID
-	reqURL = fmt.Sprintf("http://%s/auth/admin/realms/master/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
+	keycloakEndPoint, err = getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL = fmt.Sprintf("%s/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
 	method = "GET"
 	response, err = processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
@@ -301,7 +349,11 @@ func FetchIDOfUser(userName string) (string, error) {
 		logrus.Errorf("%s: %v", fn, err)
 		return "", err
 	}
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users", keycloakEndPoint)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return "", err
+	}
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
@@ -358,7 +410,11 @@ func AddRoleToUser(userName string, role string, description string) error {
 		logrus.Errorf("%s: %v", fn, err)
 		return err
 	}
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
@@ -406,7 +462,11 @@ func DeleteRoleFromUser(userName string, role string, description string) error 
 		logrus.Errorf("%s: %v", fn, err)
 		return err
 	}
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
 	method := "DELETE"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
@@ -424,7 +484,11 @@ func DeleteRoleFromUser(userName string, role string, description string) error 
 // AddUser adds a new user
 func AddUser(userName, firstName, lastName, email, password string) error {
 	fn := "AddUser"
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users", keycloakEndPoint)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
@@ -565,7 +629,11 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 		logrus.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/groups", keycloakEndPoint)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+	reqURL := fmt.Sprintf("%s/groups", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
@@ -585,7 +653,11 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 // AddGroup adds a new group
 func AddGroup(group string) error {
 	fn := "AddGroup"
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/groups", keycloakEndPoint)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/groups", keycloakEndPoint)
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
@@ -623,7 +695,11 @@ func AddGroupToUser(user, group string) error {
 		return err
 	}
 
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users/%s/groups/%s", keycloakEndPoint, userID, groupID)
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/users/%s/groups/%s", keycloakEndPoint, userID, groupID)
 	method := "PUT"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
@@ -681,7 +757,11 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 	var userName string
 	var email string
 	f := func() (interface{}, bool, error) {
-		reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users", keycloakEndPoint)
+		keycloakEndPoint, err := getKeycloakEndPoint(true)
+		if err != nil {
+			return nil, true, err
+		}
+		reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 		method := "GET"
 		response, err := processHTTPRequest(method, reqURL, headers, nil)
 		if err != nil {
