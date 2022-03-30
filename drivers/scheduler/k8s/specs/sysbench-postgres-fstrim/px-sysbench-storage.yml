@@ -1,0 +1,15 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: sysbench-data
+  labels:
+    name: sysbench-data
+  annotations:
+   torpedo.io/autopilot-enabled: "true"
+spec:
+  storageClassName: sysbench-sc-postgres
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
