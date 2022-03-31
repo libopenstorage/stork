@@ -47,6 +47,8 @@ const (
 	ObjectLockDefaultIncrementalCount = 5
 	// InsufficientRetentionPeriod status message signifies user has set a improper retention period on the bucket
 	InsufficientRetentionPeriod = "Failed due to insufficient bucket retention period"
+	backupTypeKey               = "portworx.io/backup-type"
+	genericBackupTypeValue      = "Generic"
 )
 
 // NewApplicationBackupSchedule creates a new instance of ApplicationBackupScheduleController.
@@ -345,6 +347,11 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 	}
 	backup.Annotations[ApplicationBackupScheduleNameAnnotation] = backupSchedule.Name
 	backup.Annotations[ApplicationBackupSchedulePolicyTypeAnnotation] = string(policyType)
+	if val, ok := backupSchedule.Annotations[backupTypeKey]; ok {
+		if val == genericBackupTypeValue {
+			backup.Spec.BackupType = genericBackupTypeValue
+		}
+	}
 	options, err := schedule.GetOptions(backupSchedule.Spec.SchedulePolicyName, backupSchedule.Namespace, policyType)
 	if err != nil {
 		return err
