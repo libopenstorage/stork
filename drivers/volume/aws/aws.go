@@ -630,13 +630,6 @@ func (a *aws) getAWSClientFromBackupLocation(backupLocationName, ns string) *ec2
 			return nil
 		}
 		client = ec2.New(s)
-	} else {
-		if a.client == nil {
-			if err := a.Init(nil); err != nil {
-				return client
-			}
-		}
-		client = a.client
 	}
 	return client
 }
