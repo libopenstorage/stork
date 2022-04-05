@@ -30,8 +30,10 @@ func Init(username, token string) {
 	client, err = jira.NewClient(httpClient.Client(), jiraURL)
 	if err != nil {
 		isJiraConnectionSuccessful = false
-		logrus.Errorf("Testrail connection not successful, Cause: %v", err)
+		logrus.Errorf("Jira connection not successful, Cause: %v", err)
 
+	} else {
+		logrus.Info("Jira connection is successful")
 	}
 
 	isJiraConnectionSuccessful = true

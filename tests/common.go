@@ -305,6 +305,7 @@ func InitInstance() {
 	}
 
 	if jiraUserName != "" && jiraToken != "" {
+		logrus.Info("Initializing JIRA connection")
 		jirautils.Init(jiraUserName, jiraToken)
 
 	} else {
@@ -1241,6 +1242,20 @@ func runCmd(cmd string, n node.Node) error {
 		Timeout:         defaultCmdTimeout,
 		TimeBeforeRetry: defaultCmdRetryInterval,
 		Sudo:            true,
+	})
+	if err != nil {
+		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+
+	return err
+
+}
+
+func runCmdWithNoSudo(cmd string, n node.Node) error {
+	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            false,
 	})
 	if err != nil {
 		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
@@ -3236,7 +3251,7 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 
 			if err == nil {
 				logrus.Infof("copying logs %v  on node: %s", filePath, currNode.Name)
-				runCmd(fmt.Sprintf("cp %v %v/%v/", rootLogDir, filePath, issueKey), currNode)
+				runCmd(fmt.Sprintf("cp %v %v/%v/", filePath, rootLogDir, issueKey), currNode)
 			} else {
 				logrus.Warnf("Error collecting diags on node: %v, Error: %v", currNode.Name, err)
 			}
@@ -3274,7 +3289,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 
 			for k, v := range logsByPodName {
 				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
-				runCmd(cmnd, masterNode)
+				runCmdWithNoSudo(cmnd, masterNode)
 				runCmd(fmt.Sprintf("cp /root/%v.log %v/%v/", k, rootLogDir, issueKey), masterNode)
 			}
 		}
@@ -3308,7 +3323,7 @@ func collectAndCopyOperatorLogs(issueKey string) {
 		if err == nil {
 			for k, v := range logsByPodName {
 				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
-				runCmd(cmnd, masterNode)
+				runCmdWithNoSudo(cmnd, masterNode)
 				runCmd(fmt.Sprintf("cp /root/%v.log %v/%v/", k, rootLogDir, issueKey), masterNode)
 			}
 		}
@@ -3343,7 +3358,7 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 		if err == nil {
 			for k, v := range logsByPodName {
 				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
-				runCmd(cmnd, masterNode)
+				runCmdWithNoSudo(cmnd, masterNode)
 				runCmd(fmt.Sprintf("cp /root/%v.log %v/%v/", k, rootLogDir, issueKey), masterNode)
 			}
 		}

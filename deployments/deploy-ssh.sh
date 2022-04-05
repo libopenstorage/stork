@@ -450,6 +450,9 @@ spec:
             "--testrail-host=$TESTRAIL_HOST",
             "--testrail-username=$TESTRAIL_USERNAME",
             "--testrail-password=$TESTRAIL_PASSWORD",
+            "--jira-username=$JIRA_USERNAME",
+            "--jira-token=$JIRA_TOKEN",
+            "--jira-account-id=$JIRA_ACCOUNT_ID",
             "$APP_DESTROY_TIMEOUT_ARG",
     ]
     tty: true

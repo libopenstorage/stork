@@ -85,6 +85,9 @@ var restoreCounter = 0
 // newNamespaceCounter holds the count of current namespace
 var newNamespaceCounter = 0
 
+//jiraEvents to store raised jira events data
+var jiraEvents = make(map[string][]string)
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -143,6 +146,7 @@ func UpdateOutcome(event *EventRecord, err error) {
 		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
 		er := fmt.Errorf(err.Error() + "<br>")
 		event.Outcome = append(event.Outcome, er)
+		createLongevityJiraIssue(event, er)
 	}
 }
 
@@ -262,6 +266,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				if len(file) != 0 {
 					logrus.Warnf("[%s] found on node [%s]", file, n.Name)
 					coresMap[n.Name] = "1"
+					createLongevityJiraIssue(event, fmt.Errorf("[%s] found on node [%s]", file, n.Name))
 				} else {
 					coresMap[n.Name] = ""
 
@@ -1417,7 +1422,6 @@ func TriggerEmailReporter(contexts *[]*scheduler.Context, recordChan *chan *Even
 	// emailRecords stores events to be notified
 
 	emailData := emailData{}
-	Inst().S.RefreshNodeRegistry()
 	logrus.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
 
 	var masterNodeList []string
@@ -3111,7 +3115,7 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step(fmt.Sprintf("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version "),
+	Step("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version ",
 		func() {
 			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
 				Inst().StorageDriverUpgradeEndpointVersion)
@@ -3179,6 +3183,68 @@ func getCloudSnapInterval(triggerType string) int {
 		interval = 10
 	}
 	return interval
+
+}
+
+func createLongevityJiraIssue(event *EventRecord, err error) {
+	logrus.Info("Creating Jira Issue")
+
+	eventsGenerated, ok := jiraEvents[event.Event.Type]
+	issueExists := false
+	t := time.Now().Format(time.RFC1123)
+	if ok {
+		logrus.Infof("Event type [%v] exists", event.Event.Type)
+
+		for _, e := range eventsGenerated {
+			iss := strings.Split(e, "->")[1]
+			if strings.Contains(iss, err.Error()) {
+				issueExists = true
+			}
+
+		}
+
+	} else {
+		logrus.Infof("Event type [%v] does not exists", event.Event.Type)
+
+		errorsSlice := make([]string, 0)
+
+		jiraEvents[event.Event.Type] = errorsSlice
+
+	}
+
+	if !issueExists {
+
+		//adding issue to existing jiraEvents
+		issues := jiraEvents[event.Event.Type]
+		issues = append(issues, fmt.Sprintf("%v->%v", t, err.Error()))
+		jiraEvents[event.Event.Type] = issues
+
+		actualEvent := strings.Split(event.Event.Type, "<br>")[0]
+		summary := fmt.Sprintf("[%v]: Error %v occured in Torpedo Longevity", actualEvent, err)
+		summary = strings.Replace(summary, "\r\n", "", -1)
+		summary = strings.Replace(summary, "\n", "", -1)
+		var lines []string
+
+		var masterNodeIps []string
+
+		for _, n := range node.GetMasterNodes() {
+			masterNodeIps = append(masterNodeIps, n.Addresses...)
+		}
+
+		lines = append(lines, fmt.Sprintf("Master Node: %v", masterNodeIps))
+		lines = append(lines, fmt.Sprintf("Error Occured time: %v", t))
+		lines = append(lines, fmt.Sprintf("Event: %v", event.Event.Type))
+		lines = append(lines, fmt.Sprintf("Error: %v", err.Error()))
+
+		description := ""
+
+		for _, line := range lines {
+			description = description + fmt.Sprintf("%v\r\n", line)
+		}
+
+		CreateJiraIssueWithLogs(description, summary)
+
+	}
 
 }
 
