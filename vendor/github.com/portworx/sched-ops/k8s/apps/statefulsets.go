@@ -271,8 +271,9 @@ func (c *Client) ValidatePVCsForStatefulSet(ss *appsv1.StatefulSet, timeout, ret
 			return nil, true, err
 		}
 
-		if len(pvcList.Items) < int(*ss.Spec.Replicas) {
-			return nil, true, fmt.Errorf("Expected PVCs: %v, Actual: %v", *ss.Spec.Replicas, len(pvcList.Items))
+		expectedPVCCount := len(ss.Spec.VolumeClaimTemplates) * int(*ss.Spec.Replicas)
+		if len(pvcList.Items) < expectedPVCCount {
+			return nil, true, fmt.Errorf("Expected PVCs: %v, Actual: %v", expectedPVCCount, len(pvcList.Items))
 		}
 
 		for _, pvc := range pvcList.Items {

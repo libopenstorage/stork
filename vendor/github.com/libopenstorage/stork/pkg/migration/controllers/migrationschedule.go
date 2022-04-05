@@ -140,6 +140,10 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 	if !(*migrationSchedule.Spec.Suspend) {
 		remoteConfig, err := getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 		if err != nil {
+			m.recorder.Event(migrationSchedule,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				err.Error())
 			return err
 		}
 		remoteOps, err := storkops.NewForConfig(remoteConfig)

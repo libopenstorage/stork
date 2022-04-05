@@ -2061,7 +2061,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated Ingress: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*batchv1beta1.CronJob); ok {
-			if err := k8sBatch.ValidateCronJob(obj, timeout, retryInterval); err != nil {
+			if err := k8sBatch.ValidateCronJobV1beta1(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate CronJob: %v. Err: %v", obj.Name, err),
@@ -4130,9 +4130,9 @@ func (k *K8s) createBatchObjects(
 ) (interface{}, error) {
 	if obj, ok := spec.(*batchv1beta1.CronJob); ok {
 		obj.Namespace = ns.Name
-		cronjob, err := k8sBatch.CreateCronJob(obj)
+		cronjob, err := k8sBatch.CreateCronJobV1beta1(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if cronjob, err = k8sBatch.GetCronJob(obj.Name, obj.Namespace); err == nil {
+			if cronjob, err = k8sBatch.GetCronJobV1beta1(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing CronJob: %v", app.Key, cronjob.Name)
 				return cronjob, nil
 			}

@@ -5,6 +5,7 @@ import (
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/objectstore/azure"
+	"github.com/libopenstorage/stork/pkg/objectstore/common"
 	"github.com/libopenstorage/stork/pkg/objectstore/google"
 	"github.com/libopenstorage/stork/pkg/objectstore/s3"
 	"gocloud.dev/blob"
@@ -43,5 +44,22 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 		return s3.CreateBucket(backupLocation)
 	default:
 		return fmt.Errorf("invalid backupLocation type: %v", backupLocation.Location.Type)
+	}
+}
+
+// GetObjLockInfo fetches the object lock configuration of a S3 bucket
+func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockInfo, error) {
+	if backupLocation == nil {
+		return nil, fmt.Errorf("nil backupLocation")
+	}
+	switch backupLocation.Location.Type {
+	case stork_api.BackupLocationGoogle:
+		return google.GetObjLockInfo(backupLocation)
+	case stork_api.BackupLocationAzure:
+		return azure.GetObjLockInfo(backupLocation)
+	case stork_api.BackupLocationS3:
+		return s3.GetObjLockInfo(backupLocation)
+	default:
+		return nil, fmt.Errorf("invalid backupLocation type: %v", backupLocation.Location.Type)
 	}
 }

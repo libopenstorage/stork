@@ -3,9 +3,11 @@ package k8sutils
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -19,6 +21,12 @@ import (
 const (
 	crdTimeout    = 1 * time.Minute
 	retryInterval = 5 * time.Second
+	// StorkDeploymentName - stork deployment name
+	StorkDeploymentName = "stork"
+	storkPodLabelKey    = "name"
+	storkPodLabelValue  = "stork"
+	// DefaultAdminNamespace - default admin namespace, where stork will be installed
+	DefaultAdminNamespace = "kube-system"
 )
 
 // GetPVCsForGroupSnapshot returns all PVCs in given namespace that match the given matchLabels. All PVCs need to be bound.
@@ -153,4 +161,47 @@ func CreateCRD(resource apiextensions.CustomResource) error {
 		return err
 	}
 	return nil
+}
+
+// GetImageRegistryFromDeployment - extract image registry and image registry secret from deployment spec
+func GetImageRegistryFromDeployment(name, namespace string) (string, string, error) {
+	deploy, err := apps.Instance().GetDeployment(name, namespace)
+	if err != nil {
+		return "", "", err
+	}
+	imageFields := strings.Split(deploy.Spec.Template.Spec.Containers[0].Image, "/")
+	var registry string
+	// Here the assumtption is that the image format will be <registry-name>/<repo-name>/image:tag
+	// or <repo-name>/image:tag. If repo name contains any path (<registry-name>/<repo-name>/<extra-dir-name>/image:tag), below logic will not work.
+	if len(imageFields) == 3 {
+		registry = imageFields[0]
+	} else {
+		registry = ""
+	}
+	imageSecret := deploy.Spec.Template.Spec.ImagePullSecrets
+	if imageSecret != nil {
+		return registry, imageSecret[0].Name, nil
+	}
+	return registry, "", nil
+}
+
+// GetStorkPodNamespace - will return the stork pod namespace.
+func GetStorkPodNamespace() (string, error) {
+	var ns string
+	pods, err := core.Instance().ListPods(
+		map[string]string{
+			storkPodLabelKey: storkPodLabelValue,
+		},
+	)
+	if err != nil {
+		return ns, err
+	}
+	if len(pods.Items) > 0 {
+		ns = pods.Items[0].Namespace
+	}
+	if len(ns) == 0 {
+		return ns, fmt.Errorf("error: stork namespace is empty")
+	}
+	return ns, nil
+
 }
