@@ -2334,7 +2334,7 @@ func (d *portworx) UpgradeStork(endpointURL string, endpointVersion string) erro
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *portworx) GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error) {
+func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string) (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	pxNodes, err := d.schedOps.GetRemotePXNodes(kubeConfigPath)
 	if err != nil {
@@ -2345,15 +2345,18 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath string) (map[string]stri
 		return nil, fmt.Errorf("No PX Node found")
 	}
 
-	clusterPairManager, err := d.getClusterPairManagerByAddress(pxNodes[0].Addresses[0])
+	clusterPairManager, err := d.getClusterPairManagerByAddress(pxNodes[0].Addresses[0], token)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := clusterPairManager.GetToken(d.getContext(), &api.SdkClusterPairGetTokenRequest{})
-	if err != nil {
-		return nil, err
+	var resp *api.SdkClusterPairGetTokenResponse
+	if token != "" {
+		resp, err = clusterPairManager.GetToken(d.getContextWithToken(context.Background(), token), &api.SdkClusterPairGetTokenRequest{})
+	} else {
+		resp, err = clusterPairManager.GetToken(d.getContext(), &api.SdkClusterPairGetTokenRequest{})
 	}
+
 	logrus.Infof("Response for token: %v", resp.Result.Token)
 
 	// file up cluster pair info
@@ -2528,7 +2531,7 @@ func (d *portworx) getClusterPairManager() api.OpenStorageClusterPairClient {
 
 }
 
-func (d *portworx) getClusterPairManagerByAddress(addr string) (api.OpenStorageClusterPairClient, error) {
+func (d *portworx) getClusterPairManagerByAddress(addr, token string) (api.OpenStorageClusterPairClient, error) {
 	pxPort, err := getSDKContainerPort()
 	if err != nil {
 		return nil, err
@@ -2539,7 +2542,11 @@ func (d *portworx) getClusterPairManagerByAddress(addr string) (api.OpenStorageC
 		return nil, err
 	}
 	dClient := api.NewOpenStorageClusterPairClient(conn)
-	_, err = dClient.Enumerate(d.getContext(), &api.SdkClusterPairEnumerateRequest{})
+	if token != "" {
+		_, err = dClient.Enumerate(d.getContextWithToken(context.Background(), token), &api.SdkClusterPairEnumerateRequest{})
+	} else {
+		_, err = dClient.Enumerate(d.getContext(), &api.SdkClusterPairEnumerateRequest{})
+	}
 	if err != nil {
 		return nil, err
 	}
