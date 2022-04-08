@@ -2673,7 +2673,12 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
 				}
 			}
-			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(*obj.Spec.Replicas), retryInterval); err != nil {
+			//Providing the scaling factor in timeout
+			scalingFactor := *obj.Spec.Replicas
+			if *ss.Spec.Replicas > *obj.Spec.Replicas {
+				scalingFactor = int32(*ss.Spec.Replicas - *obj.Spec.Replicas)
+			}
+			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v. Err: %v", ss.Name, err),
