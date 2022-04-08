@@ -13,6 +13,7 @@ import (
 	kSnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
+	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -45,8 +46,10 @@ const (
 	annPVBoundByController  = "pv.kubernetes.io/bound-by-controller"
 	skipResourceAnnotation  = "stork.libopenstorage.org/skip-resource"
 
-	// snapshotTimeout represents the duration to wait before timing out on snapshot completion
-	snapshotTimeout = time.Minute * 5
+	// defaultSnapshotTimeout represents the duration to wait before timing out on snapshot completion
+	defaultSnapshotTimeout = time.Minute * 5
+	// SnapshotTimeoutKey represents the duration to wait before timing out on snapshot completion
+	SnapshotTimeoutKey = "SNAPSHOT_TIMEOUT"
 	// restoreTimeout is the duration to wait before timing out the restore
 	restoreTimeout = time.Minute * 5
 	// localCSIRetention is the max number of csi snapshots those can be kept locally
@@ -418,6 +421,11 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 		if contentName != "" {
 			vscError = c.getSnapshotContentError(contentName)
 		}
+		snapshotTimeout, err := getSnapshotTimeout()
+		if err != nil {
+			logrus.Warnf("failed to obtain timeout value for snapshot %s: %v, falling back on default snapshot timeout value %s", name, err, defaultSnapshotTimeout.String())
+			snapshotTimeout = defaultSnapshotTimeout
+		}
 		switch {
 		case volumeSnapshotReady && volumeSnapshotContentReady:
 			snapshotInfo.Status = StatusReady
@@ -503,6 +511,11 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 		var vscError string
 		if contentName != "" {
 			vscError = c.getSnapshotContentError(contentName)
+		}
+		snapshotTimeout, err := getSnapshotTimeout()
+		if err != nil {
+			logrus.Warnf("failed to obtain timeout value for snapshot %s: %v, falling back on default snapshot timeout value %s", name, err, defaultSnapshotTimeout.String())
+			snapshotTimeout = defaultSnapshotTimeout
 		}
 		switch {
 		case volumeSnapshotReady && volumeSnapshotContentReady:
@@ -1817,4 +1830,23 @@ func toBoundJobPVCName(pvcName string, pvcUID string) string {
 	}
 	uidToken := strings.Split(pvcUID, "-")
 	return fmt.Sprintf("%s-%s-%s", "bound", truncatedPVCName, uidToken[0])
+}
+
+func getSnapshotTimeout() (time.Duration, error) {
+	var snapshotTimeout time.Duration
+	var snapshotTimeoutConfigVal string
+	var err error
+	ns := k8sutils.DefaultAdminNamespace
+	if snapshotTimeoutConfigVal, err = k8sutils.GetConfigValue(drivers.KdmpConfigmapName, ns, SnapshotTimeoutKey); err != nil {
+		return 0, fmt.Errorf("failed to get %s key from config map %s: %v", SnapshotTimeoutKey, drivers.KdmpConfigmapName, err)
+	}
+	if snapshotTimeoutConfigVal != "" {
+		snapshotTimeout, err = time.ParseDuration(snapshotTimeoutConfigVal)
+		if err != nil {
+			return 0, fmt.Errorf("failed to convert time duration given in config:[%s] error: %v", SnapshotTimeoutKey, err)
+		}
+	} else {
+		snapshotTimeout = defaultSnapshotTimeout
+	}
+	return snapshotTimeout, nil
 }
