@@ -35,6 +35,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/snapshot"
+	"github.com/libopenstorage/stork/pkg/snapshotter"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/libopenstorage/stork/pkg/webhookadmission"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
@@ -232,6 +233,7 @@ func run(c *cli.Context) {
 	kdmpConfig.Data[drivers.KopiaExecutorLimitCPU] = drivers.DefaultKopiaExecutorLimitCPU
 	kdmpConfig.Data[drivers.KopiaExecutorLimitMemory] = drivers.DefaultKopiaExecutorLimitMemory
 	kdmpConfig.Data[drivers.KopiaExecutorImageSecretKey] = ""
+	kdmpConfig.Data[snapshotter.SnapshotTimeoutKey] = ""
 	if marketPlace == awsMarketPlace {
 		kdmpConfig.Data[drivers.KopiaExecutorImageKey] = strings.Join([]string{awsKopiaExecutorImage, awsKopiaExecutorImageTag}, ":")
 	} else {
