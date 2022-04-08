@@ -76,6 +76,7 @@ var _ = Describe("{Longevity}", func() {
 		UpgradeStork:        TriggerUpgradeStork,
 		VolumesDelete:       TriggerVolumeDelete,
 		UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
+		AppTasksDown:        TriggerAppTasksDown,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -226,6 +227,7 @@ func populateDisruptiveTriggers() {
 		BackupRestartNode:               false,
 		BackupDeleteBackupPod:           false,
 		BackupScaleMongo:                false,
+		AppTasksDown:                    false,
 	}
 }
 
@@ -333,6 +335,7 @@ func populateIntervals() {
 	triggerInterval[LocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[DeleteLocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
+	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -453,6 +456,17 @@ func populateIntervals() {
 	triggerInterval[BackupRestartNode][7] = 4 * baseInterval
 	triggerInterval[BackupRestartNode][6] = 5 * baseInterval
 	triggerInterval[BackupRestartNode][5] = 6 * baseInterval
+
+	triggerInterval[AppTasksDown][10] = 1 * baseInterval
+	triggerInterval[AppTasksDown][9] = 2 * baseInterval
+	triggerInterval[AppTasksDown][8] = 3 * baseInterval
+	triggerInterval[AppTasksDown][7] = 4 * baseInterval
+	triggerInterval[AppTasksDown][6] = 5 * baseInterval
+	triggerInterval[AppTasksDown][5] = 6 * baseInterval
+	triggerInterval[AppTasksDown][4] = 7 * baseInterval
+	triggerInterval[AppTasksDown][3] = 8 * baseInterval
+	triggerInterval[AppTasksDown][2] = 9 * baseInterval
+	triggerInterval[AppTasksDown][1] = 10 * baseInterval
 
 	baseInterval = 60 * time.Minute
 
@@ -709,6 +723,7 @@ func populateIntervals() {
 	triggerInterval[VolumesDelete][0] = 0
 	triggerInterval[LocalSnapShot][0] = 0
 	triggerInterval[DeleteLocalSnapShot][0] = 0
+	triggerInterval[AppTasksDown][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

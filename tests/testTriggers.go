@@ -226,6 +226,8 @@ const (
 	UpgradeStork = "upgradeStork"
 	// UpgradeVolumeDriver  upgrade volume driver version to the latest build
 	UpgradeVolumeDriver = "upgradeVolumeDriver"
+	// AppTasksDown scales app up and down
+	AppTasksDown = "appScaleUpAndDown"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3245,7 +3247,40 @@ func createLongevityJiraIssue(event *EventRecord, err error) {
 		CreateJiraIssueWithLogs(description, summary)
 
 	}
+}
 
+// TriggerAppTasksDown performs app scale up and down according to chaos level
+func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	chaosLevel := ChaosMap[AppTasksDown]
+	context("deletes all pods from a given app and validate if they recover", func() {
+		for _, ctx := range *contexts {
+			for i := 0; i < chaosLevel; i++ {
+				Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+					err := Inst().S.DeleteTasks(ctx, nil)
+					UpdateOutcome(event, err)
+				})
+
+				Step("validate all apps after deletion", func() {
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx)
+				})
+			}
+		}
+	})
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
