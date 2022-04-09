@@ -405,11 +405,12 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 				Step(fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
-					workerNodes := int32(len(node.GetWorkerNodes()))
+					//Scaling up by number of storage-nodes
+					workerStorageNodes := int32(len(node.GetStorageNodes()))
 					for name, scale := range applicationScaleUpMap {
 						// limit scale up to the number of worker nodes
-						if scale < workerNodes {
-							applicationScaleUpMap[name] = workerNodes
+						if scale < workerStorageNodes {
+							applicationScaleUpMap[name] = workerStorageNodes
 						}
 					}
 					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
