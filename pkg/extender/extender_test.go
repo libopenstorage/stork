@@ -83,6 +83,23 @@ func setup(t *testing.T) {
 	if err = extender.Start(); err != nil {
 		t.Fatalf("Error starting scheduler extender: %v", err)
 	}
+
+	// Wait for extender to be ready before starting test cases
+	pod := newPod("setupPod", nil)
+	nodes := &v1.NodeList{}
+	retries := 5
+	for i := 0; i < retries; i++ {
+		_, err := sendFilterRequest(pod, nodes)
+		if err == nil {
+			return
+		} else if strings.Contains(err.Error(), "connection refused") {
+			logrus.Warnf("Extender not ready, retrying: %v", err)
+			time.Sleep(1 * time.Second)
+		} else {
+			t.Fatalf("Unexpected Error setting up extender: %v", err)
+		}
+	}
+	t.Fatalf("Failed setting up extender")
 }
 
 func teardown(t *testing.T) {
