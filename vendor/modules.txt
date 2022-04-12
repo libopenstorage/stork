@@ -612,7 +612,7 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20220309093511-f7b925b9e53e
+# github.com/portworx/kdmp v0.4.1-0.20220412142801-d34a2d5d010d
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
@@ -639,7 +639,7 @@ github.com/portworx/kdmp/pkg/version
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20220324123847-dfc1334c5499 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220321032155-bcc98224224c
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220321032155-bcc98224224c
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1091,7 +1091,7 @@ helm.sh/helm/v3/pkg/storage
 helm.sh/helm/v3/pkg/storage/driver
 helm.sh/helm/v3/pkg/strvals
 helm.sh/helm/v3/pkg/time
-# k8s.io/api v0.21.1 => k8s.io/api v0.20.11
+# k8s.io/api v0.21.4 => k8s.io/api v0.20.11
 ## explicit
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
@@ -1139,7 +1139,7 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apiextensions-apiserver v0.21.1 => k8s.io/apiextensions-apiserver v0.20.11
+# k8s.io/apiextensions-apiserver v0.21.4 => k8s.io/apiextensions-apiserver v0.20.11
 ## explicit
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
@@ -1151,7 +1151,7 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextension
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1/fake
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1/fake
-# k8s.io/apimachinery v0.21.1 => k8s.io/apimachinery v0.20.11
+# k8s.io/apimachinery v0.21.4 => k8s.io/apimachinery v0.20.11
 ## explicit
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -1216,7 +1216,7 @@ k8s.io/apiserver/pkg/authentication/user
 k8s.io/apiserver/pkg/endpoints/deprecation
 k8s.io/apiserver/pkg/features
 k8s.io/apiserver/pkg/util/feature
-# k8s.io/cli-runtime v0.20.11 => k8s.io/cli-runtime v0.20.11
+# k8s.io/cli-runtime v0.21.4 => k8s.io/cli-runtime v0.20.11
 ## explicit
 k8s.io/cli-runtime/pkg/genericclioptions
 k8s.io/cli-runtime/pkg/kustomize
@@ -1477,7 +1477,7 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/workqueue
 # k8s.io/cloud-provider v0.20.11 => k8s.io/cloud-provider v0.20.11
 k8s.io/cloud-provider
-# k8s.io/code-generator v0.21.0 => k8s.io/code-generator v0.20.11
+# k8s.io/code-generator v0.21.4 => k8s.io/code-generator v0.20.11
 ## explicit
 k8s.io/code-generator
 k8s.io/code-generator/cmd/client-gen
@@ -1562,7 +1562,7 @@ k8s.io/kubectl/pkg/util/openapi/validation
 k8s.io/kubectl/pkg/util/templates
 k8s.io/kubectl/pkg/util/term
 k8s.io/kubectl/pkg/validation
-# k8s.io/kubernetes v1.20.11 => k8s.io/kubernetes v1.20.11
+# k8s.io/kubernetes v1.21.4 => k8s.io/kubernetes v1.20.11
 ## explicit
 k8s.io/kubernetes/pkg/api/legacyscheme
 k8s.io/kubernetes/pkg/api/v1/pod
@@ -1602,7 +1602,7 @@ k8s.io/kubernetes/pkg/volume/util/types
 k8s.io/kubernetes/pkg/volume/util/volumepathhandler
 # k8s.io/mount-utils v0.0.0 => k8s.io/mount-utils v0.20.11
 k8s.io/mount-utils
-# k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
+# k8s.io/utils v0.0.0-20210527160623-6fdb442a123b
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
@@ -1617,7 +1617,7 @@ k8s.io/utils/trace
 # sigs.k8s.io/cluster-api v0.2.11
 sigs.k8s.io/cluster-api/errors
 sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1
-# sigs.k8s.io/controller-runtime v0.8.0 => sigs.k8s.io/controller-runtime v0.8.2
+# sigs.k8s.io/controller-runtime v0.9.0 => sigs.k8s.io/controller-runtime v0.8.2
 ## explicit
 sigs.k8s.io/controller-runtime/pkg/cache
 sigs.k8s.io/controller-runtime/pkg/cache/internal

@@ -44,9 +44,9 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
-	github.com/portworx/kdmp v0.4.1-0.20220309093511-f7b925b9e53e
+	github.com/portworx/kdmp v0.4.1-0.20220412142801-d34a2d5d010d
 	github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194 // indirect
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20220324123847-dfc1334c5499
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.11.0
 	github.com/rs/cors v1.6.1-0.20190116175910-76f58f330d76 // indirect
@@ -68,18 +68,18 @@ require (
 	google.golang.org/grpc v1.40.0
 	gopkg.in/freddierice/go-losetup.v1 v1.0.0-20170407175016-fc9adea44124 // indirect
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.21.1
-	k8s.io/apiextensions-apiserver v0.21.1
-	k8s.io/apimachinery v0.21.1
+	k8s.io/api v0.21.4
+	k8s.io/apiextensions-apiserver v0.21.4
+	k8s.io/apimachinery v0.21.4
 	k8s.io/apiserver v0.20.11
-	k8s.io/cli-runtime v0.20.11
+	k8s.io/cli-runtime v0.21.4
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.21.0
+	k8s.io/code-generator v0.21.4
 	k8s.io/klog/v2 v2.20.0 // indirect
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.20.11
-	k8s.io/kubernetes v1.20.11
-	sigs.k8s.io/controller-runtime v0.8.0
+	k8s.io/kubernetes v1.21.4
+	sigs.k8s.io/controller-runtime v0.9.0
 	sigs.k8s.io/gcp-compute-persistent-disk-csi-driver v0.7.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )

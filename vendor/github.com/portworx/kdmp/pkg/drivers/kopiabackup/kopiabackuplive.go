@@ -23,7 +23,7 @@ func jobForLiveBackup(
 	mountPod corev1.Pod,
 	resources corev1.ResourceRequirements,
 ) (*batchv1.Job, error) {
-	volDir, err := getVolumeDirectory(jobOption.SourcePVCName, jobOption.Namespace)
+	volDir, err := getVolumeDirectory(jobOption.SourcePVCName, jobOption.SourcePVCNamespace)
 	if err != nil {
 		return nil, err
 	}
