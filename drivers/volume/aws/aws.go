@@ -556,7 +556,8 @@ func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		case "available", "in-use":
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
-			vInfo.TotalSize = uint64(*ebsVolume.Size)
+			// converting to bytes
+			vInfo.TotalSize = uint64(*ebsVolume.Size) * units.GiB
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
