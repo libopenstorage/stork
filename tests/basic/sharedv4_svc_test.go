@@ -520,6 +520,10 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 		It("has to schedule apps, stop volume driver on node where volume is attached, teardown the application", func() {
 			for _, ctx := range testSv4Contexts {
+				Step(fmt.Sprintf("validate app %s", ctx.App.Key), func() {
+					ValidateContext(ctx)
+				})
+
 				Step(
 					fmt.Sprintf("stop the volume driver on attached node and verify app %s teardown succeeds", ctx.App.Key),
 					func() {
