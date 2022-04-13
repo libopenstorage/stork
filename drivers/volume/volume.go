@@ -226,7 +226,10 @@ type Driver interface {
 	GetLicenseSummary() (LicenseSummary, error)
 
 	//SetClusterOpts sets cluster options
-	SetClusterOpts(n node.Node, rtOpts map[string]string) error
+	SetClusterOpts(n node.Node, clusterOpts map[string]string) error
+
+	//SetClusterRunTimeOpts sets cluster run time options
+	SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error
 
 	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
@@ -272,6 +275,9 @@ type Driver interface {
 
 	// WaitForPxPodsToBeUp waits for px pod to be up in given node
 	WaitForPxPodsToBeUp(n node.Node) error
+
+	//GetAutoFsTrimStatus get status of autofstrim
+	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

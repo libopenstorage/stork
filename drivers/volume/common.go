@@ -470,6 +470,14 @@ func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_
 	}
 }
 
+// GetAutoFsTrimStatus get auto ftim status of a given volume
+func (d *DefaultDriver) GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutoFsTrimStatus()",
+	}
+}
+
 // ListStoragePools lists all existing storage pools
 func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error) {
 	return nil, &errors.ErrNotSupported{
@@ -550,6 +558,14 @@ func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) er
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetClusterOpts()",
+	}
+}
+
+// SetClusterRunTimeOpts sets cluster run time options
+func (d *DefaultDriver) SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetClusterRunTimeOpts()",
 	}
 }
 

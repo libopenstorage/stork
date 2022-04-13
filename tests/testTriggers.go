@@ -88,6 +88,9 @@ var newNamespaceCounter = 0
 //jiraEvents to store raised jira events data
 var jiraEvents = make(map[string][]string)
 
+//isAutoFsTrimEnabled to store if auto fs trim enalbed
+var isAutoFsTrimEnabled = false
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -228,6 +231,8 @@ const (
 	UpgradeVolumeDriver = "upgradeVolumeDriver"
 	// AppTasksDown scales app up and down
 	AppTasksDown = "appScaleUpAndDown"
+	// AutoFsTrim enables Auto Fstrim in PX cluster
+	AutoFsTrim = "autoFsTrim"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3101,7 +3106,7 @@ func getOperatorLatestVersion() (string, error) {
 
 }
 
-// TriggerUpgradeStork peforms add-disk on the storage pools for the given contexts
+// TriggerUpgradeStork peforms upgrade of the stork
 func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
@@ -3124,6 +3129,192 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 			UpdateOutcome(event, err)
 
 		})
+}
+
+// TriggerAutoFsTrim enables Auto Fstrim in the PX Cluster
+func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AutoFsTrim,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	context("Validate AutoFsTrim of the volumes", func() {
+
+		Step("enable auto fstrim ",
+			func() {
+				if !isAutoFsTrimEnabled {
+					currNode := node.GetWorkerNodes()[0]
+					err := Inst().V.SetClusterOpts(currNode, map[string]string{
+						"--auto-fstrim": "on",
+					})
+					if err != nil {
+						err = fmt.Errorf("error while enabling auto fstrim, Error:%v", err)
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+
+					} else {
+						logrus.Info("AutoFsTrim is successfully enabled")
+						isAutoFsTrimEnabled = true
+						time.Sleep(5 * time.Minute)
+					}
+				} else {
+					logrus.Info("AutoFsTrim is already enabled")
+				}
+
+			})
+		Step("Validate AutoFsTrim Status ",
+			func() {
+				validateAutoFsTrim(contexts, event)
+
+			})
+
+		Step("Reboot attached node and validate AutoFsTrim Status ",
+			func() {
+
+				for _, ctx := range *contexts {
+					if strings.Contains(ctx.App.Key, "fstrim") {
+						vols, _ := Inst().S.GetVolumes(ctx)
+						for _, vol := range vols {
+
+							n, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+							UpdateOutcome(event, err)
+							logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+							err = Inst().S.DisableSchedulingOnNode(*n)
+							UpdateOutcome(event, err)
+
+							Inst().V.StopDriver([]node.Node{*n}, false, nil)
+
+							Inst().N.RebootNode(*n, node.RebootNodeOpts{
+								Force: true,
+								ConnectionOpts: node.ConnectionOpts{
+									Timeout:         1 * time.Minute,
+									TimeBeforeRetry: 5 * time.Second,
+								},
+							})
+
+							logrus.Info("wait for a minute for node reboot")
+							time.Sleep(1 * time.Minute)
+							n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+							if err != nil {
+
+								logrus.Info("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
+								n2, err = Inst().V.GetNodeForVolume(vol, 3*time.Minute, 10*time.Second)
+								if err != nil {
+									err = fmt.Errorf("Error while getting node for volume %v, Error: %v", vol.ID, err)
+									UpdateOutcome(event, err)
+								}
+
+							}
+
+							logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+							StartVolDriverAndWait([]node.Node{*n})
+							Inst().S.EnableSchedulingOnNode(*n)
+
+						}
+
+					}
+
+				}
+
+				validateAutoFsTrim(contexts, event)
+
+			})
+	})
+
+}
+
+func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
+	for _, ctx := range *contexts {
+		var appVolumes []*volume.Volume
+		var err error
+		if strings.Contains(ctx.App.Key, "fstrim") {
+			appVolumes, err = Inst().S.GetVolumes(ctx)
+			UpdateOutcome(event, err)
+			if len(appVolumes) == 0 {
+				UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+			}
+
+			for _, v := range appVolumes {
+				logrus.Infof("Getting info : %s", v.ID)
+				appVol, err := Inst().V.InspectVolume(v.ID)
+				if err != nil {
+					logrus.Errorf("Error inspecting volume: %v", err)
+				}
+				attachedNode := appVol.AttachedOn
+
+				fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
+
+				val, ok := fsTrimStatuses[appVol.Id]
+				var fsTrimStatus string
+
+				if !ok {
+					fsTrimStatus = waitForFsTrimStatus(event, attachedNode, appVol.Id)
+				} else {
+					fsTrimStatus = val.String()
+				}
+
+				if fsTrimStatus != "" {
+
+					if strings.Contains(fsTrimStatus, "FAILED") {
+
+						err = fmt.Errorf("AutoFstrim failed for volume %v, status: %v", v.ID, val.String())
+						UpdateOutcome(event, err)
+
+					} else {
+						logrus.Infof("Autofstrim status for volume %v, status: %v", v.ID, val.String())
+
+					}
+				} else {
+					err = fmt.Errorf("autofstrim for volume %v not started", v.ID)
+					logrus.Errorf("Error: %v", err)
+					UpdateOutcome(event, err)
+				}
+
+			}
+
+		}
+	}
+
+}
+
+func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) string {
+
+	doExit := false
+	exitCount := 50
+
+	for !doExit {
+		logrus.Infof("Autofstrim for volume %v not started, retrying after 2 mins", volumeID)
+		time.Sleep(2 * time.Minute)
+		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+
+		fsTrimStatus, isValueExist := fsTrimStatuses[volumeID]
+
+		if isValueExist {
+			return fsTrimStatus.String()
+		}
+		if exitCount == 0 {
+			doExit = true
+		}
+		exitCount--
+	}
+
+	return ""
+
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {
@@ -3191,11 +3382,13 @@ func getCloudSnapInterval(triggerType string) int {
 func createLongevityJiraIssue(event *EventRecord, err error) {
 	logrus.Info("Creating Jira Issue")
 
-	eventsGenerated, ok := jiraEvents[event.Event.Type]
+	actualEvent := strings.Split(event.Event.Type, "<br>")[0]
+
+	eventsGenerated, ok := jiraEvents[actualEvent]
 	issueExists := false
 	t := time.Now().Format(time.RFC1123)
 	if ok {
-		logrus.Infof("Event type [%v] exists", event.Event.Type)
+		logrus.Infof("Event type [%v] exists", actualEvent)
 
 		for _, e := range eventsGenerated {
 			iss := strings.Split(e, "->")[1]
@@ -3206,22 +3399,21 @@ func createLongevityJiraIssue(event *EventRecord, err error) {
 		}
 
 	} else {
-		logrus.Infof("Event type [%v] does not exists", event.Event.Type)
+		logrus.Infof("Event type [%v] does not exists", actualEvent)
 
 		errorsSlice := make([]string, 0)
 
-		jiraEvents[event.Event.Type] = errorsSlice
+		jiraEvents[actualEvent] = errorsSlice
 
 	}
 
 	if !issueExists {
 
 		//adding issue to existing jiraEvents
-		issues := jiraEvents[event.Event.Type]
+		issues := jiraEvents[actualEvent]
 		issues = append(issues, fmt.Sprintf("%v->%v", t, err.Error()))
-		jiraEvents[event.Event.Type] = issues
+		jiraEvents[actualEvent] = issues
 
-		actualEvent := strings.Split(event.Event.Type, "<br>")[0]
 		summary := fmt.Sprintf("[%v]: Error %v occured in Torpedo Longevity", actualEvent, err)
 		summary = strings.Replace(summary, "\r\n", "", -1)
 		summary = strings.Replace(summary, "\n", "", -1)

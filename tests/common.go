@@ -3207,7 +3207,7 @@ func init() {
 //CreateJiraIssueWithLogs creates a jira issue and copy logs to nfs mount
 func CreateJiraIssueWithLogs(issueDescription, issueSummary string) {
 	issueKey, err := jirautils.CreateIssue(issueDescription, issueSummary)
-	if err == nil {
+	if err == nil && issueKey != "" {
 		collectAndCopyDiagsOnWorkerNodes(issueKey)
 		collectAndCopyStorkLogs(issueKey)
 		collectAndCopyOperatorLogs(issueKey)
@@ -3241,7 +3241,7 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 				OutputFile:    filePath,
 				ContainerName: "",
 				Profile:       false,
-				Live:          true,
+				Live:          false,
 				Upload:        false,
 				All:           true,
 				Force:         true,

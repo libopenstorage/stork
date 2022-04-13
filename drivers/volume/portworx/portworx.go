@@ -161,6 +161,7 @@ type portworx struct {
 	diagsJobManager       api.OpenStorageJobClient
 	licenseManager        pxapi.PortworxLicenseClient
 	licenseFeatureManager pxapi.PortworxLicensedFeatureClient
+	autoFsTrimManager     api.OpenStorageFilesystemTrimClient
 	schedOps              schedops.Driver
 	nodeDriver            node.Driver
 	refreshEndpoint       bool
@@ -1800,6 +1801,29 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 	return expectedPoolSizes, nil
 }
 
+//GetAutoFsTrimStatus get status of autofstrim
+func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
+
+	sdkport, _ := getSDKPort()
+	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
+	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	if err != nil {
+		logrus.Errorf("Got error while setting the connection endpoint, Error: %v", err)
+		return nil, err
+
+	}
+	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
+
+	autoFstrimResp, err := d.autoFsTrimManager.AutoFSTrimStatus(d.getContext(), &api.SdkAutoFSTrimStatusRequest{})
+	if err != nil {
+		logrus.Errorf("Got error while getting auto fstrim status : %v", err)
+		return nil, err
+
+	}
+	logrus.Infof("Trim Status is [%v]", autoFstrimResp.GetTrimStatus())
+	return autoFstrimResp.GetTrimStatus(), nil
+}
+
 // pickAlternateClusterManager returns a different node than given one, useful in case you want to skip nodes which are down
 func (d *portworx) pickAlternateClusterManager(n node.Node) (api.OpenStorageNodeClient, error) {
 	// Check if px is down on all node addresses. We don't want to keep track
@@ -2146,6 +2170,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.diagsManager = api.NewOpenStorageDiagsClient(conn)
 	d.diagsJobManager = api.NewOpenStorageJobClient(conn)
 	d.licenseFeatureManager = pxapi.NewPortworxLicensedFeatureClient(conn)
+	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(conn)
 	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
 	} else {
@@ -2579,6 +2604,14 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 	}
 
 	return dClient, nil
+}
+
+func (d *portworx) getFilesystemTrimManager() api.OpenStorageFilesystemTrimClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.autoFsTrimManager
+
 }
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
@@ -3172,7 +3205,7 @@ func (d *portworx) GetLicenseSummary() (torpedovolume.LicenseSummary, error) {
 	return licenseSummary, nil
 }
 
-func (d *portworx) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
+func (d *portworx) SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error {
 	var err error
 
 	opts := node.ConnectionOpts{
@@ -3196,6 +3229,33 @@ func (d *portworx) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
 	}
 
 	logrus.Debugf("Successfully set rt_opts")
+	return nil
+}
+
+func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) error {
+	var err error
+
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+
+	var clusteropts string
+	for k, v := range clusterOpts {
+		clusteropts += k + "=" + v + " "
+	}
+
+	clusteropts = strings.TrimSuffix(clusteropts, " ")
+	cmd := fmt.Sprintf("%s cluster options update %s", d.getPxctlPath(n), clusteropts)
+
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return fmt.Errorf("failed to set cluster options, Err: %v %v", err, out)
+	}
+
+	logrus.Debugf("Successfully updated Cluster Options")
 	return nil
 }
 

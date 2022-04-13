@@ -592,7 +592,7 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 
 		currNode := node.GetWorkerNodes()[0]
 		Step(fmt.Sprintf("Set License expiry timeout to 1 hour"), func() {
-			err := Inst().V.SetClusterOpts(currNode, map[string]string{
+			err := Inst().V.SetClusterRunTimeOpts(currNode, map[string]string{
 				"metering_interval_mins":       "10",
 				"license_expiry_timeout_hours": "1",
 			})

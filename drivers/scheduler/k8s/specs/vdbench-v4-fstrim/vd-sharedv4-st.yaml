@@ -17,7 +17,7 @@ apiVersion: v1
 metadata:
   name: vdbench-pvc-sharedv4
 spec:
-  storageClassName: vdbench-sc-sharedv4
+  storageClassName: vdbench-sc-sharedv4-fstrim
   accessModes:
     - ReadWriteMany
   resources:
