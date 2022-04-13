@@ -212,46 +212,10 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 
 		logrus.Debugf("drivername: %v", driverName)
-		// Creating a secret for ssl enabled objectstore with custom certificates
-		// User creates a secret in kube-system ns, mounts it to stork and recommendation is
-		// secret data is 'public.crt' always which contains the certificate content
-		// This secret path is provided as env section as follows
-		// env:
-		// - name: SSL_CERT_DIR
-		//   value: "/etc/tls-secrets" (can be any path)
-
-		// Check if the above env is present and read the certs file contents and
-		// secret for the job pod for kopia to access the same
-		err = createCertificateSecret(drivers.CertSecretName, dataExport.Spec.Source.Namespace, dataExport.Labels)
-		if err != nil {
-			return false, err
-		}
-		if driverName == drivers.KopiaBackup {
-			// This will create a unique secret per PVC being backed up
-			// Create secret in source ns because in case of multi ns backup
-			// BL CR is created in kube-system ns
-			err = CreateCredentialsSecret(
-				dataExport.Name,
-				dataExport.Spec.Destination.Name,
-				dataExport.Spec.Destination.Namespace,
-				dataExport.Spec.Source.Namespace,
-				dataExport.Labels,
-			)
-			if err != nil {
-				msg := fmt.Sprintf("failed to create cloud credential secret during kopia backup: %v", err)
-				logrus.Errorf(msg)
-				data := updateDataExportDetail{
-					status: kdmpapi.DataExportStatusFailed,
-					reason: msg,
-				}
-				return false, c.updateStatus(dataExport, data)
-			}
-
-		}
-
+		var vb *kdmpapi.VolumeBackup
 		if driverName == drivers.KopiaRestore {
 			// Get the volumebackup
-			vb, err := kdmpopts.Instance().GetVolumeBackup(context.Background(),
+			vb, err = kdmpopts.Instance().GetVolumeBackup(context.Background(),
 				dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace)
 			if err != nil {
 				msg := fmt.Sprintf("Error accessing volumebackup %s in namespace %s : %v",
@@ -288,26 +252,12 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				return false, c.updateStatus(dataExport, data)
 			}
 
-			// This will create a unique secret per PVC being restored
-			// For restore create the secret in the ns where PVC is referenced
-			err = CreateCredentialsSecret(
-				dataExport.Name,
-				vb.Spec.BackupLocation.Name,
-				vb.Spec.BackupLocation.Namespace,
-				dataExport.Spec.Destination.Namespace,
-				dataExport.Labels,
-			)
-			if err != nil {
-				msg := fmt.Sprintf("failed to create cloud credential secret during kopia restore: %v", err)
-				logrus.Errorf(msg)
-				data := updateDataExportDetail{
-					status: kdmpapi.DataExportStatusFailed,
-					reason: msg,
-				}
-				return false, c.updateStatus(dataExport, data)
-			}
 			// For restore setting the source PVCName as the destination PVC name for the job
 			srcPVCName = dataExport.Spec.Destination.Name
+		}
+		data, err := c.createJobCredCertSecrets(dataExport, vb, driverName, srcPVCName)
+		if err != nil {
+			return false, c.updateStatus(dataExport, data)
 		}
 		// Read the config map to get compression type
 		var compressionType string
@@ -345,7 +295,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 
 		dataExport.Status.TransferID = id
-		data := updateDataExportDetail{
+		data = updateDataExportDetail{
 			status:     kdmpapi.DataExportStatusSuccessful,
 			transferID: id,
 		}
@@ -498,6 +448,78 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		return false, nil
 	}
 	return false, nil
+}
+
+func (c *Controller) createJobCredCertSecrets(
+	dataExport *kdmpapi.DataExport,
+	vb *kdmpapi.VolumeBackup,
+	driverName,
+	srcPVCName string,
+) (updateDataExportDetail, error) {
+	namespace := dataExport.Namespace
+	// Below are default values for kopiaRestore. There values will be updated with different, if the driveName is kopiaBackup.
+	var blName, blNamespace string
+	if driverName == drivers.KopiaRestore {
+		blName = vb.Spec.BackupLocation.Name
+		blNamespace = vb.Spec.BackupLocation.Namespace
+	}
+	if driverName == drivers.KopiaBackup {
+		pods, err := core.Instance().GetPodsUsingPVC(srcPVCName, dataExport.Spec.Source.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("error fetching pods using PVC %s/%s: %v", dataExport.Spec.Source.Namespace, srcPVCName, err)
+			logrus.Errorf(msg)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: msg,
+			}
+			return data, err
+		}
+		if len(pods) > 0 {
+			namespace = utils.AdminNamespace
+		}
+		blName = dataExport.Spec.Destination.Name
+		blNamespace = dataExport.Spec.Destination.Namespace
+	}
+	// Creating a secret for ssl enabled objectstore with custom certificates
+	// User creates a secret in kube-system ns, mounts it to stork and recommendation is
+	// secret data is 'public.crt' always which contains the certificate content
+	// This secret path is provided as env section as follows
+	// env:
+	// - name: SSL_CERT_DIR
+	//   value: "/etc/tls-secrets" (can be any path)
+
+	// Check if the above env is present and read the certs file contents and
+	// secret for the job pod for kopia to access the same
+	err := createCertificateSecret(dataExport.Name, namespace, dataExport.Labels)
+	if err != nil {
+		msg := fmt.Sprintf("error in creating certificate secret[%v/%v]: %v", namespace, dataExport.Name, err)
+		logrus.Errorf(msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return data, err
+	}
+	// This will create a unique secret per PVC being backedup / restore
+	// Create secret in source ns because in case of multi ns backup
+	// BL CR is created in kube-system ns
+	err = CreateCredentialsSecret(
+		dataExport.Name,
+		blName,
+		blNamespace,
+		namespace,
+		dataExport.Labels,
+	)
+	if err != nil {
+		msg := fmt.Sprintf("failed to create cloud credential secret during %v : %v", driverName, err)
+		logrus.Errorf(msg)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return data, err
+	}
+	return updateDataExportDetail{}, nil
 }
 
 func (c *Controller) stageInitial(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
@@ -1197,10 +1219,25 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 			}
 		}
 	}
+	// use snapshot pvc in the dst namespace if it's available
+	srcPVCName := de.Spec.Source.Name
+	if de.Status.SnapshotPVCName != "" {
+		srcPVCName = de.Status.SnapshotPVCName
+	}
+	pods, err := core.Instance().GetPodsUsingPVC(srcPVCName, de.Spec.Source.Namespace)
+	if err != nil {
+		return fmt.Errorf("error fetching pods using PVC %s/%s: %v", de.Spec.Source.Namespace, srcPVCName, err)
+	}
+	var namespace string
+	if len(pods) > 0 {
+		namespace = utils.AdminNamespace
+	} else {
+		namespace = de.Namespace
+	}
 	// Delete the tls certificate secret created
-	err := core.Instance().DeleteSecret(drivers.CertSecretName, de.Spec.Source.Namespace)
+	err = core.Instance().DeleteSecret(de.Name, namespace)
 	if err != nil && !k8sErrors.IsNotFound(err) {
-		errMsg := fmt.Sprintf("failed to delete [%s/%s] secret", de.Spec.Source.Namespace, drivers.CertSecretName)
+		errMsg := fmt.Sprintf("failed to delete [%s/%s] secret", namespace, de.Name)
 		logrus.Errorf("%v", errMsg)
 		return fmt.Errorf("%v", errMsg)
 	}
@@ -1211,7 +1248,7 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		}
 	}
 
-	if err := core.Instance().DeleteSecret(de.Name, de.Namespace); err != nil && !k8sErrors.IsNotFound(err) {
+	if err := core.Instance().DeleteSecret(de.Name, namespace); err != nil && !k8sErrors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", de.Name, err)
 		logrus.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
@@ -1529,6 +1566,7 @@ func startTransferJob(
 			drivers.WithKopiaImageExecutorSource(dataExport.Spec.TriggeredFrom),
 			drivers.WithKopiaImageExecutorSourceNs(dataExport.Spec.TriggeredFromNs),
 			drivers.WithSourcePVC(srcPVCName),
+			drivers.WithSourcePVCNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithRepoPVC(getRepoPVCName(dataExport, srcPVCName)),
 			drivers.WithNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithBackupLocationName(dataExport.Spec.Destination.Name),

@@ -7,6 +7,7 @@ import (
 
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
+	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
@@ -56,19 +57,33 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		return "", fmt.Errorf(errMsg)
 	}
 	jobName := toJobName(o.JobName, o.BackupLocationName)
-	job, err := buildJob(jobName, o)
+
+	requiresV1, err := version.RequiresV1CronJob()
+	if err != nil {
+		return "", err
+	}
+
+	job, err := buildJob(jobName, o, requiresV1)
 	if err != nil {
 		errMsg := fmt.Sprintf("building maintenance job [%s] for backuplocation [%v] failed: %v", jobName, o.BackupLocationName, err)
 		logrus.Errorf("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
-	if _, err = batch.Instance().CreateCronJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
+
+	if requiresV1 {
+		jobV1 := job.(*batchv1.CronJob)
+		_, err = batch.Instance().CreateCronJob(jobV1)
+	} else {
+		jobV1Beta1 := job.(*batchv1beta1.CronJob)
+		_, err = batch.Instance().CreateCronJobV1beta1(jobV1Beta1)
+	}
+	if err != nil && !apierrors.IsAlreadyExists(err) {
 		errMsg := fmt.Sprintf("creation of maintenance job [%s] for backuplocation [%v] failed: %v", jobName, o.BackupLocationName, err)
 		logrus.Errorf("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
-	logrus.Infof("%s created maintenance job [%s] for backuplocation [%v] successfully", fn, o.BackupLocationName, job.Name)
-	return utils.NamespacedName(job.Namespace, job.Name), nil
+	logrus.Infof("%s created maintenance job [%s] for backuplocation [%v] successfully", fn, o.BackupLocationName, jobName)
+	return utils.NamespacedName(o.JobNamespace, jobName), nil
 }
 
 // DeleteJob deletes the maintenance job.
@@ -80,7 +95,17 @@ func (d Driver) DeleteJob(id string) error {
 		return err
 	}
 
-	if err = batch.Instance().DeleteCronJob(name, namespace); err != nil && !apierrors.IsNotFound(err) {
+	requiresV1, err := version.RequiresV1CronJob()
+	if err != nil {
+		return err
+	}
+
+	if requiresV1 {
+		err = batch.Instance().DeleteCronJob(name, namespace)
+	} else {
+		err = batch.Instance().DeleteCronJobV1beta1(name, namespace)
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("deletion of maintenance job [%s/%s] failed: %v", namespace, name, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return fmt.Errorf(errMsg)
@@ -144,7 +169,8 @@ func jobFor(
 	jobOption drivers.JobOpts,
 	jobName string,
 	resources corev1.ResourceRequirements,
-) (*batchv1beta1.CronJob, error) {
+	requiresV1 bool,
+) (interface{}, error) {
 
 	labels := addJobLabels(jobOption.Labels)
 	var successfulJobsHistoryLimit int32 = defaultSuccessfulJobsHistoryLimit
@@ -185,89 +211,64 @@ func jobFor(
 		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
 	}
 
-	job := &batchv1beta1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: jobOption.JobNamespace,
-			Annotations: map[string]string{
-				utils.SkipResourceAnnotation: "true",
-			},
-			Labels: labels,
+	jobObjectMeta := metav1.ObjectMeta{
+		Name:      jobName,
+		Namespace: jobOption.JobNamespace,
+		Annotations: map[string]string{
+			utils.SkipResourceAnnotation: "true",
 		},
-		Spec: batchv1beta1.CronJobSpec{
-			Schedule:                   scheduleInterval,
-			SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
-			FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
-			JobTemplate: batchv1beta1.JobTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      jobName,
-					Namespace: jobOption.JobNamespace,
-					Annotations: map[string]string{
-						utils.SkipResourceAnnotation: "true",
-					},
-					Labels: labels,
+		Labels: labels,
+	}
+
+	jobSpec := corev1.PodSpec{
+		RestartPolicy:      corev1.RestartPolicyOnFailure,
+		ServiceAccountName: jobOption.ServiceAccountName,
+		ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
+		Containers: []corev1.Container{
+			{
+				Name:  "kopiaexecutor",
+				Image: kopiaExecutorImage,
+				// TODO: Need to revert it to NotPresent. For now keep it as PullAlways.
+				ImagePullPolicy: corev1.PullAlways,
+				Command: []string{
+					"/bin/sh",
+					"-x",
+					"-c",
+					cmd,
 				},
-				Spec: batchv1.JobSpec{
-					BackoffLimit: &utils.JobPodBackOffLimit,
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: labels,
-						},
-						Spec: corev1.PodSpec{
-							RestartPolicy:      corev1.RestartPolicyOnFailure,
-							ServiceAccountName: jobOption.ServiceAccountName,
-							ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
-							Containers: []corev1.Container{
-								{
-									Name:  "kopiaexecutor",
-									Image: kopiaExecutorImage,
-									// TODO: Need to revert it to NotPresent. For now keep it as PullAlways.
-									ImagePullPolicy: corev1.PullAlways,
-									Command: []string{
-										"/bin/sh",
-										"-x",
-										"-c",
-										cmd,
-									},
-									Resources: resources,
-									VolumeMounts: []corev1.VolumeMount{
-										{
-											Name:      "cred-secret",
-											MountPath: drivers.KopiaCredSecretMount,
-											ReadOnly:  true,
-										},
-									},
-								},
-							},
-							Volumes: []corev1.Volume{
-								{
-									Name: "cred-secret",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: jobOption.CredSecretName,
-										},
-									},
-								},
-							},
-						},
+				Resources: resources,
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "cred-secret",
+						MountPath: drivers.KopiaCredSecretMount,
+						ReadOnly:  true,
+					},
+				},
+			},
+		},
+		Volumes: []corev1.Volume{
+			{
+				Name: "cred-secret",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: jobOption.CredSecretName,
 					},
 				},
 			},
 		},
 	}
 
+	var volumeMount corev1.VolumeMount
+	var volume corev1.Volume
+	var env []corev1.EnvVar
 	if drivers.CertFilePath != "" {
-		volumeMount := corev1.VolumeMount{
+		volumeMount = corev1.VolumeMount{
 			Name:      utils.TLSCertMountVol,
 			MountPath: drivers.CertMount,
 			ReadOnly:  true,
 		}
-		job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts = append(
-			job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts,
-			volumeMount,
-		)
 
-		volume := corev1.Volume{
+		volume = corev1.Volume{
 			Name: utils.TLSCertMountVol,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
@@ -275,19 +276,79 @@ func jobFor(
 				},
 			},
 		}
-		job.Spec.JobTemplate.Spec.Template.Spec.Volumes = append(job.Spec.JobTemplate.Spec.Template.Spec.Volumes, volume)
 
-		env := []corev1.EnvVar{
+		env = []corev1.EnvVar{
 			{
 				Name:  drivers.CertDirPath,
 				Value: drivers.CertMount,
 			},
 		}
-
-		job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env = env
 	}
 
-	return job, nil
+	if requiresV1 {
+		jobV1 := &batchv1.CronJob{
+			ObjectMeta: jobObjectMeta,
+			Spec: batchv1.CronJobSpec{
+				Schedule:                   scheduleInterval,
+				SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
+				FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
+				JobTemplate: batchv1.JobTemplateSpec{
+					ObjectMeta: jobObjectMeta,
+					Spec: batchv1.JobSpec{
+						BackoffLimit: &utils.JobPodBackOffLimit,
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: labels,
+							},
+							Spec: jobSpec,
+						},
+					},
+				},
+			},
+		}
+
+		if drivers.CertFilePath != "" {
+			jobV1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+				jobV1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts,
+				volumeMount,
+			)
+			jobV1.Spec.JobTemplate.Spec.Template.Spec.Volumes = append(jobV1.Spec.JobTemplate.Spec.Template.Spec.Volumes, volume)
+			jobV1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env = env
+		}
+
+		return jobV1, nil
+	}
+	jobV1Beta1 := &batchv1beta1.CronJob{
+		ObjectMeta: jobObjectMeta,
+		Spec: batchv1beta1.CronJobSpec{
+			Schedule:                   scheduleInterval,
+			SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
+			FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
+			JobTemplate: batchv1beta1.JobTemplateSpec{
+				ObjectMeta: jobObjectMeta,
+				Spec: batchv1.JobSpec{
+					BackoffLimit: &utils.JobPodBackOffLimit,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: labels,
+						},
+						Spec: jobSpec,
+					},
+				},
+			},
+		},
+	}
+
+	if drivers.CertFilePath != "" {
+		jobV1Beta1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			jobV1Beta1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		jobV1Beta1.Spec.JobTemplate.Spec.Template.Spec.Volumes = append(jobV1Beta1.Spec.JobTemplate.Spec.Template.Spec.Volumes, volume)
+		jobV1Beta1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env = env
+	}
+
+	return jobV1Beta1, nil
 }
 
 func toJobName(jobName, backupLocation string) string {
@@ -306,7 +367,7 @@ func addJobLabels(labels map[string]string) map[string]string {
 	return labels
 }
 
-func buildJob(jobName string, jobOpts drivers.JobOpts) (*batchv1beta1.CronJob, error) {
+func buildJob(jobName string, jobOpts drivers.JobOpts, requiresV1 bool) (interface{}, error) {
 	resources, err := utils.KopiaResourceRequirements(jobOpts.JobConfigMap, jobOpts.JobConfigMapNs)
 	if err != nil {
 		return nil, err
@@ -316,5 +377,6 @@ func buildJob(jobName string, jobOpts drivers.JobOpts) (*batchv1beta1.CronJob, e
 		jobOpts,
 		jobName,
 		resources,
+		requiresV1,
 	)
 }

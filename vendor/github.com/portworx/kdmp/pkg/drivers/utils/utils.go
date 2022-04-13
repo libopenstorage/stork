@@ -28,6 +28,8 @@ const (
 	TriggeredFromPxBackup                  = "px-backup"
 	kopiaExecutorImageRegistryEnvVar       = "KOPIA-EXECUTOR-IMAGE-REGISTRY"
 	kopiaExecutorImageRegistrySecretEnvVar = "KOPIA-EXECUTOR-IMAGE-REGISTRY-SECRET"
+	// AdminNamespace - kube-system namespace, where privilige pods will be deployed for live kopiabackup.
+	AdminNamespace = "kube-system"
 )
 
 var (
@@ -249,7 +251,7 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 func GetKopiaExecutorImageRegistryAndSecret(source, sourceNs string) (string, string, error) {
 	var registry, registrySecret string
 	var err error
-	if len(os.Getenv(kopiaExecutorImageRegistryEnvVar)) == 0 || len(os.Getenv(kopiaExecutorImageRegistrySecretEnvVar)) == 0 {
+	if len(os.Getenv(kopiaExecutorImageRegistryEnvVar)) == 0 {
 		registry, registrySecret, err = GetImageRegistryFromDeployment(source, sourceNs)
 		if err != nil {
 			logrus.Errorf("GetKopiaExecutorImageRegistryAndSecret: error in getting image registory from %v:%v deployment", sourceNs, source)
