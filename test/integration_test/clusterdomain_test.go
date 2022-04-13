@@ -54,7 +54,8 @@ func TestClusterDomains(t *testing.T) {
 		_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "expected list cluster domains status to succeed")
 
-		t.Run("failoverAndFailbackTest", failoverAndFailbackClusterDomainTest)
+		//t.Run("failoverAndFailbackTest", failoverAndFailbackClusterDomainTest)
+		t.Run("powerOffNodeClusterDomainTest", powerOffNodeClusterDomainTest)
 	} else if err != nil {
 		logrus.Errorf("Failed to run cluster domain tests: %v", err)
 	} else if !enabled {
@@ -233,4 +234,38 @@ func testClusterDomainsFailback(
 	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state on source cluster after failback")
 
+}
+
+func powerOffNodeClusterDomainTest(t *testing.T) {
+	// Accoss issue reproduction/validation
+	// validate the cluster domains status
+	err := storkops.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
+
+	// Migrate the resources
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"cassandra-clusterdomain-migration",
+		"cassandra",
+		nil,
+		[]string{"cassandra-clusterdomain-migration"},
+		true,
+		true,
+		false,
+		false,
+	)
+	appNodes, err := schedulerDriver.GetNodesForApp(preMigrationCtx)
+	logrus.Infof("Application deployed on nodes: %s", appNodes[0].Name)
+
+	// validate the following
+	// - migration is successful
+	// - app starts on cluster 1
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, false, true, false)
+
+	testClusterDomainsFailover(t, preMigrationCtx, ctxs)
+
+	//testClusterDomainsFailback(t, preMigrationCtx, ctxs)
+
+	// destroy the apps and pvcs
+	//destroyAndWait(t, ctxs)
 }
