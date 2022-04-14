@@ -129,6 +129,9 @@ type Driver interface {
 	// CrashNode Crashes the given node
 	CrashNode(node Node, options CrashNodeOpts) error
 
+	// IsUsingSSH returns true if the command will be run using ssh
+	IsUsingSSH() bool
+
 	// RunCommand runs the given command on the node and returns the output
 	RunCommand(node Node, command string, options ConnectionOpts) (string, error)
 
@@ -180,6 +183,12 @@ type Driver interface {
 
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
+
+	// AddMachine adds the new machine instance to existing map
+	AddMachine(machineName string) error
+
+	// PowerOnVMByName power on the VM using the vm name
+	PowerOnVMByName(vmName string) error
 }
 
 // Register registers the given node driver
@@ -367,4 +376,23 @@ func (d *notSupportedDriver) SystemctlUnitExist(node Node, service string, optio
 		Type:      "Function",
 		Operation: "SystemctlUnitExist()",
 	}
+}
+
+func (d *notSupportedDriver) AddMachine(machineName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddMachine()",
+	}
+}
+
+func (d *notSupportedDriver) PowerOnVMByName(vmName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "PowerOnVmByName()",
+	}
+}
+
+// IsUsingSSH returns true if the command will be run using ssh
+func (d *notSupportedDriver) IsUsingSSH() bool {
+	return false
 }

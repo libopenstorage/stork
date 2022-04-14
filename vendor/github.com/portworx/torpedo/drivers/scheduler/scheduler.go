@@ -320,6 +320,9 @@ type Driver interface {
 
 	// DeleteSecret deletes secret with given name in given namespace
 	DeleteSecret(namespace, name string) error
+
+	//RecyleNode deletes nodes with given node
+	RecycleNode(n node.Node) error
 }
 
 var (
