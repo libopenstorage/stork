@@ -141,6 +141,22 @@ func (d *DefaultDriver) RecoverDriver(n node.Node) error {
 	}
 }
 
+// EnterMaintenance puts the given node in maintenance mode
+func (d *DefaultDriver) EnterMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnterMaintenance()",
+	}
+}
+
+// ExitMaintenance exits the given node from maintenance mode
+func (d *DefaultDriver) ExitMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExitMaintenance()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{
@@ -377,7 +393,7 @@ func (d *DefaultDriver) UpgradeStork(endpointURL string, endpointVersion string)
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error) {
+func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath, token string) (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	return pairInfo, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -451,6 +467,14 @@ func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ExpandPool()",
+	}
+}
+
+// GetAutoFsTrimStatus get auto ftim status of a given volume
+func (d *DefaultDriver) GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutoFsTrimStatus()",
 	}
 }
 
@@ -537,6 +561,14 @@ func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) er
 	}
 }
 
+// SetClusterRunTimeOpts sets cluster run time options
+func (d *DefaultDriver) SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetClusterRunTimeOpts()",
+	}
+}
+
 // ToggleCallHome toggles Call-home
 func (d *DefaultDriver) ToggleCallHome(n node.Node, enabled bool) error {
 	return &errors.ErrNotSupported{
@@ -550,5 +582,86 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpdateSharedv4FailoverStrategyUsingPxctl",
+	}
+}
+
+// GetPxNode return api.Storage Node
+func (d *DefaultDriver) GetPxNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxNode()",
+	}
+}
+
+// Contains return
+func (d *DefaultDriver) Contains(nodes []*api.StorageNode, n *api.StorageNode) bool {
+	return false
+}
+
+// GetStoragelessNodes return storageless node list
+func (d *DefaultDriver) GetStoragelessNodes() ([]*api.StorageNode, error) {
+	return []*api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetStoragelessNodes()",
+	}
+}
+
+// UpdateNodeWithStorageInfo updates storage info in new node object
+func (d *DefaultDriver) UpdateNodeWithStorageInfo(n node.Node, skipNode string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateNodeWithStorageInfo()",
+	}
+
+}
+
+// WaitForNodeIDToBePickedByAnotherNode wait for new node to pick up the drives.
+func (d *DefaultDriver) WaitForNodeIDToBePickedByAnotherNode(
+	n *api.StorageNode) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForNodeIdToBePickedByAnotherNode()",
+	}
+}
+
+// ValidateNodeAfterPickingUpNodeID validates the node.
+func (d *DefaultDriver) ValidateNodeAfterPickingUpNodeID(
+	n1 *api.StorageNode, n2 *api.StorageNode, sn []*api.StorageNode) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateNodeAfterPickingUpNodeId()",
+	}
+}
+
+// WaitForPxPodsToBeUp waits for px pods to be up
+func (d *DefaultDriver) WaitForPxPodsToBeUp(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForPxPodsToBeUp()",
+	}
+
+}
+
+// IsOperatorBasedInstall eturns if px is operator based
+func (d *DefaultDriver) IsOperatorBasedInstall() (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsOperatorBasedInstall()",
+	}
+}
+
+//UpdateStorageClusterImage update storage cluster image version
+func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateStorageClusterImage()",
+	}
+}
+
+//GetPxVersionOnNode retruns PxVersion on the given node
+func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxVersionOnNode()",
 	}
 }
