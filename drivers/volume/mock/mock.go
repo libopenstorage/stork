@@ -14,7 +14,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (

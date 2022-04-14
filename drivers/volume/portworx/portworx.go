@@ -61,7 +61,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 // TODO: Make some of these configurable
