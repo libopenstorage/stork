@@ -411,26 +411,35 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 	if err != nil {
 		return nil, err
 	}
-	if err := utils.SetupServiceAccount(jobName, jobOptions.Namespace, roleFor()); err != nil {
-		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", jobOptions.Namespace, jobName, err)
-		logrus.Errorf("%s: %v", fn, errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}
-
-	pods, err := coreops.Instance().GetPodsUsingPVC(jobOptions.SourcePVCName, jobOptions.Namespace)
+	pods, err := coreops.Instance().GetPodsUsingPVC(jobOptions.SourcePVCName, jobOptions.SourcePVCNamespace)
 	if err != nil {
 		errMsg := fmt.Sprintf("error fetching pods using PVC %s/%s: %v", jobOptions.Namespace, jobOptions.SourcePVCName, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	// run a "live" backup if a pvc is mounted (mount a kubelet directory with pod volumes)
+	var resourceNamespace string
+	var live bool
 	if len(pods) > 0 {
-		logrus.Debugf("buildJob: pod %v phase %v pvc: %v/%v", pods[0].Name, pods[0].Status.Phase, jobOptions.Namespace, jobOptions.SourcePVCName)
+		resourceNamespace = utils.AdminNamespace
+		live = true
+	} else {
+		resourceNamespace = jobOptions.Namespace
+		live = false
+	}
+	if err := utils.SetupServiceAccount(jobName, resourceNamespace, roleFor(live)); err != nil {
+		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", resourceNamespace, jobName, err)
+		logrus.Errorf("%s: %v", fn, errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	// run a "live" backup if a pvc is mounted (mount a kubelet directory with pod volumes)
+	if live {
+		logrus.Debugf("buildJob: pod %v phase %v pvc: %v/%v", pods[0].Name, pods[0].Status.Phase, resourceNamespace, jobOptions.SourcePVCName)
 		if pods[0].Status.Phase == corev1.PodPending {
-			errMsg := fmt.Sprintf("pods %v is using pvc %v/%v but it is in pending state, backup is not possible", pods[0].Name, jobOptions.Namespace, jobOptions.SourcePVCName)
+			errMsg := fmt.Sprintf("pods %v is using pvc %v/%v but it is in pending state, backup is not possible", pods[0].Name, resourceNamespace, jobOptions.SourcePVCName)
 			logrus.Errorf("%s: %v", fn, errMsg)
 			return nil, fmt.Errorf(errMsg)
 		}
+		jobOptions.Namespace = resourceNamespace
 		return jobForLiveBackup(
 			jobOptions,
 			jobName,
@@ -446,26 +455,32 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 	)
 }
 
-func roleFor() *rbacv1.Role {
-	return &rbacv1.Role{
+func roleFor(live bool) *rbacv1.Role {
+	role := &rbacv1.Role{
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"kdmp.portworx.com"},
 				Resources: []string{"volumebackups"},
 				Verbs:     []string{rbacv1.VerbAll},
 			},
-			{
-				APIGroups:     []string{"security.openshift.io"},
-				Resources:     []string{"securitycontextconstraints"},
-				ResourceNames: []string{"hostaccess"},
-				Verbs:         []string{"use"},
-			},
-			{
-				APIGroups:     []string{"security.openshift.io"},
-				Resources:     []string{"securitycontextconstraints"},
-				ResourceNames: []string{"privileged"},
-				Verbs:         []string{"use"},
-			},
 		},
 	}
+	// Only live backup, we will add the hostaccess and privilege option.
+	if live {
+		hostAccessRule := rbacv1.PolicyRule{
+			APIGroups:     []string{"security.openshift.io"},
+			Resources:     []string{"securitycontextconstraints"},
+			ResourceNames: []string{"hostaccess"},
+			Verbs:         []string{"use"},
+		}
+		role.Rules = append(role.Rules, hostAccessRule)
+		PrivilegedRule := rbacv1.PolicyRule{
+			APIGroups:     []string{"security.openshift.io"},
+			Resources:     []string{"securitycontextconstraints"},
+			ResourceNames: []string{"privileged"},
+			Verbs:         []string{"use"},
+		}
+		role.Rules = append(role.Rules, PrivilegedRule)
+	}
+	return role
 }

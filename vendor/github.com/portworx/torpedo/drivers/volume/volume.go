@@ -149,6 +149,12 @@ type Driver interface {
 	// failure.
 	RecoverDriver(n node.Node) error
 
+	// EnterMaintenance puts the given node in maintenance mode
+	EnterMaintenance(n node.Node) error
+
+	// ExitMaintenance exits the given node from maintenance mode
+	ExitMaintenance(n node.Node) error
+
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
 
@@ -157,6 +163,9 @@ type Driver interface {
 
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
+
+	//GetPxVersionOnNode get PXVersion on the given node
+	GetPxVersionOnNode(n node.Node) (string, error)
 
 	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
@@ -174,7 +183,7 @@ type Driver interface {
 	GetAggregationLevel(vol *Volume) (int64, error)
 
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
-	GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error)
+	GetClusterPairingInfo(kubeConfigPath, token string) (map[string]string, error)
 
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error
@@ -216,14 +225,23 @@ type Driver interface {
 	// GetLicenseSummary returns the activated license SKU and Features
 	GetLicenseSummary() (LicenseSummary, error)
 
-	// SetClusterOpts sets cluster options
-	SetClusterOpts(n node.Node, rtOpts map[string]string) error
+	//SetClusterOpts sets cluster options
+	SetClusterOpts(n node.Node, clusterOpts map[string]string) error
 
-	// ToggleCallHome toggles Call-home
+	//SetClusterRunTimeOpts sets cluster run time options
+	SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error
+
+	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
 
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
+
+	//IsOperatorBasedInstall returns if px is operator based
+	IsOperatorBasedInstall() (bool, error)
+
+	//UpdateStorageClusterImage update storage cluster image version
+	UpdateStorageClusterImage(string) error
 
 	// ValidateStorageCluster validates all the storage cluster components
 	ValidateStorageCluster(endpointURL, endpointVersion string) error
@@ -233,6 +251,33 @@ type Driver interface {
 
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
+
+	// GetPxNode return api.StorageNode
+	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
+
+	// GetStoragelessNodes() return list of storageless nodes
+	GetStoragelessNodes() ([]*api.StorageNode, error)
+
+	// RecyclePXHost Recycle a node and validate the storageless node picked all it drives
+	//RecyclePXHost(*node.Node) error
+
+	// Contains check if StorageNode list conatins a give node or not
+	Contains([]*api.StorageNode, *api.StorageNode) bool
+
+	// UpdateNodeWithStorageInfo update a new node object
+	UpdateNodeWithStorageInfo(n node.Node, skipNodename string) error
+
+	// WaitForNodeIDToBePickedByAnotherNode wait for another node to pick the down node nodeID
+	WaitForNodeIDToBePickedByAnotherNode(n *api.StorageNode) (*api.StorageNode, error)
+
+	// ValidateNodeAfterPickingUpNodeID validates the new node pick the correct drives and pools
+	ValidateNodeAfterPickingUpNodeID(n1 *api.StorageNode, n2 *api.StorageNode, snList []*api.StorageNode) error
+
+	// WaitForPxPodsToBeUp waits for px pod to be up in given node
+	WaitForPxPodsToBeUp(n node.Node) error
+
+	//GetAutoFsTrimStatus get status of autofstrim
+	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

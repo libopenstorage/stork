@@ -9,6 +9,10 @@ import (
 	coreops "github.com/portworx/sched-ops/k8s/core"
 )
 
+const (
+	k8sMinVersionCronJobV1 = "1.21"
+)
+
 // Base version information.
 //
 // These variables typically come from -ldflags settings.
@@ -58,6 +62,23 @@ func RequiresV1Registration() (bool, error) {
 
 	}
 	if k8sVersion.GreaterThanOrEqual(k8sVer1_16) {
+		return true, nil
+	}
+	return false, nil
+}
+
+// RequiresV1CronJob returns true if cronJob needs to be created as apiVersion V1.
+func RequiresV1CronJob() (bool, error) {
+	k8sVersion, _, err := GetFullVersion()
+	if err != nil {
+		return false, err
+	}
+	k8sVerCronJobV1, err := version.NewVersion(k8sMinVersionCronJobV1)
+	if err != nil {
+		return false, err
+
+	}
+	if k8sVersion.GreaterThanOrEqual(k8sVerCronJobV1) {
 		return true, nil
 	}
 	return false, nil
