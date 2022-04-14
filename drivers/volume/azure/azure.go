@@ -26,7 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (

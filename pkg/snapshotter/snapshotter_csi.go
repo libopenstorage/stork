@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (

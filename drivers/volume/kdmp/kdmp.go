@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (
