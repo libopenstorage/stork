@@ -71,8 +71,6 @@ func (c *Client) ListBackupLocations(namespace string, filterOptions metav1.List
 		if err != nil {
 			return nil, err
 		}
-	}
-	for i := range backupLocations.Items {
 		err = backupLocations.Items[i].UpdateFromClusterSecret(c.kube)
 		if err != nil {
 			return nil, err

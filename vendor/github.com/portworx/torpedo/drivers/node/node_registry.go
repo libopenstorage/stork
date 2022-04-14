@@ -35,6 +35,17 @@ func UpdateNode(n Node) error {
 	return nil
 }
 
+// DeleteNode method delete a given node if exist in the node collection
+func DeleteNode(n Node) error {
+	if n.uuid == "" {
+		return fmt.Errorf("UUID should be set to delete existing node")
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	delete(nodeRegistry, n.uuid)
+	return nil
+}
+
 // GetNodes returns all the nodes from the node collection
 func GetNodes() []Node {
 	var nodeList []Node
@@ -131,6 +142,16 @@ func Contains(nodes []Node, n Node) bool {
 		}
 	}
 	return false
+}
+
+// GetNodeByName returns a node which matches with given name
+func GetNodeByName(nodeName string) (Node, error) {
+	for _, n := range nodeRegistry {
+		if n.Name == nodeName {
+			return n, nil
+		}
+	}
+	return Node{}, fmt.Errorf("FAILED: Node [%s] not found in node registry", nodeName)
 }
 
 // CleanupRegistry removes entry of all nodes from registry
