@@ -20,13 +20,11 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -171,14 +169,11 @@ func (a *azure) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
 		provisioner = val
 	} else {
-		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-		if storageClassName != "" {
-			storageClass, err := storage.Instance().GetStorageClass(storageClassName)
-			if err == nil {
-				provisioner = storageClass.Provisioner
-			} else {
-				logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
-			}
+		storageClass, err := core.Instance().GetStorageClassForPVC(pvc)
+		if err == nil {
+			provisioner = storageClass.Provisioner
+		} else {
+			logrus.Warnf("Error getting storageclass for pvc %v: %v", pvc.Name, err)
 		}
 	}
 

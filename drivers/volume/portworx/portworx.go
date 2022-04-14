@@ -61,7 +61,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 // TODO: Make some of these configurable
@@ -671,21 +670,18 @@ func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool
 // skipFBVols flag to omit such pvcs from decision matrix
 func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, skipDirectAccessVolumes bool) bool {
 	provisioner := ""
-	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-	if storageClassName != "" {
-		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
-		if err == nil {
-			if _, ok := storageClass.Parameters[proxyEndpoint]; ok && skipDirectAccessVolumes {
-				logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
-				return false
-			} else if val, ok := storageClass.Parameters[pureBackendParam]; ok && val == pureFileParam && skipDirectAccessVolumes {
-				logrus.Tracef("pure file backend param set, not classifying it as pxd for pvc [%v]", pvc.Name)
-				return false
-			}
-			provisioner = storageClass.Provisioner
-		} else {
-			logrus.Tracef("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
+	storageClass, err := core.Instance().GetStorageClassForPVC(pvc)
+	if err == nil {
+		if _, ok := storageClass.Parameters[proxyEndpoint]; ok && skipDirectAccessVolumes {
+			logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
+			return false
+		} else if val, ok := storageClass.Parameters[pureBackendParam]; ok && val == pureFileParam && skipDirectAccessVolumes {
+			logrus.Tracef("pure file backend param set, not classifying it as pxd for pvc [%v]", pvc.Name)
+			return false
 		}
+		provisioner = storageClass.Provisioner
+	} else {
+		logrus.Tracef("Error getting storageclass for pvc %v: %v", pvc.Name, err)
 	}
 	// Check for the provisioner in the PVC annotation. If not populated
 	// try getting the provisioner from the Storage class.
@@ -2972,7 +2968,11 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
 		volumeInfo.Namespace = pvc.Namespace
-		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
+		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
+		if err != nil {
+			return nil, fmt.Errorf("error getting storage class for PVC: %v", err)
+		}
+		volumeInfo.StorageClass = sc.Name
 		volumeInfo.DriverName = storkvolume.PortworxDriverName
 
 		// Save the auth annotations

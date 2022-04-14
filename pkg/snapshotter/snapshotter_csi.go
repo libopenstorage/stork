@@ -19,7 +19,6 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
@@ -32,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -574,16 +572,13 @@ func (c *csiDriver) pvcBindFinished(pvc *v1.PersistentVolumeClaim) bool {
 func (c *csiDriver) pvcWaitingForFirstConsumer(pvc *v1.PersistentVolumeClaim) bool {
 	var sc *storagev1.StorageClass
 	var err error
-	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-	if storageClassName != "" {
-		sc, err = storage.Instance().GetStorageClass(storageClassName)
-		if err != nil {
-			logrus.Warnf("did not get the storageclass %s for pvc %s/%s, err: %v", storageClassName, pvc.Namespace, pvc.Name, err)
-			return false
-		}
-		return *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer
+	//storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	sc, err = core.Instance().GetStorageClassForPVC(pvc)
+	if err != nil {
+		logrus.Warnf("did not get the storageclass for pvc %s/%s, err: %v", pvc.Namespace, pvc.Name, err)
+		return false
 	}
-	return false
+	return *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer
 }
 
 func (c *csiDriver) getSnapshotContentError(vscName string) string {

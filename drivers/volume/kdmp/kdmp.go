@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -283,7 +282,11 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.Provisioner = getProvisionerName(pvc)
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
-		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
+		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
+		if err != nil {
+			return nil, fmt.Errorf("error getting storage class for PVC: %v", err)
+		}
+		volumeInfo.StorageClass = sc.Name
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = storkvolume.KDMPDriverName
 		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
@@ -610,8 +613,13 @@ func (k *kdmp) getRestorePVCs(
 			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pvc); err != nil {
 				return nil, err
 			}
-			sc := k8shelper.GetPersistentVolumeClaimClass(&pvc)
-			if val, ok := restore.Spec.StorageClassMapping[sc]; ok {
+			//sc := k8shelper.GetPersistentVolumeClaimClass(&pvc)
+			sc, err := core.Instance().GetStorageClassForPVC(&pvc)
+			if err != nil {
+				logrus.Errorf("error getting storage class for pvc: %s, err: %v", pvc.Name, err)
+				return nil, err
+			}
+			if val, ok := restore.Spec.StorageClassMapping[sc.Name]; ok {
 				pvc.Spec.StorageClassName = &val
 			}
 			// If pvc storageClassName is empty, we want to pick up the

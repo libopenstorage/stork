@@ -14,7 +14,6 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,7 +23,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -310,14 +308,11 @@ func (l *linstor) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool 
 	if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
 		provisioner = val
 	} else {
-		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-		if storageClassName != "" {
-			storageClass, err := storage.Instance().GetStorageClass(storageClassName)
-			if err == nil {
-				provisioner = storageClass.Provisioner
-			} else {
-				logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
-			}
+		storageClass, err := core.Instance().GetStorageClassForPVC(pvc)
+		if err == nil {
+			provisioner = storageClass.Provisioner
+		} else {
+			logrus.Warnf("Error getting storageclass for pvc %v: %v", pvc.Name, err)
 		}
 	}
 
