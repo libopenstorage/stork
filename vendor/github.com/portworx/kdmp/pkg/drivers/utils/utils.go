@@ -234,12 +234,12 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 		return "", "", err
 	}
 	imageFields := strings.Split(deploy.Spec.Template.Spec.Containers[0].Image, "/")
-	var registry string
-	// Here the assumption is that the image format will be <registry-name>/<repo-name>/image:tag
+	// Here the assumption is that the image format will be <registry-name>/<extra-dir-name>/<repo-name>/image:tag
 	// or <repo-name>/image:tag. If repo name contains any path (<registry-name>/<repo-name>/<extra-dir-name>/image:tag), below logic will not work.
-	if len(imageFields) == 3 {
-		registry = imageFields[0]
-	}
+	// Customer might have extra dirs before the repo-name as mentioned above
+	// here minus 2 is for image name and repo name exclusion
+	registryFields := imageFields[0 : len(imageFields)-2]
+	registry := strings.Join(registryFields, "/")
 	imageSecret := deploy.Spec.Template.Spec.ImagePullSecrets
 	if imageSecret != nil {
 		return registry, imageSecret[0].Name, nil

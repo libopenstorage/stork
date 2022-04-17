@@ -38,7 +38,7 @@ require (
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
-	github.com/portworx/kdmp v0.4.1-0.20220414101529-0787a8aa0c2c
+	github.com/portworx/kdmp v0.4.1-0.20220417082128-8a960387fd38
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.11.0
@@ -63,7 +63,7 @@ require (
 	k8s.io/cli-runtime v0.21.4
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/code-generator v0.21.4
-	k8s.io/component-helpers v0.21.4 // indirect
+	k8s.io/component-helpers v0.21.4
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.21.4
 	k8s.io/kubernetes v1.21.4
