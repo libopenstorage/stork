@@ -59,6 +59,8 @@ import (
 	_ "github.com/portworx/torpedo/drivers/node/gke"
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
+        // import ibm driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/node/ibm"
 
 	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
