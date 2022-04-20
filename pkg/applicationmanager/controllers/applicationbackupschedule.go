@@ -401,6 +401,7 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 				backup.Status.Reason = InsufficientRetentionPeriod
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				backup.Annotations[ApplicationBackupObjectLockRetentionAnnotation] = strconv.FormatInt(objectLockInfo.RetentionPeriodDays, 10)
 				// Don't need to process anything further
 				_, err = storkops.Instance().CreateApplicationBackup(backup)
 				return err
