@@ -439,12 +439,14 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 			logrus.Errorf("%s: %v", fn, errMsg)
 			return nil, fmt.Errorf(errMsg)
 		}
+		pvcNamespace := jobOptions.Namespace
 		jobOptions.Namespace = resourceNamespace
 		return jobForLiveBackup(
 			jobOptions,
 			jobName,
 			pods[0],
 			resources,
+			pvcNamespace,
 		)
 	}
 
