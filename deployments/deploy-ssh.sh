@@ -167,7 +167,8 @@ esac
 done
 
 if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
-    TEST_SUITE='"bin/asg.test",
+    TEST_SUITE='
+            "bin/asg.test",
             "bin/autopilot.test",
             "bin/basic.test",
             "bin/backup.test",
@@ -183,7 +184,9 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/sharedv4.test",
             "bin/telemetry.test",
             "bin/upgrade_cluster.test",
-            "bin/pxcentral.test",'
+            "bin/pxcentral.test",
+            "bin/storage_pool.test",
+'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi

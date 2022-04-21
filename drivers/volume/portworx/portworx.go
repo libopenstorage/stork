@@ -221,7 +221,6 @@ func (d *portworx) ListStoragePools(labelSelector metav1.LabelSelector) (map[str
 
 	pools := make(map[string]*api.StoragePool)
 	for _, nodeID := range resp.NodeIds {
-		logrus.Infof("<debug> NODE_ID: %s", nodeID)
 		nodeResp, err := d.nodeManager.Inspect(ctx, &api.SdkNodeInspectRequest{NodeId: nodeID})
 		if err != nil {
 			return nil, err
