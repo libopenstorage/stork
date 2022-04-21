@@ -6,13 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
@@ -23,6 +22,7 @@ const (
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
+	defaultRebootTimeRange       = 3 * time.Minute
 )
 
 func TestReboot(t *testing.T) {
@@ -83,9 +83,15 @@ var _ = Describe("{RebootOneNode}", func() {
 							Expect(err).NotTo(HaveOccurred())
 						})
 
-						Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
-							err := Inst().V.WaitDriverDownOnNode(n)
+						Step(fmt.Sprintf("Check if node: %s rebooted in last 3 minutes", n.Name), func() {
+							isNodeRebootedAndUp, err := Inst().N.IsNodeRebootedInGivenTimeRange(n, defaultRebootTimeRange)
 							Expect(err).NotTo(HaveOccurred())
+							if !isNodeRebootedAndUp {
+								Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+									err := Inst().V.WaitDriverDownOnNode(n)
+									Expect(err).NotTo(HaveOccurred())
+								})
+							}
 						})
 
 						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",

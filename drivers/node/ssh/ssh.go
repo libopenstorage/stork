@@ -88,6 +88,45 @@ func (s *SSH) IsUsingSSH() bool {
 	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
 }
 
+// IsNodeRebootedInGivenTimeRange return true if node rebooted in given time range
+func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duration) (bool, error) {
+	logrus.Infof("Checking the uptime for a node %s", n.SchedulerNodeName)
+	uptimeCmd := "sudo uptime -s"
+
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}, uptimeCmd, true)
+		return out, true, err
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return false, &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to run uptime command in node %v", n),
+		}
+	}
+
+	upTime := strings.Fields(strings.TrimSpace(out.(string)))
+
+	// Converting the unix date to timestamp
+	thetime, err := time.Parse(time.RFC3339, upTime[0]+"T"+upTime[1]+"+00:00")
+	if err != nil {
+		return false, fmt.Errorf("Unable to parse uptime command output. Err: %s", err)
+	}
+
+	uptimeEpoch := thetime.Unix()
+	curEpoch := time.Now().Unix()
+	diff := curEpoch - uptimeEpoch
+	tRangeInSeconds := int64(timerange / time.Second)
+	if diff > tRangeInSeconds {
+		return false, nil
+	}
+	return true, nil
+}
+
 // Init initializes SSH node driver
 func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	s.specDir = nodeOpts.SpecDir
