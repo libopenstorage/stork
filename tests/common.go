@@ -641,16 +641,13 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 				}
 			})
 		}
-		// TODO: This is broken for now, doesn't properly return an error
-		//       Output error message is correct, but returns exit code 0
-		//       See https://portworx.atlassian.net/browse/PWX-22950
-		//Step("validating groupsnap for using pxctl", func() {
-		//	err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-		//	expect(err).NotTo(beNil())
-		//	if err != nil {
-		//		expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
-		//	}
-		//})
+		Step("validating groupsnap for using pxctl", func() {
+			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
+			expect(err).NotTo(beNil())
+			if err != nil {
+				expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+			}
+		})
 	})
 }
 
