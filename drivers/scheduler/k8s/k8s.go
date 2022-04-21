@@ -2085,10 +2085,8 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 		var terminatingPods []string
 		pods, err := k.getPodsForApp(ctx)
 		// sadly, getPodsForApp returns an error if there are no pods
-		if err != schederrors.ErrPodsNotFound {
+		if err != nil {
 			return nil, false, nil
-		} else if err != nil {
-			return nil, true, fmt.Errorf("failed to get pods for app %v: %w", ctx.App.Key, err)
 		}
 		for _, pod := range pods {
 			if !pod.DeletionTimestamp.IsZero() {
