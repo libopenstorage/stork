@@ -748,7 +748,7 @@ func getPureAppDataDir(namespace string) (string, int) {
 		return "/var/www/html", units.GiB / 2
 	}
 	if strings.HasPrefix(namespace, "elasticsearch") {
-		return "/usr/share/elasticsearch/data", units.GiB * 5
+		return "/usr/share/elasticsearch/data", units.GiB * 2
 	}
 	return "", 0
 }
