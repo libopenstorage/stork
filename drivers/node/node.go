@@ -189,6 +189,9 @@ type Driver interface {
 
 	// PowerOnVMByName power on the VM using the vm name
 	PowerOnVMByName(vmName string) error
+
+	// IsNodeRebootedInGivenTimeRange check if node is rebooted within given time range
+	IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error)
 }
 
 // Register registers the given node driver
@@ -395,4 +398,12 @@ func (d *notSupportedDriver) PowerOnVMByName(vmName string) error {
 // IsUsingSSH returns true if the command will be run using ssh
 func (d *notSupportedDriver) IsUsingSSH() bool {
 	return false
+}
+
+// IsNodeRebootedInGivenTimeRange return true if node rebooted in given time range
+func (d *notSupportedDriver) IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "PowerOnVmByName()",
+	}
 }
