@@ -19,6 +19,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -162,25 +163,46 @@ func (c *csi) createDefaultSnapshotClasses() error {
 		return fmt.Errorf("failed to get client for creating default CSI snapshot classes: %v", err)
 	}
 
-	// Get all drivers
-	driverList, err := k8sClient.StorageV1beta1().CSIDrivers().List(context.TODO(), metav1.ListOptions{})
+	ok, err := version.RequiresV1CSIdriver()
 	if err != nil {
-		return fmt.Errorf("failed to list all CSI drivers: %v", err)
+		return err
+	}
+	var csiDriverNameList []string
+	if ok {
+		// Get all drivers
+		driverList, err := k8sClient.StorageV1().CSIDrivers().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to list all CSI drivers(V1): %v", err)
+		}
+		// Fill the driver names from CSIDrivers to list
+		for _, driver := range driverList.Items {
+			csiDriverNameList = append(csiDriverNameList, driver.Name)
+		}
+	} else {
 
+		// Get all drivers
+		driverList, err := k8sClient.StorageV1beta1().CSIDrivers().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to list all CSI drivers(V1beta1): %v", err)
+		}
+		// Fill the driver names from CSIDrivers to list
+		for _, driver := range driverList.Items {
+			csiDriverNameList = append(csiDriverNameList, driver.Name)
+		}
 	}
 
 	// Create VolumeSnapshotClass for each driver
-	for _, driver := range driverList.Items {
+	for _, driverName := range csiDriverNameList {
 		// skip drivers with native supports
-		if c.HasNativeVolumeDriverSupport(driver.Name) {
-			logrus.Infof("CSI driver %s has native support, skipping default snapshotclass creation", driver.Name)
+		if c.HasNativeVolumeDriverSupport(driverName) {
+			logrus.Infof("CSI driver %s has native support, skipping default snapshotclass creation", driverName)
 			continue
 		}
 
 		foundSnapClass := false
 		for _, existingSnapClass := range existingSnapshotClasses.Items {
-			if driver.Name == existingSnapClass.Driver {
-				logrus.Infof("CSI VolumeSnapshotClass exists for driver %v. Skipping creation of snapshotclass", driver.Name)
+			if driverName == existingSnapClass.Driver {
+				logrus.Infof("CSI VolumeSnapshotClass exists for driver %v. Skipping creation of snapshotclass", driverName)
 				foundSnapClass = true
 				break
 			}
@@ -188,8 +210,8 @@ func (c *csi) createDefaultSnapshotClasses() error {
 		if foundSnapClass {
 			continue
 		}
-		snapshotClassName := c.getDefaultSnapshotClassName(driver.Name)
-		_, err := c.createVolumeSnapshotClass(snapshotClassName, driver.Name)
+		snapshotClassName := c.getDefaultSnapshotClassName(driverName)
+		_, err := c.createVolumeSnapshotClass(snapshotClassName, driverName)
 		if err != nil && !k8s_errors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create default snapshotclass %s: %v", snapshotClassName, err)
 		} else if k8s_errors.IsAlreadyExists(err) {
@@ -372,6 +394,10 @@ func (c *csi) StartBackup(
 		volumeInfos = append(volumeInfos, volumeInfo)
 
 		vsName := c.getBackupSnapshotName(&pvc, backup)
+		// We should bail-out if snapshotter is not initialized right
+		if c.snapshotter == nil {
+			return nil, fmt.Errorf("found uninitialized snapshotter object")
+		}
 		_, _, csiDriverName, err := c.snapshotter.CreateSnapshot(
 			snapshotter.Name(vsName),
 			snapshotter.PVCName(pvc.Name),
