@@ -26,6 +26,10 @@ const (
 	GCE = "gce"
 	// CSI provider
 	CSI = "csi"
+	// IBM provider
+	IBM = "ibm"
+	// Pure provider
+	Pure = "pure"
 )
 
 // CloudResourceInfo provides metadata information on a cloud resource.

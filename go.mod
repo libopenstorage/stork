@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/andygrunwald/go-jira v1.15.0
-	github.com/aws/aws-sdk-go v1.35.37
+	github.com/aws/aws-sdk-go v1.40.39
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
@@ -16,16 +16,16 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-version v1.2.1
-	github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
+	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
 	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
-	github.com/libopenstorage/cloudops v0.0.0-20210223183702-b9c6b74cbf1d
+	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
 	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
 	github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 	github.com/libopenstorage/stork v1.4.1-0.20220323180113-0ea773109d05
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.16.0
+	github.com/onsi/gomega v1.19.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
@@ -38,7 +38,7 @@ require (
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
-	golang.org/x/net v0.0.0-20210917221730-978cfadd31cf
+	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 	google.golang.org/genproto v0.0.0-20210921142501-181ce0d877f6
 	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0

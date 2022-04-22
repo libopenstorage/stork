@@ -240,12 +240,9 @@ func (dm *StorageDecisionMatrix) FilterByIOPS(requestedIOPS uint64) *StorageDeci
 	var filteredRows []StorageDecisionMatrixRow
 	if requestedIOPS > 0 {
 		for _, row := range dm.Rows {
-			if row.MinIOPS >= requestedIOPS {
-				filteredRows = append(filteredRows, row)
-			} else if requestedIOPS >= row.MinIOPS && requestedIOPS <= row.MaxIOPS {
+			if requestedIOPS <= row.MaxIOPS {
 				filteredRows = append(filteredRows, row)
 			}
-
 		}
 		dm.Rows = filteredRows
 	}

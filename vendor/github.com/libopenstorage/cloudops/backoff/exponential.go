@@ -377,7 +377,9 @@ func (e *exponentialBackoff) Enumerate(volumeIds []*string,
 	)
 	conditionFn := func() (bool, error) {
 		enumerateResponse, origErr = e.cloudOps.Enumerate(volumeIds, labels, setIdentifier)
-		msg := fmt.Sprintf("Failed to enumerate drives (%v).", volumeIds)
+		volumeIdsStr := volumeIdsStringDereference(volumeIds)
+
+		msg := fmt.Sprintf("Failed to enumerate drives (%v).", volumeIdsStr)
 		return e.handleError(origErr, msg)
 	}
 	expErr := wait.ExponentialBackoff(e.backoff, conditionFn)
@@ -385,6 +387,18 @@ func (e *exponentialBackoff) Enumerate(volumeIds []*string,
 		return nil, cloudops.NewStorageError(cloudops.ErrExponentialTimeout, origErr.Error(), "")
 	}
 	return enumerateResponse, origErr
+}
+
+func volumeIdsStringDereference(volumeIds []*string) []string {
+	var volumeIdsStr []string
+	for _, volumeID := range volumeIds {
+		if volumeID == nil {
+			volumeIdsStr = append(volumeIdsStr, "")
+			continue
+		}
+		volumeIdsStr = append(volumeIdsStr, *volumeID)
+	}
+	return volumeIdsStr
 }
 
 // DevicePath for the given volume i.e path where it's attached

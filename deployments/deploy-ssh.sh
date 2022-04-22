@@ -329,6 +329,12 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
             ;;
+        ibm)
+            # Run torpedo on worker node, where px installation is disabled.
+            K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["false"]'
+            ;;
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
@@ -461,6 +467,10 @@ spec:
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
     - name: K8S_VENDOR
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
@@ -515,6 +525,8 @@ spec:
       value: "${VSPHERE_PWD}"
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
+    - name: IBMCLOUD_API_KEY
+      value: "${IBMCLOUD_API_KEY}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
