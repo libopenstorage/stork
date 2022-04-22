@@ -78,6 +78,7 @@ const (
 	configMapSyncWaitTime       = 3 * time.Second
 	defaultSchedulerName        = "default-scheduler"
 	bucketPrefix                = "stork-test"
+	adminTokenSecretName        = "px-admin-token"
 
 	// TODO: Figure out a way to communicate with PX nodes from other cluster
 	nodeScore   = 100
@@ -547,7 +548,10 @@ func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) e
 }
 
 func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
+	var token string
+	var err error
 	if reverse {
+		// For auth-enabled clusters first get admin token for destination cluster
 		err := setSourceKubeConfig()
 		if err != nil {
 			return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
@@ -559,7 +563,15 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		}
 	}
 
-	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath, "")
+	// For auth-enabled clusters, get token for the current cluster, which will be used to generate cluster pair
+	if authTokenConfigMap != "" {
+		token, err = getTokenFromSecret(adminTokenSecretName, defaultAdminNamespace)
+		if err != nil {
+			return err
+		}
+	}
+
+	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath, token)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -595,6 +607,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 
 // Create a cluster pair from source to destination and another cluster pair from destination to source
 func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
+	var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err := setSourceKubeConfig()
 	if err != nil {
@@ -640,8 +653,16 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
 	}
 
+	// For auth-enabled clusters, get token for the current cluster, which will be used to generate cluster pair
+	if authTokenConfigMap != "" {
+		token, err = getTokenFromSecret(adminTokenSecretName, defaultAdminNamespace)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Get cluster pair details for source cluster
-	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcKubeconfigPath, "")
+	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcKubeconfigPath, token)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -672,8 +693,16 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
 	}
 
+	// For auth-enabled clusters, get token for the current cluster, which will be used to generate cluster pair
+	if authTokenConfigMap != "" {
+		token, err = getTokenFromSecret(adminTokenSecretName, defaultAdminNamespace)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Get cluster pair details for destination cluster
-	destInfo, err := volumeDriver.GetClusterPairingInfo(destKubeconfigPath, "")
+	destInfo, err := volumeDriver.GetClusterPairingInfo(destKubeconfigPath, token)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -890,6 +919,19 @@ func getStorkVersion(fullVersion string) string {
 	noHash := strings.Split(fullVersion, "-")[0]
 	majorVersion := strings.Split(noHash, ".")
 	return strings.Join([]string{majorVersion[0], majorVersion[1]}, ".")
+}
+
+func getTokenFromSecret(secretName, secretNamespace string) (string, error) {
+	var token string
+	secret, err := core.Instance().GetSecret(secretName, secretNamespace)
+	if err != nil {
+		return "", fmt.Errorf("Failed to get secret %s: %v", secretName, err)
+	}
+	if tk, ok := secret.Data["auth-token"]; ok {
+		token = string(tk)
+		return token, nil
+	}
+	return "", fmt.Errorf("secret does not contain key 'auth-token'")
 }
 
 func TestMain(m *testing.M) {
