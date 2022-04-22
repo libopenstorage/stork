@@ -1164,7 +1164,7 @@ func (d *portworx) ValidateCreateCloudsnap(volumeName string, params map[string]
 	}
 	_, err := d.csbackupManager.Create(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupCreateRequest{VolumeId: volumeName})
 	if err != nil {
-		fmt.Printf("error when creating cloudsnap is %v", err)
+		logrus.WithError(err).Error("error when creating cloudsnap")
 		return err
 	}
 	return nil
