@@ -40,7 +40,7 @@ const (
 	// environment variable for command executor image registry and image registry secret.
 	cmdExecutorImageRegistryEnvVar       = "CMD-EXECUTOR-IMAGE-REGISTRY"
 	cmdExecutorImageRegistrySecretEnvVar = "CMD-EXECUTOR-IMAGE-REGISTRY-SECRET"
-	defaultCmdExecutorImage              = "openstorage/cmdexecutor:0.1"
+	defaultCmdExecutorImage              = "cmdexecutor:0.1"
 	// annotation key value for command executor image registry and image registry secret.
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
 	cmdExecutorImageOverrideSecretKey    = "stork.libopenstorage.org/cmdexecutor-image-secret"
