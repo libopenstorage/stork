@@ -17,8 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -41,6 +39,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/netutil"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/units"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
@@ -49,6 +48,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v2"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -625,9 +625,12 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	for _, value := range members {
 		for _, url := range value.ClientUrls {
 			result := getGroupMatches(ipRegex, url)
-			if val, ok := result["address"]; ok && address == val {
-				logrus.Debugf("Node %s is a metadata node", node.Name)
-				return true, nil
+			if val, ok := result["address"]; ok {
+				val = strings.Trim(val, "[]")
+				if address == val {
+					logrus.Debugf("Node %s is a metadata node", node.Name)
+					return true, nil
+				}
 			}
 		}
 	}
@@ -2182,7 +2185,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 }
 
 func (d *portworx) getLegacyClusterManager(endpoint string, pxdRestPort int32) (cluster.Cluster, error) {
-	pxEndpoint := fmt.Sprintf("http://%s", net.JoinHostPort(endpoint, strconv.Itoa(int(pxdRestPort))))
+	pxEndpoint := netutil.MakeURL("http://", endpoint, int(pxdRestPort))
 	var cClient *client.Client
 	var err error
 	if d.token != "" {
@@ -2623,7 +2626,7 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("http://%s", net.JoinHostPort(n.Addresses[0], strconv.Itoa(int(pxdRestPort))))
+	url := netutil.MakeURL("http://", n.Addresses[0], int(pxdRestPort))
 
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
@@ -2800,9 +2803,9 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 		if err != nil {
 			return kvdbMembers, err
 		}
-		url = fmt.Sprintf("http://%s", net.JoinHostPort(n.Addresses[0], strconv.Itoa(int(pxdRestPort))))
+		url = netutil.MakeURL("http://", n.Addresses[0], int(pxdRestPort))
 	} else {
-		url = fmt.Sprintf("http://%s", net.JoinHostPort(endpoint, strconv.Itoa(int(pxdRestPort))))
+		url = netutil.MakeURL("http://", endpoint, int(pxdRestPort))
 	}
 	// TODO replace by sdk call whenever it is available
 	logrus.Infof("Url to call %v", url)
@@ -2869,7 +2872,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		return nil
 	}
 
-	url := fmt.Sprintf("http://%s:9014", n.Addresses[0])
+	url := netutil.MakeURL("http://", n.Addresses[0], 9014)
 
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
@@ -2891,7 +2894,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		logrus.Debug("Validating CCM health")
 		// Change to config package.
-		url := fmt.Sprintf("http://%s/1.0/status/troubleshoot-cloud-connection", net.JoinHostPort(n.MgmtIp, strconv.Itoa(1970)))
+		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
 		resp, err := http.Get(url)
 		if err != nil {
 			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
@@ -2979,7 +2982,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 
 		logrus.Debug("Validating CCM health")
 		// Change to config package.
-		url := fmt.Sprintf("http://%s/1.0/status/troubleshoot-cloud-connection", net.JoinHostPort(n.MgmtIp, strconv.Itoa(1970)))
+		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
 		ccmresp, err := http.Get(url)
 		if err != nil {
 			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
