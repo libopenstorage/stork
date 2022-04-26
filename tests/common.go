@@ -150,9 +150,14 @@ const (
 	jiraAccountIDFlag = "jira-account-id"
 
 	// Async DR
-	pairFileName   = "cluster-pair.yaml"
-	remotePairName = "remoteclusterpair"
-	remoteFilePath = "/tmp/kubeconfig"
+	pairFileName           = "cluster-pair.yaml"
+	remotePairName         = "remoteclusterpair"
+	remoteFilePath         = "/tmp/kubeconfig"
+	appReadinessTimeout    = 10 * time.Minute
+	migrationKey           = "async-dr-"
+	migrationRetryTimeout  = 10 * time.Minute
+	migrationRetryInterval = 10 * time.Second
+	defaultClusterPairDir  = "cluster-pair"
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 )
@@ -1603,23 +1608,31 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 }
 
 // SetClusterContext sets context to clusterConfigPath
-func SetClusterContext(clusterConfigPath string) {
+func SetClusterContext(clusterConfigPath string) error {
 	err := Inst().S.SetConfig(clusterConfigPath)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to switch to context. Error: [%v]", err))
-
+	if err != nil {
+		return fmt.Errorf("Failed to switch to context. Set Config Error: [%v]", err)
+	}
 	err = Inst().S.RefreshNodeRegistry()
-	expect(err).NotTo(haveOccurred())
+	if err != nil {
+		return fmt.Errorf("Failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+	}
 
 	err = Inst().V.RefreshDriverEndpoints()
-	expect(err).NotTo(haveOccurred())
+	if err != nil {
+		return fmt.Errorf("Failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+	}
+	return nil
 }
 
 // SetSourceKubeConfig sets current context to the kubeconfig passed as source to the torpedo test
-func SetSourceKubeConfig() {
+func SetSourceKubeConfig() error {
 	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
-	expect(err).NotTo(haveOccurred())
+	if err != nil {
+		return err
+	}
 	SetClusterContext(sourceClusterConfigPath)
+	return nil
 }
 
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
@@ -2752,12 +2765,14 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 func GetSourceClusterConfigPath() (string, error) {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	if kubeconfigs == "" {
-		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
+		return "", fmt.Errorf("Failed to get source config path. Empty KUBECONFIGS environment variable")
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
-		"At least minimum two kubeconfigs required")
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path. 
+				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
 
 	logrus.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
@@ -2771,8 +2786,10 @@ func GetDestinationClusterConfigPath() (string, error) {
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
-		"At least minimum two kubeconfigs required")
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path. 
+				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
 
 	logrus.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil

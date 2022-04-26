@@ -1,4 +1,4 @@
-package test
+package tests
 
 import (
 	//"context"
@@ -20,6 +20,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
+
 	//appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -148,7 +149,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 
 		Step("teardown migrations", func() {
 			for _, mig := range allMigrations {
-				err := deleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+				err := DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
 				Expect(err).NotTo(HaveOccurred(),
 					fmt.Sprintf("failed to delete migration: %s in namespace %s. Error: [%v]",
 						mig.Name, mig.Namespace, err))
@@ -238,7 +239,7 @@ func WaitForMigration(migrationList []*storkapi.Migration) error {
 	return err
 }
 
-func deleteAndWaitForMigrationDeletion(name, namespace string) error {
+func DeleteAndWaitForMigrationDeletion(name, namespace string) error {
 	logrus.Infof("Deleting migration: %s in namespace: %s", name, namespace)
 	err := storkops.Instance().DeleteMigration(name, namespace)
 	if err != nil {

@@ -104,6 +104,7 @@ var _ = Describe("{Longevity}", func() {
 		Trashcan:             TriggerTrashcan,
 		KVDBFailover:         TriggerKVDBFailover,
 		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
+		AsyncDR:              TriggerAsyncDR,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -567,6 +568,7 @@ func populateIntervals() {
 	triggerInterval[Trashcan] = make(map[int]time.Duration)
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
+	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -698,6 +700,17 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown][3] = 8 * baseInterval
 	triggerInterval[AppTasksDown][2] = 9 * baseInterval
 	triggerInterval[AppTasksDown][1] = 10 * baseInterval
+
+	triggerInterval[AsyncDR][10] = 1 * baseInterval
+	triggerInterval[AsyncDR][9] = 3 * baseInterval
+	triggerInterval[AsyncDR][8] = 6 * baseInterval
+	triggerInterval[AsyncDR][7] = 9 * baseInterval
+	triggerInterval[AsyncDR][6] = 12 * baseInterval
+	triggerInterval[AsyncDR][5] = 15 * baseInterval
+	triggerInterval[AsyncDR][4] = 18 * baseInterval
+	triggerInterval[AsyncDR][3] = 21 * baseInterval
+	triggerInterval[AsyncDR][2] = 24 * baseInterval
+	triggerInterval[AsyncDR][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
 
@@ -1104,6 +1117,7 @@ func populateIntervals() {
 	triggerInterval[RelaxedReclaim][0] = 0
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
+	triggerInterval[AsyncDR][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
