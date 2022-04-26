@@ -5,9 +5,8 @@ metadata:
 provisioner: pxd.portworx.com
 parameters:
   # Tests:
-  # * FlashArray Direct Access w/ filesystem
-  # * Default filesystem type (ext4), mount options and create options
-  # * No QoS
+  # * FlashBlade Direct Access
+  # * Default export rules
   backend: "pure_file"
 allowVolumeExpansion: true
 ---
@@ -18,8 +17,7 @@ metadata:
 provisioner: pxd.portworx.com
 parameters:
   # Tests:
-  # * FlashArray Direct Access w/ filesystem
-  # * Default filesystem type (ext4), mount options and create options
-  # * No QoS
-  backend: "pure_block"
+  # * FlashBlade Direct Access
+  # * Default export rules
+  backend: "pure_file"
 allowVolumeExpansion: true
