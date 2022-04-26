@@ -2,6 +2,10 @@ package ipv6util
 
 import (
 	"bufio"
+	"bytes"
+	"fmt"
+	"net"
+	"regexp"
 	"strings"
 
 	"github.com/asaskevich/govalidator"
@@ -14,6 +18,16 @@ const (
 	PxctlClusterList = "cluster list"
 	// PxctlClusterInspect defines the pxctl cluster inspect command
 	PxctlClusterInspect = "cluster inspect"
+	// PxctlServiceKvdb defines the pxctl service kvdb command
+	PxctlServiceKvdb = "service kvdb"
+	// PxctlServiceKvdbEndpoints defines the pxctl service kvdb endpoints command
+	PxctlServiceKvdbEndpoints = PxctlServiceKvdb + " endpoints"
+	// PxctlServiceKvdbMembers defines the pxctl service kvdb members command
+	PxctlServiceKvdbMembers = PxctlServiceKvdb + " members"
+	// PxctlAlertsShow defines the pxctl alerts show command
+	PxctlAlertsShow = "alerts show"
+	// OperationalStatusDown is a substring node down alert description
+	OperationalStatusDown = "Operational Status: Down"
 )
 
 type parser struct {
@@ -34,6 +48,12 @@ type parserOption struct {
 	index  int
 	count  int
 }
+
+var (
+	kvdbEndPtsRgx = regexp.MustCompile("https?://(.*)")
+	nodeDown      = "Node (.*) has an " + OperationalStatusDown
+	nodeDownRgx   = regexp.MustCompile(nodeDown)
+)
 
 // newIPv6Parser returns a parser instance
 func newIPv6Parser(options []parserOption) parser {
@@ -85,16 +105,20 @@ func (p *parser) parseLine(line string) {
 }
 
 // ParseIPv6AddressInPxctlCommand takes output of `pxctl command` and return the list of IPs parsed
-func ParseIPv6AddressInPxctlCommand(command string, output string, nodeCount int) []string {
+func ParseIPv6AddressInPxctlCommand(command string, output string, nodeCount int) ([]string, error) {
 	switch command {
 	case PxctlStatus:
-		return parseIPv6AddressInPxctlStatus(output, nodeCount)
+		return parseIPv6AddressInPxctlStatus(output, nodeCount), nil
 	case PxctlClusterList:
-		return parseIPv6AddressInPxctlClusterList(output, nodeCount)
+		return parseIPv6AddressInPxctlClusterList(output, nodeCount), nil
 	case PxctlClusterInspect:
-		return parseIPv6AddressInPxctlClusterInspect(output, nodeCount)
+		return parseIPv6AddressInPxctlClusterInspect(output, nodeCount), nil
+	case PxctlServiceKvdbEndpoints:
+		return parseIPAddressInPxctlServiceKvdbEndpoints(output)
+	case PxctlServiceKvdbMembers:
+		return parseIPAddressInPxctlServiceKvdbMembers(output)
 	default:
-		return []string{}
+		return []string{}, nil
 	}
 }
 
@@ -156,4 +180,45 @@ func AreAddressesIPv6(addrs []string) bool {
 		isIpv6 = isIpv6 && IsAddressIPv6(addr)
 	}
 	return isIpv6
+}
+
+func parseIPAddressInPxctlServiceKvdbEndpoints(kvdbEndpointsOutput string) ([]string, error) {
+	kvdbEndPts := kvdbEndPtsRgx.FindAllSubmatch([]byte(kvdbEndpointsOutput), -1)
+
+	kvdbEndPtsIPs := []string{}
+	for _, endPt := range kvdbEndPts {
+		ip, _, err := net.SplitHostPort(string(bytes.TrimSpace(endPt[1])))
+		if err != nil {
+			return kvdbEndPtsIPs, fmt.Errorf("Endpoint parse error %v", err)
+		}
+		kvdbEndPtsIPs = append(kvdbEndPtsIPs, ip)
+	}
+	return kvdbEndPtsIPs, nil
+}
+
+func parseIPAddressInPxctlServiceKvdbMembers(kvdbMembersOutput string) ([]string, error) {
+	kvdbMemberIPs := []string{}
+	for _, line := range strings.Split(kvdbMembersOutput, "\n") {
+		if strings.Contains(line, "http") {
+			cols := strings.Fields(strings.TrimSpace(line))
+			if len(cols) >= 2 {
+				endPt := kvdbEndPtsRgx.FindSubmatch([]byte(strings.Trim(cols[2], "[]")))
+				ip, _, err := net.SplitHostPort(string(bytes.TrimSpace(endPt[1])))
+				if err != nil {
+					return kvdbMemberIPs, fmt.Errorf("Member parse error %v", err)
+				}
+				kvdbMemberIPs = append(kvdbMemberIPs, ip)
+			}
+		}
+	}
+	return kvdbMemberIPs, nil
+}
+
+func ParseIPAddressInPxctlResourceDownAlert(alertsOutput, resource string) (string, error) {
+	findNodeDownRgx := regexp.MustCompile(`NODE.*NodeStateChange.*` + resource + `.*` + nodeDown)
+	if fstr := findNodeDownRgx.FindStringIndex(alertsOutput); fstr != nil {
+		nodeDownStr := alertsOutput[fstr[0]:fstr[1]]
+		return string(nodeDownRgx.FindSubmatch([]byte(nodeDownStr))[1]), nil
+	}
+	return "", fmt.Errorf("failed to find resource down alerts")
 }
