@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -134,7 +136,7 @@ func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volum
 }
 
 func (p *portworx) constructURL(ip string) string {
-	return fmt.Sprintf("%s:%d", ip, defaultPxbServicePort)
+	return net.JoinHostPort(ip, strconv.Itoa(int(defaultPxbServicePort)))
 }
 
 func (p *portworx) testAndSetEndpoint(endpoint string) error {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1804,7 +1805,7 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 
 	sdkport, _ := getSDKPort()
-	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
 	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		logrus.Errorf("Got error while setting the connection endpoint, Error: %v", err)
@@ -2146,7 +2147,7 @@ func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
 }
 
 func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) error {
-	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return err
@@ -2181,7 +2182,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 }
 
 func (d *portworx) getLegacyClusterManager(endpoint string, pxdRestPort int32) (cluster.Cluster, error) {
-	pxEndpoint := fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+	pxEndpoint := fmt.Sprintf("http://%s", net.JoinHostPort(endpoint, strconv.Itoa(int(pxdRestPort))))
 	var cClient *client.Client
 	var err error
 	if d.token != "" {
@@ -2560,7 +2561,7 @@ func (d *portworx) getClusterPairManagerByAddress(addr, token string) (api.OpenS
 	if err != nil {
 		return nil, err
 	}
-	pxEndpoint := fmt.Sprintf("%s:%d", addr, pxPort)
+	pxEndpoint := net.JoinHostPort(addr, strconv.Itoa(int(pxPort)))
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
@@ -2591,7 +2592,7 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 	if err != nil {
 		return nil, err
 	}
-	pxEndpoint := fmt.Sprintf("%s:%d", addr, pxPort)
+	pxEndpoint := net.JoinHostPort(addr, strconv.Itoa(int(pxPort)))
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
@@ -2622,7 +2623,7 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	url := fmt.Sprintf("http://%s", net.JoinHostPort(n.Addresses[0], strconv.Itoa(int(pxdRestPort))))
 
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
@@ -2799,9 +2800,9 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 		if err != nil {
 			return kvdbMembers, err
 		}
-		url = fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+		url = fmt.Sprintf("http://%s", net.JoinHostPort(n.Addresses[0], strconv.Itoa(int(pxdRestPort))))
 	} else {
-		url = fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+		url = fmt.Sprintf("http://%s", net.JoinHostPort(endpoint, strconv.Itoa(int(pxdRestPort))))
 	}
 	// TODO replace by sdk call whenever it is available
 	logrus.Infof("Url to call %v", url)
@@ -2890,7 +2891,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		logrus.Debug("Validating CCM health")
 		// Change to config package.
-		url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+		url := fmt.Sprintf("http://%s/1.0/status/troubleshoot-cloud-connection", net.JoinHostPort(n.MgmtIp, strconv.Itoa(1970)))
 		resp, err := http.Get(url)
 		if err != nil {
 			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
@@ -2978,7 +2979,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 
 		logrus.Debug("Validating CCM health")
 		// Change to config package.
-		url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+		url := fmt.Sprintf("http://%s/1.0/status/troubleshoot-cloud-connection", net.JoinHostPort(n.MgmtIp, strconv.Itoa(1970)))
 		ccmresp, err := http.Get(url)
 		if err != nil {
 			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)

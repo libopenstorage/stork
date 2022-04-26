@@ -3,6 +3,7 @@ package ssh
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -615,7 +616,8 @@ func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
 			// check if address is responding on port 22
-			conn, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
+			endpoint := net.JoinHostPort(addr, strconv.Itoa(int(DefaultSSHPort)))
+			conn, err := ssh_pkg.Dial("tcp", endpoint, s.sshConfig)
 			return conn, true, err
 		}
 		if cli, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
