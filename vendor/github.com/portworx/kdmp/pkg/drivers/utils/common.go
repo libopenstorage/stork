@@ -39,7 +39,7 @@ const (
 
 var (
 	// JobPodBackOffLimit backofflimit for the job
-	JobPodBackOffLimit = int32(3)
+	JobPodBackOffLimit = int32(10)
 )
 
 // SetupServiceAccount create a service account and bind it to a provided role.
