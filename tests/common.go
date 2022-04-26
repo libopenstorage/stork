@@ -60,7 +60,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/node/gke"
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
-        // import ibm driver to invoke it's init
+	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
 
 	// import ssh driver to invoke it's init
@@ -204,6 +204,7 @@ const (
 var (
 	errPureFileSnapshotNotSupported    = errors.New("snapshot feature is not supported for pure_file volumes")
 	errPureCloudsnapNotSupported       = errors.New("cloudsnap feature is not supported for pure volumes")
+	errPureGroupsnapNotSupported       = errors.New("groupsnap feature is not supported for pure volumes")
 	errUnexpectedSizeChangeAfterPureIO = errors.New("the size change in bytes is not expected after write to Pure volume")
 )
 
@@ -647,7 +648,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
 			expect(err).NotTo(beNil())
 			if err != nil {
-				expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()))
 			}
 		})
 	})
