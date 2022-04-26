@@ -214,6 +214,7 @@ func parseIPAddressInPxctlServiceKvdbMembers(kvdbMembersOutput string) ([]string
 	return kvdbMemberIPs, nil
 }
 
+// ParseIPAddressInPxctlResourceDownAlert extract IP address from specific resource down alert description."
 func ParseIPAddressInPxctlResourceDownAlert(alertsOutput, resource string) (string, error) {
 	findNodeDownRgx := regexp.MustCompile(`NODE.*NodeStateChange.*` + resource + `.*` + nodeDown)
 	if fstr := findNodeDownRgx.FindStringIndex(alertsOutput); fstr != nil {
