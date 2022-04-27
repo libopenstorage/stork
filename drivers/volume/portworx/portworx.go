@@ -637,6 +637,27 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	return false, nil
 }
 
+func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
+	volDriver := d.getVolDriver()
+	resp, err := volDriver.Create(d.getContext(),
+		&api.SdkVolumeCreateRequest{
+			Name: volName,
+			Spec: &api.VolumeSpec{
+				Size:    size,
+				HaLevel: haLevel,
+				Format:  api.FSType_FS_TYPE_EXT4,
+			},
+		})
+	if err != nil {
+		err = fmt.Errorf("error while creating volume because of: %v", err)
+		return "", err
+	}
+
+	logrus.Infof("successfully created Portworx volume %v ", resp.VolumeId)
+
+	return resp.VolumeId, nil
+}
+
 func (d *portworx) CloneVolume(volumeID string) (string, error) {
 	volDriver := d.getVolDriver()
 	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
@@ -664,6 +685,38 @@ func (d *portworx) CloneVolume(volumeID string) (string, error) {
 	}
 	logrus.Infof("successfully clone %v as %v", volumeID, volumeCloneResp.VolumeId)
 	return volumeCloneResp.VolumeId, nil
+}
+
+func (d *portworx) AttachVolume(volumeID string) (string, error) {
+	manager := d.getMountAttachManager()
+	resp, err := manager.Attach(d.getContext(),
+		&api.SdkVolumeAttachRequest{
+			VolumeId: volumeID,
+		})
+	if err != nil {
+		err = fmt.Errorf("error while attaching volume because of: %v", err)
+		return "", err
+	}
+
+	logrus.Infof("successfully attach Portworx volume %v ", volumeID)
+
+	return resp.DevicePath, nil
+}
+
+func (d *portworx) DetachVolume(volumeID string) error {
+	manager := d.getMountAttachManager()
+	_, err := manager.Detach(d.getContext(),
+		&api.SdkVolumeDetachRequest{
+			VolumeId: volumeID,
+		})
+	if err != nil {
+		err = fmt.Errorf("error while detaching volume because of: %v", err)
+		return err
+	}
+
+	logrus.Infof("successfully detach Portworx volume %v ", volumeID)
+
+	return nil
 }
 
 func (d *portworx) DeleteVolume(volumeID string) error {

@@ -29,4 +29,15 @@ func TestValidIpv6Address(t *testing.T) {
 	assert.NotEmpty(t, addrs, "addresses are not expected to be empty. running command: %v", PxctlClusterInspect)
 	isIpv6 = AreAddressesIPv6(addrs)
 	assert.True(t, isIpv6, "running command %v. addresses are expected to be ipv6, got: %v", PxctlClusterInspect, addrs)
+
+	addrs = ParseIPv6AddressInPxctlCommand(PxctlVolumeList, sampleIpv6PxctlVolumeListOutput, sampleNodeCount)
+	assert.NotEmpty(t, addrs, "addresses are not expected to be empty. running command: %v", PxctlVolumeList)
+	isIpv6 = AreAddressesIPv6(addrs)
+	assert.True(t, isIpv6, "running command %v. addresses are expected to be ipv6, got: %v", PxctlVolumeList, addrs)
+
+	addrs = ParseIPv6AddressInPxctlCommand(PxctlVolumeInspect, sampleIpv6PxctlVolumeInspectOutput, sampleNodeCount)
+	assert.NotEmpty(t, addrs, "addresses are not expected to be empty. running command: %v", PxctlVolumeInspect)
+	isIpv6 = AreAddressesIPv6(addrs)
+	assert.True(t, isIpv6, "running command %v. addresses are expected to be ipv6, got: %v", PxctlVolumeInspect, addrs)
+
 }
