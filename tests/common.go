@@ -753,6 +753,9 @@ func getPureAppDataDir(namespace string) (string, int) {
 	if strings.HasPrefix(namespace, "elasticsearch") {
 		return "/usr/share/elasticsearch/data", units.GiB * 2
 	}
+	if strings.HasPrefix(namespace, "mysql-without-enc") {
+		return "/var/lib/mysql", units.GiB
+	}
 	return "", 0
 }
 
