@@ -3410,6 +3410,42 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 	return api.Status_STATUS_NONE.String(), nil
 }
 
+// GetPxctlCmdOutput returns the command output run on the given node and any error
+func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	// create context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to create pxctl context. cause: %v", err)
+		}
+	}
+
+	cmd := fmt.Sprintf("%s %s", pxctlPath, command)
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+
+	// delete context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+		}
+	}
+
+	return out, nil
+
+}
+
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
 	condExprValue, _ := strconv.ParseFloat(conditionExpression.Values[0], 64)
 	return expectedMetricValue < condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpLt ||
