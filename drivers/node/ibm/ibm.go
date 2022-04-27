@@ -28,6 +28,8 @@ func (i *ibm) String() string {
 }
 
 func (i *ibm) Init(nodeOpts node.InitOptions) error {
+	i.SSH.Init(nodeOpts)
+
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
 		i.instanceGroup = instanceGroup
