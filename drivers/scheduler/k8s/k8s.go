@@ -1386,7 +1386,7 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 }
 
 func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMap) error {
-	//logrus.Debugf("Config Map details: %v", configMap.Data)
+	// logrus.Debugf("Config Map details: %v", configMap.Data)
 	secretNameKeyFlag := false
 	secretNamespaceKeyFlag := false
 	encryptionFlag := false
@@ -2613,10 +2613,14 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			err := k8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval)
-			if err != nil && !options.ExpectError {
-				return &scheduler.ErrFailedToValidateStorage{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
+			if err != nil {
+				if options != nil && options.ExpectError {
+					// ignore
+				} else {
+					return &scheduler.ErrFailedToValidateStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
+					}
 				}
 			}
 
@@ -2673,7 +2677,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
 				}
 			}
-			//Providing the scaling factor in timeout
+			// Providing the scaling factor in timeout
 			scalingFactor := *obj.Spec.Replicas
 			if *ss.Spec.Replicas > *obj.Spec.Replicas {
 				scalingFactor = int32(*ss.Spec.Replicas - *obj.Spec.Replicas)
@@ -3111,7 +3115,7 @@ func (k *K8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	return snaps, nil
 }
 
-//DeleteSnapShot delete the snapshots
+// DeleteSnapShot delete the snapshots
 func (k *K8s) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
 
 	if err := k8sExternalStorage.DeleteSnapshot(snapshotName, snapshotNameSpace); err != nil {
@@ -3131,7 +3135,7 @@ func (k *K8s) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameS
 
 }
 
-//GetShapShotsInNameSpace get the snapshots list for the namespace
+// GetShapShotsInNameSpace get the snapshots list for the namespace
 func (k *K8s) GetShapShotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
 
 	time.Sleep(10 * time.Second)
@@ -4762,7 +4766,7 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 
 // RecycleNode method not supported for K8s scheduler
 func (k *K8s) RecycleNode(n node.Node) error {
-	//Recycle is not supported
+	// Recycle is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RecycleNode()",
