@@ -1296,7 +1296,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 			}
 		}
 
-		return volDriver.Delete(snapDataSrc.PortworxSnapshot.SnapshotID)
+		return volDriver.Delete(context.Background(), snapDataSrc.PortworxSnapshot.SnapshotID)
 	}
 }
 
@@ -1343,7 +1343,7 @@ func (p *portworx) CleanupSnapshotRestoreObjects(snapRestore *storkapi.VolumeSna
 			}
 		}
 		// Delete restore volume
-		err = volDriver.Delete(volName)
+		err = volDriver.Delete(context.Background(), volName)
 		if err != nil {
 			log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Failed to delete volume %v", err)
 			return fmt.Errorf("failed to delete volume %v: %v", volName, err)
@@ -1717,7 +1717,7 @@ func (p *portworx) pxSnapshotRestore(snapRestore *storkapi.VolumeSnapshotRestore
 		vol.Reason = "Restore is successful"
 		vol.RestoreStatus = storkapi.VolumeSnapshotRestoreStatusSuccessful
 		if snapType == crdv1.PortworxSnapshotTypeCloud {
-			if err := volDriver.Delete(snapID); err != nil {
+			if err := volDriver.Delete(context.Background(), snapID); err != nil {
 				logrus.Errorf("Unable to delete volume  %v, err %v",
 					snapID, err)
 			}
@@ -1962,7 +1962,7 @@ func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
 		return err
 	}
 
-	return volDriver.Delete(id)
+	return volDriver.Delete(context.Background(), id)
 }
 
 func (p *portworx) findParentVolID(snapID string) (string, error) {
@@ -2113,7 +2113,7 @@ func (p *portworx) revertPXSnaps(snapIDs []string) {
 
 	failedDeletions := make(map[string]error)
 	for _, id := range snapIDs {
-		err := volDriver.Delete(id)
+		err := volDriver.Delete(context.Background(), id)
 		if err != nil {
 			failedDeletions[id] = err
 		}
@@ -3531,7 +3531,7 @@ func (p *portworx) CreateVolumeClones(clone *storkapi.ApplicationClone) error {
 			}
 			// Delete the clones that we already created
 			for _, cloneVolume := range createdClones {
-				if err := volDriver.Delete(cloneVolume); err != nil {
+				if err := volDriver.Delete(context.Background(), cloneVolume); err != nil {
 					log.ApplicationCloneLog(clone).Warnf("error deleting cloned volume %v on failure: %v", cloneVolume, err)
 				}
 			}
