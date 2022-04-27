@@ -372,6 +372,7 @@ func run(c *cli.Context) {
 				OnStoppedLeading: func() {
 					log.Fatalf("Stork lost master")
 				},
+				OnNewLeader: displayLeader,
 			},
 		}
 		leaderElector, err := leaderelection.NewLeaderElector(leaderElectionConfig)
@@ -382,6 +383,10 @@ func run(c *cli.Context) {
 	} else {
 		runFunc(nil)
 	}
+}
+
+func displayLeader(name string) {
+	log.Infof("new leader detected, current leader: %s", name)
 }
 
 func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
