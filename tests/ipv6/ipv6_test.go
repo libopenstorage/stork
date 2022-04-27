@@ -147,7 +147,7 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 				})
 				Step(fmt.Sprintf("run pxctl alerts command for down volume %v and parse output\n", nodes[1].VolDriverNodeID), func() {
 					Eventually(func() (string, error) {
-						output, err = Inst().V.GetPxctlRawOutput(nodes[0], pxctlCmdFull)
+						output, err = Inst().V.GetPxctlCmdOutput(nodes[0], pxctlCmdFull)
 						Expect(err).NotTo(HaveOccurred(), "Failed to get alerts for down volume %v, %v", nodes[1].VolDriverNodeID, output)
 						return output, err
 					}, 45*time.Second, 5*time.Second).Should(ContainSubstring(ipv6util.OperationalStatusDown),
