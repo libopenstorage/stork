@@ -980,7 +980,7 @@ func (k *kdmp) CleanupRestoreResources(restore *storkapi.ApplicationRestore) err
 
 		}
 		restoreNamespace := val
-		crName := getGenericCRName(prefixRestore, string(restore.UID), vInfo.PersistentVolumeClaim, restoreNamespace)
+		crName := getGenericCRName(prefixRestore, string(restore.UID), vInfo.PersistentVolumeClaimUID, restoreNamespace)
 		// delete kdmp crs
 		logrus.Tracef("deleting data export CR: %s%s", restoreNamespace, crName)
 		if err := kdmpShedOps.Instance().DeleteDataExport(crName, restoreNamespace); err != nil && !k8serror.IsNotFound(err) {
@@ -1037,6 +1037,9 @@ func getValidLabel(labelVal string) string {
 
 // getShortUID returns the first part of the UID
 func getShortUID(uid string) string {
+	if len(uid) < 8 {
+		return ""
+	}
 	return uid[0:7]
 }
 
