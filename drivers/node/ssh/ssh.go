@@ -579,7 +579,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 		return "", fmt.Errorf("fail to setup stdout")
 	}
 	if options.Sudo {
-		cmd = fmt.Sprintf("sudo su -c '%s'", cmd)
+		cmd = fmt.Sprintf("sudo su -c '%s' -", cmd) // Hyphen necessary to preserve PATH for commands like "which pxctl"
 	}
 	session.Start(cmd)
 	err = session.Wait()
