@@ -130,7 +130,7 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 			testPxctlCmdForIPv6()
 		})
 
-		// test ip address from pxctl service kvdb members
+		// test ip address from pxctl service kvdb Alerts
 		Context("{IPv6PxctlAlertsDescription}", func() {
 
 			JustBeforeEach(func() {
@@ -173,9 +173,51 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 
 			})
 		})
+
+		// test ip address from pxctl cluster inspect
+		Context("{PxctlVolumeCommands}", func() {
+			var volumeID string
+			var err error
+
+			BeforeEach(func() {
+				// create and attach volume for testing
+				volumeID, err = Inst().V.CreateVolume(ipv6util.Ipv6VolumeName, 1000, 1)
+				Expect(err).NotTo(HaveOccurred(), "failed to create volume")
+				_, err = Inst().V.AttachVolume(volumeID)
+				Expect(err).NotTo(HaveOccurred(), "Failed to attached volume")
+			})
+
+			AfterEach(func() {
+				// clean up
+				err := Inst().V.DetachVolume(volumeID)
+				Expect(err).NotTo(HaveOccurred(), "failed to detach volume")
+				err = Inst().V.DeleteVolume(volumeID)
+				Expect(err).NotTo(HaveOccurred(), "failed to delete volume")
+			})
+
+			Context("{PxctlVolumeList", func() {
+				JustBeforeEach(func() {
+					pxctlCmd = ipv6util.PxctlVolumeList
+					pxctlCmdFull = ipv6util.PxctlVolumeList
+					expectedIPCount = 1
+					testrailID = 9695445
+				})
+				testPxctlCmdForIPv6()
+			})
+
+			Context("{PxctlVolumeInspect", func() {
+				JustBeforeEach(func() {
+					pxctlCmd = ipv6util.PxctlVolumeInspect
+					pxctlCmdFull = fmt.Sprintf("%s %s", ipv6util.PxctlVolumeInspect, volumeID)
+					expectedIPCount = 2
+					testrailID = 9695445
+				})
+				testPxctlCmdForIPv6()
+			})
+		})
 	})
 
-	JustAfterEach(func() {
+	AfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

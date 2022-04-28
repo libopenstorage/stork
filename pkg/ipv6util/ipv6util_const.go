@@ -96,5 +96,37 @@ Volumes 		:
 Status  		:  Online
 `
 
+	sampleIpv6PxctlVolumeListOutput = `
+ID			NAME	SIZE	HA	SHARED	ENCRYPTED	PROXY-VOLUME	IO_PRIORITY	STATUS							SNAP-ENABLED
+197020883293002044	ipv6-volume	1 GiB	1	no	no		no		LOW		up - attached on 0000:111:2222:3333:444:5555:6666:111	no
+`
+
+	sampleIpv6PxctlVolumeInspectOutput = `
+	Volume          	 :  197020883293002044
+	Name            	 :  test
+	Size            	 :  1.0 GiB
+	Format          	 :  ext4
+	HA              	 :  1
+	IO Priority     	 :  LOW
+	Creation time   	 :  Apr 20 01:48:59 UTC 2022
+	Shared          	 :  no
+	Status          	 :  up
+	State           	 :  Attached: 1c251a9f-605d-47fc-925d-7c8cb38d8b48 (0000:111:2222:3333:444:5555:6666:111)
+	Last Attached   	 :  Apr 20 01:49:26 UTC 2022
+	Device Path     	 :  /dev/pxd/pxd197020883293002044
+	Mount Options          	 :  discard
+	Reads           	 :  43
+	Reads MS        	 :  85
+	Bytes Read      	 :  1060864
+	Writes          	 :  0
+	Writes MS       	 :  0
+	Bytes Written   	 :  0
+	IOs in progress 	 :  0
+	Bytes used      	 :  596 KiB
+	Replica sets on nodes:
+		Set 0
+		  Node 		 : 0000:111:2222:3333:444:5555:6666:111 (Pool f54c56c1-eb9e-408b-ac92-010426e59500 )
+	Replication Status	 :  Up
+`
 	sampleNodeCount = 6
 )

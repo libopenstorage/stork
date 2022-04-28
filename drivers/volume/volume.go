@@ -54,9 +54,20 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
+	// CreateVolume creates a volume with the default setting
+	// returns volume_id of the new volume
+	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
+
 	// CloneVolume creates a clone of the volume whose volumeName is passed as arg.
 	// returns volume_id of the cloned volume and error if there is any
 	CloneVolume(volumeID string) (string, error)
+
+	// AttachVolume attaches a volume with the default setting
+	// returns the device path
+	AttachVolume(volumeID string) (string, error)
+
+	// DetachVolume detaches the volume given the volumeID
+	DetachVolume(volumeID string) error
 
 	// Delete the volume of the Volume ID provided
 	DeleteVolume(volumeID string) error
