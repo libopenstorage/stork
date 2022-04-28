@@ -40,4 +40,24 @@ func TestValidIpv6Address(t *testing.T) {
 	isIpv6 = AreAddressesIPv6(addrs)
 	assert.True(t, isIpv6, "running command %v. addresses are expected to be ipv6, got: %v", PxctlVolumeInspect, addrs)
 
+	var (
+	    err error
+	    ip string
+	)	    
+
+	addrs, err = ParseIPv6AddressInPxctlCommand(PxctlServiceKvdbEndpoints, sampleIpv6PxctlSvcKvdbEndPtsOutput, -1)
+	assert.NoError(t, err, "Failed to parse addresses running command: %v", PxctlServiceKvdbEndpoints)
+	isIpv6 = AreAddressesIPv6(addrs)
+	assert.True(t, isIpv6, "running command %v. addresses are expected to be ipv6, got: %v", PxctlServiceKvdbEndpoints, addrs)
+
+	addrs, err = ParseIPv6AddressInPxctlCommand(PxctlServiceKvdbMembers, sampleIpv6PxctlSvcKvdbMembersOutput, -1)
+	assert.NoError(t, err, "Failed to parse addresses running command: %v", PxctlServiceKvdbMembers)
+	isIpv6 = AreAddressesIPv6(addrs)
+	assert.True(t, isIpv6, "running command %v. addresses are expected to be ipv6, got: %v", PxctlServiceKvdbMembers, addrs)
+
+	ip, err = ParseIPAddressInPxctlResourceDownAlert(sampleIpv6PxctlResourceDownAlertOutput, sampleDownResource)
+	assert.NoError(t, err, "Failed to parse addresses running command: %v", PxctlAlertsShow)
+	isIpv6 = AreAddressesIPv6([]string{ip})
+	assert.True(t, isIpv6, "running command %v. addresses are expected to be ipv6, got: %v", PxctlAlertsShow, ip)
+
 }

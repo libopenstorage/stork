@@ -135,7 +135,7 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 
 			JustBeforeEach(func() {
 				pxctlCmd = ipv6util.PxctlAlertsShow
-				pxctlCmdFull = ipv6util.PxctlAlertsShow + " -t node -i NodeStateChange -r " + nodes[1].VolDriverNodeID
+				pxctlCmdFull = fmt.Sprintf("%s -t node -i NodeStateChange -r %s", ipv6util.PxctlAlertsShow, nodes[1].VolDriverNodeID)
 				expectedIPCount = -1
 				testrailID = 9695446
 			})

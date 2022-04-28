@@ -129,4 +129,24 @@ ID			NAME	SIZE	HA	SHARED	ENCRYPTED	PROXY-VOLUME	IO_PRIORITY	STATUS							SNAP-EN
 	Replication Status	 :  Up
 `
 	sampleNodeCount = 6
+
+	sampleIpv6PxctlSvcKvdbEndPtsOutput = `
+Kvdb client endpoints: 
+http://[2620:125:9006:1330:250:56ff:fead:aaea]:9019
+http://[2620:125:9006:1330:250:56ff:fead:4a3]:9019
+http://[2620:125:9006:1330:250:56ff:fead:aaf3]:9019
+`
+	sampleIpv6PxctlSvcKvdbMembersOutput = `
+Kvdb Cluster Members: 
+ID				PEER URLs				CLIENT URLs					 LEADER HEALTHY DBSIZE
+28dee5d4-7724-41eb-a86d-929a3f88456e [http://portworx-3.internal.kvdb:9018]    [http://[2620:125:9006:1330:250:56ff:fead:aaf3]:9019]	false true 956 KiB
+956aafc1-a52d-41f3-afb1-6427e2a3b0ef [http://portworx-2.internal.kvdb:9018]    [http://[2620:125:9006:1330:250:56ff:fead:aaea]:9019]	false true 956 KiB
+f703597a-9772-4bdb-b630-6395b3c98658 [http://portworx-1.internal.kvdb:9018]    [http://[2620:125:9006:1330:250:56ff:fead:4a3]:9019]	true  true 956 KiB
+`
+
+	sampleIpv6PxctlResourceDownAlertOutput = `
+Type    ID              Resource                                Severity        Count   LastSeen                        FirstSeen                       Description
+NODE    NodeStateChange c87fd016-de40-43f6-89ef-e51f9d38a9ba    ALARM           2       Apr 18 23:55:33 UTC 2022        Apr 18 18:12:41 UTC 2022        Node 2620:125:9006:1330:250:56ff:fead:aaea has an Operational Status: Down
+`
+	sampleDownResource = `c87fd016-de40-43f6-89ef-e51f9d38a9ba`
 )
