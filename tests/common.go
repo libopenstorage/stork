@@ -1278,7 +1278,7 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 func PerformSystemCheck() {
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
