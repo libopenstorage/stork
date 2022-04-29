@@ -28,6 +28,8 @@ const (
 	TriggeredFromPxBackup                  = "px-backup"
 	kopiaExecutorImageRegistryEnvVar       = "KOPIA-EXECUTOR-IMAGE-REGISTRY"
 	kopiaExecutorImageRegistrySecretEnvVar = "KOPIA-EXECUTOR-IMAGE-REGISTRY-SECRET"
+	// AdminNamespace - kube-system namespace, where privilige pods will be deployed for live kopiabackup.
+	AdminNamespace = "kube-system"
 )
 
 var (
@@ -232,12 +234,11 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 		return "", "", err
 	}
 	imageFields := strings.Split(deploy.Spec.Template.Spec.Containers[0].Image, "/")
-	var registry string
-	// Here the assumption is that the image format will be <registry-name>/<repo-name>/image:tag
-	// or <repo-name>/image:tag. If repo name contains any path (<registry-name>/<repo-name>/<extra-dir-name>/image:tag), below logic will not work.
-	if len(imageFields) == 3 {
-		registry = imageFields[0]
-	}
+	// Here the assumption is that the image format will be <registry-name>/<extra-dir-name>/<repo-name>/image:tag
+	// or <repo-name>/image:tag or <registry-name>/<repo-name>/<extra-dir-name>/image:tag).
+	// Customer might have extra dirs before the repo-name as mentioned above
+	registryFields := imageFields[0 : len(imageFields)-1]
+	registry := strings.Join(registryFields, "/")
 	imageSecret := deploy.Spec.Template.Spec.ImagePullSecrets
 	if imageSecret != nil {
 		return registry, imageSecret[0].Name, nil
@@ -249,7 +250,7 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 func GetKopiaExecutorImageRegistryAndSecret(source, sourceNs string) (string, string, error) {
 	var registry, registrySecret string
 	var err error
-	if len(os.Getenv(kopiaExecutorImageRegistryEnvVar)) == 0 || len(os.Getenv(kopiaExecutorImageRegistrySecretEnvVar)) == 0 {
+	if len(os.Getenv(kopiaExecutorImageRegistryEnvVar)) == 0 {
 		registry, registrySecret, err = GetImageRegistryFromDeployment(source, sourceNs)
 		if err != nil {
 			logrus.Errorf("GetKopiaExecutorImageRegistryAndSecret: error in getting image registory from %v:%v deployment", sourceNs, source)

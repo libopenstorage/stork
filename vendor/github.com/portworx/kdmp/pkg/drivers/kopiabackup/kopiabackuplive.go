@@ -22,8 +22,9 @@ func jobForLiveBackup(
 	jobName string,
 	mountPod corev1.Pod,
 	resources corev1.ResourceRequirements,
+	pvcNamespace string,
 ) (*batchv1.Job, error) {
-	volDir, err := getVolumeDirectory(jobOption.SourcePVCName, jobOption.Namespace)
+	volDir, err := getVolumeDirectory(jobOption.SourcePVCName, jobOption.SourcePVCNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +57,7 @@ func jobForLiveBackup(
 		"--backup-namespace",
 		jobOption.Namespace,
 		"--repository",
-		toRepoName(jobOption.RepoPVCName, jobOption.Namespace),
+		toRepoName(jobOption.RepoPVCName, pvcNamespace),
 		"--source-path-glob",
 		backupPath,
 	}, " ")

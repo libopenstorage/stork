@@ -33,7 +33,7 @@ var (
 	ErrNodeRemovePending = errors.New("Node remove is pending")
 	ErrInitNodeNotFound  = errors.New("This node is already initialized but " +
 		"could not be found in the cluster map.")
-	ErrNodeDecommissioned   = errors.New("Node is decomissioned.")
+	ErrNodeDecommissioned   = errors.New("Node is decommissioned.")
 	ErrRemoveCausesDataLoss = errors.New("Cannot remove node without data loss")
 	ErrNotImplemented       = errors.New("Not Implemented")
 )
@@ -385,6 +385,9 @@ type Cluster interface {
 	// ClusterNotifyClusterDomainsUpdate is a callback function that listeners can use to notify
 	// cluster manager of an update on cluster domains
 	ClusterNotifyClusterDomainsUpdate(types.ClusterDomainsActiveMap) error
+
+	// GetGossipIntervals returns the configured values for the gossip intervals
+	GetGossipIntervals() types.GossipIntervals
 
 	ClusterRemove
 	ClusterData

@@ -26,7 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (
@@ -634,21 +634,20 @@ func (a *azure) getAzureClientFromBackupLocation(backupLocationName, ns string) 
 	backupLocation, err := storkops.Instance().GetBackupLocation(backupLocationName, ns)
 	if err != nil {
 		logrus.Errorf("error getting backup location %s resource: %v", backupLocationName, err)
-		return nil
+		return azureSessionWithCred
 	}
 
-	azureSessionWithCred.clientID = backupLocation.Cluster.AzureClusterConfig.ClientID
-	azureSessionWithCred.clientSecret = backupLocation.Cluster.AzureClusterConfig.ClientSecret
-	azureSessionWithCred.subscriptionID = backupLocation.Cluster.AzureClusterConfig.SubscriptionID
-	azureSessionWithCred.tenantID = backupLocation.Cluster.AzureClusterConfig.TenantID
-
-	if len(backupLocation.Cluster.SecretConfig) > 0 {
+	if len(backupLocation.Cluster.SecretConfig) > 0 && backupLocation.Cluster.AzureClusterConfig != nil {
+		azureSessionWithCred.clientID = backupLocation.Cluster.AzureClusterConfig.ClientID
+		azureSessionWithCred.clientSecret = backupLocation.Cluster.AzureClusterConfig.ClientSecret
+		azureSessionWithCred.subscriptionID = backupLocation.Cluster.AzureClusterConfig.SubscriptionID
+		azureSessionWithCred.tenantID = backupLocation.Cluster.AzureClusterConfig.TenantID
 		config := auth.NewClientCredentialsConfig(azureSessionWithCred.clientID, azureSessionWithCred.clientSecret, azureSessionWithCred.tenantID)
 		config.AADEndpoint = azure_rest.PublicCloud.ActiveDirectoryEndpoint
 		authorizer, err := config.Authorizer()
 		if err != nil {
 			logrus.Errorf("error creating azure client session for backuplocation %s: %v", backupLocationName, err)
-			return nil
+			return azureSessionWithCred
 		}
 		azureSessionWithCred.snapshotClient = compute.NewSnapshotsClient(azureSessionWithCred.subscriptionID)
 		azureSessionWithCred.diskClient = compute.NewDisksClient(azureSessionWithCred.subscriptionID)

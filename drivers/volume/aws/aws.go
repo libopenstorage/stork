@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (
@@ -556,7 +556,8 @@ func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		case "available", "in-use":
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
-			vInfo.TotalSize = uint64(*ebsVolume.Size)
+			// converting to bytes
+			vInfo.TotalSize = uint64(*ebsVolume.Size) * units.GiB
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
@@ -630,13 +631,6 @@ func (a *aws) getAWSClientFromBackupLocation(backupLocationName, ns string) *ec2
 			return nil
 		}
 		client = ec2.New(s)
-	} else {
-		if a.client == nil {
-			if err := a.Init(nil); err != nil {
-				return client
-			}
-		}
-		client = a.client
 	}
 	return client
 }

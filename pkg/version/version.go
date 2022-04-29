@@ -15,7 +15,11 @@ var (
 	kbVerRegex = regexp.MustCompile(`^(v\d+\.\d+\.\d+)(.*)`)
 )
 
-// RequiresV1Registration returns true if crd nees to be registered as apiVersion V1
+const (
+	k8sMinVersionCSIDriverV1 = "1.22"
+)
+
+// RequiresV1Registration returns true if crd needs to be registered as apiVersion V1
 func RequiresV1Registration() (bool, error) {
 	k8sVersion, _, err := GetFullVersion()
 	if err != nil {
@@ -27,6 +31,23 @@ func RequiresV1Registration() (bool, error) {
 
 	}
 	if k8sVersion.GreaterThanOrEqual(k8sVer1_16) {
+		return true, nil
+	}
+	return false, nil
+}
+
+// RequiresV1CSIdriver returns true if V1 version of CSIdriver APIs need to be called
+func RequiresV1CSIdriver() (bool, error) {
+	clusterK8sVersion, _, err := GetFullVersion()
+	if err != nil {
+		return false, err
+	}
+	requiredK8sVer, err := version.NewVersion(k8sMinVersionCSIDriverV1)
+	if err != nil {
+		return false, err
+
+	}
+	if clusterK8sVersion.GreaterThanOrEqual(requiredK8sVer) {
 		return true, nil
 	}
 	return false, nil

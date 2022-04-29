@@ -24,7 +24,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 	"sigs.k8s.io/gcp-compute-persistent-disk-csi-driver/pkg/common"
 )
 
@@ -76,7 +76,6 @@ func (g *gcp) Init(_ interface{}) error {
 	if err != nil {
 		return err
 	}
-
 	g.service, err = compute.NewService(context.TODO(), option.WithTokenSource(creds.TokenSource))
 	if err != nil {
 		return err
@@ -618,18 +617,18 @@ func (g *gcp) getGCPClientFromBackupLocation(backupLocationName, ns string) *gcp
 	backupLocation, err := storkops.Instance().GetBackupLocation(backupLocationName, ns)
 	if err != nil {
 		logrus.Errorf("error getting backup location %s resource: %v", backupLocationName, err)
-		return nil
+		return gcpSessionWithCred
 	}
 
-	if len(backupLocation.Cluster.SecretConfig) > 0 {
+	if len(backupLocation.Cluster.SecretConfig) > 0 && backupLocation.Cluster.GCPClusterConfig != nil {
 		ctx := context.Background()
+		gcpSessionWithCred.projectID = backupLocation.Cluster.GCPClusterConfig.ProjectID
 		gcpSessionWithCred.service, err = compute.NewService(ctx, option.WithCredentialsJSON([]byte(backupLocation.Cluster.GCPClusterConfig.AccountKey)))
 		if err != nil {
 			logrus.Errorf("error creating gcp client session for backuplocation %s: %v", backupLocationName, err)
-			return nil
+			return gcpSessionWithCred
 		}
 	}
-	gcpSessionWithCred.projectID = backupLocation.Cluster.GCPClusterConfig.ProjectID
 	return gcpSessionWithCred
 }
 

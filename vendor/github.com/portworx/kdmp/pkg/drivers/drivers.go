@@ -19,7 +19,7 @@ const (
 // Docker images.
 const (
 	ResticExecutorImage = "portworx/resticexecutor"
-	KopiaExecutorImage  = "portworx/kopiaexecutor"
+	KopiaExecutorImage  = "kopiaexecutor"
 	RsyncImage          = "eeacms/rsync"
 )
 

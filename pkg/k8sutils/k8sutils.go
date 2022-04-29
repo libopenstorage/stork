@@ -29,7 +29,7 @@ const (
 	// DefaultAdminNamespace - default admin namespace, where stork will be installed
 	DefaultAdminNamespace = "kube-system"
 	// StorkConfigMapName holds any generic config specific to stork module
-	StorkConfigMapName = "stork-objLock-config"
+	StorkConfigMapName = "stork-objlock-config"
 	// ObjectLockIncrBackupCountKey defines scheduleBackup's incremental backup count
 	ObjectLockIncrBackupCountKey = "object-lock-incr-backup-count"
 	// ObjectLockDefaultIncrementalCount defines default incremental backup count
@@ -179,14 +179,12 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 		return "", "", err
 	}
 	imageFields := strings.Split(deploy.Spec.Template.Spec.Containers[0].Image, "/")
-	var registry string
-	// Here the assumtption is that the image format will be <registry-name>/<repo-name>/image:tag
-	// or <repo-name>/image:tag. If repo name contains any path (<registry-name>/<repo-name>/<extra-dir-name>/image:tag), below logic will not work.
-	if len(imageFields) == 3 {
-		registry = imageFields[0]
-	} else {
-		registry = ""
-	}
+	// Here the assumption is that the image format will be <registry-name>/<extra-dir-name>/<repo-name>/image:tag
+	// or <repo-name>/image:tag or <registry-name>/<repo-name>/<extra-dir-name>/image:tag).
+	// Customer might have extra dirs before the repo-name as mentioned above
+	// here minus 1 is for image name
+	registryFields := imageFields[0 : len(imageFields)-1]
+	registry := strings.Join(registryFields, "/")
 	imageSecret := deploy.Spec.Template.Spec.ImagePullSecrets
 	if imageSecret != nil {
 		return registry, imageSecret[0].Name, nil
@@ -229,19 +227,20 @@ func GetConfigValue(cm, ns, key string) (string, error) {
 
 // IsValidBucketRetentionPeriod - returns the sanity of retention period
 // for a object locked bucket this function returns true if retention
-// period set on the bucket is more than the minimum retention period
-func IsValidBucketRetentionPeriod(bucketRetentionPeriod int64) (bool, error) {
+// period set on the bucket is more than the minimum retention period and
+// minimum required retention period.
+func IsValidBucketRetentionPeriod(bucketRetentionPeriod int64) (bool, int64, error) {
 	var incrBkpCnt int64
 	var i string
 	var err error
 	ns := DefaultAdminNamespace
 	if i, err = GetConfigValue(StorkConfigMapName, ns, ObjectLockIncrBackupCountKey); err != nil {
-		return false, fmt.Errorf("failed to get %s key from px-backup-configmap: %v", ObjectLockIncrBackupCountKey, err)
+		return false, 0, fmt.Errorf("failed to get %s key from px-backup-configmap: %v", ObjectLockIncrBackupCountKey, err)
 	}
 	if i != "" {
 		incrBkpCnt, err = strconv.ParseInt(i, 10, 64)
 		if err != nil {
-			return false, fmt.Errorf("failed to convert backup incremental count: %v", err)
+			return false, 0, fmt.Errorf("failed to convert backup incremental count: %v", err)
 		}
 	} else {
 		incrBkpCnt = ObjectLockDefaultIncrementalCount
@@ -250,5 +249,5 @@ func IsValidBucketRetentionPeriod(bucketRetentionPeriod int64) (bool, error) {
 	// and a full backup following it makes up the minimum number of retention period
 	// user should set.
 	minRetentionDays := minProtectionPeriod + incrBkpCnt + 1
-	return (bucketRetentionPeriod >= minRetentionDays), nil
+	return (bucketRetentionPeriod >= minRetentionDays), minRetentionDays, nil
 }
