@@ -9,6 +9,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
@@ -29,9 +30,9 @@ var _ = BeforeSuite(func() {
 // Sanity test for OCP Recycle method
 var _ = Describe("{RecycleOCPNode}", func() {
 
-	if Inst().S.String() != "openshift" {
-		fmt.Printf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
-		Expect(Inst().S.String()).To(Equal("openshift"))
+	if Inst().S.String() != openshift.SchedName {
+		logrus.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
+		return
 	}
 
 	It("Validing the drives and pools after recyling a node", func() {
