@@ -624,6 +624,7 @@ func (k *kdmp) getRestorePVCs(
 				}
 			}
 			pvc.Spec.VolumeName = ""
+			pvc.Spec.DataSource = nil
 			if pvc.Annotations != nil {
 				delete(pvc.Annotations, bindCompletedKey)
 				delete(pvc.Annotations, boundByControllerKey)
