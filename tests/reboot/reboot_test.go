@@ -22,7 +22,7 @@ const (
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
-	defaultRebootTimeRange       = 3 * time.Minute
+	defaultRebootTimeRange       = 5 * time.Minute
 )
 
 func TestReboot(t *testing.T) {
