@@ -2,12 +2,13 @@ package puredirectaccess
 
 import (
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/onsi/ginkgo/reporters"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"os"
-	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -61,7 +62,7 @@ func createCloudsnapCredential() {
 		TimeBeforeRetry: k8s.DefaultRetryInterval,
 		Sudo:            true,
 	})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "unexpected error creating cloudsnap credential")
 }
 
 func deleteCloudsnapCredential() {
@@ -71,7 +72,7 @@ func deleteCloudsnapCredential() {
 		TimeBeforeRetry: k8s.DefaultRetryInterval,
 		Sudo:            true,
 	})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "unexpected error deleting cloudsnap credential")
 }
 
 // This test performs basic tests making sure Pure direct access are running as expected
