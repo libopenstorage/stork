@@ -78,10 +78,15 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 	out, err := s3.New(sess).GetObjectLockConfiguration(input)
 	if err != nil {
 		if awsErr, ok := err.(awserr.Error); ok {
-			// When a minio server doesn't have object-lock implemented
-			// then Minio backed backuplocation throws this error for
-			// normal buckets too hence we need to ignore this for now.
-			if awsErr.Code() == "ObjectLockConfigurationNotFoundError" || awsErr.Code() == "MethodNotAllowed" {
+			// When a Minio server doesn't have object-lock implemented then above API
+			// throws following error codes depending on version it runs for normal buckets
+			//	1. "ObjectLockConfigurationNotFoundError"
+			//  2. "MethodNotAllowed"
+			// Similarly in case of AWS, we need to ignore "NoSuchBucket" so that
+			// px-backup/stork can create the bucket on behalf user when validation flag is not set.
+			if awsErr.Code() == "ObjectLockConfigurationNotFoundError" ||
+				awsErr.Code() == "MethodNotAllowed" ||
+				awsErr.Code() == "NoSuchBucket" {
 				// for a non-objectlocked bucket we needn't throw error
 				return objLockInfo, nil
 			}
