@@ -592,17 +592,20 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateSnapshot(vol, params)
 				if params["backend"] == k8s.PureBlock {
-					expect(err).To(beNil())
+					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
-					expect(err).NotTo(beNil())
+					expect(err).NotTo(beNil(), "error expected but no error received while creating pure_file snapshot")
 					if err != nil {
-						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnap(vol, params)
-				expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()))
+				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
+				if err != nil {
+					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
+				}
 			})
 		}
 	})
@@ -628,27 +631,27 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 			Step(fmt.Sprintf("get %s app's volume: %s then create snapshot using pxctl", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
 				if params["backend"] == k8s.PureBlock {
-					expect(err).To(beNil())
+					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
-					expect(err).NotTo(beNil())
+					expect(err).NotTo(beNil(), "error expected but no error received while creating pure_file snapshot")
 					if err != nil {
-						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
-				expect(err).NotTo(beNil())
+				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
 				if err != nil {
-					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()))
+					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
 				}
 			})
 		}
 		Step("validating groupsnap for using pxctl", func() {
 			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-			expect(err).NotTo(beNil())
+			expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
 			if err != nil {
-				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()))
+				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
 			}
 		})
 	})
@@ -666,10 +669,11 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step("validating resizing pvcs", func() {
 			_, err = Inst().S.ResizeVolume(ctx, "")
-			if err != nil {
-				expect(err).ToNot(haveOccurred())
-			}
+			expect(err).To(beNil(), "unexpected error resizing Pure PVC")
 		})
+
+		// TODO: add more checks (is the PVC resized in the pod?), we currently only check that the
+		//       CSI resize succeeded.
 	})
 }
 
@@ -689,7 +693,7 @@ func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan err
 		})
 
 		err = Inst().V.ValidatePureVolumesNoReplicaSets(vols[0].ID, make(map[string]string))
-		expect(err).NotTo(haveOccurred())
+		expect(err).NotTo(haveOccurred(), "failed to validate that no replica sets present for Pure volume")
 
 	})
 }
@@ -727,7 +731,7 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 
 		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
-		expect(byteUsedAfter > byteUsedInitial).To(beTrue())
+		expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
 
 	})
 }
@@ -903,7 +907,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
 			err := Inst().V.ValidateDeleteVolume(vol)
-			expect(err).NotTo(haveOccurred())
+			expect(err).NotTo(haveOccurred(), "unexpected error validating app volumes deleted")
 		})
 	}
 }
