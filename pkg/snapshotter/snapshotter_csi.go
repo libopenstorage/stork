@@ -60,6 +60,8 @@ const (
 	shortRetryTimeout = 30 * time.Second
 	// shortRetryTimeout gets used for retry timeout interval
 	shortRetryTimeoutInterval = 2 * time.Second
+	defaultTimeout            = 1 * time.Minute
+	progressCheckInterval     = 5 * time.Second
 )
 
 type csiBackupObject struct {
@@ -329,8 +331,27 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 		return nil, fmt.Errorf("failed to get volumesnapshot %s/%s", o.RestoreNamespace, o.RestoreSnapshotName)
 	}
 
+	checkVsStatus := func() (interface{}, bool, error) {
+		snapshot, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(snapshot.Namespace).Get(context.TODO(), snapshot.Name, metav1.GetOptions{})
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to get volumesnapshot [%v/%v]", snapshot.Namespace, snapshot.Name)
+			return "", true, fmt.Errorf("%v", errMsg)
+		}
+		if snapshot.Status == nil || snapshot.Status.RestoreSize == nil {
+			errMsg := fmt.Sprintf("volumesnapshot [%v/%v] status is not updated", snapshot.Namespace, snapshot.Name)
+			return "", true, fmt.Errorf("%v", errMsg)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(checkVsStatus, defaultTimeout, progressCheckInterval); err != nil {
+		errMsg := fmt.Sprintf("max retries done, volumesnapshot [%v/%v] status is not updated", snapshot.Namespace, snapshot.Name)
+		logrus.Errorf("%v", errMsg)
+		// Exhausted all retries, return error
+		return nil, fmt.Errorf("%v", errMsg)
+	}
+
 	// Make the pvc size  same as the restore size from the volumesnapshot
-	if snapshot.Status.RestoreSize != nil && !snapshot.Status.RestoreSize.IsZero() {
+	if snapshot.Status != nil && snapshot.Status.RestoreSize != nil && !snapshot.Status.RestoreSize.IsZero() {
 		quantity, err := resource.ParseQuantity(snapshot.Status.RestoreSize.String())
 		if err != nil {
 			return nil, err
