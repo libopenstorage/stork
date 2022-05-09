@@ -155,6 +155,12 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				util.CheckErr(err)
 				return
 			}
+			if qps := cmdFactory.GetQPS(); qps > 1 {
+				config.QPS = float32(qps)
+			}
+			if burst := cmdFactory.GetQPS(); burst > 1 {
+				config.QPS = float32(burst)
+			}
 			if allNamespaces {
 				namespaces, err := core.Instance().ListNamespaces(nil)
 				if err != nil {
