@@ -29,6 +29,8 @@ type factory struct {
 	context       string
 	outputFormat  string
 	watch         bool
+	qps           int
+	burst         int
 }
 
 // Factory to be used for command line
@@ -58,6 +60,10 @@ type Factory interface {
 	setNamespace(string)
 	// IsWatchSet return true if -w/watch is passed
 	IsWatchSet() bool
+	// GetQPS return qps number for k8s api request
+	GetQPS() int
+	// GetBurst return qps number for k8s api request
+	GetBurst() int
 }
 
 // NewFactory Return a new factory interface that can be used by commands
@@ -71,6 +77,8 @@ func (f *factory) BindFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&f.context, "context", "", "The name of the kubeconfig context to use")
 	flags.StringVarP(&f.outputFormat, "output", "o", outputFormatTable, "Output format. One of: table|json|yaml")
 	flags.BoolVarP(&f.watch, "watch", "w", false, "watch stork resourrces")
+	flags.IntVarP(&f.qps, "qps", "", 100, "Restrict number of k8s api requests from stork")
+	flags.IntVarP(&f.burst, "burst", "", 100, "Restrict number of k8s api requests from stork")
 }
 
 func (f *factory) BindGetFlags(flags *pflag.FlagSet) {
@@ -82,6 +90,13 @@ func (f *factory) AllNamespaces() bool {
 	return f.allNamespaces
 }
 
+func (f *factory) GetQPS() int {
+	return f.qps
+
+}
+func (f *factory) GetBurst() int {
+	return f.burst
+}
 func (f *factory) GetNamespace() string {
 	return f.namespace
 }
