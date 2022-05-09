@@ -427,5 +427,11 @@ func GetSupportedGVR() map[schema.GroupVersionResource]string {
 			Group:    "mongodbcommunity.mongodb.com",
 			Version:  "v1",
 		}: "MongoDBCommunityList",
+		// VirtualMachine crds
+		{
+			Resource: "virtualmachines",
+			Group:    "kubevirt.io",
+			Version:  "v1",
+		}: "VirtualMachinesList",
 	}
 }
