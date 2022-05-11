@@ -518,6 +518,10 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.resourceQuotaToBeCollected(object)
 	case "NetworkPolicy":
 		return r.networkPolicyToBeCollected(object)
+	case "DataVolume":
+		return r.dataVolumesToBeCollected(object)
+	case "VirtualMachineInstance":
+		return r.virtualMachineInstanceToBeCollected(object)
 	}
 
 	return true, nil
@@ -618,7 +622,12 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		case "Job":
 			err := r.prepareJobForCollection(o, namespaces)
 			if err != nil {
-				return fmt.Errorf("error preparing ClusterRoleBindings resource %v: %v", metadata.GetName(), err)
+				return fmt.Errorf("error preparing job resource %v: %v", metadata.GetName(), err)
+			}
+		case "VirtualMachine":
+			err := r.prepareVirtualMachineForCollection(o, namespaces)
+			if err != nil {
+				return fmt.Errorf("error preparing VirtualMachine resource %v: %v", metadata.GetName(), err)
 			}
 		}
 
