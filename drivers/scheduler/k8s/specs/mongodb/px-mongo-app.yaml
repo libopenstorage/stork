@@ -84,7 +84,7 @@ spec:
         - name: MONGODB_DISABLE_SYSTEM_LOG
           value: "no"
         - name: MONGODB_ENABLE_IPV6
-          value: "no"
+          value: "yes"
         - name: MONGODB_ENABLE_DIRECTORY_PER_DB
           value: "no"
         ports:
