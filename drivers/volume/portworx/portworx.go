@@ -49,6 +49,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -732,10 +733,13 @@ func (p *portworx) OwnsPV(pv *v1.PersistentVolume) bool {
 	return true
 }
 
-func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
+func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
+	// includePendingWFFC - Includes pending volumes in the second return value if they are using WaitForFirstConsumer binding mode
 	var volumes []*storkvolume.Info
+	var pendingWFFCVolumes []*storkvolume.Info
 	for _, volume := range podSpec.Volumes {
 		volumeName := ""
+		isPendingWFFC := false
 		var (
 			pvc *v1.PersistentVolumeClaim
 			err error
@@ -745,7 +749,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 				volume.PersistentVolumeClaim.ClaimName,
 				namespace)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			if !p.OwnsPVC(core.Instance(), pvc) {
@@ -753,8 +757,13 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 			}
 
 			if pvc.Status.Phase == v1.ClaimPending {
-				return nil, &storkvolume.ErrPVCPending{
-					Name: volume.PersistentVolumeClaim.ClaimName,
+				// Only include pending volume if requested and storage class has WFFC
+				if includePendingWFFC && isWaitingForFirstConsumer(pvc) {
+					isPendingWFFC = true
+				} else {
+					return nil, nil, &storkvolume.ErrPVCPending{
+						Name: volume.PersistentVolumeClaim.ClaimName,
+					}
 				}
 			}
 			volumeName = pvc.Spec.VolumeName
@@ -782,10 +791,29 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 				}
 			}
 
-			volumes = append(volumes, volumeInfo)
+			if isPendingWFFC {
+				pendingWFFCVolumes = append(pendingWFFCVolumes, volumeInfo)
+			} else {
+				volumes = append(volumes, volumeInfo)
+			}
 		}
 	}
-	return volumes, nil
+	return volumes, pendingWFFCVolumes, nil
+}
+
+func isWaitingForFirstConsumer(pvc *v1.PersistentVolumeClaim) bool {
+	var sc *storagev1.StorageClass
+	var err error
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName != "" {
+		sc, err = storage.Instance().GetStorageClass(storageClassName)
+		if err != nil {
+			logrus.Warnf("Did not get the storageclass %s for pvc %s/%s, err: %v", storageClassName, pvc.Namespace, pvc.Name, err)
+			return false
+		}
+		return *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer
+	}
+	return false
 }
 
 func (p *portworx) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim) (

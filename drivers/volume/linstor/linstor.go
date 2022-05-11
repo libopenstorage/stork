@@ -251,7 +251,12 @@ func (l *linstor) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return infos, nil
 }
 
-func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
+func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
+	// TODO how to handle includePendingWFFC
+	if includePendingWFFC {
+		return nil, nil, &errors.ErrNotSupported{}
+	}
+	var empty []*storkvolume.Info
 	var volumes []*storkvolume.Info
 	for _, volume := range podSpec.Volumes {
 		volumeName := ""
@@ -260,7 +265,7 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stork
 				volume.PersistentVolumeClaim.ClaimName,
 				namespace)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			if !l.OwnsPVC(core.Instance(), pvc) {
@@ -268,7 +273,7 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stork
 			}
 
 			if pvc.Status.Phase == v1.ClaimPending {
-				return nil, &storkvolume.ErrPVCPending{
+				return nil, nil, &storkvolume.ErrPVCPending{
 					Name: volume.PersistentVolumeClaim.ClaimName,
 				}
 			}
@@ -286,7 +291,7 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stork
 			volumes = append(volumes, volumeInfo)
 		}
 	}
-	return volumes, nil
+	return volumes, empty, nil
 }
 
 func (l *linstor) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim) ([]v1.PersistentVolumeClaim, error) {

@@ -21,8 +21,10 @@ const (
 	driverName = "MockDriver"
 	// mockStorageClassName is the storage class for mock driver PVCs
 	mockStorageClassName = "mockDriverStorageClass"
-	provisionerName      = "kubernetes.io/mock-volume"
-	clusterID            = "MockClusterID"
+	// MockStorageClassNameWFFC is storage class used to mock having WaitForFirstConsumer
+	MockStorageClassNameWFFC = "mockDriverStorageClassWFFC"
+	provisionerName          = "kubernetes.io/mock-volume"
+	clusterID                = "MockClusterID"
 	// RackLabel Label used for the mock driver to set rack information
 	RackLabel = "mock/rack"
 	// ZoneLabel Label used for the mock driver to set zone information
@@ -218,17 +220,19 @@ func (m Driver) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 }
 
 // GetPodVolumes Get the Volumes in the Pod that use the mock driver
-func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
+func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
 	if m.interfaceError != nil {
-		return nil, m.interfaceError
+		return nil, nil, m.interfaceError
 	}
 	var volumes []*storkvolume.Info
+	var pendingWFFC []*storkvolume.Info
 	for _, volume := range podSpec.Volumes {
+		isWFFC := false
 		if volume.PersistentVolumeClaim != nil {
 			pvc, ok := m.pvcs[volume.PersistentVolumeClaim.ClaimName]
 			if !ok {
 				logrus.Debugf("PVCs: %+v", m.pvcs)
-				return nil, &errors.ErrNotFound{
+				return nil, nil, &errors.ErrNotFound{
 					ID:   volume.PersistentVolumeClaim.ClaimName,
 					Type: "PVC",
 				}
@@ -242,18 +246,25 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvo
 
 			// Assume all mock volumes have the same storageclass
 			if storageClassName != mockStorageClassName {
+				if storageClassName == MockStorageClassNameWFFC {
+					isWFFC = true
+				}
 				continue
 			}
 
 			volumeInfo, err := m.InspectVolume(pvc.Spec.VolumeName)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			volumes = append(volumes, volumeInfo)
+			if isWFFC {
+				pendingWFFC = append(pendingWFFC, volumeInfo)
+			} else {
+				volumes = append(volumes, volumeInfo)
+			}
 		}
 	}
 
-	return volumes, nil
+	return volumes, pendingWFFC, nil
 }
 
 // OwnsPVCForBackup returns true because it owns all PVCs created by tests

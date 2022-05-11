@@ -314,6 +314,7 @@ func TestExtender(t *testing.T) {
 	t.Run("setup", setup)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("noDriverVolumeTest", noDriverVolumeTest)
+	t.Run("WFFCVolumeTest", WFFCVolumeTest)
 	t.Run("noVolumeNodeTest", noVolumeNodeTest)
 	t.Run("noDriverNodeTest", noDriverNodeTest)
 	t.Run("singleVolumeTest", singleVolumeTest)
@@ -378,6 +379,47 @@ func noDriverVolumeTest(t *testing.T) {
 	pvcClaim := &v1.PersistentVolumeClaim{}
 	pvcClaim.Name = "noDriverPVC"
 	pvcClaim.Spec.VolumeName = "noDriverVol"
+	pvcSpec := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvcClaim.Name,
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcClaim)
+	require.NoError(t, err)
+	podVolume.PersistentVolumeClaim = pvcSpec
+	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{defaultScore, defaultScore, defaultScore},
+		prioritizeResponse)
+}
+
+// Create a pod with a PVC which uses the mocked WaitForFirstConusmer storage class
+// The filter response should return all the input nodes
+// The prioritize response should return all nodes with equal priority
+func WFFCVolumeTest(t *testing.T) {
+	pod := newPod("WFFCVolumeTest", nil)
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+
+	podVolume := v1.Volume{}
+	pvcClaim := &v1.PersistentVolumeClaim{}
+	pvcClaim.Name = "WFFCPVC"
+	pvcClaim.Spec.VolumeName = "WFFCVol"
+	mockSC := mock.MockStorageClassNameWFFC
+	pvcClaim.Spec.StorageClassName = &mockSC
 	pvcSpec := &v1.PersistentVolumeClaimVolumeSource{
 		ClaimName: pvcClaim.Name,
 	}

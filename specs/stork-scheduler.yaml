@@ -51,7 +51,7 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims", "persistentvolumes"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "update"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses", "csinodes","csidrivers", "csistoragecapacities"]
     verbs: ["get", "list", "watch"]

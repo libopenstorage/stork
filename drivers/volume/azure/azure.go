@@ -602,8 +602,8 @@ func (a *azure) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
-func (a *azure) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
-	return nil, &errors.ErrNotSupported{}
+func (a *azure) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
+	return nil, nil, &errors.ErrNotSupported{}
 }
 
 func (a *azure) GetSnapshotPlugin() snapshotVolume.Plugin {
