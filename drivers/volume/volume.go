@@ -106,8 +106,9 @@ type Driver interface {
 	// InspectNode using ID
 	InspectNode(id string) (*NodeInfo, error)
 
-	// GetPodVolumes Get all the volumes used by a pod backed by the driver
-	GetPodVolumes(*v1.PodSpec, string) ([]*Info, error)
+	// GetPodVolumes Gets the volumes used by a pod backed by the driver
+	// Optionally returns volumes that are pending due to WaitForFirstConsumer binding
+	GetPodVolumes(*v1.PodSpec, string, bool) ([]*Info, []*Info, error)
 
 	// GetVolumeClaimTemplates Get all the volume templates from the list backed by
 	// the driver
