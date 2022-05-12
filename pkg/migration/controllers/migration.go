@@ -336,20 +336,34 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		for _, ns := range migration.Spec.Namespaces {
 			_, err := core.Instance().GetNamespace(ns)
 			if err != nil {
-				migration.Status.Status = stork_api.MigrationStatusFailed
-				migration.Status.Stage = stork_api.MigrationStageFinal
-				migration.Status.FinishTimestamp = metav1.Now()
-				err = fmt.Errorf("error getting namespace %v: %v", ns, err)
-				log.MigrationLog(migration).Errorf(err.Error())
-				m.recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					err.Error())
-				err = m.updateMigrationCR(context.Background(), migration)
-				if err != nil {
-					log.MigrationLog(migration).Errorf("Error updating")
+				if *migration.Spec.SkipDeletedNamespaces {
+					// Instead of throwing an error here check for the SkipDeletedNamespaces  flag
+					// and based on that either throw an error or continue for deleted namespaces
+					migration.Status.Status = stork_api.MigrationStatusInitial
+					migration.Status.Stage = stork_api.MigrationStageInitial
+					migration.Status.FinishTimestamp = metav1.Now()
+					skipWarning := fmt.Sprintf("namespace  %s was deleted, skipping migration", ns)
+					log.MigrationLog(migration).Warnf(skipWarning)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						skipWarning,
+						err.Error())
+				} else {
+					migration.Status.Status = stork_api.MigrationStatusFailed
+					migration.Status.Stage = stork_api.MigrationStageFinal
+					migration.Status.FinishTimestamp = metav1.Now()
+					err = fmt.Errorf("error getting namespace %v: %v", ns, err)
+					log.MigrationLog(migration).Errorf(err.Error())
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating")
+					}
+					return nil
 				}
-				return nil
 			}
 		}
 		// Make sure the rules exist if configured
@@ -1427,6 +1441,9 @@ func (m *MigrationController) applyResources(
 	for _, ns := range migration.Spec.Namespaces {
 		namespace, err := core.Instance().GetNamespace(ns)
 		if err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
 			return err
 		}
 
