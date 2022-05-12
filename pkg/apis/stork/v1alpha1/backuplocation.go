@@ -99,6 +99,9 @@ type S3Config struct {
 	// The S3 Storage Class to use when uploading objects. Glacier storage
 	// classes are not supported
 	StorageClass string `json:"storageClass"`
+	// UseIam when set stork will use the instance IAM role associated with the nodes
+	// on which stork pods run
+	UseIam bool `json:"useIam"`
 }
 
 // AzureConfig specifies the config required to connect to Azure Blob Storage
