@@ -1291,8 +1291,8 @@ func (m *MigrationController) prepareCRDClusterResource(
 				disableVersion = int64(0)
 				currVal = fmt.Sprintf("%v", curr)
 			} else if suspend.Type == "string" {
-				curr, found, err := unstructured.NestedString(content, fields...)
-				if err != nil || !found {
+				curr, _, err := unstructured.NestedString(content, fields...)
+				if err != nil {
 					return fmt.Errorf("unable to find suspend path, err: %v", err)
 				}
 				disableVersion = suspend.Value
