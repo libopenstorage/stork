@@ -252,10 +252,6 @@ func (l *linstor) GetNodes() ([]*storkvolume.NodeInfo, error) {
 }
 
 func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
-	// TODO how to handle includePendingWFFC
-	if includePendingWFFC {
-		return nil, nil, &errors.ErrNotSupported{}
-	}
 	var empty []*storkvolume.Info
 	var volumes []*storkvolume.Info
 	for _, volume := range podSpec.Volumes {

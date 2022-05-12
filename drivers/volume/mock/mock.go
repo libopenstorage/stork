@@ -131,6 +131,11 @@ func (m *Driver) NewPVC(volumeName string) *v1.PersistentVolumeClaim {
 	return pvc
 }
 
+// AddPVC adds an already created PVC
+func (m *Driver) AddPVC(pvc *v1.PersistentVolumeClaim) {
+	m.pvcs[pvc.Name] = pvc
+}
+
 // ProvisionVolume Provision a volume in the mock driver
 func (m *Driver) ProvisionVolume(
 	volumeName string,
@@ -248,15 +253,16 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePend
 			if storageClassName != mockStorageClassName {
 				if storageClassName == MockStorageClassNameWFFC {
 					isWFFC = true
+				} else {
+					continue
 				}
-				continue
 			}
 
 			volumeInfo, err := m.InspectVolume(pvc.Spec.VolumeName)
 			if err != nil {
 				return nil, nil, err
 			}
-			if isWFFC {
+			if includePendingWFFC && isWFFC {
 				pendingWFFC = append(pendingWFFC, volumeInfo)
 			} else {
 				volumes = append(volumes, volumeInfo)

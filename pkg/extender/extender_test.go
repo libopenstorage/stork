@@ -315,6 +315,7 @@ func TestExtender(t *testing.T) {
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("noDriverVolumeTest", noDriverVolumeTest)
 	t.Run("WFFCVolumeTest", WFFCVolumeTest)
+	t.Run("WFFCMultiVolumeTest", WFFCMultiVolumeTest)
 	t.Run("noVolumeNodeTest", noVolumeNodeTest)
 	t.Run("noDriverNodeTest", noDriverNodeTest)
 	t.Run("singleVolumeTest", singleVolumeTest)
@@ -375,6 +376,10 @@ func noDriverVolumeTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
 	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
 
+	if err := driver.CreateCluster(3, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
 	podVolume := v1.Volume{}
 	pvcClaim := &v1.PersistentVolumeClaim{}
 	pvcClaim.Name = "noDriverPVC"
@@ -386,6 +391,7 @@ func noDriverVolumeTest(t *testing.T) {
 	require.NoError(t, err)
 	podVolume.PersistentVolumeClaim = pvcSpec
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
+	driver.AddPVC(pvcClaim)
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -414,6 +420,10 @@ func WFFCVolumeTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
 	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
 
+	if err := driver.CreateCluster(3, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
 	podVolume := v1.Volume{}
 	pvcClaim := &v1.PersistentVolumeClaim{}
 	pvcClaim.Name = "WFFCPVC"
@@ -427,6 +437,11 @@ func WFFCVolumeTest(t *testing.T) {
 	require.NoError(t, err)
 	podVolume.PersistentVolumeClaim = pvcSpec
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
+	driver.AddPVC(pvcClaim)
+	provNodes := []int{}
+	if err := driver.ProvisionVolume("WFFCVol", provNodes, 1, nil); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -442,6 +457,78 @@ func WFFCVolumeTest(t *testing.T) {
 		t,
 		nodes,
 		[]float64{defaultScore, defaultScore, defaultScore},
+		prioritizeResponse)
+}
+
+// Create a pod with a PVC which uses the mocked WaitForFirstConusmer storage class
+// and A normal mocked PVC on 1 node
+// The filter response should return all the input nodes
+// The prioritize response should prefer the node with the normal PVC on it
+func WFFCMultiVolumeTest(t *testing.T) {
+	pod := newPod("WFFCMultiVolumeTest", nil)
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+
+	if err := driver.CreateCluster(3, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	// WFFC volume
+	podVolume1 := v1.Volume{}
+	pvcClaim1 := &v1.PersistentVolumeClaim{}
+	pvcClaim1.Name = "WFFCPVC1"
+	pvcClaim1.Spec.VolumeName = "WFFCVol1"
+	mockSC1 := mock.MockStorageClassNameWFFC
+	pvcClaim1.Spec.StorageClassName = &mockSC1
+	pvcSpec1 := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvcClaim1.Name,
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcClaim1)
+	require.NoError(t, err)
+	podVolume1.PersistentVolumeClaim = pvcSpec1
+	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume1)
+	driver.AddPVC(pvcClaim1)
+	provNodes := []int{}
+	if err := driver.ProvisionVolume("WFFCVol1", provNodes, 1, nil); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	// Normal volume
+	podVolume2 := v1.Volume{}
+	pvcClaim2 := &v1.PersistentVolumeClaim{}
+	pvcClaim2.Name = "normalPVC"
+	pvcClaim2.Spec.VolumeName = "normalVol"
+	mockSC2 := driver.GetStorageClassName()
+	pvcClaim2.Spec.StorageClassName = &mockSC2
+	pvcSpec2 := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvcClaim2.Name,
+	}
+	_, err = core.Instance().CreatePersistentVolumeClaim(pvcClaim2)
+	require.NoError(t, err)
+	podVolume2.PersistentVolumeClaim = pvcSpec2
+	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume2)
+	driver.AddPVC(pvcClaim2)
+	provNodes = []int{1}
+	if err := driver.ProvisionVolume("normalVol", provNodes, 1, nil); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{rackPriorityScore, nodePriorityScore, rackPriorityScore},
 		prioritizeResponse)
 }
 
