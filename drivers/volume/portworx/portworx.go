@@ -2443,25 +2443,30 @@ func (p *portworx) GetMigrationStatus(migration *storkapi.Migration) ([]*storkap
 	if err != nil {
 		return nil, err
 	}
-	status, err := volDriver.CloudMigrateStatus(nil)
-	if err != nil {
-		return nil, err
-	}
 
 	clusterPair, err := storkops.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
 
-	clusterInfo, ok := status.Info[clusterPair.Status.RemoteStorageID]
-	if !ok {
-		return nil, fmt.Errorf("migration status not found for remote cluster %v", clusterPair.Status.RemoteStorageID)
-	}
-
 	for _, vInfo := range migration.Status.Volumes {
 		found := false
+		taskID := p.getMigrationTaskID(migration, vInfo)
+		clusterID := clusterPair.Status.RemoteStorageID
+		status, err := volDriver.CloudMigrateStatus(
+			&api.CloudMigrateStatusRequest{
+				TaskId:    taskID,
+				ClusterId: clusterID,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		clusterInfo, ok := status.Info[clusterID]
+		if !ok {
+			return nil, fmt.Errorf("migration status not found for remote cluster %v", clusterID)
+		}
 		for _, mInfo := range clusterInfo.List {
-			taskID := p.getMigrationTaskID(migration, vInfo)
 			if taskID == mInfo.TaskId {
 				found = true
 				if mInfo.Status == api.CloudMigrate_Failed || mInfo.Status == api.CloudMigrate_Canceled {
