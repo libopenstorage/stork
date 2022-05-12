@@ -201,7 +201,7 @@ type Driver interface {
 	GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error)
 
 	// GetPodLog returns logs for all the pods in the specified context
-	GetPodLog(ctx *Context, sinceSeconds int64) (map[string]string, error)
+	GetPodLog(ctx *Context, sinceSeconds int64, containerName string) (map[string]string, error)
 
 	// ResizeVolume resizes all the volumes of a given context
 	ResizeVolume(*Context, string) ([]*volume.Volume, error)

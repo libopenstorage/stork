@@ -3235,7 +3235,7 @@ func (k *K8s) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 }
 
 // GetPodLog returns logs for all the pods in the specified context
-func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64) (map[string]string, error) {
+func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64, containerName string) (map[string]string, error) {
 	var sinceSecondsArg *int64
 	if sinceSeconds > 0 {
 		sinceSecondsArg = &sinceSeconds
@@ -3246,7 +3246,7 @@ func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64) (map[string]
 	}
 	logsByPodName := map[string]string{}
 	for _, pod := range pods {
-		output, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &v1.PodLogOptions{SinceSeconds: sinceSecondsArg})
+		output, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &v1.PodLogOptions{SinceSeconds: sinceSecondsArg, Container: containerName})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get logs for the pod %s/%s: %w", pod.Namespace, pod.Name, err)
 		}

@@ -45,6 +45,22 @@ spec:
           mountPath: /test-sv4-vol-svc
         - name: local-vol
           mountPath: /local-vol
+      - name: sv4test-reader
+        image: portworx/sharedv4-test:torpedo
+        imagePullPolicy: Always
+        command: ["python", "/app/reader.py"]
+        # sleeping for 9 seconds from 3 * number of pods * seconds
+        args: ["--interval=9", "$(LOCAL_FILE)"]
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: LOCAL_FILE
+            value: "/local-vol/$(MY_POD_NAME)"
+        volumeMounts:
+        - name: local-vol
+          mountPath: /local-vol
       volumes:
       - name: test-sv4-vol-svc
         persistentVolumeClaim:

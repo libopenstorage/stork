@@ -1272,7 +1272,7 @@ func getActivePods(counters map[string]appCounter) []string {
 
 // There should not be any errors in the pod logs.
 func validateAppLogs(ctx *scheduler.Context, numPods int) {
-	logsByPodName, err := Inst().S.GetPodLog(ctx, 0)
+	logsByPodName, err := Inst().S.GetPodLog(ctx, 0, "sv4test")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(logsByPodName)).To(Equal(numPods))
 	var errors []string
