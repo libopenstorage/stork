@@ -5,19 +5,39 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/libopenstorage/secrets/aws/credentials"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/s3blob"
 )
 
 func getSession(backupLocation *stork_api.BackupLocation) (*session.Session, error) {
+	// AWS SDK fetches the correct endpoint based on region provided if endpoint is passed empty
+	var endpoint string
+	if backupLocation.Location.S3Config.Endpoint == "s3.amazonaws.com" {
+		endpoint = ""
+	} else {
+		endpoint = backupLocation.Location.S3Config.Endpoint
+	}
+	awsCreds, err := credentials.NewAWSCredentials(
+		backupLocation.Location.S3Config.AccessKeyID,
+		backupLocation.Location.S3Config.SecretAccessKey,
+		"",
+		backupLocation.Location.S3Config.UseIam, // runningOnEc2 when set ec2 role credentials will be used
+	)
+	if err != nil {
+		return nil, err
+	}
+	creds, err := awsCreds.Get()
+	if err != nil {
+		return nil, err
+	}
+
 	return session.NewSession(&aws.Config{
-		Endpoint: aws.String(backupLocation.Location.S3Config.Endpoint),
-		Credentials: credentials.NewStaticCredentials(backupLocation.Location.S3Config.AccessKeyID,
-			backupLocation.Location.S3Config.SecretAccessKey, ""),
+		Endpoint:         aws.String(endpoint),
+		Credentials:      creds,
 		Region:           aws.String(backupLocation.Location.S3Config.Region),
 		DisableSSL:       aws.Bool(backupLocation.Location.S3Config.DisableSSL),
 		S3ForcePathStyle: aws.Bool(true),
