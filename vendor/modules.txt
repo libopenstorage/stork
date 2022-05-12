@@ -408,9 +408,9 @@ github.com/hashicorp/hcl/hcl/token
 github.com/hashicorp/hcl/json/parser
 github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
-# github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
+# github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
 github.com/hashicorp/vault/api
-# github.com/hashicorp/vault/sdk v0.1.14-0.20200429182704-29fce8f27ce4
+# github.com/hashicorp/vault/sdk v0.1.14-0.20200519221838-e0cfd64bc267
 github.com/hashicorp/vault/sdk/helper/compressutil
 github.com/hashicorp/vault/sdk/helper/consts
 github.com/hashicorp/vault/sdk/helper/hclutil
@@ -522,9 +522,10 @@ github.com/libopenstorage/operator/pkg/errors
 github.com/libopenstorage/operator/pkg/mock
 github.com/libopenstorage/operator/pkg/util
 github.com/libopenstorage/operator/pkg/util/test
-# github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67
+# github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 ## explicit
 github.com/libopenstorage/secrets
+github.com/libopenstorage/secrets/aws/credentials
 github.com/libopenstorage/secrets/k8s
 # github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
 github.com/liggitt/tabwriter
@@ -550,7 +551,7 @@ github.com/mitchellh/copystructure
 github.com/mitchellh/go-homedir
 # github.com/mitchellh/go-wordwrap v1.0.0
 github.com/mitchellh/go-wordwrap
-# github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452
+# github.com/mitchellh/hashstructure v1.0.0
 ## explicit
 github.com/mitchellh/hashstructure
 # github.com/mitchellh/mapstructure v1.3.3
@@ -636,7 +637,7 @@ github.com/portworx/kdmp/pkg/jobratelimit
 github.com/portworx/kdmp/pkg/util/ops
 github.com/portworx/kdmp/pkg/utils
 github.com/portworx/kdmp/pkg/version
-# github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194
+# github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
@@ -684,7 +685,7 @@ github.com/portworx/torpedo/pkg/errors
 github.com/portworx/torpedo/pkg/osutils
 github.com/portworx/torpedo/pkg/units
 github.com/portworx/torpedo/porx/px/api
-# github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021
+# github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35
 github.com/pquerna/cachecontrol
 github.com/pquerna/cachecontrol/cacheobject
 # github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
@@ -1045,7 +1046,7 @@ google.golang.org/protobuf/types/pluginpb
 gopkg.in/gorp.v1
 # gopkg.in/inf.v0 v0.9.1
 gopkg.in/inf.v0
-# gopkg.in/square/go-jose.v2 v2.3.1
+# gopkg.in/square/go-jose.v2 v2.5.1
 gopkg.in/square/go-jose.v2
 gopkg.in/square/go-jose.v2/cipher
 gopkg.in/square/go-jose.v2/json
