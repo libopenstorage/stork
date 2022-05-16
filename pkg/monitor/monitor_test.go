@@ -190,7 +190,7 @@ func testLostPod(
 	require.NoError(t, err, "failed to get pod from fake API")
 	require.NotNil(t, pod, "got nil pod back from get pod")
 
-	info, err := driver.GetPodVolumes(&pod.Spec, "")
+	info, _, err := driver.GetPodVolumes(&pod.Spec, "", false)
 	if driverPod {
 		require.NoError(t, err, "failed to get pod from fake API")
 		require.NotNil(t, info, "got nil pod volumes from driver")

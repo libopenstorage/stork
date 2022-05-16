@@ -268,7 +268,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 }
 
 func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
-	volumes, err := m.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
+	volumes, _, err := m.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, false)
 	if err != nil {
 		storklog.PodLog(pod).Errorf("Error getting volumes for pod: %v", err)
 		return false, err
