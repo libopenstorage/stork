@@ -198,7 +198,8 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 
 	filteredNodes := []v1.Node{}
-	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
+	driverVolumes, WFFCVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, true)
+
 	if err != nil {
 		msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
 		storklog.PodLog(pod).Warnf(msg)
@@ -207,7 +208,8 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
 			return
 		}
-	} else if len(driverVolumes) > 0 {
+		// Do driver check even if we only have pending WaitForFirstConsumer volumes
+	} else if len(driverVolumes) > 0 || len(WFFCVolumes) > 0 {
 		driverNodes, err := e.Driver.GetNodes()
 		if err != nil {
 			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
@@ -333,7 +335,7 @@ func (e *Extender) collectExtenderMetrics() error {
 			return nil
 		}
 
-		driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
+		driverVolumes, _, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, false)
 		if err != nil {
 			msg := fmt.Sprintf("Metric: Error getting volumes for Pod for driver: %v", err)
 			storklog.PodLog(pod).Warnf(msg)
@@ -506,7 +508,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	}
 
 	{ // Put these variables in their own scope so we can use the goto above
-		driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
+		driverVolumes, _, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, true)
 		if err != nil {
 			msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
 			storklog.PodLog(pod).Warnf(msg)
