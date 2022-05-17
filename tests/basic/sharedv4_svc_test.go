@@ -1167,6 +1167,7 @@ func getAppCounters(vol *api.Volume, attachedNode *node.Node, sleepInterval time
 }
 
 func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string]int {
+	dropCaches(attachedNode)
 	counterByPodName := map[string]int{}
 	// We find all the files in the root dir where the pods are writing their counters.
 	// Example:
@@ -1198,6 +1199,11 @@ func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string
 		counterByPodName[podName] = val
 	}
 	return counterByPodName
+}
+
+func dropCaches(attachedNode *node.Node) {
+	output, err := runCmd("sync; echo 1 > /proc/sys/vm/drop_caches", *attachedNode)
+	Expect(err).NotTo(HaveOccurred(), "failed to drop caches: %v", output)
 }
 
 // Validate the app counters after the failover.
