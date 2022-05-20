@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
@@ -41,6 +42,7 @@ const (
 	// StorkMigrationScheduleName is the annotation to keep track of child migration
 	// objects triggered by migration schedule
 	StorkMigrationScheduleName = "stork.libopenstorage.org/migration-schedule-name"
+	nearsyncPromoteLabel       = "near_sync_promote"
 )
 
 // NewMigrationSchedule creates a new instance of MigrationScheduleController.
@@ -126,6 +128,31 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 			if err != nil {
 				return err
 			}
+
+			// Promote near-sync volumes
+			if isActivated {
+				for _, policyMigration := range migrationSchedule.Status.Items {
+					for _, migration := range policyMigration {
+						currentMigration, err := storkops.Instance().GetMigration(migration.Name, migrationSchedule.Namespace)
+						for migrVol := range currentMigration.Status.Volumes {
+							volume, err := m.volDriver.InspectVolume(migrVol.Volume)
+							if err != nil {
+								return err
+							}
+							spec := &api.VolumeSpec{
+								VolumeLabels: volume.Labels,
+								//VolumeLabels: map[string]string{nearsyncPromoteLabel: "true"},
+							}
+							spec.VolumeLabels[nearsyncPromoteLabel] = "true"
+							// TODO stork volume Driver does not have Set
+							if err := m.volDriver.Set(volume.VolumeID, spec); err != nil {
+								return err
+							}
+						}
+					}
+				}
+			}
+
 			migrationSchedule.Status.ApplicationActivated = isActivated
 			msg := fmt.Sprintf("Setting AppActive status to: %v", isActivated)
 			m.recorder.Event(migrationSchedule,
