@@ -10,7 +10,10 @@ import (
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
 	"github.com/libopenstorage/stork/pkg/version"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -42,6 +45,18 @@ func parsePodNameAndNamespace(podString string) (string, string, error) {
 	return "default", podString, nil
 }
 
+func parseLabelSelector(labelSelectorString string) (map[string]string, error) {
+	labelSelector, err := metav1.ParseToLabelSelector(labelSelectorString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse label selector due to: %v", err)
+	}
+	selectorsMap, err := metav1.LabelSelectorAsMap(labelSelector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert label selector to map of strings due to: %v", err)
+	}
+	return selectorsMap, nil
+}
+
 func createPodStringFromNameAndNamespace(namespace, name string) string {
 	return namespace + "/" + name
 }
@@ -50,7 +65,18 @@ func main() {
 	logrus.Infof("Running pod command executor: %v", version.Version)
 	flag.Parse()
 
-	if len(podList) == 0 {
+	podListSpecified := len(podList) > 0
+	selectorWithNamespaceSpecified := labelSelector != "" && namespace != ""
+
+	if labelSelector != "" && namespace == "" {
+		logrus.Fatalf("-namespace must be specified when using -selector")
+	}
+
+	if podListSpecified && selectorWithNamespaceSpecified {
+		logrus.Fatalf("-pod args cannot be used in combination with -selector arg")
+	}
+
+	if !podListSpecified && !selectorWithNamespaceSpecified {
 		logrus.Fatalf("no pods specified to the command executor")
 	}
 
@@ -77,22 +103,48 @@ func main() {
 		logrus.Fatalf(err.Error())
 	}
 
-	executors := make([]cmdexecutor.Executor, 0)
-	errChans := make(map[string]chan error)
-	// Start the commands
+	var podNames []types.NamespacedName
+	// Map podList args to podNames.
 	for _, pod := range podList {
 		namespace, name, err := parsePodNameAndNamespace(pod)
 		if err != nil {
 			logrus.Fatalf("failed to parse pod due to: %v", err)
 		}
+		podNames = append(podNames, types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		})
+	}
 
-		executor := cmdexecutor.Init(namespace, name, podContainer, command, taskID)
+	// Fetch list of pods using label selector.
+	if selectorWithNamespaceSpecified {
+		selectorsMap, err := parseLabelSelector(labelSelector)
+		if err != nil {
+			logrus.Fatalf(err.Error())
+		}
+		pods, err := core.Instance().GetPods(namespace, selectorsMap)
+		if err != nil {
+			logrus.Fatalf(err.Error())
+		}
+		for _, pod := range pods.Items {
+			podNames = append(podNames, types.NamespacedName{
+				Namespace: pod.Namespace,
+				Name:      pod.Name,
+			})
+		}
+	}
+
+	executors := make([]cmdexecutor.Executor, 0)
+	errChans := make(map[string]chan error)
+	// Start the commands
+	for _, pod := range podNames {
+		executor := cmdexecutor.Init(pod.Namespace, pod.Name, podContainer, command, taskID)
 		errChan := make(chan error)
-		errChans[createPodStringFromNameAndNamespace(namespace, name)] = errChan
+		errChans[createPodStringFromNameAndNamespace(pod.Namespace, pod.Name)] = errChan
 
 		err = executor.Start(errChan)
 		if err != nil {
-			msg := fmt.Sprintf("failed to run command in pod: [%s] %s due to: %v", namespace, name, err)
+			msg := fmt.Sprintf("failed to run command in pod: [%s] %s due to: %v", pod.Namespace, pod.Name, err)
 			persistStatusErr := status.Persist(hostname, msg)
 			if persistStatusErr != nil {
 				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
@@ -150,7 +202,7 @@ Loop:
 				// as each executor is done, track how many are done
 				doneCount++
 				if doneCount == len(executors) {
-					logrus.Infof("successfully executed command: %s on all pods: %v", command, podList)
+					logrus.Infof("successfully executed command: %s on all pods: %v", command, podNames)
 					_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
 					if err != nil {
 						logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
@@ -179,6 +231,8 @@ func getHostname() (string, error) {
 // command line arguments
 var (
 	podList            arrayFlags
+	labelSelector      string
+	namespace          string
 	podContainer       string
 	command            string
 	statusCheckTimeout int64
@@ -187,6 +241,8 @@ var (
 
 func init() {
 	flag.Var(&podList, "pod", "Pod on which to run the command. Format: <pod-namespace>/<pod-name> e.g dev/pod-12345")
+	flag.StringVar(&labelSelector, "selector", "", "Label selector to specify pods on which to run the command. Must be used with the -namespace flag.")
+	flag.StringVar(&namespace, "namespace", "", "Name of the namespace of the pods on which to run the command.")
 	flag.StringVar(&podContainer, "container", "", "(Optional) name of the container within the pod on which to run the command. If not specified, executor will pick the first container.")
 	flag.StringVar(&command, "cmd", "", "The command to run inside the pod")
 	flag.StringVar(&taskID, "taskid", "", "A unique ID the caller can provide which can be later used to clean the status files created by the command executor.")
