@@ -109,6 +109,10 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 	if (out != nil) && (out.ObjectLockConfiguration != nil) {
 		if aws.StringValue(out.ObjectLockConfiguration.ObjectLockEnabled) == "Enabled" {
 			objLockInfo.LockEnabled = true
+		} else {
+			// For some of the objectstore like FB and dell ECS, GetObjectLockConfiguration
+			// will return empty objectlockconfiguration instead of nil or error
+			return objLockInfo, nil
 		}
 		if out.ObjectLockConfiguration.Rule != nil &&
 			out.ObjectLockConfiguration.Rule.DefaultRetention != nil {
