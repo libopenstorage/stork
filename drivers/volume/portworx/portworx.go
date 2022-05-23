@@ -166,6 +166,9 @@ const (
 	proxyPath            = "proxy_nfs_exportpath"
 	pureBackendParam     = "backend"
 	pureFileParam        = "pure_file"
+
+	// nearsyncPromoteLabel volume label used to trigger promotion
+	nearsyncPromoteLabel = "near_sync_promote"
 )
 
 type cloudSnapStatus struct {
@@ -2368,6 +2371,40 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 		// ignore not found errors, for everything else return the error
 		// back to the caller
 		return err
+	}
+	return nil
+}
+func (p *portworx) ActivateMigration(migration *storkapi.Migration) error {
+	// TODO admin or user vol driver?
+	//volDriver, err := p.getUserVolDriver(migration.Annotations, "" /*templatized ns not supported*/)
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return err
+	}
+
+	log.MigrationLog(migration).Debugf("ActivateMigration")
+	for _, migrVol := range migration.Status.Volumes {
+		volumes, err := volDriver.Inspect([]string{migrVol.Volume})
+		if err != nil {
+			return err
+		}
+		if len(volumes) != 1 {
+			return &errors.ErrNotFound{
+				ID:   migrVol.Volume,
+				Type: "Volume",
+			}
+		}
+		vol := volumes[0]
+
+		spec := &api.VolumeSpec{
+			VolumeLabels: vol.Spec.GetVolumeLabels(),
+		}
+		spec.VolumeLabels[nearsyncPromoteLabel] = "true"
+		log.MigrationLog(migration).Debugf("Promoting vol: %v with updated labels: %v", vol.GetId(), spec.VolumeLabels)
+
+		if err := volDriver.Set(vol.GetId(), vol.GetLocator(), spec); err != nil {
+			return fmt.Errorf("failed to promote volume: %v", vol.GetId())
+		}
 	}
 	return nil
 }

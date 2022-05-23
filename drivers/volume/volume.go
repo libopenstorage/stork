@@ -178,6 +178,8 @@ type ClusterPairPluginInterface interface {
 
 // MigratePluginInterface Interface to migrate data between clusters
 type MigratePluginInterface interface {
+	// Promote near-sync volumes when activating a migration
+	ActivateMigration(*storkapi.Migration) error
 	// Start migration of volumes specified by the spec. Should only migrate
 	// volumes, not the specs associated with them
 	StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
@@ -407,6 +409,11 @@ func (c *ClusterPairNotSupported) DeletePair(*storkapi.ClusterPair) error {
 
 // MigrationNotSupported to be used by drivers that don't support migration
 type MigrationNotSupported struct{}
+
+// ActivateMigration returns ErrNotSupported
+func (m *MigrationNotSupported) ActivateMigration(*storkapi.Migration) error {
+	return &errors.ErrNotSupported{}
+}
 
 // StartMigration returns ErrNotSupported
 func (m *MigrationNotSupported) StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
