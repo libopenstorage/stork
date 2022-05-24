@@ -101,7 +101,8 @@ var _ = Describe("{Sharedv4Functional}", func() {
 
 		It("should set device path to RO and validate recovery", func() {
 			for _, ctx := range testSharedV4Contexts {
-				_, apiVol, attachedNode := getSv4TestAppVol(ctx)
+				var err error
+				vol, apiVol, attachedNode := getSv4TestAppVol(ctx)
 				counterCollectionInterval := 3 * time.Duration(numPods) * time.Second
 				devicePath := fmt.Sprintf("%s%s", devicePathPrefix, apiVol.Id)
 
@@ -123,6 +124,9 @@ var _ = Describe("{Sharedv4Functional}", func() {
 				Step(fmt.Sprintf("restart vol driver %s", ctx.App.Key), func() {
 					restartVolumeDriverOnNode(attachedNode)
 					ValidateContext(ctx)
+					// updates the attachedNode; sometimes the volume is moved when restart to fix the readonly volume
+					attachedNode, err = Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				Step(fmt.Sprintf("validate counter are active for %s", ctx.App.Key), func() {
