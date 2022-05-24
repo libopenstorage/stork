@@ -4,7 +4,7 @@ metadata:
   name: postgres-pgbench-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "1"
+  repl: "2"
   priority_io: "low"
 allowVolumeExpansion: true
 ---

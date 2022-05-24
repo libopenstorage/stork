@@ -155,6 +155,9 @@ type Driver interface {
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
 
+	// GetPxNodes returns current PX nodes in the cluster
+	GetPxNodes() ([]*api.StorageNode, error)
+
 	// RecoverDriver will recover a volume driver from a failure/storage down state.
 	// This could be used by a volume driver to recover itself from any underlying storage
 	// failure.

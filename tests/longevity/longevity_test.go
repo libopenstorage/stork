@@ -80,6 +80,8 @@ var _ = Describe("{Longevity}", func() {
 		AutoFsTrim:           TriggerAutoFsTrim,
 		RestartManyVolDriver: TriggerRestartManyVolDriver,
 		RebootManyNodes:      TriggerRebootManyNodes,
+		NodeDecommission:     TriggerNodeDecommission,
+		NodeRejoin:           TriggerNodeRejoin,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -234,6 +236,7 @@ func populateDisruptiveTriggers() {
 		RestartManyVolDriver:            true,
 		RebootManyNodes:                 true,
 		RestartKvdbVolDriver:            true,
+		NodeDecommission:                true,
 	}
 }
 
@@ -346,6 +349,8 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
+	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
+	triggerInterval[NodeRejoin] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -717,6 +722,28 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrim][3] = 21 * baseInterval
 	triggerInterval[AutoFsTrim][2] = 24 * baseInterval
 	triggerInterval[AutoFsTrim][1] = 27 * baseInterval
+
+	triggerInterval[NodeDecommission][10] = 1 * baseInterval
+	triggerInterval[NodeDecommission][9] = 3 * baseInterval
+	triggerInterval[NodeDecommission][8] = 6 * baseInterval
+	triggerInterval[NodeDecommission][7] = 9 * baseInterval
+	triggerInterval[NodeDecommission][6] = 12 * baseInterval
+	triggerInterval[NodeDecommission][5] = 15 * baseInterval
+	triggerInterval[NodeDecommission][4] = 18 * baseInterval
+	triggerInterval[NodeDecommission][3] = 21 * baseInterval
+	triggerInterval[NodeDecommission][2] = 24 * baseInterval
+	triggerInterval[NodeDecommission][1] = 27 * baseInterval
+
+	triggerInterval[NodeRejoin][10] = 1 * baseInterval
+	triggerInterval[NodeRejoin][9] = 3 * baseInterval
+	triggerInterval[NodeRejoin][8] = 6 * baseInterval
+	triggerInterval[NodeRejoin][7] = 9 * baseInterval
+	triggerInterval[NodeRejoin][6] = 12 * baseInterval
+	triggerInterval[NodeRejoin][5] = 15 * baseInterval
+	triggerInterval[NodeRejoin][4] = 18 * baseInterval
+	triggerInterval[NodeRejoin][3] = 21 * baseInterval
+	triggerInterval[NodeRejoin][2] = 24 * baseInterval
+	triggerInterval[NodeRejoin][1] = 27 * baseInterval
 
 	baseInterval = 300 * time.Minute
 

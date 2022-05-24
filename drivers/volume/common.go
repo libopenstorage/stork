@@ -351,6 +351,15 @@ func (d *DefaultDriver) WaitDriverUpOnNode(n node.Node, timeout time.Duration) e
 	}
 }
 
+// GetPxNodes returns current PX nodes in the cluster
+func (d *DefaultDriver) GetPxNodes() ([]*api.StorageNode, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxNodes()",
+	}
+
+}
+
 // WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
 func (d *DefaultDriver) WaitDriverDownOnNode(n node.Node) error {
 	return &errors.ErrNotSupported{
