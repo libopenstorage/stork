@@ -9,16 +9,12 @@ data:
   # list will go away with Kubernetes v1.10 where it will use the defaults if nothing is
   # specified.
   stork-config.yaml: |-
-    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    apiVersion: kubescheduler.config.k8s.io/v1beta2
     kind: KubeSchedulerConfiguration
     leaderElection:
       leaderElect: true
       resourceNamespace: kube-system
       resourceName: stork-scheduler
-      leaseDuration: 15s
-      renewDeadline: 10s
-      retryPeriod: 2s
-      resourceLock: leases
     profiles:
       - schedulerName: stork
     extenders:
