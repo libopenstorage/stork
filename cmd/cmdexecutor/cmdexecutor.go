@@ -45,6 +45,7 @@ func parsePodNameAndNamespace(podString string) (string, string, error) {
 	return "default", podString, nil
 }
 
+// Parses label selector (e.g. "label1=value1,label2=value2") into a map of strings.
 func parseLabelSelector(labelSelectorString string) (map[string]string, error) {
 	labelSelector, err := metav1.ParseToLabelSelector(labelSelectorString)
 	if err != nil {
@@ -66,17 +67,17 @@ func main() {
 	flag.Parse()
 
 	podListSpecified := len(podList) > 0
-	selectorWithNamespaceSpecified := labelSelector != "" && namespace != ""
+	selectorAndNamespaceSpecified := labelSelector != "" && namespace != ""
 
 	if labelSelector != "" && namespace == "" {
 		logrus.Fatalf("-namespace must be specified when using -selector")
 	}
 
-	if podListSpecified && selectorWithNamespaceSpecified {
+	if podListSpecified && selectorAndNamespaceSpecified {
 		logrus.Fatalf("-pod args cannot be used in combination with -selector arg")
 	}
 
-	if !podListSpecified && !selectorWithNamespaceSpecified {
+	if !podListSpecified && !selectorAndNamespaceSpecified {
 		logrus.Fatalf("no pods specified to the command executor")
 	}
 
@@ -117,7 +118,7 @@ func main() {
 	}
 
 	// Fetch list of pods using label selector.
-	if selectorWithNamespaceSpecified {
+	if selectorAndNamespaceSpecified {
 		selectorsMap, err := parseLabelSelector(labelSelector)
 		if err != nil {
 			logrus.Fatalf(err.Error())
