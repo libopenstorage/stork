@@ -105,33 +105,19 @@ func main() {
 	}
 
 	var podNames []types.NamespacedName
-	// Map podList args to podNames.
-	for _, pod := range podList {
-		namespace, name, err := parsePodNameAndNamespace(pod)
+	// Get list of specified by the -pod args.
+	if podListSpecified {
+		podNames, err = getPodNamesFromArgs(podList)
 		if err != nil {
-			logrus.Fatalf("failed to parse pod due to: %v", err)
+			logrus.Fatalf(err.Error())
 		}
-		podNames = append(podNames, types.NamespacedName{
-			Namespace: namespace,
-			Name:      name,
-		})
 	}
 
-	// Fetch list of pods using label selector.
+	// Get list of pods specified by the -selector and -namespace args.
 	if selectorAndNamespaceSpecified {
-		selectorsMap, err := parseLabelSelector(labelSelector)
+		podNames, err = getPodNamesUsingLabelSelector(labelSelector, namespace)
 		if err != nil {
 			logrus.Fatalf(err.Error())
-		}
-		pods, err := core.Instance().GetPods(namespace, selectorsMap)
-		if err != nil {
-			logrus.Fatalf(err.Error())
-		}
-		for _, pod := range pods.Items {
-			podNames = append(podNames, types.NamespacedName{
-				Namespace: pod.Namespace,
-				Name:      pod.Name,
-			})
 		}
 	}
 
@@ -214,6 +200,42 @@ Loop:
 			}
 		}
 	}
+}
+
+func getPodNamesFromArgs(podList []string) ([]types.NamespacedName, error) {
+	var podNames []types.NamespacedName
+	for _, pod := range podList {
+		namespace, name, err := parsePodNameAndNamespace(pod)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse pod due to: %v", err)
+		}
+		podNames = append(podNames, types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		})
+	}
+	return podNames, nil
+}
+
+func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.NamespacedName, error) {
+	selectorsMap, err := parseLabelSelector(labelSelector)
+	if err != nil {
+		return nil, err
+	}
+
+	pods, err := core.Instance().GetPods(namespace, selectorsMap)
+	if err != nil {
+		return nil, err
+	}
+
+	var podNames []types.NamespacedName
+	for _, pod := range pods.Items {
+		podNames = append(podNames, types.NamespacedName{
+			Namespace: pod.Namespace,
+			Name:      pod.Name,
+		})
+	}
+	return podNames, nil
 }
 
 func getHostname() (string, error) {
