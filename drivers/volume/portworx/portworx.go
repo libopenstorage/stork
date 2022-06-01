@@ -2382,28 +2382,50 @@ func (p *portworx) ActivateMigration(migration *storkapi.Migration) error {
 		return err
 	}
 
-	log.MigrationLog(migration).Debugf("ActivateMigration")
-	for _, migrVol := range migration.Status.Volumes {
-		volumes, err := volDriver.Inspect([]string{migrVol.Volume})
+	log.MigrationLog(migration).Debugf("ActivateMigration namespaces: %v", migration.Spec.Namespaces)
+	//for _, migrVol := range migration.Status.Volumes {
+	for _, namespace := range migration.Spec.Namespaces {
+		pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
 		if err != nil {
-			return err
+			return fmt.Errorf("error getting list of volumes to migrate: %v", err)
 		}
-		if len(volumes) != 1 {
-			return &errors.ErrNotFound{
-				ID:   migrVol.Volume,
-				Type: "Volume",
+		log.MigrationLog(migration).Debugf("ActivateMigration pvcs: %v", pvcList.Items)
+		for _, pvc := range pvcList.Items {
+			if !p.OwnsPVC(core.Instance(), &pvc) {
+				continue
 			}
-		}
-		vol := volumes[0]
+			if resourcecollector.SkipResource(pvc.Annotations) {
+				continue
+			}
 
-		spec := &api.VolumeSpec{
-			VolumeLabels: vol.Spec.GetVolumeLabels(),
-		}
-		spec.VolumeLabels[nearsyncPromoteLabel] = "true"
-		log.MigrationLog(migration).Debugf("Promoting vol: %v with updated labels: %v", vol.GetId(), spec.VolumeLabels)
+			volID, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+			if err != nil {
+				return fmt.Errorf("error getting volume for PVC: %v", err)
+			}
+			log.MigrationLog(migration).Debugf("ActivateMigration volID: %v", volID)
 
-		if err := volDriver.Set(vol.GetId(), vol.GetLocator(), spec); err != nil {
-			return fmt.Errorf("failed to promote volume: %v", vol.GetId())
+			//volumes, err := volDriver.Inspect([]string{migrVol.Volume})
+			volumes, err := volDriver.Inspect([]string{volID})
+			if err != nil {
+				return err
+			}
+			if len(volumes) != 1 {
+				return &errors.ErrNotFound{
+					ID:   volID,
+					Type: "Volume",
+				}
+			}
+			vol := volumes[0]
+
+			spec := &api.VolumeSpec{
+				VolumeLabels: vol.Spec.GetVolumeLabels(),
+			}
+			spec.VolumeLabels[nearsyncPromoteLabel] = "true"
+			log.MigrationLog(migration).Debugf("Promoting vol: %v with updated labels: %v", vol.GetId(), spec.VolumeLabels)
+
+			if err := volDriver.Set(vol.GetId(), vol.GetLocator(), spec); err != nil {
+				return fmt.Errorf("failed to promote volume: %v", vol.GetId())
+			}
 		}
 	}
 	return nil
