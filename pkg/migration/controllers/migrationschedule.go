@@ -103,6 +103,7 @@ func (m *MigrationScheduleController) Reconcile(ctx context.Context, request rec
 
 func (m *MigrationScheduleController) handle(ctx context.Context, migrationSchedule *stork_api.MigrationSchedule) error {
 	// Delete any migrations created by the schedule
+	logrus.Debugf("Schedule Handle: %v", migrationSchedule)
 	if migrationSchedule.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(migrationSchedule, controllers.FinalizerCleanup) {
 			if err := m.deleteMigrations(migrationSchedule); err != nil {
@@ -154,6 +155,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 
 		}
 	}
+	logrus.Debugf("suspend: %v", *migrationSchedule.Spec.Suspend)
 	if !(*migrationSchedule.Spec.Suspend) {
 		remoteConfig, err := getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 		if err != nil {
@@ -179,6 +181,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				err.Error())
 			return nil
 		}
+		logrus.Debugf("autoSuspend: %v", migrationSchedule.Spec.AutoSuspend)
 		if migrationSchedule.Spec.AutoSuspend {
 			var remoteMigrSched *stork_api.MigrationSchedule
 			remoteMigrSched, err = remoteOps.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
