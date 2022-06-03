@@ -1940,11 +1940,11 @@ func (m *MigrationController) getMigrationSummary(migration *stork_api.Migration
 		}
 		elapsedTimeVolume := "NA"
 		if !migration.CreationTimestamp.IsZero() {
-			if migration.Status.Stage == stork_api.MigrationStageApplications {
+			if migration.Status.Stage == stork_api.MigrationStageApplications || migration.Status.Stage == stork_api.MigrationStageFinal {
 				if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
 					elapsedTimeVolume = migration.Status.VolumeMigrationFinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
 				}
-			} else {
+			} else { // Volume migration hasn't finished, use current total time
 				elapsedTimeVolume = time.Since(migration.CreationTimestamp.Time).String()
 			}
 		}
