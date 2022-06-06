@@ -33,7 +33,8 @@ var (
 	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
 
-	triggerFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	triggerFunctions     map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	emailTriggerFunction map[string]func()
 )
 
 func TestLongevity(t *testing.T) {
@@ -54,18 +55,19 @@ var _ = BeforeSuite(func() {
 var _ = Describe("{Longevity}", func() {
 	contexts := make([]*scheduler.Context, 0)
 	var triggerLock sync.Mutex
+	var emailTriggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-		DeployApps:           TriggerDeployNewApps,
-		RebootNode:           TriggerRebootNodes,
-		CrashNode:            TriggerCrashNodes,
-		RestartVolDriver:     TriggerRestartVolDriver,
-		CrashVolDriver:       TriggerCrashVolDriver,
-		HAIncrease:           TriggerHAIncrease,
-		HADecrease:           TriggerHADecrease,
-		VolumeClone:          TriggerVolumeClone,
-		VolumeResize:         TriggerVolumeResize,
-		EmailReporter:        TriggerEmailReporter,
+		DeployApps:       TriggerDeployNewApps,
+		RebootNode:       TriggerRebootNodes,
+		CrashNode:        TriggerCrashNodes,
+		RestartVolDriver: TriggerRestartVolDriver,
+		CrashVolDriver:   TriggerCrashVolDriver,
+		HAIncrease:       TriggerHAIncrease,
+		HADecrease:       TriggerHADecrease,
+		VolumeClone:      TriggerVolumeClone,
+		VolumeResize:     TriggerVolumeResize,
+		//EmailReporter:        TriggerEmailReporter,
 		AppTaskDown:          TriggerAppTaskDown,
 		CoreChecker:          TriggerCoreChecker,
 		CloudSnapShot:        TriggerCloudSnapShot,
@@ -83,6 +85,10 @@ var _ = Describe("{Longevity}", func() {
 		NodeDecommission:     TriggerNodeDecommission,
 		NodeRejoin:           TriggerNodeRejoin,
 	}
+	//Creating a distinct trigger to make sure email triggers at regular intervals
+	emailTriggerFunction = map[string]func(){
+		EmailReporter: TriggerEmailReporter,
+	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
 			configMapNS, testTriggersConfigMap), func() {
@@ -95,11 +101,22 @@ var _ = Describe("{Longevity}", func() {
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
+				logrus.Infof("Registering trigger: [%v]", triggerType)
 				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
-		logrus.Infof("Finished registering triggers")
+		logrus.Infof("Finished registering test triggers")
+
+		Step("Register email trigger", func() {
+			for triggerType, triggerFunc := range emailTriggerFunction {
+				logrus.Infof("Registering email trigger: [%v]", triggerType)
+				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
+				wg.Add(1)
+			}
+		})
+		logrus.Infof("Finished registering email trigger")
+
 		CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
 		close(triggerEventsChan)
@@ -165,6 +182,48 @@ func testTrigger(wg *sync.WaitGroup,
 			triggerLoc.Unlock()
 			logrus.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 			//}
+
+			lastInvocationTime = time.Now().Local()
+
+		}
+		time.Sleep(controlLoopSleepTime)
+	}
+}
+
+func emailEventTrigger(wg *sync.WaitGroup,
+	triggerType string,
+	triggerFunc func(),
+	emailTriggerLock *sync.Mutex) {
+	defer wg.Done()
+
+	minRunTime := Inst().MinRunTimeMins
+	timeout := (minRunTime) * 60
+
+	start := time.Now().Local()
+	lastInvocationTime := start
+
+	for {
+		// if timeout is 0, run indefinitely
+		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
+			break
+		}
+
+		// Get next interval of when trigger should happen
+		// This interval can dynamically change by editing configMap
+		waitTime, isTriggerEnabled := isTriggerEnabled(triggerType)
+
+		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
+			// If trigger is not disabled and its right time to trigger,
+
+			logrus.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			emailTriggerLock.Lock()
+			logrus.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+
+			triggerFunc()
+			logrus.Infof("Trigger Function completed for [%s]\n", triggerType)
+
+			emailTriggerLock.Unlock()
+			logrus.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 
 			lastInvocationTime = time.Now().Local()
 
