@@ -844,8 +844,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		}
 	}
 	resKinds := make(map[string]string)
-	var updateObjects []runtime.Unstructured
-
+	var updateObjects, allObjects []runtime.Unstructured
 	// Don't modify resources if mentioned explicitly in specs
 	if *migration.Spec.SkipServiceUpdate {
 		if m.resourceCollector.Opts == nil {
@@ -853,19 +852,27 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		}
 		m.resourceCollector.Opts[resourcecollector.ServiceKind] = "true"
 	}
-	allObjects, err := m.resourceCollector.GetResources(
-		migration.Spec.Namespaces,
-		migration.Spec.Selectors,
-		nil,
-		migration.Spec.IncludeOptionalResourceTypes,
-		false)
-	if err != nil {
-		m.recorder.Event(migration,
-			v1.EventTypeWarning,
-			string(stork_api.MigrationStatusFailed),
-			fmt.Sprintf("Error getting resource: %v", err))
-		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
-		return err
+	if volumesOnly {
+		allObjects, err = m.getVolumeOnlyMigrationResources(migration)
+		if err != nil {
+			// already raised event in getVolumeOnlyMigrationResources()
+			return err
+		}
+	} else {
+		allObjects, err = m.resourceCollector.GetResources(
+			migration.Spec.Namespaces,
+			migration.Spec.Selectors,
+			nil,
+			migration.Spec.IncludeOptionalResourceTypes,
+			false)
+		if err != nil {
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				fmt.Sprintf("Error getting resource: %v", err))
+			log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
+			return err
+		}
 	}
 
 	// Save the collected resources infos in the status
@@ -2012,4 +2019,55 @@ func (m *MigrationController) createCRD() error {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+func (m *MigrationController) getVolumeOnlyMigrationResources(migration *stork_api.Migration) ([]runtime.Unstructured, error) {
+	var resources []runtime.Unstructured
+	// add pv objects
+	resource := metav1.APIResource{
+		Name:       "persistentvolumes",
+		Kind:       "PersistentVolume",
+		Version:    "v1",
+		Namespaced: false,
+	}
+	objects, err := m.resourceCollector.GetResourcesForType(
+		resource,
+		nil,
+		migration.Spec.Namespaces,
+		migration.Spec.Selectors,
+		nil,
+		false)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting pv resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
+		return resources, err
+	}
+	resources = append(resources, objects.Items...)
+	// add pvcs to resource list
+	resource = metav1.APIResource{
+		Name:       "persistentvolumeclaims",
+		Kind:       "PersistentVolumeClaim",
+		Version:    "v1",
+		Namespaced: true,
+	}
+	objects, err = m.resourceCollector.GetResourcesForType(
+		resource,
+		nil,
+		migration.Spec.Namespaces,
+		migration.Spec.Selectors,
+		nil,
+		false)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting pv resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
+		return resources, err
+	}
+	resources = append(resources, objects.Items...)
+	return resources, nil
 }
