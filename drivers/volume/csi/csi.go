@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	kSnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -65,14 +66,38 @@ const (
 
 // csiBackupObject represents a backup of a series of CSI objects
 type csiBackupObject struct {
+	VolumeSnapshots          interface{} `json:"volumeSnapshots"`
+	VolumeSnapshotContents   interface{} `json:"volumeSnapshotContents"`
+	VolumeSnapshotClasses    interface{} `json:"volumeSnapshotClasses"`
+	v1VolumeSnapshotRequired bool
+}
+
+// BackupObjectv1Csi represents a backup of a series of v1 VolumeSnapshot CSI objects
+type BackupObjectv1Csi struct {
+	VolumeSnapshots        map[string]*kSnapshotv1.VolumeSnapshot        `json:"volumeSnapshots"`
+	VolumeSnapshotContents map[string]*kSnapshotv1.VolumeSnapshotContent `json:"volumeSnapshotContents"`
+	VolumeSnapshotClasses  map[string]*kSnapshotv1.VolumeSnapshotClass   `json:"volumeSnapshotClasses"`
+	V1SnapshotRequired     bool
+}
+
+// BackupObjectv1beta1Csi represents a backup of a series of v1beta1 VolumeSnapshot CSI objects
+type BackupObjectv1beta1Csi struct {
 	VolumeSnapshots        map[string]*kSnapshotv1beta1.VolumeSnapshot        `json:"volumeSnapshots"`
 	VolumeSnapshotContents map[string]*kSnapshotv1beta1.VolumeSnapshotContent `json:"volumeSnapshotContents"`
 	VolumeSnapshotClasses  map[string]*kSnapshotv1beta1.VolumeSnapshotClass   `json:"volumeSnapshotClasses"`
+	V1SnapshotRequired     bool
 }
 
 //  GetVolumeSnapshotContent retrieves a backed up volume snapshot
-func (cbo *csiBackupObject) GetVolumeSnapshot(snapshotID string) (*kSnapshotv1beta1.VolumeSnapshot, error) {
-	vs, ok := cbo.VolumeSnapshots[snapshotID]
+func (cbo *csiBackupObject) GetVolumeSnapshot(snapshotID string) (interface{}, error) {
+	var vs interface{}
+	var ok bool
+
+	if cbo.v1VolumeSnapshotRequired {
+		vs, ok = cbo.VolumeSnapshots.(map[string]*kSnapshotv1.VolumeSnapshot)[snapshotID]
+	} else {
+		vs, ok = cbo.VolumeSnapshots.(map[string]*kSnapshotv1beta1.VolumeSnapshot)[snapshotID]
+	}
 	if !ok {
 		return nil, fmt.Errorf("failed to retrieve volume snapshot for snapshotID %s", snapshotID)
 	}
@@ -80,9 +105,15 @@ func (cbo *csiBackupObject) GetVolumeSnapshot(snapshotID string) (*kSnapshotv1be
 }
 
 // GetVolumeSnapshotContent retrieves a backed up volume snapshot content
-func (cbo *csiBackupObject) GetVolumeSnapshotContent(snapshotID string) (*kSnapshotv1beta1.VolumeSnapshotContent, error) {
+func (cbo *csiBackupObject) GetVolumeSnapshotContent(snapshotID string) (interface{}, error) {
+	var vsc interface{}
+	var ok bool
 
-	vsc, ok := cbo.VolumeSnapshotContents[snapshotID]
+	if cbo.v1VolumeSnapshotRequired {
+		vsc, ok = cbo.VolumeSnapshotContents.(map[string]*kSnapshotv1.VolumeSnapshotContent)[snapshotID]
+	} else {
+		vsc, ok = cbo.VolumeSnapshotContents.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)[snapshotID]
+	}
 	if !ok {
 		return nil, fmt.Errorf("failed to retrieve volume snapshot content for snapshotID %s", snapshotID)
 	}
@@ -90,18 +121,36 @@ func (cbo *csiBackupObject) GetVolumeSnapshotContent(snapshotID string) (*kSnaps
 }
 
 // GetVolumeSnapshotClass retrieves a backed up volume snapshot class
-func (cbo *csiBackupObject) GetVolumeSnapshotClass(snapshotID string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
-	vs, ok := cbo.VolumeSnapshots[snapshotID]
-	if !ok {
-		return nil, fmt.Errorf("failed to retrieve volume snapshot for snapshotID %s", snapshotID)
-	}
+func (cbo *csiBackupObject) GetVolumeSnapshotClass(snapshotID string) (interface{}, error) {
+	var vsClass, vs interface{}
+	var vsClassName string
+	var ok bool
 
-	if vs.Spec.VolumeSnapshotClassName == nil {
-		return nil, fmt.Errorf("failed to retrieve volume snapshot class for snapshot %s. Volume snapshot class is undefined", snapshotID)
-	}
-	vsClassName := *vs.Spec.VolumeSnapshotClassName
+	if cbo.v1VolumeSnapshotRequired {
+		vs, ok = cbo.VolumeSnapshots.(map[string]*kSnapshotv1.VolumeSnapshot)[snapshotID]
+		if !ok {
+			logrus.Errorf("failed to retrieve volume snapshot for snapshot ID %s", snapshotID)
+			return nil, fmt.Errorf("failed to retrieve volume snapshot for snapshot ID %s", snapshotID)
+		}
+		if vs.(*kSnapshotv1.VolumeSnapshot).Spec.VolumeSnapshotClassName == nil {
+			return nil, fmt.Errorf("failed to retrieve volume snapshot class for snapshot %s. Volume snapshot class is undefined", snapshotID)
+		}
+		vsClassName = *vs.(*kSnapshotv1.VolumeSnapshot).Spec.VolumeSnapshotClassName
 
-	vsClass, ok := cbo.VolumeSnapshotClasses[vsClassName]
+		vsClass, ok = cbo.VolumeSnapshotClasses.(map[string]*kSnapshotv1.VolumeSnapshotClass)[vsClassName]
+	} else {
+		vs, ok = cbo.VolumeSnapshots.(map[string]*kSnapshotv1beta1.VolumeSnapshot)[snapshotID]
+		if !ok {
+			logrus.Errorf("failed to retrieve volume snapshot for snapshot ID %s", snapshotID)
+			return nil, fmt.Errorf("failed to retrieve volume snapshot for snapshot ID %s", snapshotID)
+		}
+		if vs.(*kSnapshotv1beta1.VolumeSnapshot).Spec.VolumeSnapshotClassName == nil {
+			return nil, fmt.Errorf("failed to retrieve volume snapshot class for snapshot %s. Volume snapshot class is undefined", snapshotID)
+		}
+		vsClassName = *vs.(*kSnapshotv1beta1.VolumeSnapshot).Spec.VolumeSnapshotClassName
+
+		vsClass, ok = cbo.VolumeSnapshotClasses.(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)[vsClassName]
+	}
 	if !ok {
 		return nil, fmt.Errorf("failed to retrieve volume snapshot class for snapshotID %s", snapshotID)
 	}
@@ -110,8 +159,9 @@ func (cbo *csiBackupObject) GetVolumeSnapshotClass(snapshotID string) (*kSnapsho
 }
 
 type csi struct {
-	snapshotClient *kSnapshotClient.Clientset
-	snapshotter    snapshotter.Driver
+	snapshotClient     *kSnapshotClient.Clientset
+	snapshotter        snapshotter.Driver
+	v1SnapshotRequired bool
 
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
@@ -133,6 +183,11 @@ func (c *csi) Init(_ interface{}) error {
 	}
 	c.snapshotClient = cs
 
+	c.v1SnapshotRequired, err = version.RequiresV1VolumeSnapshot()
+	if err != nil {
+		return err
+	}
+
 	err = c.createDefaultSnapshotClasses()
 	if err != nil {
 		return err
@@ -147,11 +202,29 @@ func (c *csi) Init(_ interface{}) error {
 }
 
 func (c *csi) createDefaultSnapshotClasses() error {
-	existingSnapshotClasses, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		logrus.Infof("CSI VolumeSnapshotClass CRD does not exist, skipping default SnapshotClass creation")
-		return nil
+	var existingSnapshotClassesDriverList []string
+	if c.v1SnapshotRequired {
+		existingSnapshotClasses, err := c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			logrus.Infof("CSI v1 VolumeSnapshotClass CRD does not exist, skipping default SnapshotClass creation - error:  %v", err)
+			return nil
+		}
+		for _, existingSnapClass := range existingSnapshotClasses.Items {
+			logrus.Infof("Driver name %s", existingSnapClass.Driver)
+			existingSnapshotClassesDriverList = append(existingSnapshotClassesDriverList, existingSnapClass.Driver)
+		}
+	} else {
+		existingSnapshotClasses, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			logrus.Infof("CSI v1beta1 VolumeSnapshotClass CRD does not exist, skipping default SnapshotClass creation - error: %v", err)
+			return nil
+		}
+		for _, existingSnapClass := range existingSnapshotClasses.Items {
+			logrus.Infof("Driver name %s", existingSnapClass.Driver)
+			existingSnapshotClassesDriverList = append(existingSnapshotClassesDriverList, existingSnapClass.Driver)
+		}
 	}
+
 	logrus.Infof("Creating default CSI SnapshotClasses")
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -200,8 +273,8 @@ func (c *csi) createDefaultSnapshotClasses() error {
 		}
 
 		foundSnapClass := false
-		for _, existingSnapClass := range existingSnapshotClasses.Items {
-			if driverName == existingSnapClass.Driver {
+		for _, existingSnapClassDriverName := range existingSnapshotClassesDriverList {
+			if driverName == existingSnapClassDriverName {
 				logrus.Infof("CSI VolumeSnapshotClass exists for driver %v. Skipping creation of snapshotclass", driverName)
 				foundSnapClass = true
 				break
@@ -299,11 +372,23 @@ func (c *csi) getSnapshotClassName(
 	return ""
 }
 
-func (c *csi) getVolumeSnapshotClass(snapshotClassName string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
+func (c *csi) getVolumeSnapshotClass(snapshotClassName string) (interface{}, error) {
+	if c.v1SnapshotRequired {
+		return c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Get(context.TODO(), snapshotClassName, metav1.GetOptions{})
+	}
 	return c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), snapshotClassName, metav1.GetOptions{})
 }
 
-func (c *csi) createVolumeSnapshotClass(snapshotClassName, driverName string) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
+func (c *csi) createVolumeSnapshotClass(snapshotClassName, driverName string) (interface{}, error) {
+	if c.v1SnapshotRequired {
+		return c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Create(context.TODO(), &kSnapshotv1.VolumeSnapshotClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: snapshotClassName,
+			},
+			Driver:         driverName,
+			DeletionPolicy: kSnapshotv1.VolumeSnapshotContentRetain,
+		}, metav1.CreateOptions{})
+	}
 	return c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(context.TODO(), &kSnapshotv1beta1.VolumeSnapshotClass{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: snapshotClassName,
@@ -333,14 +418,23 @@ func (c *csi) ensureVolumeSnapshotClassCreated(snapshotClassCreatedForDriver map
 		// If we've found a vsClass, but it doesn't have a RetainPolicy, update to Retain.
 		// This is essential for the storage backend to not delete the snapshot.
 		// Some CSI drivers require specific VolumeSnapshotClass parameters, so we will leave those as is.
-		if vsClass.DeletionPolicy == kSnapshotv1beta1.VolumeSnapshotContentDelete {
-			vsClass.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentRetain
-			_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Update(context.TODO(), vsClass, metav1.UpdateOptions{})
-			if err != nil {
-				return nil, err
+		if c.v1SnapshotRequired {
+			if vsClass.(*kSnapshotv1.VolumeSnapshotClass).DeletionPolicy == kSnapshotv1.VolumeSnapshotContentDelete {
+				vsClass.(*kSnapshotv1.VolumeSnapshotClass).DeletionPolicy = kSnapshotv1.VolumeSnapshotContentRetain
+				_, err = c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Update(context.TODO(), vsClass.(*kSnapshotv1.VolumeSnapshotClass), metav1.UpdateOptions{})
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			if vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).DeletionPolicy == kSnapshotv1beta1.VolumeSnapshotContentDelete {
+				vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentRetain
+				_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Update(context.TODO(), vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass), metav1.UpdateOptions{})
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
-
 		snapshotClassCreatedForDriver[snapshotClassName] = true
 	}
 
@@ -488,19 +582,34 @@ func (c *csi) uploadObject(
 // uploadSnapshotsAndContents issues an object upload for all VolumeSnapshots and VolumeSnapshotContents provided
 func (c *csi) uploadCSIBackupObject(
 	backup *storkapi.ApplicationBackup,
-	vsMap map[string]*kSnapshotv1beta1.VolumeSnapshot,
-	vsContentMap map[string]*kSnapshotv1beta1.VolumeSnapshotContent,
-	vsClassMap map[string]*kSnapshotv1beta1.VolumeSnapshotClass,
+	vsMap interface{},
+	vsContentMap interface{},
+	vsClassMap interface{},
 ) error {
-	csiBackup := csiBackupObject{
-		VolumeSnapshots:        vsMap,
-		VolumeSnapshotContents: vsContentMap,
-		VolumeSnapshotClasses:  vsClassMap,
+	var csiBackup interface{}
+	v1VolumeSnapshotRequired, err := version.RequiresV1VolumeSnapshot()
+	if err != nil {
+		return fmt.Errorf("failed to get volumesnapshot version supported by cluster")
+	}
+	if v1VolumeSnapshotRequired {
+		csiBackup = csiBackupObject{
+			VolumeSnapshots:          vsMap.(map[string]*kSnapshotv1.VolumeSnapshot),
+			VolumeSnapshotContents:   vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent),
+			VolumeSnapshotClasses:    vsClassMap.(map[string]*kSnapshotv1.VolumeSnapshotClass),
+			v1VolumeSnapshotRequired: true,
+		}
+	} else {
+		csiBackup = csiBackupObject{
+			VolumeSnapshots:          vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot),
+			VolumeSnapshotContents:   vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent),
+			VolumeSnapshotClasses:    vsClassMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotClass),
+			v1VolumeSnapshotRequired: false,
+		}
 	}
 
 	var csiBackupBytes []byte
 
-	csiBackupBytes, err := json.Marshal(csiBackup)
+	csiBackupBytes, err = json.Marshal(csiBackup)
 	if err != nil {
 		return err
 	}
@@ -529,6 +638,38 @@ func (c *csi) cleanupSnapshotsForRestore(
 	restore *storkapi.ApplicationRestore,
 	retainContent bool,
 ) error {
+	if c.v1SnapshotRequired {
+		vsMap := make(map[string]*kSnapshotv1.VolumeSnapshot)
+		vsContentMap := make(map[string]*kSnapshotv1.VolumeSnapshotContent)
+
+		// Check all destination namespaces for VolumeSnapshots with restoreUID
+		for _, ns := range restore.Spec.NamespaceMapping {
+			vsList, err := c.snapshotClient.SnapshotV1().VolumeSnapshots(ns).List(context.TODO(), metav1.ListOptions{
+				LabelSelector: c.getRestoreUIDLabelSelector(restore),
+			})
+			if err != nil {
+				return err
+			}
+			for _, vs := range vsList.Items {
+				vsMap[vs.Name] = &vs
+			}
+
+		}
+
+		// Check for VolumeSnapshotContents with restoreUID
+		vsContentList, err := c.snapshotClient.SnapshotV1().VolumeSnapshotContents().List(context.TODO(), metav1.ListOptions{
+			LabelSelector: c.getRestoreUIDLabelSelector(restore),
+		})
+		if err != nil {
+			return err
+		}
+		for _, vsContent := range vsContentList.Items {
+			vsContentMap[vsContent.Name] = &vsContent
+		}
+		log.ApplicationRestoreLog(restore).Debugf("collected %v snapshots and %v snapshotcontents to clean", len(vsMap), len(vsContentMap))
+
+		return c.cleanupSnapshots(vsMap, vsContentMap, retainContent)
+	}
 	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
 
@@ -562,17 +703,57 @@ func (c *csi) cleanupSnapshotsForRestore(
 }
 
 func (c *csi) cleanupSnapshots(
-	vsMap map[string]*kSnapshotv1beta1.VolumeSnapshot,
-	vsContentMap map[string]*kSnapshotv1beta1.VolumeSnapshotContent,
+	vsMap interface{},
+	vsContentMap interface{},
 	retainContent bool,
 ) error {
+	if c.v1SnapshotRequired {
+		desiredRetainPolicy := kSnapshotv1.VolumeSnapshotContentRetain
+		if !retainContent {
+			desiredRetainPolicy = kSnapshotv1.VolumeSnapshotContentDelete
+		}
+
+		// ensure all vscontent have the desired delete policy
+		for _, vsc := range vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent) {
+			if vsc.Spec.DeletionPolicy != desiredRetainPolicy {
+				vsc.UID = ""
+				vsc.Spec.DeletionPolicy = desiredRetainPolicy
+				_, err := c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Update(context.TODO(), vsc, metav1.UpdateOptions{})
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// delete all vs & vscontent
+		for _, vs := range vsMap.(map[string]*kSnapshotv1.VolumeSnapshot) {
+			err := c.snapshotClient.SnapshotV1().VolumeSnapshots(vs.Namespace).Delete(context.TODO(), vs.Name, metav1.DeleteOptions{})
+			if k8s_errors.IsNotFound(err) {
+				continue
+			} else if err != nil {
+				return err
+			}
+		}
+		for _, vsc := range vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent) {
+			err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Delete(context.TODO(), vsc.Name, metav1.DeleteOptions{})
+			if k8s_errors.IsNotFound(err) {
+				continue
+			} else if err != nil {
+				return err
+			}
+		}
+
+		logrus.Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)))
+		return nil
+	}
+
 	desiredRetainPolicy := kSnapshotv1beta1.VolumeSnapshotContentRetain
 	if !retainContent {
 		desiredRetainPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
 	}
 
 	// ensure all vscontent have the desired delete policy
-	for _, vsc := range vsContentMap {
+	for _, vsc := range vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent) {
 		if vsc.Spec.DeletionPolicy != desiredRetainPolicy {
 			vsc.UID = ""
 			vsc.Spec.DeletionPolicy = desiredRetainPolicy
@@ -584,7 +765,7 @@ func (c *csi) cleanupSnapshots(
 	}
 
 	// delete all vs & vscontent
-	for _, vs := range vsMap {
+	for _, vs := range vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot) {
 		err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vs.Namespace).Delete(context.TODO(), vs.Name, metav1.DeleteOptions{})
 		if k8s_errors.IsNotFound(err) {
 			continue
@@ -592,7 +773,7 @@ func (c *csi) cleanupSnapshots(
 			return err
 		}
 	}
-	for _, vsc := range vsContentMap {
+	for _, vsc := range vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent) {
 		err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Delete(context.TODO(), vsc.Name, metav1.DeleteOptions{})
 		if k8s_errors.IsNotFound(err) {
 			continue
@@ -601,7 +782,7 @@ func (c *csi) cleanupSnapshots(
 		}
 	}
 
-	logrus.Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
+	logrus.Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)))
 	return nil
 }
 
@@ -615,9 +796,19 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	var anyInProgress bool
 	var anyFailed bool
-	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
-	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
-	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
+
+	var vsMap, vsContentMap, vsClassMap interface{}
+	var vsMapLen, vsContentMapLen int
+
+	if c.v1SnapshotRequired {
+		vsMap = make(map[string]*kSnapshotv1.VolumeSnapshot)
+		vsContentMap = make(map[string]*kSnapshotv1.VolumeSnapshotContent)
+		vsClassMap = make(map[string]*kSnapshotv1.VolumeSnapshotClass)
+	} else {
+		vsMap = make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
+		vsContentMap = make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
+		vsClassMap = make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
+	}
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.CSIDriverName {
 			continue
@@ -643,37 +834,73 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
-
-		snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
-		if !ok {
-			vInfo.Reason = "failed to map volumesnapshot object"
-			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			anyFailed = true
-			volumeInfos = append(volumeInfos, vInfo)
-			continue
+		if c.v1SnapshotRequired {
+			snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1.VolumeSnapshot)
+			if !ok {
+				vInfo.Reason = "failed to map volumesnapshot object"
+				vInfo.Status = storkapi.ApplicationBackupStatusFailed
+				anyFailed = true
+				volumeInfos = append(volumeInfos, vInfo)
+				continue
+			}
+			vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)[vInfo.BackupID] = snapshot
+		} else {
+			snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+			if !ok {
+				vInfo.Reason = "failed to map volumesnapshot object"
+				vInfo.Status = storkapi.ApplicationBackupStatusFailed
+				anyFailed = true
+				volumeInfos = append(volumeInfos, vInfo)
+				continue
+			}
+			vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)[vInfo.BackupID] = snapshot
 		}
-		vsMap[vInfo.BackupID] = snapshot
 
 		if snapshotInfo.Status == snapshotter.StatusReady {
-			snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
-			if !ok {
-				vInfo.Reason = "failed to map volumesnapshotcontent object"
-				vInfo.Status = storkapi.ApplicationBackupStatusFailed
-				anyFailed = true
-				volumeInfos = append(volumeInfos, vInfo)
-				continue
+			if c.v1SnapshotRequired {
+				snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1.VolumeSnapshotContent)
+				if !ok {
+					vInfo.Reason = "failed to map volumesnapshotcontent object"
+					vInfo.Status = storkapi.ApplicationBackupStatusFailed
+					anyFailed = true
+					volumeInfos = append(volumeInfos, vInfo)
+					continue
+				}
+				vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
+				vInfo.Options[optVolumeSnapshotContentName] = snapshotContent.Name
+			} else {
+				snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+				if !ok {
+					vInfo.Reason = "failed to map volumesnapshotcontent object"
+					vInfo.Status = storkapi.ApplicationBackupStatusFailed
+					anyFailed = true
+					volumeInfos = append(volumeInfos, vInfo)
+					continue
+				}
+				vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
+				vInfo.Options[optVolumeSnapshotContentName] = snapshotContent.Name
 			}
-			vsContentMap[vInfo.BackupID] = snapshotContent
-			vInfo.Options[optVolumeSnapshotContentName] = snapshotContent.Name
-			snapshotClass, ok := snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass)
-			if !ok {
-				vInfo.Reason = "failed to map volumesnapshotcontent object"
-				vInfo.Status = storkapi.ApplicationBackupStatusFailed
-				anyFailed = true
-				volumeInfos = append(volumeInfos, vInfo)
-				continue
+			if c.v1SnapshotRequired {
+				snapshotClass, ok := snapshotInfo.Class.(*kSnapshotv1.VolumeSnapshotClass)
+				if !ok {
+					vInfo.Reason = "failed to map volumesnapshotcontent object"
+					vInfo.Status = storkapi.ApplicationBackupStatusFailed
+					anyFailed = true
+					volumeInfos = append(volumeInfos, vInfo)
+					continue
+				}
+				vsClassMap.(map[string]*kSnapshotv1.VolumeSnapshotClass)[snapshotClass.Name] = snapshotClass
+			} else {
+				snapshotClass, ok := snapshotInfo.Class.(*kSnapshotv1beta1.VolumeSnapshotClass)
+				if !ok {
+					vInfo.Reason = "failed to map volumesnapshotcontent object"
+					vInfo.Status = storkapi.ApplicationBackupStatusFailed
+					anyFailed = true
+					volumeInfos = append(volumeInfos, vInfo)
+					continue
+				}
+				vsClassMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)[snapshotClass.Name] = snapshotClass
 			}
-			vsClassMap[snapshotClass.Name] = snapshotClass
 			vInfo.ActualSize = uint64(snapshotInfo.Size)
 			vInfo.TotalSize = uint64(snapshotInfo.Size)
 		} else if snapshotInfo.Status == snapshotter.StatusInProgress {
@@ -698,13 +925,20 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		return volumeInfos, nil
 	}
 
+	if c.v1SnapshotRequired {
+		vsMapLen = len(vsMap.(map[string]*kSnapshotv1.VolumeSnapshot))
+		vsContentMapLen = len(vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent))
+	} else {
+		vsMapLen = len(vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot))
+		vsContentMapLen = len(vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent))
+	}
 	// if all have finished, add all VolumeSnapshot and VolumeSnapshotContent to objectstore
-	if !anyInProgress && len(vsContentMap) > 0 && len(vsMap) > 0 {
+	if !anyInProgress && vsContentMapLen > 0 && vsMapLen > 0 {
 		err := c.uploadCSIBackupObject(backup, vsMap, vsContentMap, vsClassMap)
 		if err != nil {
 			return nil, err
 		}
-		log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
+		log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", vsMapLen, vsContentMapLen)
 	}
 
 	return volumeInfos, nil
@@ -747,22 +981,25 @@ func (c *csi) recreateSnapshotForDeletion(
 	if err != nil {
 		return fmt.Errorf("failed to restore VolumeSnapshotClass for deletion: %s", err.Error())
 	}
-	log.ApplicationBackupLog(backup).Debugf("created volume snapshot class %s for backup %s deletion", vs.Name, snapshotID)
+	if c.v1SnapshotRequired {
+		log.ApplicationBackupLog(backup).Debugf("created volume snapshot class %s for backup %s deletion", vs.(*kSnapshotv1.VolumeSnapshot).Name, snapshotID)
+	} else {
+		log.ApplicationBackupLog(backup).Debugf("created volume snapshot class %s for backup %s deletion", vs.(*kSnapshotv1beta1.VolumeSnapshot).Name, snapshotID)
+	}
 
 	// Create VS, bound to VSC
 	vs, err = c.restoreVolumeSnapshot(backup.Namespace, vs, vsc)
 	if err != nil {
 		return fmt.Errorf("failed to restore VolumeSnapshot for deletion: %s", err.Error())
 	}
-	log.ApplicationBackupLog(backup).Debugf("created volume snapshot %s for backup %s deletion", vs.Name, snapshotID)
+	//log.ApplicationBackupLog(backup).Debugf("created volume snapshot %s for backup %s deletion", vs.Name, snapshotID)
 
 	// Create VSC
-	vsc.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
 	_, err = c.restoreVolumeSnapshotContent(backup.Namespace, vs, vsc)
 	if err != nil {
 		return err
 	}
-	log.ApplicationBackupLog(backup).Debugf("created volume snapshot content %s for backup %s deletion", vsc.Name, snapshotID)
+	//log.ApplicationBackupLog(backup).Debugf("created volume snapshot content %s for backup %s deletion", vsc.Name, snapshotID)
 
 	return nil
 }
@@ -777,30 +1014,59 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 			snapshotName := vInfo.BackupID
 
 			// Delete VS
-			err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(backup.Namespace).Delete(context.TODO(), snapshotName, metav1.DeleteOptions{})
-			if !k8s_errors.IsNotFound(err) {
-				log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshot %s: %v", snapshotName, err)
+			if c.v1SnapshotRequired {
+				err := c.snapshotClient.SnapshotV1().VolumeSnapshots(backup.Namespace).Delete(context.TODO(), snapshotName, metav1.DeleteOptions{})
+				if !k8s_errors.IsNotFound(err) {
+					log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshot %s: %v", snapshotName, err)
+				}
+			} else {
+				err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(backup.Namespace).Delete(context.TODO(), snapshotName, metav1.DeleteOptions{})
+				if !k8s_errors.IsNotFound(err) {
+					log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshot %s: %v", snapshotName, err)
+				}
 			}
 
 			// Get VSC, update to delete policy, and delete it
 			vscName := vInfo.Options[optVolumeSnapshotContentName]
 			if vscName != "" {
-				snapshotContent, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(context.TODO(), vscName, metav1.GetOptions{})
-				if !k8s_errors.IsNotFound(err) {
-					log.ApplicationBackupLog(backup).Debugf("Cancel Backup failed to find snapshotcontent: %s", vscName)
-				} else if err == nil {
-					// update snapshot content if we found one
-					snapshotContent.UID = ""
-					snapshotContent.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
-					_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Update(context.TODO(), snapshotContent, metav1.UpdateOptions{})
-					if err != nil {
-						return fmt.Errorf("failed to update VolumeSnapshotContent %v with deletion policy", snapshotContent.Name)
-					}
+				if c.v1SnapshotRequired {
+					snapshotContent, err := c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Get(context.TODO(), vscName, metav1.GetOptions{})
+					if !k8s_errors.IsNotFound(err) {
+						log.ApplicationBackupLog(backup).Debugf("Cancel Backup failed to find snapshotcontent: %s", vscName)
+					} else if err == nil {
+						// update snapshot content if we found one
+						snapshotContent.UID = ""
+						snapshotContent.Spec.DeletionPolicy = kSnapshotv1.VolumeSnapshotContentDelete
+						_, err = c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Update(context.TODO(), snapshotContent, metav1.UpdateOptions{})
+						if err != nil {
+							return fmt.Errorf("failed to update VolumeSnapshotContent %v with deletion policy", snapshotContent.Name)
+						}
 
-					err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Delete(context.TODO(), vscName, metav1.DeleteOptions{})
-					if err != nil {
-						if !k8s_errors.IsNotFound(err) {
-							log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshotcontent %s: %v", vscName, err)
+						err = c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Delete(context.TODO(), vscName, metav1.DeleteOptions{})
+						if err != nil {
+							if !k8s_errors.IsNotFound(err) {
+								log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshotcontent %s: %v", vscName, err)
+							}
+						}
+					}
+				} else {
+					snapshotContent, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(context.TODO(), vscName, metav1.GetOptions{})
+					if !k8s_errors.IsNotFound(err) {
+						log.ApplicationBackupLog(backup).Debugf("Cancel Backup failed to find snapshotcontent: %s", vscName)
+					} else if err == nil {
+						// update snapshot content if we found one
+						snapshotContent.UID = ""
+						snapshotContent.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
+						_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Update(context.TODO(), snapshotContent, metav1.UpdateOptions{})
+						if err != nil {
+							return fmt.Errorf("failed to update VolumeSnapshotContent %v with deletion policy", snapshotContent.Name)
+						}
+
+						err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Delete(context.TODO(), vscName, metav1.DeleteOptions{})
+						if err != nil {
+							if !k8s_errors.IsNotFound(err) {
+								log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshotcontent %s: %v", vscName, err)
+							}
 						}
 					}
 				}
@@ -863,16 +1129,30 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 		if err != nil {
 			return true, fmt.Errorf("failed to find Snapshot for backup %s: %s", vInfo.BackupID, err.Error())
 		}
-
-		err = c.snapshotter.DeleteSnapshot(
-			vs.Name,
-			vInfo.Namespace,
-			false, // retain snapshot content
-		)
-		if err != nil {
-			return true, err
+		switch v := vs.(type) {
+		case kSnapshotv1beta1.VolumeSnapshot:
+			err = c.snapshotter.DeleteSnapshot(
+				vs.(*kSnapshotv1beta1.VolumeSnapshot).Name,
+				vInfo.Namespace,
+				false, // retain snapshot content
+			)
+			if err != nil {
+				return true, err
+			}
+			log.ApplicationBackupLog(backup).Debugf("deleted %v snapshot for backup %s", vs.(*kSnapshotv1beta1.VolumeSnapshot).Name, string(backup.UID))
+		case kSnapshotv1.VolumeSnapshot:
+			err = c.snapshotter.DeleteSnapshot(
+				vs.(*kSnapshotv1.VolumeSnapshot).Name,
+				vInfo.Namespace,
+				false, // retain snapshot content
+			)
+			if err != nil {
+				return true, err
+			}
+			log.ApplicationBackupLog(backup).Debugf("deleted %v snapshot for backup %s", vs.(*kSnapshotv1.VolumeSnapshot).Name, string(backup.UID))
+		default:
+			log.ApplicationBackupLog(backup).Errorf("unknown volume snapshot API version %s detected for snapshot %v and backup id %s", v, vs.(*kSnapshotv1.VolumeSnapshot).Name, string(backup.UID))
 		}
-		log.ApplicationBackupLog(backup).Debugf("deleted %v snapshot for backup %s", vs.Name, string(backup.UID))
 	}
 
 	err = c.cleanupBackupLocation(backup)
@@ -974,14 +1254,30 @@ func (c *csi) getCSIBackupObject(backupName, backupNamespace string) (*csiBackup
 	if err != nil {
 		return nil, err
 	}
-
-	cbo := &csiBackupObject{}
-	err = json.Unmarshal(backupObjectBytes, cbo)
+	cboCommon := &csiBackupObject{}
+	if c.v1SnapshotRequired {
+		cbov1 := &BackupObjectv1Csi{}
+		err = json.Unmarshal(backupObjectBytes, cbov1)
+		if err != nil {
+			return nil, err
+		}
+		cboCommon.VolumeSnapshots = cbov1.VolumeSnapshots
+		cboCommon.VolumeSnapshotContents = cbov1.VolumeSnapshotContents
+		cboCommon.VolumeSnapshotClasses = cbov1.VolumeSnapshotClasses
+		cboCommon.v1VolumeSnapshotRequired = c.v1SnapshotRequired
+		return cboCommon, nil
+	}
+	cbov1beta1 := &BackupObjectv1beta1Csi{}
+	err = json.Unmarshal(backupObjectBytes, cbov1beta1)
 	if err != nil {
 		return nil, err
 	}
+	cboCommon.VolumeSnapshots = cbov1beta1.VolumeSnapshots
+	cboCommon.VolumeSnapshotContents = cbov1beta1.VolumeSnapshotContents
+	cboCommon.VolumeSnapshotClasses = cbov1beta1.VolumeSnapshotClasses
+	cboCommon.v1VolumeSnapshotRequired = c.v1SnapshotRequired
 
-	return cbo, nil
+	return cboCommon, nil
 }
 
 // getBackupResources gets all objects in resource.json
@@ -1033,59 +1329,122 @@ func (c *csi) findPVCInResources(resources []runtime.Unstructured, pvcName, pvcN
 	return nil, fmt.Errorf("PVC %s not backed up in resources.json", pvcName)
 }
 
-func (c *csi) restoreVolumeSnapshotClass(vsClass *kSnapshotv1beta1.VolumeSnapshotClass) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
-	vsClass.ResourceVersion = ""
-	vsClass.UID = ""
-	newVSClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(context.TODO(), vsClass, metav1.CreateOptions{})
-	if err != nil {
-		if k8s_errors.IsAlreadyExists(err) {
-			return vsClass, nil
+func (c *csi) restoreVolumeSnapshotClass(vsClass interface{}) (interface{}, error) {
+	var newVSClass interface{}
+	var err error
+	if c.v1SnapshotRequired {
+		vsClass.(*kSnapshotv1.VolumeSnapshotClass).ResourceVersion = ""
+		vsClass.(*kSnapshotv1.VolumeSnapshotClass).UID = ""
+		newVSClass, err = c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Create(context.TODO(), vsClass.(*kSnapshotv1.VolumeSnapshotClass), metav1.CreateOptions{})
+		if err != nil {
+			if k8s_errors.IsAlreadyExists(err) {
+				return vsClass, nil
+			}
+			return nil, err
 		}
-		return nil, err
+	} else {
+		vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).ResourceVersion = ""
+		vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).UID = ""
+		newVSClass, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(context.TODO(), vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass), metav1.CreateOptions{})
+		if err != nil {
+			if k8s_errors.IsAlreadyExists(err) {
+				return vsClass, nil
+			}
+			return nil, err
+		}
 	}
-
 	return newVSClass, nil
 }
 
 func (c *csi) restoreVolumeSnapshot(
 	namespace string,
-	vs *kSnapshotv1beta1.VolumeSnapshot,
-	vsc *kSnapshotv1beta1.VolumeSnapshotContent,
-) (*kSnapshotv1beta1.VolumeSnapshot, error) {
-	vs.ResourceVersion = ""
-	vs.Spec.Source.PersistentVolumeClaimName = nil
-	vs.Spec.Source.VolumeSnapshotContentName = &vsc.Name
-	vs.Namespace = namespace
-	vs, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vs, metav1.CreateOptions{})
-	if err != nil {
-		if k8s_errors.IsAlreadyExists(err) {
-			return vs, nil
+	vs interface{},
+	vsc interface{},
+) (interface{}, error) {
+	if c.v1SnapshotRequired {
+		vsObj, ok := vs.(*kSnapshotv1.VolumeSnapshot)
+		if !ok {
+			return nil, fmt.Errorf("failed to typecast volumesnapshot interface to v1 version structure")
 		}
-		return nil, err
+		vsObj.ResourceVersion = ""
+		vsObj.Spec.Source.PersistentVolumeClaimName = nil
+		vsObj.Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1.VolumeSnapshotContent).Name
+		vsObj.Namespace = namespace
+		vs, err := c.snapshotClient.SnapshotV1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
+		if err != nil {
+			if k8s_errors.IsAlreadyExists(err) {
+				return vs, nil
+			}
+			return nil, err
+		}
+	} else {
+		vsObj, ok := vs.(*kSnapshotv1beta1.VolumeSnapshot)
+		if !ok {
+			return nil, fmt.Errorf("failed to typecast volumesnapshot interface to v1beta1 version structure")
+		}
+		vsObj.ResourceVersion = ""
+		vsObj.Spec.Source.PersistentVolumeClaimName = nil
+		vsObj.Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name
+		vsObj.Namespace = namespace
+		vs, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
+		if err != nil {
+			if k8s_errors.IsAlreadyExists(err) {
+				return vs, nil
+			}
+			return nil, err
+		}
 	}
-
 	return vs, nil
 }
 
 func (c *csi) restoreVolumeSnapshotContent(
 	namespace string,
-	vs *kSnapshotv1beta1.VolumeSnapshot,
-	vsc *kSnapshotv1beta1.VolumeSnapshotContent,
-) (*kSnapshotv1beta1.VolumeSnapshotContent, error) {
-	snapshotHandle := *vsc.Status.SnapshotHandle
-	vsc.ResourceVersion = ""
-	vsc.Spec.Source.VolumeHandle = nil
-	vsc.Spec.Source.SnapshotHandle = &snapshotHandle
-	vsc.Spec.VolumeSnapshotRef.Name = vs.Name
-	vsc.Spec.VolumeSnapshotRef.Namespace = namespace
-	vsc.Spec.VolumeSnapshotRef.UID = vs.UID
-	vsc.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentRetain
-	vsc, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(context.TODO(), vsc, metav1.CreateOptions{})
-	if err != nil {
-		if k8s_errors.IsAlreadyExists(err) {
-			return vsc, nil
+	vs interface{},
+	vsc interface{},
+) (interface{}, error) {
+	if c.v1SnapshotRequired {
+		vscObj, ok := vsc.(*kSnapshotv1.VolumeSnapshotContent)
+		if !ok {
+			return nil, fmt.Errorf("failed to typecast volumesnapshotContent interface to v1 version structure")
 		}
-		return nil, err
+		snapshotHandle := *vscObj.Status.SnapshotHandle
+
+		vscObj.ResourceVersion = ""
+		vscObj.Spec.DeletionPolicy = kSnapshotv1.VolumeSnapshotContentDelete
+		vscObj.Spec.Source.VolumeHandle = nil
+		vscObj.Spec.Source.SnapshotHandle = &snapshotHandle
+		vscObj.Spec.VolumeSnapshotRef.Name = vs.(*kSnapshotv1.VolumeSnapshot).Name
+		vscObj.Spec.VolumeSnapshotRef.Namespace = namespace
+		vscObj.Spec.VolumeSnapshotRef.UID = vs.(*kSnapshotv1.VolumeSnapshot).UID
+		vscObj.Spec.DeletionPolicy = kSnapshotv1.VolumeSnapshotContentRetain
+		vsc, err := c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Create(context.TODO(), vscObj, metav1.CreateOptions{})
+		if err != nil {
+			if k8s_errors.IsAlreadyExists(err) {
+				return vsc, nil
+			}
+			return nil, err
+		}
+	} else {
+		vscObj, ok := vsc.(*kSnapshotv1beta1.VolumeSnapshotContent)
+		if !ok {
+			return nil, fmt.Errorf("failed to typecast volumesnapshotContent interface to v1beta1 version structure")
+		}
+		snapshotHandle := *vscObj.Status.SnapshotHandle
+		vscObj.ResourceVersion = ""
+		vscObj.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
+		vscObj.Spec.Source.VolumeHandle = nil
+		vscObj.Spec.Source.SnapshotHandle = &snapshotHandle
+		vscObj.Spec.VolumeSnapshotRef.Name = vs.(*kSnapshotv1.VolumeSnapshot).Name
+		vscObj.Spec.VolumeSnapshotRef.Namespace = namespace
+		vscObj.Spec.VolumeSnapshotRef.UID = vs.(*kSnapshotv1.VolumeSnapshot).UID
+		vscObj.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentRetain
+		vsc, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(context.TODO(), vscObj, metav1.CreateOptions{})
+		if err != nil {
+			if k8s_errors.IsAlreadyExists(err) {
+				return vsc, nil
+			}
+			return nil, err
+		}
 	}
 
 	return vsc, nil
@@ -1145,13 +1504,34 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		if err != nil {
 			return nil, err
 		}
-		vsc.Name = c.getRestoreSnapshotContentName(vsc.UID, restore.UID)
+		switch v := vsc.(type) {
+		case kSnapshotv1beta1.VolumeSnapshotContent:
+			vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name = c.getRestoreSnapshotContentName(vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).UID, restore.UID)
+			vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).ObjectMeta.Labels)
+		case kSnapshotv1.VolumeSnapshotClass:
+			vsc.(*kSnapshotv1.VolumeSnapshotContent).Name = c.getRestoreSnapshotContentName(vsc.(*kSnapshotv1.VolumeSnapshotContent).UID, restore.UID)
+			vsc.(*kSnapshotv1.VolumeSnapshotContent).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vsc.(*kSnapshotv1.VolumeSnapshotContent).ObjectMeta.Labels)
+		default:
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshotContent %s", v)
+		}
 
 		vs, err := csiBackupObject.GetVolumeSnapshot(snapshotID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve volume snapshot for snapshotID %s", snapshotID)
 		}
-		vs.Name = c.getRestoreSnapshotName(vs.UID, restore.UID)
+		var destNamespace string
+		switch v := vs.(type) {
+		case kSnapshotv1beta1.VolumeSnapshot:
+			vs.(*kSnapshotv1beta1.VolumeSnapshot).Name = c.getRestoreSnapshotName(vs.(*kSnapshotv1beta1.VolumeSnapshot).UID, restore.UID)
+			destNamespace = c.getDestinationNamespace(restore, vs.(*kSnapshotv1beta1.VolumeSnapshot).Namespace)
+			vs.(*kSnapshotv1beta1.VolumeSnapshot).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vs.(*kSnapshotv1beta1.VolumeSnapshot).ObjectMeta.Labels)
+		case kSnapshotv1.VolumeSnapshot:
+			vs.(*kSnapshotv1.VolumeSnapshot).Name = c.getRestoreSnapshotName(vs.(*kSnapshotv1.VolumeSnapshot).UID, restore.UID)
+			destNamespace = c.getDestinationNamespace(restore, vs.(*kSnapshotv1.VolumeSnapshot).Namespace)
+			vs.(*kSnapshotv1.VolumeSnapshot).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vs.(*kSnapshotv1.VolumeSnapshot).ObjectMeta.Labels)
+		default:
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshot %s", v)
+		}
 
 		vsClass, err := csiBackupObject.GetVolumeSnapshotClass(snapshotID)
 		if err != nil {
@@ -1163,33 +1543,62 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		if err != nil {
 			return nil, err
 		}
-		log.ApplicationRestoreLog(restore).Debugf("created vsClass: %s", vsClass.Name)
+		// Just for a log we are doing below type checking of interface
+		// Can we remove it or print it some other way
+		switch v := vsClass.(type) {
+		case kSnapshotv1beta1.VolumeSnapshotClass:
+			log.ApplicationRestoreLog(restore).Debugf("created vsClass: %s", vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).Name)
+		case kSnapshotv1.VolumeSnapshotClass:
+			log.ApplicationRestoreLog(restore).Debugf("created vsClass: %s", vsClass.(*kSnapshotv1.VolumeSnapshotClass).Name)
+		default:
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshotClass %s", v)
+		}
 
 		// Create VS, bound to VSC
-		destNamespace := c.getDestinationNamespace(restore, vs.Namespace)
-		vs.ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vs.ObjectMeta.Labels)
+		// TODO: Check restore happen between two different K8s version(<1.19 & >1.20) based cluster
 		vs, err = c.restoreVolumeSnapshot(destNamespace, vs, vsc)
 		if err != nil {
 			return nil, err
 		}
-		log.ApplicationRestoreLog(restore).Debugf("created vs: %s", vs.Name)
+		switch v := vs.(type) {
+		case kSnapshotv1beta1.VolumeSnapshot:
+			log.ApplicationRestoreLog(restore).Debugf("created vs: %s", vs.(*kSnapshotv1beta1.VolumeSnapshot).Name)
 
-		// Create VSC, bound to VS
-		vsc.ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vsc.ObjectMeta.Labels)
-		vsc, err = c.restoreVolumeSnapshotContent(destNamespace, vs, vsc)
-		if err != nil {
-			return nil, err
+			// Create VSC, bound to VS
+			vsc, err = c.restoreVolumeSnapshotContent(destNamespace, vs, vsc)
+			if err != nil {
+				return nil, err
+			}
+			log.ApplicationRestoreLog(restore).Debugf("created vsc: %s", vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name)
+
+			pvc, err = c.snapshotter.RestoreVolumeClaim(
+				snapshotter.RestoreSnapshotName(vs.(*kSnapshotv1beta1.VolumeSnapshot).Name),
+				snapshotter.RestoreNamespace(c.getDestinationNamespace(restore, pvc.Namespace)),
+				snapshotter.PVC(*pvc),
+			)
+		case kSnapshotv1.VolumeSnapshot:
+			log.ApplicationRestoreLog(restore).Debugf("created vs: %s", vs.(*kSnapshotv1.VolumeSnapshot).Name)
+
+			// Create VSC, bound to VS
+			vsc, err = c.restoreVolumeSnapshotContent(destNamespace, vs, vsc)
+			if err != nil {
+				return nil, err
+			}
+			log.ApplicationRestoreLog(restore).Debugf("created vsc: %s", vsc.(*kSnapshotv1.VolumeSnapshotContent).Name)
+
+			pvc, err = c.snapshotter.RestoreVolumeClaim(
+				snapshotter.RestoreSnapshotName(vs.(*kSnapshotv1.VolumeSnapshot).Name),
+				snapshotter.RestoreNamespace(c.getDestinationNamespace(restore, pvc.Namespace)),
+				snapshotter.PVC(*pvc),
+			)
+		default:
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshot %s", v)
 		}
-		log.ApplicationRestoreLog(restore).Debugf("created vsc: %s", vsc.Name)
 
-		pvc, err = c.snapshotter.RestoreVolumeClaim(
-			snapshotter.RestoreSnapshotName(vs.Name),
-			snapshotter.RestoreNamespace(c.getDestinationNamespace(restore, pvc.Namespace)),
-			snapshotter.PVC(*pvc),
-		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restore pvc %s: %v", vbInfo.PersistentVolumeClaim, err.Error())
 		}
+
 		log.ApplicationRestoreLog(restore).Debugf("created pvc: %s", pvc.Name)
 
 		// Populate volumeRestoreInfo
@@ -1385,8 +1794,16 @@ func mapSnapshotInfoStatus(status snapshotter.Status) storkapi.ApplicationBackup
 
 // CleanupBackupResources for specified backup
 func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
-	vsMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
-	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
+	var vsMap interface{}
+	var vsContentMap interface{}
+
+	if c.v1SnapshotRequired {
+		vsMap = make(map[string]*kSnapshotv1.VolumeSnapshot)
+		vsContentMap = make(map[string]*kSnapshotv1.VolumeSnapshotContent)
+	} else {
+		vsMap = make(map[string]*kSnapshotv1beta1.VolumeSnapshot)
+		vsContentMap = make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
+	}
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.CSIDriverName {
 			continue
@@ -1405,19 +1822,36 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 			logrus.Warnf("unable to cleanup snapshot :%s, err:%v", snapshotName, err)
 			continue
 		}
-		snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
-		if !ok {
-			logrus.Warnf("failed to map volumesnapshot object")
-			continue
-		}
-		vsMap[vInfo.BackupID] = snapshot
-		if snapshotInfo.Status == snapshotter.StatusReady {
-			snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+		if c.v1SnapshotRequired {
+			snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1.VolumeSnapshot)
 			if !ok {
-				logrus.Warnf("failed to map volumesnapshotcontent object")
+				logrus.Warnf("failed to map volumesnapshot object")
 				continue
 			}
-			vsContentMap[vInfo.BackupID] = snapshotContent
+			vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)[vInfo.BackupID] = snapshot
+			if snapshotInfo.Status == snapshotter.StatusReady {
+				snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1.VolumeSnapshotContent)
+				if !ok {
+					logrus.Warnf("failed to map volumesnapshotcontent object")
+					continue
+				}
+				vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
+			}
+		} else {
+			snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+			if !ok {
+				logrus.Warnf("failed to map volumesnapshot object")
+				continue
+			}
+			vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)[vInfo.BackupID] = snapshot
+			if snapshotInfo.Status == snapshotter.StatusReady {
+				snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+				if !ok {
+					logrus.Warnf("failed to map volumesnapshotcontent object")
+					continue
+				}
+				vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
+			}
 		}
 	}
 	// cleanup after a successful object upload
@@ -1425,7 +1859,11 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 	if err != nil {
 		logrus.Tracef("failed to cleanup snapshots: %v", err)
 	}
-	log.ApplicationBackupLog(backup).Tracef("started clean up of %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
+	if c.v1SnapshotRequired {
+		log.ApplicationBackupLog(backup).Tracef("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)))
+	} else {
+		log.ApplicationBackupLog(backup).Tracef("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)))
+	}
 	return nil
 }
 
