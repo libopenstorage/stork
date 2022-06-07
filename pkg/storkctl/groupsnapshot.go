@@ -2,9 +2,8 @@ package storkctl
 
 import (
 	"fmt"
-	"strings"
-
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/utils"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +41,7 @@ func newCreateGroupSnapshotCommand(cmdFactory Factory, ioStreams genericclioptio
 				return
 			}
 
-			labelSelector, err := parseKeyValueList(pvcSelectors)
+			labelSelector, err := utils.ParseKeyValueList(pvcSelectors)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -56,7 +55,7 @@ func newCreateGroupSnapshotCommand(cmdFactory Factory, ioStreams genericclioptio
 
 			var optsMap map[string]string
 			if len(opts) > 0 {
-				optsMap, err = parseKeyValueList(opts)
+				optsMap, err = utils.ParseKeyValueList(opts)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -217,20 +216,4 @@ func groupSnapshotPrinter(
 		rows = append(rows, row)
 	}
 	return rows, nil
-}
-
-// parseKeyValueList parses a list of key values into a map
-func parseKeyValueList(expressions []string) (map[string]string, error) {
-	matchLabels := make(map[string]string)
-	for _, e := range expressions {
-		entry := strings.SplitN(e, "=", 2)
-		if len(entry) != 2 {
-			return nil, fmt.Errorf("invalid key value: %s provided. "+
-				"Example format: app=mysql", e)
-		}
-
-		matchLabels[entry[0]] = entry[1]
-	}
-
-	return matchLabels, nil
 }

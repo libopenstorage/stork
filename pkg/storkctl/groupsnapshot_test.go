@@ -5,6 +5,7 @@ package storkctl
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"strings"
 	"testing"
 
@@ -91,7 +92,7 @@ func TestDuplicateGroupSnapshots(t *testing.T) {
 
 	name := "test-group-snap-duplicate"
 	namespace := "default"
-	selectors, err := parseKeyValueList([]string{"app=mysql"})
+	selectors, err := utils.ParseKeyValueList([]string{"app=mysql"})
 	require.NoError(t, err, "failed to parse selectors")
 
 	createGroupSnapshotAndVerify(t, name, namespace, selectors, "", "", nil, nil, 0)

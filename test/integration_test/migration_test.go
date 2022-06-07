@@ -104,7 +104,7 @@ func triggerMigrationTest(
 		require.NoError(t, err, "Error resetting source config")
 	}()
 
-	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false)
+	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false, "", nil)
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, false)
 }
@@ -119,10 +119,14 @@ func triggerMigration(
 	skipStoragePair bool,
 	startAppsOnMigration bool,
 	pairReverse bool,
+	projectIDMappings string,
+	namespaceLabels map[string]string,
 ) ([]*scheduler.Context, *scheduler.Context) {
-	// schedule the app on cluster 1
 	ctxs, err := schedulerDriver.Schedule(instanceID,
-		scheduler.ScheduleOptions{AppKeys: []string{appKey}})
+		scheduler.ScheduleOptions{
+			AppKeys: []string{appKey},
+			Labels:  namespaceLabels,
+		})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
@@ -143,7 +147,7 @@ func triggerMigration(
 		preMigrationCtx = ctxs[0].DeepCopy()
 	}
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, pairReverse)
+	err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, projectIDMappings, pairReverse)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -274,6 +278,8 @@ func deploymentMigrationReverseTest(t *testing.T) {
 		false,
 		true,
 		false,
+		"",
+		nil,
 	)
 
 	// Cleanup up source
@@ -294,7 +300,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", true)
+	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", "", true)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -456,6 +462,8 @@ func migrationIntervalScheduleTest(t *testing.T) {
 		false,
 		false,
 		false,
+		"",
+		nil,
 	)
 
 	// bump time of the world by 5 minutes
@@ -491,6 +499,8 @@ func intervalScheduleCleanupTest(t *testing.T) {
 		false,
 		false,
 		false,
+		"",
+		nil,
 	)
 
 	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
@@ -603,6 +613,8 @@ func migrationScheduleInvalidTest(t *testing.T) {
 		false,
 		false,
 		false,
+		"",
+		nil,
 	)
 
 	namespace := preMigrationCtx.GetID()
@@ -700,6 +712,8 @@ func migrationScheduleTest(
 		false,
 		false,
 		false,
+		"",
+		nil,
 	)
 
 	namespace := preMigrationCtx.GetID()
@@ -856,7 +870,7 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 		appCtxs = append(appCtxs, preMigrationCtx)
 
 		// create, apply and validate cluster pair specs
-		err = scheduleClusterPair(currCtxs[0], false, true, defaultClusterPairDir, false)
+		err = scheduleClusterPair(currCtxs[0], false, true, defaultClusterPairDir, "", false)
 		require.NoError(t, err, "Error scheduling cluster pair")
 		ctxs = append(ctxs, currCtxs...)
 
@@ -916,7 +930,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	// Change token value to an incorrect token
 	badTokenInfo[tokenKey] = "randomtoken"
-	err = createClusterPair(badTokenInfo, false, true, defaultClusterPairDir)
+	err = createClusterPair(badTokenInfo, false, true, defaultClusterPairDir, "")
 	require.NoError(t, err, "Error creating cluster Spec: %v")
 
 	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
@@ -937,7 +951,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	badIPInfo[clusterIP] = "0.0.0.0"
 
-	err = createClusterPair(badIPInfo, false, true, defaultClusterPairDir)
+	err = createClusterPair(badIPInfo, false, true, defaultClusterPairDir, "")
 	require.NoError(t, err, "Error creating cluster Spec: %v")
 
 	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
@@ -958,7 +972,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	badPortInfo[clusterPort] = "0000"
 
-	err = createClusterPair(badPortInfo, false, true, defaultClusterPairDir)
+	err = createClusterPair(badPortInfo, false, true, defaultClusterPairDir, "")
 	require.NoError(t, err, "Error creating cluster Spec: %v")
 
 	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
@@ -982,7 +996,7 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	clusterPairNamespace := "bidirectional-clusterpair-ns"
 
 	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
-	err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace)
+	err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "")
 	require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
 
 	err = setSourceKubeConfig()
@@ -1021,7 +1035,6 @@ func bidirectionalClusterPairTest(t *testing.T) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-
 }
 
 func operatorMigrationMongoTest(t *testing.T) {
@@ -1154,6 +1167,8 @@ func pvcResizeMigrationTest(t *testing.T) {
 		false,
 		false,
 		false,
+		"",
+		nil,
 	)
 
 	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
@@ -1259,6 +1274,8 @@ func suspendMigrationTest(t *testing.T) {
 		false,
 		false,
 		false,
+		"",
+		nil,
 	)
 
 	validateMigration(t, "mysql-migration-schedule-interval-autosuspend", preMigrationCtx.GetID())

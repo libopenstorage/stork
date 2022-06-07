@@ -46,6 +46,8 @@ func deploymentMigrationBackupTest(t *testing.T) {
 			false,
 			true,
 			false,
+			"",
+			nil,
 		)
 
 		// Cleanup up source

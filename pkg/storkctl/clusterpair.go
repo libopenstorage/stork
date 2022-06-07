@@ -3,6 +3,7 @@ package storkctl
 import (
 	"bufio"
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -135,7 +136,7 @@ func getByteData(fileName string) ([]byte, error) {
 }
 
 func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	var storageOptions string
+	var storageOptions, projectMappingsStr string
 	generateClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
 		Short: "Generate a spec to be used for cluster pairing from a remote cluster",
@@ -200,6 +201,17 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 					Options: opts,
 				},
 			}
+			if len(projectMappingsStr) > 0 {
+				projectIDMap, err := utils.ParseKeyValueList(strings.Split(projectMappingsStr, ","))
+				if err != nil {
+					util.CheckErr(fmt.Errorf("invalid project-mappings provided, use comma-separated" +
+						"<source-project-id>=<dest-project-id> pairs (Currently supported only for Rancher)"))
+				}
+				clusterPair.Spec.PlatformOptions = storkv1.PlatformSpec{
+					Rancher: &storkv1.RancherSpec{ProjectMappings: projectIDMap},
+				}
+			}
+
 			if err = printEncoded(c, clusterPair, "yaml", ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
@@ -208,11 +220,13 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 	}
 
 	generateClusterPairCommand.Flags().StringVarP(&storageOptions, "storageoptions", "s", "", "comma seperated key-value pair storage options")
+	generateClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "",
+		"project mappings between source and destination clusters, use comma-separated <source-project-id>=<dest-project-id> pairs (Currently supported only for Rancher)")
 	return generateClusterPairCommand
 }
 
 func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	var sIP, dIP, sPort, dPort, srcToken, destToken string
+	var sIP, dIP, sPort, dPort, srcToken, destToken, projectMappingsStr string
 	var sFile, dFile string
 	createClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
@@ -235,13 +249,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
-			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile)
+			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
 
-			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile)
+			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -285,11 +299,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "kube-config of destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "destination cluster token for cluster pairing")
+	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "",
+		"project mappings between source and destination clusters, use comma-separated <source-project-id>=<dest-project-id> pairs (Currently supported only for Rancher)")
 
 	return createClusterPairCommand
 }
 
-func generateClusterPair(name, ns, ip, port, token, configFile string) (*storkv1.ClusterPair, error) {
+func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings string, reverse bool) (*storkv1.ClusterPair, error) {
 	opts := make(map[string]string)
 	opts["ip"] = ip
 	opts["port"] = port
@@ -304,6 +320,14 @@ func generateClusterPair(name, ns, ip, port, token, configFile string) (*storkv1
 	if err != nil {
 		return nil, err
 	}
+	var projectIDMap map[string]string
+	if len(projectIDMappings) != 0 {
+		projectIDMap, err = utils.ParseKeyValueList(strings.Split(projectIDMappings, ","))
+		if err != nil {
+			return nil, fmt.Errorf("invalid project-mappings provided: %v", err)
+		}
+	}
+
 	clusterPair := &storkv1.ClusterPair{
 		TypeMeta: meta.TypeMeta{
 			Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
@@ -318,6 +342,18 @@ func generateClusterPair(name, ns, ip, port, token, configFile string) (*storkv1
 			Config:  currConfig,
 			Options: opts,
 		},
+	}
+	if len(projectIDMap) != 0 {
+		clusterPair.Spec.PlatformOptions.Rancher = &storkv1.RancherSpec{}
+		clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings = make(map[string]string)
+		for k, v := range projectIDMap {
+			if reverse {
+				clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings[v] = k
+			} else {
+				clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings[k] = v
+			}
+
+		}
 	}
 	return clusterPair, nil
 }
