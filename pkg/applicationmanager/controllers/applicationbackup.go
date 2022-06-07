@@ -1073,11 +1073,9 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Don't modify resources if mentioned explicitly in specs
+	resourceCollectorOpts := resourcecollector.Options{}
 	if backup.Spec.SkipServiceUpdate {
-		if a.resourceCollector.Opts == nil {
-			a.resourceCollector.Opts = make(map[string]string)
-		}
-		a.resourceCollector.Opts[resourcecollector.ServiceKind] = "true"
+		resourceCollectorOpts.SkipServices = true
 	}
 
 	// Always backup optional resources. When restorting they need to be
@@ -1112,7 +1110,9 @@ func (a *ApplicationBackupController) backupResources(
 				backup.Spec.Selectors,
 				objectMap,
 				optionalBackupResources,
-				true)
+				true,
+				resourceCollectorOpts,
+			)
 			if err != nil {
 				log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 				return err
@@ -1125,7 +1125,7 @@ func (a *ApplicationBackupController) backupResources(
 				for _, resource := range resourceTypes {
 					if resource.Kind == backupResourceType || (backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
 						log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
-						objects, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, true)
+						objects, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, true, resourceCollectorOpts)
 						if err != nil {
 							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 							return err
