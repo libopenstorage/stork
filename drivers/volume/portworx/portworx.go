@@ -2374,7 +2374,7 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 	}
 	return nil
 }
-func (p *portworx) ActivateMigration(migration *storkapi.Migration) error {
+func (p *portworx) ActivateMigration(namespace string) error {
 	// TODO admin or user vol driver?
 	//volDriver, err := p.getUserVolDriver(migration.Annotations, "" /*templatized ns not supported*/)
 	volDriver, err := p.getAdminVolDriver()
@@ -2382,52 +2382,53 @@ func (p *portworx) ActivateMigration(migration *storkapi.Migration) error {
 		return err
 	}
 
-	log.MigrationLog(migration).Debugf("ActivateMigration namespaces: %v", migration.Spec.Namespaces)
+	logrus.Debugf("ActivateMigration namespace: %s", namespace)
 	//for _, migrVol := range migration.Status.Volumes {
-	for _, namespace := range migration.Spec.Namespaces {
-		pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
-		if err != nil {
-			return fmt.Errorf("error getting list of volumes to migrate: %v", err)
+	//for _, namespace := range migration.Spec.Namespaces {
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		return fmt.Errorf("error getting list of volumes to migrate: %v", err)
+	}
+	logrus.Debugf("ActivateMigration pvcs: %v", pvcList.Items)
+	for _, pvc := range pvcList.Items {
+		if !p.OwnsPVC(core.Instance(), &pvc) {
+			continue
 		}
-		log.MigrationLog(migration).Debugf("ActivateMigration pvcs: %v", pvcList.Items)
-		for _, pvc := range pvcList.Items {
-			if !p.OwnsPVC(core.Instance(), &pvc) {
-				continue
-			}
-			if resourcecollector.SkipResource(pvc.Annotations) {
-				continue
-			}
+		if resourcecollector.SkipResource(pvc.Annotations) {
+			continue
+		}
 
-			volID, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
-			if err != nil {
-				return fmt.Errorf("error getting volume for PVC: %v", err)
-			}
-			log.MigrationLog(migration).Debugf("ActivateMigration volID: %v", volID)
+		volID, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		if err != nil {
+			return fmt.Errorf("error getting volume for PVC: %v", err)
+		}
+		logrus.Debugf("ActivateMigration volID: %v", volID)
 
-			//volumes, err := volDriver.Inspect([]string{migrVol.Volume})
-			volumes, err := volDriver.Inspect([]string{volID})
-			if err != nil {
-				return err
+		//volumes, err := volDriver.Inspect([]string{migrVol.Volume})
+		volumes, err := volDriver.Inspect([]string{volID})
+		if err != nil {
+			return err
+		}
+		if len(volumes) != 1 {
+			return &errors.ErrNotFound{
+				ID:   volID,
+				Type: "Volume",
 			}
-			if len(volumes) != 1 {
-				return &errors.ErrNotFound{
-					ID:   volID,
-					Type: "Volume",
-				}
-			}
-			vol := volumes[0]
+		}
+		vol := volumes[0]
+		// TODO check if nearsync volume
 
-			spec := &api.VolumeSpec{
-				VolumeLabels: vol.Spec.GetVolumeLabels(),
-			}
-			spec.VolumeLabels[nearsyncPromoteLabel] = "true"
-			log.MigrationLog(migration).Debugf("Promoting vol: %v with updated labels: %v", vol.GetId(), spec.VolumeLabels)
+		spec := &api.VolumeSpec{
+			VolumeLabels: vol.Spec.GetVolumeLabels(),
+		}
+		spec.VolumeLabels[nearsyncPromoteLabel] = "true"
+		logrus.Debugf("Promoting vol: %v with updated labels: %v", vol.GetId(), spec.VolumeLabels)
 
-			if err := volDriver.Set(vol.GetId(), vol.GetLocator(), spec); err != nil {
-				return fmt.Errorf("failed to promote volume: %v", vol.GetId())
-			}
+		if err := volDriver.Set(vol.GetId(), vol.GetLocator(), spec); err != nil {
+			return fmt.Errorf("failed to promote volume: %v", vol.GetId())
 		}
 	}
+	//}
 	return nil
 }
 

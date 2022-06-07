@@ -129,30 +129,34 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 			}
 
 			// Promote near-sync volumes
-			if isActivated {
-				logrus.Debugf("Activating migrations: %v", migrationSchedule.Status.Items)
-				for _, policyMigration := range migrationSchedule.Status.Items {
-					for _, migration := range policyMigration {
-						currentMigration, err := storkops.Instance().GetMigration(migration.Name, migrationSchedule.Namespace)
-						if err != nil {
-							return err
-						}
-						if err := m.volDriver.ActivateMigration(currentMigration); err != nil {
-							return err
+			if isActivated && !migrationSchedule.Status.ApplicationActivated {
+				logrus.Debugf("Activating migration namespace: %v", migrationSchedule.Namespace)
+				/*
+					for _, policyMigration := range migrationSchedule.Status.Items {
+						for _, migration := range policyMigration {
+							currentMigration, err := storkops.Instance().GetMigration(migration.Name, migrationSchedule.Namespace)
+							if err != nil {
+								return err
+							}
+							if err := m.volDriver.ActivateMigration(currentMigration); err != nil {
+								return err
+							}
 						}
 					}
+				*/
+				if err := m.volDriver.ActivateMigration(migrationSchedule.Namespace); err != nil {
+					return err
 				}
+
+				migrationSchedule.Status.ApplicationActivated = isActivated
+				msg := fmt.Sprintf("Setting AppActive status to: %v", isActivated)
+				m.recorder.Event(migrationSchedule,
+					v1.EventTypeWarning,
+					"AppsActivated",
+					msg)
+				log.MigrationScheduleLog(migrationSchedule).Warn(msg)
+				return m.client.Update(context.TODO(), migrationSchedule)
 			}
-
-			migrationSchedule.Status.ApplicationActivated = isActivated
-			msg := fmt.Sprintf("Setting AppActive status to: %v", isActivated)
-			m.recorder.Event(migrationSchedule,
-				v1.EventTypeWarning,
-				"AppsActivated",
-				msg)
-			log.MigrationScheduleLog(migrationSchedule).Warn(msg)
-			return m.client.Update(context.TODO(), migrationSchedule)
-
 		}
 	}
 	logrus.Debugf("suspend: %v", *migrationSchedule.Spec.Suspend)
