@@ -29,6 +29,8 @@ const (
 	PostgressApp = "postgress"
 	// MongoDBCommunityApp registration name
 	MongoDBCommunityApp = "mongodbcommunity"
+	// VirtualMachineApp registration name
+	VirtualMachineApp = "virtualmachine"
 )
 
 // GetSupportedCRD returns the list of supported CRDs.
@@ -319,7 +321,21 @@ func GetSupportedCRD() map[string][]stork_api.ApplicationResource {
 			},
 		},
 	}
-
+	defCRD[VirtualMachineApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "VirtualMachine",
+				Group:   "kubevirt.io",
+				Version: "v1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path:  "spec.runStrategy",
+				Type:  "string",
+				Value: "Halted",
+			},
+		},
+	}
 	return defCRD
 }
 
