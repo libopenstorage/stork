@@ -166,6 +166,7 @@ const (
 	proxyPath            = "proxy_nfs_exportpath"
 	pureBackendParam     = "backend"
 	pureFileParam        = "pure_file"
+	pureBlockParam       = "pure_block"
 )
 
 type cloudSnapStatus struct {
@@ -679,8 +680,8 @@ func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClai
 			if _, ok := storageClass.Parameters[proxyEndpoint]; ok && skipDirectAccessVolumes {
 				logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
 				return false
-			} else if val, ok := storageClass.Parameters[pureBackendParam]; ok && val == pureFileParam && skipDirectAccessVolumes {
-				logrus.Tracef("pure file backend param set, not classifying it as pxd for pvc [%v]", pvc.Name)
+			} else if val, ok := storageClass.Parameters[pureBackendParam]; ok && (val == pureFileParam || val == pureBlockParam) && skipDirectAccessVolumes {
+				logrus.Tracef("pure backend param set, not classifying it as pxd for pvc [%v]", pvc.Name)
 				return false
 			}
 			provisioner = storageClass.Provisioner
