@@ -42,6 +42,8 @@ const (
 	StorkResourceHash = "stork.libopenstorage.org/resource-hash"
 	// SkipModifyResources is the annotation used to skip update of resources
 	SkipModifyResources = "stork.libopenstorage.org/skip-modify-resource"
+	// ProjectMappingsOption is a resource collector option to provide rancher project mappings
+	ProjectMappingsOption = "ProjectMappings"
 	// ServiceKind for k8s service resources
 	ServiceKind = "Service"
 	// NetworkPolicyKind for network policy resources
@@ -60,7 +62,20 @@ type ResourceCollector struct {
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
 	storkOps         storkops.Ops
-	Opts             map[string]string
+}
+
+// Options are the options passed to the ResourceCollector APIs that dictate how k8s
+// resources should be collected
+type Options struct {
+	// SkipServices if set will skip the service objects from collection
+	SkipServices bool
+	// IncludeAllNetworkPolicies if set will include all network policies
+	// even if they have CIDRs set on them
+	IncludeAllNetworkPolicies bool
+	// RancherProjectMappings provides the rancher project mappings which allows the
+	// resource collector to perform transformations on certain k8s resources.
+	// TODO: temporary change required to handle project related transformations
+	RancherProjectMappings map[string]string
 }
 
 // Objects Collection of objects
@@ -209,7 +224,9 @@ func (r *ResourceCollector) GetResourcesForType(
 	namespaces []string,
 	labelSelectors map[string]string,
 	includeObjects map[stork_api.ObjectInfo]bool,
-	allDrivers bool) (*Objects, error) {
+	allDrivers bool,
+	opts Options,
+) (*Objects, error) {
 
 	if objects == nil {
 		objects = &Objects{
@@ -264,7 +281,7 @@ func (r *ResourceCollector) GetResourcesForType(
 				return nil, fmt.Errorf("error casting object: %v", o)
 			}
 
-			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, crbs, ns, allDrivers)
+			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, crbs, ns, allDrivers, opts)
 			if err != nil {
 				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 			}
@@ -284,7 +301,7 @@ func (r *ResourceCollector) GetResourcesForType(
 	if err != nil {
 		return nil, err
 	}
-	err = r.prepareResourcesForCollection(modObjects, namespaces)
+	err = r.prepareResourcesForCollection(modObjects, namespaces, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +315,9 @@ func (r *ResourceCollector) GetResources(
 	labelSelectors map[string]string,
 	includeObjects map[stork_api.ObjectInfo]bool,
 	optionalResourceTypes []string,
-	allDrivers bool) ([]runtime.Unstructured, error) {
+	allDrivers bool,
+	opts Options,
+) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
@@ -384,7 +403,7 @@ func (r *ResourceCollector) GetResources(
 					// With this now a user can choose to backup all resources in a ns and some
 					// selected resources from different ns
 
-					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
+					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers, opts)
 					if err != nil {
 						if apierrors.IsForbidden(err) {
 							continue
@@ -410,7 +429,7 @@ func (r *ResourceCollector) GetResources(
 		return nil, err
 	}
 
-	err = r.prepareResourcesForCollection(allObjects, namespaces)
+	err = r.prepareResourcesForCollection(allObjects, namespaces, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -467,6 +486,7 @@ func (r *ResourceCollector) objectToBeCollected(
 	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
 	allDrivers bool,
+	opts Options,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
 	if err != nil {
@@ -519,7 +539,7 @@ func (r *ResourceCollector) objectToBeCollected(
 	case "ResourceQuota":
 		return r.resourceQuotaToBeCollected(object)
 	case "NetworkPolicy":
-		return r.networkPolicyToBeCollected(object)
+		return r.networkPolicyToBeCollected(object, opts)
 	case "DataVolume":
 		return r.dataVolumesToBeCollected(object)
 	case "VirtualMachineInstance":
@@ -592,6 +612,7 @@ func (r *ResourceCollector) pruneOwnedResources(
 func (r *ResourceCollector) prepareResourcesForCollection(
 	objects []runtime.Unstructured,
 	namespaces []string,
+	opts Options,
 ) error {
 	crdList, err := r.storkOps.ListApplicationRegistrations()
 	if err != nil {
@@ -610,7 +631,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		case "Service":
-			if _, ok := r.Opts[ServiceKind]; !ok {
+			if !opts.SkipServices {
 				err := r.prepareServiceResourceForCollection(o)
 				if err != nil {
 					return fmt.Errorf("error preparing Service resource %v/%v: %v", metadata.GetNamespace(), metadata.GetName(), err)
@@ -626,6 +647,13 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 			if err != nil {
 				return fmt.Errorf("error preparing job resource %v: %v", metadata.GetName(), err)
 			}
+
+		case "NetworkPolicy":
+			err := r.prepareNetworkPolicyForCollection(o, opts)
+			if err != nil {
+				return fmt.Errorf("error preparing NetworkPolicy resource %v: %v", metadata.GetName(), err)
+			}
+
 		case "VirtualMachine":
 			err := r.prepareVirtualMachineForCollection(o, namespaces)
 			if err != nil {

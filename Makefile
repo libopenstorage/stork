@@ -45,6 +45,7 @@ vendor:
 lint:
 	GO111MODULE=off go get -u golang.org/x/lint/golint
 	for file in $(GO_FILES); do \
+		echo "running lint on ${file}" \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
 			exit 1; \

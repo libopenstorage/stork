@@ -4,12 +4,10 @@
 package integrationtest
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -455,7 +453,7 @@ func setDestinationKubeConfig() error {
 	return nil
 }
 
-func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir string) error {
+func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir, projectIDMappings string) error {
 	err := os.MkdirAll(path.Join(specDir, clusterPairDir), 0777)
 	if err != nil {
 		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", specDir+"/"+clusterPairDir, err)
@@ -476,22 +474,29 @@ func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool
 
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
-	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath})
+
+	if !skipStorage {
+		var storageOptionsStr string
+		if len(pairInfo) > 0 {
+			for k, v := range pairInfo {
+				if len(storageOptionsStr) > 0 {
+					storageOptionsStr = storageOptionsStr + "," + k + "=" + v
+				} else {
+					storageOptionsStr = k + "=" + v
+				}
+			}
+		}
+		cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "--project-mappings", projectIDMappings, "--storageoptions", storageOptionsStr})
+	} else {
+		cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "--project-mappings", projectIDMappings})
+	}
 	if err := cmd.Execute(); err != nil {
 		logrus.Errorf("Execute storkctl failed: %v", err)
 		return err
 	}
 
-	truncCmd := `sed -i "$((` + "`wc -l " + clusterPairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + clusterPairFileName
-	logrus.Infof("trunc cmd: %v", truncCmd)
-	err = exec.Command("sh", "-c", truncCmd).Run()
-	if err != nil {
-		logrus.Errorf("truncate failed %v", err)
-		return err
-	}
-
 	if resetConfig {
-		// stokctl generate command sets sched-ops to source cluster config
+		// storkctl generate command sets sched-ops to source cluster config
 		err = setSourceKubeConfig()
 		if err != nil {
 			logrus.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
@@ -506,48 +511,12 @@ func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool
 		}
 	}
 
-	if skipStorage {
-		logrus.Info("cluster-pair.yml created")
-		return nil
-	}
-
-	return addStorageOptions(pairInfo, clusterPairFileName)
-}
-
-func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
-	file, err := os.OpenFile(clusterPairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	if err != nil {
-		logrus.Errorf("Unable to open %v: %v", pairFileName, err)
-		return err
-	}
-	defer func() {
-		err := file.Close()
-		if err != nil {
-			logrus.Errorf("Error closing pair file: %v", err)
-		}
-	}()
-	w := bufio.NewWriter(file)
-	for k, v := range pairInfo {
-		if k == "port" {
-			// port is integer
-			v = "\"" + v + "\""
-		}
-		_, err = fmt.Fprintf(w, "    %v: %v\n", k, v)
-		if err != nil {
-			logrus.Infof("error writing file %v", err)
-			return err
-		}
-	}
-	err = w.Flush()
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("cluster-pair.yml created with storage options in %s", clusterPairFileName)
+	logrus.Info("cluster-pair.yml created")
 	return nil
+
 }
 
-func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
+func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir, projectIDMappings string, reverse bool) error {
 	var token string
 	var err error
 	if reverse {
@@ -577,7 +546,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		return err
 	}
 
-	err = createClusterPair(info, skipStorage, resetConfig, clusterPairDir)
+	err = createClusterPair(info, skipStorage, resetConfig, clusterPairDir, projectIDMappings)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)
 		return err
@@ -606,7 +575,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 }
 
 // Create a cluster pair from source to destination and another cluster pair from destination to source
-func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
+func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string) error {
 	var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err := setSourceKubeConfig()
@@ -736,6 +705,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
 		"--dest-kube-file", destKubeconfigPath,
 		"--dest-ip", destInfo[clusterIP],
 		"--dest-token", destInfo[tokenKey],
+		"--project-mappings", projectMappings,
 	})
 
 	if err := cmd.Execute(); err != nil {
