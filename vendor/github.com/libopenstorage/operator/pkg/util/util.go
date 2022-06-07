@@ -1,21 +1,23 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/hashicorp/go-version"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/operator/pkg/constants"
-
-	appsv1 "k8s.io/api/apps/v1"
 )
 
 // Reasons for controller events
@@ -36,6 +38,15 @@ const (
 	ClusterOnlineReason = "ClusterOnline"
 	// MigrationPendingReason is added to an event when the migration is in pending state.
 	MigrationPendingReason = "MigrationPending"
+	// MigrationCompletedReason is added to an event when the migration is completed.
+	MigrationCompletedReason = "MigrationCompleted"
+	// MigrationFailed is added to an event when the migration fails.
+	MigrationFailedReason = "MigrationFailed"
+
+	// MigrationDryRunCompletedReason is added to an event when dry run is completed
+	MigrationDryRunCompletedReason = "MigrationDryRunCompleted"
+	// MigrationDryRunFailedReason is aded to an event when dry run fails.
+	MigrationDryRunFailedReason = "MigrationDryRunFailed"
 )
 
 var (
@@ -46,6 +57,11 @@ var (
 		"index.docker.io":             true,
 		"registry-1.docker.io":        true,
 		"registry.connect.redhat.com": true,
+	}
+	// podTopologySpreadConstraintKeys is a list of topology keys considered for pod spread constraints
+	podTopologySpreadConstraintKeys = []string{
+		"topology.kubernetes.io/region",
+		"topology.kubernetes.io/zone",
 	}
 )
 
@@ -77,6 +93,7 @@ func GetImageURN(cluster *corev1.StorageCluster, image string) string {
 
 	registryAndRepo := cluster.Spec.CustomImageRegistry
 	mergedCommonRegistries := getMergedCommonRegistries(cluster)
+	preserveFullCustomImageRegistry := cluster.Spec.PreserveFullCustomImageRegistry
 
 	omitRepo := false
 	if strings.HasSuffix(registryAndRepo, "//") {
@@ -97,11 +114,13 @@ func GetImageURN(cluster *corev1.StorageCluster, image string) string {
 		}
 	}
 
-	// if we have '/' in the registryAndRepo, return <registry/repository/><only-image>
-	// else (registry only) -- return <registry/><image-with-repository>
-	if strings.Contains(registryAndRepo, "/") || omitRepo {
-		// advance to the last element, skipping image's repository
-		imgParts = imgParts[len(imgParts)-1:]
+	if !preserveFullCustomImageRegistry {
+		// if we have '/' in the registryAndRepo, return <registry/repository/><only-image>
+		// else (registry only) -- return <registry/><image-with-repository>
+		if strings.Contains(registryAndRepo, "/") || omitRepo {
+			// advance to the last element, skipping image's repository
+			imgParts = imgParts[len(imgParts)-1:]
+		}
 	}
 	return registryAndRepo + "/" + path.Join(imgParts...)
 }
@@ -109,17 +128,12 @@ func GetImageURN(cluster *corev1.StorageCluster, image string) string {
 // GetImageMajorVersion returns the major version for a given image.
 // This allows you to make decisions based on the major version.
 func GetImageMajorVersion(image string) int {
-	if image == "" {
+	if !strings.Contains(image, ":") {
 		return -1
 	}
 
-	var tag string
 	parts := strings.Split(image, ":")
-	if len(parts) < 2 {
-		return -1
-	}
-
-	tag = parts[1]
+	tag := parts[len(parts)-1]
 	if tag == "" {
 		return -1
 	}
@@ -157,8 +171,55 @@ func HaveTolerationsChanged(
 	return !reflect.DeepEqual(cluster.Spec.Placement.Tolerations, existingTolerations)
 }
 
-// DeploymentDeepEqual compares if two deployments are same.
-func DeploymentDeepEqual(d1 *appsv1.Deployment, d2 *appsv1.Deployment) (bool, error) {
+// DeepEqualObject compare two objects
+func DeepEqualObject(obj1, obj2 interface{}) error {
+	if !reflect.DeepEqual(obj1, obj2) {
+		return fmt.Errorf("two objects are different, first object %+v, second object %+v", obj1, obj2)
+	}
+	return nil
+}
+
+// DeepEqualObjects compares two arrays of objects
+func DeepEqualObjects(
+	objs1, objs2 []interface{},
+	funcGetKey func(obj interface{}) string,
+	funcDeepEqualObject func(obj1, obj2 interface{}) error) error {
+
+	map1 := make(map[string]interface{})
+	map2 := make(map[string]interface{})
+	for _, obj := range objs1 {
+		map1[funcGetKey(obj)] = obj
+	}
+	for _, obj := range objs2 {
+		map2[funcGetKey(obj)] = obj
+	}
+
+	var msg string
+	for k, v := range map1 {
+		v2, ok := map2[k]
+
+		if !ok {
+			msg += fmt.Sprintf("object \"%s\" exists in first array but does not exist in second array.\n", k)
+		} else if err := funcDeepEqualObject(v, v2); err != nil {
+			msg += err.Error()
+			msg += "\n"
+		}
+	}
+
+	for k := range map2 {
+		if _, ok := map1[k]; !ok {
+			msg += fmt.Sprintf("object \"%s\" exists in second array but does not exist in first array.\n", k)
+		}
+	}
+
+	if msg != "" {
+		return fmt.Errorf(msg)
+	}
+	return nil
+}
+
+// DeepEqualDeployment compares if two deployments are same.
+func DeepEqualDeployment(d1 *appsv1.Deployment, d2 *appsv1.Deployment) (bool, error) {
 	// DeepDerivative will return true if first argument is nil, hence check the length of volumes.
 	// The reason we don't use deepEqual for volumes is k8s API server may add defaultMode to it.
 	if !equality.Semantic.DeepDerivative(d1.Spec.Template.Spec.Containers, d2.Spec.Template.Spec.Containers) {
@@ -271,10 +332,81 @@ func GetCustomAnnotations(
 	return nil
 }
 
+// GetCustomLabels returns custom labels for different StorageCluster components from spec
+func GetCustomLabels(
+	cluster *corev1.StorageCluster,
+	k8sObjKind string,
+	componentName string,
+) map[string]string {
+	if cluster.Spec.Metadata == nil || cluster.Spec.Metadata.Labels == nil {
+		return nil
+	}
+	// Use kind/component to locate the custom labels, e.g. service/portworx-api
+	key := fmt.Sprintf("%s/%s", k8sObjKind, componentName)
+	if labels, ok := cluster.Spec.Metadata.Labels[key]; ok && len(labels) != 0 {
+		return labels
+	}
+	return nil
+}
+
 // ComponentsPausedForMigration returns true if the daemonset migration is going on and
 // the components are waiting for storage pods to migrate first
 func ComponentsPausedForMigration(cluster *corev1.StorageCluster) bool {
 	_, migrating := cluster.Annotations[constants.AnnotationMigrationApproved]
 	componentsPaused, err := strconv.ParseBool(cluster.Annotations[constants.AnnotationPauseComponentMigration])
 	return migrating && err == nil && componentsPaused
+}
+
+// HaveTopologySpreadConstraintsChanged checks if the deployment has pod topology spread constraints changed
+func HaveTopologySpreadConstraintsChanged(
+	updatedTopologySpreadConstraints []v1.TopologySpreadConstraint,
+	existingTopologySpreadConstraints []v1.TopologySpreadConstraint,
+) bool {
+	return !reflect.DeepEqual(updatedTopologySpreadConstraints, existingTopologySpreadConstraints)
+}
+
+// GetTopologySpreadConstraints returns pod topology spread constraints spec
+func GetTopologySpreadConstraints(
+	k8sClient client.Client,
+	labels map[string]string,
+) ([]v1.TopologySpreadConstraint, error) {
+	nodeList := &v1.NodeList{}
+	err := k8sClient.List(context.TODO(), nodeList)
+	if err != nil {
+		return nil, err
+	}
+	return GetTopologySpreadConstraintsFromNodes(nodeList, labels)
+}
+
+// GetTopologySpreadConstraintsFromNodes returns pod topology spread constraints spec
+func GetTopologySpreadConstraintsFromNodes(
+	nodeList *v1.NodeList,
+	labels map[string]string,
+) ([]v1.TopologySpreadConstraint, error) {
+	topologyKeySet := make(map[string]bool)
+	for _, key := range podTopologySpreadConstraintKeys {
+		for _, node := range nodeList.Items {
+			if _, ok := node.Labels[key]; ok {
+				topologyKeySet[key] = true
+			}
+		}
+	}
+	var keys []string
+	for k := range topologyKeySet {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	// Construct topology spread constraints
+	var constraints []v1.TopologySpreadConstraint
+	for _, key := range keys {
+		constraints = append(constraints, v1.TopologySpreadConstraint{
+			MaxSkew:           1,
+			TopologyKey:       key,
+			WhenUnsatisfiable: v1.ScheduleAnyway,
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+		})
+	}
+	return constraints, nil
 }

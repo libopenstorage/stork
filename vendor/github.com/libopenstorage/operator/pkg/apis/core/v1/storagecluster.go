@@ -39,6 +39,8 @@ type StorageClusterList struct {
 type Metadata struct {
 	// Annotations that will be passed to different StorageCluster components
 	Annotations map[string]map[string]string `json:"annotations,omitempty"`
+	// Labels that will be passed to different StorageCluster components
+	Labels map[string]map[string]string `json:"labels,omitempty"`
 }
 
 // StorageClusterSpec is the spec used to define a storage cluster
@@ -72,6 +74,10 @@ type StorageClusterSpec struct {
 	// repository) that will be used instead of index.docker.io to download Docker
 	// images. (Example: myregistry.net:5443 or myregistry.com/myrepository)
 	CustomImageRegistry string `json:"customImageRegistry,omitempty"`
+	// This is a hack to stop GetImageURN from swallowing part of the image tag.
+	// Without it having a customImageRegistry with a / in it means that an image
+	// `portworx/oci-monitor` becomes just `oci-monitor`
+	PreserveFullCustomImageRegistry bool `json:"preserveFullCustomImageRegistry,omitempty"`
 	// Kvdb is the information of kvdb that storage driver uses
 	Kvdb *KvdbSpec `json:"kvdb,omitempty"`
 	// CloudStorage details of storage in cloud environment.
@@ -90,7 +96,7 @@ type StorageClusterSpec struct {
 	// UserInterface contains details of a user interface for the storage driver
 	UserInterface *UserInterfaceSpec `json:"userInterface,omitempty"`
 	// PxRepo contains configuration for apt repository. Portworx uses it to install dependency modules.
-	PxRepo *PxRepoSpec `json:"pxrepo,omitempty"`
+	PxRepo *PxRepoSpec `json:"pxRepo,omitempty"`
 	// Stork contains STORK related parameters. For more information about STORK,
 	// check https://github.com/libopenstorage/stork
 	Stork *StorkSpec `json:"stork,omitempty"`
@@ -180,8 +186,14 @@ type NodeSpec struct {
 
 // CSISpec is used to define the CSI configurations
 type CSISpec struct {
-	Enabled                   bool  `json:"enabled,omitempty"`
-	InstallSnapshotController *bool `json:"installSnapshotController,omitempty"`
+	Enabled                   bool             `json:"enabled,omitempty"`
+	InstallSnapshotController *bool            `json:"installSnapshotController,omitempty"`
+	Topology                  *CSITopologySpec `json:"topology,omitempty"`
+}
+
+// CSITopologySpec is used to define the CSI topology configurations
+type CSITopologySpec struct {
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 // SecuritySpec is used to define the security configuration for a cluster.
@@ -596,6 +608,7 @@ type ComponentImages struct {
 	Telemetry                  string `json:"telemetry,omitempty"`
 	MetricsCollector           string `json:"metricsCollector,omitempty"`
 	MetricsCollectorProxy      string `json:"metricsCollectorProxy,omitempty"`
+	PxRepo                     string `json:"pxRepo,omitempty"`
 }
 
 // Storage represents cluster storage details
