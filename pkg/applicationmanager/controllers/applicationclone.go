@@ -758,7 +758,9 @@ func (a *ApplicationCloneController) cloneResources(
 		clone.Spec.Selectors,
 		nil,
 		clone.Spec.IncludeOptionalResourceTypes,
-		false)
+		false,
+		resourcecollector.Options{},
+	)
 	if err != nil {
 		log.ApplicationCloneLog(clone).Errorf("Error getting resources: %v", err)
 		return err
