@@ -49,6 +49,8 @@ type Node struct {
 	Type                     Type
 	Zone                     string
 	Region                   string
+	TopologyZone             string
+	TopologyRegion           string
 	IsStorageDriverInstalled bool
 	IsMetadataNode           bool
 	StoragePools             []StoragePool

@@ -1,7 +1,7 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-    name: elasticsearch-sc
+  name: sysbench-sc
 provisioner: pxd.portworx.com
 parameters:
   # Tests:
@@ -9,8 +9,7 @@ parameters:
   # * Specifying filesystem type, creation options, and mount options
   # * Specifying QoS
   backend: "pure_block"
-  max_iops: "30000"
-  max_bandwidth: "10G"
+  max_bandwidth: "1G"
   csi.storage.k8s.io/fstype: ext4
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true

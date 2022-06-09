@@ -17,6 +17,7 @@ import (
 
 	"container/ring"
 
+	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"github.com/onsi/ginkgo"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
@@ -58,6 +59,20 @@ const (
 )
 
 const (
+	// PureSecretName pure secret name
+	PureSecretName = "px-pure-secret"
+	// PureSecretDataField is pure json file name
+	PureSecretDataField = "pure.json"
+	// PureSnapShotClass is pure Snapshot class name
+	PureSnapShotClass = "px-pure-snapshotclass"
+)
+
+const (
+	// PureTopologyField to check for pure Topology is enabled on cluster
+	PureTopologyField = "pureTopology"
+)
+
+const (
 	validateReplicationUpdateTimeout = 2 * time.Hour
 	errorChannelSize                 = 50
 )
@@ -92,6 +107,9 @@ var jiraEvents = make(map[string][]string)
 
 //isAutoFsTrimEnabled to store if auto fs trim enalbed
 var isAutoFsTrimEnabled = false
+
+// isCsiVolumeSnapshotClassExist to store if snapshot class exist
+var isCsiVolumeSnapshotClassExist = false
 
 // Event describes type of test trigger
 type Event struct {
@@ -139,6 +157,27 @@ type nodeInfo struct {
 type triggerInfo struct {
 	Name     string
 	Duration time.Duration
+}
+
+// FlashArray structure for pure secret
+type FlashArray struct {
+	MgmtEndPoint string
+	APIToken     string
+	Labels       map[string]string
+}
+
+// FlashBlade Structure for pure secret
+type FlashBlade struct {
+	MgmtEndPoint string
+	APIToken     string
+	NFSEndPoint  string
+	Labels       map[string]string
+}
+
+// PureSecret represent px-pure-secret for FADA
+type PureSecret struct {
+	FlashArrays []FlashArray
+	FlashBlades []FlashBlade
 }
 
 // GenerateUUID generates unique ID
@@ -198,6 +237,10 @@ const (
 	CloudSnapShot = "cloudSnapShot"
 	// LocalSnapShot takes local snapshot of the volumes
 	LocalSnapShot = "localSnapShot"
+	// CsiSnapShot takes csi snapshot of the volumes
+	CsiSnapShot = "csiSnapShot"
+	//CsiSnapRestore takes restore
+	CsiSnapRestore = "csiSnapRestore"
 	// DeleteLocalSnapShot deletes local snapshots of the volumes
 	DeleteLocalSnapShot = "deleteLocalSnapShot"
 	// EmailReporter notifies via email outcome of past events
@@ -315,11 +358,20 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		*recordChan <- event
 	}()
 	errorChan := make(chan error, errorChannelSize)
-
+	labels := Inst().TopologyLabels
 	Step("Deploy applications", func() {
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
-			*contexts = append(*contexts, newContexts...)
+		if len(labels) > 0 {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				newContexts := ScheduleAppsInTopologyEnabledCluster(
+					fmt.Sprintf("longevity-%d", i), labels, &errorChan,
+				)
+				*contexts = append(*contexts, newContexts...)
+			}
+		} else {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
+				*contexts = append(*contexts, newContexts...)
+			}
 		}
 
 		for _, ctx := range *contexts {
@@ -368,6 +420,18 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 			}
 			for _, v := range appVolumes {
+				// Check if volumes are Pure FA/FB DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err == nil {
+					UpdateOutcome(event, err)
+				}
+				if isPureVol {
+					logrus.Warningf(
+						"Repl increase on Pure DA Volume [%s] not supported.",
+						"Skiping this operation", v.Name,
+					)
+					continue
+				}
 				MaxRF := Inst().V.GetMaxReplicationFactor()
 
 				Step(
@@ -481,6 +545,18 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 			}
 			for _, v := range appVolumes {
+				// Skipping repl decrease for pure volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err == nil {
+					UpdateOutcome(event, err)
+				}
+				if isPureVol {
+					logrus.Warningf(
+						"Repl decrease on Pure DA volume:[%s] not supported.",
+						"Skipping repl decrease operation in pure volume", v.Name,
+					)
+					continue
+				}
 				MinRF := Inst().V.GetMinReplicationFactor()
 
 				Step(
@@ -1431,7 +1507,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 						}
 					}
 
-					snapshotList, err := Inst().S.GetShapShotsInNameSpace(ctx, appNamespace)
+					snapshotList, err := Inst().S.GetSnapshotsInNameSpace(ctx, appNamespace)
 					UpdateOutcome(event, err)
 					if len(snapshotList.Items) != 0 {
 						logrus.Infof("Failed to delete snapshots in namespace %v", appNamespace)
@@ -1522,6 +1598,18 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				logrus.Infof("Got volume count : %v", len(appVolumes))
 
 				for _, v := range appVolumes {
+					// Skip cloud snapshot trigger for Pure DA volumes
+					isPureVol, err := Inst().V.IsPureVolume(v)
+					if err == nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf(
+							"Cloud snapshot is not supported for Pure DA volumes: [%s]",
+							"Skipping cloud snapshot trigger for pure volume.", v.Name,
+						)
+						continue
+					}
 					snapshotScheduleName := v.Name + "-interval-schedule"
 					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
@@ -3162,6 +3250,18 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				poolSet := make(map[string]struct{})
 				var exists = struct{}{}
 				for _, vol := range appVolumes {
+					// Skipping get replicaset operations for Pure Volumes
+					isPureVol, err := Inst().V.IsPureVolume(vol)
+					if err == nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf(
+							"Pure DA volume doesn't consume space in Portworx pools",
+							"Skipping get replicaset for pure volume %s", vol.Name,
+						)
+						continue
+					}
 					replicaSets, err := Inst().V.GetReplicaSets(vol)
 					if err != nil {
 						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
@@ -3237,7 +3337,9 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			var err error
 			Step("Get StoragePool IDs from the app volumes", func() {
 				appVolumes, err = Inst().S.GetVolumes(ctx)
-				UpdateOutcome(event, err)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
 				if len(appVolumes) == 0 {
 					err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
 					logrus.Errorf(err.Error())
@@ -3246,6 +3348,15 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				poolSet := make(map[string]struct{})
 				var exists = struct{}{}
 				for _, vol := range appVolumes {
+					// Skipping get replicaset operations for Pure DA volumes
+					isPureVol, err := Inst().V.IsPureVolume(vol)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf("Skipping get replicaset operations Pure DA Volume %s", vol.Name)
+						continue
+					}
 					replicaSets, err := Inst().V.GetReplicaSets(vol)
 					if err != nil {
 						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
@@ -3554,6 +3665,18 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 			}
 
 			for _, v := range appVolumes {
+				// Skip autofs trim status on Pure DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err == nil {
+					UpdateOutcome(event, err)
+				}
+				if isPureVol {
+					logrus.Warningf(
+						"Autofs Trim is not supported for Pure DA volume: [%s]",
+						"Skipping autofs trim status on pure volumes", v.Name,
+					)
+					continue
+				}
 				logrus.Infof("Getting info : %s", v.ID)
 				appVol, err := Inst().V.InspectVolume(v.ID)
 				if err != nil {
@@ -3787,6 +3910,86 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		})
 	}
 
+}
+
+// TriggerCsiSnapShot takes csi snapshots of the volumes and validates snapshot
+func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	var volSnapshotClass *v1beta1.VolumeSnapshotClass
+	var err error
+
+	defer ginkgo.GinkgoRecover()
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: CsiSnapShot,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Create and Validate snapshots for FA DA volumes", func() {
+		if !isCsiVolumeSnapshotClassExist {
+			snapShotClassName := PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
+			if volSnapshotClass, err = Inst().S.CreateCsiSanpshotClass(snapShotClassName, "Delete"); err != nil {
+				UpdateOutcome(event, err)
+			}
+			isCsiVolumeSnapshotClassExist = true
+		}
+		for _, ctx := range *contexts {
+			var volumeSnapshotMap map[string]*v1beta1.VolumeSnapshot
+			var err error
+			Step(fmt.Sprintf("get snapshots for %s app", ctx.App.Key), func() {
+				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, volSnapshotClass.Name)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
+			})
+			Step(fmt.Sprintf("validate snapshot for %s app", ctx.App.Key), func() {
+				if err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap); err != nil {
+					UpdateOutcome(event, err)
+				}
+			})
+		}
+	})
+}
+
+// TriggerCsiSnapRestore create pvc from snapshot and validate the restored PVC
+func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: CsiSnapRestore,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Restore the Snapshot and Validate the PVC", func() {
+		for _, ctx := range *contexts {
+			//var volumePVCMap map[string]v1.PersistentVolumeClaim
+			var err error
+			Step(fmt.Sprintf("Restore and validate snapshot for %s app", ctx.App.Key), func() {
+				_, err = Inst().S.RestoreCsiSnapAndValidate(ctx)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
+			})
+		}
+	})
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {

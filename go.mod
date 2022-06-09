@@ -19,6 +19,7 @@ require (
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
 	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0 // indirect
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41

@@ -1,0 +1,24 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-fb
+spec:
+  storageClassName: vdbench-fb-sc-nfsv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 75Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-output-fb
+spec:
+  storageClassName: vdbench-fb-sc-nfsv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+

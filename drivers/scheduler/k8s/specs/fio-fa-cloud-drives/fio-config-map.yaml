@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fio-job-config
+data:
+    fio.job: |
+        [global]
+        name=fio-rand-RW
+        directory=/scratch/
+        rw=randwrite
+        rwmixread=75
+        randrepeat=1
+        blocksize_range=4k-512k
+        direct=1
+        end_fsync=1
+        do_verify=1
+        verify=crc32c
+        verify_pattern=0xdeadbeef
+        disable_lat=0
+        time_based=1
+        runtime=99999999
+        [file1]
+        filesize=1M-10M
+        nrfiles=1000
+        ioengine=libaio
+        iodepth=128
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grok-exporter
+data:
+  config.yml: |-
+    global:
+      config_version: 3
+    input:
+      type: file
+      path: /logs/fio.log
+      readall: false
+      fail_on_missing_logfile: true
+    imports:
+    - type: grok_patterns
+      dir: ./patterns
+    grok_patterns:
+    - 'FIO_IOPS [0-9]*[.][0-9]k$|[0-9]*'
+    metrics:
+        - type: gauge
+          name: iops
+          help: FIO IOPS Write Gauge Metrics
+          match: '  write: %{GREEDYDATA}, iops=%{NUMBER:val1}%{GREEDYDATA:thsd}, %{GREEDYDATA}'
+          value: '{{`{{if eq .thsd "k"}}{{multiply .val1 1000}}{{else}}{{.val1}}{{end}}`}}'
+          labels:
+              iops_suffix: '{{`{{.thsd}}`}}'
+          cumulative: false
+          retention: 1s
+        - type: gauge
+          name: bandwidth
+          help: FIO Bandwidth Write Gauge Metrics
+          match: '  write: io=%{GREEDYDATA}, bw=%{NUMBER:val2}%{GREEDYDATA:kbs}, %{GREEDYDATA}, %{GREEDYDATA}'
+          value: '{{`{{if eq .kbs "KB/s"}}{{divide .val2 1024}}{{else}}{{.val2}}{{end}}`}}'
+          labels:
+              bw_unit: '{{`{{.kbs}}`}}'
+          cumulative: false
+          retention: 1s
+        - type: gauge
+          name: avg_latency
+          help: FIO AVG Latency Write Gauge Metrics
+          match: '     lat (%{GREEDYDATA:nsec}): min=%{GREEDYDATA}, max=%{GREEDYDATA}, avg=%{NUMBER:val3}, stdev=%{GREEDYDATA}'
+          value: '{{`{{if eq .nsec "(usec)"}}{{divide .val3 1000}}{{else}}{{.val3}}{{end}}`}}'
+          labels:
+              lat_unit: '{{`{{.nsec}}`}}'
+          cumulative: false
+          retention: 1s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fio-ready-probe
+data:
+  ready-probe.sh: |
+    #!/bin/bash
+    if [ `cat /root/fio.log | grep 'error\|bad magic header' | wc -l` -ge 1 ]; then 
+      exit 1; 
+    else 
+      exit 0; 
+    fi

@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,7 +14,10 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -24,6 +28,7 @@ const (
 	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
 	controlLoopSleepTime  = time.Second * 15
+	podDestroyTimeout     = 5 * time.Minute
 )
 
 var (
@@ -35,6 +40,12 @@ var (
 
 	triggerFunctions     map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 	emailTriggerFunction map[string]func()
+
+	// Pure Topology is disabled by default
+	pureTopologyEnabled = false
+
+	// Pure Topology Label array
+	labels []map[string]string
 )
 
 func TestLongevity(t *testing.T) {
@@ -84,6 +95,8 @@ var _ = Describe("{Longevity}", func() {
 		RebootManyNodes:      TriggerRebootManyNodes,
 		NodeDecommission:     TriggerNodeDecommission,
 		NodeRejoin:           TriggerNodeRejoin,
+		CsiSnapShot:          TriggerCsiSnapShot,
+		CsiSnapRestore:       TriggerCsiSnapRestore,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -95,6 +108,13 @@ var _ = Describe("{Longevity}", func() {
 			err := watchConfigMap()
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		if pureTopologyEnabled {
+			var err error
+			labels, err = SetTopologyLabelsOnNodes()
+			Expect(err).NotTo(HaveOccurred())
+			Inst().TopologyLabels = labels
+		}
 
 		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
@@ -296,6 +316,8 @@ func populateDisruptiveTriggers() {
 		RebootManyNodes:                 true,
 		RestartKvdbVolDriver:            true,
 		NodeDecommission:                true,
+		CsiSnapShot:                     true,
+		CsiSnapRestore:                  false,
 	}
 }
 
@@ -305,6 +327,7 @@ func isDisruptiveTrigger(triggerType string) bool {
 
 func populateDataFromConfigMap(configData *map[string]string) error {
 	setEmailRecipients(configData)
+	setPureTopology(configData)
 	err := setSendGridEmailAPIKey(configData)
 	if err != nil {
 		return err
@@ -327,6 +350,23 @@ func setEmailRecipients(configData *map[string]string) {
 	} else {
 		EmailRecipients = strings.Split(emailRecipients, ",")
 		delete(*configData, EmailRecipientsConfigMapField)
+	}
+}
+
+// setPureTopology read the config map and set the pureTopologyEnabled field
+func setPureTopology(configData *map[string]string) {
+	// Set Pure Topology Enabled value from configMap
+	var err error
+	if pureTopology, ok := (*configData)[PureTopologyField]; !ok {
+		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
+			PureTopologyField, testTriggersConfigMap, configMapNS)
+	} else {
+		pureTopologyEnabled, err = strconv.ParseBool(pureTopology)
+		if err != nil {
+			logrus.Errorf("Failed to parse [%s] field in config-map in [%s] namespace.Error:[%v]\n",
+				PureTopologyField, configMapNS, err)
+		}
+		delete(*configData, PureTopologyField)
 	}
 }
 
@@ -363,6 +403,90 @@ func populateTriggers(triggers *map[string]string) error {
 			RunningTriggers[triggerType] = triggerInterval[triggerType][chaosLevel]
 		}
 
+	}
+	return nil
+}
+
+// SetTopologyLabelsOnNodes distribute labels on node
+func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
+	// Slice of FA labels
+	topologyLabels := make([]map[string]string, 0)
+	nodeUpTimeout := 5 * time.Minute
+
+	logrus.Info("Add Topology Labels on node")
+	var secret PureSecret
+	pureSecretString, err := Inst().S.GetSecretData(
+		schedops.PXNamespace, PureSecretName, PureSecretDataField,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read pure secret [%s]. Error [%v]",
+			PureSecretName, err)
+	}
+
+	pureSecretJSON := []byte(pureSecretString)
+
+	if err = json.Unmarshal(pureSecretJSON, &secret); err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal pure secret data [%s]. Error:[%v]",
+			pureSecretJSON, err)
+	}
+
+	// Appending the labels to a list
+	for _, fa := range secret.FlashArrays {
+		topologyLabels = append(topologyLabels, fa.Labels)
+	}
+
+	topologyGroups := len(topologyLabels)
+
+	// Adding the labels on node.
+	for nodeIdx, n := range node.GetWorkerNodes() {
+		labelIdx := int32(nodeIdx % topologyGroups)
+		for key, value := range topologyLabels[labelIdx] {
+			if err = Inst().S.AddLabelOnNode(n, key, value); err != nil {
+				return nil, fmt.Errorf("Failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
+					key, value, n.Name, err)
+			}
+			switch key {
+			case k8s.TopologyZoneK8sNodeLabel:
+				logrus.Infof("Setting node: [%s] Topology Zone to: [%s]", n.Name, value)
+				n.TopologyZone = value
+			case k8s.TopologyRegionK8sNodeLabel:
+				logrus.Infof("Setting node: [%s] Topology Region to: [%s]", n.Name, value)
+				n.TopologyRegion = value
+			}
+		}
+		// Updating the node with topology info in node registry
+		node.UpdateNode(n)
+	}
+
+	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
+	logrus.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
+	if err := deletePXPods(""); err != nil {
+		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)
+	}
+
+	// Wait for PX pods to be up
+	logrus.Info("Waiting for Volume Driver to be up and running")
+	for _, n := range node.GetWorkerNodes() {
+		if err := Inst().V.WaitForPxPodsToBeUp(n); err != nil {
+			return nil, fmt.Errorf("PX pod not coming up in a node [%s]. Error:[%v]", n.Name, err)
+		}
+		if err := Inst().V.WaitDriverUpOnNode(n, nodeUpTimeout); err != nil {
+			return nil, fmt.Errorf("Volume Driver not coming up in a node [%s]. Error:[%v]", n.Name, err)
+		}
+	}
+
+	return topologyLabels, nil
+}
+
+// deletePXPods delete px pods
+func deletePXPods(nameSpace string) error {
+	pxLabel := make(map[string]string)
+	if nameSpace == "" {
+		nameSpace = k8s.PXNamespace
+	}
+	pxLabel["name"] = "portworx"
+	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
+		return err
 	}
 	return nil
 }
@@ -410,6 +534,8 @@ func populateIntervals() {
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
 	triggerInterval[NodeRejoin] = make(map[int]time.Duration)
+	triggerInterval[CsiSnapShot] = make(map[int]time.Duration)
+	triggerInterval[CsiSnapRestore] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -804,6 +930,17 @@ func populateIntervals() {
 	triggerInterval[NodeRejoin][2] = 24 * baseInterval
 	triggerInterval[NodeRejoin][1] = 27 * baseInterval
 
+	triggerInterval[CsiSnapShot][10] = 1 * baseInterval
+	triggerInterval[CsiSnapShot][9] = 3 * baseInterval
+	triggerInterval[CsiSnapShot][8] = 6 * baseInterval
+	triggerInterval[CsiSnapShot][7] = 9 * baseInterval
+	triggerInterval[CsiSnapShot][6] = 12 * baseInterval
+	triggerInterval[CsiSnapShot][5] = 15 * baseInterval
+	triggerInterval[CsiSnapShot][4] = 18 * baseInterval
+	triggerInterval[CsiSnapShot][3] = 21 * baseInterval
+	triggerInterval[CsiSnapShot][2] = 24 * baseInterval
+	triggerInterval[CsiSnapShot][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -830,6 +967,17 @@ func populateIntervals() {
 	triggerInterval[VolumesDelete][3] = 21 * baseInterval
 	triggerInterval[VolumesDelete][2] = 24 * baseInterval
 	triggerInterval[VolumesDelete][1] = 27 * baseInterval
+
+	triggerInterval[CsiSnapRestore][10] = 1 * baseInterval
+	triggerInterval[CsiSnapRestore][9] = 3 * baseInterval
+	triggerInterval[CsiSnapRestore][8] = 6 * baseInterval
+	triggerInterval[CsiSnapRestore][7] = 9 * baseInterval
+	triggerInterval[CsiSnapRestore][6] = 12 * baseInterval
+	triggerInterval[CsiSnapRestore][5] = 15 * baseInterval
+	triggerInterval[CsiSnapRestore][4] = 18 * baseInterval
+	triggerInterval[CsiSnapRestore][3] = 21 * baseInterval
+	triggerInterval[CsiSnapRestore][2] = 24 * baseInterval
+	triggerInterval[CsiSnapRestore][1] = 27 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
@@ -868,6 +1016,8 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrim][0] = 0
 	triggerInterval[RestartManyVolDriver][0] = 0
 	triggerInterval[RebootManyNodes][0] = 0
+	triggerInterval[CsiSnapShot][0] = 0
+	triggerInterval[CsiSnapRestore][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

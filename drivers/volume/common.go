@@ -708,3 +708,11 @@ func (d *DefaultDriver) GetPxctlCmdOutput(n node.Node, command string) (string, 
 		Operation: "GetPxctlCmdOutput()",
 	}
 }
+
+// IsPureVolume returns true if volume is FA/FB DA volumes else false
+func (d *DefaultDriver) IsPureVolume(volume *Volume) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPureVolume()",
+	}
+}

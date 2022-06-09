@@ -230,6 +230,9 @@ type Driver interface {
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
 
+	// IsPureVolume(volume *torpedovolume.Volume) return true if given volume is FA/FB DA volumes
+	IsPureVolume(volume *Volume) (bool, error)
+
 	// EstimatePoolExpandSize calculates expected pool size based on autopilot rule
 	EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.StoragePool, node node.Node) (uint64, error)
 

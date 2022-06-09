@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	random "math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,6 +24,7 @@ import (
 
 	docker_types "github.com/docker/docker/api/types"
 	vaultapi "github.com/hashicorp/vault/api"
+	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
@@ -33,6 +35,7 @@ import (
 	k8sCommon "github.com/portworx/sched-ops/k8s/common"
 	"github.com/portworx/sched-ops/k8s/core"
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
+	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/networking"
 	"github.com/portworx/sched-ops/k8s/policy"
@@ -91,10 +94,22 @@ const (
 	ZoneK8SNodeLabel = "failure-domain.beta.kubernetes.io/zone"
 	// RegionK8SNodeLabel is node label describing region of the k8s node
 	RegionK8SNodeLabel = "failure-domain.beta.kubernetes.io/region"
+	// TopologyZoneK8sNodeLabel is label describing topology zone of k8s node
+	TopologyZoneK8sNodeLabel = "topology.portworx.io/zone"
+	// TopologyRegionK8sNodeLabel is label describing topology region of k8s node
+	TopologyRegionK8sNodeLabel = "topology.portworx.io/region"
 	// PureFile is the parameter in storageclass to represent FB volume
 	PureFile = "pure_file"
 	// PureBlock is the parameter in storageclass to represent FA direct access volumes
 	PureBlock = "pure_block"
+	// PortworxStrict provisioner for using same provisioner as provided in the spec
+	PortworxStrict = "strict"
+	// PXDaemonSet DaemonSet Name
+	PXDaemonSet = "portworx"
+	// PXNamespace default namespace
+	PXNamespace = "kube-system"
+	// CsiProvisioner is csi provisioner
+	CsiProvisioner = "pxd.portworx.com"
 )
 
 const (
@@ -150,6 +165,8 @@ const (
 	PvcNameKey = "pvc_name"
 	// PvcNamespaceKey key used in volume param map to store PVC namespace
 	PvcNamespaceKey = "pvc_namespace"
+	// VolumeSnapshotKind type use for restore
+	VolumeSnapshotKind = "VolumeSnapshot"
 )
 
 var (
@@ -169,6 +186,8 @@ var (
 	k8sBatch           = batch.Instance()
 	k8sMonitoring      = prometheus.Instance()
 	k8sPolicy          = policy.Instance()
+	// SnapshotAPIGroup is the group for the resource being referenced.
+	SnapshotAPIGroup = "snapshot.storage.k8s.io"
 )
 
 // K8s  The kubernetes structure
@@ -489,8 +508,7 @@ func (k *K8s) ParseSpecsFromYamlBuf(yamlBuf *bytes.Buffer) ([]interface{}, error
 func isValidProvider(specPath, storageProvisioner string) bool {
 	// Skip all storage provisioner specific spec except storageProvisioner
 	for _, driver := range volume.GetVolumeDrivers() {
-		if driver != storageProvisioner &&
-			strings.Contains(specPath, "/"+driver+"/") {
+		if driver != storageProvisioner && strings.Contains(specPath, "/"+driver+"/") {
 			return false
 		}
 	}
@@ -707,6 +725,9 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			appNamespace = options.Namespace
 		} else {
 			options.Namespace = appNamespace
+		}
+		if len(options.TopologyLabels) > 1 {
+			rotateTopologyArray(&options)
 		}
 
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
@@ -1204,8 +1225,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
-		obj.Provisioner = volume.GetStorageProvisioner()
+		if volume.GetStorageProvisioner() != PortworxStrict {
+			obj.Provisioner = volume.GetStorageProvisioner()
+		}
+		logrus.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
+
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
@@ -1553,6 +1577,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if options.Scheduler != "" {
 			obj.Spec.Template.Spec.SchedulerName = options.Scheduler
 		}
+		if len(options.TopologyLabels) > 0 {
+			Affinity := getAffinity(options.TopologyLabels)
+			obj.Spec.Template.Spec.Affinity = Affinity.DeepCopy()
+		}
 
 		secret, err := createDockerRegistrySecret(app.Key, obj.Namespace)
 		if err != nil {
@@ -1597,6 +1625,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			if err != nil {
 				return nil, fmt.Errorf("failed to add annotations to core object: %v", err)
 			}
+		}
+
+		if len(options.TopologyLabels) > 0 {
+			Affinity := getAffinity(options.TopologyLabels)
+			obj.Spec.Template.Spec.Affinity = Affinity.DeepCopy()
 		}
 
 		obj.Spec.Template.Spec.Containers = k.substituteNamespaceInContainers(obj.Spec.Template.Spec.Containers, ns.Name)
@@ -1906,6 +1939,84 @@ func (k *K8s) substituteNamespaceInVolumes(volumes []corev1.Volume, ns string) [
 		updatedVolumes = append(updatedVolumes, vol)
 	}
 	return updatedVolumes
+}
+
+// ValidateTopologyLabel validate Topology for Running Pods
+func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
+	var err error
+	var zone string
+	var podList *corev1.PodList
+
+	logrus.Info("Validating pods topology")
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			var dep *appsapi.Deployment
+			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: obj.Namespace,
+					Cause:     err,
+				}
+			}
+			nodeAff := dep.Spec.Template.Spec.Affinity.NodeAffinity
+			labels := getLabelsFromNodeAffinity(nodeAff)
+			zone = labels[TopologyZoneK8sNodeLabel]
+			if podList, err = k8sCore.GetPods(obj.Namespace, nil); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: obj.Namespace,
+					Cause:     err,
+				}
+			}
+			if err = k.validatePodsTopology(podList, zone); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: obj.Namespace,
+					Cause:     err,
+				}
+			}
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			var ss *appsapi.StatefulSet
+			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: obj.Namespace,
+					Cause:     err,
+				}
+			}
+			nodeAff := ss.Spec.Template.Spec.Affinity.NodeAffinity
+			labels := getLabelsFromNodeAffinity(nodeAff)
+			zone = labels[TopologyZoneK8sNodeLabel]
+			if podList, err = k8sCore.GetPods(obj.Namespace, nil); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: obj.Namespace,
+					Cause:     err,
+				}
+			}
+			if err = k.validatePodsTopology(podList, zone); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: obj.Namespace,
+					Cause:     err,
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// validatePodsTopology validates pods scheduled on matched label node
+func (k *K8s) validatePodsTopology(podList *v1.PodList, labelValue string) error {
+	for _, pod := range podList.Items {
+		hostIP := pod.Status.HostIP
+		if node, err := node.GetNodeByIP(hostIP); err != nil {
+			if node.TopologyZone != labelValue || node.TopologyRegion != labelValue {
+				return &scheduler.ErrTopologyLabelMismatch{
+					PodName: pod.Name,
+					Cause: fmt.Sprintf(
+						"Topology Mismatch.Pod [%s] on zone [%s] scheduled on a node [%s].",
+						pod.Name, labelValue, node.Name),
+				}
+			}
+		}
+		logrus.Infof("Successfully matched Pod: [%s] topology", pod.Name)
+	}
+	return nil
 }
 
 // WaitForRunning   wait for running
@@ -2554,6 +2665,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			var labels map[string]string
 			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
@@ -2570,12 +2682,17 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 			}
 
+			if len(ctx.ScheduleOptions.TopologyLabels) > 0 {
+				nodeAff := ss.Spec.Template.Spec.Affinity.NodeAffinity
+				labels = getLabelsFromNodeAffinity(nodeAff)
+			}
+
 			for _, pvc := range pvcList.Items {
 				params, err := k8sCore.GetPersistentVolumeClaimParams(&pvc)
 				if err != nil {
 					return nil, &scheduler.ErrFailedToGetVolumeParameters{
 						App:   ctx.App,
-						Cause: fmt.Sprintf("failed to get params for volume: %v. Err: %v", pvc.Name, err),
+						Cause: fmt.Sprintf("Failed to get params for volume: %v. Err: %v", pvc.Name, err),
 					}
 				}
 
@@ -2584,11 +2701,18 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 				params[PvcNameKey] = pvc.GetName()
 				params[PvcNamespaceKey] = pvc.GetNamespace()
+
+				if len(pvc.Spec.VolumeName) > 0 && len(ctx.ScheduleOptions.TopologyLabels) > 0 {
+					for k, v := range labels {
+						params[k] = v
+						logrus.Infof("Topology labels for volume [%s] are: [%s]", pvc.Spec.VolumeName, params[k])
+					}
+				}
 				result[pvc.Spec.VolumeName] = params
+
 			}
 		}
 	}
-
 	return result, nil
 }
 
@@ -2688,7 +2812,6 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v. Err: %v", ss.Name, err),
 				}
 			}
-
 			logrus.Infof("[%v] Validated PVCs from StatefulSet: %v", ctx.App.Key, obj.Name)
 		}
 	}
@@ -3135,8 +3258,8 @@ func (k *K8s) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameS
 
 }
 
-// GetShapShotsInNameSpace get the snapshots list for the namespace
-func (k *K8s) GetShapShotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+// GetSnapshotsInNameSpace get the snapshots list for the namespace
+func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
 
 	time.Sleep(10 * time.Second)
 	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
@@ -4773,6 +4896,377 @@ func (k *K8s) RecycleNode(n node.Node) error {
 	}
 }
 
+// CreateCsiSnapsForVolumes create csi snapshots for Apps
+func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
+	var volSnapMap = make(map[string]*v1beta1.VolumeSnapshot)
+
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			snapshotOkay, err := k.filterPureVolumesIfEnabled(pvc)
+			if err != nil {
+				return nil, err
+			}
+			if snapshotOkay {
+				snapName := "snap-" + pvc.Name + "-" + time.Now().Format("01-02-15h04m05s")
+				volSnapshot, err := k.CreateCsiSnapshot(snapName, snapClass, pvc.Name)
+				if err != nil {
+					return nil, err
+				}
+				volSnapMap[pvc.Spec.VolumeName] = volSnapshot
+			}
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				snapshotOkay, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if snapshotOkay {
+					snapName := "snap-" + pvc.Name + "-" + time.Now().Format("01-02-15h04m05s")
+					volSnapshot, err := k.CreateCsiSnapshot(snapName, snapClass, pvc.Name)
+					if err != nil {
+						return nil, err
+					}
+					volSnapMap[pvc.Spec.VolumeName] = volSnapshot
+				}
+			}
+		}
+	}
+
+	return volSnapMap, nil
+}
+
+func (k *K8s) restoreAndValidate(ctx *scheduler.Context, pvc *v1.PersistentVolumeClaim, namespace string) (*v1.PersistentVolumeClaim, error) {
+	var resPvc *v1.PersistentVolumeClaim
+
+	snaplist, err := k.GetCsiSnapshots(namespace, pvc.Name)
+	if err != nil {
+		return nil, err
+	}
+	if len(snaplist) > 0 {
+		return nil, fmt.Errorf("No snaphost found for a PVC: [%s]", pvc.Name)
+	}
+
+	resVolIndex := random.Intn(len(snaplist))
+	restorePVCName := pvc.Name + "-" + "restore"
+	if resPvc, err = k.restoreCsiSnapshot(restorePVCName, *pvc, snaplist[resVolIndex]); err != nil {
+		return nil, &scheduler.ErrFailedToRestore{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("Failed to restore snapshot: [%s]", snaplist[resVolIndex].Name),
+		}
+	}
+	// Validate restored PVC
+	if err = k.ValidateCsiRestore(resPvc.Name, namespace, DefaultTimeout); err != nil {
+		return nil, &scheduler.ErrFailedToValidatePvcAfterRestore{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("Failed to validate after snapshot: [%s] restore", snaplist[resVolIndex].Name),
+		}
+	}
+
+	return resPvc, nil
+}
+
+// RestoreCsiSnapAndValidate restore the snapshot and validate the PVC
+func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context) (map[string]v1.PersistentVolumeClaim, error) {
+	var pvcToRestorePVCMap = make(map[string]v1.PersistentVolumeClaim)
+	for _, specObj := range ctx.App.SpecList {
+		var resPvc *v1.PersistentVolumeClaim
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			restoreOkay, err := k.filterPureVolumesIfEnabled(pvc)
+			if err != nil {
+				return nil, err
+			}
+			if restoreOkay {
+				if resPvc, err = k.restoreAndValidate(ctx, pvc, obj.Namespace); err != nil {
+					return nil, err
+				}
+			}
+			pvcToRestorePVCMap[pvc.Name] = *resPvc
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToRestore{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToRestore{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				restoreOkay, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if restoreOkay {
+					if resPvc, err = k.restoreAndValidate(ctx, &pvc, obj.Namespace); err != nil {
+						return nil, err
+					}
+				}
+				pvcToRestorePVCMap[pvc.Name] = *resPvc
+			}
+		}
+	}
+	return pvcToRestorePVCMap, nil
+
+}
+
+// ValidateCsiRestore validates the restored PVC from snapshot
+func (k *K8s) ValidateCsiRestore(pvcName string, namespace string, timeout time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		var pvc *v1.PersistentVolumeClaim
+		var err error
+		if pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace); err != nil {
+			return nil, true, &scheduler.ErrFailedToValidatePvc{
+				Name:  pvcName,
+				Cause: fmt.Errorf("failed to get persistent volume claim.Err: %v", err),
+			}
+		}
+		if pvc.Status.Phase == v1.ClaimPending {
+			return nil, true, &scheduler.ErrFailedToValidatePvc{
+				Name:  pvcName,
+				Cause: fmt.Errorf("PVC [%s] is not bound", pvcName),
+			}
+		}
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// restoreCsiSnapshot restore PVC from csiSnapshot
+func (k *K8s) restoreCsiSnapshot(
+	restorePvcName string, pvc corev1.PersistentVolumeClaim, snap v1beta1.VolumeSnapshot,
+) (*v1.PersistentVolumeClaim, error) {
+	var resPvc *corev1.PersistentVolumeClaim
+	var dataSource v1.TypedLocalObjectReference
+
+	var err error
+
+	v1obj := metav1.ObjectMeta{
+		Name: restorePvcName,
+	}
+
+	resList := make(map[v1.ResourceName]resource.Quantity)
+	resList["storage"] = *snap.Status.RestoreSize
+
+	resRequirements := corev1.ResourceRequirements{
+		Requests: resList,
+	}
+
+	dataSource = v1.TypedLocalObjectReference{
+		Kind:     VolumeSnapshotKind,
+		Name:     snap.Name,
+		APIGroup: &SnapshotAPIGroup,
+	}
+
+	restorePvcSpec := corev1.PersistentVolumeClaimSpec{
+		AccessModes: pvc.Spec.AccessModes,
+		Resources:   resRequirements,
+		DataSource:  &dataSource,
+	}
+	restorePVC := corev1.PersistentVolumeClaim{
+		ObjectMeta: v1obj,
+		Spec:       restorePvcSpec,
+	}
+
+	if resPvc, err = k8sCore.CreatePersistentVolumeClaim(&restorePVC); err != nil {
+		return nil, err
+	}
+	return resPvc, nil
+}
+
+// CreateCsiSanpshotClass creates csi volume snapshot class
+func (k *K8s) CreateCsiSanpshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+	var err error
+	var annotation = make(map[string]string)
+	var volumeSnapClass *v1beta1.VolumeSnapshotClass
+	annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
+
+	v1obj := metav1.ObjectMeta{
+		Name:        snapClassName,
+		Annotations: annotation,
+	}
+
+	snapClass := v1beta1.VolumeSnapshotClass{
+		ObjectMeta: v1obj,
+		Driver:     CsiProvisioner,
+	}
+
+	if volumeSnapClass, err = csisnapshot.Instance().CreateSnapshotClass(&snapClass); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
+			Name:  snapClassName,
+			Cause: err,
+		}
+	}
+	return volumeSnapClass, nil
+}
+
+// CreateCsiSnapshot create snapshot for given pvc
+func (k *K8s) CreateCsiSnapshot(name string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+	var err error
+	var snapshot *v1beta1.VolumeSnapshot
+
+	v1obj := metav1.ObjectMeta{
+		Name: name,
+	}
+
+	source := v1beta1.VolumeSnapshotSource{
+		PersistentVolumeClaimName: &pvc,
+	}
+
+	spec := v1beta1.VolumeSnapshotSpec{
+		VolumeSnapshotClassName: &class,
+		Source:                  source,
+	}
+
+	snap := v1beta1.VolumeSnapshot{
+		ObjectMeta: v1obj,
+		Spec:       spec,
+	}
+	if snapshot, err = csisnapshot.Instance().CreateSnapshot(&snap); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshot{
+			PvcName: pvc,
+			Cause:   err,
+		}
+	}
+	return snapshot, nil
+}
+
+// GetCsiSnapshots return snapshot list for a pvc
+func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]v1beta1.VolumeSnapshot, error) {
+	var snaplist *v1beta1.VolumeSnapshotList
+	var err error
+	snapshots := make([]v1beta1.VolumeSnapshot, 0)
+	if snaplist, err = csisnapshot.Instance().ListSnapshots(namespace); err != nil {
+		return nil, &scheduler.ErrFailedToGetSnapshotList{
+			Name:  namespace,
+			Cause: err,
+		}
+	}
+	for _, snapshot := range snaplist.Items {
+		if *snapshot.Spec.Source.PersistentVolumeClaimName == pvcName {
+			snapshots = append(snapshots, snapshot)
+		}
+	}
+	return snapshots, nil
+}
+
+// ValidateCsiSnapshots validate all snapshots in the context
+func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*v1beta1.VolumeSnapshot) error {
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			validateOkay, err := k.filterPureVolumesIfEnabled(pvc)
+			if err != nil {
+				return err
+			}
+			if validateOkay {
+				if err = k.validateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
+					return err
+				}
+			}
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return &scheduler.ErrFailedToValidateCsiSnapshots{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return &scheduler.ErrFailedToValidateCsiSnapshots{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				validateOkay, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return err
+				}
+				if validateOkay {
+					if err = k.validateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// validateCsiSnapshot validates the given snapshot is successfully created or not
+func (k *K8s) validateCsiSnap(vol string, namespace string, csiSnapshot v1beta1.VolumeSnapshot) error {
+	var snaplist []v1beta1.VolumeSnapshot
+	var err error
+
+	if snaplist, err = k.GetCsiSnapshots(namespace, vol); err != nil {
+		return &scheduler.ErrFailedToValidateSnapshot{
+			Name:  vol,
+			Cause: err,
+		}
+	}
+	for _, snap := range snaplist {
+		if snap.Name == csiSnapshot.Name {
+			// Checking the snapshot status
+			if !*snap.Status.ReadyToUse {
+				return &scheduler.ErrFailedToValidateSnapshot{
+					Name:  vol,
+					Cause: fmt.Errorf("failed to validate snap: [%s].Snap is not redy to use", snap.Name),
+				}
+			}
+
+			// Checking if snapshot content field is not nil
+			if snap.Spec.Source.VolumeSnapshotContentName == nil {
+				return &scheduler.ErrFailedToValidateSnapshot{
+					Name:  vol,
+					Cause: fmt.Errorf("failed to validate snap: [%s].SNAPSHOTCONTENT is nil", snap.Name),
+				}
+			}
+
+			// Checking if snapshot class matches with create storage class
+			if snap.Spec.VolumeSnapshotClassName != csiSnapshot.Spec.VolumeSnapshotClassName {
+				return &scheduler.ErrFailedToValidateSnapshot{
+					Name:  vol,
+					Cause: fmt.Errorf("failed to validate snap: [%s].Snapshot class is not maching", snap.Name),
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func substituteImageWithInternalRegistry(spec interface{}) {
 	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
 	if internalDockerRegistry != "" {
@@ -4882,6 +5376,63 @@ func dumpEvents(namespace, resourceType, name string) string {
 	buf.WriteString(insertLineBreak("Events:"))
 	buf.WriteString(fmt.Sprintf("%v\n", events))
 	return buf.String()
+}
+
+// getAffinity return Affinity spec
+func getAffinity(topologyLabels []map[string]string) corev1.Affinity {
+	var matchExpressions []corev1.NodeSelectorRequirement
+	var nodeSelTerms []corev1.NodeSelectorTerm
+	for key, value := range topologyLabels[0] {
+		var values []string
+		values = append(values, value)
+		nodeSelecterReq := corev1.NodeSelectorRequirement{
+			Key:      key,
+			Operator: "In",
+			Values:   values,
+		}
+		matchExpressions = append(matchExpressions, nodeSelecterReq)
+	}
+	nodeSelTerm := corev1.NodeSelectorTerm{
+		MatchExpressions: matchExpressions,
+	}
+	nodeSelTerms = append(nodeSelTerms, nodeSelTerm)
+	nodeSelector := corev1.NodeSelector{
+		NodeSelectorTerms: nodeSelTerms,
+	}
+	nodeAff := corev1.NodeAffinity{
+		RequiredDuringSchedulingIgnoredDuringExecution: &nodeSelector,
+	}
+	return corev1.Affinity{
+		NodeAffinity: &nodeAff,
+	}
+}
+
+// getLabelsFromNodeAffinit return Topology labels from appinity specs
+func getLabelsFromNodeAffinity(nodeAffSpec *v1.NodeAffinity) map[string]string {
+	var nodeSelTerms []corev1.NodeSelectorTerm
+	var label = make(map[string]string)
+
+	if nodeAffSpec.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+		nodeSelTerms = nodeAffSpec.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+		for _, nSelTerm := range nodeSelTerms {
+			matchExpressions := nSelTerm.MatchExpressions
+			for _, nSelReq := range matchExpressions {
+				label[nSelReq.Key] = nSelReq.Values[0]
+			}
+		}
+	}
+	return label
+}
+
+// rotateTopologyArray Rotates topology arrays by one
+func rotateTopologyArray(options *scheduler.ScheduleOptions) {
+	if len(options.TopologyLabels) > 1 {
+		arr := options.TopologyLabels
+		firstElem := arr[0]
+		arr = arr[1:]
+		arr = append(arr, firstElem)
+		options.TopologyLabels = arr
+	}
 }
 
 func init() {

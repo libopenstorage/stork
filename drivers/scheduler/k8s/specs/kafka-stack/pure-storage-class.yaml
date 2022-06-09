@@ -1,0 +1,21 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: elasticsearch-sc
+provisioner: pxd.portworx.com
+parameters:
+    backend: "pure_block"
+    csi.storage.k8s.io/fstype: ext4
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: zk-sc
+provisioner: pxd.portworx.com
+parameters:
+    backend: "pure_block"
+    csi.storage.k8s.io/fstype: ext4
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

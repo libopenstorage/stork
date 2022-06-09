@@ -1,0 +1,29 @@
+##### FA direct access storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-fb-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_file"
+  pure_export_rules: "*(rw)"
+mountOptions:
+  - nfsvers=4.1
+  - tcp
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+##### FA direct access storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-log-fb-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_file"
+  pure_export_rules: "*(rw)"
+mountOptions:
+  - nfsvers=4.1
+  - tcp
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
