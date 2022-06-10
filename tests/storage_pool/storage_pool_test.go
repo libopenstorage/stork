@@ -40,7 +40,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverdown-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -64,6 +64,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 
 		// px will put a new request in a queue, but in this case we can't calculate the expected size,
 		// so need to wain until the ongoing operation is completed
+		time.Sleep(time.Second * 60)
 		Step("Verify that pool resize is non in progress", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
@@ -157,10 +158,17 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 	poolSizeHasBeenChanged := false
 	if poolToBeResized.LastOperation != nil {
 		for {
-			if poolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_SUCCESSFUL {
-				Expect(poolToBeResized.LastOperation.Status).ShouldNot(BeEquivalentTo(api.SdkStoragePool_OPERATION_FAILED), fmt.Sprintf("PoolResize has failed. Error: %s", poolToBeResized.LastOperation))
-				logrus.Infof("Pool Resize is already in progress: %v", poolToBeResized.LastOperation)
-				time.Sleep(time.Second * 10)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(pools)).NotTo(Equal(0))
+
+			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
+			Expect(updatedPoolToBeResized).ShouldNot(BeNil())
+			if updatedPoolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_SUCCESSFUL {
+				Expect(updatedPoolToBeResized.LastOperation.Status).ShouldNot(BeEquivalentTo(api.SdkStoragePool_OPERATION_FAILED), fmt.Sprintf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation))
+				logrus.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
+				time.Sleep(time.Second * 90)
 				continue
 			}
 			poolSizeHasBeenChanged = true
