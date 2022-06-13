@@ -14,7 +14,9 @@ import (
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -29,7 +31,14 @@ const (
 	kopiaExecutorImageRegistryEnvVar       = "KOPIA-EXECUTOR-IMAGE-REGISTRY"
 	kopiaExecutorImageRegistrySecretEnvVar = "KOPIA-EXECUTOR-IMAGE-REGISTRY-SECRET"
 	// AdminNamespace - kube-system namespace, where privilige pods will be deployed for live kopiabackup.
-	AdminNamespace = "kube-system"
+	AdminNamespace    = "kube-system"
+	imageSecretPrefix = "image-secret"
+	// CredSecret - credential secret prefix
+	CredSecret = "cred-secret"
+	// ImageSecret - image secret prefix
+	ImageSecret = "image-secret"
+	// CertSecret - cert secret prefix
+	CertSecret = "cert-secret"
 )
 
 var (
@@ -412,4 +421,47 @@ func GetValidLabel(labelVal string) string {
 		labelVal = strings.Trim(labelVal, ".")
 	}
 	return labelVal
+}
+
+// CreateImageRegistrySecret - will create the image registry secret in the given job pod namespace
+func CreateImageRegistrySecret(sourceName, destName, sourceNamespace, destNamespace string) error {
+	// Read the image secret from the stork deployment namespace
+	// and create one in the current job's namespace
+	secret, err := core.Instance().GetSecret(sourceName, sourceNamespace)
+	if err != nil {
+		logrus.Errorf("failed in getting secret [%v/%v]: %v", sourceNamespace, sourceName, err)
+		return err
+	}
+	// Re-create it in the pvc namespace, where the job pod will run
+	newSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        GetImageSecretName(destName),
+			Namespace:   destNamespace,
+			Labels:      secret.Labels,
+			Annotations: secret.Annotations,
+		},
+		Data: secret.Data,
+		Type: secret.Type,
+	}
+	_, err = core.Instance().CreateSecret(newSecret)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		logrus.Errorf("failed in creating secret [%v/%v]: %v", destNamespace, destName, err)
+		return err
+	}
+	return nil
+}
+
+//GetCredSecretName - get credential secret name
+func GetCredSecretName(name string) string {
+	return CredSecret + "-" + name
+}
+
+//GetImageSecretName - get image secret name
+func GetImageSecretName(name string) string {
+	return ImageSecret + "-" + name
+}
+
+//GetCertSecretName - get cert secret name
+func GetCertSecretName(name string) string {
+	return CertSecret + "-" + name
 }
