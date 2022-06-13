@@ -107,6 +107,9 @@ type Driver interface {
 	// ValidatePureVolumesNoReplicaSets validates pure volumes has no replicaset
 	ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error
 
+	// ValidateVolumeInPxctlList validates that the given volume appears in the output of `pxctl v l`
+	ValidateVolumeInPxctlList(name string) error
+
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
 

@@ -484,6 +484,12 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 		Step(fmt.Sprintf("validate %s app's volumes for pxctl", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumesPXCTL(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's snapshots for pxctl", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
 				ValidatePureSnapshotsPXCTL(ctx, errChan...)
 			}
 		})
@@ -611,8 +617,8 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
-// ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FB volume snapshots using PXCTL for a context
-func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+// ValidatePureVolumesPXCTL is the ginkgo spec for validating FA/FB DA volumes using PXCTL for a context
+func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
@@ -622,6 +628,27 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 		})
 
 		var vols map[string]map[string]string
+		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+			vols, err = Inst().S.GetVolumeParameters(ctx)
+			processError(err, errChan...)
+		})
+
+		for vol := range vols {
+			Step(fmt.Sprintf("get %s app's volume: %s then check that it appears in pxctl", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateVolumeInPxctlList(vol)
+				expect(err).To(beNil(), "unexpected error validating volume appears in pxctl list")
+			})
+		}
+	})
+}
+
+// ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FADA volume snapshots using PXCTL for a context
+func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an app's volumes", func() {
+		var (
+			err  error
+			vols map[string]map[string]string
+		)
 		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
 			vols, err = Inst().S.GetVolumeParameters(ctx)
 			processError(err, errChan...)

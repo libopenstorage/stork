@@ -76,6 +76,7 @@ const (
 	pxMinVersionForStorkUpgrade               = "2.1"
 	formattingCommandPxctlLocalSnapshotCreate = "pxctl volume snapshot create %s --name %s"
 	formattingCommandPxctlCloudSnapCreate     = "pxctl cloudsnap backup %s"
+	pxctlVolumeList                           = "pxctl volume list "
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
 	refreshEndpointParam                      = "refresh-endpoint"
@@ -1263,6 +1264,25 @@ func (d *portworx) ValidateCreateGroupSnapshotUsingPxctl() error {
 	if err != nil {
 		logrus.WithError(err).Error("error when creating groupsnapshot using PXCTL")
 		return err
+	}
+
+	return nil
+}
+
+func (d *portworx) ValidateVolumeInPxctlList(volumeName string) error {
+	nodes := node.GetStorageDriverNodes()
+	out, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], pxctlVolumeList, node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		logrus.WithError(err).Error("error when listing volumes using PXCTL")
+		return err
+	}
+
+	if !strings.Contains(out, volumeName) {
+		logrus.Errorf("volume name %s is not present in PXCTL volume list", volumeName)
+		return fmt.Errorf("volume name %s is not present in PXCTL volume list", volumeName)
 	}
 
 	return nil
