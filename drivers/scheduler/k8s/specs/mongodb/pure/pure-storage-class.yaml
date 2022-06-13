@@ -1,0 +1,9 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-ha-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

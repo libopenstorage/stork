@@ -386,18 +386,34 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 
+		// Validating Topology Labels for apps if Topology is enabled
+		if len(Inst().TopologyLabels) > 0 {
+			Step(fmt.Sprintf("validate topology labels for %s app", ctx.App.Key), func() {
+				err := Inst().S.ValidateTopologyLabel(ctx)
+				if err != nil {
+					processError(err, errChan...)
+					return
+				}
+			})
+		}
+
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
 				return
 			}
 
 			vols, err := Inst().S.GetVolumes(ctx)
-			processError(err, errChan...)
+			// Fixing issue where it is priniting nil
+			if err != nil {
+				processError(err, errChan...)
+			}
 
 			for _, vol := range vols {
 				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
 					err := Inst().V.ValidateVolumeSetup(vol)
-					processError(err, errChan...)
+					if err != nil {
+						processError(err, errChan...)
+					}
 				})
 			}
 		})
@@ -536,26 +552,34 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
-			processError(err, errChan...)
+			if err != nil {
+				processError(err, errChan...)
+			}
 		})
 
 		var vols map[string]map[string]string
 		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
 			vols, err = Inst().S.GetVolumeParameters(ctx)
-			processError(err, errChan...)
+			if err != nil {
+				processError(err, errChan...)
+			}
 		})
 
 		for vol, params := range vols {
 			if Inst().ConfigMap != "" {
 				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-				processError(err, errChan...)
+				if err != nil {
+					processError(err, errChan...)
+				}
 			}
 			if ctx.RefreshStorageEndpoint {
 				params["refresh-endpoint"] = "true"
 			}
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
-				processError(err, errChan...)
+				if err != nil {
+					processError(err, errChan...)
+				}
 			})
 		}
 	})
@@ -938,6 +962,33 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
+		})
+		processError(err, errChan...)
+		if len(contexts) == 0 {
+			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+		}
+	})
+
+	return contexts
+}
+
+// ScheduleAppsInTopologyEnabledCluster schedules but does not wait for applications
+func ScheduleAppsInTopologyEnabledCluster(
+	testname string, labels []map[string]string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var err error
+
+	Step("schedule applications", func() {
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+			TopologyLabels:     labels,
 		})
 		processError(err, errChan...)
 		if len(contexts) == 0 {
@@ -3012,6 +3063,7 @@ type Torpedo struct {
 	ConfigMap                           string
 	BundleLocation                      string
 	CustomAppConfig                     map[string]scheduler.AppConfig
+	TopologyLabels                      []map[string]string
 	Backup                              backup.Driver
 	SecretType                          string
 	PureVolumes                         bool

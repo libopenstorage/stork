@@ -59,6 +59,8 @@ const (
 	PortworxStorage torpedovolume.StorageProvisionerType = "portworx"
 	// PortworxCsi csi storage name
 	PortworxCsi torpedovolume.StorageProvisionerType = "csi"
+	// PortworxStrict provisioner for using same provisioner as provided in the spec
+	PortworxStrict torpedovolume.StorageProvisionerType = "strict"
 )
 
 const (
@@ -122,6 +124,7 @@ const (
 var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
 	PortworxStorage: "kubernetes.io/portworx-volume",
 	PortworxCsi:     "pxd.portworx.com",
+	PortworxStrict:  "strict",
 }
 
 var csiProvisionerOnly = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
@@ -1027,6 +1030,19 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		return nil
 	}
 
+	// If CSI Topology key is set in param, validate volume attached on right node
+	// Skiping the check for FB volumes as they never be attached
+	if _, hasKey := params[torpedok8s.TopologyZoneK8sNodeLabel]; hasKey {
+		if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol != api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
+			if err := d.ValidateVolumeTopology(vol, params); err != nil {
+				return &ErrFailedToInspectVolume{
+					ID:    volumeName,
+					Cause: fmt.Sprintf("Topology Inspect failed. %v", err),
+				}
+			}
+		}
+	}
+
 	// Labels
 	var pxNodes []*api.StorageNode
 	for _, rs := range vol.ReplicaSets {
@@ -1148,6 +1164,26 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 
 	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
+}
+
+// ValidateVolumeTopology validate volume attached to matched topology label node
+func (d *portworx) ValidateVolumeTopology(vol *api.Volume, params map[string]string) error {
+	var topoMatches bool
+	var err error
+	zone := params[torpedok8s.TopologyZoneK8sNodeLabel]
+	nodes := node.GetNodesByTopologyZoneLabel(zone)
+	for _, node := range nodes {
+		if topoMatches, err = d.isVolumeAttachedOnNode(vol, node); err != nil {
+			return err
+		}
+		if topoMatches {
+			return nil
+		}
+	}
+	return &ErrCsiTopologyMismatch{
+		VolName: vol.Locator.Name,
+		Cause:   fmt.Errorf("volume is not attched on nodes with topology label: [%v]", zone),
+	}
 }
 
 func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]string) error {
@@ -1932,6 +1968,44 @@ func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// IsPureVolume return true if volume is pure volume else false
+func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
+	name := d.schedOps.GetVolumeName(volume)
+	t := func() (interface{}, bool, error) {
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: name})
+		if err != nil && errIsNotFound(err) {
+			return 0, false, err
+		} else if err != nil {
+			return 0, true, err
+		}
+		return volumeInspectResponse.Volume.Spec.ProxySpec, false, nil
+	}
+
+	proxySpec, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval)
+	if err != nil {
+		return false, &ErrFailedToGetVolumeProxySpec{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+	if proxySpec == nil {
+		return false, nil
+	}
+	if proxySpec.(*api.ProxySpec).ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
+		logrus.Debugf("Volume is Pure Block volume: %s", volume.ID)
+		return true, nil
+	}
+
+	if proxySpec.(*api.ProxySpec).ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
+		logrus.Debugf("Volume is Pure File volume: %s", volume.ID)
+		return true, nil
+	}
+
+	logrus.Debugf("Volume is not Pure Block volume: %s", volume.ID)
+	return false, nil
+
 }
 
 func isAutopilotMatchStoragePoolLabels(apRule apapi.AutopilotRule, sPools []node.StoragePool) bool {

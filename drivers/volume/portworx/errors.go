@@ -157,3 +157,27 @@ type ErrFailedToRejoinNode struct {
 func (e *ErrFailedToRejoinNode) Error() string {
 	return fmt.Sprintf("Failed to rejoin node: %v due to err: %v", e.Node, e.Cause)
 }
+
+// ErrFailedToGetVolumeProxySpec error type for failing to get volume Spec
+type ErrFailedToGetVolumeProxySpec struct {
+	// ID is the ID/name of the volume for which we could not get the Volume Proxy Spec
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetVolumeProxySpec) Error() string {
+	return fmt.Sprintf("Failed to get proxy spec for a volume: %v due to err: %v", e.ID, e.Cause)
+}
+
+// ErrCsiTopologyMismatch error type for CSI Topology mismatch
+type ErrCsiTopologyMismatch struct {
+	// Name of the volume where topology not matching
+	VolName string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrCsiTopologyMismatch) Error() string {
+	return fmt.Sprintf("CSI Topology not matching for volume: %v. Err: %v", e.VolName, e.Cause)
+}
