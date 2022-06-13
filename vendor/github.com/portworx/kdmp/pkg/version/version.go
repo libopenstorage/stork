@@ -1,16 +1,23 @@
 package version
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"runtime"
 
 	version "github.com/hashicorp/go-version"
+	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	coreops "github.com/portworx/sched-ops/k8s/core"
+	"github.com/sirupsen/logrus"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 )
 
 const (
-	k8sMinVersionCronJobV1 = "1.21"
+	k8sMinVersionCronJobV1        = "1.21"
+	k8sMinVersionVolumeSnapshotV1 = "1.20"
 )
 
 // Base version information.
@@ -48,6 +55,39 @@ func Get() Info {
 		Compiler:   runtime.Compiler,
 		Platform:   fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
+}
+
+// RequiresV1VolumeSnapshot returns true if V1 version of VolumeSnapshot APIs need to be called
+func RequiresV1VolumeSnapshot() (bool, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return false, err
+	}
+	cs, err := kSnapshotClient.NewForConfig(config)
+	if err != nil {
+		return false, err
+	}
+	_, err = cs.SnapshotV1().VolumeSnapshots("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		logrus.Errorf("Failed to get VolumeSnapshot v1 version error: %s", err)
+		return false, err
+	} else if k8s_errors.IsNotFound(err) {
+		// Try for v1beta1
+		_, err := cs.SnapshotV1beta1().VolumeSnapshots("").List(context.TODO(), metav1.ListOptions{})
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			logrus.Errorf("Failed to get VolumeSnapshot v1beta1 version CRD error: %s", err)
+			return false, err
+		} else if k8s_errors.IsNotFound(err) {
+			logrus.Warnf("VolumeSnapshot CRDs are not installed in the cluster, Please install appropriate version of volumesnapshot CRDs: %s", err)
+			// Not attempting for v1alpha1 CRD search, it is too old to adopt
+			// Returning error as nil to keep the previous behavior unchanged, which doesn't bail out in the absence of CRDs
+			return false, nil
+		}
+		//Found v1beta1 CRD
+		return false, nil
+	}
+	//Found the v1 CRD
+	return true, nil
 }
 
 // RequiresV1Registration returns true if crd nees to be registered as apiVersion V1

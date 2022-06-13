@@ -44,6 +44,7 @@ type JobOpts struct {
 	JobConfigMapNs             string
 	KopiaImageExecutorSource   string
 	KopiaImageExecutorSourceNs string
+	NodeAffinity               map[string]string
 }
 
 // WithKopiaImageExecutorSource is job parameter.
@@ -370,6 +371,14 @@ func WithJobConfigMap(jobConfigMap string) JobOption {
 func WithJobConfigMapNs(jobConfigMapNs string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.JobConfigMapNs = jobConfigMapNs
+		return nil
+	}
+}
+
+// WithNodeAffinity is job parameter.
+func WithNodeAffinity(l map[string]string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NodeAffinity = l
 		return nil
 	}
 }

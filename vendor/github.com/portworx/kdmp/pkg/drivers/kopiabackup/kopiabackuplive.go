@@ -78,6 +78,13 @@ func jobForLiveBackup(
 		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during live backup: %v", err)
 		return nil, err
 	}
+	if len(imageRegistrySecret) != 0 {
+		err = utils.CreateImageRegistrySecret(imageRegistrySecret, jobName, jobOption.KopiaImageExecutorSourceNs, jobOption.Namespace)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var kopiaExecutorImage string
 	if len(imageRegistry) != 0 {
 		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
@@ -102,7 +109,7 @@ func jobForLiveBackup(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobName)),
 					ServiceAccountName: jobName,
 					NodeName:           mountPod.Spec.NodeName,
 					Containers: []corev1.Container{
@@ -146,7 +153,7 @@ func jobForLiveBackup(
 							Name: "cred-secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: jobOption.DataExportName,
+									SecretName: utils.GetCredSecretName(jobOption.DataExportName),
 								},
 							},
 						},
