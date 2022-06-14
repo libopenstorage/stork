@@ -192,6 +192,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 		defaultBool := false
 		spec.SkipServiceUpdate = &defaultBool
 	}
+	if spec.IncludeNetworkPolicyWithCIDR == nil {
+		defaultBool := false
+		spec.IncludeNetworkPolicyWithCIDR = &defaultBool
+	}
 	return spec
 }
 
@@ -851,6 +855,12 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			m.resourceCollector.Opts = make(map[string]string)
 		}
 		m.resourceCollector.Opts[resourcecollector.ServiceKind] = "true"
+	}
+	if *migration.Spec.IncludeNetworkPolicyWithCIDR {
+		if m.resourceCollector.Opts == nil {
+			m.resourceCollector.Opts = make(map[string]string)
+		}
+		m.resourceCollector.Opts[resourcecollector.NetworkPolicyKind] = "true"
 	}
 	if volumesOnly {
 		allObjects, err = m.getVolumeOnlyMigrationResources(migration)
