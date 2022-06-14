@@ -245,6 +245,14 @@ func (d *DefaultDriver) ValidateCreateGroupSnapshotUsingPxctl() error {
 	}
 }
 
+// ValidateVolumeInPxctlList validates whether the given volume appears in the output of "pxctl v l"
+func (d *DefaultDriver) ValidateVolumeInPxctlList(volumeName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateVolumeInPxctlList()",
+	}
+}
+
 // ValidateGetByteUsedForVolume validates and returns byteUsed for given volume.
 func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error) {
 	return 0, &errors.ErrNotSupported{
