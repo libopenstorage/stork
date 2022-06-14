@@ -14,6 +14,11 @@ func (r *ResourceCollector) networkPolicyToBeCollected(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &networkPolicy); err != nil {
 		return false, fmt.Errorf("error converting to networkpolicy: %v", err)
 	}
+	if _, ok := r.Opts[NetworkPolicyKind]; ok {
+		// collect all network policies
+		return true, nil
+	}
+
 	// Collect NetworkPolicy if ony CIDR is not set.
 	// If we backup NetworkPolicy with CIDR present when a user
 	// restores this, it's not guaranteed that same network topology is

@@ -43,7 +43,9 @@ const (
 	// SkipModifyResources is the annotation used to skip update of resources
 	SkipModifyResources = "stork.libopenstorage.org/skip-modify-resource"
 	// ServiceKind for k8s service resources
-	ServiceKind          = "Service"
+	ServiceKind = "Service"
+	// NetworkPolicyKind for network policy resources
+	NetworkPolicyKind    = "NetworkPolicy"
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
 )
