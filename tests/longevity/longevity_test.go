@@ -89,7 +89,6 @@ var _ = Describe("{Longevity}", func() {
 		UpgradeStork:         TriggerUpgradeStork,
 		VolumesDelete:        TriggerVolumeDelete,
 		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
-		AppTasksDown:         TriggerAppTasksDown,
 		AutoFsTrim:           TriggerAutoFsTrim,
 		RestartManyVolDriver: TriggerRestartManyVolDriver,
 		RebootManyNodes:      TriggerRebootManyNodes,
@@ -97,6 +96,8 @@ var _ = Describe("{Longevity}", func() {
 		NodeRejoin:           TriggerNodeRejoin,
 		CsiSnapShot:          TriggerCsiSnapShot,
 		CsiSnapRestore:       TriggerCsiSnapRestore,
+		RelaxedReclaim:       TriggerRelaxedReclaim,
+		Trashcan:             TriggerTrashcan,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -536,6 +537,8 @@ func populateIntervals() {
 	triggerInterval[NodeRejoin] = make(map[int]time.Duration)
 	triggerInterval[CsiSnapShot] = make(map[int]time.Duration)
 	triggerInterval[CsiSnapRestore] = make(map[int]time.Duration)
+	triggerInterval[RelaxedReclaim] = make(map[int]time.Duration)
+	triggerInterval[Trashcan] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -979,6 +982,28 @@ func populateIntervals() {
 	triggerInterval[CsiSnapRestore][2] = 24 * baseInterval
 	triggerInterval[CsiSnapRestore][1] = 27 * baseInterval
 
+	triggerInterval[RelaxedReclaim][10] = 1 * baseInterval
+	triggerInterval[RelaxedReclaim][9] = 3 * baseInterval
+	triggerInterval[RelaxedReclaim][8] = 6 * baseInterval
+	triggerInterval[RelaxedReclaim][7] = 9 * baseInterval
+	triggerInterval[RelaxedReclaim][6] = 12 * baseInterval
+	triggerInterval[RelaxedReclaim][5] = 15 * baseInterval
+	triggerInterval[RelaxedReclaim][4] = 18 * baseInterval
+	triggerInterval[RelaxedReclaim][3] = 21 * baseInterval
+	triggerInterval[RelaxedReclaim][2] = 24 * baseInterval
+	triggerInterval[RelaxedReclaim][1] = 27 * baseInterval
+
+	triggerInterval[Trashcan][10] = 1 * baseInterval
+	triggerInterval[Trashcan][9] = 3 * baseInterval
+	triggerInterval[Trashcan][8] = 6 * baseInterval
+	triggerInterval[Trashcan][7] = 9 * baseInterval
+	triggerInterval[Trashcan][6] = 12 * baseInterval
+	triggerInterval[Trashcan][5] = 15 * baseInterval
+	triggerInterval[Trashcan][4] = 18 * baseInterval
+	triggerInterval[Trashcan][3] = 21 * baseInterval
+	triggerInterval[Trashcan][2] = 24 * baseInterval
+	triggerInterval[Trashcan][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1018,6 +1043,7 @@ func populateIntervals() {
 	triggerInterval[RebootManyNodes][0] = 0
 	triggerInterval[CsiSnapShot][0] = 0
 	triggerInterval[CsiSnapRestore][0] = 0
+	triggerInterval[RelaxedReclaim][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

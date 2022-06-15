@@ -111,6 +111,12 @@ var isAutoFsTrimEnabled = false
 // isCsiVolumeSnapshotClassExist to store if snapshot class exist
 var isCsiVolumeSnapshotClassExist = false
 
+//isRelaxedReclaimEnabled to store if relaxed reclaim enalbed
+var isRelaxedReclaimEnabled = false
+
+//isTrashcanEnabled to store if trashcan enalbed
+var isTrashcanEnabled = false
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -291,6 +297,10 @@ const (
 	NodeDecommission = "nodeDecomm"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
 	NodeRejoin = "nodeRejoin"
+	// RelaxedReclaim enables RelaxedReclaim in PX cluster
+	RelaxedReclaim = "relaxedReclaim"
+	// Trashcan enables Trashcan in PX cluster
+	Trashcan = "trashcan"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3630,7 +3640,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 								logrus.Infof("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
 								n2, err = Inst().V.GetNodeForVolume(vol, 3*time.Minute, 10*time.Second)
 								if err != nil {
-									err = fmt.Errorf("Error while getting node for volume %v, Error: %v", vol.ID, err)
+									err = fmt.Errorf("error while getting node for volume %v, Error: %v", vol.ID, err)
 									UpdateOutcome(event, err)
 								}
 
@@ -3747,6 +3757,162 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) stri
 	}
 
 	return ""
+
+}
+
+// TriggerTrashcan enables trashcan feature in the PX Cluster and validates it
+func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: Trashcan,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	context("Validate Trashcan feature of the volumes", func() {
+		if !isTrashcanEnabled {
+
+			Step("enable trashcan",
+				func() {
+					currNode := node.GetWorkerNodes()[0]
+					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+						"--volume-expiration-minutes": "600",
+					})
+					if err != nil {
+						err = fmt.Errorf("error while enabling trashcan, Error:%v", err)
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+
+					} else {
+						logrus.Info("Trashcan is successfully enabled")
+						isTrashcanEnabled = true
+					}
+
+				})
+		} else {
+			var trashcanVols []string
+			var err error
+			node := node.GetWorkerNodes()[0]
+
+			Step("Validating trashcan",
+				func() {
+					trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+					if err != nil {
+						logrus.Infof("Error While getting trashcan volumes, Err %v", err)
+					}
+
+					if len(trashcanVols) == 0 {
+						err = fmt.Errorf("no volumes present in trashcan")
+						UpdateOutcome(event, err)
+
+					}
+				})
+
+			Step("Validating trashcan restore",
+				func() {
+					if len(trashcanVols) != 0 {
+						volToRestore := trashcanVols[len(trashcanVols)-1]
+						logrus.Infof("Restoring vol [%v] from trashcan", volToRestore)
+						volName := fmt.Sprintf("%s-res", volToRestore[len(volToRestore)-4:])
+						pxctlCmdFull := fmt.Sprintf("v r %s --trashcan %s", volName, volToRestore)
+						output, err := Inst().V.GetPxctlCmdOutput(node, pxctlCmdFull)
+						if err == nil {
+							logrus.Infof("output: %v", output)
+							if !strings.Contains(output, fmt.Sprintf("Successfully restored: %s", volName)) {
+								err = fmt.Errorf("volume %v, restore from trashcan failed, Err: %v", volToRestore, output)
+								UpdateOutcome(event, err)
+							}
+						} else {
+							logrus.Infof("Error restoring: %v", err)
+							UpdateOutcome(event, err)
+						}
+
+					}
+
+				})
+		}
+	})
+
+}
+
+// TriggerRelaxedReclaim enables Relaxed Reclaim in the PX Cluster
+func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RelaxedReclaim,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	context("Validate Relaxed Reclaim of the volumes", func() {
+		if !isRelaxedReclaimEnabled {
+
+			Step("enable relaxed reclaim ",
+				func() {
+
+					currNode := node.GetWorkerNodes()[0]
+					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+						"--relaxedreclaim-delete-seconds": "600",
+					})
+					if err != nil {
+						err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+
+					} else {
+						logrus.Info("RelaxedReclaim is successfully enabled")
+						isRelaxedReclaimEnabled = true
+					}
+
+				})
+		} else {
+
+			Step("Validating relaxed reclaim ",
+				func() {
+
+					nodes := node.GetWorkerNodes()
+					totalDeleted := 0
+					totalPending := 0
+					totalSkipped := 0
+
+					for _, n := range nodes {
+						nodeStatsMap, err := Inst().V.GetNodeStats(n)
+
+						if err != nil {
+							logrus.Errorf("error while getting node stats for node : %v, err: %v", n.Name, err)
+						} else {
+							logrus.Infof("Node [%v] relaxed reclaim stats : %v", n.Name, nodeStatsMap[n.Name])
+
+							totalDeleted += nodeStatsMap[n.Name]["deleted"]
+							totalPending += nodeStatsMap[n.Name]["pending"]
+							totalSkipped += nodeStatsMap[n.Name]["skipped"]
+						}
+					}
+
+					totalVal := totalDeleted + totalPending + totalSkipped
+
+					if totalVal == 0 {
+						err := fmt.Errorf("no stats present for relaxed reclaim")
+						UpdateOutcome(event, err)
+					}
+
+				})
+		}
+	})
 
 }
 

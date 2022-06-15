@@ -3476,6 +3476,33 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	return nil
 }
 
+func (d *portworx) SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error {
+	var err error
+
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+
+	var clusteropts string
+	for k, v := range clusterOpts {
+		clusteropts += k + "=" + v + " "
+	}
+
+	clusteropts = strings.TrimSuffix(clusteropts, " ")
+	cmd := fmt.Sprintf("yes Y | %s cluster options update %s", d.getPxctlPath(n), clusteropts)
+
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return fmt.Errorf("failed to set cluster options, Err: %v %v", err, out)
+	}
+
+	logrus.Debugf("Successfully updated Cluster Options")
+	return nil
+}
+
 func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 	var err error
 
@@ -3768,6 +3795,127 @@ func getImageList(endpointURL, pxVersion, k8sVersion string) (map[string]string,
 	}
 	imageList["version"] = fmt.Sprintf("portworx/oci-monitor:%s", yamlMap["version"].(string))
 	return imageList, nil
+}
+
+// GetNodeStats returns the node stats of the given node and an error if any
+func (d *portworx) GetNodeStats(n node.Node) (map[string]map[string]int, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	// create context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create pxctl context. cause: %v", err)
+		}
+	}
+
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv dump --nodestats -j", pxctlPath), opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+
+	var data interface{}
+	err = json.Unmarshal([]byte(out), &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
+	}
+
+	// delete context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+		}
+	}
+
+	nodeStats := data.(map[string]interface{})
+	deleted := 0
+	pending := 0
+	skipped := 0
+
+	if value, ok := nodeStats["relaxed_reclaim_stats"].(map[string]interface{}); ok {
+
+		if p, ok := value["pending"]; ok {
+			pending = int(p.(float64))
+		}
+
+		if d, ok := value["deleted"]; ok {
+			deleted = int(d.(float64))
+		}
+
+		if s, ok := value["skipped"]; ok {
+			skipped = int(s.(float64))
+		}
+
+	}
+
+	var nodeStatsMap = map[string]map[string]int{}
+	nodeStatsMap[n.Name] = map[string]int{}
+	nodeStatsMap[n.Name]["deleted"] = deleted
+	nodeStatsMap[n.Name]["pending"] = pending
+	nodeStatsMap[n.Name]["skipped"] = skipped
+
+	return nodeStatsMap, nil
+}
+
+// GetTrashCanVolumeIds returns the volume ids in the trashcan and an error if any
+func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	// create context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create pxctl context. cause: %v", err)
+		}
+	}
+
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s v l --trashcan -j", pxctlPath), opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+	logrus.Info(out)
+
+	var data interface{}
+	err = json.Unmarshal([]byte(out), &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
+	}
+
+	// delete context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+		}
+	}
+
+	res := data.([]interface{})
+
+	trashcanVols := make([]string, 50)
+
+	for _, v := range res {
+		var tp map[string]interface{} = v.(map[string]interface{})
+		str := fmt.Sprintf("%v", tp["id"])
+		trashcanVols = append(trashcanVols, strings.Trim(str, " "))
+
+	}
+
+	logrus.Infof("trash vols: %v", trashcanVols)
+
+	return trashcanVols, nil
 }
 
 func init() {

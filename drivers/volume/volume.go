@@ -248,6 +248,9 @@ type Driver interface {
 	//SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, clusterOpts map[string]string) error
 
+	//SetClusterOptsWithConfirmation sets cluster options and confirm it
+	SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error
+
 	//SetClusterRunTimeOpts sets cluster run time options
 	SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error
 
@@ -301,6 +304,12 @@ type Driver interface {
 
 	// GetPxctlCmdOutput returns the command output run on the given node and any error
 	GetPxctlCmdOutput(n node.Node, command string) (string, error)
+
+	// GetNodeStats returns the node stats of the given node and an error if any
+	GetNodeStats(n node.Node) (map[string]map[string]int, error)
+
+	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
+	GetTrashCanVolumeIds(n node.Node) ([]string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

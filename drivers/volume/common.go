@@ -604,6 +604,14 @@ func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) er
 	}
 }
 
+// SetClusterOptsWithConfirmation sets cluster options and confirm it
+func (d *DefaultDriver) SetClusterOptsWithConfirmation(n node.Node, rtOpts map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetClusterOpts()",
+	}
+}
+
 // SetClusterRunTimeOpts sets cluster run time options
 func (d *DefaultDriver) SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error {
 	return &errors.ErrNotSupported{
@@ -722,5 +730,21 @@ func (d *DefaultDriver) IsPureVolume(volume *Volume) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsPureVolume()",
+	}
+}
+
+// GetNodeStats returns the node stats of the given node and an error if any
+func (d *DefaultDriver) GetNodeStats(n node.Node) (map[string]map[string]int, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodeStats()",
+	}
+}
+
+// GetTrashCanVolumeIds returns the volume ids in the trashcan and an error if any
+func (d *DefaultDriver) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetTrashCanVolumeIds()",
 	}
 }
