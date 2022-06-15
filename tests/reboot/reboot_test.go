@@ -168,11 +168,22 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 								TimeBeforeRetry: defaultCommandRetry,
 							},
 						})
+						Expect(err).NotTo(HaveOccurred())
 
 						// as we keep the storage driver down on node until we check if the volume, we wait a minute for
 						// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
-						logrus.Info("wait for 1 minute for node reboot")
+						logrus.Infof("wait for %v for node reboot", defaultCommandTimeout)
 						time.Sleep(defaultCommandTimeout)
+
+						// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
+						err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
+							Action: "start",
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         5 * time.Minute,
+								TimeBeforeRetry: 10 * time.Second,
+							}})
+						Expect(err).NotTo(HaveOccurred())
+
 						ctx.RefreshStorageEndpoint = true
 						ValidateContext(ctx)
 						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
