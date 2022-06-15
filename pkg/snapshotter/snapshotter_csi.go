@@ -1194,7 +1194,7 @@ func (c *csiDriver) restoreVolumeSnapshot(
 	} else {
 		vs.(*kSnapshotv1beta1.VolumeSnapshot).ResourceVersion = ""
 		vs.(*kSnapshotv1beta1.VolumeSnapshot).Spec.Source.PersistentVolumeClaimName = nil
-		vs.(*kSnapshotv1beta1.VolumeSnapshot).Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1beta1.VolumeSnapshot).Name
+		vs.(*kSnapshotv1beta1.VolumeSnapshot).Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name
 		vs.(*kSnapshotv1beta1.VolumeSnapshot).Namespace = namespace
 		newVS, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vs.(*kSnapshotv1beta1.VolumeSnapshot), metav1.CreateOptions{})
 		if err != nil {
@@ -1416,7 +1416,7 @@ func (c *csiDriver) RetainLocalSnapshots(
 			} else {
 				vs = snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
 				snapName = vs.(*kSnapshotv1beta1.VolumeSnapshot).Name
-				vs.(*kSnapshotv1.VolumeSnapshot).Annotations[snapDeleteAnnotation] = "true"
+				vs.(*kSnapshotv1beta1.VolumeSnapshot).Annotations[snapDeleteAnnotation] = "true"
 			}
 			snapshotInfo.SnapshotRequest = vs
 			newSnapInfo, err := c.RecreateSnapshotResources(snapshotInfo, snapshotDriverName, namespace, retain)
@@ -1799,7 +1799,7 @@ func (c *csiDriver) waitForVolumeSnapshotBound(vs interface{}, namespace string)
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to get volumesnapshot object %v/%v: %v", namespace, vs.(*kSnapshotv1beta1.VolumeSnapshot).Name, err)
 		}
-		if curVS.(*kSnapshotv1beta1.VolumeSnapshot).Status == nil || curVS.(*kSnapshotv1.VolumeSnapshot).Status.BoundVolumeSnapshotContentName == nil {
+		if curVS.(*kSnapshotv1beta1.VolumeSnapshot).Status == nil || curVS.(*kSnapshotv1beta1.VolumeSnapshot).Status.BoundVolumeSnapshotContentName == nil {
 			return nil, true, fmt.Errorf("failed to find get status for snapshot: %s/%s, status: %+v", namespace, vs.(*kSnapshotv1beta1.VolumeSnapshot).Name, vs.(*kSnapshotv1beta1.VolumeSnapshot).Status)
 		}
 		return nil, false, nil

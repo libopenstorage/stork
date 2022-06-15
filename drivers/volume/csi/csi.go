@@ -782,7 +782,7 @@ func (c *csi) cleanupSnapshots(
 		}
 	}
 
-	logrus.Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)))
+	logrus.Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)))
 	return nil
 }
 
