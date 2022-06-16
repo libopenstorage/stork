@@ -154,9 +154,35 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				for _, vol := range vols {
 					if vol.Shared {
+
 						n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+
+						// Workaround to avoid PWX-24277 for now.
+						Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
+							prevStatus := ""
+							Eventually(func() (string, error) {
+								connOpts := node.ConnectionOpts{
+									Timeout:         defaultCommandTimeout,
+									TimeBeforeRetry: defaultCommandRetry,
+									Sudo:            true,
+								}
+								cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
+								volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+								if err != nil {
+									logrus.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
+									return "", err
+								}
+								if volStatus != prevStatus {
+									logrus.Warnf("volume %v: %v", vol.ID, volStatus)
+									prevStatus = volStatus
+								}
+								return volStatus, nil
+							}, 30*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
+								"volume %v status is not Up for app %v", vol.ID, ctx.App.Key)
+						})
+
 						err = Inst().S.DisableSchedulingOnNode(*n)
 						Expect(err).NotTo(HaveOccurred())
 						err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
