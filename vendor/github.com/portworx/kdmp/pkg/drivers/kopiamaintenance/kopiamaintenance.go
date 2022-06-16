@@ -284,6 +284,32 @@ func jobFor(
 			},
 		}
 	}
+	if len(jobOption.NodeAffinity) > 0 {
+		// Maintenance jobs for baas paid customer will run on the dedicated nodes assigned to customer instance
+		// Nodes wil have the following label "tenant: <instance name>"
+		// Iterate over the map list having affinity rules
+		matchExpressions := []corev1.NodeSelectorRequirement{}
+		for key, val := range jobOption.NodeAffinity {
+			expression := corev1.NodeSelectorRequirement{
+				Key:      key,
+				Operator: corev1.NodeSelectorOpIn,
+				Values:   []string{val},
+			}
+			matchExpressions = append(matchExpressions, expression)
+		}
+
+		jobSpec.Affinity = &corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: matchExpressions,
+						},
+					},
+				},
+			},
+		}
+	}
 
 	if requiresV1 {
 		jobV1 := &batchv1.CronJob{

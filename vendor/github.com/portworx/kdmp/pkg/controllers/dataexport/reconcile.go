@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	kSnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -21,6 +22,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
+	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -490,7 +492,7 @@ func (c *Controller) createJobCredCertSecrets(
 
 	// Check if the above env is present and read the certs file contents and
 	// secret for the job pod for kopia to access the same
-	err := createCertificateSecret(dataExport.Name, namespace, dataExport.Labels)
+	err := createCertificateSecret(utils.GetCertSecretName(dataExport.Name), namespace, dataExport.Labels)
 	if err != nil {
 		msg := fmt.Sprintf("error in creating certificate secret[%v/%v]: %v", namespace, dataExport.Name, err)
 		logrus.Errorf(msg)
@@ -504,7 +506,7 @@ func (c *Controller) createJobCredCertSecrets(
 	// Create secret in source ns because in case of multi ns backup
 	// BL CR is created in kube-system ns
 	err = CreateCredentialsSecret(
-		dataExport.Name,
+		utils.GetCredSecretName(dataExport.Name),
 		blName,
 		blNamespace,
 		namespace,
@@ -769,12 +771,29 @@ func (c *Controller) stageSnapshotInProgress(ctx context.Context, dataExport *kd
 		return false, c.updateStatus(dataExport, data)
 	}
 
-	vs := snapInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
-	timestampEpoch := strconv.FormatInt(vs.GetObjectMeta().GetCreationTimestamp().Unix(), 10)
-	snapInfoList := []snapshotter.SnapshotInfo{snapInfo}
-	err = snapshotDriver.UploadSnapshotObjects(bl, snapInfoList, getCSICRUploadDirectory(pvcUID), getVSFileName(backupUID, timestampEpoch))
+	v1SnapshotRequired, err := version.RequiresV1VolumeSnapshot()
 	if err != nil {
-		msg := fmt.Sprintf("uploading snapshot objects for pvc %s/%s failed with error : %v", vs.Namespace, vs.Name, err)
+		return false, err
+	}
+
+	var vsName, vsNamespace string
+	if v1SnapshotRequired {
+		vs := snapInfo.SnapshotRequest.(*kSnapshotv1.VolumeSnapshot)
+		timestampEpoch := strconv.FormatInt(vs.GetObjectMeta().GetCreationTimestamp().Unix(), 10)
+		snapInfoList := []snapshotter.SnapshotInfo{snapInfo}
+		err = snapshotDriver.UploadSnapshotObjects(bl, snapInfoList, getCSICRUploadDirectory(pvcUID), getVSFileName(backupUID, timestampEpoch))
+		vsName = vs.Name
+		vsNamespace = vs.Namespace
+	} else {
+		vs := snapInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
+		timestampEpoch := strconv.FormatInt(vs.GetObjectMeta().GetCreationTimestamp().Unix(), 10)
+		snapInfoList := []snapshotter.SnapshotInfo{snapInfo}
+		err = snapshotDriver.UploadSnapshotObjects(bl, snapInfoList, getCSICRUploadDirectory(pvcUID), getVSFileName(backupUID, timestampEpoch))
+		vsName = vs.Name
+		vsNamespace = vs.Namespace
+	}
+	if err != nil {
+		msg := fmt.Sprintf("uploading snapshot objects for pvc %s/%s failed with error : %v", vsNamespace, vsName, err)
 		logrus.Errorf(msg)
 		data := updateDataExportDetail{
 			status: kdmpapi.DataExportStatusFailed,
@@ -1235,7 +1254,7 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		namespace = de.Namespace
 	}
 	// Delete the tls certificate secret created
-	err = core.Instance().DeleteSecret(de.Name, namespace)
+	err = core.Instance().DeleteSecret(utils.GetCertSecretName(de.Name), namespace)
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete [%s/%s] secret", namespace, de.Name)
 		logrus.Errorf("%v", errMsg)
@@ -1248,8 +1267,15 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		}
 	}
 
-	if err := core.Instance().DeleteSecret(de.Name, namespace); err != nil && !k8sErrors.IsNotFound(err) {
+	if err := core.Instance().DeleteSecret(utils.GetCredSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", de.Name, err)
+		logrus.Errorf(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+	// Deleting image secret, if present
+	// Not checking for presence of the secret, instead try delete and ignore if the error is NotFound
+	if err := core.Instance().DeleteSecret(utils.GetImageSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("deletion of image secret %s failed: %v", de.Name, err)
 		logrus.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}

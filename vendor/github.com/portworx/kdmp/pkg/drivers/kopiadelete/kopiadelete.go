@@ -284,6 +284,32 @@ func jobFor(
 				Value: drivers.CertMount,
 			},
 		}
+		if len(jobOption.NodeAffinity) > 0 {
+			// Deletion jobs for baas paid customer will run on the dedicated nodes assigned to customer instance
+			// Nodes wil have the following label "tenant: <instance name>"
+			// Iterate over the map list having affinity rules
+			matchExpressions := []corev1.NodeSelectorRequirement{}
+			for key, val := range jobOption.NodeAffinity {
+				expression := corev1.NodeSelectorRequirement{
+					Key:      key,
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{val},
+				}
+				matchExpressions = append(matchExpressions, expression)
+			}
+
+			job.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: matchExpressions,
+							},
+						},
+					},
+				},
+			}
+		}
 
 		job.Spec.Template.Spec.Containers[0].Env = env
 	}
