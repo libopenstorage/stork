@@ -4,7 +4,7 @@
 [![Code Coverage](https://codecov.io/gh/libopenstorage/stork/branch/master/graph/badge.svg)](https://codecov.io/gh/libopenstorage/stork)
 
 # Stork - Storage Operator Runtime for Kubernetes
-Stork is a Cloud Native storage operator runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage provider, it's capabilities and state.
+Stork is a Cloud Native storage operator runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage provider, its capabilities and state.
 
 <div style="text-align:center"><img src="images/stork.png" alt="Drawing" style="width: 50px;"/></div>
 
