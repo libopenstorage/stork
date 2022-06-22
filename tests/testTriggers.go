@@ -27,6 +27,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -36,6 +37,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/portworx/torpedo/pkg/email"
@@ -65,6 +67,14 @@ const (
 	PureSecretDataField = "pure.json"
 	// PureSnapShotClass is pure Snapshot class name
 	PureSnapShotClass = "px-pure-snapshotclass"
+	// PureBlockStorageClass is pure storage class for FA volumes
+	PureBlockStorageClass = "px-pure-block"
+	// PureFileStorageClass is pure storage class for FA volumes
+	PureFileStorageClass = "px-pure-file"
+	// ReclaimPolicyDelete is reclaim policy
+	ReclaimPolicyDelete = "Delete"
+	// PureBackend is a key for parameter map
+	PureBackend = "backend"
 )
 
 const (
@@ -111,11 +121,20 @@ var isAutoFsTrimEnabled = false
 // isCsiVolumeSnapshotClassExist to store if snapshot class exist
 var isCsiVolumeSnapshotClassExist = false
 
+// isCsiRestoreStorageClassExist to store if restore storage class exist
+var isCsiRestoreStorageClassExist = false
+
 //isRelaxedReclaimEnabled to store if relaxed reclaim enalbed
 var isRelaxedReclaimEnabled = false
 
 //isTrashcanEnabled to store if trashcan enalbed
 var isTrashcanEnabled = false
+
+// volSnapshotClass is snapshot class for FA volumes
+var volSnapshotClass *v1beta1.VolumeSnapshotClass
+
+// pureStorageClassMap is map of pure storage class
+var pureStorageClassMap map[string]*storageapi.StorageClass
 
 // Event describes type of test trigger
 type Event struct {
@@ -432,7 +451,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			for _, v := range appVolumes {
 				// Check if volumes are Pure FA/FB DA volumes
 				isPureVol, err := Inst().V.IsPureVolume(v)
-				if err == nil {
+				if err != nil {
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
@@ -557,7 +576,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			for _, v := range appVolumes {
 				// Skipping repl decrease for pure volumes
 				isPureVol, err := Inst().V.IsPureVolume(v)
-				if err == nil {
+				if err != nil {
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
@@ -1240,6 +1259,22 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			})
 			for _, vol := range appVolumes {
 				var clonedVolID string
+
+				// Skip clone trigger for Pure FB volumes
+				isPureFileVol, err := Inst().V.IsPureFileVolume(vol)
+				if err != nil {
+					logrus.Errorf("Checking pure file volume is for a volume %s failing with error: %v", vol.Name, err)
+					UpdateOutcome(event, err)
+				}
+
+				if isPureFileVol {
+					logrus.Warningf(
+						"Clone is not supported for FB volumes: [%s]",
+						"Skipping clone create for FB volume.", vol.Name,
+					)
+					continue
+				}
+
 				Step(fmt.Sprintf("Clone Volume %s", vol.Name), func() {
 					logrus.Infof("Calling CloneVolume()...")
 					clonedVolID, err = Inst().V.CloneVolume(vol.ID)
@@ -1610,7 +1645,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				for _, v := range appVolumes {
 					// Skip cloud snapshot trigger for Pure DA volumes
 					isPureVol, err := Inst().V.IsPureVolume(v)
-					if err == nil {
+					if err != nil {
 						UpdateOutcome(event, err)
 					}
 					if isPureVol {
@@ -3262,7 +3297,7 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				for _, vol := range appVolumes {
 					// Skipping get replicaset operations for Pure Volumes
 					isPureVol, err := Inst().V.IsPureVolume(vol)
-					if err == nil {
+					if err != nil {
 						UpdateOutcome(event, err)
 					}
 					if isPureVol {
@@ -3677,7 +3712,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 			for _, v := range appVolumes {
 				// Skip autofs trim status on Pure DA volumes
 				isPureVol, err := Inst().V.IsPureVolume(v)
-				if err == nil {
+				if err != nil {
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
@@ -4080,7 +4115,6 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 // TriggerCsiSnapShot takes csi snapshots of the volumes and validates snapshot
 func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	var volSnapshotClass *v1beta1.VolumeSnapshotClass
 	var err error
 
 	defer ginkgo.GinkgoRecover()
@@ -4101,25 +4135,32 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 	Step("Create and Validate snapshots for FA DA volumes", func() {
 		if !isCsiVolumeSnapshotClassExist {
+			logrus.Info("Creating csi volume snapshot class")
 			snapShotClassName := PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
 			if volSnapshotClass, err = Inst().S.CreateCsiSanpshotClass(snapShotClassName, "Delete"); err != nil {
+				logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
 				UpdateOutcome(event, err)
 			}
+			logrus.Infof("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
 			isCsiVolumeSnapshotClassExist = true
 		}
 		for _, ctx := range *contexts {
 			var volumeSnapshotMap map[string]*v1beta1.VolumeSnapshot
 			var err error
-			Step(fmt.Sprintf("get snapshots for %s app", ctx.App.Key), func() {
+			Step(fmt.Sprintf("Creating snapshots for %s app", ctx.App.Key), func() {
 				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, volSnapshotClass.Name)
 				if err != nil {
+					logrus.Errorf("Creating volume snapshot failed with error: [%v]", err)
 					UpdateOutcome(event, err)
 				}
 			})
-			Step(fmt.Sprintf("validate snapshot for %s app", ctx.App.Key), func() {
+
+			Step(fmt.Sprintf("Validate snapshot for %s app", ctx.App.Key), func() {
 				if err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap); err != nil {
+					logrus.Errorf("Validating volume snapshot failed with error: [%v]", err)
 					UpdateOutcome(event, err)
 				}
+				logrus.Infof("Successfully validated the snapshot for %s app", ctx.App.Key)
 			})
 		}
 	})
@@ -4144,13 +4185,31 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		*recordChan <- event
 	}()
 
+	var err error
+
 	Step("Restore the Snapshot and Validate the PVC", func() {
+		if !isCsiRestoreStorageClassExist {
+			var blockSc *storageapi.StorageClass
+			var param = make(map[string]string)
+			pureStorageClassMap = make(map[string]*storageapi.StorageClass)
+			logrus.Info("Creating csi volume snapshot class")
+			blkScName := PureBlockStorageClass + time.Now().Format("01-02-15h04m05s")
+			// Adding a pure backend parameters
+			param[PureBackend] = k8s.PureBlock
+			if blockSc, err = createPureStorageClass(blkScName, param); err != nil {
+				logrus.Errorf("StorageClass creation failed for SC: %s", blkScName)
+				UpdateOutcome(event, err)
+			}
+			pureStorageClassMap[k8s.PureBlock] = blockSc
+			isCsiRestoreStorageClassExist = true
+		}
 		for _, ctx := range *contexts {
 			//var volumePVCMap map[string]v1.PersistentVolumeClaim
-			var err error
+
 			Step(fmt.Sprintf("Restore and validate snapshot for %s app", ctx.App.Key), func() {
-				_, err = Inst().S.RestoreCsiSnapAndValidate(ctx)
+				_, err = Inst().S.RestoreCsiSnapAndValidate(ctx, pureStorageClassMap)
 				if err != nil {
+					logrus.Errorf("Restoring snapshot failed with error: [%v]", err)
 					UpdateOutcome(event, err)
 				}
 			})
@@ -4353,6 +4412,33 @@ func rangeStructer(args ...interface{}) []interface{} {
 	}
 
 	return out
+}
+
+// createPureStorageClass create storage class
+func createPureStorageClass(name string, params map[string]string) (*storageapi.StorageClass, error) {
+	var reclaimPolicyDelete v1.PersistentVolumeReclaimPolicy
+	var bindMode storageapi.VolumeBindingMode
+	k8sStorage := storage.Instance()
+
+	v1obj := meta_v1.ObjectMeta{
+		Name: name,
+	}
+	reclaimPolicyDelete = v1.PersistentVolumeReclaimDelete
+	bindMode = storageapi.VolumeBindingImmediate
+
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.CsiProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &reclaimPolicyDelete,
+		VolumeBindingMode: &bindMode,
+	}
+
+	sc, err := k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", name, err)
+	}
+	return sc, err
 }
 
 var htmlTemplate = `<!DOCTYPE html>

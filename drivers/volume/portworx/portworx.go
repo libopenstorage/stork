@@ -119,6 +119,8 @@ const (
 const (
 	secretName      = "openstorage.io/auth-secret-name"
 	secretNamespace = "openstorage.io/auth-secret-namespace"
+	// DeviceMapper is a string in dev mapper path
+	DeviceMapper = "mapper"
 )
 
 // Provisioners types of supported provisioners
@@ -1029,6 +1031,18 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			}
 		}
 		return nil
+	}
+
+	// Validate Device Path for a Volume
+	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
+		// Checking the device path when state is attached
+		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
+			return &ErrFailedToInspectVolume{
+				ID:    volumeName,
+				Cause: fmt.Sprintf("Failed to validate device path [%s]", vol.DevicePath),
+			}
+		}
+		logrus.Debugf("Successfully validated the device path for a volume: %s", volumeName)
 	}
 
 	// If CSI Topology key is set in param, validate volume attached on right node
@@ -1992,6 +2006,28 @@ func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
 
 // IsPureVolume return true if volume is pure volume else false
 func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
+	var proxySpec *api.ProxySpec
+	var err error
+	if proxySpec, err = d.getProxySpecForAVolume(volume); err != nil {
+		return false, err
+	}
+
+	if proxySpec == nil {
+		return false, nil
+	}
+
+	if proxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK || proxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
+		logrus.Debugf("Volume is Pure volume: %s", volume.ID)
+		return true, nil
+	}
+
+	logrus.Debugf("Volume is not Pure Block volume: %s", volume.ID)
+	return false, nil
+
+}
+
+// getProxySpecForAVolume return proxy spec for a pure volumes
+func (d *portworx) getProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
 	name := d.schedOps.GetVolumeName(volume)
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: name})
@@ -2005,27 +2041,33 @@ func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
 
 	proxySpec, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval)
 	if err != nil {
-		return false, &ErrFailedToGetVolumeProxySpec{
+		return nil, &ErrFailedToGetVolumeProxySpec{
 			ID:    name,
 			Cause: err.Error(),
 		}
 	}
+	return proxySpec.(*api.ProxySpec), nil
+
+}
+
+// IsPureFileVolume return true if volume is FB volume else false
+func (d *portworx) IsPureFileVolume(volume *torpedovolume.Volume) (bool, error) {
+	var proxySpec *api.ProxySpec
+	var err error
+	if proxySpec, err = d.getProxySpecForAVolume(volume); err != nil {
+		return false, err
+	}
 	if proxySpec == nil {
 		return false, nil
 	}
-	if proxySpec.(*api.ProxySpec).ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
-		logrus.Debugf("Volume is Pure Block volume: %s", volume.ID)
-		return true, nil
-	}
 
-	if proxySpec.(*api.ProxySpec).ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
+	if proxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
 		logrus.Debugf("Volume is Pure File volume: %s", volume.ID)
 		return true, nil
 	}
 
-	logrus.Debugf("Volume is not Pure Block volume: %s", volume.ID)
+	logrus.Debugf("Volume is not Pure File volume: %s", volume.ID)
 	return false, nil
-
 }
 
 func isAutopilotMatchStoragePoolLabels(apRule apapi.AutopilotRule, sPools []node.StoragePool) bool {

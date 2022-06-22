@@ -5,6 +5,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
@@ -334,19 +335,19 @@ type Driver interface {
 	CreateCsiSanpshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error)
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
-	CreateCsiSnapshot(name string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
+	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
 
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
 	CreateCsiSnapsForVolumes(*Context, string) (map[string]*v1beta1.VolumeSnapshot, error)
 
 	// GetCsiSnapshots return snapshot lists for a volume
-	GetCsiSnapshots(string, string) ([]v1beta1.VolumeSnapshot, error)
+	GetCsiSnapshots(string, string) ([]*v1beta1.VolumeSnapshot, error)
 
 	// ValidateCsiSnapshots validate csi snapshots in the context
 	ValidateCsiSnapshots(*Context, map[string]*v1beta1.VolumeSnapshot) error
 
 	// RestoreCsiSnapAndValidate restore csi snapshot and validate the restore.
-	RestoreCsiSnapAndValidate(*Context) (map[string]corev1.PersistentVolumeClaim, error)
+	RestoreCsiSnapAndValidate(*Context, map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error)
 }
 
 var (

@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 
 	corev1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 )
 
 const (
@@ -866,7 +867,7 @@ func (d *dcos) CreateCsiSanpshotClass(snapClassName string, deleionPolicy string
 	}
 }
 
-func (d *dcos) CreateCsiSnapshot(name string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
 	//CreateCsiSanpshot is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -882,7 +883,7 @@ func (d *dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string
 	}
 }
 
-func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]v1beta1.VolumeSnapshot, error) {
+func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
 	// GetCsiSnapshots is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -898,7 +899,7 @@ func (d *dcos) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMa map[string
 	}
 }
 
-func (d *dcos) RestoreCsiSnapAndValidate(ctx *scheduler.Context) (map[string]corev1.PersistentVolumeClaim, error) {
+func (d *dcos) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scList map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error) {
 	// RestoreCsiSnapAndValidate is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",

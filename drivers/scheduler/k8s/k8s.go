@@ -124,6 +124,8 @@ const (
 	DefaultRetryInterval = 10 * time.Second
 	// DefaultTimeout default timeout
 	DefaultTimeout = 3 * time.Minute
+	// SnapshotReadyTimeout timeout for snapshot to be ready
+	SnapshotReadyTimeout = 5 * time.Minute
 
 	autopilotServiceName          = "autopilot"
 	autopilotDefaultNamespace     = "kube-system"
@@ -186,6 +188,9 @@ var (
 	k8sBatch           = batch.Instance()
 	k8sMonitoring      = prometheus.Instance()
 	k8sPolicy          = policy.Instance()
+
+	// k8sExternalsnap is a instance of csisnapshot instance
+	k8sExternalsnap = csisnapshot.Instance()
 	// SnapshotAPIGroup is the group for the resource being referenced.
 	SnapshotAPIGroup = "snapshot.storage.k8s.io"
 )
@@ -639,8 +644,18 @@ func validateSpec(in interface{}) (interface{}, error) {
 // direct access volume, only if PureVolumes is true. If PureVolumes is false, all
 // volumes are valid.
 func (k *K8s) filterPureVolumesIfEnabled(claim *v1.PersistentVolumeClaim) (bool, error) {
+	volTypes := []string{PureFile, PureBlock}
+
+	return k.filterPureTypeVolumeIfEnabled(claim, volTypes)
+}
+
+// filterPureTypeVolumeIfEnabled will return true if matches with given type pure volume
+// If PureVolumes is false, all volumes are valid.
+func (k *K8s) filterPureTypeVolumeIfEnabled(claim *v1.PersistentVolumeClaim, volTypes []string) (bool, error) {
+
 	if !k.PureVolumes {
-		return true, nil // If we aren't filtering for Pure volumes, all are valid
+		// If we aren't filtering for Pure volumes, all are valid
+		return true, nil
 	}
 
 	scForPvc, err := k8sCore.GetStorageClassForPVC(claim)
@@ -651,7 +666,12 @@ func (k *K8s) filterPureVolumesIfEnabled(claim *v1.PersistentVolumeClaim) (bool,
 	if !ok {
 		return false, nil
 	}
-	return backend == PureFile || backend == PureBlock, nil
+	for _, voltype := range volTypes {
+		if backend == voltype {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // getAddressesForNode  Get IP address for the nodes in the cluster
@@ -4898,21 +4918,34 @@ func (k *K8s) RecycleNode(n node.Node) error {
 
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
 func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
+	// Only FA (pure_block) volume is supported
+	volTypes := []string{PureBlock}
 	var volSnapMap = make(map[string]*v1beta1.VolumeSnapshot)
+	var snaplist []*v1beta1.VolumeSnapshot
 
 	for _, specObj := range ctx.App.SpecList {
+
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			snapshotOkay, err := k.filterPureVolumesIfEnabled(pvc)
+			snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, volTypes)
 			if err != nil {
 				return nil, err
 			}
 			if snapshotOkay {
-				snapName := "snap-" + pvc.Name + "-" + time.Now().Format("01-02-15h04m05s")
-				volSnapshot, err := k.CreateCsiSnapshot(snapName, snapClass, pvc.Name)
+				if snaplist, err = k.GetCsiSnapshots(obj.Namespace, pvc.Name); err != nil {
+					return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to list csi snapshot in namespace: %v. Err: %v", obj.Namespace, err),
+					}
+
+				}
+				snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(len(snaplist))
+				logrus.Debugf("Creating snapshot: [%s] for pvc: %s", snapName, pvc.Name)
+				volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name)
 				if err != nil {
 					return nil, err
 				}
+				logrus.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, pvc.Name)
 				volSnapMap[pvc.Spec.VolumeName] = volSnapshot
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
@@ -4933,16 +4966,25 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 			}
 
 			for _, pvc := range pvcList.Items {
-				snapshotOkay, err := k.filterPureVolumesIfEnabled(&pvc)
+				snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, volTypes)
 				if err != nil {
 					return nil, err
 				}
 				if snapshotOkay {
-					snapName := "snap-" + pvc.Name + "-" + time.Now().Format("01-02-15h04m05s")
-					volSnapshot, err := k.CreateCsiSnapshot(snapName, snapClass, pvc.Name)
+					if snaplist, err = k.GetCsiSnapshots(obj.Namespace, pvc.Name); err != nil {
+						return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Failed to list csi snapshot in namespace: %v. Err: %v", obj.Namespace, err),
+						}
+
+					}
+					snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(len(snaplist))
+					logrus.Debugf("Creating snapshot: [%s] for pvc: %s", snapName, pvc.Name)
+					volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name)
 					if err != nil {
 						return nil, err
 					}
+					logrus.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, pvc.Name)
 					volSnapMap[pvc.Spec.VolumeName] = volSnapshot
 				}
 			}
@@ -4952,20 +4994,23 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 	return volSnapMap, nil
 }
 
-func (k *K8s) restoreAndValidate(ctx *scheduler.Context, pvc *v1.PersistentVolumeClaim, namespace string) (*v1.PersistentVolumeClaim, error) {
+func (k *K8s) restoreAndValidate(
+	ctx *scheduler.Context, pvc *v1.PersistentVolumeClaim,
+	namespace string, sc *storageapi.StorageClass,
+) (*v1.PersistentVolumeClaim, error) {
 	var resPvc *v1.PersistentVolumeClaim
 
 	snaplist, err := k.GetCsiSnapshots(namespace, pvc.Name)
 	if err != nil {
 		return nil, err
 	}
-	if len(snaplist) > 0 {
-		return nil, fmt.Errorf("No snaphost found for a PVC: [%s]", pvc.Name)
+	if len(snaplist) == 0 {
+		return nil, fmt.Errorf("no snapshot found for a PVC: [%s]", pvc.Name)
 	}
 
 	resVolIndex := random.Intn(len(snaplist))
 	restorePVCName := pvc.Name + "-" + "restore"
-	if resPvc, err = k.restoreCsiSnapshot(restorePVCName, *pvc, snaplist[resVolIndex]); err != nil {
+	if resPvc, err = k.restoreCsiSnapshot(restorePVCName, *pvc, snaplist[resVolIndex], sc); err != nil {
 		return nil, &scheduler.ErrFailedToRestore{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("Failed to restore snapshot: [%s]", snaplist[resVolIndex].Name),
@@ -4978,23 +5023,25 @@ func (k *K8s) restoreAndValidate(ctx *scheduler.Context, pvc *v1.PersistentVolum
 			Cause: fmt.Sprintf("Failed to validate after snapshot: [%s] restore", snaplist[resVolIndex].Name),
 		}
 	}
+	logrus.Infof("Successfully restored pvc [%s] from snapshot [%s]", resPvc.Name, snaplist[resVolIndex].Name)
 
 	return resPvc, nil
 }
 
 // RestoreCsiSnapAndValidate restore the snapshot and validate the PVC
-func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context) (map[string]v1.PersistentVolumeClaim, error) {
+func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scMap map[string]*storageapi.StorageClass) (map[string]v1.PersistentVolumeClaim, error) {
 	var pvcToRestorePVCMap = make(map[string]v1.PersistentVolumeClaim)
+	var pureBlkType = []string{PureBlock}
 	for _, specObj := range ctx.App.SpecList {
 		var resPvc *v1.PersistentVolumeClaim
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			restoreOkay, err := k.filterPureVolumesIfEnabled(pvc)
+			restoreOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, pureBlkType)
 			if err != nil {
 				return nil, err
 			}
 			if restoreOkay {
-				if resPvc, err = k.restoreAndValidate(ctx, pvc, obj.Namespace); err != nil {
+				if resPvc, err = k.restoreAndValidate(ctx, pvc, obj.Namespace, scMap[PureBlock]); err != nil {
 					return nil, err
 				}
 			}
@@ -5017,12 +5064,12 @@ func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context) (map[string]v1.P
 			}
 
 			for _, pvc := range pvcList.Items {
-				restoreOkay, err := k.filterPureVolumesIfEnabled(&pvc)
+				restoreOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, pureBlkType)
 				if err != nil {
 					return nil, err
 				}
 				if restoreOkay {
-					if resPvc, err = k.restoreAndValidate(ctx, &pvc, obj.Namespace); err != nil {
+					if resPvc, err = k.restoreAndValidate(ctx, &pvc, obj.Namespace, scMap[PureBlock]); err != nil {
 						return nil, err
 					}
 				}
@@ -5063,7 +5110,8 @@ func (k *K8s) ValidateCsiRestore(pvcName string, namespace string, timeout time.
 
 // restoreCsiSnapshot restore PVC from csiSnapshot
 func (k *K8s) restoreCsiSnapshot(
-	restorePvcName string, pvc corev1.PersistentVolumeClaim, snap v1beta1.VolumeSnapshot,
+	restorePvcName string, pvc corev1.PersistentVolumeClaim,
+	snap *v1beta1.VolumeSnapshot, sc *storageapi.StorageClass,
 ) (*v1.PersistentVolumeClaim, error) {
 	var resPvc *corev1.PersistentVolumeClaim
 	var dataSource v1.TypedLocalObjectReference
@@ -5071,7 +5119,8 @@ func (k *K8s) restoreCsiSnapshot(
 	var err error
 
 	v1obj := metav1.ObjectMeta{
-		Name: restorePvcName,
+		Name:      restorePvcName,
+		Namespace: pvc.Namespace,
 	}
 
 	resList := make(map[v1.ResourceName]resource.Quantity)
@@ -5088,15 +5137,17 @@ func (k *K8s) restoreCsiSnapshot(
 	}
 
 	restorePvcSpec := corev1.PersistentVolumeClaimSpec{
-		AccessModes: pvc.Spec.AccessModes,
-		Resources:   resRequirements,
-		DataSource:  &dataSource,
+		AccessModes:      pvc.Spec.AccessModes,
+		Resources:        resRequirements,
+		DataSource:       &dataSource,
+		StorageClassName: &sc.Name,
 	}
 	restorePVC := corev1.PersistentVolumeClaim{
 		ObjectMeta: v1obj,
 		Spec:       restorePvcSpec,
 	}
 
+	logrus.Infof("Restoring Snapshot: %v", restorePVC.Name)
 	if resPvc, err = k8sCore.CreatePersistentVolumeClaim(&restorePVC); err != nil {
 		return nil, err
 	}
@@ -5116,11 +5167,13 @@ func (k *K8s) CreateCsiSanpshotClass(snapClassName string, deleionPolicy string)
 	}
 
 	snapClass := v1beta1.VolumeSnapshotClass{
-		ObjectMeta: v1obj,
-		Driver:     CsiProvisioner,
+		ObjectMeta:     v1obj,
+		Driver:         CsiProvisioner,
+		DeletionPolicy: v1beta1.DeletionPolicy(deleionPolicy),
 	}
 
-	if volumeSnapClass, err = csisnapshot.Instance().CreateSnapshotClass(&snapClass); err != nil {
+	logrus.Infof("Creating volume snapshot class: %v", snapClassName)
+	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
 			Name:  snapClassName,
 			Cause: err,
@@ -5129,13 +5182,38 @@ func (k *K8s) CreateCsiSanpshotClass(snapClassName string, deleionPolicy string)
 	return volumeSnapClass, nil
 }
 
+// waitForCsiSnapToBeReady wait for snapshot status to be ready
+func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
+	var snap *v1beta1.VolumeSnapshot
+	var err error
+	logrus.Infof("Waiting for snapshot [%s] to be ready in namespace: %s ", snapName, namespace)
+	t := func() (interface{}, bool, error) {
+		if snap, err = k8sExternalsnap.GetSnapshot(snapName, namespace); err != nil {
+			return "", true, err
+		}
+		if snap.Status == nil || !*snap.Status.ReadyToUse {
+			return "", true, &scheduler.ErrFailedToValidateSnapshot{
+				Name:  snapName,
+				Cause: fmt.Errorf("snapshot [%s] is not ready", snapName),
+			}
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, SnapshotReadyTimeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	logrus.Infof("Snapshot is ready to use: %s", snap.Name)
+	return nil
+}
+
 // CreateCsiSnapshot create snapshot for given pvc
-func (k *K8s) CreateCsiSnapshot(name string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
 	var err error
 	var snapshot *v1beta1.VolumeSnapshot
 
 	v1obj := metav1.ObjectMeta{
-		Name: name,
+		Name:      name,
+		Namespace: namespace,
 	}
 
 	source := v1beta1.VolumeSnapshotSource{
@@ -5151,29 +5229,42 @@ func (k *K8s) CreateCsiSnapshot(name string, class string, pvc string) (*v1beta1
 		ObjectMeta: v1obj,
 		Spec:       spec,
 	}
-	if snapshot, err = csisnapshot.Instance().CreateSnapshot(&snap); err != nil {
+	logrus.Infof("Creating snapshot : %v", name)
+	if snapshot, err = k8sExternalsnap.CreateSnapshot(&snap); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshot{
 			PvcName: pvc,
 			Cause:   err,
+		}
+	}
+	if err = k.waitForCsiSnapToBeReady(snapshot.Name, namespace); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshot{
+			PvcName: pvc,
+			Cause:   fmt.Errorf("snapshot is not ready. Error: %v", err),
 		}
 	}
 	return snapshot, nil
 }
 
 // GetCsiSnapshots return snapshot list for a pvc
-func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]v1beta1.VolumeSnapshot, error) {
+func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
 	var snaplist *v1beta1.VolumeSnapshotList
+	var snap *v1beta1.VolumeSnapshot
 	var err error
-	snapshots := make([]v1beta1.VolumeSnapshot, 0)
-	if snaplist, err = csisnapshot.Instance().ListSnapshots(namespace); err != nil {
+	snapshots := make([]*v1beta1.VolumeSnapshot, 0)
+
+	if snaplist, err = k8sExternalsnap.ListSnapshots(namespace); err != nil {
 		return nil, &scheduler.ErrFailedToGetSnapshotList{
 			Name:  namespace,
 			Cause: err,
 		}
 	}
+
 	for _, snapshot := range snaplist.Items {
-		if *snapshot.Spec.Source.PersistentVolumeClaimName == pvcName {
-			snapshots = append(snapshots, snapshot)
+		if snap, err = k8sExternalsnap.GetSnapshot(snapshot.Name, namespace); err != nil {
+			return nil, err
+		}
+		if *snap.Spec.Source.PersistentVolumeClaimName == pvcName {
+			snapshots = append(snapshots, &snapshot)
 		}
 	}
 	return snapshots, nil
@@ -5181,14 +5272,23 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]v1beta1.Volum
 
 // ValidateCsiSnapshots validate all snapshots in the context
 func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*v1beta1.VolumeSnapshot) error {
+	var pureBlkType = []string{PureBlock}
+
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			validateOkay, err := k.filterPureVolumesIfEnabled(pvc)
+			validateOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, pureBlkType)
 			if err != nil {
 				return err
 			}
 			if validateOkay {
+				if _, ok := volSnapMap[pvc.Spec.VolumeName]; !ok {
+					return &scheduler.ErrFailedToValidateCsiSnapshots{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Snapshot is empty for a pvc: %v", pvc.Name),
+					}
+				}
+
 				if err = k.validateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
 					return err
 				}
@@ -5211,11 +5311,17 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 			}
 
 			for _, pvc := range pvcList.Items {
-				validateOkay, err := k.filterPureVolumesIfEnabled(&pvc)
+				validateOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, pureBlkType)
 				if err != nil {
 					return err
 				}
 				if validateOkay {
+					if _, ok := volSnapMap[pvc.Spec.VolumeName]; !ok {
+						return &scheduler.ErrFailedToValidateCsiSnapshots{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Snapshot is empty for a pvc: %v", pvc.Name),
+						}
+					}
 					if err = k.validateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
 						return err
 					}
@@ -5227,43 +5333,42 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 }
 
 // validateCsiSnapshot validates the given snapshot is successfully created or not
-func (k *K8s) validateCsiSnap(vol string, namespace string, csiSnapshot v1beta1.VolumeSnapshot) error {
-	var snaplist []v1beta1.VolumeSnapshot
+func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1beta1.VolumeSnapshot) error {
+	var snap *v1beta1.VolumeSnapshot
 	var err error
 
-	if snaplist, err = k.GetCsiSnapshots(namespace, vol); err != nil {
+	if csiSnapshot.Name == "" {
 		return &scheduler.ErrFailedToValidateSnapshot{
-			Name:  vol,
-			Cause: err,
+			Name:  pvcName,
+			Cause: fmt.Errorf("failed to validate snaps.Valid snapshot not provided for volume: %s", pvcName),
 		}
 	}
-	for _, snap := range snaplist {
-		if snap.Name == csiSnapshot.Name {
-			// Checking the snapshot status
-			if !*snap.Status.ReadyToUse {
-				return &scheduler.ErrFailedToValidateSnapshot{
-					Name:  vol,
-					Cause: fmt.Errorf("failed to validate snap: [%s].Snap is not redy to use", snap.Name),
-				}
-			}
 
-			// Checking if snapshot content field is not nil
-			if snap.Spec.Source.VolumeSnapshotContentName == nil {
-				return &scheduler.ErrFailedToValidateSnapshot{
-					Name:  vol,
-					Cause: fmt.Errorf("failed to validate snap: [%s].SNAPSHOTCONTENT is nil", snap.Name),
-				}
-			}
-
-			// Checking if snapshot class matches with create storage class
-			if snap.Spec.VolumeSnapshotClassName != csiSnapshot.Spec.VolumeSnapshotClassName {
-				return &scheduler.ErrFailedToValidateSnapshot{
-					Name:  vol,
-					Cause: fmt.Errorf("failed to validate snap: [%s].Snapshot class is not maching", snap.Name),
-				}
-			}
+	if snap, err = k8sExternalsnap.GetSnapshot(csiSnapshot.Name, namespace); err != nil {
+		return &scheduler.ErrFailedToValidateSnapshot{
+			Name:  pvcName,
+			Cause: fmt.Errorf("failed to get snapshot: %s", csiSnapshot.Name),
 		}
 	}
+
+	// Checking if snapshot class matches with create storage class
+	logrus.Debugf("VolumeSnapshotClassName in snapshot: %s", *snap.Spec.VolumeSnapshotClassName)
+	if *snap.Spec.VolumeSnapshotClassName != *csiSnapshot.Spec.VolumeSnapshotClassName {
+		return &scheduler.ErrFailedToValidateSnapshot{
+			Name:  pvcName,
+			Cause: fmt.Errorf("failed to validate snap: [%s].Snapshot class is not maching", snap.Name),
+		}
+	}
+
+	logrus.Debugf("Validating the source PVC name in snapshot: %s", *snap.Spec.Source.PersistentVolumeClaimName)
+	if *snap.Spec.Source.PersistentVolumeClaimName != pvcName {
+		return &scheduler.ErrFailedToValidateSnapshot{
+			Name:  pvcName,
+			Cause: fmt.Errorf("failed to validate source pvc name in snapshot: %s", snap.Name),
+		}
+	}
+
+	logrus.Infof("Successfully validated the snapshot %s", csiSnapshot.Name)
 	return nil
 }
 
