@@ -2765,7 +2765,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				for _, rule := range listApRules.Items {
 					for _, a := range rule.Spec.Actions {
 						if a.Name == aututils.VolumeSpecAction && isAutopilotMatchPvcLabels(rule, obj) {
-							err := k.validatePVCSize(ctx, obj, rule, timeout, retryInterval)
+							err := k.validatePVCSize(ctx, obj, rule, 5*timeout, retryInterval)
 							if err != nil {
 								return err
 							}
