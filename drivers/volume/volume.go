@@ -236,6 +236,9 @@ type Driver interface {
 	// IsPureVolume(volume *torpedovolume.Volume) return true if given volume is FA/FB DA volumes
 	IsPureVolume(volume *Volume) (bool, error)
 
+	// IsPureFileVolume(volume *torpedovolume.Volume) return true if given volume is FB volumes
+	IsPureFileVolume(volume *Volume) (bool, error)
+
 	// EstimatePoolExpandSize calculates expected pool size based on autopilot rule
 	EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.StoragePool, node node.Node) (uint64, error)
 

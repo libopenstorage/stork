@@ -748,3 +748,11 @@ func (d *DefaultDriver) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 		Operation: "GetTrashCanVolumeIds()",
 	}
 }
+
+// IsPureFileVolume returns true if volume is FB volumes else false
+func (d *DefaultDriver) IsPureFileVolume(volume *Volume) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPureFileVolume()",
+	}
+}

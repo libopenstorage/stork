@@ -317,7 +317,7 @@ func populateDisruptiveTriggers() {
 		RebootManyNodes:                 true,
 		RestartKvdbVolDriver:            true,
 		NodeDecommission:                true,
-		CsiSnapShot:                     true,
+		CsiSnapShot:                     false,
 		CsiSnapRestore:                  false,
 	}
 }
@@ -971,17 +971,6 @@ func populateIntervals() {
 	triggerInterval[VolumesDelete][2] = 24 * baseInterval
 	triggerInterval[VolumesDelete][1] = 27 * baseInterval
 
-	triggerInterval[CsiSnapRestore][10] = 1 * baseInterval
-	triggerInterval[CsiSnapRestore][9] = 3 * baseInterval
-	triggerInterval[CsiSnapRestore][8] = 6 * baseInterval
-	triggerInterval[CsiSnapRestore][7] = 9 * baseInterval
-	triggerInterval[CsiSnapRestore][6] = 12 * baseInterval
-	triggerInterval[CsiSnapRestore][5] = 15 * baseInterval
-	triggerInterval[CsiSnapRestore][4] = 18 * baseInterval
-	triggerInterval[CsiSnapRestore][3] = 21 * baseInterval
-	triggerInterval[CsiSnapRestore][2] = 24 * baseInterval
-	triggerInterval[CsiSnapRestore][1] = 27 * baseInterval
-
 	triggerInterval[RelaxedReclaim][10] = 1 * baseInterval
 	triggerInterval[RelaxedReclaim][9] = 3 * baseInterval
 	triggerInterval[RelaxedReclaim][8] = 6 * baseInterval
@@ -1003,6 +992,17 @@ func populateIntervals() {
 	triggerInterval[Trashcan][3] = 21 * baseInterval
 	triggerInterval[Trashcan][2] = 24 * baseInterval
 	triggerInterval[Trashcan][1] = 27 * baseInterval
+
+	triggerInterval[CsiSnapRestore][10] = 1 * baseInterval
+	triggerInterval[CsiSnapRestore][9] = 3 * baseInterval
+	triggerInterval[CsiSnapRestore][8] = 6 * baseInterval
+	triggerInterval[CsiSnapRestore][7] = 9 * baseInterval
+	triggerInterval[CsiSnapRestore][6] = 12 * baseInterval
+	triggerInterval[CsiSnapRestore][5] = 15 * baseInterval
+	triggerInterval[CsiSnapRestore][4] = 18 * baseInterval
+	triggerInterval[CsiSnapRestore][3] = 21 * baseInterval
+	triggerInterval[CsiSnapRestore][2] = 24 * baseInterval
+	triggerInterval[CsiSnapRestore][1] = 27 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
