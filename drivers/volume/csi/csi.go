@@ -1130,7 +1130,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 			return true, fmt.Errorf("failed to find Snapshot for backup %s: %s", vInfo.BackupID, err.Error())
 		}
 		switch v := vs.(type) {
-		case kSnapshotv1beta1.VolumeSnapshot:
+		case *kSnapshotv1beta1.VolumeSnapshot:
 			err = c.snapshotter.DeleteSnapshot(
 				vs.(*kSnapshotv1beta1.VolumeSnapshot).Name,
 				vInfo.Namespace,
@@ -1140,7 +1140,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 				return true, err
 			}
 			log.ApplicationBackupLog(backup).Debugf("deleted %v snapshot for backup %s", vs.(*kSnapshotv1beta1.VolumeSnapshot).Name, string(backup.UID))
-		case kSnapshotv1.VolumeSnapshot:
+		case *kSnapshotv1.VolumeSnapshot:
 			err = c.snapshotter.DeleteSnapshot(
 				vs.(*kSnapshotv1.VolumeSnapshot).Name,
 				vInfo.Namespace,
@@ -1361,6 +1361,7 @@ func (c *csi) restoreVolumeSnapshot(
 	vs interface{},
 	vsc interface{},
 ) (interface{}, error) {
+	var err error
 	if c.v1SnapshotRequired {
 		vsObj, ok := vs.(*kSnapshotv1.VolumeSnapshot)
 		if !ok {
@@ -1370,9 +1371,13 @@ func (c *csi) restoreVolumeSnapshot(
 		vsObj.Spec.Source.PersistentVolumeClaimName = nil
 		vsObj.Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1.VolumeSnapshotContent).Name
 		vsObj.Namespace = namespace
-		vs, err := c.snapshotClient.SnapshotV1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
+		vs, err = c.snapshotClient.SnapshotV1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {
+				vs, err = c.snapshotClient.SnapshotV1().VolumeSnapshots(namespace).Get(context.TODO(), vsObj.Name, metav1.GetOptions{})
+				if err != nil {
+					return nil, fmt.Errorf("failed to get v1 volumesnapshot %s", vsObj.Name)
+				}
 				return vs, nil
 			}
 			return nil, err
@@ -1386,9 +1391,13 @@ func (c *csi) restoreVolumeSnapshot(
 		vsObj.Spec.Source.PersistentVolumeClaimName = nil
 		vsObj.Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name
 		vsObj.Namespace = namespace
-		vs, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
+		vs, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {
+				vs, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Get(context.TODO(), vsObj.Name, metav1.GetOptions{})
+				if err != nil {
+					return nil, fmt.Errorf("failed to get v1beta1 volumesnapshot %s", vsObj.Name)
+				}
 				return vs, nil
 			}
 			return nil, err
@@ -1402,6 +1411,7 @@ func (c *csi) restoreVolumeSnapshotContent(
 	vs interface{},
 	vsc interface{},
 ) (interface{}, error) {
+	var err error
 	if c.v1SnapshotRequired {
 		vscObj, ok := vsc.(*kSnapshotv1.VolumeSnapshotContent)
 		if !ok {
@@ -1417,9 +1427,13 @@ func (c *csi) restoreVolumeSnapshotContent(
 		vscObj.Spec.VolumeSnapshotRef.Namespace = namespace
 		vscObj.Spec.VolumeSnapshotRef.UID = vs.(*kSnapshotv1.VolumeSnapshot).UID
 		vscObj.Spec.DeletionPolicy = kSnapshotv1.VolumeSnapshotContentRetain
-		vsc, err := c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Create(context.TODO(), vscObj, metav1.CreateOptions{})
+		vsc, err = c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Create(context.TODO(), vscObj, metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {
+				vsc, err = c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Get(context.TODO(), vscObj.Name, metav1.GetOptions{})
+				if err != nil {
+					return nil, fmt.Errorf("failed to get v1 volumesnapshot content %s", vscObj.Name)
+				}
 				return vsc, nil
 			}
 			return nil, err
@@ -1434,19 +1448,22 @@ func (c *csi) restoreVolumeSnapshotContent(
 		vscObj.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
 		vscObj.Spec.Source.VolumeHandle = nil
 		vscObj.Spec.Source.SnapshotHandle = &snapshotHandle
-		vscObj.Spec.VolumeSnapshotRef.Name = vs.(*kSnapshotv1.VolumeSnapshot).Name
+		vscObj.Spec.VolumeSnapshotRef.Name = vs.(*kSnapshotv1beta1.VolumeSnapshot).Name
 		vscObj.Spec.VolumeSnapshotRef.Namespace = namespace
-		vscObj.Spec.VolumeSnapshotRef.UID = vs.(*kSnapshotv1.VolumeSnapshot).UID
+		vscObj.Spec.VolumeSnapshotRef.UID = vs.(*kSnapshotv1beta1.VolumeSnapshot).UID
 		vscObj.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentRetain
-		vsc, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(context.TODO(), vscObj, metav1.CreateOptions{})
+		vsc, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(context.TODO(), vscObj, metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {
+				vsc, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(context.TODO(), vscObj.Name, metav1.GetOptions{})
+				if err != nil {
+					return nil, fmt.Errorf("failed to get v1beta1 volumesnapshot content %s", vscObj.Name)
+				}
 				return vsc, nil
 			}
 			return nil, err
 		}
 	}
-
 	return vsc, nil
 }
 
@@ -1505,14 +1522,14 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 			return nil, err
 		}
 		switch v := vsc.(type) {
-		case kSnapshotv1beta1.VolumeSnapshotContent:
+		case *kSnapshotv1beta1.VolumeSnapshotContent:
 			vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name = c.getRestoreSnapshotContentName(vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).UID, restore.UID)
 			vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).ObjectMeta.Labels)
-		case kSnapshotv1.VolumeSnapshotClass:
+		case *kSnapshotv1.VolumeSnapshotContent:
 			vsc.(*kSnapshotv1.VolumeSnapshotContent).Name = c.getRestoreSnapshotContentName(vsc.(*kSnapshotv1.VolumeSnapshotContent).UID, restore.UID)
 			vsc.(*kSnapshotv1.VolumeSnapshotContent).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vsc.(*kSnapshotv1.VolumeSnapshotContent).ObjectMeta.Labels)
 		default:
-			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshotContent %s", v)
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type %T recieved for volumeSnapshotContent %v", v, v)
 		}
 
 		vs, err := csiBackupObject.GetVolumeSnapshot(snapshotID)
@@ -1521,16 +1538,16 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		}
 		var destNamespace string
 		switch v := vs.(type) {
-		case kSnapshotv1beta1.VolumeSnapshot:
+		case *kSnapshotv1beta1.VolumeSnapshot:
 			vs.(*kSnapshotv1beta1.VolumeSnapshot).Name = c.getRestoreSnapshotName(vs.(*kSnapshotv1beta1.VolumeSnapshot).UID, restore.UID)
 			destNamespace = c.getDestinationNamespace(restore, vs.(*kSnapshotv1beta1.VolumeSnapshot).Namespace)
 			vs.(*kSnapshotv1beta1.VolumeSnapshot).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vs.(*kSnapshotv1beta1.VolumeSnapshot).ObjectMeta.Labels)
-		case kSnapshotv1.VolumeSnapshot:
+		case *kSnapshotv1.VolumeSnapshot:
 			vs.(*kSnapshotv1.VolumeSnapshot).Name = c.getRestoreSnapshotName(vs.(*kSnapshotv1.VolumeSnapshot).UID, restore.UID)
 			destNamespace = c.getDestinationNamespace(restore, vs.(*kSnapshotv1.VolumeSnapshot).Namespace)
 			vs.(*kSnapshotv1.VolumeSnapshot).ObjectMeta.Labels = c.getRestoreUIDLabels(restore, vs.(*kSnapshotv1.VolumeSnapshot).ObjectMeta.Labels)
 		default:
-			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshot %s", v)
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type %T recieved for volumeSnapshot %s", v, v)
 		}
 
 		vsClass, err := csiBackupObject.GetVolumeSnapshotClass(snapshotID)
@@ -1546,12 +1563,12 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		// Just for a log we are doing below type checking of interface
 		// Can we remove it or print it some other way
 		switch v := vsClass.(type) {
-		case kSnapshotv1beta1.VolumeSnapshotClass:
+		case *kSnapshotv1beta1.VolumeSnapshotClass:
 			log.ApplicationRestoreLog(restore).Debugf("created vsClass: %s", vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).Name)
-		case kSnapshotv1.VolumeSnapshotClass:
+		case *kSnapshotv1.VolumeSnapshotClass:
 			log.ApplicationRestoreLog(restore).Debugf("created vsClass: %s", vsClass.(*kSnapshotv1.VolumeSnapshotClass).Name)
 		default:
-			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshotClass %s", v)
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type %T recieved for volumeSnapshotClass %s", v, v)
 		}
 
 		// Create VS, bound to VSC
@@ -1561,7 +1578,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 			return nil, err
 		}
 		switch v := vs.(type) {
-		case kSnapshotv1beta1.VolumeSnapshot:
+		case *kSnapshotv1beta1.VolumeSnapshot:
 			log.ApplicationRestoreLog(restore).Debugf("created vs: %s", vs.(*kSnapshotv1beta1.VolumeSnapshot).Name)
 
 			// Create VSC, bound to VS
@@ -1576,7 +1593,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 				snapshotter.RestoreNamespace(c.getDestinationNamespace(restore, pvc.Namespace)),
 				snapshotter.PVC(*pvc),
 			)
-		case kSnapshotv1.VolumeSnapshot:
+		case *kSnapshotv1.VolumeSnapshot:
 			log.ApplicationRestoreLog(restore).Debugf("created vs: %s", vs.(*kSnapshotv1.VolumeSnapshot).Name)
 
 			// Create VSC, bound to VS
@@ -1592,7 +1609,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 				snapshotter.PVC(*pvc),
 			)
 		default:
-			log.ApplicationRestoreLog(restore).Errorf("Unknown Type recieved for volumeSnapshot %s", v)
+			log.ApplicationRestoreLog(restore).Errorf("Unknown Type %T recieved for volumeSnapshot %+v", v, v)
 		}
 
 		if err != nil {
