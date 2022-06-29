@@ -17,6 +17,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
@@ -1891,6 +1892,11 @@ func (c *csi) CleanupRestoreResources(restore *storkapi.ApplicationRestore) erro
 		logrus.Tracef("failed to clean CSI snapshots: %v", err)
 	}
 	return nil
+}
+
+// GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
+func (c *csi) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
+	return nil, nil
 }
 
 func init() {

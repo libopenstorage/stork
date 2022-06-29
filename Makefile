@@ -1,3 +1,14 @@
+DOCKER_HUB_REPO ?= openstorage
+
+DOCKER_HUB_STORK_IMAGE ?= stork
+DOCKER_HUB_STORK_TAG ?= dev
+
+DOCKER_HUB_CMD_EXECUTOR_IMAGE ?= cmdexecutor
+DOCKER_HUB_CMD_EXECUTOR_TAG ?= dev
+
+DOCKER_HUB_STORK_TEST_IMAGE ?= stork_test
+DOCKER_HUB_STORK_TEST_TAG ?= dev
+
 STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
 CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
@@ -29,9 +40,9 @@ LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSI
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 .DEFAULT_GOAL=all
-.PHONY: test clean vendor vendor-update
+.PHONY: test clean vendor vendor-update px-statfs
 
-all: stork storkctl cmdexecutor pretest
+all: stork storkctl cmdexecutor pretest px-statfs
 
 vendor-tidy:
 	go mod tidy
@@ -119,6 +130,10 @@ storkctl:
 	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
 	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
 	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
+
+px-statfs:
+	@echo "Building px_statfs.so"
+	@cd drivers/volume/portworx/px-statfs && gcc -g -shared -fPIC -o $(BIN)/px_statfs.so px_statfs.c -ldl -D__USE_LARGEFILE64
 
 container: help
 	@echo "Building container: docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile . "

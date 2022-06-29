@@ -36,3 +36,4 @@ COPY ./bin/darwin/storkctl /storkctl/darwin/
 COPY ./bin/windows/storkctl.exe /storkctl/windows/
 COPY ./LICENSE /licenses
 COPY ./bin/stork /
+COPY ./bin/px_statfs.so /

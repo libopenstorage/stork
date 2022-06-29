@@ -2,6 +2,7 @@ package k8sutils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -37,6 +38,18 @@ const (
 	//minProtectionPeriod defines minimum number of days, the backup are protected via object-lock feature
 	minProtectionPeriod = 1
 )
+
+// JSONPatchOp is a single json mutation done by a k8s mutating webhook
+type JSONPatchOp struct {
+	// Operation e.g. add, replace
+	Operation string `json:"op"`
+
+	// Path to mutate
+	Path string `json:"path"`
+
+	// Value for the path
+	Value json.RawMessage `json:"value,omitempty"`
+}
 
 // GetPVCsForGroupSnapshot returns all PVCs in given namespace that match the given matchLabels. All PVCs need to be bound.
 func GetPVCsForGroupSnapshot(namespace string, matchLabels map[string]string) ([]v1.PersistentVolumeClaim, error) {
