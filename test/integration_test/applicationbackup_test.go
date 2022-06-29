@@ -120,6 +120,7 @@ func triggerBackupRestoreTest(
 
 		// Track what has to be verified post restore (skips apps that will won't be restored due to label selectors)
 		postRestoreCtx := preBackupCtx
+		postRestoreCtx.ScheduleOptions.Namespace = ctx.ScheduleOptions.Namespace
 
 		if len(additionalAppKeys) > 0 {
 			err = schedulerDriver.AddTasks(ctxs[0],
@@ -166,6 +167,7 @@ func triggerBackupRestoreTest(
 
 			logrus.Infof("Starting Restore.")
 			// Restore application
+			restoreCtx.ScheduleOptions.Namespace = ctx.ScheduleOptions.Namespace
 			err = schedulerDriver.AddTasks(restoreCtx,
 				scheduler.ScheduleOptions{AppKeys: appRestoreKey})
 			require.NoError(t, err, "Error restoring apps")
@@ -1091,6 +1093,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 			SpecList: []interface{}{},
 		}}
 
+	restoreCtxFirst.ScheduleOptions.Namespace = appCtx.ScheduleOptions.Namespace
 	err = schedulerDriver.AddTasks(restoreCtxFirst,
 		scheduler.ScheduleOptions{AppKeys: []string{restoreName + "-backup-sync"}})
 	require.NoError(t, err, "Error restoring apps")
