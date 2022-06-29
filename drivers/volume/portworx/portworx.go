@@ -980,7 +980,13 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 	volDriver := d.getVolDriver()
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token),
+			&api.SdkVolumeInspectRequest{
+				VolumeId: volumeName,
+				Options: &api.VolumeInspectOptions{
+					Deep: true,
+				},
+			})
 		if err != nil {
 			return nil, true, err
 		}
