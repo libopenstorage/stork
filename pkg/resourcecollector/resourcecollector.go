@@ -169,7 +169,8 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"ReplicaSet",
 		"LimitRange",
 		"NetworkPolicy",
-		"PodDisruptionBudget":
+		"PodDisruptionBudget",
+		"Endpoint":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -544,6 +545,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.dataVolumesToBeCollected(object)
 	case "VirtualMachineInstance":
 		return r.virtualMachineInstanceToBeCollected(object)
+	case "Endpoint":
+		return r.endpointsToBeCollected(object)
 	}
 
 	return true, nil
