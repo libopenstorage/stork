@@ -44,6 +44,9 @@ const (
 	SkipModifyResources = "stork.libopenstorage.org/skip-modify-resource"
 	// ProjectMappingsOption is a resource collector option to provide rancher project mappings
 	ProjectMappingsOption = "ProjectMappings"
+	// IncludeResources to not skip resources of specific type
+	IncludeResources = "stork.libopenstorage.org/include-resource"
+
 	// ServiceKind for k8s service resources
 	ServiceKind = "Service"
 	// NetworkPolicyKind for network policy resources
@@ -170,7 +173,7 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"LimitRange",
 		"NetworkPolicy",
 		"PodDisruptionBudget",
-		"Endpoint":
+		"Endpoints":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -545,7 +548,7 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.dataVolumesToBeCollected(object)
 	case "VirtualMachineInstance":
 		return r.virtualMachineInstanceToBeCollected(object)
-	case "Endpoint":
+	case "Endpoints":
 		return r.endpointsToBeCollected(object)
 	}
 

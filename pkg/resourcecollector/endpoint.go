@@ -16,13 +16,25 @@ func (r *ResourceCollector) endpointsToBeCollected(
 	}
 
 	if endpoint.Annotations != nil {
-		if _, ok := endpoint.Annotations["last_applied_annotation"]; ok {
-			return true, nil
-		}
-		if _, ok := endpoint.Annotations["collect_resource"]; ok {
+		// collect endpoint which has include-resources annotation applied
+		if _, ok := endpoint.Annotations[IncludeResources]; ok {
 			return true, nil
 		}
 	}
+	// skip endpoints which has selector set
+	for _, subset := range endpoint.Subsets {
+		for _, addr := range subset.Addresses {
+			if addr.TargetRef != nil {
+				return false, nil
+			}
+		}
+	}
+	if endpoint.Annotations != nil {
+		// collect manually created endpoint resources
+		if _, ok := endpoint.Annotations[v1.LastAppliedConfigAnnotation]; !ok {
+			return false, nil
+		}
 
-	return false, nil
+	}
+	return true, nil
 }
