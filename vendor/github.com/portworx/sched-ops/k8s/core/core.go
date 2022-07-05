@@ -48,6 +48,7 @@ type Ops interface {
 	ServiceOps
 	ServiceAccountOps
 	LimitRangeOps
+	NetworkPolicyOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)

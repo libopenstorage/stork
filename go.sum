@@ -1368,9 +1368,13 @@ github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af/go.mod h1
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65 h1:BJoyW5YUZmxSpOfbmqWxBKmAtsJFyDOM0P09jvLYYoY=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65/go.mod h1:0IQvado0rnmbRMORaCqCDrrzjBrX5sU+Sz2+vQwEsjM=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220714042759-8f183fe386ca h1:jrjwiQdqgDRsQZuiRDaWsbvx/z5t1icQPf7dgJOQUKE=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220714042759-8f183fe386ca/go.mod h1:0IQvado0rnmbRMORaCqCDrrzjBrX5sU+Sz2+vQwEsjM=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.0.0-20220708194938-51851a4a76a7 h1:lDvFNvXnGModzVAMwo5yypYwEFpfTN+IGyUpuXKpbpI=
 github.com/portworx/torpedo v0.0.0-20220708194938-51851a4a76a7/go.mod h1:qhBrOHe4PKNcZULBSnL7YEOZDulSe0SwAPuZAxrghvg=
+github.com/portworx/torpedo v0.0.0-20220714042817-25f6ab6dc5d1 h1:P4Lo6jDUUKglz7rkqlK8Hg4gLXqIIrgQaEeWxcXrV8U=
+github.com/portworx/torpedo v0.0.0-20220714042817-25f6ab6dc5d1/go.mod h1:I2wJjwLvCub+L1eNHWyHIIe6SrCreMVgwym4dCsR1WE=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/posener/complete v1.2.1/go.mod h1:6gapUrK/U1TAN7ciCoNRIdVC5sbdBTUh1DKN0g6uH7E=
 github.com/posener/complete v1.2.3/go.mod h1:WZIdtGGp+qx0sLrYKtIRAruyNpv6hFCicSgv7Sy7s/s=

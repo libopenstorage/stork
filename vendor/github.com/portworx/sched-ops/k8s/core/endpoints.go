@@ -14,6 +14,8 @@ type EndpointsOps interface {
 	CreateEndpoints(endpoints *corev1.Endpoints) (*corev1.Endpoints, error)
 	// GetEndpoints retrieves endpoints for a given namespace/name.
 	GetEndpoints(name, namespace string) (*corev1.Endpoints, error)
+	// ListEndpoints retrieves endpoints for a given namespace
+	ListEndpoints(string, metav1.ListOptions) (*corev1.EndpointsList, error)
 	// PatchEndpoints applies a patch for a given endpoints.
 	PatchEndpoints(name, namespace string, pt types.PatchType, jsonPatch []byte, subresources ...string) (*corev1.Endpoints, error)
 	// DeleteEndpoints removes endpoints for a given namespace/name.
@@ -36,6 +38,14 @@ func (c *Client) GetEndpoints(name, ns string) (*corev1.Endpoints, error) {
 		return nil, err
 	}
 	return c.kubernetes.CoreV1().Endpoints(ns).Get(context.TODO(), name, metav1.GetOptions{})
+}
+
+// ListEndpoints retrieves endpoints for a given namespace
+func (c *Client) ListEndpoints(ns string, opts metav1.ListOptions) (*corev1.EndpointsList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.kubernetes.CoreV1().Endpoints(ns).List(context.TODO(), opts)
 }
 
 // PatchEndpoints applies a patch for a given endpoints.
