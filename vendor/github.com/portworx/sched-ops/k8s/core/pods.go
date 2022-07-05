@@ -346,12 +346,8 @@ func (c *Client) IsPodReady(pod corev1.Pod) bool {
 
 // IsPodBeingManaged returns true if the pod is being managed by a controller
 func (c *Client) IsPodBeingManaged(pod corev1.Pod) bool {
-	if len(pod.OwnerReferences) == 0 {
-		return false
-	}
-
 	for _, owner := range pod.OwnerReferences {
-		if *owner.Controller {
+		if owner.Controller != nil && *owner.Controller {
 			// We are assuming that if a pod has a owner who has set itself as
 			// a controller, the pod is managed. We are not checking for specific
 			// contollers like ReplicaSet, StatefulSet as that is
@@ -361,7 +357,6 @@ func (c *Client) IsPodBeingManaged(pod corev1.Pod) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
