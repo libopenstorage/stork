@@ -75,6 +75,8 @@ func testMigration(t *testing.T) {
 		t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
 		t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
 	}
+	t.Run("networkpolicyTest", networkPolicyMigrationTest)
+	t.Run("endpointTest", endpointMigrationTest)
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
 	t.Run("pvcResizeTest", pvcResizeMigrationTest)
@@ -1323,5 +1325,170 @@ func suspendMigrationTest(t *testing.T) {
 
 	logrus.Infof("Successfully verified suspend migration case")
 
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+}
+
+func endpointMigrationTest(t *testing.T) {
+	var err error
+	namespace := "endpoint-migration-schedule-interval"
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	// the schedule interval for these specs it set to 5 minutes
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"endpoint-migration-schedule-interval",
+		"endpoint",
+		[]string{},
+		[]string{"endpoint-migration-schedule-interval"},
+		true,
+		false,
+		false,
+		false,
+		"",
+		nil,
+	)
+
+	validateMigration(t, "endpoint-migration-schedule-interval", preMigrationCtx.GetID())
+
+	srcEndpoints, err := core.Instance().ListEndpoints(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving endpoints list from %s namespace", namespace)
+	cnt := 0
+	for _, endpoint := range srcEndpoints.Items {
+		collect := false
+		for _, subset := range endpoint.Subsets {
+			for _, addr := range subset.Addresses {
+				if addr.TargetRef != nil {
+					collect = true
+				}
+			}
+		}
+		if !collect {
+			cnt++
+		}
+	}
+	logrus.Infof("endpoint on source cluster: %+v", srcEndpoints)
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destEndpoints, err := core.Instance().ListEndpoints(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving endpoints list from %s namespace", namespace)
+
+	if len(destEndpoints.Items) != cnt {
+		matchErr := fmt.Errorf("migrated endpoints does not match")
+		require.NoError(t, matchErr, "Endpoints Expected: %v, Current: %v", srcEndpoints, destEndpoints)
+	}
+
+	logrus.Infof("Successfully verified migrated endpoints on destination cluster")
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+}
+
+// networkPolicyMigrationTest validate migrated network policy
+func networkPolicyMigrationTest(t *testing.T) {
+	// validate default behaviour of network policy migration where policy which has CIDR set
+	// will not be migrated
+	validateNetworkPolicyMigration(t, false)
+	logrus.Infof("Validating migration of all network policy with IncludeNetworkPolicyWithCIDR set to true")
+	// validate behaviour of network policy migration where policy which has CIDR set
+	// will be migrated using IncludeNetworkPolicyWithCIDR option in migration schedule
+	validateNetworkPolicyMigration(t, true)
+}
+func validateNetworkPolicyMigration(t *testing.T, all bool) {
+	var err error
+	namespace := "networkpolicy-networkpolicy-migration-schedule-interval"
+	scheduleName := "networkpolicy-migration-schedule-interval"
+	if all {
+		namespace = "networkpolicy-networkpolicy-all-migration-schedule-interval"
+		scheduleName = "networkpolicy-all-migration-schedule-interval"
+	}
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	// the schedule interval for these specs it set to 5 minutes
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		scheduleName,
+		"networkpolicy",
+		[]string{},
+		[]string{scheduleName},
+		true,
+		false,
+		false,
+		false,
+		"",
+		nil,
+	)
+
+	validateMigration(t, scheduleName, preMigrationCtx.GetID())
+
+	networkPolicies, err := core.Instance().ListNetworkPolicy(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving network policy list from %s namespace", namespace)
+	cnt := 0
+	for _, networkPolicy := range networkPolicies.Items {
+		collect := true
+		ingressRule := networkPolicy.Spec.Ingress
+		for _, ingress := range ingressRule {
+			for _, fromPolicyPeer := range ingress.From {
+				ipBlock := fromPolicyPeer.IPBlock
+				if ipBlock != nil && len(ipBlock.CIDR) != 0 {
+					collect = false
+				}
+			}
+		}
+		egreeRule := networkPolicy.Spec.Egress
+		for _, egress := range egreeRule {
+			for _, networkPolicyPeer := range egress.To {
+				ipBlock := networkPolicyPeer.IPBlock
+				if ipBlock != nil && len(ipBlock.CIDR) != 0 {
+					collect = false
+				}
+			}
+		}
+		if collect {
+			cnt++
+		}
+	}
+	if all {
+		cnt = len(networkPolicies.Items)
+	}
+	logrus.Infof("No. of network policies which does not have CIDR set: %d", cnt)
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destNetworkPolicies, err := core.Instance().ListNetworkPolicy(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving network policy list from %s namespace", namespace)
+
+	if len(destNetworkPolicies.Items) != cnt {
+		matchErr := fmt.Errorf("migrated network poilcy does not match")
+		logrus.Infof("Policy found on source cluster")
+		for _, networkPolicy := range networkPolicies.Items {
+			logrus.Infof("Network Policy: %s/%s", networkPolicy.Namespace, networkPolicy.Name)
+		}
+		logrus.Infof("Policy found on DR cluster")
+		for _, networkPolicy := range destNetworkPolicies.Items {
+			logrus.Infof("Network Policy: %s/%s", networkPolicy.Namespace, networkPolicy.Name)
+		}
+		require.NoError(t, matchErr, "NetworkPolicy Expected: %v, Actual: %v", cnt, len(destNetworkPolicies.Items))
+	}
+
+	logrus.Infof("Successfully verified migrated network policies on destination cluster")
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
 }

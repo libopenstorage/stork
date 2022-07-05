@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: custom-endpoint
+subsets:
+  - addresses:
+    - ip: 5.6.7.8
+    ports:
+    - port: 8080
+      protocol: TCP

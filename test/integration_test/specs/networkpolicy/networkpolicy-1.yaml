@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: policy-with-cidr-test
+spec:
+    ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            app: incident-registration
+    podSelector:
+      matchLabels:
+        name: oracle
+    policyTypes:
+    - Ingress
