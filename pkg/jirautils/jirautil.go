@@ -5,6 +5,7 @@ import (
 
 	jira "github.com/andygrunwald/go-jira"
 	"github.com/sirupsen/logrus"
+	"github.com/trivago/tgo/tcontainer"
 )
 
 var (
@@ -62,7 +63,6 @@ func getPTX(issueID string) {
 	logrus.Infof("Error: %v", err)
 
 	logrus.Infof("%s: %+v\n", issue.Key, issue.Fields.Summary)
-	logrus.Infof("%+v\n", issue)
 
 	logrus.Infof("%s: %s\n", issue.ID, issue.Fields.Summary)
 	logrus.Info(issue.Fields.FixVersions[0].Name)
@@ -70,6 +70,13 @@ func getPTX(issueID string) {
 }
 
 func createPTX(description, summary string) (string, error) {
+
+	//Hardcoding the Priority to P1
+	customFieldsMap := tcontainer.NewMarshalMap()
+	customFieldsMap["customfield_11115"] = map[string]interface{}{
+		"id":    "10936",
+		"value": "P1 (High)",
+	}
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
@@ -93,7 +100,8 @@ func createPTX(description, summary string) (string, error) {
 					Name: "master",
 				},
 			},
-			Summary: summary,
+			Summary:  summary,
+			Unknowns: customFieldsMap,
 		},
 	}
 	issue, resp, err := client.Issue.Create(&i)
