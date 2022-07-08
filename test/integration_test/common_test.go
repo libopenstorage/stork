@@ -126,6 +126,25 @@ func TestSnapshot(t *testing.T) {
 	t.Run("testWebhook", testWebhook)
 }
 
+func TestStorkCbt(t *testing.T) {
+	t.Run("deploymentTest", deploymentMigrationTest)
+	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
+	t.Run("stopDriverTest", stopDriverTest)
+	t.Run("simpleSnapshotTest", simpleSnapshotTest)
+	t.Run("pvcOwnershipTest", pvcOwnershipTest)
+}
+
+func TestStorkCbtBackup(t *testing.T) {
+	setDefaultsForBackup(t)
+
+	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
+	logrus.Infof("Backup path being used: %s", backupLocationPath)
+
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
+}
+
 // TODO: Take driver name from input
 // TODO: Parse storageclass specs based on driver name
 func setup() error {
