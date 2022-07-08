@@ -338,7 +338,7 @@ if [ -n "${K8S_VENDOR}" ]; then
             ;;
     esac
 else
-    K8S_VENDOR_KEY=node-role.kubernetes.io/master
+    K8S_VENDOR_KEY=node-role.kubernetes.io/control-plane
 fi
 
 cat > torpedo.yaml <<EOF
@@ -387,9 +387,6 @@ spec:
     operator: Equal
     effect: NoSchedule
   - key: node-role.kubernetes.io/controlplane
-    operator: Equal
-    value: "true"
-  - key: node-role.kubernetes.io/control-plane
     operator: Equal
     value: "true"
   - key: node-role.kubernetes.io/etcd
