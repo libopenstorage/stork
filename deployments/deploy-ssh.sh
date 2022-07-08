@@ -389,6 +389,9 @@ spec:
   - key: node-role.kubernetes.io/controlplane
     operator: Equal
     value: "true"
+  - key: node-role.kubernetes.io/control-plane
+    operator: Equal
+    value: "true"
   - key: node-role.kubernetes.io/etcd
     operator: Equal
     value: "true"
