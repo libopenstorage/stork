@@ -7,9 +7,11 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -269,6 +271,9 @@ type Driver interface {
 	//UpdateStorageClusterImage update storage cluster image version
 	UpdateStorageClusterImage(string) error
 
+	//GetPXStorageCluster returns portworx storage cluster
+	GetPXStorageCluster() (*v1.StorageCluster, error)
+
 	// ValidateStorageCluster validates all the storage cluster components
 	ValidateStorageCluster(endpointURL, endpointVersion string) error
 
@@ -277,6 +282,9 @@ type Driver interface {
 
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
+
+	//GetStorageSpec get the storage spec used to deploy portworx
+	GetStorageSpec() (*pxapi.StorageSpec, error)
 
 	// GetPxNode return api.StorageNode
 	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)

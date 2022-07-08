@@ -26,6 +26,7 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -169,6 +170,7 @@ type portworx struct {
 	licenseManager        pxapi.PortworxLicenseClient
 	licenseFeatureManager pxapi.PortworxLicensedFeatureClient
 	autoFsTrimManager     api.OpenStorageFilesystemTrimClient
+	portworxServiceClient pxapi.PortworxServiceClient
 	schedOps              schedops.Driver
 	nodeDriver            node.Driver
 	refreshEndpoint       bool
@@ -212,6 +214,18 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 		return err
 	}
 	return nil
+}
+
+//GetStorageSpec get the storage spec used to deploy portworx
+func (d *portworx) GetStorageSpec() (*pxapi.StorageSpec, error) {
+	storageSpecResp, err := d.portworxServiceClient.GetStorageSpec(d.getContext(), &pxapi.PxGetStorageSpecRequest{})
+	var storageSpec *pxapi.StorageSpec
+	if err != nil {
+		err = fmt.Errorf("Error getting storage resource ,cause : %v", err)
+		return nil, err
+	}
+	storageSpec = storageSpecResp.GetSpec()
+	return storageSpec, nil
 }
 
 // ListStoragePools returns all PX storage pools
@@ -2375,6 +2389,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.diagsJobManager = api.NewOpenStorageJobClient(conn)
 	d.licenseFeatureManager = pxapi.NewPortworxLicensedFeatureClient(conn)
 	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(conn)
+	d.portworxServiceClient = pxapi.NewPortworxServiceClient(conn)
 	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
 	} else {
@@ -3609,6 +3624,26 @@ func (d *portworx) UpdateStorageClusterImage(imageName string) error {
 	}
 	logrus.Infof("Storage Cluster Image updated to [%v]", imageName)
 	return nil
+
+}
+
+func (d *portworx) GetPXStorageCluster() (*v1.StorageCluster, error) {
+	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+	if err != nil {
+		err = fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
+		logrus.Error(err.Error())
+		return nil, err
+
+	}
+
+	stc, err := pxOperator.GetStorageCluster(pxOps.Items[0].Name, pxOps.Items[0].Namespace)
+	if err != nil {
+		err = fmt.Errorf("error getting Storage Clusters [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
+		logrus.Error(err.Error())
+		return nil, err
+
+	}
+	return stc, nil
 
 }
 

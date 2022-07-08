@@ -87,6 +87,10 @@ const (
 	errorChannelSize                 = 50
 )
 
+const (
+	pxStatusError = "ERROR GETTING PX STATUS"
+)
+
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
 
@@ -1883,15 +1887,17 @@ func TriggerEmailReporter() {
 	emailData.MasterIP = masterNodeList
 
 	for _, n := range node.GetWorkerNodes() {
-		status, err := Inst().V.GetNodeStatus(n)
-		if err != nil {
-			pxStatus = "ERROR GETTING STATUS"
-		} else {
-			pxStatus = status.String()
-		}
+		if n.StorageNode != nil {
+			status, err := Inst().V.GetNodeStatus(n)
+			if err != nil {
+				pxStatus = pxStatusError
+			} else {
+				pxStatus = status.String()
+			}
 
-		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
-			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus, Cores: coresMap[n.Name]})
+			emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
+				PxVersion: n.NodeLabels["PX Version"], Status: pxStatus, Cores: coresMap[n.Name]})
+		}
 	}
 
 	for k, v := range RunningTriggers {
@@ -1911,8 +1917,14 @@ func TriggerEmailReporter() {
 		logrus.Errorf("Failed to prepare email body. Error: [%v]", err)
 	}
 
+	emailSub := subject
+	stc, err := Inst().V.GetPXStorageCluster()
+	if err != nil {
+		emailSub = stc.GetClusterName()
+	}
+
 	emailDetails := &email.Email{
-		Subject:        subject,
+		Subject:        emailSub,
 		Content:        content,
 		From:           from,
 		To:             EmailRecipients,

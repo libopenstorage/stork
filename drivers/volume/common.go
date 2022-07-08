@@ -9,6 +9,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/pborman/uuid"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -529,6 +530,14 @@ func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (ma
 	}
 }
 
+//GetStorageSpec get the storage spec used to deploy portworx
+func (d *DefaultDriver) GetStorageSpec() (*pxapi.StorageSpec, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListStoragePools()",
+	}
+}
+
 // ValidateRebalanceJobs validates rebalance jobs
 func (d *DefaultDriver) ValidateRebalanceJobs() error {
 	return &errors.ErrNotSupported{
@@ -706,6 +715,14 @@ func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpdateStorageClusterImage()",
+	}
+}
+
+//GetPXStorageCluster returns portworx storage cluster
+func (d *DefaultDriver) GetPXStorageCluster() (*v1.StorageCluster, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPXStorageCluster()",
 	}
 }
 
