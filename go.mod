@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
 	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
-	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
@@ -37,6 +37,7 @@ require (
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
+	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
@@ -69,7 +70,7 @@ replace (
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20220323180113-0ea773109d05
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220711165201-be5e8919faf9
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.0
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency
