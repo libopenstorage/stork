@@ -58,6 +58,7 @@ import (
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -634,6 +635,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*policyv1beta1.PodDisruptionBudget); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*netv1.NetworkPolicy); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*corev1.Endpoints); ok {
 		return specObj, nil
 	}
 
@@ -1809,6 +1814,42 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 		logrus.Infof("[%v] Created Config Map: %v", app.Key, configMap.Name)
 		return configMap, nil
+	} else if obj, ok := spec.(*v1.Endpoints); ok {
+		obj.Namespace = ns.Name
+		endpoints, err := k8sCore.CreateEndpoints(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if endpoints, err = k8sCore.GetEndpoints(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Endpoints: %v", app.Key, endpoints.Name)
+				return endpoints, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Endpoints: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Endpoints: %v", app.Key, endpoints.Name)
+		return endpoints, nil
+	} else if obj, ok := spec.(*netv1.NetworkPolicy); ok {
+		obj.Namespace = ns.Name
+		networkPolicy, err := k8sCore.CreateNetworkPolicy(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if networkPolicy, err = k8sCore.GetNetworkPolicy(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing NetworkPolicy: %v", app.Key, networkPolicy.Name)
+				return networkPolicy, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create NetworkPolicy: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created NetworkPolicy: %v", app.Key, networkPolicy.Name)
+		return networkPolicy, nil
 	}
 
 	return nil, nil
