@@ -43,6 +43,7 @@ type BackupLocationItem struct {
 	SecretConfig       string        `json:"secretConfig"`
 	Sync               bool          `json:"sync"`
 	RepositoryPassword string        `json:"repositoryPassword"`
+	EncryptionV2Key    string        `json:"encryptionV2Key"`
 }
 
 // ClusterItem is the spec used to store a the credentials associated with the cluster
@@ -138,7 +139,7 @@ func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
 		if val, ok := secretConfig.Data["encryptionKey"]; ok && val != nil {
-			bl.Location.EncryptionKey = strings.TrimSuffix(string(val), "\n")
+			bl.Location.EncryptionV2Key = strings.TrimSuffix(string(val), "\n")
 		}
 		if val, ok := secretConfig.Data["path"]; ok && val != nil {
 			bl.Location.Path = strings.TrimSuffix(string(val), "\n")
