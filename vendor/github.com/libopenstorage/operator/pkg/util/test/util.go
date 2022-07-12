@@ -56,6 +56,7 @@ import (
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/operator/pkg/mock"
 	"github.com/libopenstorage/operator/pkg/util"
+	ocp_secv1 "github.com/openshift/api/security/v1"
 )
 
 const (
@@ -70,6 +71,21 @@ const (
 	PxImageEnvVarName = "PX_IMAGE"
 	// StorkNamespaceEnvVarName is the namespace where stork is deployed
 	StorkNamespaceEnvVarName = "STORK-NAMESPACE"
+
+	// StorkPxJwtIssuerEnvVarName is a PX JWT issuer Env variable name for stork
+	StorkPxJwtIssuerEnvVarName = "PX_JWT_ISSUER"
+
+	// DefaultStorkPxJwtIssuerEnvVarValue is a defeault value for PX JWT issuer for stork
+	DefaultStorkPxJwtIssuerEnvVarValue = "apps.portworx.io"
+
+	// StorkPxSharedSecretEnvVarName is a PX shared secret Env variable name for stork
+	StorkPxSharedSecretEnvVarName = "PX_SHARED_SECRET"
+
+	// DefaultStorkPxSharedSecretEnvVarValue is a default value for PX shared secret for stork
+	DefaultStorkPxSharedSecretEnvVarValue = "px-system-secrets"
+
+	// DefaultPxVsphereSecretName is a default name for PX vSphere credentials secret
+	DefaultPxVsphereSecretName = "px-vsphere-secret"
 
 	// PxMasterVersion is a tag for Portworx master version
 	PxMasterVersion = "3.0.0.0"
@@ -222,6 +238,14 @@ func GetExpectedCRD(t *testing.T, fileName string) *apiextensionsv1beta1.CustomR
 	return crd
 }
 
+// GetExpectedCRDV1 returns the CustomResourceDefinition object from given yaml spec file
+func GetExpectedCRDV1(t *testing.T, fileName string) *apiextensionsv1.CustomResourceDefinition {
+	obj := getKubernetesObject(t, fileName)
+	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+	assert.True(t, ok, "Expected CustomResourceDefinition object")
+	return crd
+}
+
 // GetExpectedPrometheus returns the Prometheus object from given yaml spec file
 func GetExpectedPrometheus(t *testing.T, fileName string) *monitoringv1.Prometheus {
 	obj := getKubernetesObject(t, fileName)
@@ -263,13 +287,23 @@ func GetExpectedPSP(t *testing.T, fileName string) *policyv1beta1.PodSecurityPol
 	return psp
 }
 
+// GetExpectedSCC returns the SecurityContextConstraints object from given yaml spec file
+func GetExpectedSCC(t *testing.T, fileName string) *ocp_secv1.SecurityContextConstraints {
+	obj := getKubernetesObject(t, fileName)
+	scc, ok := obj.(*ocp_secv1.SecurityContextConstraints)
+	assert.True(t, ok, "Expected SecurityContextConstraints object")
+	return scc
+}
+
 // getKubernetesObject returns a generic Kubernetes object from given yaml file
 func getKubernetesObject(t *testing.T, fileName string) runtime.Object {
 	json, err := ioutil.ReadFile(path.Join(TestSpecPath, fileName))
 	assert.NoError(t, err)
 	s := scheme.Scheme
 	apiextensionsv1beta1.AddToScheme(s)
+	apiextensionsv1.AddToScheme(s)
 	monitoringv1.AddToScheme(s)
+	ocp_secv1.Install(s)
 	codecs := serializer.NewCodecFactory(s)
 	obj, _, err := codecs.UniversalDeserializer().Decode([]byte(json), nil, nil)
 	assert.NoError(t, err)
@@ -360,6 +394,95 @@ func UninstallStorageCluster(cluster *corev1.StorageCluster, kubeconfig ...strin
 	return operatorops.Instance().DeleteStorageCluster(cluster.Name, cluster.Namespace)
 }
 
+// FindAndCopyVsphereSecretToCustomNamespace attempt to find and copy PX vSphere secret to a given namespace
+func FindAndCopyVsphereSecretToCustomNamespace(customNamespace string) error {
+	var pxVsphereSecret *v1.Secret
+
+	// Get all secrets
+	secrets, err := coreops.Instance().ListSecret("", metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list secrets, err %v", err)
+	}
+
+	// Find PX vSphere secret
+	for _, secret := range secrets.Items {
+		if secret.Name == DefaultPxVsphereSecretName {
+			logrus.Debugf("Found %s in the %s namespace", secret.Name, secret.Namespace)
+			pxVsphereSecret = &secret
+			break
+		}
+	}
+
+	if pxVsphereSecret == nil {
+		logrus.Warnf("Failed to find secret %s", DefaultPxVsphereSecretName)
+		return nil
+	}
+
+	// Construct new PX vSpheresecret in the new namespace
+	newPxVsphereSecret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pxVsphereSecret.Name,
+			Namespace: customNamespace,
+		},
+		Data: pxVsphereSecret.Data,
+		Type: pxVsphereSecret.Type,
+	}
+
+	logrus.Debugf("Attempting to copy %s from %s to %s", DefaultPxVsphereSecretName, pxVsphereSecret.Namespace, customNamespace)
+	_, err = coreops.Instance().CreateSecret(newPxVsphereSecret)
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			logrus.Warnf("Secret %s already exists in %s namespace", DefaultPxVsphereSecretName, customNamespace)
+			return nil
+		}
+		return err
+	}
+
+	return nil
+}
+
+// CreateVsphereCredentialEnvVarsFromSecret check if px-vsphere-secret exists and returns vSphere crendentials Env vars
+func CreateVsphereCredentialEnvVarsFromSecret(namespace string) ([]v1.EnvVar, error) {
+	var envVars []v1.EnvVar
+
+	// Get PX vSphere secret
+	_, err := coreops.Instance().GetSecret(DefaultPxVsphereSecretName, namespace)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logrus.Warnf("PX vSphere secret %s in not found in %s namespace, unable to get credentials from secret, please make sure you have specified them in the Env vars", DefaultPxVsphereSecretName, namespace)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get secret %s in %s namespace, err %v", DefaultPxVsphereSecretName, namespace, err)
+	}
+
+	envVars = []v1.EnvVar{
+		{
+			Name: "VSPHERE_USER",
+			ValueFrom: &v1.EnvVarSource{
+				SecretKeyRef: &v1.SecretKeySelector{
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: DefaultPxVsphereSecretName,
+					},
+					Key: "VSPHERE_USER",
+				},
+			},
+		},
+		{
+			Name: "VSPHERE_PASSWORD",
+			ValueFrom: &v1.EnvVarSource{
+				SecretKeyRef: &v1.SecretKeySelector{
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: DefaultPxVsphereSecretName,
+					},
+					Key: "VSPHERE_PASSWORD",
+				},
+			},
+		},
+	}
+
+	return envVars, nil
+}
+
 // ValidateStorageCluster validates a StorageCluster spec
 func ValidateStorageCluster(
 	pxImageList map[string]string,
@@ -417,6 +540,11 @@ func ValidateStorageCluster(
 
 	// Validate Portworx Service
 	if err = validatePortworxService(liveCluster.Namespace); err != nil {
+		return err
+	}
+
+	// Validate Portworx API Service
+	if err = validatePortworxAPIService(liveCluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -784,6 +912,42 @@ func validatePortworxService(namespace string) error {
 	return nil
 }
 
+func validatePortworxAPIService(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		pxAPIServiceName := "portworx-api"
+		service, err := coreops.Instance().GetService(pxAPIServiceName, cluster.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to validate Service %s/%s, Err: %v", cluster.Namespace, pxAPIServiceName, err)
+		}
+		if cluster.Spec.Metadata != nil && cluster.Spec.Metadata.Labels != nil {
+			for k, expectedVal := range cluster.Spec.Metadata.Labels["service/portworx-api"] {
+				if actualVal, ok := service.Labels[k]; !ok || actualVal != expectedVal {
+					return nil, true, fmt.Errorf("failed to validate Service %s/%s custom labels, label %s doesn't exist or value doesn't match", cluster.Namespace, pxAPIServiceName, k)
+				}
+			}
+			for k := range service.Labels {
+				if k == "name" {
+					continue
+				}
+				if labels, ok := cluster.Spec.Metadata.Labels["service/portworx-api"]; ok {
+					if _, ok := labels[k]; !ok {
+						return nil, true, fmt.Errorf("failed to validate Service %s/%s custom labels, found unexpected label %s", cluster.Namespace, pxAPIServiceName, k)
+					}
+				} else {
+					return nil, true, fmt.Errorf("failed to validate Service %s/%s custom labels, found unexpected label %s", cluster.Namespace, pxAPIServiceName, k)
+				}
+			}
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetExpectedPxNodeNameList will get the list of node names that should be included
 // in the given Portworx cluster, by seeing if each non-master node matches the given
 // node selectors and affinities.
@@ -896,12 +1060,18 @@ func validateComponents(pxImageList map[string]string, cluster *corev1.StorageCl
 	}
 
 	// Validate Monitoring
-	if err = validateMonitoring(pxImageList, cluster, timeout, interval); err != nil {
+	if err = ValidateMonitoring(pxImageList, cluster, timeout, interval); err != nil {
 		return err
 	}
 
 	// Validate PortworxProxy
 	if err = ValidatePortworxProxy(cluster, timeout); err != nil {
+		return err
+	}
+
+	// Validate Security
+	previouslyEnabled := false
+	if err = ValidateSecurity(cluster, previouslyEnabled, timeout, interval); err != nil {
 		return err
 	}
 
@@ -946,6 +1116,11 @@ func ValidatePvcController(pxImageList map[string]string, cluster *corev1.Storag
 		_, err = coreops.Instance().GetServiceAccount(pvcControllerDp.Name, pvcControllerDp.Namespace)
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("failed to validate ServiceAccount %s, Err: %v", pvcControllerDp.Name, err)
+		}
+
+		// Validate PVC controller deployment pod topology spread constraints
+		if err := validatePodTopologySpreadConstraints(pvcControllerDp, timeout, interval); err != nil {
+			return err
 		}
 	} else {
 		logrus.Debug("PVC Controller is Disabled")
@@ -1021,8 +1196,21 @@ func ValidateStork(pxImageList map[string]string, cluster *corev1.StorageCluster
 			return err
 		}
 
-		if err = validateImageTag(k8sVersion, cluster.Namespace, map[string]string{"name": "stork-scheduler"}); err != nil {
+		K8sVer1_22, _ := version.NewVersion("1.22")
+		kubeVersion, _, err := GetFullVersion()
+		if err != nil {
 			return err
+		}
+
+		if kubeVersion != nil && kubeVersion.GreaterThanOrEqual(K8sVer1_22) {
+			// TODO Image tag for stork-scheduler is hardcoded to v1.21.4 for clusters 1.22 and up
+			if err = validateImageTag("v1.21.4", cluster.Namespace, map[string]string{"name": "stork-scheduler"}); err != nil {
+				return err
+			}
+		} else {
+			if err = validateImageTag(k8sVersion, cluster.Namespace, map[string]string{"name": "stork-scheduler"}); err != nil {
+				return err
+			}
 		}
 
 		// Validate webhook-controller arguments
@@ -1032,6 +1220,16 @@ func ValidateStork(pxImageList map[string]string, cluster *corev1.StorageCluster
 
 		// Validate hostNetwork parameter
 		if err := validateStorkHostNetwork(cluster.Spec.Stork.HostNetwork, storkDp, timeout, interval); err != nil {
+			return err
+		}
+
+		// Validate stork deployment pod topology spread constraints
+		if err := validatePodTopologySpreadConstraints(storkDp, timeout, interval); err != nil {
+			return err
+		}
+
+		// Validate stork scheduler deployment pod topology spread constraints
+		if err := validatePodTopologySpreadConstraints(storkSchedulerDp, timeout, interval); err != nil {
 			return err
 		}
 	} else {
@@ -1323,7 +1521,7 @@ func validateStorkNamespaceEnvVar(namespace string, storkDeployment *appsv1.Depl
 }
 
 func validateCSI(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
-	csi, _ := strconv.ParseBool(cluster.Spec.FeatureGates["CSI"])
+	csi := cluster.Spec.CSI.Enabled
 	pxCsiDp := &appsv1.Deployment{}
 	pxCsiDp.Name = "px-csi-ext"
 	pxCsiDp.Namespace = cluster.Namespace
@@ -1346,6 +1544,16 @@ func validateCSI(pxImageList map[string]string, cluster *corev1.StorageCluster, 
 
 		// Validate CSI container images inside px-csi-ext pods
 		if err := validateCsiExtImages(cluster.Namespace, pxImageList); err != nil {
+			return err
+		}
+
+		// Validate CSI deployment pod topology spread constraints
+		if err := validatePodTopologySpreadConstraints(pxCsiDp, timeout, interval); err != nil {
+			return err
+		}
+
+		// Validate CSI topology specs
+		if err := validateCSITopologySpecs(cluster.Namespace, cluster.Spec.CSI.Topology, timeout, interval); err != nil {
 			return err
 		}
 	} else {
@@ -1433,7 +1641,7 @@ func validatePvcControllerPorts(annotations map[string]string, pvcControllerDepl
 	t := func() (interface{}, bool, error) {
 		pods, err := appops.Instance().GetDeploymentPods(pvcControllerDeployment)
 		if err != nil {
-			return nil, false, err
+			return nil, true, fmt.Errorf("failed to get %s deployment pods, Err: %v", pvcControllerDeployment.Name, err)
 		}
 
 		numberOfPods := 0
@@ -1530,6 +1738,57 @@ func validatePortworxOciMonCsiImage(namespace string, pxImageList map[string]str
 		}
 	}
 
+	return nil
+}
+
+func validateCSITopologySpecs(namespace string, topologySpec *corev1.CSITopologySpec, timeout, interval time.Duration) error {
+	logrus.Debug("Validating CSI topology specs inside px-csi-ext pods")
+	topologyEnabled := false
+	if topologySpec != nil {
+		topologyEnabled = topologySpec.Enabled
+	}
+
+	t := func() (interface{}, bool, error) {
+		deployment, err := appops.Instance().GetDeployment("px-csi-ext", namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get deployment %s/px-csi-ext", namespace)
+		}
+		pods, err := appops.Instance().GetDeploymentPods(deployment)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get pods of deployment %s/px-csi-ext", namespace)
+		}
+		// Go through each pod and validate the csi specs
+		for _, pod := range pods {
+			if err := validateCSITopologyFeatureGate(pod, topologyEnabled); err != nil {
+				return nil, true, fmt.Errorf("failed to validate csi topology feature gate")
+			}
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateCSITopologyFeatureGate(pod v1.Pod, topologyEnabled bool) error {
+	for _, container := range pod.Spec.Containers {
+		if container.Name == "csi-external-provisioner" {
+			featureGateEnabled := false
+			for _, arg := range container.Args {
+				if strings.Contains(arg, "Topology=true") {
+					featureGateEnabled = true
+					if !topologyEnabled {
+						return fmt.Errorf("csi topology is disabled but found the feature gate enabled in container args")
+					}
+				}
+			}
+			if topologyEnabled && !featureGateEnabled {
+				return fmt.Errorf("csi topology is enabled but cannot find the enabled feature gate in container args")
+			}
+		}
+	}
 	return nil
 }
 
@@ -1633,7 +1892,222 @@ func validateImageTag(tag, namespace string, listOptions map[string]string) erro
 	return nil
 }
 
-func validateMonitoring(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+// ValidateSecurity validates all PX Security components
+func ValidateSecurity(cluster *corev1.StorageCluster, previouslyEnabled bool, timeout, interval time.Duration) error {
+	if cluster.Spec.Security != nil &&
+		cluster.Spec.Security.Enabled {
+		logrus.Infof("PX Security is enabled")
+		return ValidateSecurityEnabled(cluster, timeout, interval)
+	}
+
+	logrus.Infof("PX Security is not enabled")
+	return ValidateSecurityDisabled(cluster, previouslyEnabled, timeout, interval)
+}
+
+// ValidateSecurityEnabled validates PX Security components are enabled/running as expected
+func ValidateSecurityEnabled(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	storkDp := &appsv1.Deployment{}
+	storkDp.Name = "stork"
+	storkDp.Namespace = cluster.Namespace
+
+	t := func() (interface{}, bool, error) {
+		// Validate Stork ENV vars, if Stork is enabled
+		if cluster.Spec.Stork != nil && cluster.Spec.Stork.Enabled {
+			// Validate stork deployment and pods
+			if err := validateDeployment(storkDp, timeout, interval); err != nil {
+				return "", true, fmt.Errorf("failed to validate Stork deployment and pods, err %v", err)
+			}
+
+			// Validate Security ENv vars in Stork pods
+			if err := validateStorkSecurityEnvVar(cluster, storkDp, timeout, interval); err != nil {
+				return "", true, fmt.Errorf("failed to validate Stork Security ENV vars, err %v", err)
+			}
+		}
+
+		if _, err := coreops.Instance().GetSecret("px-admin-token", cluster.Namespace); err != nil {
+			return "", true, fmt.Errorf("failed to find secret px-admin-token, err %v", err)
+		}
+
+		if _, err := coreops.Instance().GetSecret("px-user-token", cluster.Namespace); err != nil {
+			return "", true, fmt.Errorf("failed to find secret px-user-token, err %v", err)
+		}
+
+		if _, err := coreops.Instance().GetSecret("px-shared-secret", cluster.Namespace); err != nil {
+			return "", true, fmt.Errorf("failed to find secret px-shared-secret, err %v", err)
+		}
+
+		if _, err := coreops.Instance().GetSecret("px-system-secrets", cluster.Namespace); err != nil {
+			return "", true, fmt.Errorf("failed to find secret px-system-secrets, err %v", err)
+		}
+
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateSecurityDisabled validates PX Security components are disabled/uninstalled as expected
+func ValidateSecurityDisabled(cluster *corev1.StorageCluster, previouslyEnabled bool, timeout, interval time.Duration) error {
+	storkDp := &appsv1.Deployment{}
+	storkDp.Name = "stork"
+	storkDp.Namespace = cluster.Namespace
+
+	t := func() (interface{}, bool, error) {
+		// Validate Stork ENV vars, if Stork is enabled
+		if cluster.Spec.Stork != nil && cluster.Spec.Stork.Enabled {
+			// Validate Stork deployment and pods
+			if err := validateDeployment(storkDp, timeout, interval); err != nil {
+				return "", true, fmt.Errorf("failed to validate Stork deployment and pods, err %v", err)
+			}
+
+			// Validate Security ENv vars in Stork pods
+			if err := validateStorkSecurityEnvVar(cluster, storkDp, timeout, interval); err != nil {
+				return "", true, fmt.Errorf("failed to validate Stork Security ENV vars, err %v", err)
+			}
+		}
+
+		// *-token secrets are always deleted regardless if security was previously enabled or not
+		_, err := coreops.Instance().GetSecret("px-admin-token", cluster.Namespace)
+		if !errors.IsNotFound(err) {
+			return "", true, fmt.Errorf("found secret px-admin-token, when should't have, err %v", err)
+		}
+
+		_, err = coreops.Instance().GetSecret("px-user-token", cluster.Namespace)
+		if !errors.IsNotFound(err) {
+			return "", true, fmt.Errorf("found secret px-user-token, when shouldn't have, err %v", err)
+		}
+
+		if previouslyEnabled {
+			if _, err := coreops.Instance().GetSecret("px-shared-secret", cluster.Namespace); err != nil {
+				return "", true, fmt.Errorf("failed to find secret px-shared-secret, err %v", err)
+			}
+
+			if _, err := coreops.Instance().GetSecret("px-system-secrets", cluster.Namespace); err != nil {
+				return "", true, fmt.Errorf("failed to find secret px-system-secrets, err %v", err)
+			}
+		} else {
+			_, err := coreops.Instance().GetSecret("px-shared-secret", cluster.Namespace)
+			if !errors.IsNotFound(err) {
+				return "", true, fmt.Errorf("found secret px-shared-secret, when shouldn't have, err %v", err)
+			}
+
+			_, err = coreops.Instance().GetSecret("px-system-secrets", cluster.Namespace)
+			if !errors.IsNotFound(err) {
+				return "", true, fmt.Errorf("found secret px-system-secrets, when shouldn't have, err %v", err)
+			}
+		}
+
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateStorkSecurityEnvVar(cluster *corev1.StorageCluster, storkDeployment *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Debug("Validate Stork Security ENV vars")
+	var securityEnabled bool
+
+	if cluster.Spec.Security != nil && cluster.Spec.Security.Enabled {
+		securityEnabled = cluster.Spec.Security.Enabled
+	}
+
+	t := func() (interface{}, bool, error) {
+		pods, err := appops.Instance().GetDeploymentPods(storkDeployment)
+		if err != nil {
+			return nil, false, err
+		}
+
+		numberOfPods := 0
+		for _, pod := range pods {
+			pxJwtIssuerEnvVar := ""
+			pxSharedSecretEnvVar := ""
+			for _, env := range pod.Spec.Containers[0].Env {
+				if env.Name == StorkPxJwtIssuerEnvVarName && securityEnabled {
+					if env.Value != DefaultStorkPxJwtIssuerEnvVarValue {
+						return nil, true, fmt.Errorf("failed to validate Stork %s env var inside Stork pod [%s]: expected: %s, actual: %s", StorkPxJwtIssuerEnvVarName, pod.Name, DefaultStorkPxJwtIssuerEnvVarValue, env.Value)
+					}
+					pxJwtIssuerEnvVar = env.Value
+				} else if env.Name == StorkPxJwtIssuerEnvVarName && !securityEnabled {
+					return nil, true, fmt.Errorf("found env var %s inside Stork pod [%s] when Security is disabled", StorkPxJwtIssuerEnvVarName, pod.Name)
+				}
+
+				if env.Name == StorkPxSharedSecretEnvVarName && securityEnabled {
+					if env.ValueFrom != nil {
+						if env.ValueFrom.SecretKeyRef != nil {
+							if env.ValueFrom.SecretKeyRef.Key == "apps-secret" {
+								keyValue := env.ValueFrom.SecretKeyRef.LocalObjectReference
+								if keyValue.Name != DefaultStorkPxSharedSecretEnvVarValue {
+									return nil, true, fmt.Errorf("failed to validate Stork %s env var inside Stork pod [%s]: expected: %s, actual: %s", StorkPxSharedSecretEnvVarName, pod.Name, DefaultStorkPxSharedSecretEnvVarValue, keyValue.Name)
+								}
+								pxSharedSecretEnvVar = keyValue.Name
+							}
+						}
+					}
+				} else if env.Name == StorkPxSharedSecretEnvVarName && !securityEnabled {
+					return nil, true, fmt.Errorf("found env var %s inside Stork pod [%s] when Security is disabled", StorkPxSharedSecretEnvVarName, pod.Name)
+				}
+
+			}
+			if pxJwtIssuerEnvVar == "" && securityEnabled {
+				return nil, true, fmt.Errorf("failed to validate Stork %s env var inside Stork pod [%s], because it was not found", StorkPxJwtIssuerEnvVarName, pod.Name)
+			} else if pxJwtIssuerEnvVar != "" && !securityEnabled {
+				return nil, true, fmt.Errorf("failed to validate Stork %s env var inside Stork pod [%s], because it was was found, when shouldn't have, if security is disabled", StorkPxJwtIssuerEnvVarName, pod.Name)
+			}
+
+			if pxSharedSecretEnvVar == "" && securityEnabled {
+				return nil, true, fmt.Errorf("failed to validate Stork %s env var inside Stork pod [%s], because it was not found", StorkPxSharedSecretEnvVarName, pod.Name)
+			} else if pxSharedSecretEnvVar != "" && !securityEnabled {
+				return nil, true, fmt.Errorf("failed to validate Stork %s env var inside Stork pod [%s], because it was was found, when shouldn't have, if security is disabledd", StorkPxSharedSecretEnvVarName, pod.Name)
+			}
+
+			if securityEnabled {
+				logrus.Debugf("Value for %s env var in Stork pod [%s]: expected: %v, actual: %v", StorkPxJwtIssuerEnvVarName, pod.Name, DefaultStorkPxJwtIssuerEnvVarValue, pxJwtIssuerEnvVar)
+				logrus.Debugf("Value for %s env var in Stork pod [%s]: expected: %v, actual: %v", StorkPxSharedSecretEnvVarName, pod.Name, DefaultStorkPxSharedSecretEnvVarValue, pxSharedSecretEnvVar)
+			}
+			numberOfPods++
+		}
+
+		// TODO: Hardcoding this to 3 instead of len(pods), because the previous ValidateDeloyment() step might have not validated the updated deployment
+		if numberOfPods != 3 {
+			return nil, true, fmt.Errorf("waiting for all Stork pods, expected: %d, got: %d", 3, numberOfPods)
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateMonitoring validates all PX Monitoring components
+func ValidateMonitoring(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	if err := ValidatePrometheus(pxImageList, cluster, timeout, interval); err != nil {
+		return err
+	}
+
+	if err := ValidateTelemetry(pxImageList, cluster, timeout, interval); err != nil {
+		return err
+	}
+
+	if err := ValidateAlertManager(pxImageList, cluster, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidatePrometheus validates all Prometheus components
+func ValidatePrometheus(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	if cluster.Spec.Monitoring != nil &&
 		((cluster.Spec.Monitoring.EnableMetrics != nil && *cluster.Spec.Monitoring.EnableMetrics) ||
 			(cluster.Spec.Monitoring.Prometheus != nil && cluster.Spec.Monitoring.Prometheus.ExportMetrics)) {
@@ -1680,11 +2154,6 @@ func validateMonitoring(pxImageList map[string]string, cluster *corev1.StorageCl
 		if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
 			return err
 		}
-	}
-
-	err := ValidateTelemetry(pxImageList, cluster, timeout, interval)
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -1735,7 +2204,7 @@ func ValidateTelemetryUninstalled(pxImageList map[string]string, cluster *corev1
 		return err
 	}
 
-	logrus.Infof("Telemetry successfully uninstalled.")
+	logrus.Infof("Telemetry is disabled")
 	return nil
 }
 
@@ -1748,6 +2217,124 @@ func ValidateTelemetry(pxImageList map[string]string, cluster *corev1.StorageClu
 	}
 
 	return ValidateTelemetryUninstalled(pxImageList, cluster, timeout, interval)
+}
+
+// ValidateAlertManager validates alertManager components
+func ValidateAlertManager(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Prometheus != nil {
+		if cluster.Spec.Monitoring.Prometheus.Enabled {
+			logrus.Infof("Prometheus is enabled")
+			if cluster.Spec.Monitoring.Prometheus.AlertManager != nil && cluster.Spec.Monitoring.Prometheus.AlertManager.Enabled {
+				logrus.Infof("AlertManager is enabled")
+				return ValidateAlertManagerEnabled(pxImageList, cluster, timeout, interval)
+			}
+			logrus.Infof("AlertManager is not enabled")
+			return ValidateAlertManagerDisabled(pxImageList, cluster, timeout, interval)
+		}
+	}
+
+	logrus.Infof("AlertManager is disabled")
+	return ValidateAlertManagerDisabled(pxImageList, cluster, timeout, interval)
+}
+
+// ValidateAlertManagerEnabled validates alert manager components are enabled/installed as expected
+func ValidateAlertManagerEnabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	// Wait for the statefulset to become online
+	sset := appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "alertmanager-portworx",
+			Namespace: cluster.Namespace,
+		},
+	}
+	if err := appops.Instance().ValidateStatefulSet(&sset, timeout); err != nil {
+		return err
+	}
+
+	statefulSet, err := appops.Instance().GetStatefulSet(sset.Name, sset.Namespace)
+	if err != nil {
+		return err
+	}
+
+	// Verify alert manager services
+	if _, err := coreops.Instance().GetService("alertmanager-portworx", cluster.Namespace); err != nil {
+		return fmt.Errorf("failed to get service alertmanager-portworx")
+	}
+
+	if _, err := coreops.Instance().GetService("alertmanager-operated", cluster.Namespace); err != nil {
+		return fmt.Errorf("failed to get service alertmanager-operated")
+	}
+
+	// Verify alert manager image
+	imageName, ok := pxImageList["alertManager"]
+	if !ok {
+		return fmt.Errorf("failed to find image for alert manager")
+	}
+
+	imageName = util.GetImageURN(cluster, imageName)
+
+	if statefulSet.Spec.Template.Spec.Containers[0].Image != imageName {
+		return fmt.Errorf("alertmanager image mismatch, image: %s, expected: %s",
+			statefulSet.Spec.Template.Spec.Containers[0].Image,
+			imageName)
+	}
+
+	K8sVer1_22, _ := version.NewVersion("1.22")
+	kubeVersion, _, err := GetFullVersion()
+	if err != nil {
+		return err
+	}
+
+	// NOTE: Prometheus uses different images for k8s 1.22 and up then for 1.21 and below
+	if kubeVersion != nil && kubeVersion.GreaterThanOrEqual(K8sVer1_22) {
+		imageName, ok = pxImageList["prometheusConfigReloader"]
+		if !ok {
+			return fmt.Errorf("failed to find image for prometheus config reloader")
+		}
+	} else {
+		imageName, ok = pxImageList["prometheusConfigMapReload"]
+		if !ok {
+			return fmt.Errorf("failed to find image for prometheus configmap reloader")
+		}
+	}
+
+	imageName = util.GetImageURN(cluster, imageName)
+	if statefulSet.Spec.Template.Spec.Containers[1].Image != imageName {
+		return fmt.Errorf("config-reloader image mismatch, image: %s, expected: %s",
+			statefulSet.Spec.Template.Spec.Containers[1].Image,
+			imageName)
+	}
+
+	logrus.Infof("Alert manager is enabled and deployed")
+	return nil
+}
+
+// ValidateAlertManagerDisabled validates alert manager components are disabled/uninstalled as expected
+func ValidateAlertManagerDisabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if _, err := appops.Instance().GetStatefulSet("alertmanager-portworx", cluster.Namespace); !errors.IsNotFound(err) {
+			return "", true, fmt.Errorf("wait for stateful alertmanager-portworx deletion, err %v", err)
+		}
+
+		if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Prometheus != nil && cluster.Spec.Monitoring.Prometheus.AlertManager != nil {
+			_, err := coreops.Instance().GetService("alertmanager-portworx", cluster.Namespace)
+			if !cluster.Spec.Monitoring.Prometheus.AlertManager.Enabled && !errors.IsNotFound(err) {
+				return "", true, fmt.Errorf("wait for service alertmanager-portworx deletion, err %v", err)
+			}
+		}
+
+		if _, err := coreops.Instance().GetService("alertmanager-operated", cluster.Namespace); !errors.IsNotFound(err) {
+			return "", true, fmt.Errorf("wait for service alertmanager-operated deletion, err %v", err)
+		}
+
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	logrus.Infof("Alert manager components do not exist")
+	return nil
 }
 
 // ValidateTelemetryInstalled validates telemetry component is running as expected
@@ -1812,7 +2399,7 @@ func ValidateTelemetryInstalled(pxImageList map[string]string, cluster *corev1.S
 		return err
 	}
 
-	// Verify collector image
+	// Verify metrics collector image
 	imageName, ok := pxImageList["metricsCollector"]
 	if !ok {
 		return fmt.Errorf("failed to find image for metrics collector")
@@ -1826,10 +2413,10 @@ func ValidateTelemetryInstalled(pxImageList map[string]string, cluster *corev1.S
 			imageName)
 	}
 
-	// Verify collector proxy image
+	// Verify metrics collector proxy image
 	imageName, ok = pxImageList["metricsCollectorProxy"]
 	if !ok {
-		return fmt.Errorf("failed to find image for metrics collector")
+		return fmt.Errorf("failed to find image for metrics collector proxy")
 	}
 
 	imageName = util.GetImageURN(cluster, imageName)
@@ -1839,7 +2426,38 @@ func ValidateTelemetryInstalled(pxImageList map[string]string, cluster *corev1.S
 			imageName)
 	}
 
-	logrus.Infof("Telemetry successfully installed")
+	logrus.Infof("Telemetry is enabled")
+	return nil
+}
+
+// validatePodTopologySpreadConstraints validates pod topology spread constraints
+func validatePodTopologySpreadConstraints(deployment *appsv1.Deployment, timeout, interval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		nodeList, err := coreops.Instance().GetNodes()
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get k8s nodes")
+		}
+		existingDeployment, err := appops.Instance().GetDeployment(deployment.Name, deployment.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get deployment %s/%s", deployment.Namespace, deployment.Name)
+		}
+		expectedConstraints, err := util.GetTopologySpreadConstraintsFromNodes(nodeList, existingDeployment.Spec.Template.Labels)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get expected pod topology spread constraints from %s/%s deployment template",
+				deployment.Namespace, deployment.Name)
+		}
+		existingConstraints := existingDeployment.Spec.Template.Spec.TopologySpreadConstraints
+		if !reflect.DeepEqual(expectedConstraints, existingConstraints) {
+			return nil, true, fmt.Errorf("failed to validate deployment pod topology spread constraints for %s/%s, expected constraints: %+v, actual constraints: %+v",
+				deployment.Namespace, deployment.Name, expectedConstraints, existingConstraints)
+		}
+		return nil, false, nil
+	}
+
+	logrus.Infof("validating deployment %s/%s pod topology spread constraints", deployment.Namespace, deployment.Name)
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
 	return nil
 }
 

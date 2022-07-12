@@ -5,8 +5,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/api"
@@ -124,6 +126,8 @@ type ScheduleOptions struct {
 	Upgrade bool
 	// Namespace to schedule app installation if not empty
 	Namespace string
+	// TopoLogy Labels
+	TopologyLabels []map[string]string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -182,14 +186,17 @@ type Driver interface {
 	// ValidateVolumes validates storage volumes in the provided context
 	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration, options *VolumeOptions) error
 
+	// ValidateTopologyLabel validate topology Labels for App
+	ValidateTopologyLabel(cc *Context) error
+
 	// GetSnapShotData retruns volumesnapshotdata
 	GetSnapShotData(ctx *Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error)
 
-	//DeleteSnapshots  delete the snapshots
+	// DeleteSnapshots  delete the snapshots
 	DeleteSnapShot(ctx *Context, snapshotName, snapshotNameSpace string) error
 
-	//GetShapShotsInNameSpace get the snapshots list for the namespace
-	GetShapShotsInNameSpace(ctx *Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error)
+	// GetSnapshotsInNameSpace get the snapshots list for the namespace
+	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error)
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)
@@ -201,7 +208,7 @@ type Driver interface {
 	GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error)
 
 	// GetPodLog returns logs for all the pods in the specified context
-	GetPodLog(ctx *Context, sinceSeconds int64) (map[string]string, error)
+	GetPodLog(ctx *Context, sinceSeconds int64, containerName string) (map[string]string, error)
 
 	// ResizeVolume resizes all the volumes of a given context
 	ResizeVolume(*Context, string) ([]*volume.Volume, error)
@@ -321,8 +328,26 @@ type Driver interface {
 	// DeleteSecret deletes secret with given name in given namespace
 	DeleteSecret(namespace, name string) error
 
-	//RecyleNode deletes nodes with given node
+	// RecyleNode deletes nodes with given node
 	RecycleNode(n node.Node) error
+
+	// CreateCsiSanpshotClass create csi snapshot class
+	CreateCsiSanpshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error)
+
+	// CreateCsiSnapshot create csi snapshot for given pvc
+	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
+
+	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
+	CreateCsiSnapsForVolumes(*Context, string) (map[string]*v1beta1.VolumeSnapshot, error)
+
+	// GetCsiSnapshots return snapshot lists for a volume
+	GetCsiSnapshots(string, string) ([]*v1beta1.VolumeSnapshot, error)
+
+	// ValidateCsiSnapshots validate csi snapshots in the context
+	ValidateCsiSnapshots(*Context, map[string]*v1beta1.VolumeSnapshot) error
+
+	// RestoreCsiSnapAndValidate restore csi snapshot and validate the restore.
+	RestoreCsiSnapAndValidate(*Context, map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error)
 }
 
 var (

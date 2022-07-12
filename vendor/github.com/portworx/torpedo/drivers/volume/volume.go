@@ -7,9 +7,11 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -54,9 +56,20 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
+	// CreateVolume creates a volume with the default setting
+	// returns volume_id of the new volume
+	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
+
 	// CloneVolume creates a clone of the volume whose volumeName is passed as arg.
 	// returns volume_id of the cloned volume and error if there is any
 	CloneVolume(volumeID string) (string, error)
+
+	// AttachVolume attaches a volume with the default setting
+	// returns the device path
+	AttachVolume(volumeID string) (string, error)
+
+	// DetachVolume detaches the volume given the volumeID
+	DetachVolume(volumeID string) error
 
 	// Delete the volume of the Volume ID provided
 	DeleteVolume(volumeID string) error
@@ -95,6 +108,9 @@ type Driver interface {
 
 	// ValidatePureVolumesNoReplicaSets validates pure volumes has no replicaset
 	ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error
+
+	// ValidateVolumeInPxctlList validates that the given volume appears in the output of `pxctl v l`
+	ValidateVolumeInPxctlList(name string) error
 
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
@@ -143,6 +159,9 @@ type Driver interface {
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
+
+	// GetPxNodes returns current PX nodes in the cluster
+	GetPxNodes() ([]*api.StorageNode, error)
 
 	// RecoverDriver will recover a volume driver from a failure/storage down state.
 	// This could be used by a volume driver to recover itself from any underlying storage
@@ -216,6 +235,12 @@ type Driver interface {
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
 
+	// IsPureVolume(volume *torpedovolume.Volume) return true if given volume is FA/FB DA volumes
+	IsPureVolume(volume *Volume) (bool, error)
+
+	// IsPureFileVolume(volume *torpedovolume.Volume) return true if given volume is FB volumes
+	IsPureFileVolume(volume *Volume) (bool, error)
+
 	// EstimatePoolExpandSize calculates expected pool size based on autopilot rule
 	EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.StoragePool, node node.Node) (uint64, error)
 
@@ -227,6 +252,9 @@ type Driver interface {
 
 	//SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, clusterOpts map[string]string) error
+
+	//SetClusterOptsWithConfirmation sets cluster options and confirm it
+	SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error
 
 	//SetClusterRunTimeOpts sets cluster run time options
 	SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error
@@ -243,6 +271,9 @@ type Driver interface {
 	//UpdateStorageClusterImage update storage cluster image version
 	UpdateStorageClusterImage(string) error
 
+	//GetPXStorageCluster returns portworx storage cluster
+	GetPXStorageCluster() (*v1.StorageCluster, error)
+
 	// ValidateStorageCluster validates all the storage cluster components
 	ValidateStorageCluster(endpointURL, endpointVersion string) error
 
@@ -251,6 +282,9 @@ type Driver interface {
 
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
+
+	//GetStorageSpec get the storage spec used to deploy portworx
+	GetStorageSpec() (*pxapi.StorageSpec, error)
 
 	// GetPxNode return api.StorageNode
 	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
@@ -278,6 +312,15 @@ type Driver interface {
 
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
+
+	// GetPxctlCmdOutput returns the command output run on the given node and any error
+	GetPxctlCmdOutput(n node.Node, command string) (string, error)
+
+	// GetNodeStats returns the node stats of the given node and an error if any
+	GetNodeStats(n node.Node) (map[string]map[string]int, error)
+
+	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
+	GetTrashCanVolumeIds(n node.Node) ([]string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

@@ -480,3 +480,135 @@ type ErrFailedToBringUpNode struct {
 func (e *ErrFailedToBringUpNode) Error() string {
 	return fmt.Sprintf("Failed to bring up a Node : [%v] due to err: %v", e.Node, e.Cause)
 }
+
+// ErrFailedToValidateTopologyLabel error when failed to validate topology label in namespace
+type ErrFailedToValidateTopologyLabel struct {
+	// Pod is the pod that failed to schedule
+	NameSpace string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToValidateTopologyLabel) Error() string {
+	return fmt.Sprintf("Failed to validate topology label in namespace: %v due to err: %v", e.NameSpace, e.Cause)
+}
+
+// ErrTopologyLabelMismatch  error when pod schedule on a node where label not matched
+type ErrTopologyLabelMismatch struct {
+	// Pod is the pod that failed to schedule
+	PodName string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrTopologyLabelMismatch) Error() string {
+	return fmt.Sprintf("Failed to match topology label for pod: %v due to err: %v", e.PodName, e.Cause)
+}
+
+// ErrFailedToCreateSnapshot error when snapshot create is failed
+type ErrFailedToCreateSnapshot struct {
+	// PvcName is name of the pvc for which snapshot create failed
+	PvcName string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToCreateSnapshot) Error() string {
+	return fmt.Sprintf("Failed to create snapshot for volume: %v due to err: %v", e.PvcName, e.Cause)
+}
+
+// ErrFailedToCreateCsiSnapshots error when snapshot create is failed
+type ErrFailedToCreateCsiSnapshots struct {
+	// App specs
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToCreateCsiSnapshots) Error() string {
+	return fmt.Sprintf("Failed to create snapshot for App: %v due to err: %v", e.App, e.Cause)
+}
+
+// ErrFailedToCreateSnapshotClass error when snapshot create is failed
+type ErrFailedToCreateSnapshotClass struct {
+	// Name is name of the snapshot class which failed to create
+	Name string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToCreateSnapshotClass) Error() string {
+	return fmt.Sprintf("Failed to create snapshot for volume: %v due to err: %v", e.Name, e.Cause)
+}
+
+// ErrFailedToGetSnapshotList error when snapshot create is failed
+type ErrFailedToGetSnapshotList struct {
+	// Name is name of the namespace
+	Name string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToGetSnapshotList) Error() string {
+	return fmt.Sprintf("Failed to list snapshot in namespace: %v due to err: %v", e.Name, e.Cause)
+}
+
+// ErrFailedToValidateSnapshot error is failed to validate the snapshot for a volume
+type ErrFailedToValidateSnapshot struct {
+	// Name is name of the PVC
+	Name string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToValidateSnapshot) Error() string {
+	return fmt.Sprintf("Failed to validate snapshot for volume: %v due to err: %v", e.Name, e.Cause)
+}
+
+// ErrFailedToValidateCsiSnapshots error is failed to validate the snapshot for a volume
+type ErrFailedToValidateCsiSnapshots struct {
+	// AppSpec
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToValidateCsiSnapshots) Error() string {
+	return fmt.Sprintf("Failed to validate Csi snapshot for App: %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToValidatePvc error is failed to validate PVC
+type ErrFailedToValidatePvc struct {
+	// Name is the name of the PVC
+	Name string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToValidatePvc) Error() string {
+	return fmt.Sprintf("Failed to validate PVC: %v due to err: %v", e.Name, e.Cause)
+}
+
+// ErrFailedToValidatePvcAfterRestore error is failed to validate PVC
+type ErrFailedToValidatePvcAfterRestore struct {
+	// Name is the name of the PVC
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToValidatePvcAfterRestore) Error() string {
+	return fmt.Sprintf("Failed to validate PVC for App: %v due to err: %v", e.App, e.Cause)
+}
+
+// ErrFailedToRestore error is failed to restore from snapshot
+type ErrFailedToRestore struct {
+	// Name is the name of the PVC
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToRestore) Error() string {
+	return fmt.Sprintf("Failed to validate PVC for App: %v due to err: %v", e.App, e.Cause)
+}

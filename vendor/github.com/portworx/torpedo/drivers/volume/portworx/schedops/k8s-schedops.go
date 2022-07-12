@@ -326,7 +326,7 @@ PodLoop:
 			}
 			mounts := strings.Split(output, "\n")
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s ", pureMapperPrefix, path))
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s ", pureMapperPrefix, path))
 				pxMountFound := false
 				for _, line := range mounts {
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
