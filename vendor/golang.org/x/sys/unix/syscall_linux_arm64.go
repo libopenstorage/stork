@@ -22,8 +22,9 @@ import "unsafe"
 //sysnb	getrlimit(resource int, rlim *Rlimit) (err error)
 //sysnb	Getuid() (uid int)
 //sys	Listen(s int, n int) (err error)
-//sys	Pread(fd int, p []byte, offset int64) (n int, err error) = SYS_PREAD64
-//sys	Pwrite(fd int, p []byte, offset int64) (n int, err error) = SYS_PWRITE64
+//sys	MemfdSecret(flags int) (fd int, err error)
+//sys	pread(fd int, p []byte, offset int64) (n int, err error) = SYS_PREAD64
+//sys	pwrite(fd int, p []byte, offset int64) (n int, err error) = SYS_PWRITE64
 //sys	Renameat(olddirfd int, oldpath string, newdirfd int, newpath string) (err error)
 //sys	Seek(fd int, offset int64, whence int) (off int64, err error) = SYS_LSEEK
 
@@ -66,7 +67,6 @@ func Ustat(dev int, ubuf *Ustat_t) (err error) {
 	return ENOSYS
 }
 
-//sys	accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error)
 //sys	accept4(s int, rsa *RawSockaddrAny, addrlen *_Socklen, flags int) (fd int, err error)
 //sys	bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error)
 //sys	connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error)
@@ -183,18 +183,6 @@ func (rsa *RawSockaddrNFCLLCP) SetServiceNameLen(length int) {
 func Pause() error {
 	_, err := ppoll(nil, 0, nil, nil)
 	return err
-}
-
-func Poll(fds []PollFd, timeout int) (n int, err error) {
-	var ts *Timespec
-	if timeout >= 0 {
-		ts = new(Timespec)
-		*ts = NsecToTimespec(int64(timeout) * 1e6)
-	}
-	if len(fds) == 0 {
-		return ppoll(nil, 0, ts, nil)
-	}
-	return ppoll(&fds[0], len(fds), ts, nil)
 }
 
 //sys	kexecFileLoad(kernelFd int, initrdFd int, cmdlineLen int, cmdline string, flags int) (err error)

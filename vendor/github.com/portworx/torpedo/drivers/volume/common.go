@@ -9,6 +9,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/pborman/uuid"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -85,12 +86,38 @@ func (d *DefaultDriver) RefreshDriverEndpoints() error {
 
 }
 
+// CreateVolume creates a volume with the given setting
+// returns volume_id of the new volume
+func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolume()",
+	}
+}
+
 // CloneVolume clones the volume specified in VolumeId paramerter
 // returns the volume_id of the cloned volume
 func (d *DefaultDriver) CloneVolume(volumeID string) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CloneVolume()",
+	}
+}
+
+// AttachVolume attaches a volume with the default setting
+// returns the device path
+func (d *DefaultDriver) AttachVolume(volumeID string) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolume()",
+	}
+}
+
+// DetachVolume detaches the volume given the volumeID
+func (d *DefaultDriver) DetachVolume(volumeID string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DetachVolume()",
 	}
 }
 
@@ -219,6 +246,14 @@ func (d *DefaultDriver) ValidateCreateGroupSnapshotUsingPxctl() error {
 	}
 }
 
+// ValidateVolumeInPxctlList validates whether the given volume appears in the output of "pxctl v l"
+func (d *DefaultDriver) ValidateVolumeInPxctlList(volumeName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateVolumeInPxctlList()",
+	}
+}
+
 // ValidateGetByteUsedForVolume validates and returns byteUsed for given volume.
 func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error) {
 	return 0, &errors.ErrNotSupported{
@@ -323,6 +358,15 @@ func (d *DefaultDriver) WaitDriverUpOnNode(n node.Node, timeout time.Duration) e
 		Type:      "Function",
 		Operation: "WaitDriverUpOnNode()",
 	}
+}
+
+// GetPxNodes returns current PX nodes in the cluster
+func (d *DefaultDriver) GetPxNodes() ([]*api.StorageNode, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxNodes()",
+	}
+
 }
 
 // WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
@@ -486,6 +530,14 @@ func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (ma
 	}
 }
 
+//GetStorageSpec get the storage spec used to deploy portworx
+func (d *DefaultDriver) GetStorageSpec() (*pxapi.StorageSpec, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListStoragePools()",
+	}
+}
+
 // ValidateRebalanceJobs validates rebalance jobs
 func (d *DefaultDriver) ValidateRebalanceJobs() error {
 	return &errors.ErrNotSupported{
@@ -555,6 +607,14 @@ func (d *DefaultDriver) RestartDriver(n node.Node, triggerOpts *driver_api.Trigg
 
 // SetClusterOpts sets cluster options
 func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetClusterOpts()",
+	}
+}
+
+// SetClusterOptsWithConfirmation sets cluster options and confirm it
+func (d *DefaultDriver) SetClusterOptsWithConfirmation(n node.Node, rtOpts map[string]string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetClusterOpts()",
@@ -658,10 +718,58 @@ func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
 	}
 }
 
+//GetPXStorageCluster returns portworx storage cluster
+func (d *DefaultDriver) GetPXStorageCluster() (*v1.StorageCluster, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPXStorageCluster()",
+	}
+}
+
 //GetPxVersionOnNode retruns PxVersion on the given node
 func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPxVersionOnNode()",
+	}
+}
+
+// GetPxctlCmdOutput returns the command output run on the given node and any error
+func (d *DefaultDriver) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlCmdOutput()",
+	}
+}
+
+// IsPureVolume returns true if volume is FA/FB DA volumes else false
+func (d *DefaultDriver) IsPureVolume(volume *Volume) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPureVolume()",
+	}
+}
+
+// GetNodeStats returns the node stats of the given node and an error if any
+func (d *DefaultDriver) GetNodeStats(n node.Node) (map[string]map[string]int, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodeStats()",
+	}
+}
+
+// GetTrashCanVolumeIds returns the volume ids in the trashcan and an error if any
+func (d *DefaultDriver) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetTrashCanVolumeIds()",
+	}
+}
+
+// IsPureFileVolume returns true if volume is FB volumes else false
+func (d *DefaultDriver) IsPureFileVolume(volume *Volume) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPureFileVolume()",
 	}
 }
