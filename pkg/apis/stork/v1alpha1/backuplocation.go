@@ -24,6 +24,7 @@ type BackupLocation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Location          BackupLocationItem `json:"location"`
+	Cluster           ClusterItem        `json:"cluster"`
 }
 
 // BackupLocationItem is the spec used to store a backup location
@@ -33,14 +34,43 @@ type BackupLocation struct {
 type BackupLocationItem struct {
 	Type BackupLocationType `json:"type"`
 	// Path is either the bucket or any other path for the backup location
-	Path          string        `json:"path"`
-	EncryptionKey string        `json:"encryptionKey"`
-	S3Config      *S3Config     `json:"s3Config,omitempty"`
-	AzureConfig   *AzureConfig  `json:"azureConfig,omitempty"`
-	GoogleConfig  *GoogleConfig `json:"googleConfig,omitempty"`
-	SecretConfig  string        `json:"secretConfig"`
-	Sync          bool          `json:"sync"`
+	Path               string        `json:"path"`
+	EncryptionKey      string        `json:"encryptionKey"`
+	S3Config           *S3Config     `json:"s3Config,omitempty"`
+	AzureConfig        *AzureConfig  `json:"azureConfig,omitempty"`
+	GoogleConfig       *GoogleConfig `json:"googleConfig,omitempty"`
+	SecretConfig       string        `json:"secretConfig"`
+	Sync               bool          `json:"sync"`
+	RepositoryPassword string        `json:"repositoryPassword"`
+	EncryptionV2Key    string        `json:"encryptionV2Key"`
 }
+
+// ClusterItem is the spec used to store a the credentials associated with the cluster
+// Only one of AWSClusterConfig, AzureClusterConfig or GCPClusterConfig should be specified and
+// should match the Type field. Members of the config can be specified inline or
+// through the SecretConfig
+type ClusterItem struct {
+	Type ClusterType `json:"type"`
+	// Path is either the bucket or any other path for the backup location
+	EncryptionKey      string        `json:"encryptionKey"`
+	AWSClusterConfig   *S3Config     `json:"awsClusterConfig,omitempty"`
+	AzureClusterConfig *AzureConfig  `json:"azureClusterConfig,omitempty"`
+	GCPClusterConfig   *GoogleConfig `json:"gcpClusterConfig,omitempty"`
+	SecretConfig       string        `json:"secretConfig"`
+	Sync               bool          `json:"sync"`
+}
+
+// ClusterType is the type of the cluster
+type ClusterType string
+
+const (
+	// AWSCluster type represents the cluster has aws volumes
+	AWSCluster ClusterType = "aws"
+	// GCPCluster type represents the cluster has gcp volumes
+	GCPCluster ClusterType = "gcp"
+	// AzureCluster type represents the cluster has azure volumes
+	AzureCluster ClusterType = "azure"
+)
 
 // BackupLocationType is the type of the backup location
 type BackupLocationType string
@@ -104,7 +134,7 @@ func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
 		if val, ok := secretConfig.Data["encryptionKey"]; ok && val != nil {
-			bl.Location.EncryptionKey = strings.TrimSuffix(string(val), "\n")
+			bl.Location.EncryptionV2Key = strings.TrimSuffix(string(val), "\n")
 		}
 		if val, ok := secretConfig.Data["path"]; ok && val != nil {
 			bl.Location.Path = strings.TrimSuffix(string(val), "\n")
