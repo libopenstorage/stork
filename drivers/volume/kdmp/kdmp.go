@@ -1007,6 +1007,11 @@ func (k *kdmp) getSnapshotClassName(backup *storkapi.ApplicationBackup) string {
 	return ""
 }
 
+// GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
+func (k *kdmp) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
+	return nil, nil
+}
+
 func init() {
 	a := &kdmp{}
 

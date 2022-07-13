@@ -18,6 +18,7 @@ import (
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -648,6 +649,11 @@ func (a *aws) getAWSClient(backupLocationName, ns string) (*ec2.EC2, error) {
 		client = a.client
 	}
 	return client, nil
+}
+
+// GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
+func (a *aws) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
+	return nil, nil
 }
 
 func init() {
