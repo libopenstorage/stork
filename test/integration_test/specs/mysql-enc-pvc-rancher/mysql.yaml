@@ -63,6 +63,7 @@ metadata:
   annotations:
     field.cattle.io/projectId: "project-A"
   labels:
+    field.cattle.io/projectId: "project-A"
     app: mysql
 spec:
   selector:
