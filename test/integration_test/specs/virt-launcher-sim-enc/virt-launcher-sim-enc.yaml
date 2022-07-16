@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+  type: Opaque
+data:
+    test-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: virt-launcher-sim-pvc-enc
+  annotations:
+    px/secret-name: volume-secrets
+    px/secret-namespace: "_NAMESPACE_"
+    px/secret-key: test-secret
+    px/secure: "true"
+spec:
+  storageClassName: virt-launcher-sim-sc-enc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: virt-launcher-sim-dep-enc
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: virt-launcher-sim-app-enc
+  template:
+    metadata:
+      labels:
+        app: virt-launcher-sim-app-enc
+        kubevirt.io: virt-launcher
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - virt-launcher-sim-app-enc
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: sv4test
+        image: portworx/sharedv4-test:torpedo
+        imagePullPolicy: Always
+        command: ["python", "/app/fileio.py"]
+        args: ["--lock", "--interval=0.25", "$(SHARED_FILE)", "$(LOCAL_FILE)"]
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: SHARED_FILE
+            value: "/shared-vol/$(MY_POD_NAME)"
+          - name: LOCAL_FILE
+            value: "/local-vol/$(MY_POD_NAME)"
+        volumeMounts:
+        - name: virt-launcher-sim-vol-enc
+          mountPath: /shared-vol
+        - name: local-vol
+          mountPath: /local-vol
+      - name: sv4test-reader
+        image: portworx/sharedv4-test:torpedo
+        imagePullPolicy: Always
+        command: ["python", "/app/reader.py"]
+        # sleeping for 9 seconds from 3 * number of pods * seconds
+        args: ["--interval=9", "$(LOCAL_FILE)"]
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: LOCAL_FILE
+            value: "/local-vol/$(MY_POD_NAME)"
+        volumeMounts:
+        - name: local-vol
+          mountPath: /local-vol
+      volumes:
+      - name: virt-launcher-sim-vol-enc
+        persistentVolumeClaim:
+          claimName: virt-launcher-sim-pvc-enc
+      - name: local-vol
+        emptyDir: {}
+
+
