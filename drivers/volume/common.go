@@ -710,6 +710,22 @@ func (d *DefaultDriver) IsOperatorBasedInstall() (bool, error) {
 	}
 }
 
+// RunSecretsLogin runs secrets login using pxctl
+func (d *DefaultDriver) RunSecretsLogin(n node.Node, secretType string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RunSecretsLogin()",
+	}
+}
+
+// GetStorageCluster returns the StorageCluster object
+func (d *DefaultDriver) GetStorageCluster() (*v1.StorageCluster, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetStorageCluster()",
+	}
+}
+
 //UpdateStorageClusterImage update storage cluster image version
 func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
 	return &errors.ErrNotSupported{

@@ -10,11 +10,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestBasic(t *testing.T) {
@@ -569,6 +571,67 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{SecretsVaultFunctional}", func() {
+	var testrailID, runID int
+	var contexts []*scheduler.Context
+
+	const (
+		secretsProvider       = "vault"
+		portworxContainerName = "portworx"
+	)
+
+	BeforeEach(func() {
+		isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+		if !isOpBased {
+			k8sApps := apps.Instance()
+			daemonSets, err := k8sApps.ListDaemonSets("kube-system", metav1.ListOptions{
+				LabelSelector: "name=portworx",
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(daemonSets)).NotTo(Equal(0))
+			Expect(daemonSets[0].Spec.Template.Spec.Containers).NotTo(BeEmpty())
+			usingVault := false
+			for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
+				if container.Name == portworxContainerName {
+					for _, arg := range container.Args {
+						if arg == secretsProvider {
+							usingVault = true
+						}
+					}
+				}
+			}
+			if !usingVault {
+				Skip(fmt.Sprintf("Skip test for not using %s", secretsProvider))
+			}
+		} else {
+			spec, err := Inst().V.GetStorageCluster()
+			Expect(err).ToNot(HaveOccurred())
+			if *spec.Spec.SecretsProvider != secretsProvider {
+				Skip(fmt.Sprintf("Skip test for not using %s", secretsProvider))
+			}
+		}
+	})
+
+	var _ = Describe("{RunSecretsLogin}", func() {
+		testrailID = 82774
+		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82774
+		JustBeforeEach(func() {
+			runID = testrailuttils.AddRunsToMilestone(testrailID)
+		})
+
+		It("has to run secrets login for vault", func() {
+			contexts = make([]*scheduler.Context, 0)
+			n := node.GetWorkerNodes()[0]
+			err := Inst().V.RunSecretsLogin(n, secretsProvider)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	AfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

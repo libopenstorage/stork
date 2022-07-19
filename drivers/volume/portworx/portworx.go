@@ -3597,12 +3597,31 @@ func (d *portworx) IsOperatorBasedInstall() (bool, error) {
 
 }
 
-func (d *portworx) UpdateStorageClusterImage(imageName string) error {
+func (d *portworx) RunSecretsLogin(n node.Node, secretType string) error {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	command := fmt.Sprintf("secrets %s login", secretType)
+	cmd := fmt.Sprintf("%s %s", pxctlPath, command)
+	_, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return fmt.Errorf("failed to run secrets login for %s. cause: %v", secretType, err)
+	}
+
+	return nil
+}
+
+func (d *portworx) GetStorageCluster() (*v1.StorageCluster, error) {
 	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
 	if err != nil {
 		er := fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
 		logrus.Error(er.Error())
-		return er
+		return nil, er
 
 	}
 
@@ -3610,14 +3629,21 @@ func (d *portworx) UpdateStorageClusterImage(imageName string) error {
 	if err != nil {
 		er := fmt.Errorf("error getting Storage Clusters [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
 		logrus.Error(er.Error())
-		return er
+		return nil, er
+	}
+	return stc, nil
+}
 
+func (d *portworx) UpdateStorageClusterImage(imageName string) error {
+	stc, err := d.GetStorageCluster()
+	if err != nil {
+		return err
 	}
 	logrus.Infof("Current Storage Cluster Image: %v", stc.Spec.Image)
 	stc.Spec.Image = imageName
 	_, err = pxOperator.UpdateStorageCluster(stc)
 	if err != nil {
-		er := fmt.Errorf("error upgrading Storage Cluster [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
+		er := fmt.Errorf("error upgrading Storage Cluster [%v], Namespace: [%v], Err: %v", stc.Name, stc.Namespace, err.Error())
 		logrus.Error(er.Error())
 		return er
 

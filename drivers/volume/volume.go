@@ -268,6 +268,12 @@ type Driver interface {
 	//IsOperatorBasedInstall returns if px is operator based
 	IsOperatorBasedInstall() (bool, error)
 
+	// RunSecretsLogin runs secrets login using pxctl
+	RunSecretsLogin(n node.Node, secretType string) error
+
+	// GetStorageCluster returns the storageCluster object
+	GetStorageCluster() (*v1.StorageCluster, error)
+
 	//UpdateStorageClusterImage update storage cluster image version
 	UpdateStorageClusterImage(string) error
 
