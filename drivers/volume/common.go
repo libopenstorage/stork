@@ -645,6 +645,14 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 	}
 }
 
+//UpdateIOPriority update IO priority on volume
+func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateIOPriority",
+	}
+}
+
 // GetPxNode return api.Storage Node
 func (d *DefaultDriver) GetPxNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
 	return &api.StorageNode{}, &errors.ErrNotSupported{

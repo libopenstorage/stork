@@ -90,6 +90,7 @@ var _ = Describe("{Longevity}", func() {
 		VolumesDelete:        TriggerVolumeDelete,
 		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
 		AutoFsTrim:           TriggerAutoFsTrim,
+		UpdateVolume:         TriggerVolumeUpdate,
 		RestartManyVolDriver: TriggerRestartManyVolDriver,
 		RebootManyNodes:      TriggerRebootManyNodes,
 		NodeDecommission:     TriggerNodeDecommission,
@@ -531,6 +532,7 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
+	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
@@ -911,6 +913,17 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrim][2] = 24 * baseInterval
 	triggerInterval[AutoFsTrim][1] = 27 * baseInterval
 
+	triggerInterval[UpdateVolume][10] = 1 * baseInterval
+	triggerInterval[UpdateVolume][9] = 3 * baseInterval
+	triggerInterval[UpdateVolume][8] = 6 * baseInterval
+	triggerInterval[UpdateVolume][7] = 9 * baseInterval
+	triggerInterval[UpdateVolume][6] = 12 * baseInterval
+	triggerInterval[UpdateVolume][5] = 15 * baseInterval
+	triggerInterval[UpdateVolume][4] = 18 * baseInterval
+	triggerInterval[UpdateVolume][3] = 21 * baseInterval
+	triggerInterval[UpdateVolume][2] = 24 * baseInterval
+	triggerInterval[UpdateVolume][1] = 27 * baseInterval
+
 	triggerInterval[NodeDecommission][10] = 1 * baseInterval
 	triggerInterval[NodeDecommission][9] = 3 * baseInterval
 	triggerInterval[NodeDecommission][8] = 6 * baseInterval
@@ -1039,6 +1052,7 @@ func populateIntervals() {
 	triggerInterval[DeleteLocalSnapShot][0] = 0
 	triggerInterval[AppTasksDown][0] = 0
 	triggerInterval[AutoFsTrim][0] = 0
+	triggerInterval[UpdateVolume][0] = 0
 	triggerInterval[RestartManyVolDriver][0] = 0
 	triggerInterval[RebootManyNodes][0] = 0
 	triggerInterval[CsiSnapShot][0] = 0

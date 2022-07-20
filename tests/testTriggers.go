@@ -122,6 +122,9 @@ var jiraEvents = make(map[string][]string)
 //isAutoFsTrimEnabled to store if auto fs trim enalbed
 var isAutoFsTrimEnabled = false
 
+//setIoPriority to set IOPriority
+var setIoPriority = true
+
 // isCsiVolumeSnapshotClassExist to store if snapshot class exist
 var isCsiVolumeSnapshotClassExist = false
 
@@ -316,6 +319,8 @@ const (
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
+	// UpdateVolume provides option to update volume with properties like iopriority.
+	UpdateVolume = "updateVolume"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
@@ -3638,7 +3643,6 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						err = fmt.Errorf("error while enabling auto fstrim, Error:%v", err)
 						logrus.Error(err)
 						UpdateOutcome(event, err)
-
 					} else {
 						logrus.Info("AutoFsTrim is successfully enabled")
 						isAutoFsTrimEnabled = true
@@ -3708,6 +3712,94 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			})
 	})
 
+}
+
+// TriggerVolumeUpdate enables to test volume update
+func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpdateVolume,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	context("Validate update of the volumes", func() {
+
+		Step("Update Io priority on volumes ",
+			func() {
+				updateIOPriorityOnVolumes(contexts, event)
+				logrus.Info("Update IO priority call completed")
+			})
+	})
+}
+
+// updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
+func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecord) {
+	for _, ctx := range *contexts {
+		var appVolumes []*volume.Volume
+		var err error
+		appVolumes, err = Inst().S.GetVolumes(ctx)
+		UpdateOutcome(event, err)
+		if len(appVolumes) == 0 {
+			UpdateOutcome(event, fmt.Errorf("found no volumes for app "))
+		}
+		for _, v := range appVolumes {
+			isPureVol, err := Inst().V.IsPureVolume(v)
+			if err != nil {
+				UpdateOutcome(event, err)
+			}
+			if isPureVol {
+				logrus.Warningf(
+					"Autofs Trim is not supported for Pure DA volume: [%s]",
+					"Skipping autofs trim status on pure volumes", v.Name,
+				)
+				continue
+			}
+			logrus.Infof("Getting info from volume: %s", v.ID)
+			appVol, err := Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				logrus.Errorf("Error inspecting volume: %v", err)
+			}
+			if requiredPriority, ok := appVol.Spec.VolumeLabels["priority_io"]; ok {
+				if !setIoPriority {
+					if requiredPriority == "low" {
+						requiredPriority = "high"
+					} else if requiredPriority == "high" {
+						requiredPriority = "low"
+					}
+				}
+				logrus.Infof("Expected Priority %v", requiredPriority)
+				logrus.Infof("COS %v", appVol.Spec.GetCos().SimpleString())
+				if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
+					err = Inst().V.UpdateIOPriority(v.ID, requiredPriority)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
+					//Verify Volume set with required IOPriority.
+					appVol, err := Inst().V.InspectVolume(v.ID)
+					logrus.Infof("COS after update %v", appVol.Spec.GetCos().SimpleString())
+					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
+						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
+						UpdateOutcome(event, err)
+					}
+					logrus.Infof("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
+				}
+				logrus.Infof("Completed update on %v", v.ID)
+			}
+		}
+		// setIoPriority if IO priority is set to High then next iteration will be run with low.
+		if setIoPriority {
+			setIoPriority = false
+		} else {
+			setIoPriority = true
+		}
+	}
 }
 
 func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
