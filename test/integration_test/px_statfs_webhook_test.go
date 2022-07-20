@@ -16,7 +16,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func TestWebhookStatfs(t *testing.T) {
+// This test is named starting with "TestExtender" so that is runs as part of the TestExtender suite
+func TestExtenderWebhookStatfs(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
