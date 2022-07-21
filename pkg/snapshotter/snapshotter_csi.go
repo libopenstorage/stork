@@ -1031,9 +1031,11 @@ func (c *csiDriver) UploadSnapshotObjects(
 	if err != nil {
 		return err
 	}
-
 	if backupLocation.Location.EncryptionKey != "" {
-		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+		return fmt.Errorf("EncryptionKey is deprecated, use EncryptionKeyV2 instead")
+	}
+	if backupLocation.Location.EncryptionV2Key != "" {
+		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionV2Key); err != nil {
 			return err
 		}
 	}
@@ -1077,9 +1079,10 @@ func (c *csiDriver) DownloadSnapshotObjects(
 	if err != nil {
 		return snapshotInfoList, err
 	}
-	if backupLocation.Location.EncryptionKey != "" {
-		if data, err = crypto.Decrypt(data, backupLocation.Location.EncryptionKey); err != nil {
-			return snapshotInfoList, err
+	if backupLocation.Location.EncryptionV2Key != "" {
+		if decryptData, err := crypto.Decrypt(data, backupLocation.Location.EncryptionV2Key); err != nil {
+		} else {
+			data = decryptData
 		}
 	}
 
