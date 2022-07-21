@@ -934,9 +934,11 @@ func (a *ApplicationBackupController) uploadObject(
 	if err != nil {
 		return err
 	}
-
 	if backupLocation.Location.EncryptionKey != "" {
-		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+		return fmt.Errorf("EncryptionKey is deprecated, use EncryptionKeyV2 instead")
+	}
+	if backupLocation.Location.EncryptionV2Key != "" {
+		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionV2Key); err != nil {
 			return err
 		}
 	}

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -102,9 +103,13 @@ func (b *BackupSyncController) syncBackupsFromLocation(location *storkv1.BackupL
 					continue
 				}
 				if location.Location.EncryptionKey != "" {
-					if data, err = crypto.Decrypt(data, location.Location.EncryptionKey); err != nil {
+					return fmt.Errorf("EncryptionKey is deprecated, use EncryptionKeyV2 instead")
+				}
+				if location.Location.EncryptionV2Key != "" {
+					if decryptData, err := crypto.Decrypt(data, location.Location.EncryptionV2Key); err != nil {
 						log.BackupLocationLog(location).Errorf("Error decrypting backup %v during sync: %v", backupName, err)
-						continue
+					} else {
+						data = decryptData
 					}
 				}
 				backupInfo := storkv1.ApplicationBackup{}

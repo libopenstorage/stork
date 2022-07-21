@@ -29,6 +29,11 @@ func Decrypt(data []byte, passphrase string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Sometime, if we pass unencrypted data, which does not have header,
+	// We end up in data being less gcm.NonceSize. So added this check.
+	if len(data) < gcm.NonceSize() {
+		return nil, fmt.Errorf("unencrypted data crypto header is missing")
+	}
 	nonce, encryptedData := data[:gcm.NonceSize()], data[gcm.NonceSize():]
 	return gcm.Open(nil, nonce, encryptedData, nil)
 }
