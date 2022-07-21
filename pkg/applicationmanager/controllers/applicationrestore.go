@@ -722,9 +722,15 @@ func (a *ApplicationRestoreController) downloadObject(
 		return nil, err
 	}
 	if restoreLocation.Location.EncryptionKey != "" {
-		if data, err = crypto.Decrypt(data, restoreLocation.Location.EncryptionKey); err != nil {
-			return nil, err
+		return nil, fmt.Errorf("EncryptionKey is deprecated, use EncryptionKeyV2 instead")
+	}
+	if restoreLocation.Location.EncryptionV2Key != "" {
+		var decryptData []byte
+		if decryptData, err = crypto.Decrypt(data, restoreLocation.Location.EncryptionV2Key); err != nil {
+			logrus.Errorf("ApplicationRestoreController/downloadObject: decrypt failed :%v, returing data direclty", err)
+			return data, nil
 		}
+		return decryptData, nil
 	}
 
 	return data, nil

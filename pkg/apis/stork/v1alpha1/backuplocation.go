@@ -35,7 +35,8 @@ type BackupLocation struct {
 type BackupLocationItem struct {
 	Type BackupLocationType `json:"type"`
 	// Path is either the bucket or any other path for the backup location
-	Path               string        `json:"path"`
+	Path string `json:"path"`
+	// EncryptionKey is deprecated. Instead use EncryptionV2Key field to pass the encryption key.
 	EncryptionKey      string        `json:"encryptionKey"`
 	S3Config           *S3Config     `json:"s3Config,omitempty"`
 	AzureConfig        *AzureConfig  `json:"azureConfig,omitempty"`
@@ -43,7 +44,8 @@ type BackupLocationItem struct {
 	SecretConfig       string        `json:"secretConfig"`
 	Sync               bool          `json:"sync"`
 	RepositoryPassword string        `json:"repositoryPassword"`
-	EncryptionV2Key    string        `json:"encryptionV2Key"`
+	// EncryptionV2Key will be used to pass encryption key.
+	EncryptionV2Key string `json:"encryptionV2Key"`
 }
 
 // ClusterItem is the spec used to store a the credentials associated with the cluster
