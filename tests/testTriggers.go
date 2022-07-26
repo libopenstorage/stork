@@ -80,6 +80,8 @@ const (
 const (
 	// PureTopologyField to check for pure Topology is enabled on cluster
 	PureTopologyField = "pureTopology"
+	// HyperConvergedTypeField to schedule apps on both storage and storageless nodes
+	HyperConvergedTypeField = "hyperConverged"
 )
 
 const (
@@ -329,6 +331,8 @@ const (
 	RelaxedReclaim = "relaxedReclaim"
 	// Trashcan enables Trashcan in PX cluster
 	Trashcan = "trashcan"
+	//KVDBFailover cyclic restart of kvdb nodes
+	KVDBFailover = "kvdbFailover"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -4443,6 +4447,174 @@ func createLongevityJiraIssue(event *EventRecord, err error) {
 		CreateJiraIssueWithLogs(description, summary)
 
 	}
+}
+
+// TriggerKVDBFailover performs kvdb failover in cyclic manner
+func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: KVDBFailover,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	context("perform kvdb failover in a cyclic manner", func() {
+		Step("Get KVDB nodes and perform failover", func() {
+			nodes := node.GetWorkerNodes()
+
+			kvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
+
+			if err != nil {
+				err = fmt.Errorf("error getting kvdb members using node %v. cause: %v", nodes[0].Name, err)
+				logrus.Info(err)
+				UpdateOutcome(event, err)
+			}
+
+			logrus.Infof("Validating initial KVDB members")
+
+			allhealthy := validateKVDBMembers(event, kvdbMembers, false)
+
+			if allhealthy {
+				nodeMap := node.GetNodesByVoDriverNodeID()
+
+				for id := range kvdbMembers {
+					kvdbNode := nodeMap[id]
+					errorChan := make(chan error, errorChannelSize)
+					StopVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+
+					isKvdbStatusUpdated := false
+					waitTime := 10
+
+					for !isKvdbStatusUpdated && waitTime > 0 {
+						newKvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
+						if err != nil {
+							err = fmt.Errorf("error getting kvdb members using node %v, cause: %v ", nodes[0].Name, err)
+							logrus.Error(err.Error())
+
+						}
+						m, ok := newKvdbMembers[id]
+
+						if !ok && len(newKvdbMembers) > 0 {
+							logrus.Infof("node %v is no longer kvdb member", kvdbNode.Name)
+							isKvdbStatusUpdated = true
+
+						}
+						if ok && !m.IsHealthy {
+							logrus.Infof("kvdb node %v isHealthy?: %v", id, m.IsHealthy)
+							isKvdbStatusUpdated = true
+						} else {
+							logrus.Infof("Waiting for kvdb node %v health status to update to false after PX is stopped", kvdbNode.Name)
+							time.Sleep(1 * time.Minute)
+						}
+
+						waitTime--
+
+					}
+					if err != nil {
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+
+					}
+
+					waitTime = 15
+					isKvdbMembersUpdated := false
+
+					for !isKvdbMembersUpdated && waitTime > 0 {
+						newKvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
+						if err != nil {
+							err = fmt.Errorf("error getting kvdb members using node %v, cause: %v ", nodes[0].Name, err)
+							logrus.Error(err.Error())
+						}
+
+						_, ok := newKvdbMembers[id]
+						if ok {
+							logrus.Infof("Node %v still exist as a KVDB member. Waiting for failover to happen", kvdbNode.Name)
+							time.Sleep(2 * time.Minute)
+						} else {
+							logrus.Infof("node %v is no longer kvdb member", kvdbNode.Name)
+							isKvdbMembersUpdated = true
+
+						}
+						waitTime--
+					}
+
+					if err != nil {
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+					}
+
+					newKvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
+					if err != nil {
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+					}
+					kvdbMemberStatus := validateKVDBMembers(event, newKvdbMembers, false)
+
+					errorChan = make(chan error, errorChannelSize)
+
+					if !kvdbMemberStatus {
+						logrus.Infof("Skipping remaining Kvdb node failovers as not all members are healthy")
+						StartVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
+						for err = range errorChan {
+							UpdateOutcome(event, err)
+						}
+						break
+					}
+
+					StartVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
+					for err = range errorChan {
+						logrus.Infof("Error a")
+						UpdateOutcome(event, err)
+					}
+
+				}
+			} else {
+				err = fmt.Errorf("not all kvdb members are healthy")
+				logrus.Errorf(err.Error())
+				UpdateOutcome(event, err)
+			}
+
+		})
+	})
+}
+
+func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
+	logrus.Infof("Current KVDB members: %v", kvdbMembers)
+
+	allHealthy := true
+
+	if len(kvdbMembers) == 0 {
+		err := fmt.Errorf("No KVDB membes to validate")
+		UpdateOutcome(event, err)
+		return false
+	}
+
+	for id, m := range kvdbMembers {
+
+		if !m.IsHealthy {
+			err := fmt.Errorf("kvdb member node: %v is not healthy", id)
+			allHealthy = allHealthy && false
+			logrus.Warn(err.Error())
+			if isDestuctive {
+				UpdateOutcome(event, err)
+			}
+		} else {
+			logrus.Infof("KVDB member node %v is healthy", id)
+		}
+	}
+
+	return allHealthy
+
 }
 
 // TriggerAppTasksDown performs app scale up and down according to chaos level

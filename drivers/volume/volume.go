@@ -329,6 +329,9 @@ type Driver interface {
 
 	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
 	GetTrashCanVolumeIds(n node.Node) ([]string, error)
+
+	//GetKvdbMembers returns KVDB memebers of the PX cluster
+	GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

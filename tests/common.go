@@ -985,11 +985,40 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var err error
 
 	Step("schedule applications", func() {
-		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
-		})
+		}
+		//if not hyper converged set up deploy apps only on storageless nodes
+		if !Inst().IsHyperConverged {
+			logrus.Infof("Scheduling apps only on storageless nodes")
+			storagelessNodes := node.GetStorageLessNodes()
+			if len(storagelessNodes) == 0 {
+				logrus.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				Inst().IsHyperConverged = true
+			}
+			for _, storagelessNode := range storagelessNodes {
+				if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
+					err = fmt.Errorf("failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
+						"storage", "NO", storagelessNode.Name, err)
+					processError(err, errChan...)
+				}
+			}
+			storageLessNodeLabels := make(map[string]string)
+			storageLessNodeLabels["storage"] = "NO"
+
+			options = scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Inst().Provisioner,
+				Nodes:              storagelessNodes,
+				Labels:             storageLessNodeLabels,
+			}
+
+		} else {
+			logrus.Infof("Scheduling Apps with hyper-converged")
+		}
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, options)
 		processError(err, errChan...)
 		if len(contexts) == 0 {
 			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
@@ -1076,6 +1105,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		})
 
 	})
+
 }
 
 // StopVolDriverAndWait stops volume driver on given app nodes and waits till driver is down
@@ -3100,6 +3130,7 @@ type Torpedo struct {
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
+	IsHyperConverged                    bool
 }
 
 // ParseFlags parses command line flags

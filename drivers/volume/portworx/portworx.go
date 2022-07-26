@@ -178,16 +178,6 @@ type portworx struct {
 	skipPXSvcEndpoint     bool
 }
 
-// TODO temporary solution until sdk supports metadataNode response
-type metadataNode struct {
-	PeerUrls   []string `json:"PeerUrls"`
-	ClientUrls []string `json:"ClientUrls"`
-	Leader     bool     `json:"Leader"`
-	DbSize     int      `json:"DbSize"`
-	IsHealthy  bool     `json:"IsHealthy"`
-	ID         string   `json:"ID"`
-}
-
 // ExpandPool resizes a pool of a given ID
 func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
 
@@ -636,7 +626,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 }
 
 func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) {
-	members, err := d.getKvdbMembers(node)
+	members, err := d.GetKvdbMembers(node)
 	if err != nil {
 		return false, fmt.Errorf("failed to get metadata nodes. Cause: %v", err)
 	}
@@ -3080,10 +3070,12 @@ func hasIgnorePrefix(str string) bool {
 	return false
 }
 
-func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) {
+// GetKvdbMembers return KVDM member nodes of the PX Cluster
+func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.MetadataNode, error) {
 	var err error
-	kvdbMembers := make(map[string]metadataNode)
+	kvdbMembers := make(map[string]*torpedovolume.MetadataNode)
 	pxdRestPort, err := getRestPort()
+
 	if err != nil {
 		return kvdbMembers, err
 	}
@@ -3091,6 +3083,7 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 	if !d.skipPXSvcEndpoint {
 		endpoint, err = d.schedOps.GetServiceEndpoint()
 	}
+
 	if err != nil || endpoint == "" {
 		logrus.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
 		pxdRestPort, err = getRestContainerPort()
