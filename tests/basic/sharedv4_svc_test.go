@@ -229,7 +229,138 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 	})
 })
 
-// Below tests uses test-sharedv4 app https://github.com/portworx/test-sharedv4 .
+// Verify different combination of storageClass.sharedv4 and PVC.accessMode settings
+var _ = Describe("{PVCAccessModeFunctional}", func() {
+	var testrailID, runID int
+	var contexts []*scheduler.Context
+	var testName string
+	var origCustomAppConfigs, customAppConfigs map[string]scheduler.AppConfig
+
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+
+		// save the original custom app configs
+		origCustomAppConfigs = make(map[string]scheduler.AppConfig)
+		for appName, customAppConfig := range Inst().CustomAppConfig {
+			origCustomAppConfigs[appName] = customAppConfig
+		}
+
+		// replace with our custom app config
+		for appName, customAppConfig := range customAppConfigs {
+			Inst().CustomAppConfig[appName] = customAppConfig
+		}
+		logrus.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
+
+		contexts = ScheduleApplications(testName)
+		ValidateApplications(contexts)
+
+		// Skip the test if we don't find any of our apps
+		for appName := range customAppConfigs {
+			found := false
+			for _, ctx := range contexts {
+				if ctx.App.Key == appName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				logrus.Warnf("App %v not found in %d contexts, skipping test", appName, len(contexts))
+				Skip(fmt.Sprintf("app %v not found", appName))
+			}
+		}
+	})
+
+	When("sharedv4 storageClass is used with ReadWriteOnce PVC", func() {
+		var appName string
+		BeforeEach(func() {
+			testrailID = 83069
+			testName = "sharedv4-sc-rwo-pvc"
+			appName = "test-sv4-svc-enc"
+			customAppConfigs = map[string]scheduler.AppConfig{
+				appName: {
+					StorageClassSharedv4: "\"true\"",
+					PVCAccessMode:        "\"ReadWriteOnce\"",
+					Replicas:             1,
+				},
+			}
+		})
+
+		It("should create a non-sharedv4 volume", func() {
+			ctx := findContext(contexts, appName)
+			_, apiVol, _ := getSv4TestAppVol(ctx)
+			Expect(apiVol.Spec.Sharedv4).To(BeFalse(), "sharedv4 volume was created unexpectedly")
+		})
+	})
+
+	When("non-sharedv4 storageClass is used with ReadWriteMany PVC", func() {
+		var appName string
+		BeforeEach(func() {
+			testrailID = 83070
+			testName = "non-sharedv4-sc-rwx-pvc"
+			appName = "test-sv4-svc"
+			customAppConfigs = map[string]scheduler.AppConfig{
+				appName: {
+					StorageClassSharedv4: "\"false\"",
+					PVCAccessMode:        "\"ReadWriteMany\"",
+					Replicas:             3,
+				},
+			}
+		})
+
+		It("should create a sharedv4 volume", func() {
+			ctx := findContext(contexts, appName)
+			_, apiVol, _ := getSv4TestAppVol(ctx)
+			Expect(apiVol.Spec.Sharedv4).To(BeTrue(), "sharedv4 volume was not created")
+		})
+	})
+
+	JustAfterEach(func() {
+		// restore the original custom app configs
+		for appName, customAppConfig := range origCustomAppConfigs {
+			Inst().CustomAppConfig[appName] = customAppConfig
+		}
+		// remove any keys that are not present in the orig map
+		for appName := range Inst().CustomAppConfig {
+			if _, ok := origCustomAppConfigs[appName]; !ok {
+				delete(Inst().CustomAppConfig, appName)
+			}
+		}
+		logrus.Infof("JustAfterEach restoring Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
+
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+	AfterEach(func() {
+		Step("destroy apps", func() {
+			if CurrentGinkgoTestDescription().Failed {
+				logrus.Info("not destroying apps because the test failed\n")
+				return
+			}
+			for _, ctx := range contexts {
+				TearDownContext(ctx, map[string]bool{scheduler.OptionsWaitForResourceLeakCleanup: true})
+			}
+		})
+	})
+})
+
+func findContext(contexts []*scheduler.Context, appName string) (ret *scheduler.Context) {
+	for _, ctx := range contexts {
+		if ctx.App.Key == appName {
+			ret = ctx
+			break
+		}
+	}
+	Expect(ret).NotTo(BeNil(), "failed to find app %v in the contexts", appName)
+	return
+}
+
+// Tests below use test-sharedv4 app https://github.com/portworx/test-sharedv4 .
 //
 // The test-sharedv4 app has the following properties:
 // - uses node anti-affinity to ensure that each pod is on a different node

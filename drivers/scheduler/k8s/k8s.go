@@ -344,6 +344,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 
 // ParseSpecs parses the application spec file
 func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
+	logrus.Infof("ParseSpecs k.CustomConfig = %v", k.customConfig)
 	fileList := make([]string, 0)
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
 		if f != nil && !f.IsDir() {
@@ -380,6 +381,8 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 
 			if customConfig, ok = k.customConfig[appName]; !ok {
 				customConfig = scheduler.AppConfig{}
+			} else {
+				logrus.Infof("customConfig[%v] = %v", appName, customConfig)
 			}
 			var funcs = template.FuncMap{
 				"Iterate": func(count int) []int {
@@ -547,6 +550,10 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		}
 
 		if err := apiextensionsv1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
+		if err := storageapi.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
 

@@ -3154,7 +3154,12 @@ func ParseFlags() {
 	var meteringIntervalMins time.Duration
 	var bundleLocation string
 	var customConfigPath string
-	var customAppConfig map[string]scheduler.AppConfig
+
+	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
+	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
+	// We should make this more robust.
+	var customAppConfig map[string]scheduler.AppConfig = make(map[string]scheduler.AppConfig)
+
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool

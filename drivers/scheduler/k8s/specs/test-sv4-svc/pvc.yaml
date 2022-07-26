@@ -6,7 +6,10 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
-  sharedv4: "true"
+  {{ if .StorageClassSharedv4 }}
+  sharedv4: {{ .StorageClassSharedv4 }}
+  {{ else }}
+  sharedv4: "true"{{ end }}
   sharedv4_svc_type: "ClusterIP"
 allowVolumeExpansion: true
 ---
@@ -18,7 +21,10 @@ metadata:
 spec:
   storageClassName: test-sv4-sc-svc
   accessModes:
-    - ReadWriteMany
+  {{ if .PVCAccessMode }}
+    - {{ .PVCAccessMode }}
+  {{ else }}
+   - ReadWriteMany {{ end }}
   resources:
     requests:
       storage: 50Gi

@@ -10,11 +10,14 @@ data:
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: test-sv4-sc-svc
+  name: test-sv4-sc-svc-enc
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
-  sharedv4: "true"
+  {{ if .StorageClassSharedv4 }}
+  sharedv4: {{ .StorageClassSharedv4 }}
+  {{ else }}
+  sharedv4: "true"{{ end }}
   sharedv4_svc_type: "ClusterIP"
 allowVolumeExpansion: true
 ---
@@ -29,9 +32,12 @@ metadata:
     px/secret-key: test-secret
     px/secure: "true"
 spec:
-  storageClassName: test-sv4-sc-svc
+  storageClassName: test-sv4-sc-svc-enc
   accessModes:
-    - ReadWriteMany
+  {{ if .PVCAccessMode }}
+    - {{ .PVCAccessMode }}
+  {{ else }}
+   - ReadWriteMany {{ end }}
   resources:
     requests:
       storage: 50Gi
