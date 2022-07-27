@@ -295,50 +295,18 @@ if [ -n "${KUBECONFIGS}" ]; then
 fi
 
 K8S_VENDOR_KEY=""
-K8S_VENDOR_VALUE=""
-K8S_VENDOR_OPERATOR="Exists"
 if [ -z "${NODE_DRIVER}" ]; then
     NODE_DRIVER="ssh"
 fi
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        kubernetes)
-            K8S_VENDOR_KEY=node-role.kubernetes.io/master
-            ;;
-        rancher)
-            K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
-            K8S_VENDOR_OPERATOR="In"
-            K8S_VENDOR_VALUE='values: ["true"]'
-            ;;
         gke)
-            # Run torpedo on worker node, where px installation is disabled.
-            K8S_VENDOR_KEY=px/enabled
-            K8S_VENDOR_OPERATOR="In"
-            K8S_VENDOR_VALUE='values: ["false"]'
             NODE_DRIVER="gke"
             ;;
         aks)
-            # Run torpedo on worker node, where px installation is disabled.
-            K8S_VENDOR_KEY=px/enabled
-            K8S_VENDOR_OPERATOR="In"
-            K8S_VENDOR_VALUE='values: ["false"]'
             NODE_DRIVER="aks"
             ;;
-        eks)
-            # Run torpedo on worker node, where px installation is disabled.
-            K8S_VENDOR_KEY=px/enabled
-            K8S_VENDOR_OPERATOR="In"
-            K8S_VENDOR_VALUE='values: ["false"]'
-            ;;
-        ibm)
-            # Run torpedo on worker node, where px installation is disabled.
-            K8S_VENDOR_KEY=px/enabled
-            K8S_VENDOR_OPERATOR="In"
-            K8S_VENDOR_VALUE='values: ["false"]'
-            ;;
     esac
-else
-    K8S_VENDOR_KEY=node-role.kubernetes.io/control-plane
 fi
 
 cat > torpedo.yaml <<EOF
@@ -401,9 +369,19 @@ spec:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
         - matchExpressions:
-          - key: ${K8S_VENDOR_KEY}
-            operator: ${K8S_VENDOR_OPERATOR}
-            ${K8S_VENDOR_VALUE}
+          - key: node-role.kubernetes.io/master
+            operator: "Exists"
+        - matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: "Exists"
+        - matchExpressions:
+          - key: node-role.kubernetes.io/controlplane
+            operator: "In"
+            values: ["true"]
+        - matchExpressions:
+          - key: px/enabled
+            operator: "In"
+            values: ["false"]
   initContainers:
   - name: init-sysctl
     image: ${BUSYBOX_IMG}
