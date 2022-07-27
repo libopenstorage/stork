@@ -331,13 +331,19 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 		// Try to create the backupLocation path, just log error if it fails
-		err := a.createBackupLocationPath(backup)
+		backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 		if err != nil {
-			log.ApplicationBackupLog(backup).Errorf(err.Error())
-			a.recorder.Event(backup,
-				v1.EventTypeWarning,
-				string(stork_api.ApplicationBackupStatusFailed),
-				err.Error())
+			return fmt.Errorf("error getting backup location path: %v", err)
+		}
+		if backupLocation.Location.Type != stork_api.BackupLocationNFS {
+			err := a.createBackupLocationPath(backup)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf(err.Error())
+				a.recorder.Event(backup,
+					v1.EventTypeWarning,
+					string(stork_api.ApplicationBackupStatusFailed),
+					err.Error())
+			}
 		}
 
 		// Make sure the rules exist if configured
