@@ -103,6 +103,7 @@ var _ = Describe("{Longevity}", func() {
 		RelaxedReclaim:       TriggerRelaxedReclaim,
 		Trashcan:             TriggerTrashcan,
 		KVDBFailover:         TriggerKVDBFailover,
+		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -565,6 +566,7 @@ func populateIntervals() {
 	triggerInterval[RelaxedReclaim] = make(map[int]time.Duration)
 	triggerInterval[Trashcan] = make(map[int]time.Duration)
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
+	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1048,6 +1050,17 @@ func populateIntervals() {
 	triggerInterval[CsiSnapRestore][2] = 24 * baseInterval
 	triggerInterval[CsiSnapRestore][1] = 27 * baseInterval
 
+	triggerInterval[ValidateDeviceMapper][10] = 1 * baseInterval
+	triggerInterval[ValidateDeviceMapper][9] = 3 * baseInterval
+	triggerInterval[ValidateDeviceMapper][8] = 6 * baseInterval
+	triggerInterval[ValidateDeviceMapper][7] = 9 * baseInterval
+	triggerInterval[ValidateDeviceMapper][6] = 12 * baseInterval
+	triggerInterval[ValidateDeviceMapper][5] = 15 * baseInterval
+	triggerInterval[ValidateDeviceMapper][4] = 18 * baseInterval
+	triggerInterval[ValidateDeviceMapper][3] = 21 * baseInterval
+	triggerInterval[ValidateDeviceMapper][2] = 24 * baseInterval
+	triggerInterval[ValidateDeviceMapper][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1090,6 +1103,7 @@ func populateIntervals() {
 	triggerInterval[CsiSnapRestore][0] = 0
 	triggerInterval[RelaxedReclaim][0] = 0
 	triggerInterval[KVDBFailover][0] = 0
+	triggerInterval[ValidateDeviceMapper][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

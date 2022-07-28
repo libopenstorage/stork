@@ -128,6 +128,35 @@ func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duratio
 	return true, nil
 }
 
+// GetDeviceMapperCount return device mapper count in a node
+func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, error) {
+	logrus.Infof("Getting the current devicemapper devices counts in a node %s", n.SchedulerNodeName)
+	devMappCmd := "sudo multipath -ll 2>&1|grep dm-|wc -l"
+
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}, devMappCmd, true)
+		return out, true, err
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return -1, &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to run multipath command in node %v", n),
+		}
+	}
+
+	count, err := strconv.Atoi(strings.Fields(strings.TrimSpace(out.(string)))[0])
+	if err != nil {
+		return -1, err
+	}
+	logrus.Infof("Currently [%v] device mapped to a node: [%v]", count, n.Name)
+	return count, nil
+}
+
 // Init initializes SSH node driver
 func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	s.specDir = nodeOpts.SpecDir

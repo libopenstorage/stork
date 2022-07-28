@@ -816,6 +816,14 @@ func (d *DefaultDriver) GetKvdbMembers(n node.Node) (map[string]*MetadataNode, e
 	}
 }
 
+// GetNodePureVolumeAttachedCountMap return Map of nodeName and number of pure volume attached on that node
+func (d *DefaultDriver) GetNodePureVolumeAttachedCountMap() (map[string]int, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePureVolumeAttachedCountMap()",
+	}
+}
+
 // RejoinNode rejoins a given node back to the cluster
 func (d *DefaultDriver) RejoinNode(n *node.Node) error {
 	return &errors.ErrNotSupported{

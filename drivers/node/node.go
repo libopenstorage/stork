@@ -194,6 +194,9 @@ type Driver interface {
 
 	// IsNodeRebootedInGivenTimeRange check if node is rebooted within given time range
 	IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error)
+
+	// GetDeviceMapperCount return devicemapper count
+	GetDeviceMapperCount(Node, time.Duration) (int, error)
 }
 
 // Register registers the given node driver
@@ -406,6 +409,14 @@ func (d *notSupportedDriver) IsUsingSSH() bool {
 func (d *notSupportedDriver) IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "PowerOnVmByName()",
+		Operation: "IsNodeRebootedInGivenTimeRange()",
+	}
+}
+
+// GetDeviceMapperCount return device mapper count in a node
+func (d *notSupportedDriver) GetDeviceMapperCount(Node, time.Duration) (int, error) {
+	return -1, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDeviceMapperCount()",
 	}
 }

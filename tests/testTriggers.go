@@ -336,6 +336,8 @@ const (
 	Trashcan = "trashcan"
 	//KVDBFailover cyclic restart of kvdb nodes
 	KVDBFailover = "kvdbFailover"
+	// ValidateDeviceMapper validate device mapper cleanup
+	ValidateDeviceMapper = "validateDeviceMapper"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -4714,6 +4716,58 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 					ctx.SkipVolumeValidation = true
 					ValidateContext(ctx)
 				})
+			}
+		}
+	})
+}
+
+// TriggerValidateDeviceMapperCleanup validate device mapper device cleaned up for FA setup
+func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ValidateDeviceMapper,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	logrus.Infof("Validating the deviceMapper devices cleaned up or not")
+	Step("Match the devicemapper devices in each node if it matches the expected count or not ", func() {
+		pureVolAttachedMap, err := Inst().V.GetNodePureVolumeAttachedCountMap()
+		if err != nil {
+			logrus.Error(err)
+			UpdateOutcome(event, err)
+		}
+
+		for _, n := range node.GetWorkerNodes() {
+			logrus.Infof("Validating the node: %v", n.Name)
+			expectedDevMapperCount := 0
+			storageNode, err := Inst().V.GetPxNode(&n)
+			if err != nil {
+				logrus.Error(err)
+				UpdateOutcome(event, err)
+			}
+
+			if storageNode != nil {
+				expectedDevMapperCount += len(storageNode.Disks)
+				expectedDevMapperCount += pureVolAttachedMap[n.Name]
+				actualCount, err := Inst().N.GetDeviceMapperCount(n, defaultTimeout)
+				if err != nil {
+					logrus.Error(err)
+					UpdateOutcome(event, err)
+				}
+				if expectedDevMapperCount-actualCount > 1 || (expectedDevMapperCount == 0 && actualCount >= 1) || (actualCount == 0 && expectedDevMapperCount >= 1) {
+					err := fmt.Errorf("device count mismatch in node: %v. Expected device: %v, Found %v device",
+						n.Name, expectedDevMapperCount, actualCount)
+					logrus.Error(err)
+					UpdateOutcome(event, err)
+				}
+				logrus.Infof("Successfully validated the deviceMapper device cleaned up in a node: %v", n.Name)
 			}
 		}
 	})
