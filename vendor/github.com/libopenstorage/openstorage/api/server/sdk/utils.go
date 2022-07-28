@@ -1,0 +1,306 @@
+/*
+Package sdk is the gRPC implementation of the SDK gRPC server
+Copyright 2018 Portworx
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package sdk
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/pkg/auth"
+	"github.com/libopenstorage/openstorage/pkg/sched"
+	"github.com/libopenstorage/openstorage/volume"
+
+	"github.com/portworx/kvdb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v2"
+)
+
+const (
+	// Max day for each month. All months have at least 28 days
+	maxDay = int32(28)
+	// Max hour
+	maxHour = int32(23)
+	// Max minute
+	maxMinute = int32(59)
+)
+
+func sdkWeekdayToTimeWeekday(weekday api.SdkTimeWeekday) time.Weekday {
+	// Purposely not using math to translate in case the values are ever changed
+	switch weekday {
+	case api.SdkTimeWeekday_SdkTimeWeekdaySunday:
+		return time.Sunday
+	case api.SdkTimeWeekday_SdkTimeWeekdayMonday:
+		return time.Monday
+	case api.SdkTimeWeekday_SdkTimeWeekdayTuesday:
+		return time.Tuesday
+	case api.SdkTimeWeekday_SdkTimeWeekdayWednesday:
+		return time.Wednesday
+	case api.SdkTimeWeekday_SdkTimeWeekdayThursday:
+		return time.Thursday
+	case api.SdkTimeWeekday_SdkTimeWeekdayFriday:
+		return time.Friday
+	case api.SdkTimeWeekday_SdkTimeWeekdaySaturday:
+		return time.Saturday
+	}
+	panic("Illegal time of the week")
+}
+
+func timeWeekdayToSdkWeekly(t time.Weekday) api.SdkTimeWeekday {
+	// Purposely not using math to translate in case the values are ever changed
+	switch t {
+	case time.Sunday:
+		return api.SdkTimeWeekday_SdkTimeWeekdaySunday
+	case time.Monday:
+		return api.SdkTimeWeekday_SdkTimeWeekdayMonday
+	case time.Tuesday:
+		return api.SdkTimeWeekday_SdkTimeWeekdayTuesday
+	case time.Wednesday:
+		return api.SdkTimeWeekday_SdkTimeWeekdayWednesday
+	case time.Thursday:
+		return api.SdkTimeWeekday_SdkTimeWeekdayThursday
+	case time.Friday:
+		return api.SdkTimeWeekday_SdkTimeWeekdayFriday
+	case time.Saturday:
+		return api.SdkTimeWeekday_SdkTimeWeekdaySaturday
+	}
+	panic("Illegal time of the week")
+}
+
+func sdkSchedToRetainInternalSpec(
+	req *api.SdkSchedulePolicyInterval,
+) (*sched.RetainIntervalSpec, error) {
+
+	// Translate sdk schedule to yaml RetainIntervalSpec string.
+	var spec sched.IntervalSpec
+	if daily := req.GetDaily(); daily != nil {
+		// daily
+		if daily.GetHour() < 0 || daily.GetHour() > maxDay {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid hour value: %d", daily.GetHour())
+		} else if daily.GetMinute() < 0 || daily.GetMinute() > maxMinute {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid minute value: %d", daily.GetMinute())
+		}
+		spec = sched.Daily(
+			int(daily.GetHour()),
+			int(daily.GetMinute())).
+			Spec()
+	} else if weekly := req.GetWeekly(); weekly != nil {
+		// weekly
+		if weekly.GetDay() < api.SdkTimeWeekday_SdkTimeWeekdaySunday ||
+			weekly.GetDay() > api.SdkTimeWeekday_SdkTimeWeekdaySaturday {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid weekday value: %d", weekly.GetDay())
+		} else if weekly.GetHour() < 0 || weekly.GetHour() > maxDay {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid hour value: %d", weekly.GetHour())
+		} else if weekly.GetMinute() < 0 || weekly.GetMinute() > maxMinute {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid minute value: %d", weekly.GetMinute())
+		}
+		spec = sched.Weekly(
+			sdkWeekdayToTimeWeekday(weekly.GetDay()),
+			int(weekly.GetHour()),
+			int(weekly.GetMinute())).
+			Spec()
+	} else if monthly := req.GetMonthly(); monthly != nil {
+		// monthly
+		if monthly.GetDay() < 1 || monthly.GetDay() > maxDay {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid day value: %d", monthly.GetDay())
+		} else if monthly.GetHour() < 0 || monthly.GetHour() > maxDay {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid hour value: %d", monthly.GetHour())
+		} else if monthly.GetMinute() < 0 || monthly.GetMinute() > maxMinute {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid minute value: %d", monthly.GetMinute())
+		}
+		spec = sched.Monthly(
+			int(monthly.GetDay()),
+			int(monthly.GetHour()),
+			int(monthly.GetMinute())).
+			Spec()
+	} else if periodic := req.GetPeriodic(); periodic != nil {
+		spec = sched.Periodic(time.Duration(req.GetPeriodic().GetSeconds()) * time.Second).Spec()
+	} else {
+		return nil, status.Error(codes.InvalidArgument, "Invalid schedule period type")
+	}
+
+	return &sched.RetainIntervalSpec{
+		IntervalSpec: spec,
+		Retain:       uint32(req.GetRetain()),
+	}, nil
+}
+
+func sdkSchedToRetainInternalSpecYamlByte(sdkScheds []*api.SdkSchedulePolicyInterval) ([]byte, error) {
+	scheds := make([]*sched.RetainIntervalSpec, 0)
+	for _, sdkSched := range sdkScheds {
+		sched, err := sdkSchedToRetainInternalSpec(sdkSched)
+		if err != nil {
+			return nil, err
+		}
+		scheds = append(scheds, sched)
+	}
+
+	out, err := yaml.Marshal(scheds)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to create schedule: %v", err)
+	}
+
+	return out, nil
+}
+
+func retainInternalSpecToSdkSched(spec *sched.RetainIntervalSpec) (*api.SdkSchedulePolicyInterval, error) {
+
+	var resp *api.SdkSchedulePolicyInterval
+	switch spec.Freq {
+	case sched.MonthlyType:
+		resp = &api.SdkSchedulePolicyInterval{
+			PeriodType: &api.SdkSchedulePolicyInterval_Monthly{
+				Monthly: &api.SdkSchedulePolicyIntervalMonthly{
+					Day:    int32(spec.Day),
+					Hour:   int32(spec.Hour),
+					Minute: int32(spec.Minute),
+				},
+			},
+		}
+	case sched.WeeklyType:
+		resp = &api.SdkSchedulePolicyInterval{
+			PeriodType: &api.SdkSchedulePolicyInterval_Weekly{
+				Weekly: &api.SdkSchedulePolicyIntervalWeekly{
+					Day:    timeWeekdayToSdkWeekly(time.Weekday(spec.Weekday)),
+					Hour:   int32(spec.Hour),
+					Minute: int32(spec.Minute),
+				},
+			},
+		}
+	case sched.DailyType:
+		resp = &api.SdkSchedulePolicyInterval{
+			PeriodType: &api.SdkSchedulePolicyInterval_Daily{
+				Daily: &api.SdkSchedulePolicyIntervalDaily{
+					Hour:   int32(spec.Hour),
+					Minute: int32(spec.Minute),
+				},
+			},
+		}
+	case sched.PeriodicType:
+		resp = &api.SdkSchedulePolicyInterval{
+			PeriodType: &api.SdkSchedulePolicyInterval_Periodic{
+				Periodic: &api.SdkSchedulePolicyIntervalPeriodic{
+					Seconds: int64(time.Duration(spec.Period) / time.Second),
+				},
+			},
+		}
+	default:
+		return nil, status.Errorf(codes.Internal, "Unknown schedule type: %s", spec.Freq)
+	}
+
+	resp.Retain = int64(spec.Retain)
+	return resp, nil
+}
+
+func retainInternalSpecYamlByteToSdkSched(
+	in []byte,
+) ([]*api.SdkSchedulePolicyInterval, error) {
+
+	// Get spec from yaml
+	var specs []sched.RetainIntervalSpec
+	err := yaml.Unmarshal(in, &specs)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to retrieve schedule: %v", err)
+	}
+
+	// Convert each one to Sdk messages
+	scheds := make([]*api.SdkSchedulePolicyInterval, len(specs))
+	for i, spec := range specs {
+		var err error
+		scheds[i], err = retainInternalSpecToSdkSched(&spec)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return scheds, nil
+}
+
+func openLog(logfile string) (*os.File, error) {
+	file, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to open logfile %s: %v", logfile, err)
+	}
+	return file, nil
+}
+
+func checkAccessFromDriverForLocator(
+	ctx context.Context,
+	d volume.VolumeDriver,
+	locator *api.VolumeLocator,
+	accessType api.Ownership_AccessType,
+) error {
+	// Avoid costly driver calls if auth is disabled.
+	if !auth.Enabled() {
+		return nil
+	}
+
+	vols, err := d.Enumerate(locator, nil)
+	if err == kvdb.ErrNotFound || (err == nil && len(vols) == 0) {
+		return status.Errorf(
+			codes.NotFound,
+			"No volumes found for locator")
+	} else if err != nil {
+		return status.Errorf(
+			codes.Internal,
+			"Failed to find volumes from locator: %v", err)
+	}
+
+	for _, vol := range vols {
+		if !vol.IsPermitted(ctx, accessType) {
+			return status.Errorf(codes.PermissionDenied, "Access denied to volume %s", vol.Id)
+		}
+	}
+
+	return nil
+}
+
+func checkAccessFromDriverForVolumeIds(
+	ctx context.Context,
+	d volume.VolumeDriver,
+	volumeIds []string,
+	accessType api.Ownership_AccessType,
+) error {
+	return checkAccessFromDriverForLocator(ctx, d, &api.VolumeLocator{
+		VolumeIds: volumeIds,
+	}, accessType)
+
+}
+
+func enumerateVolumeIdsAsMap(d volume.VolumeDriver, locator *api.VolumeLocator) (map[string]bool, error) {
+	vols, err := d.Enumerate(locator, nil)
+	if err == kvdb.ErrNotFound || (err == nil && len(vols) == 0) {
+		return nil, status.Errorf(
+			codes.NotFound,
+			"No volumes found")
+	} else if err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			"Failed to find volumes from locator: %v", err)
+	}
+
+	volMap := make(map[string]bool)
+	for _, vol := range vols {
+		volMap[vol.Id] = true
+	}
+
+	return volMap, nil
+
+}

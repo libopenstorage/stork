@@ -185,6 +185,48 @@ func CreateCRD(resource apiextensions.CustomResource) error {
 	return nil
 }
 
+// CreateCRDWithAdditionalPrinterColumns creates the given custom resource with customer resource column definition
+func CreateCRDWithAdditionalPrinterColumns(resource apiextensions.CustomResource, crColumnDefinition []apiextensionsv1.CustomResourceColumnDefinition) error {
+	scope := apiextensionsv1.NamespaceScoped
+	if string(resource.Scope) == string(apiextensionsv1.ClusterScoped) {
+		scope = apiextensionsv1.ClusterScoped
+	}
+	ignoreSchemaValidation := true
+	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
+	crd := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crdName,
+		},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: resource.Group,
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{Name: resource.Version,
+					Served:  true,
+					Storage: true,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							XPreserveUnknownFields: &ignoreSchemaValidation,
+						},
+					},
+					AdditionalPrinterColumns: crColumnDefinition,
+				},
+			},
+			Scope: scope,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Singular:   resource.Name,
+				Plural:     resource.Plural,
+				Kind:       resource.Kind,
+				ShortNames: resource.ShortNames,
+			},
+		},
+	}
+	err := apiextensions.Instance().RegisterCRD(crd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetImageRegistryFromDeployment - extract image registry and image registry secret from deployment spec
 func GetImageRegistryFromDeployment(name, namespace string) (string, string, error) {
 	deploy, err := apps.Instance().GetDeployment(name, namespace)

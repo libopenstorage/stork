@@ -30,6 +30,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/metrics"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
+	"github.com/libopenstorage/stork/pkg/objectcontroller"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
@@ -141,6 +142,10 @@ func main() {
 		cli.BoolTFlag{
 			Name:  "application-controller",
 			Usage: "Start the controllers for managing applications (default: true)",
+		},
+		cli.BoolTFlag{
+			Name:  "px-object-controller",
+			Usage: "Start the px object controller.",
 		},
 		cli.StringFlag{
 			Name:  "admin-namespace",
@@ -392,6 +397,7 @@ func displayLeader(name string) {
 }
 
 func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -483,6 +489,12 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 		}
 		if err := appManager.Init(mgr, adminNamespace, signalChan); err != nil {
 			log.Fatalf("Error initializing application manager: %v", err)
+		}
+	}
+	if c.Bool("px-object-controller") {
+		objectController := &objectcontroller.ObjectController{}
+		if err := objectController.Init(); err != nil {
+			log.Fatalf("Error initializing px-object-controller : %v", err)
 		}
 	}
 	if c.Bool("kdmp-controller") {

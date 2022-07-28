@@ -1,0 +1,515 @@
+make all --print-data-base --no-builtin-variables --no-builtin-rules --question
+# GNU Make 4.1
+# Built for x86_64-pc-linux-gnu
+# Copyright (C) 1988-2014 Free Software Foundation, Inc.
+# License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+# This is free software: you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+ 
+
+# Make data base, printed on Tue Jul 19 21:29:40 2022
+
+# Variables
+
+# automatic
+<D = $(patsubst %/,%,$(dir $<))
+# automatic
+?F = $(notdir $?)
+# makefile (from 'Makefile', line 17)
+PKGS := github.com/libopenstorage/stork/cmd/cmdexecutor github.com/libopenstorage/stork/cmd/stork github.com/libopenstorage/stork/cmd/storkctl github.com/libopenstorage/stork/drivers github.com/libopenstorage/stork/drivers/volume github.com/libopenstorage/stork/drivers/volume/aws github.com/libopenstorage/stork/drivers/volume/azure github.com/libopenstorage/stork/drivers/volume/csi github.com/libopenstorage/stork/drivers/volume/gcp github.com/libopenstorage/stork/drivers/volume/kdmp github.com/libopenstorage/stork/drivers/volume/linstor github.com/libopenstorage/stork/drivers/volume/mock github.com/libopenstorage/stork/drivers/volume/portworx github.com/libopenstorage/stork/pkg/apis github.com/libopenstorage/stork/pkg/applicationmanager github.com/libopenstorage/stork/pkg/applicationmanager/controllers github.com/libopenstorage/stork/pkg/appregistration github.com/libopenstorage/stork/pkg/client/listers/stork/v1alpha1 github.com/libopenstorage/stork/pkg/clusterdomains github.com/libopenstorage/stork/pkg/clusterdomains/controllers github.com/libopenstorage/stork/pkg/cmdexecutor github.com/libopenstorage/stork/pkg/cmdexecutor/status github.com/libopenstorage/stork/pkg/controllers github.com/libopenstorage/stork/pkg/crypto github.com/libopenstorage/stork/pkg/dbg github.com/libopenstorage/stork/pkg/errors github.com/libopenstorage/stork/pkg/extender github.com/libopenstorage/stork/pkg/groupsnapshot github.com/libopenstorage/stork/pkg/groupsnapshot/controllers github.com/libopenstorage/stork/pkg/k8sutils github.com/libopenstorage/stork/pkg/log github.com/libopenstorage/stork/pkg/metrics github.com/libopenstorage/stork/pkg/migration github.com/libopenstorage/stork/pkg/migration/controllers github.com/libopenstorage/stork/pkg/monitor github.com/libopenstorage/stork/pkg/objectcontroller github.com/libopenstorage/stork/pkg/objectstore github.com/libopenstorage/stork/pkg/objectstore/azure github.com/libopenstorage/stork/pkg/objectstore/common github.com/libopenstorage/stork/pkg/objectstore/google github.com/libopenstorage/stork/pkg/objectstore/s3 github.com/libopenstorage/stork/pkg/pvcwatcher github.com/libopenstorage/stork/pkg/resourcecollector github.com/libopenstorage/stork/pkg/rule github.com/libopenstorage/stork/pkg/schedule github.com/libopenstorage/stork/pkg/snapshot github.com/libopenstorage/stork/pkg/snapshot/controllers github.com/libopenstorage/stork/pkg/snapshotter github.com/libopenstorage/stork/pkg/storkctl github.com/libopenstorage/stork/pkg/utils github.com/libopenstorage/stork/pkg/version github.com/libopenstorage/stork/pkg/webhookadmission
+# default
+.SHELLFLAGS := -c
+# environment
+VSCODE_AGENT_FOLDER = /u/ppandey/.vscode-server
+# environment
+VSCODE_LOG_NATIVE = false
+# automatic
+?D = $(patsubst %/,%,$(dir $?))
+# automatic
+@D = $(patsubst %/,%,$(dir $@))
+# automatic
+@F = $(notdir $@)
+# default
+MAKE_VERSION := 4.1
+# makefile
+CURDIR := /home/ppandey/go/src/github.com/libopenstorage/stork
+# makefile
+SHELL = /bin/sh
+# makefile (from 'Makefile', line 35)
+BIN := /home/ppandey/go/src/github.com/libopenstorage/stork/bin
+# makefile (from 'Makefile', line 33)
+BASE_DIR := /home/ppandey/go/src/github.com/libopenstorage/stork
+# environment
+VSCODE_NLS_CONFIG = {"locale":"en","availableLanguages":{}}
+# environment
+_ = /dogfood-home/eng_home/ppandey/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/node
+# makefile (from 'Makefile', line 1)
+MAKEFILE_LIST :=  Makefile
+# environment
+GO111MODULE = on
+# makefile (from 'Makefile', line 32)
+RELEASE_VER := 2.7.0
+# 'override' directive
+GNUMAKEFLAGS := 
+# environment
+VSCODE_AMD_ENTRYPOINT = vs/workbench/api/node/extensionHostProcess
+# environment
+DBUS_SESSION_BUS_ADDRESS = unix:path=/run/user/1557718371/bus
+# makefile (from 'Makefile', line 37)
+VERSION = $(RELEASE_VER)-$(GIT_SHA)
+# environment
+VSCODE_VERBOSE_LOGGING = true
+# environment
+VSCODE_CWD = /dogfood-home/eng_home/ppandey
+# environment
+GOPROXY = https://proxy.golang.org,direct
+# environment
+KRB5CCNAME = FILE:/tmp/krb5cc_1557718371_sfgTxu
+# environment
+SSH_CONNECTION = 10.231.208.178 50095 10.7.68.92 22
+# environment
+PATH = /usr/local/go/bin:/dogfood-home/eng_home/ppandey/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/remote-cli:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/ppandey/go/bin:/home/ppandey/go/bin
+# environment
+XDG_RUNTIME_DIR = /run/user/1557718371
+# environment
+GOPATH = /home/ppandey/go
+# makefile (from 'Makefile', line 34)
+GIT_SHA := 5c3c9b63
+# environment
+VSCODE_LOG_STACK = false
+# environment
+REQUESTS_CA_BUNDLE = /etc/ssl/certs/ca-certificates.crt
+# environment
+KUBECONFIG = /home/ppandey/kubeup/kubeconfig-k8s1.conf
+# default
+.FEATURES := target-specific order-only second-expansion else-if shortest-stem undefine oneshell archives jobserver output-sync check-symlink load
+# automatic
+%F = $(notdir $%)
+# environment
+GOBIN = /home/ppandey/go/bin
+# environment
+WHO_IP = ::1
+# environment
+DOCKER_HUB_TAG = master
+# environment
+VSCODE_PIPE_LOGGING = true
+# environment
+PWD = /home/ppandey/go/src/github.com/libopenstorage/stork
+# environment
+VSCODE_IPC_HOOK_CLI = /run/user/1557718371/vscode-ipc-07452559-3f6d-4797-9f0b-9f205dac3034.sock
+# automatic
+*D = $(patsubst %/,%,$(dir $*))
+# environment
+HISTTIMEFORMAT = %F %T 
+# environment
+GOMODCACHE = /home/ppandey/go/pkg/mod
+# environment
+HOME = /u/ppandey
+# environment
+WHO_HOST = dev-ppandey
+# environment
+LOGNAME = ppandey
+# environment
+APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = true
+# automatic
++F = $(notdir $+)
+# environment
+VSCODE_HANDLES_UNCAUGHT_ERRORS = true
+# automatic
+^D = $(patsubst %/,%,$(dir $^))
+# environment
+MAKELEVEL := 0
+# environment
+KUBEUP_USER = whoami
+# default
+MAKE = $(MAKE_COMMAND)
+# default
+MAKECMDGOALS := all
+# environment
+SHLVL = 3
+# makefile (from 'Makefile', line 7)
+DOCKER_HUB_CMD_EXECUTOR_TAG = dev
+# environment
+XDG_SESSION_ID = 15385
+# environment
+USER = ppandey
+# makefile (from 'Makefile', line 42)
+.DEFAULT_GOAL = all
+# environment
+DOCKER_HUB_IMAGE = px-enterprise
+# environment
+GOROOT = /usr/local/go
+# environment
+LIBVIRT_DEFAULT_URI = qemu:///system
+# makefile (from 'Makefile', line 13)
+CMD_EXECUTOR_IMG = $(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
+# environment
+DOCKER_HUB_REPO = docker.io/priyanshu511
+# automatic
+%D = $(patsubst %/,%,$(dir $%))
+# default
+MAKE_COMMAND := make
+# default
+.VARIABLES := 
+# automatic
+*F = $(notdir $*)
+# makefile (from 'Makefile', line 10)
+DOCKER_HUB_STORK_TEST_TAG = dev
+# makefile
+MAKEFLAGS = pqrR
+# environment
+MFLAGS = -pqrR
+# environment
+SSH_CLIENT = 10.231.208.178 50095 22
+# environment
+MAIL = /var/mail/ppandey
+# automatic
++D = $(patsubst %/,%,$(dir $+))
+# makefile (from 'Makefile', line 14)
+STORK_TEST_IMG = $(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
+# makefile (from 'Makefile', line 4)
+DOCKER_HUB_STORK_TAG = dev
+# environment
+BROWSER = /dogfood-home/eng_home/ppandey/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/helpers/browser.sh
+# makefile (from 'Makefile', line 40)
+BUILD_OPTIONS := -ldflags="-s -w -X github.com/libopenstorage/stork/pkg/version.Version=2.7.0-5c3c9b63"
+# environment
+S_COLORS = auto
+# environment
+VSCODE_HANDLES_SIGPIPE = true
+# makefile (from 'Makefile', line 39)
+LDFLAGS = "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSION)"
+# makefile (from 'Makefile', line 12)
+STORK_IMG = $(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
+# default
+MAKEFILES := 
+# makefile (from 'Makefile', line 6)
+DOCKER_HUB_CMD_EXECUTOR_IMAGE = cmdexecutor
+# environment
+PROMPT_COMMAND = RETRN_VAL=$?;logger -p local1.notice -t bash -i "${USER}@${WHO_HOST}(${WHO_IP})[$(pwd)]:$(fc -nl  -1| sed "s/^\t //") [$RETRN_VAL]"
+# automatic
+<F = $(notdir $<)
+# environment
+PS1 = [${PWD#${PWD%/*/*/*}/}]\$ 
+# environment
+LC_ALL = C
+# automatic
+^F = $(notdir $^)
+# default
+SUFFIXES := 
+# makefile (from 'Makefile', line 9)
+DOCKER_HUB_STORK_TEST_IMAGE = stork_test
+# default
+.INCLUDE_DIRS = /usr/include /usr/local/include /usr/include
+# makefile (from 'Makefile', line 20)
+GO_FILES := ./drivers/drivers.go ./drivers/volume/azure/azure.go ./drivers/volume/mock/mock.go ./drivers/volume/csi/csi.go ./drivers/volume/gcp/gcp.go ./drivers/volume/linstor/linstor.go ./drivers/volume/kdmp/kdmp.go ./drivers/volume/errors.go ./drivers/volume/volume.go ./drivers/volume/portworx/portworx.go ./drivers/volume/portworx/errors.go ./drivers/volume/aws/aws.go ./cmd/stork/stork.go ./cmd/storkctl/storkctl.go ./cmd/cmdexecutor/cmdexecutor.go ./test/integration_test/cmdexecutor_test.go ./test/integration_test/snapshot_restore_test.go ./test/integration_test/migration_failover_failback_test.go ./test/integration_test/migration_stork_failures_test.go ./test/integration_test/extender_test.go ./test/integration_test/migration_backup_test.go ./test/integration_test/snapshot_test.go ./test/integration_test/migration_test.go ./test/integration_test/health_monitor_test.go ./test/integration_test/applicationbackup_test.go ./test/integration_test/clusterdomain_test.go ./test/integration_test/applicationclone_test.go ./test/integration_test/webhook_test.go ./test/integration_test/common_test.go ./pkg/snapshotter/snapshotter_csi.go ./pkg/snapshotter/options.go ./pkg/snapshotter/snapshotter.go ./pkg/monitor/monitor_test.go ./pkg/monitor/monitor.go ./pkg/webhookadmission/utils.go ./pkg/webhookadmission/webhook.go ./pkg/crypto/crypto_test.go ./pkg/crypto/crypto.go ./pkg/snapshot/snapshot.go ./pkg/snapshot/rule.go ./pkg/snapshot/controllers/snapshot.go ./pkg/snapshot/controllers/provisioner.go ./pkg/snapshot/controllers/snapshotrestore.go ./pkg/snapshot/controllers/snapshotschedule.go ./pkg/metrics/clusterpair.go ./pkg/metrics/applicationclone.go ./pkg/metrics/volumesnapshotschedule.go ./pkg/metrics/clusterpair_test.go ./pkg/metrics/applicationrestore_test.go ./pkg/metrics/migration_test.go ./pkg/metrics/applicationrestore.go ./pkg/metrics/migration.go ./pkg/metrics/applicationbackup.go ./pkg/metrics/metrics_test.go ./pkg/metrics/applicationbackup_test.go ./pkg/metrics/applicationclone_test.go ./pkg/metrics/metrics.go ./pkg/log/log.go ./pkg/log/log_test.go ./pkg/objectstore/azure/azure.go ./pkg/objectstore/objectstore.go ./pkg/objectstore/google/google.go ./pkg/objectstore/common/common.go ./pkg/objectstore/s3/s3.go ./pkg/pvcwatcher/pvcwatcher.go ./pkg/migration/migration.go ./pkg/migration/controllers/clusterpair.go ./pkg/migration/controllers/migration.go ./pkg/migration/controllers/migrationschedule.go ./pkg/groupsnapshot/groupsnapshot.go ./pkg/groupsnapshot/controllers/groupsnapshot.go ./pkg/schedule/cache.go ./pkg/schedule/schedule.go ./pkg/schedule/schedule_test.go ./pkg/k8sutils/k8sutils.go ./pkg/extender/extender_test.go ./pkg/extender/extender.go ./pkg/client/listers/stork/v1alpha1/groupvolumesnapshot.go ./pkg/client/listers/stork/v1alpha1/backuplocation.go ./pkg/client/listers/stork/v1alpha1/volumesnapshotrestore.go ./pkg/client/listers/stork/v1alpha1/clusterpair.go ./pkg/client/listers/stork/v1alpha1/applicationclone.go ./pkg/client/listers/stork/v1alpha1/volumesnapshotschedule.go ./pkg/client/listers/stork/v1alpha1/clusterdomainsstatus.go ./pkg/client/listers/stork/v1alpha1/schedulepolicy.go ./pkg/client/listers/stork/v1alpha1/applicationrestore.go ./pkg/client/listers/stork/v1alpha1/dataexport.go ./pkg/client/listers/stork/v1alpha1/migration.go ./pkg/client/listers/stork/v1alpha1/rule.go ./pkg/client/listers/stork/v1alpha1/applicationbackupschedule.go ./pkg/client/listers/stork/v1alpha1/applicationbackup.go ./pkg/client/listers/stork/v1alpha1/clusterdomainupdate.go ./pkg/client/listers/stork/v1alpha1/migrationschedule.go ./pkg/client/listers/stork/v1alpha1/applicationregistration.go ./pkg/client/listers/stork/v1alpha1/namespacedschedulepolicy.go ./pkg/dbg/dbg.go ./pkg/resourcecollector/persistentvolume.go ./pkg/resourcecollector/pod.go ./pkg/resourcecollector/service.go ./pkg/resourcecollector/virtualmachineinstance.go ./pkg/resourcecollector/serviceaccount.go ./pkg/resourcecollector/clusterrole.go ./pkg/resourcecollector/endpoint.go ./pkg/resourcecollector/secret.go ./pkg/resourcecollector/datavolume.go ./pkg/resourcecollector/persistentvolumeclaim.go ./pkg/resourcecollector/ingress.go ./pkg/resourcecollector/networkpolicy.go ./pkg/resourcecollector/configmap.go ./pkg/resourcecollector/virtualmachine.go ./pkg/resourcecollector/role.go ./pkg/resourcecollector/resourcequota.go ./pkg/resourcecollector/resourcecollector.go ./pkg/resourcecollector/job.go ./pkg/applicationmanager/applicationmanager.go ./pkg/applicationmanager/controllers/applicationclone.go ./pkg/applicationmanager/controllers/applicationrestore.go ./pkg/applicationmanager/controllers/applicationbackupschedule.go ./pkg/applicationmanager/controllers/applicationbackup.go ./pkg/applicationmanager/controllers/backupsync.go ./pkg/applicationmanager/controllers/applicationregistration.go ./pkg/appregistration/appregistration.go ./pkg/utils/utils.go ./pkg/apis/stork.go ./pkg/apis/stork/register.go ./pkg/apis/stork/v1alpha1/groupvolumesnapshot.go ./pkg/apis/stork/v1alpha1/backuplocation.go ./pkg/apis/stork/v1alpha1/volumesnapshotrestore.go ./pkg/apis/stork/v1alpha1/register.go ./pkg/apis/stork/v1alpha1/clusterpair.go ./pkg/apis/stork/v1alpha1/volumeexport.go ./pkg/apis/stork/v1alpha1/applicationclone.go ./pkg/apis/stork/v1alpha1/volumesnapshotschedule.go ./pkg/apis/stork/v1alpha1/clusterdomainsstatus.go ./pkg/apis/stork/v1alpha1/schedulepolicy.go ./pkg/apis/stork/v1alpha1/applicationrestore.go ./pkg/apis/stork/v1alpha1/migration.go ./pkg/apis/stork/v1alpha1/rule.go ./pkg/apis/stork/v1alpha1/applicationbackupschedule.go ./pkg/apis/stork/v1alpha1/applicationbackup.go ./pkg/apis/stork/v1alpha1/doc.go ./pkg/apis/stork/v1alpha1/clusterdomainupdate.go ./pkg/apis/stork/v1alpha1/migrationschedule.go ./pkg/apis/stork/v1alpha1/applicationregistration.go ./pkg/apis/stork/v1alpha1/namespacedschedulepolicy.go ./pkg/apis/apis.go ./pkg/errors/errors.go ./pkg/objectcontroller/objectcontroller.go ./pkg/rule/rule.go ./pkg/storkctl/snapshot.go ./pkg/storkctl/migrationschedule_test.go ./pkg/storkctl/backuplocation.go ./pkg/storkctl/resume.go ./pkg/storkctl/groupsnapshot_test.go ./pkg/storkctl/clusterpair.go ./pkg/storkctl/deactivate.go ./pkg/storkctl/schedulepolicy_test.go ./pkg/storkctl/applicationbackupschedule_test.go ./pkg/storkctl/activate.go ./pkg/storkctl/applicationregistration_test.go ./pkg/storkctl/applicationclone.go ./pkg/storkctl/version_test.go ./pkg/storkctl/fake_api_server_test.go ./pkg/storkctl/create.go ./pkg/storkctl/clusterpair_test.go ./pkg/storkctl/delete.go ./pkg/storkctl/common.go ./pkg/storkctl/applicationrestore_test.go ./pkg/storkctl/groupsnapshot.go ./pkg/storkctl/snapshot_test.go ./pkg/storkctl/get.go ./pkg/storkctl/factory.go ./pkg/storkctl/clusterdomainsstatus.go ./pkg/storkctl/version.go ./pkg/storkctl/generate.go ./pkg/storkctl/schedulepolicy.go ./pkg/storkctl/migration_test.go ./pkg/storkctl/snapshotschedule.go ./pkg/storkctl/applicationrestore.go ./pkg/storkctl/suspend.go ./pkg/storkctl/migration.go ./pkg/storkctl/factory_test.go ./pkg/storkctl/applicationbackupschedule.go ./pkg/storkctl/storkctl.go ./pkg/storkctl/applicationbackup.go ./pkg/storkctl/clusterdomainupdate.go ./pkg/storkctl/watch.go ./pkg/storkctl/clusterdomainsstatus_test.go ./pkg/storkctl/applicationbackup_test.go ./pkg/storkctl/clusterdomainupdate_test.go ./pkg/storkctl/backuplocation_test.go ./pkg/storkctl/pvc_test.go ./pkg/storkctl/applicationclone_test.go ./pkg/storkctl/migrationschedule.go ./pkg/storkctl/applicationregistration.go ./pkg/storkctl/snapshotschedule_test.go ./pkg/storkctl/common_test.go ./pkg/storkctl/pvc.go ./pkg/controllers/controllers.go ./pkg/controllers/finalizers.go ./pkg/cmdexecutor/cmdexecutor.go ./pkg/cmdexecutor/status/status.go ./pkg/clusterdomains/clusterdomains.go ./pkg/clusterdomains/controllers/clusterdomainupdate.go ./pkg/clusterdomains/controllers/clusterdomainstatus.go ./pkg/version/version.go
+# default
+.RECIPEPREFIX := 
+# default
+MAKE_HOST := x86_64-pc-linux-gnu
+# environment
+LANG = C
+# makefile (from 'Makefile', line 3)
+DOCKER_HUB_STORK_IMAGE = stork
+# environment
+VSCODE_EXTHOST_WILL_SEND_SOCKET = true
+# variable set hash-table stats:
+# Load=101/1024=10%, Rehash=0, Collisions=12/158=8%
+
+# Pattern-specific Variable Values
+
+# No pattern-specific variable values.
+
+# Directories
+
+# . (device 64769, inode 14835842): 32 files, no impossibilities.
+ 
+
+# 32 files, no impossibilities in 1 directories.
+
+# Implicit Rules
+
+# No implicit rules.
+
+# Files
+
+staticcheck:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+px-statfs:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 131):
+	@echo "Building px_statfs.so"
+	@cd drivers/volume/portworx/px-statfs && gcc -g -shared -fPIC -o $(BIN)/px_statfs.so px_statfs.c -ldl -D__USE_LARGEFILE64
+
+cmdexecutor:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 121):
+	@echo "Building command executor binary"
+	@cd cmd/cmdexecutor && GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/cmdexecutor
+
+all: stork storkctl cmdexecutor pretest px-statfs
+#  Command line target.
+#  Implicit rule search has been done.
+#  File does not exist.
+#  File has been updated.
+#  Needs to be updated (-q is set).
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/5=0%
+
+.PHONY: test clean vendor vendor-update px-statfs
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+integration-test:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 102):
+	@echo "Building stork integration tests"
+	@cd test/integration_test && GOOS=linux go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test
+
+# Not a target:
+.SUFFIXES:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+Makefile:
+#  Implicit rule search has been done.
+#  Last modified 2022-07-18 17:50:50.707418157
+#  File has been updated.
+#  Successfully updated.
+
+vendor-tidy:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 48):
+	go mod tidy
+
+test:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 92):
+	echo "" > coverage.txt
+	for pkg in $(PKGS);	do \
+		go test -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
+		if [ -f profile.out ]; then \
+			cat profile.out >> coverage.txt; \
+			rm profile.out; \
+		fi; \
+	done
+
+stork:
+#  Implicit rule search has not been done.
+#  Implicit/static pattern stem: ''
+#  File does not exist.
+#  File has been updated.
+#  Needs to be updated (-q is set).
+# automatic
+# @ := stork
+# automatic
+# % := 
+# automatic
+# * := 
+# automatic
+# + := 
+# automatic
+# | := 
+# automatic
+# < := 
+# automatic
+# ^ := 
+# automatic
+# ? := 
+# variable set hash-table stats:
+# Load=8/32=25%, Rehash=0, Collisions=1/13=8%
+#  recipe to execute (from 'Makefile', line 117):
+	@echo "Building the stork binary"
+	@cd cmd/stork && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/stork
+
+vet:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 67):
+	go vet $(PKGS)
+	go vet -tags unittest $(PKGS)
+	go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
+
+container: help
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 135):
+	@echo "Building container: docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile . "
+	sudo docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile .
+	@echo "Building container: docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor ."
+	sudo docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor .
+
+check-fmt:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 80):
+	bash -c "diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES))"
+
+gocyclo:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 86):
+	GO111MODULE=off go get -u github.com/fzipp/gocyclo
+	gocyclo -over 15 $(GO_FILES)
+
+help:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 142):
+	@echo "Updating help file"
+	go-md2man -in help.md -out help.1
+	go-md2man -in help-cmdexecutor.md -out help-cmdexecutor.1
+
+vendor-update:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 51):
+	go mod download
+
+integration-test-deploy:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 110):
+	sudo docker push $(STORK_TEST_IMG)
+
+# Not a target:
+.DEFAULT:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+errcheck:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 74):
+	GO111MODULE=off go get -u github.com/kisielk/errcheck
+	errcheck -verbose -blank $(PKGS)
+	errcheck -verbose -blank -tags unittest $(PKGS)
+	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
+
+do-fmt:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 83):
+	 gofmt -s -w $(GO_FILES)
+
+clean:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 151):
+	-rm -rf $(BIN)
+	@echo "Deleting image "$(STORK_IMG)
+	-sudo docker rmi -f $(STORK_IMG)
+	@echo "Deleting image "$(CMD_EXECUTOR_IMG)
+	-sudo docker rmi -f $(CMD_EXECUTOR_IMG)
+	go clean -i $(PKGS)
+
+storkctl:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 125):
+	@echo "Building storkctl"
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
+
+integration-test-container:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 106):
+	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
+	@cd test/integration_test && sudo docker build --tag $(STORK_TEST_IMG) -f Dockerfile .
+
+codegen:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 113):
+	@echo "Generating CRD"
+	(GOFLAGS="" hack/update-codegen.sh)
+
+lint:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 57):
+	GO111MODULE=off go get -u golang.org/x/lint/golint
+	for file in $(GO_FILES); do \
+		echo "running lint on ${file}" \
+		golint $${file}; \
+		if [ -n "$$(golint $${file})" ]; then \
+			exit 1; \
+		fi; \
+	done
+
+deploy:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 147):
+	sudo docker push $(STORK_IMG)
+	sudo docker push $(CMD_EXECUTOR_IMG)
+
+pretest: check-fmt vet errcheck staticcheck
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+vendor:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 54):
+	go mod vendor
+
+# files hash-table stats:
+# Load=29/1024=3%, Rehash=0, Collisions=0/66=0%
+# VPATH Search Paths
+
+# No 'vpath' search paths.
+
+# No general ('VPATH' variable) search path.
+
+# strcache buffers: 1 (0) / strings = 60 / storage = 580 B / avg = 9 B
+# current buf: size = 8162 B / used = 580 B / count = 60 / avg = 9 B
+
+# strcache performance: lookups = 109 / hit rate = 44%
+# hash-table stats:
+ 
+# Load=60/8192=1%, Rehash=0, Collisions=1/109=1%
+# Finished Make data base on Tue Jul 19 21:29:40 2022
+
+ 
