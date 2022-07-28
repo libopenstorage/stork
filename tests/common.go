@@ -113,7 +113,6 @@ const (
 	scaleFactorCliFlag                   = "scale-factor"
 	minRunTimeMinsFlag                   = "minimun-runtime-mins"
 	chaosLevelFlag                       = "chaos-level"
-	hyperConvergedFlag                   = "hyper-converged"
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
 	provisionerFlag                      = "provisioner"
@@ -3155,7 +3154,6 @@ func ParseFlags() {
 	var meteringIntervalMins time.Duration
 	var bundleLocation string
 	var customConfigPath string
-	var hyperConverged bool
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -3215,7 +3213,6 @@ func ParseFlags() {
 	flag.StringVar(&jiraUserName, jiraUserNameFlag, "", "Username to be used for JIRA client")
 	flag.StringVar(&jiraToken, jiraTokenFlag, "", "API token for accessing the JIRA")
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
-	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.Parse()
 
 	appList, err := splitCsv(appListCSV)
@@ -3291,7 +3288,6 @@ func ParseFlags() {
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
 				MeteringIntervalMins:                meteringIntervalMins,
-				IsHyperConverged:                    hyperConverged,
 			}
 		})
 	}
