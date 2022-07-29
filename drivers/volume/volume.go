@@ -207,6 +207,9 @@ type Driver interface {
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error
 
+	// RecoverNode makes a given node back to normal
+	RecoverNode(n *node.Node) error
+
 	// RejoinNode rejoins a given node back to the cluster
 	RejoinNode(n *node.Node) error
 

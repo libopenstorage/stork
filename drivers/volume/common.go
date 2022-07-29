@@ -464,11 +464,11 @@ func (d *DefaultDriver) DecommissionNode(n *node.Node) error {
 	}
 }
 
-// RejoinNode rejoins a given node back to the cluster
-func (d *DefaultDriver) RejoinNode(n *node.Node) error {
+// RecoverNode recovers node back to the normal
+func (d *DefaultDriver) RecoverNode(n *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "RejoinNode()",
+		Operation: "RecoverNode()",
 	}
 }
 
@@ -813,5 +813,13 @@ func (d *DefaultDriver) GetKvdbMembers(n node.Node) (map[string]*MetadataNode, e
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetKvdbMembers()",
+	}
+}
+
+// RejoinNode rejoins a given node back to the cluster
+func (d *DefaultDriver) RejoinNode(n *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RejoinNode()",
 	}
 }

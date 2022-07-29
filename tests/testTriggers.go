@@ -42,6 +42,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 )
 
@@ -90,7 +91,8 @@ const (
 )
 
 const (
-	pxStatusError = "ERROR GETTING PX STATUS"
+	pxStatusError  = "ERROR GETTING PX STATUS"
+	pxVersionError = "ERROR GETTING PX VERSION"
 )
 
 // EmailRecipients list of email IDs to send email to
@@ -181,11 +183,12 @@ type emailData struct {
 }
 
 type nodeInfo struct {
-	MgmtIP    string
-	NodeName  string
-	PxVersion string
-	Status    string
-	Cores     string
+	MgmtIP     string
+	NodeName   string
+	PxVersion  string
+	Status     string
+	NodeStatus string
+	Cores      string
 }
 
 type triggerInfo struct {
@@ -1896,6 +1899,25 @@ func TriggerEmailReporter() {
 	emailData.MasterIP = masterNodeList
 
 	for _, n := range node.GetWorkerNodes() {
+		k8sNode, err := core.Instance().GetNodeByName(n.Name)
+		k8sNodeStatus := "False"
+
+		if err != nil {
+			logrus.Errorf("Unable to get K8s node , Err : %v", err)
+		} else {
+			for _, condition := range k8sNode.Status.Conditions {
+				if condition.Type == v1.NodeReady {
+					if condition.Status == v1.ConditionTrue && !k8sNode.Spec.Unschedulable {
+						k8sNodeStatus = "True"
+						logrus.Infof("Node %v has Node Status True", n.Name)
+					} else {
+						logrus.Errorf("Node %v has Node Status False", n.Name)
+
+					}
+				}
+			}
+
+		}
 		if n.StorageNode != nil {
 			status, err := Inst().V.GetNodeStatus(n)
 			if err != nil {
@@ -1904,8 +1926,13 @@ func TriggerEmailReporter() {
 				pxStatus = status.String()
 			}
 
+			pxVersion, err := Inst().V.GetPxVersionOnNode(n)
+			if err != nil {
+				pxVersion = pxVersionError
+			}
+
 			emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
-				PxVersion: n.NodeLabels["PX Version"], Status: pxStatus, Cores: coresMap[n.Name]})
+				PxVersion: pxVersion, Status: pxStatus, NodeStatus: k8sNodeStatus, Cores: coresMap[n.Name]})
 		}
 	}
 
@@ -1928,8 +1955,8 @@ func TriggerEmailReporter() {
 
 	emailSub := subject
 	stc, err := Inst().V.GetPXStorageCluster()
-	if err != nil {
-		emailSub = stc.GetClusterName()
+	if err == nil {
+		emailSub = stc.GetName()
 	}
 
 	emailDetails := &email.Email{
@@ -3282,6 +3309,135 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 	})
 }
 
+func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
+	poolResizePossible := false
+	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
+		logrus.Infof("Validating pool :%v to expand", poolToBeResized.Uuid)
+		for {
+			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
+
+			if err != nil {
+				err = fmt.Errorf("error getting storage pools list. Err: %v", err)
+				logrus.Error(err.Error())
+				return poolResizePossible, err
+			}
+
+			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
+
+			if updatedPoolToBeResized.LastOperation.Status != opsapi.SdkStoragePool_OPERATION_SUCCESSFUL {
+				if updatedPoolToBeResized.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
+
+					err = fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
+					return poolResizePossible, err
+
+				}
+
+				logrus.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
+				time.Sleep(time.Second * 90)
+				continue
+			}
+			poolResizePossible = true
+			break
+		}
+	}
+
+	if poolToBeResized != nil && poolToBeResized.LastOperation == nil {
+		poolResizePossible = true
+	}
+	return poolResizePossible, nil
+}
+
+func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
+
+	f := func() (interface{}, bool, error) {
+		pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
+		if err != nil {
+			return nil, false, fmt.Errorf("error getting pools list, Error :%v", err)
+		}
+
+		expandedPool := pools[poolIDToResize]
+		if expandedPool.LastOperation != nil {
+			logrus.Infof("Current pool %s last opration status : %v", poolIDToResize, expandedPool.LastOperation.Status)
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
+				return nil, false, fmt.Errorf("PoolResize for %s has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
+			}
+		}
+		newPoolSize := expandedPool.TotalSize / units.GiB
+
+		if newPoolSize > initialSize {
+			// storage pool resize has been completed
+			return nil, true, nil
+		}
+		return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d", poolIDToResize, newPoolSize)
+	}
+
+	_, err := task.DoRetryWithTimeout(f, 90*time.Minute, 1*time.Minute)
+	return err
+}
+
+func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
+	pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
+	if err != nil {
+		err = fmt.Errorf("error getting storage pools list. Err: %v", err)
+		return nil, err
+
+	}
+
+	if len(pools) == 0 {
+		err = fmt.Errorf("length of pools should be greater than 0")
+		return nil, err
+	}
+
+	// pick a random pools from a pools list and resize it
+	expectedCapacity := (len(pools) / 2) + 1
+	poolsToExpand := make([]*opsapi.StoragePool, 0)
+	for _, pool := range pools {
+		if len(poolsToExpand) <= expectedCapacity {
+			poolsToExpand = append(poolsToExpand, pool)
+		} else {
+			break
+		}
+
+	}
+	return poolsToExpand, nil
+
+}
+
+func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.StoragePool, chaosLevel uint64, resizeOperationType opsapi.SdkStoragePool_ResizeOperationType) {
+	defer wg.Done()
+	poolValidity, err := isPoolResizePossible(pool)
+	if err != nil {
+		logrus.Error(err)
+		UpdateOutcome(event, err)
+	}
+
+	expansionType := "resize-disk"
+
+	if resizeOperationType == 1 {
+		expansionType = "add-disk"
+	}
+
+	if poolValidity {
+		initialPoolSize := pool.TotalSize / units.GiB
+
+		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
+		if err != nil {
+			err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, expansionType, err.Error())
+			logrus.Error(err.Error())
+			UpdateOutcome(event, err)
+		} else {
+			err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+			if err != nil {
+				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, expansionType, err)
+				logrus.Error(err)
+				UpdateOutcome(event, err)
+			}
+		}
+
+	}
+
+}
+
 // TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
 func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -3301,79 +3457,29 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 
 	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
-		time.Sleep(1 * time.Minute)
+
+		poolsToBeResized, err := getStoragePoolsToExpand()
+
+		if err != nil {
+			logrus.Error(err)
+			UpdateOutcome(event, err)
+		}
+		logrus.Infof("Pools to resize-disk [%v]", poolsToBeResized)
+		var wg sync.WaitGroup
+
+		for _, pool := range poolsToBeResized {
+			//Initiating multiple pool expansions by resize-disk
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2)
+			wg.Add(1)
+
+		}
+		wg.Wait()
+
+	})
+
+	Step("validate all apps after pool resize using resize-disk operation", func() {
 		for _, ctx := range *contexts {
-			var appVolumes []*volume.Volume
-			var err error
-			Step("Get StoragePool IDs from the app volumes", func() {
-				appVolumes, err = Inst().S.GetVolumes(ctx)
-				UpdateOutcome(event, err)
-				if len(appVolumes) == 0 {
-					err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
-					logrus.Errorf(err.Error())
-					UpdateOutcome(event, err)
-				}
-				poolSet := make(map[string]struct{})
-				var exists = struct{}{}
-				for _, vol := range appVolumes {
-					// Skipping get replicaset operations for Pure Volumes
-					isPureVol, err := Inst().V.IsPureVolume(vol)
-					if err != nil {
-						UpdateOutcome(event, err)
-					}
-					if isPureVol {
-						logrus.Warningf(
-							"Pure DA volume doesn't consume space in Portworx pools",
-							"Skipping get replicaset for pure volume %s", vol.Name,
-						)
-						continue
-					}
-					replicaSets, err := Inst().V.GetReplicaSets(vol)
-					if err != nil {
-						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
-					}
-					UpdateOutcome(event, err)
-
-					for _, poolUUID := range replicaSets[0].PoolUuids {
-						logrus.Infof("Pool UUID: %v, Vol: %v", poolUUID, vol.Name)
-						poolSet[poolUUID] = exists
-
-					}
-				}
-
-				for id := range poolSet {
-					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(chaosLevel))
-					if err != nil {
-						err = fmt.Errorf("error pool [%v ]resize-disk: [%v]", id, err.Error())
-						logrus.Error(err.Error())
-					}
-					UpdateOutcome(event, err)
-				}
-				logrus.Infof("Waiting for 10 mins for resize to initiate and check status")
-				time.Sleep(10 * time.Minute)
-				Step("Validate the Pool status after re-size disk", func() {
-					nodeList := node.GetStorageDriverNodes()
-					if len(nodeList) == 0 {
-						err = fmt.Errorf("unable to get node list")
-						logrus.Errorf("Error getting nodelist while pool resize : [%v]", err.Error())
-						UpdateOutcome(event, err)
-					}
-					for _, n := range nodeList {
-						for _, p := range n.StoragePools {
-							poolID := p.GetUuid()
-							poolLastOperationType := p.GetLastOperation().GetType().String()
-							poolLastOperationStatus := p.GetLastOperation().GetStatus().String()
-							poolLastOperationMsg := p.GetLastOperation().GetMsg()
-							logrus.Infof("Pool ID: %s, LastOperation: %s, Status: %s, Message:%s", poolID, poolLastOperationType, poolLastOperationStatus, poolLastOperationMsg)
-							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" && poolLastOperationStatus != "OPERATION_PENDING" {
-								UpdateOutcome(event, fmt.Errorf("last operation %v for pool %v is failed with Msg: %v", poolLastOperationType, poolID, poolLastOperationMsg))
-							}
-						}
-					}
-
-				})
-
-			})
+			ValidateContext(ctx)
 		}
 	})
 
@@ -3397,78 +3503,29 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	}()
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
-		time.Sleep(1 * time.Minute)
+		poolsToBeResized, err := getStoragePoolsToExpand()
+
+		if err != nil {
+			logrus.Error(err)
+			UpdateOutcome(event, err)
+		}
+		logrus.Infof("Pools to add-disk [%v]", poolsToBeResized)
+
+		var wg sync.WaitGroup
+
+		for _, pool := range poolsToBeResized {
+			//Initiating multiple pool expansions by add-disk
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1)
+			wg.Add(1)
+
+		}
+		wg.Wait()
+
+	})
+
+	Step("validate all apps after pool resize using add-disk operation", func() {
 		for _, ctx := range *contexts {
-			var appVolumes []*volume.Volume
-			var err error
-			Step("Get StoragePool IDs from the app volumes", func() {
-				appVolumes, err = Inst().S.GetVolumes(ctx)
-				if err != nil {
-					UpdateOutcome(event, err)
-				}
-				if len(appVolumes) == 0 {
-					err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
-					logrus.Errorf(err.Error())
-					UpdateOutcome(event, err)
-				}
-				poolSet := make(map[string]struct{})
-				var exists = struct{}{}
-				for _, vol := range appVolumes {
-					// Skipping get replicaset operations for Pure DA volumes
-					isPureVol, err := Inst().V.IsPureVolume(vol)
-					if err != nil {
-						UpdateOutcome(event, err)
-					}
-					if isPureVol {
-						logrus.Warningf("Skipping get replicaset operations Pure DA Volume %s", vol.Name)
-						continue
-					}
-					replicaSets, err := Inst().V.GetReplicaSets(vol)
-					if err != nil {
-						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
-					}
-					UpdateOutcome(event, err)
-
-					for _, poolUUID := range replicaSets[0].PoolUuids {
-						logrus.Infof("Pool UUID: %v, Vol: %v", poolUUID, vol.Name)
-						poolSet[poolUUID] = exists
-
-					}
-				}
-
-				for id := range poolSet {
-					err = Inst().V.ResizeStoragePoolByPercentage(id, 1, uint64(chaosLevel))
-					if err != nil {
-						err = fmt.Errorf("error pool [%v ]add-disk: [%v]", id, err.Error())
-						logrus.Error(err.Error())
-					}
-					UpdateOutcome(event, err)
-				}
-				logrus.Infof("Waiting for 10 mins for add disk to initiate and check status")
-				time.Sleep(10 * time.Minute)
-				Step("Validate the Pool status after add disk", func() {
-					nodeList := node.GetStorageDriverNodes()
-					if len(nodeList) == 0 {
-						err = fmt.Errorf("unable to get node list")
-						logrus.Errorf("Error getting nodelist while pool resize : [%v]", err.Error())
-						UpdateOutcome(event, err)
-					}
-					for _, n := range nodeList {
-						for _, p := range n.StoragePools {
-							poolID := p.GetUuid()
-							poolLastOperationType := p.GetLastOperation().GetType().String()
-							poolLastOperationStatus := p.GetLastOperation().GetStatus().String()
-							poolLastOperationMsg := p.GetLastOperation().GetMsg()
-							logrus.Infof("Pool ID: %s, LastOperation: %s, Status: %s, Message:%s", poolID, poolLastOperationType, poolLastOperationStatus, poolLastOperationMsg)
-							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" && poolLastOperationStatus != "OPERATION_PENDING" {
-								UpdateOutcome(event, fmt.Errorf("last operation %v for pool %v is failed with Msg: %v", poolLastOperationType, poolID, poolLastOperationMsg))
-							}
-						}
-					}
-
-				})
-
-			})
+			ValidateContext(ctx)
 		}
 	})
 
@@ -3513,7 +3570,6 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 							waitCount := 10
 							for !isUpgradeDone && !isExit {
 								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								UpdateOutcome(event, err)
 								if err == nil {
 									pxVersion, err := Inst().V.GetPxVersionOnNode(n)
 									UpdateOutcome(event, err)
@@ -3527,13 +3583,18 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 											time.Sleep(2 * time.Minute)
 											if waitCount == 0 {
 												isExit = true
-												err = fmt.Errorf("node [%x] upgrade to %v failed", n.Name, pxVersion)
+												err = fmt.Errorf("node [%x] upgrade to %v failed", n.Name, expectedVersion)
+												logrus.Error(err)
 												UpdateOutcome(event, err)
 											}
 
 										}
 
 									}
+
+								} else {
+									isExit = true
+									UpdateOutcome(event, err)
 
 								}
 							}
@@ -3545,7 +3606,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 				}
 
 			} else {
-				logrus.Info("Initiatingdaemonset based install upgrade")
+				logrus.Info("Initiating Daemonset based install upgrade")
 				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion,
 					Inst().EnableStorkUpgrade)
@@ -3589,7 +3650,7 @@ func getOperatorLatestVersion() (string, error) {
 			return operatorTag, nil
 		}
 	}
-	return "", fmt.Errorf("operator version not found in respose body : %v", bodyString)
+	return Inst().StorageDriverUpgradeEndpointVersion, nil
 
 }
 
@@ -4105,11 +4166,14 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 				if *status == opsapi.Status_STATUS_NONE {
 					return true, false, nil
 				}
-				return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecomm.Name)
+				return false, true, fmt.Errorf("node %s not decomissioned yet,Current Status: %v", nodeToDecomm.Name, *status)
 			}
 			_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 
 			if err != nil {
+				UpdateOutcome(event, err)
+				err = Inst().V.RecoverNode(&nodeToDecomm)
+				logrus.Errorf("Error recovering node after failed decommission, Err: %v", err)
 				UpdateOutcome(event, err)
 			} else {
 
@@ -4166,31 +4230,35 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					logrus.Infof("Error while rejoining the node. error: %v", err)
 					UpdateOutcome(event, err)
 				} else {
+					isNodeExist := false
 					logrus.Info("Waiting for node to rejoin and refresh inventory")
 					time.Sleep(90 * time.Second)
-					err = Inst().S.RefreshNodeRegistry()
-					if err != nil {
-						UpdateOutcome(event, err)
-					}
-
-					latestNodes, err := Inst().V.GetPxNodes()
-					if err != nil {
-						UpdateOutcome(event, err)
-					}
-
-					isNodeExist := false
-					for _, latestNode := range latestNodes {
-
-						logrus.Infof("Inspecting Node: %v", latestNode.Hostname)
-
-						if latestNode.Hostname == decommissionedNode.Hostname {
-							isNodeExist = true
-							break
+					t := func() (interface{}, bool, error) {
+						err = Inst().S.RefreshNodeRegistry()
+						if err != nil {
+							logrus.Errorf("Error refreshing node registry, Error : %v", err)
+							return "", true, err
+						}
+						latestNodes, err := Inst().V.GetPxNodes()
+						if err != nil {
+							logrus.Errorf("Error getting px nodes, Error : %v", err)
+							return "", true, err
 						}
 
+						for _, latestNode := range latestNodes {
+							logrus.Infof("Inspecting Node: %v", latestNode.Hostname)
+							if latestNode.Hostname == decommissionedNode.Hostname {
+								isNodeExist = true
+								return "", false, nil
+							}
+						}
+						return "", true, fmt.Errorf("node %s node yet rejoined", decommissionedNode.Hostname)
 					}
+					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
+
 					if !isNodeExist {
-						err = fmt.Errorf("node %v rejoin failed", decommissionedNode.Hostname)
+						err = fmt.Errorf("node %v rejoin failed,Error: %v", decommissionedNode.Hostname, err)
+						logrus.Error(err)
 						UpdateOutcome(event, err)
 					} else {
 						logrus.Infof("node %v rejoin is successful ", decommissionedNode.Hostname)
@@ -4766,6 +4834,7 @@ tbody tr:last-child {
    <td align="center"><h4>PX Node Name </h4></td>
    <td align="center"><h4>PX Version </h4></td>
    <td align="center"><h4>PX Status </h4></td>
+   <td align="center"><h4>Node Status </h4></td>
    <td align="center"><h4>Cores </h4></td>
  </tr>
 {{range .NodeInfo}}
@@ -4777,6 +4846,11 @@ tbody tr:last-child {
 <td bgcolor="green">{{ .Status }}</td>
 {{ else }}
 <td bgcolor="red">{{ .Status }}</td>
+{{ end }}
+{{ if eq .NodeStatus "True"}}
+<td bgcolor="green">{{ .NodeStatus }}</td>
+{{ else }}
+<td bgcolor="red">{{ .NodeStatus }}</td>
 {{ end }}
 {{ if .Cores }}
 <td bgcolor="red">1</td>
