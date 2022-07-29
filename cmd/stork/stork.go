@@ -397,7 +397,6 @@ func displayLeader(name string) {
 }
 
 func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
-
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 

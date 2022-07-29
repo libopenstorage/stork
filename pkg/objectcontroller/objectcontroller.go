@@ -28,8 +28,6 @@ const (
 	envRetryIntervalStart = "RETRY_INTERVAL_START"
 	envRetryIntervalMax   = "RETRY_INTERVAL_MAX"
 
-	schemaGroupVersion = "v1alpha1"
-
 	BucketClassResourceName   = "pxbucketclass"
 	BucketClassResourcePlural = "pxbucketclasses"
 	BucketClassResourceShort  = "pbclass"
@@ -48,7 +46,6 @@ const (
 
 var (
 	workers            = 4
-	resyncPeriod       = 15 * time.Minute
 	retryIntervalStart = 1 * time.Second
 	retryIntervalMax   = 5 * time.Minute
 )
