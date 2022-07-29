@@ -60,8 +60,9 @@ Stork is written in Golang. To build Stork:
 # export DOCKER_HUB_REPO=myrepo
 # export DOCKER_HUB_STORK_IMAGE=stork
 # export DOCKER_HUB_STORK_TAG=latest
-# export DOCKER_HUB_CMD_EXECUTOR_IMAGE=storkctl
+# export DOCKER_HUB_CMD_EXECUTOR_IMAGE=cmdexecutor
 # export DOCKER_HUB_CMD_EXECUTOR_TAG=latest
+# make
 # make container
 # make deploy
 ```
