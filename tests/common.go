@@ -2186,12 +2186,13 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 }
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
-func DeleteBackupAndDependencies(backupName string, orgID string, clusterName string) error {
+func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 
 	backupDeleteRequest := &api.BackupDeleteRequest{
 		Name:    backupName,
+		Uid:     backupUID,
 		OrgId:   orgID,
 		Cluster: clusterName,
 	}
@@ -2202,6 +2203,7 @@ func DeleteBackupAndDependencies(backupName string, orgID string, clusterName st
 
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
+		Uid:   backupUID,
 		OrgId: orgID,
 	}
 	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
@@ -2213,7 +2215,7 @@ func DeleteBackupAndDependencies(backupName string, orgID string, clusterName st
 	if backupDelStatus.GetStatus() == api.BackupInfo_StatusInfo_DeletePending {
 		reason := strings.Split(backupDelStatus.GetReason(), ": ")
 		dependency := reason[len(reason)-1]
-		err = DeleteBackupAndDependencies(dependency, orgID, clusterName)
+		err = DeleteBackupAndDependencies(dependency, backupUID, orgID, clusterName)
 		if err != nil {
 			return err
 		}
@@ -2274,7 +2276,7 @@ func SetupBackup(testName string) {
 }
 
 // DeleteBackup deletes backup
-func DeleteBackup(backupName string, orgID string) {
+func DeleteBackup(backupName string, backupUID string, orgID string) {
 
 	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
 		backupName, orgID), func() {
@@ -2283,6 +2285,7 @@ func DeleteBackup(backupName string, orgID string) {
 		bkpDeleteRequest := &api.BackupDeleteRequest{
 			Name:  backupName,
 			OrgId: orgID,
+			Uid:   backupUID,
 		}
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -2921,7 +2924,7 @@ func TearDownBackupRestoreAll() {
 	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	backups := enumBkpResponse.GetBackups()
 	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), OrgID)
+		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID)
 	}
 
 	logrus.Infof("Enumerating restores")

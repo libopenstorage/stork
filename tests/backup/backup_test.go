@@ -41,6 +41,7 @@ const (
 	storkDeploymentNamespace = "kube-system"
 
 	appReadinessTimeout = 10 * time.Minute
+	enumerateBatchSize  = 100
 )
 
 var (
@@ -65,7 +66,8 @@ func TestBackup(t *testing.T) {
 func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	for _, bkpNamespace := range bkpNamespaces {
 		BackupName := fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespace)
-		DeleteBackup(BackupName, OrgID)
+		backupUID := getBackupUID(OrgID, BackupName)
+		DeleteBackup(BackupName, backupUID, OrgID)
 	}
 	for _, restoreNamespace := range restoreNamespaces {
 		RestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, restoreNamespace)
@@ -166,9 +168,11 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			// setup task to delete stork pods as soon as it starts doing backup
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupUID := getBackupUID(orgID, backupName)
 				req := &api.BackupInspectRequest{
 					Name:  backupName,
 					OrgId: orgID,
+					Uid:   backupUID,
 				}
 
 				logrus.Infof("backup %s wait for running", backupName)
@@ -474,9 +478,11 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 							provider, Inst().InstanceID)
 
 						// Wait until all backups/restores start running
+						backupUID := getBackupUID(orgID, backupName)
 						req := &api.BackupInspectRequest{
 							Name:  backupName,
 							OrgId: orgID,
+							Uid:   backupUID,
 						}
 
 						logrus.Infof("backup %s wait for running", backupName)
@@ -702,9 +708,11 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 							Step(fmt.Sprintf("Delete backup full name %s:%s:%s",
 								clusterName, namespace, backupName), func() {
 								backupDriver := Inst().Backup
+								backupUID := getBackupUID(orgID, backupName)
 								bkpDeleteRequest := &api.BackupDeleteRequest{
 									Name:  backupName,
 									OrgId: orgID,
+									Uid:   backupUID,
 								}
 								//	ctx, err = backup.GetPxCentralAdminCtx()
 								ctx, err = backup.GetAdminCtxFromSecret()
@@ -872,9 +880,11 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			})
 
 			triggerFn := func() (bool, error) {
+				backupUID := getBackupUID(OrgID, BackupName)
 				backupInspectReq := &api.BackupInspectRequest{
 					Name:  BackupName,
 					OrgId: OrgID,
+					Uid:   backupUID,
 				}
 				//ctx, err := backup.GetPxCentralAdminCtx()
 				ctx, err := backup.GetAdminCtxFromSecret()
@@ -1799,9 +1809,11 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 	var nodes []node.Node
 	backupDriver := Inst().Backup
 
+	backupUID := getBackupUID(orgID, backupName)
 	backupInspectReq := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
+		Uid:   backupUID,
 	}
 	err := Inst().Backup.WaitForBackupRunning(context.Background(), backupInspectReq, defaultTimeout, defaultRetryInterval)
 	Expect(err).NotTo(HaveOccurred(),
@@ -1880,7 +1892,8 @@ func CreateRestore(restoreName string, backupName string,
 //TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
 func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	for _, backupName := range backups {
-		DeleteBackup(backupName, OrgID)
+		backupUID := getBackupUID(OrgID, backupName)
+		DeleteBackup(backupName, backupUID, OrgID)
 	}
 	for _, restoreName := range restores {
 		DeleteRestore(restoreName, OrgID)
@@ -1924,4 +1937,17 @@ func CreateRestoreGetErr(restoreName string, backupName string,
 		// TODO: validate createClusterResponse also
 	})
 	return err
+}
+
+func getBackupUID(orgID, backupName string) string {
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+			err))
+	backupUID, err := backupDriver.GetBackupUID(ctx, orgID, backupName)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to get backup uid for org %s backup %s ctx: [%v]",
+			orgID, backupName, err))
+	return backupUID
 }

@@ -38,6 +38,7 @@ const (
 	nodeDriverName        = "ssh"
 	volumeDriverName      = "pxd"
 	licFeatureName        = "BackupNodeCount"
+	enumerateBatchSize    = 100
 )
 
 type portworx struct {
@@ -388,15 +389,19 @@ func (p *portworx) GetVolumeBackupIDs(
 		return volumeBackupIDs, err
 	}
 
-	backupInspectReq := &api.BackupInspectRequest{
-		Name:  backupName,
-		OrgId: orgID,
-	}
-	inspectResp, err := p.backupManager.Inspect(ctx, backupInspectReq)
+	backupUUID, err := p.GetBackupUID(ctx, orgID, backupName)
 	if err != nil {
 		return volumeBackupIDs, err
 	}
-	backupUUID := inspectResp.GetBackup().GetUid()
+	backupInspectReq := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUUID,
+	}
+	_, err = p.backupManager.Inspect(ctx, backupInspectReq)
+	if err != nil {
+		return volumeBackupIDs, err
+	}
 	storkApplicationBackupCRName := fmt.Sprintf("%s-%s", backupName, backupUUID[0:7])
 	var storkApplicationBackupCR *v1alpha1.ApplicationBackup
 
@@ -454,9 +459,15 @@ func (p *portworx) WaitForBackupCompletion(
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
 ) error {
+
+	backupUID, err := p.GetBackupUID(ctx, orgID, backupName)
+	if err != nil {
+		return err
+	}
 	req := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
+		Uid:   backupUID,
 	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
@@ -485,7 +496,7 @@ func (p *portworx) WaitForBackupCompletion(
 				req.GetName(), currentStatus)
 	}
 
-	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	_, err = task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
 	if err != nil || backupError != nil {
 		return fmt.Errorf("failed to wait for backup. Error:[%v] Reason:[%v]", err, backupError)
 	}
@@ -502,9 +513,14 @@ func (p *portworx) WaitForBackupDeletion(
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
 ) error {
+	backupUID, err := p.GetBackupUID(ctx, orgID, backupName)
+	if err != nil {
+		return err
+	}
 	req := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
+		Uid:   backupUID,
 	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
@@ -538,7 +554,7 @@ func (p *portworx) WaitForBackupDeletion(
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	_, err = task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
 	if err != nil {
 		return fmt.Errorf("failed to wait for backup deletion. Error:[%v] Reason:[%v]", err, backupError)
 	}
@@ -606,9 +622,14 @@ func (p *portworx) WaitForDeletePending(
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
 ) error {
+	backupUID, err := p.GetBackupUID(ctx, orgID, backupName)
+	if err != nil {
+		return err
+	}
 	req := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
+		Uid:   backupUID,
 	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
@@ -633,7 +654,7 @@ func (p *portworx) WaitForDeletePending(
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	_, err = task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
 	if err != nil {
 		return fmt.Errorf("failed to transition to delete pending. Error:[%v] Reason:[%v]", err, backupError)
 	}
@@ -1038,6 +1059,31 @@ func (p *portworx) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (
 
 func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error) {
 	return p.ruleManager.UpdateOwnership(ctx, req)
+}
+
+func (p *portworx) GetBackupUID(ctx context.Context, orgID, backupName string) (string, error) {
+	var backupUID string
+	var totalBackups int
+	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
+	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
+	for {
+		enumerateRsp, err := p.EnumerateBackup(ctx, bkpEnumerateReq)
+		if err != nil {
+			return backupUID, fmt.Errorf("Failed to enumerate backups for org %s ctx: [%v]", orgID, err)
+		}
+		for _, backup := range enumerateRsp.GetBackups() {
+			if backup.GetName() == backupName {
+				return backup.GetUid(), nil
+			}
+			totalBackups++
+		}
+		if uint64(totalBackups) >= enumerateRsp.GetTotalCount() {
+			break
+		} else {
+			bkpEnumerateReq.EnumerateOptions.ObjectIndex += uint64(len(enumerateRsp.GetBackups()))
+		}
+	}
+	return backupUID, nil
 }
 
 func init() {
