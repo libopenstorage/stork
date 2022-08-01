@@ -80,11 +80,14 @@ const (
 	formattingCommandPxctlLocalSnapshotCreate = "pxctl volume snapshot create %s --name %s"
 	formattingCommandPxctlCloudSnapCreate     = "pxctl cloudsnap backup %s"
 	pxctlVolumeList                           = "pxctl volume list "
+	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
+	pureKey                                   = "backend"
+	pureBlockValue                            = "pure_block"
 )
 
 const (
@@ -1612,19 +1615,16 @@ func (d *portworx) isVolumeAttachedOnNode(volume *api.Volume, node node.Node) (b
 		return false, err
 	}
 	// in case of single interface
-	logrus.Debugf("Driver management IP: %s", resp.Node.MgmtIp)
 	if resp.Node.MgmtIp == volume.AttachedOn {
 		return true, nil
 	}
 	// in case node has data and management interface
-	logrus.Debugf("Driver data IP: %s", resp.Node.DataIp)
 	if resp.Node.DataIp == volume.AttachedOn {
 		return true, nil
 	}
 
 	// check for alternate IPs
 	for _, ip := range node.Addresses {
-		logrus.Debugf("Checking if volume is on Node %s (%s)", node.Name, ip)
 		if ip == volume.AttachedOn {
 			return true, nil
 		}
@@ -4055,6 +4055,50 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 	logrus.Infof("trash vols: %v", trashcanVols)
 
 	return trashcanVols, nil
+}
+
+// GetNodePureVolumeAttachedCountMap return Map of nodeName and number of pure volume attached on that node
+func (d *portworx) GetNodePureVolumeAttachedCountMap() (map[string]int, error) {
+	// nodePureVolAttachedCountMap maintains count of attached volume
+	nodePureVolAttachedCountMap := make(map[string]int)
+	// pureLabelMap is a filter to be used for listing pure volumes
+	pureLabelMap := make(map[string]string)
+	// nodeIPMap maintains map of IP to node names
+	nodeIPMap := make(map[string]string)
+
+	volDriver := d.getVolDriver()
+	pureLabelMap[pureKey] = pureBlockValue
+
+	// Initializing the nodePureVolAttachedCountMap
+	for key, n := range node.GetNodesByName() {
+		nodePureVolAttachedCountMap[key] = 0
+		for _, ip := range n.Addresses {
+			nodeIPMap[ip] = n.Name
+		}
+	}
+
+	volumes, err := volDriver.EnumerateWithFilters(d.getContext(), &api.SdkVolumeEnumerateWithFiltersRequest{
+		Labels: pureLabelMap,
+	})
+	if err != nil {
+		logrus.Errorf("Failed to get pure volume list: %v", err)
+		return nil, err
+	}
+
+	for _, volumeID := range volumes.GetVolumeIds() {
+		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
+		if err != nil {
+			return nil, err
+		}
+		pxVol := volumeInspectResponse.Volume
+		if pxVol.State == api.VolumeState_VOLUME_STATE_ATTACHED {
+			if nodeName, ok := nodeIPMap[pxVol.AttachedOn]; ok {
+				nodePureVolAttachedCountMap[nodeName]++
+			}
+
+		}
+	}
+	return nodePureVolAttachedCountMap, nil
 }
 
 func (d *portworx) RecoverNode(n *node.Node) error {

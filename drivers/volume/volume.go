@@ -335,6 +335,9 @@ type Driver interface {
 
 	//GetKvdbMembers returns KVDB memebers of the PX cluster
 	GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error)
+
+	// GetNodePureVolumeAttachedCountMap returns map of node name and count of pure volume attached on that node
+	GetNodePureVolumeAttachedCountMap() (map[string]int, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
