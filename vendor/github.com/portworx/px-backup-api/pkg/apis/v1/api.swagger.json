@@ -13,7 +13,7 @@
   "paths": {
     "/v1/backup": {
       "post": {
-        "summary": "Create creates a new backup object",
+        "summary": "Creates a new backup object",
         "operationId": "Backup_Create",
         "responses": {
           "200": {
@@ -67,6 +67,39 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/BackupUpdateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Backup"
+        ]
+      }
+    },
+    "/v1/backup/updatebackupshare": {
+      "put": {
+        "summary": "UpdateBackupShare updates backupshare of existing backup object",
+        "operationId": "Backup_UpdateBackupShare",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/BackupShareUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BackupShareUpdateRequest"
             }
           }
         ],
@@ -187,6 +220,12 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -229,6 +268,12 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -238,7 +283,7 @@
     },
     "/v1/backuplocation": {
       "post": {
-        "summary": "Create creates new backup location",
+        "summary": "Creates new backup location",
         "operationId": "BackupLocation_Create",
         "responses": {
           "200": {
@@ -409,6 +454,13 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "include_secrets",
+            "description": "enable include_secrets to get the encryptionKey value.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -416,7 +468,7 @@
         ]
       }
     },
-    "/v1/backuplocation/{org_id}/{name}": {
+    "/v1/backuplocation/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about a specified backup location",
         "operationId": "BackupLocation_Inspect",
@@ -449,9 +501,16 @@
           },
           {
             "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "include_secrets",
+            "description": "enable include_secrets to get the encryptionKey value.",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -489,17 +548,17 @@
             "type": "string"
           },
           {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
             "name": "delete_backups",
             "description": "delete_backups indicates whether the cloud backup files need to\nbe deleted or retained.",
             "in": "query",
             "required": false,
             "type": "boolean"
-          },
-          {
-            "name": "uid",
-            "in": "query",
-            "required": false,
-            "type": "string"
           }
         ],
         "tags": [
@@ -509,7 +568,7 @@
     },
     "/v1/backupschedule": {
       "post": {
-        "summary": "Create creates new backup schedule",
+        "summary": "Creates new backup schedule",
         "operationId": "BackupSchedule_Create",
         "responses": {
           "200": {
@@ -540,7 +599,7 @@
         ]
       },
       "put": {
-        "summary": "Update updates a backup schedule",
+        "summary": "Updates a backup schedule",
         "operationId": "BackupSchedule_Update",
         "responses": {
           "200": {
@@ -714,7 +773,7 @@
     },
     "/v1/cloudcredential": {
       "post": {
-        "summary": "Create creates new cloud credential",
+        "summary": "Creates new cloud credential",
         "operationId": "CloudCredential_Create",
         "responses": {
           "200": {
@@ -846,7 +905,7 @@
         ]
       }
     },
-    "/v1/cloudcredential/{org_id}/{name}": {
+    "/v1/cloudcredential/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified cloud credential",
         "operationId": "CloudCredential_Inspect",
@@ -878,16 +937,16 @@
             "type": "string"
           },
           {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
             "name": "include_secrets",
             "in": "query",
             "required": false,
             "type": "boolean"
-          },
-          {
-            "name": "uid",
-            "in": "query",
-            "required": false,
-            "type": "string"
           }
         ],
         "tags": [
@@ -926,8 +985,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -938,7 +997,7 @@
     },
     "/v1/cluster": {
       "post": {
-        "summary": "Create creates a new cluster",
+        "summary": "Creates a new cluster",
         "operationId": "Cluster_Create",
         "responses": {
           "200": {
@@ -1000,6 +1059,39 @@
         ]
       }
     },
+    "/v1/cluster/updatebackupshare": {
+      "put": {
+        "summary": "UpdateBackupShare updates ownership details for backup share at cluster\nlevel",
+        "operationId": "Cluster_UpdateBackupShare",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ClusterBackupShareUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ClusterBackupShareUpdateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Cluster"
+        ]
+      }
+    },
     "/v1/cluster/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of clusters",
@@ -1049,6 +1141,13 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "only_backup_share",
+            "description": "Set this to true, to get the backupshare enabled cluster list.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -1204,7 +1303,7 @@
         ]
       },
       "put": {
-        "summary": "Update updates Usage Based activation ID",
+        "summary": "Updates Usage Based activation ID",
         "operationId": "License_Update",
         "responses": {
           "200": {
@@ -1266,8 +1365,164 @@
         ]
       }
     },
+    "/v1/license/{org_id}/license_usage_airgapped": {
+      "get": {
+        "operationId": "License_EnumerateLicenseUsageAirGapped",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/LicenseUsageAirgappedResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "object_index",
+            "description": "index from where object fetch has to happen.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "max_objects",
+            "description": "max objects to fetch.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "License"
+        ]
+      }
+    },
+    "/v1/managedcluster/{org_id}": {
+      "get": {
+        "summary": "Inspect returns detailed information on a managed cluster from providers\nlike\nAWS, Azure, GCE, IBM\nusing the given credentials",
+        "operationId": "ManagedClusters_Inspect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ManagedClusterInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "Managed cluster name to be searched for.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "cloud_credential.name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "cloud_credential.uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "include_secrets",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "Invalid",
+              "AWS",
+              "Azure",
+              "Google"
+            ],
+            "default": "Invalid"
+          },
+          {
+            "name": "aws_config.region",
+            "description": "Region for scanning clusters.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ManagedClusters"
+        ]
+      }
+    },
+    "/v1/managedclusters": {
+      "post": {
+        "summary": "Bulk add discovered clusters",
+        "operationId": "ManagedClusters_BulkAdd",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ManagedClusterBulkAddResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ManagedClusterBulkAddRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ManagedClusters"
+        ]
+      }
+    },
     "/v1/metrics/{org_id}": {
       "get": {
+        "summary": "Returns metrics details of backups",
         "operationId": "Metrics_Inspect",
         "responses": {
           "200": {
@@ -1319,7 +1574,7 @@
         ]
       },
       "post": {
-        "summary": "Create creates new organization object in datastore",
+        "summary": "Creates new organization object in datastore",
         "operationId": "Organization_Create",
         "responses": {
           "200": {
@@ -1383,7 +1638,7 @@
     },
     "/v1/restore": {
       "post": {
-        "summary": "Create creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
+        "summary": "Creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
         "operationId": "Restore_Create",
         "responses": {
           "200": {
@@ -1700,7 +1955,7 @@
         ]
       },
       "post": {
-        "summary": "Create creates new role object in datastore",
+        "summary": "Creates new role object in datastore",
         "operationId": "Role_Create",
         "responses": {
           "200": {
@@ -1843,7 +2098,7 @@
         ]
       }
     },
-    "/v1/role/{org_id}/{name}": {
+    "/v1/role/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about requested role object",
         "operationId": "Role_Inspect",
@@ -1876,8 +2131,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -1917,8 +2172,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -1929,7 +2184,7 @@
     },
     "/v1/rule": {
       "post": {
-        "summary": "Create creates new rule",
+        "summary": "Creates new rule",
         "operationId": "Rules_Create",
         "responses": {
           "200": {
@@ -2055,7 +2310,7 @@
         ]
       }
     },
-    "/v1/rule/{org_id}/{name}": {
+    "/v1/rule/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified rule",
         "operationId": "Rules_Inspect",
@@ -2088,8 +2343,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2129,8 +2384,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2141,7 +2396,7 @@
     },
     "/v1/schedulepolicy": {
       "post": {
-        "summary": "Create creates new schedule policy.",
+        "summary": "Creates new schedule policy.",
         "operationId": "SchedulePolicy_Create",
         "responses": {
           "200": {
@@ -2267,7 +2522,7 @@
         ]
       }
     },
-    "/v1/schedulepolicy/{org_id}/{name}": {
+    "/v1/schedulepolicy/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detail information about a specified schedule policy",
         "operationId": "SchedulePolicy_Inspect",
@@ -2300,8 +2555,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2341,8 +2596,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2353,7 +2608,7 @@
     },
     "/v1/version": {
       "get": {
-        "summary": "Get gets the version of the server",
+        "summary": "gets the version of the server",
         "operationId": "Version_Get",
         "responses": {
           "200": {
@@ -2676,6 +2931,19 @@
         "backup_type": {
           "$ref": "#/definitions/BackupInfoBackupType",
           "title": "To get type of backup (generic or non-generic)"
+        },
+        "cr_uid": {
+          "type": "string"
+        },
+        "retention_period": {
+          "type": "string",
+          "format": "int64"
+        },
+        "backup_share": {
+          "$ref": "#/definitions/BackupShare"
+        },
+        "user_backupshare_access": {
+          "$ref": "#/definitions/BackupShareAccessType"
         }
       }
     },
@@ -2793,6 +3061,15 @@
         },
         "storage_class": {
           "type": "string"
+        },
+        "pvc_id": {
+          "type": "string"
+        },
+        "provisioner": {
+          "type": "string"
+        },
+        "volumesnapshot": {
+          "type": "string"
         }
       }
     },
@@ -2867,6 +3144,9 @@
         },
         "s3_config": {
           "$ref": "#/definitions/S3Config"
+        },
+        "object_lock_enabled": {
+          "type": "boolean"
         }
       }
     },
@@ -3371,6 +3651,71 @@
       "type": "object",
       "title": "Define BackupScheduleUpdateResponse struct"
     },
+    "BackupShare": {
+      "type": "object",
+      "properties": {
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BackupShareAccessConfig"
+          },
+          "description": "Group access to objects which must match the group set in the\nauthorization token.\nCan be set by the owner or the system administrator only.\nPossible values are:\n1. no groups: Means no groups are given access.\n2. `[\"*\"]`: All groups are allowed.\n3. `[\"group1\", \"group2\"]`: Only certain groups are allowed. In this\nexample only\n_group1_ and _group2_ are allowed."
+        },
+        "collaborators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BackupShareAccessConfig"
+          },
+          "description": "Collaborator access to objects gives access to other user.\nMust be the username (unique id) set in the authorization token.\nThe owner or the administrator can set this value. Possible values\nare:\n1. no collaborators: Means no users are given access.\n2. `[\"*\"]`: All users are allowed.\n3. `[\"username1\", \"username2\"]`: Only certain usernames are allowed.\nIn this example only\n_username1_ and _username2_ are allowed."
+        }
+      },
+      "title": "BackupShare for storing user and group details for whom the backups\nwill be shared"
+    },
+    "BackupShareAccessConfig": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "access": {
+          "$ref": "#/definitions/BackupShareAccessType"
+        }
+      }
+    },
+    "BackupShareAccessType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "View",
+        "Restorable",
+        "FullAccess"
+      ],
+      "default": "Invalid",
+      "title": "- View: view access means the backup is shared for view only\nIt can not be used for restore\n - Restorable: Restorable access means the backup is shared for view and it can be\nrestore as well\n - FullAccess: The FullAccess means the backup is shared for view/restore and other\nadmin operations like update and delete"
+    },
+    "BackupShareUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "title": "Backup to be updated"
+        },
+        "backupshare": {
+          "$ref": "#/definitions/BackupShare"
+        },
+        "uid": {
+          "type": "string"
+        }
+      },
+      "title": "Request message for backup share update request"
+    },
+    "BackupShareUpdateResponse": {
+      "type": "object",
+      "title": "Response message for backup share update request"
+    },
     "BackupUpdateRequest": {
       "type": "object",
       "properties": {
@@ -3405,6 +3750,11 @@
     },
     "CloudCredentialCreateResponse": {
       "type": "object",
+      "properties": {
+        "cloud_credential": {
+          "$ref": "#/definitions/CloudCredentialObject"
+        }
+      },
       "title": "Define CloudCredentialCreateResponse struct"
     },
     "CloudCredentialDeleteResponse": {
@@ -3511,6 +3861,29 @@
       "type": "object",
       "title": "Define CloudCredentialUpdateResponse struct"
     },
+    "ClusterBackupShareUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "add_backup_share": {
+          "$ref": "#/definitions/BackupShare"
+        },
+        "del_backup_share": {
+          "$ref": "#/definitions/BackupShare"
+        },
+        "uid": {
+          "type": "string"
+        }
+      }
+    },
+    "ClusterBackupShareUpdateResponse": {
+      "type": "object"
+    },
     "ClusterCreateRequest": {
       "type": "object",
       "properties": {
@@ -3582,8 +3955,47 @@
         },
         "cloud_credential_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "add_backup_share": {
+          "$ref": "#/definitions/BackupShare"
+        },
+        "del_backup_share": {
+          "$ref": "#/definitions/BackupShare"
+        },
+        "backup_share_status_info": {
+          "$ref": "#/definitions/ClusterInfoBackupShareStatusInfo"
+        },
+        "owner_group_list": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
+    },
+    "ClusterInfoBackupShareStatusInfo": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/ClusterInfoBackupShareStatusInfoStatus"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "description": "Message for maintaining status of the backup share."
+    },
+    "ClusterInfoBackupShareStatusInfoStatus": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "InProgress",
+        "Failed",
+        "Success",
+        "PartialSuccess"
+      ],
+      "default": "Invalid",
+      "description": " - InProgress: InProgress if backupshare is going on for backups belonging to\nthe cluster\n - Failed: Failed if backupshare fails for some backups belonging to the\ncluster\n - Success: Success if backupshare is successful for all current backups\nbelonging to the cluster\n - PartialSuccess: Parital Success if backupshare is successful for only few\nbackups."
     },
     "ClusterInfoStatusInfo": {
       "type": "object",
@@ -3603,9 +4015,13 @@
         "Invalid",
         "Online",
         "Offline",
-        "DeletePending"
+        "DeletePending",
+        "Pending",
+        "Failed",
+        "Success"
       ],
-      "default": "Invalid"
+      "default": "Invalid",
+      "title": "- Pending: Pending If a cluster addition is in pending state\n - Failed: Failed If a cluster failed to be added\n - Success: Success If cluster was successfully added but not Online yet"
     },
     "ClusterInspectResponse": {
       "type": "object",
@@ -3759,6 +4175,9 @@
         },
         "usage_based_id": {
           "type": "string"
+        },
+        "usaged_based_airgapped_id": {
+          "type": "string"
         }
       }
     },
@@ -3854,9 +4273,12 @@
         "UsageBased",
         "IBM",
         "AWS",
-        "GCP"
+        "GCP",
+        "BaasStd",
+        "UsageBasedAirGapped"
       ],
-      "default": "Invalid"
+      "default": "Invalid",
+      "title": "- BaasStd: In future we might have different baas licensing"
     },
     "LicenseUpdateRequest": {
       "type": "object",
@@ -3871,6 +4293,254 @@
     },
     "LicenseUpdateResponse": {
       "type": "object"
+    },
+    "LicenseUsageAirgappedObject": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/Metadata"
+        },
+        "node_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "report_time": {
+          "type": "string",
+          "format": "int64",
+          "title": "Time at which license consumption is recorded in epoch time format"
+        }
+      }
+    },
+    "LicenseUsageAirgappedResponse": {
+      "type": "object",
+      "properties": {
+        "licenseUsageAirgapped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LicenseUsageAirgappedObject"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "total_count": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "ManagedClusterBulkAddRequest": {
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string"
+        },
+        "cloud_credential": {
+          "$ref": "#/definitions/ObjectRef"
+        },
+        "cluster_name": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Region for scanning cluster\ncluster name to be added"
+        },
+        "provider": {
+          "$ref": "#/definitions/ManagedClusterBulkAddRequestProvider"
+        },
+        "aws_config": {
+          "$ref": "#/definitions/ManagedClusterBulkAddRequestAWSConfig"
+        },
+        "google_config": {
+          "$ref": "#/definitions/ManagedClusterBulkAddRequestGoogleConfig"
+        },
+        "azure_config": {
+          "$ref": "#/definitions/ManagedClusterBulkAddRequestAzureConfig"
+        }
+      }
+    },
+    "ManagedClusterBulkAddRequestAWSConfig": {
+      "type": "object",
+      "properties": {
+        "region": {
+          "type": "string",
+          "title": "Region for scanning clusters"
+        }
+      }
+    },
+    "ManagedClusterBulkAddRequestAzureConfig": {
+      "type": "object"
+    },
+    "ManagedClusterBulkAddRequestGoogleConfig": {
+      "type": "object"
+    },
+    "ManagedClusterBulkAddRequestProvider": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "AWS",
+        "Azure",
+        "Google"
+      ],
+      "default": "Invalid",
+      "title": "Cloud provider type"
+    },
+    "ManagedClusterBulkAddResponse": {
+      "type": "object"
+    },
+    "ManagedClusterEnumerateRequestAWSConfig": {
+      "type": "object",
+      "properties": {
+        "region": {
+          "type": "string",
+          "title": "Region for scanning clusters"
+        },
+        "next_token": {
+          "type": "string",
+          "title": "Used for sending token, needed for pagination"
+        }
+      }
+    },
+    "ManagedClusterEnumerateRequestAzureConfig": {
+      "type": "object"
+    },
+    "ManagedClusterEnumerateRequestGoogleConfig": {
+      "type": "object"
+    },
+    "ManagedClusterEnumerateRequestProvider": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "AWS",
+        "Azure",
+        "Google"
+      ],
+      "default": "Invalid",
+      "title": "Cloud provider type"
+    },
+    "ManagedClusterEnumerateResponse": {
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedClusterObject"
+          }
+        },
+        "provider": {
+          "$ref": "#/definitions/ManagedClusterEnumerateResponseProvider"
+        },
+        "aws_config": {
+          "$ref": "#/definitions/ManagedClusterEnumerateResponseAWSConfig"
+        },
+        "google_config": {
+          "$ref": "#/definitions/ManagedClusterEnumerateResponseGoogleConfig"
+        },
+        "azure_config": {
+          "$ref": "#/definitions/ManagedClusterEnumerateResponseAzureConfig"
+        }
+      },
+      "title": "Define ClusterEnumerateResponse struct"
+    },
+    "ManagedClusterEnumerateResponseAWSConfig": {
+      "type": "object",
+      "properties": {
+        "next_token": {
+          "type": "string",
+          "title": "For ListClusters() AWS provides pagination and next_token\nis pointer for next set of cluster fetch"
+        }
+      }
+    },
+    "ManagedClusterEnumerateResponseAzureConfig": {
+      "type": "object"
+    },
+    "ManagedClusterEnumerateResponseGoogleConfig": {
+      "type": "object"
+    },
+    "ManagedClusterEnumerateResponseProvider": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "AWS",
+        "Azure",
+        "Google"
+      ],
+      "default": "Invalid",
+      "title": "Cloud provider type"
+    },
+    "ManagedClusterInspectRequestAWSConfig": {
+      "type": "object",
+      "properties": {
+        "region": {
+          "type": "string",
+          "title": "Region for scanning clusters"
+        }
+      }
+    },
+    "ManagedClusterInspectRequestAzureConfig": {
+      "type": "object"
+    },
+    "ManagedClusterInspectRequestGoogleConfig": {
+      "type": "object"
+    },
+    "ManagedClusterInspectRequestProvider": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "AWS",
+        "Azure",
+        "Google"
+      ],
+      "default": "Invalid",
+      "title": "Cloud provider type"
+    },
+    "ManagedClusterInspectResponse": {
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "$ref": "#/definitions/ManagedClusterObject"
+        }
+      },
+      "title": "Define ClusterInspectResponse struct"
+    },
+    "ManagedClusterObject": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name of the managed cluster\nThis is usually the user friendly name of the cluster"
+        },
+        "uid": {
+          "type": "string",
+          "title": "UID of the managed cluster\nThis is the UID returned by the managed cluster provider"
+        },
+        "cloud_credential": {
+          "$ref": "#/definitions/ObjectRef",
+          "title": "Cloud Credential name used for fetching this cluster's details"
+        },
+        "kubeconfig": {
+          "type": "string",
+          "title": "Kubeconfig if the provider supports using kubeconfigs"
+        },
+        "k8s_version": {
+          "type": "string",
+          "title": "k8s version"
+        },
+        "status": {
+          "$ref": "#/definitions/ManagedClusterObjectStatus"
+        }
+      },
+      "title": "Define ManagedClusterObject struct"
+    },
+    "ManagedClusterObjectStatus": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "NotAdded",
+        "Added"
+      ],
+      "default": "Invalid",
+      "title": "Status hold if the cluster is already present in datastore or not"
     },
     "Metadata": {
       "type": "object",
@@ -4115,7 +4785,7 @@
         },
         "backup": {
           "type": "string",
-          "title": "uid or name of backup"
+          "description": "backup is deprecated, not to be used."
         },
         "cluster": {
           "type": "string",
@@ -4152,6 +4822,10 @@
             "type": "string"
           },
           "title": "storage class mapping for generic backup \u003csource, destination\u003e"
+        },
+        "backup_ref": {
+          "$ref": "#/definitions/ObjectRef",
+          "title": "backup object reference having name and id"
         }
       },
       "title": "Define RestoreCreateRequest struct"
@@ -4188,7 +4862,7 @@
       "properties": {
         "backup": {
           "type": "string",
-          "title": "Name of backup to restore from"
+          "description": "backup is deprecated, not to be used."
         },
         "backup_location": {
           "type": "string",
@@ -4263,6 +4937,10 @@
             "type": "string"
           },
           "title": "storage class mapping for generic backup \u003csource, destination\u003e"
+        },
+        "backup_ref": {
+          "$ref": "#/definitions/ObjectRef",
+          "title": "backup to restore from"
         }
       },
       "title": "Message for restore info"
@@ -4721,6 +5399,14 @@
             "type": "string"
           },
           "description": "list of backup schedule object that uses this schedule policy."
+        },
+        "for_object_lock": {
+          "type": "boolean",
+          "description": "for_object_lock should be set, if this policy is planned to be used with\nlocked bucket while taking backup."
+        },
+        "auto_delete": {
+          "type": "boolean",
+          "title": "auto-delete - this option is to indicate, whether the backup\nshould be deleted after the retention of the backup object is expired"
         }
       }
     },
@@ -4914,6 +5600,9 @@
         "patch": {
           "type": "string"
         },
+        "changes": {
+          "type": "string"
+        },
         "git_commit": {
           "type": "string"
         },
@@ -4955,5 +5644,18 @@
         }
       }
     }
-  }
+  },
+  "securityDefinitions": {
+    "bearer": {
+      "type": "apiKey",
+      "description": "Authentication token, prefixed by Bearer: Bearer \u003ctoken\u003e",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ]
 }

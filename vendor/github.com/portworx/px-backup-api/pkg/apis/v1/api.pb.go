@@ -12,6 +12,7 @@ import (
 	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/gogo/protobuf/proto"
 	types "github.com/gogo/protobuf/types"
+	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -38,6 +39,12 @@ const (
 	ClusterInfo_StatusInfo_Online        ClusterInfo_StatusInfo_Status = 1
 	ClusterInfo_StatusInfo_Offline       ClusterInfo_StatusInfo_Status = 2
 	ClusterInfo_StatusInfo_DeletePending ClusterInfo_StatusInfo_Status = 3
+	// Pending If a cluster addition is in pending state
+	ClusterInfo_StatusInfo_Pending ClusterInfo_StatusInfo_Status = 4
+	// Failed If a cluster failed to be added
+	ClusterInfo_StatusInfo_Failed ClusterInfo_StatusInfo_Status = 5
+	// Success If cluster was successfully added but not Online yet
+	ClusterInfo_StatusInfo_Success ClusterInfo_StatusInfo_Status = 6
 )
 
 var ClusterInfo_StatusInfo_Status_name = map[int32]string{
@@ -45,6 +52,9 @@ var ClusterInfo_StatusInfo_Status_name = map[int32]string{
 	1: "Online",
 	2: "Offline",
 	3: "DeletePending",
+	4: "Pending",
+	5: "Failed",
+	6: "Success",
 }
 
 var ClusterInfo_StatusInfo_Status_value = map[string]int32{
@@ -52,6 +62,9 @@ var ClusterInfo_StatusInfo_Status_value = map[string]int32{
 	"Online":        1,
 	"Offline":       2,
 	"DeletePending": 3,
+	"Pending":       4,
+	"Failed":        5,
+	"Success":       6,
 }
 
 func (x ClusterInfo_StatusInfo_Status) String() string {
@@ -60,6 +73,48 @@ func (x ClusterInfo_StatusInfo_Status) String() string {
 
 func (ClusterInfo_StatusInfo_Status) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_9943feda3d652502, []int{1, 0, 0}
+}
+
+type ClusterInfo_BackupShareStatusInfo_Status int32
+
+const (
+	ClusterInfo_BackupShareStatusInfo_Invalid ClusterInfo_BackupShareStatusInfo_Status = 0
+	// InProgress if backupshare is going on for backups belonging to
+	// the cluster
+	ClusterInfo_BackupShareStatusInfo_InProgress ClusterInfo_BackupShareStatusInfo_Status = 1
+	// Failed if backupshare fails for some backups belonging to the
+	// cluster
+	ClusterInfo_BackupShareStatusInfo_Failed ClusterInfo_BackupShareStatusInfo_Status = 2
+	// Success if backupshare is successful for all current backups
+	// belonging to the cluster
+	ClusterInfo_BackupShareStatusInfo_Success ClusterInfo_BackupShareStatusInfo_Status = 3
+	// Parital Success if backupshare is successful for only few
+	// backups.
+	ClusterInfo_BackupShareStatusInfo_PartialSuccess ClusterInfo_BackupShareStatusInfo_Status = 4
+)
+
+var ClusterInfo_BackupShareStatusInfo_Status_name = map[int32]string{
+	0: "Invalid",
+	1: "InProgress",
+	2: "Failed",
+	3: "Success",
+	4: "PartialSuccess",
+}
+
+var ClusterInfo_BackupShareStatusInfo_Status_value = map[string]int32{
+	"Invalid":        0,
+	"InProgress":     1,
+	"Failed":         2,
+	"Success":        3,
+	"PartialSuccess": 4,
+}
+
+func (x ClusterInfo_BackupShareStatusInfo_Status) String() string {
+	return proto.EnumName(ClusterInfo_BackupShareStatusInfo_Status_name, int32(x))
+}
+
+func (ClusterInfo_BackupShareStatusInfo_Status) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{1, 1, 0}
 }
 
 type CloudCredentialInfo_Type int32
@@ -535,7 +590,164 @@ func (x BackupCreateRequest_BackupType) String() string {
 }
 
 func (BackupCreateRequest_BackupType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{89, 0}
+	return fileDescriptor_9943feda3d652502, []int{91, 0}
+}
+
+// Cloud provider type
+type ManagedClusterEnumerateRequest_Provider int32
+
+const (
+	ManagedClusterEnumerateRequest_Invalid ManagedClusterEnumerateRequest_Provider = 0
+	ManagedClusterEnumerateRequest_AWS     ManagedClusterEnumerateRequest_Provider = 1
+	ManagedClusterEnumerateRequest_Azure   ManagedClusterEnumerateRequest_Provider = 2
+	ManagedClusterEnumerateRequest_Google  ManagedClusterEnumerateRequest_Provider = 3
+)
+
+var ManagedClusterEnumerateRequest_Provider_name = map[int32]string{
+	0: "Invalid",
+	1: "AWS",
+	2: "Azure",
+	3: "Google",
+}
+
+var ManagedClusterEnumerateRequest_Provider_value = map[string]int32{
+	"Invalid": 0,
+	"AWS":     1,
+	"Azure":   2,
+	"Google":  3,
+}
+
+func (x ManagedClusterEnumerateRequest_Provider) String() string {
+	return proto.EnumName(ManagedClusterEnumerateRequest_Provider_name, int32(x))
+}
+
+func (ManagedClusterEnumerateRequest_Provider) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{144, 0}
+}
+
+// Status hold if the cluster is already present in datastore or not
+type ManagedClusterObject_Status int32
+
+const (
+	ManagedClusterObject_Invalid  ManagedClusterObject_Status = 0
+	ManagedClusterObject_NotAdded ManagedClusterObject_Status = 1
+	ManagedClusterObject_Added    ManagedClusterObject_Status = 2
+)
+
+var ManagedClusterObject_Status_name = map[int32]string{
+	0: "Invalid",
+	1: "NotAdded",
+	2: "Added",
+}
+
+var ManagedClusterObject_Status_value = map[string]int32{
+	"Invalid":  0,
+	"NotAdded": 1,
+	"Added":    2,
+}
+
+func (x ManagedClusterObject_Status) String() string {
+	return proto.EnumName(ManagedClusterObject_Status_name, int32(x))
+}
+
+func (ManagedClusterObject_Status) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{145, 0}
+}
+
+// Cloud provider type
+type ManagedClusterEnumerateResponse_Provider int32
+
+const (
+	ManagedClusterEnumerateResponse_Invalid ManagedClusterEnumerateResponse_Provider = 0
+	ManagedClusterEnumerateResponse_AWS     ManagedClusterEnumerateResponse_Provider = 1
+	ManagedClusterEnumerateResponse_Azure   ManagedClusterEnumerateResponse_Provider = 2
+	ManagedClusterEnumerateResponse_Google  ManagedClusterEnumerateResponse_Provider = 3
+)
+
+var ManagedClusterEnumerateResponse_Provider_name = map[int32]string{
+	0: "Invalid",
+	1: "AWS",
+	2: "Azure",
+	3: "Google",
+}
+
+var ManagedClusterEnumerateResponse_Provider_value = map[string]int32{
+	"Invalid": 0,
+	"AWS":     1,
+	"Azure":   2,
+	"Google":  3,
+}
+
+func (x ManagedClusterEnumerateResponse_Provider) String() string {
+	return proto.EnumName(ManagedClusterEnumerateResponse_Provider_name, int32(x))
+}
+
+func (ManagedClusterEnumerateResponse_Provider) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{146, 0}
+}
+
+// Cloud provider type
+type ManagedClusterInspectRequest_Provider int32
+
+const (
+	ManagedClusterInspectRequest_Invalid ManagedClusterInspectRequest_Provider = 0
+	ManagedClusterInspectRequest_AWS     ManagedClusterInspectRequest_Provider = 1
+	ManagedClusterInspectRequest_Azure   ManagedClusterInspectRequest_Provider = 2
+	ManagedClusterInspectRequest_Google  ManagedClusterInspectRequest_Provider = 3
+)
+
+var ManagedClusterInspectRequest_Provider_name = map[int32]string{
+	0: "Invalid",
+	1: "AWS",
+	2: "Azure",
+	3: "Google",
+}
+
+var ManagedClusterInspectRequest_Provider_value = map[string]int32{
+	"Invalid": 0,
+	"AWS":     1,
+	"Azure":   2,
+	"Google":  3,
+}
+
+func (x ManagedClusterInspectRequest_Provider) String() string {
+	return proto.EnumName(ManagedClusterInspectRequest_Provider_name, int32(x))
+}
+
+func (ManagedClusterInspectRequest_Provider) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{147, 0}
+}
+
+// Cloud provider type
+type ManagedClusterBulkAddRequest_Provider int32
+
+const (
+	ManagedClusterBulkAddRequest_Invalid ManagedClusterBulkAddRequest_Provider = 0
+	ManagedClusterBulkAddRequest_AWS     ManagedClusterBulkAddRequest_Provider = 1
+	ManagedClusterBulkAddRequest_Azure   ManagedClusterBulkAddRequest_Provider = 2
+	ManagedClusterBulkAddRequest_Google  ManagedClusterBulkAddRequest_Provider = 3
+)
+
+var ManagedClusterBulkAddRequest_Provider_name = map[int32]string{
+	0: "Invalid",
+	1: "AWS",
+	2: "Azure",
+	3: "Google",
+}
+
+var ManagedClusterBulkAddRequest_Provider_value = map[string]int32{
+	"Invalid": 0,
+	"AWS":     1,
+	"Azure":   2,
+	"Google":  3,
+}
+
+func (x ManagedClusterBulkAddRequest_Provider) String() string {
+	return proto.EnumName(ManagedClusterBulkAddRequest_Provider_name, int32(x))
+}
+
+func (ManagedClusterBulkAddRequest_Provider) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{149, 0}
 }
 
 type ActivityEnumerateRequest_Interval int32
@@ -563,7 +775,7 @@ func (x ActivityEnumerateRequest_Interval) String() string {
 }
 
 func (ActivityEnumerateRequest_Interval) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{137, 0}
+	return fileDescriptor_9943feda3d652502, []int{151, 0}
 }
 
 type ActivityDataObject_Status int32
@@ -600,7 +812,7 @@ func (x ActivityDataObject_Status) String() string {
 }
 
 func (ActivityDataObject_Status) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{154, 0}
+	return fileDescriptor_9943feda3d652502, []int{168, 0}
 }
 
 type OrganizationObject struct {
@@ -651,9 +863,13 @@ type ClusterInfo struct {
 	DeleteBackups bool `protobuf:"varint,5,opt,name=delete_backups,json=deleteBackups,proto3" json:"delete_backups,omitempty"`
 	// delete_restores will determine whether the restore
 	// belong to given cluster needs to be deleted or not.
-	DeleteRestores     bool       `protobuf:"varint,6,opt,name=delete_restores,json=deleteRestores,proto3" json:"delete_restores,omitempty"`
-	StorkVersion       string     `protobuf:"bytes,7,opt,name=stork_version,json=storkVersion,proto3" json:"stork_version,omitempty"`
-	CloudCredentialRef *ObjectRef `protobuf:"bytes,8,opt,name=cloud_credential_ref,json=cloudCredentialRef,proto3" json:"cloud_credential_ref,omitempty"`
+	DeleteRestores        bool                               `protobuf:"varint,6,opt,name=delete_restores,json=deleteRestores,proto3" json:"delete_restores,omitempty"`
+	StorkVersion          string                             `protobuf:"bytes,7,opt,name=stork_version,json=storkVersion,proto3" json:"stork_version,omitempty"`
+	CloudCredentialRef    *ObjectRef                         `protobuf:"bytes,8,opt,name=cloud_credential_ref,json=cloudCredentialRef,proto3" json:"cloud_credential_ref,omitempty"`
+	AddBackupShare        *BackupShare                       `protobuf:"bytes,9,opt,name=add_backup_share,json=addBackupShare,proto3" json:"add_backup_share,omitempty"`
+	DelBackupShare        *BackupShare                       `protobuf:"bytes,10,opt,name=del_backup_share,json=delBackupShare,proto3" json:"del_backup_share,omitempty"`
+	BackupShareStatusInfo *ClusterInfo_BackupShareStatusInfo `protobuf:"bytes,11,opt,name=backup_share_status_info,json=backupShareStatusInfo,proto3" json:"backup_share_status_info,omitempty"`
+	OwnerGroupList        []string                           `protobuf:"bytes,12,rep,name=owner_group_list,json=ownerGroupList,proto3" json:"owner_group_list,omitempty"`
 }
 
 func (m *ClusterInfo) Reset()         { *m = ClusterInfo{} }
@@ -745,6 +961,34 @@ func (m *ClusterInfo) GetCloudCredentialRef() *ObjectRef {
 	return nil
 }
 
+func (m *ClusterInfo) GetAddBackupShare() *BackupShare {
+	if m != nil {
+		return m.AddBackupShare
+	}
+	return nil
+}
+
+func (m *ClusterInfo) GetDelBackupShare() *BackupShare {
+	if m != nil {
+		return m.DelBackupShare
+	}
+	return nil
+}
+
+func (m *ClusterInfo) GetBackupShareStatusInfo() *ClusterInfo_BackupShareStatusInfo {
+	if m != nil {
+		return m.BackupShareStatusInfo
+	}
+	return nil
+}
+
+func (m *ClusterInfo) GetOwnerGroupList() []string {
+	if m != nil {
+		return m.OwnerGroupList
+	}
+	return nil
+}
+
 // Message for maintaining status of the cluster.
 type ClusterInfo_StatusInfo struct {
 	Status ClusterInfo_StatusInfo_Status `protobuf:"varint,1,opt,name=status,proto3,enum=ClusterInfo_StatusInfo_Status" json:"status,omitempty"`
@@ -792,6 +1036,59 @@ func (m *ClusterInfo_StatusInfo) GetStatus() ClusterInfo_StatusInfo_Status {
 }
 
 func (m *ClusterInfo_StatusInfo) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
+// Message for maintaining status of the backup share.
+type ClusterInfo_BackupShareStatusInfo struct {
+	Status ClusterInfo_BackupShareStatusInfo_Status `protobuf:"varint,1,opt,name=status,proto3,enum=ClusterInfo_BackupShareStatusInfo_Status" json:"status,omitempty"`
+	Reason string                                   `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+}
+
+func (m *ClusterInfo_BackupShareStatusInfo) Reset()         { *m = ClusterInfo_BackupShareStatusInfo{} }
+func (m *ClusterInfo_BackupShareStatusInfo) String() string { return proto.CompactTextString(m) }
+func (*ClusterInfo_BackupShareStatusInfo) ProtoMessage()    {}
+func (*ClusterInfo_BackupShareStatusInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{1, 1}
+}
+func (m *ClusterInfo_BackupShareStatusInfo) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ClusterInfo_BackupShareStatusInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ClusterInfo_BackupShareStatusInfo.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ClusterInfo_BackupShareStatusInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterInfo_BackupShareStatusInfo.Merge(m, src)
+}
+func (m *ClusterInfo_BackupShareStatusInfo) XXX_Size() int {
+	return m.Size()
+}
+func (m *ClusterInfo_BackupShareStatusInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterInfo_BackupShareStatusInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterInfo_BackupShareStatusInfo proto.InternalMessageInfo
+
+func (m *ClusterInfo_BackupShareStatusInfo) GetStatus() ClusterInfo_BackupShareStatusInfo_Status {
+	if m != nil {
+		return m.Status
+	}
+	return ClusterInfo_BackupShareStatusInfo_Invalid
+}
+
+func (m *ClusterInfo_BackupShareStatusInfo) GetReason() string {
 	if m != nil {
 		return m.Reason
 	}
@@ -1361,6 +1658,12 @@ type SchedulePolicyInfo struct {
 	Monthly  *SchedulePolicyInfo_MonthlyPolicy  `protobuf:"bytes,4,opt,name=monthly,proto3" json:"monthly,omitempty"`
 	// list of backup schedule object that uses this schedule policy.
 	BackupSchedule []string `protobuf:"bytes,5,rep,name=backup_schedule,json=backupSchedule,proto3" json:"backup_schedule,omitempty"`
+	// for_object_lock should be set, if this policy is planned to be used with
+	// locked bucket while taking backup.
+	ForObjectLock bool `protobuf:"varint,6,opt,name=for_object_lock,json=forObjectLock,proto3" json:"for_object_lock,omitempty"`
+	// auto-delete - this option is to indicate, whether the backup
+	// should be deleted after the retention of the backup object is expired
+	AutoDelete bool `protobuf:"varint,7,opt,name=auto_delete,json=autoDelete,proto3" json:"auto_delete,omitempty"`
 }
 
 func (m *SchedulePolicyInfo) Reset()         { *m = SchedulePolicyInfo{} }
@@ -1429,6 +1732,20 @@ func (m *SchedulePolicyInfo) GetBackupSchedule() []string {
 		return m.BackupSchedule
 	}
 	return nil
+}
+
+func (m *SchedulePolicyInfo) GetForObjectLock() bool {
+	if m != nil {
+		return m.ForObjectLock
+	}
+	return false
+}
+
+func (m *SchedulePolicyInfo) GetAutoDelete() bool {
+	if m != nil {
+		return m.AutoDelete
+	}
+	return false
 }
 
 type SchedulePolicyInfo_IncrementalCount struct {
@@ -2275,7 +2592,8 @@ type BackupLocationInfo struct {
 	CloudCredentialRef      *ObjectRef                     `protobuf:"bytes,8,opt,name=cloud_credential_ref,json=cloudCredentialRef,proto3" json:"cloud_credential_ref,omitempty"`
 	// Types that are valid to be assigned to Config:
 	//	*BackupLocationInfo_S3Config
-	Config isBackupLocationInfo_Config `protobuf_oneof:"config"`
+	Config            isBackupLocationInfo_Config `protobuf_oneof:"config"`
+	ObjectLockEnabled bool                        `protobuf:"varint,9,opt,name=object_lock_enabled,json=objectLockEnabled,proto3" json:"object_lock_enabled,omitempty"`
 }
 
 func (m *BackupLocationInfo) Reset()         { *m = BackupLocationInfo{} }
@@ -2392,6 +2710,13 @@ func (m *BackupLocationInfo) GetS3Config() *S3Config {
 		return x.S3Config
 	}
 	return nil
+}
+
+func (m *BackupLocationInfo) GetObjectLockEnabled() bool {
+	if m != nil {
+		return m.ObjectLockEnabled
+	}
+	return false
 }
 
 // XXX_OneofWrappers is for the internal use of the proto package.
@@ -2611,7 +2936,11 @@ type BackupInfo struct {
 	PostExecRuleRef      *ObjectRef      `protobuf:"bytes,23,opt,name=post_exec_rule_ref,json=postExecRuleRef,proto3" json:"post_exec_rule_ref,omitempty"`
 	CloudCredentialRef   *ObjectRef      `protobuf:"bytes,24,opt,name=cloud_credential_ref,json=cloudCredentialRef,proto3" json:"cloud_credential_ref,omitempty"`
 	// To get type of backup (generic or non-generic)
-	BackupType *BackupInfo_BackupType `protobuf:"bytes,25,opt,name=backup_type,json=backupType,proto3" json:"backup_type,omitempty"`
+	BackupType            *BackupInfo_BackupType `protobuf:"bytes,25,opt,name=backup_type,json=backupType,proto3" json:"backup_type,omitempty"`
+	CrUid                 string                 `protobuf:"bytes,26,opt,name=cr_uid,json=crUid,proto3" json:"cr_uid,omitempty"`
+	RetentionPeriod       int64                  `protobuf:"varint,27,opt,name=retention_period,json=retentionPeriod,proto3" json:"retention_period,omitempty"`
+	BackupShare           *BackupShare           `protobuf:"bytes,28,opt,name=backup_share,json=backupShare,proto3" json:"backup_share,omitempty"`
+	UserBackupshareAccess BackupShare_AccessType `protobuf:"varint,29,opt,name=user_backupshare_access,json=userBackupshareAccess,proto3,enum=BackupShare_AccessType" json:"user_backupshare_access,omitempty"`
 }
 
 func (m *BackupInfo) Reset()         { *m = BackupInfo{} }
@@ -2822,6 +3151,34 @@ func (m *BackupInfo) GetBackupType() *BackupInfo_BackupType {
 	return nil
 }
 
+func (m *BackupInfo) GetCrUid() string {
+	if m != nil {
+		return m.CrUid
+	}
+	return ""
+}
+
+func (m *BackupInfo) GetRetentionPeriod() int64 {
+	if m != nil {
+		return m.RetentionPeriod
+	}
+	return 0
+}
+
+func (m *BackupInfo) GetBackupShare() *BackupShare {
+	if m != nil {
+		return m.BackupShare
+	}
+	return nil
+}
+
+func (m *BackupInfo) GetUserBackupshareAccess() BackupShare_AccessType {
+	if m != nil {
+		return m.UserBackupshareAccess
+	}
+	return BackupShare_Invalid
+}
+
 type BackupInfo_BackupType struct {
 	Type BackupInfo_BackupType_Type `protobuf:"varint,1,opt,name=type,proto3,enum=BackupInfo_BackupType_Type" json:"type,omitempty"`
 }
@@ -2930,8 +3287,11 @@ type BackupInfo_Volume struct {
 	TotalSize  uint64                 `protobuf:"varint,9,opt,name=total_size,json=totalSize,proto3" json:"total_size,omitempty"`
 	// actual size of the backup
 	// incase of incremental, it's the incremental backup size
-	ActualSize   uint64 `protobuf:"varint,10,opt,name=actual_size,json=actualSize,proto3" json:"actual_size,omitempty"`
-	StorageClass string `protobuf:"bytes,11,opt,name=storage_class,json=storageClass,proto3" json:"storage_class,omitempty"`
+	ActualSize     uint64 `protobuf:"varint,10,opt,name=actual_size,json=actualSize,proto3" json:"actual_size,omitempty"`
+	StorageClass   string `protobuf:"bytes,11,opt,name=storage_class,json=storageClass,proto3" json:"storage_class,omitempty"`
+	PvcId          string `protobuf:"bytes,12,opt,name=pvc_id,json=pvcId,proto3" json:"pvc_id,omitempty"`
+	Provisioner    string `protobuf:"bytes,13,opt,name=provisioner,proto3" json:"provisioner,omitempty"`
+	Volumesnapshot string `protobuf:"bytes,14,opt,name=volumesnapshot,proto3" json:"volumesnapshot,omitempty"`
 }
 
 func (m *BackupInfo_Volume) Reset()         { *m = BackupInfo_Volume{} }
@@ -3040,6 +3400,27 @@ func (m *BackupInfo_Volume) GetActualSize() uint64 {
 func (m *BackupInfo_Volume) GetStorageClass() string {
 	if m != nil {
 		return m.StorageClass
+	}
+	return ""
+}
+
+func (m *BackupInfo_Volume) GetPvcId() string {
+	if m != nil {
+		return m.PvcId
+	}
+	return ""
+}
+
+func (m *BackupInfo_Volume) GetProvisioner() string {
+	if m != nil {
+		return m.Provisioner
+	}
+	return ""
+}
+
+func (m *BackupInfo_Volume) GetVolumesnapshot() string {
+	if m != nil {
+		return m.Volumesnapshot
 	}
 	return ""
 }
@@ -3377,7 +3758,7 @@ var xxx_messageInfo_ReplacePolicy proto.InternalMessageInfo
 
 // Message for restore info
 type RestoreInfo struct {
-	// Name of backup to restore from
+	// backup is deprecated, not to be used.
 	Backup string `protobuf:"bytes,1,opt,name=backup,proto3" json:"backup,omitempty"`
 	// Name of backup location to restore from.
 	// backup_location is deprecated, not to be used.
@@ -3401,6 +3782,8 @@ type RestoreInfo struct {
 	BackupLocationRef            *ObjectRef      `protobuf:"bytes,15,opt,name=backup_location_ref,json=backupLocationRef,proto3" json:"backup_location_ref,omitempty"`
 	// storage class mapping for generic backup <source, destination>
 	StorageClassMapping map[string]string `protobuf:"bytes,16,rep,name=storage_class_mapping,json=storageClassMapping,proto3" json:"storage_class_mapping,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// backup to restore from
+	BackupRef *ObjectRef `protobuf:"bytes,17,opt,name=backup_ref,json=backupRef,proto3" json:"backup_ref,omitempty"`
 }
 
 func (m *RestoreInfo) Reset()         { *m = RestoreInfo{} }
@@ -3544,6 +3927,13 @@ func (m *RestoreInfo) GetBackupLocationRef() *ObjectRef {
 func (m *RestoreInfo) GetStorageClassMapping() map[string]string {
 	if m != nil {
 		return m.StorageClassMapping
+	}
+	return nil
+}
+
+func (m *RestoreInfo) GetBackupRef() *ObjectRef {
+	if m != nil {
+		return m.BackupRef
 	}
 	return nil
 }
@@ -5383,6 +5773,118 @@ func (m *BackupScheduleDeleteResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_BackupScheduleDeleteResponse proto.InternalMessageInfo
 
+type ClusterBackupShareUpdateRequest struct {
+	OrgId          string       `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	Name           string       `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	AddBackupShare *BackupShare `protobuf:"bytes,3,opt,name=add_backup_share,json=addBackupShare,proto3" json:"add_backup_share,omitempty"`
+	DelBackupShare *BackupShare `protobuf:"bytes,4,opt,name=del_backup_share,json=delBackupShare,proto3" json:"del_backup_share,omitempty"`
+	Uid            string       `protobuf:"bytes,5,opt,name=uid,proto3" json:"uid,omitempty"`
+}
+
+func (m *ClusterBackupShareUpdateRequest) Reset()         { *m = ClusterBackupShareUpdateRequest{} }
+func (m *ClusterBackupShareUpdateRequest) String() string { return proto.CompactTextString(m) }
+func (*ClusterBackupShareUpdateRequest) ProtoMessage()    {}
+func (*ClusterBackupShareUpdateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{51}
+}
+func (m *ClusterBackupShareUpdateRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ClusterBackupShareUpdateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ClusterBackupShareUpdateRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ClusterBackupShareUpdateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterBackupShareUpdateRequest.Merge(m, src)
+}
+func (m *ClusterBackupShareUpdateRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *ClusterBackupShareUpdateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterBackupShareUpdateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterBackupShareUpdateRequest proto.InternalMessageInfo
+
+func (m *ClusterBackupShareUpdateRequest) GetOrgId() string {
+	if m != nil {
+		return m.OrgId
+	}
+	return ""
+}
+
+func (m *ClusterBackupShareUpdateRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *ClusterBackupShareUpdateRequest) GetAddBackupShare() *BackupShare {
+	if m != nil {
+		return m.AddBackupShare
+	}
+	return nil
+}
+
+func (m *ClusterBackupShareUpdateRequest) GetDelBackupShare() *BackupShare {
+	if m != nil {
+		return m.DelBackupShare
+	}
+	return nil
+}
+
+func (m *ClusterBackupShareUpdateRequest) GetUid() string {
+	if m != nil {
+		return m.Uid
+	}
+	return ""
+}
+
+type ClusterBackupShareUpdateResponse struct {
+}
+
+func (m *ClusterBackupShareUpdateResponse) Reset()         { *m = ClusterBackupShareUpdateResponse{} }
+func (m *ClusterBackupShareUpdateResponse) String() string { return proto.CompactTextString(m) }
+func (*ClusterBackupShareUpdateResponse) ProtoMessage()    {}
+func (*ClusterBackupShareUpdateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{52}
+}
+func (m *ClusterBackupShareUpdateResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ClusterBackupShareUpdateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ClusterBackupShareUpdateResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ClusterBackupShareUpdateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterBackupShareUpdateResponse.Merge(m, src)
+}
+func (m *ClusterBackupShareUpdateResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *ClusterBackupShareUpdateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterBackupShareUpdateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterBackupShareUpdateResponse proto.InternalMessageInfo
+
 // Define ClusterCreateRequest struct
 type ClusterCreateRequest struct {
 	*CreateMetadata `protobuf:"bytes,1,opt,name=metadata,proto3,embedded=metadata" json:"metadata,omitempty"`
@@ -5397,7 +5899,7 @@ func (m *ClusterCreateRequest) Reset()         { *m = ClusterCreateRequest{} }
 func (m *ClusterCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*ClusterCreateRequest) ProtoMessage()    {}
 func (*ClusterCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{51}
+	return fileDescriptor_9943feda3d652502, []int{53}
 }
 func (m *ClusterCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5462,7 +5964,7 @@ func (m *ClusterCreateResponse) Reset()         { *m = ClusterCreateResponse{} }
 func (m *ClusterCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterCreateResponse) ProtoMessage()    {}
 func (*ClusterCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{52}
+	return fileDescriptor_9943feda3d652502, []int{54}
 }
 func (m *ClusterCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5505,7 +6007,7 @@ func (m *ClusterUpdateRequest) Reset()         { *m = ClusterUpdateRequest{} }
 func (m *ClusterUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*ClusterUpdateRequest) ProtoMessage()    {}
 func (*ClusterUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{53}
+	return fileDescriptor_9943feda3d652502, []int{55}
 }
 func (m *ClusterUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5570,7 +6072,7 @@ func (m *ClusterUpdateResponse) Reset()         { *m = ClusterUpdateResponse{} }
 func (m *ClusterUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterUpdateResponse) ProtoMessage()    {}
 func (*ClusterUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{54}
+	return fileDescriptor_9943feda3d652502, []int{56}
 }
 func (m *ClusterUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5611,13 +6113,15 @@ type ClusterEnumerateRequest struct {
 	// cloud_credential is deprecated, not to be used.
 	CloudCredential    string     `protobuf:"bytes,4,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
 	CloudCredentialRef *ObjectRef `protobuf:"bytes,5,opt,name=cloud_credential_ref,json=cloudCredentialRef,proto3" json:"cloud_credential_ref,omitempty"`
+	// Set this to true, to get the backupshare enabled cluster list
+	OnlyBackupShare bool `protobuf:"varint,6,opt,name=only_backup_share,json=onlyBackupShare,proto3" json:"only_backup_share,omitempty"`
 }
 
 func (m *ClusterEnumerateRequest) Reset()         { *m = ClusterEnumerateRequest{} }
 func (m *ClusterEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*ClusterEnumerateRequest) ProtoMessage()    {}
 func (*ClusterEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{55}
+	return fileDescriptor_9943feda3d652502, []int{57}
 }
 func (m *ClusterEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5681,6 +6185,13 @@ func (m *ClusterEnumerateRequest) GetCloudCredentialRef() *ObjectRef {
 	return nil
 }
 
+func (m *ClusterEnumerateRequest) GetOnlyBackupShare() bool {
+	if m != nil {
+		return m.OnlyBackupShare
+	}
+	return false
+}
+
 // Define ClusterEnumerateResponse struct
 type ClusterEnumerateResponse struct {
 	Clusters []*ClusterObject `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
@@ -5690,7 +6201,7 @@ func (m *ClusterEnumerateResponse) Reset()         { *m = ClusterEnumerateRespon
 func (m *ClusterEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterEnumerateResponse) ProtoMessage()    {}
 func (*ClusterEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{56}
+	return fileDescriptor_9943feda3d652502, []int{58}
 }
 func (m *ClusterEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5737,7 +6248,7 @@ func (m *ClusterInspectRequest) Reset()         { *m = ClusterInspectRequest{} }
 func (m *ClusterInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*ClusterInspectRequest) ProtoMessage()    {}
 func (*ClusterInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{57}
+	return fileDescriptor_9943feda3d652502, []int{59}
 }
 func (m *ClusterInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5796,7 +6307,7 @@ func (m *ClusterInspectResponse) Reset()         { *m = ClusterInspectResponse{}
 func (m *ClusterInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterInspectResponse) ProtoMessage()    {}
 func (*ClusterInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{58}
+	return fileDescriptor_9943feda3d652502, []int{60}
 }
 func (m *ClusterInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5848,7 +6359,7 @@ func (m *ClusterDeleteRequest) Reset()         { *m = ClusterDeleteRequest{} }
 func (m *ClusterDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*ClusterDeleteRequest) ProtoMessage()    {}
 func (*ClusterDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{59}
+	return fileDescriptor_9943feda3d652502, []int{61}
 }
 func (m *ClusterDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5913,7 +6424,7 @@ func (m *ClusterDeleteResponse) Reset()         { *m = ClusterDeleteResponse{} }
 func (m *ClusterDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterDeleteResponse) ProtoMessage()    {}
 func (*ClusterDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{60}
+	return fileDescriptor_9943feda3d652502, []int{62}
 }
 func (m *ClusterDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5952,7 +6463,7 @@ func (m *CloudCredentialCreateRequest) Reset()         { *m = CloudCredentialCre
 func (m *CloudCredentialCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialCreateRequest) ProtoMessage()    {}
 func (*CloudCredentialCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{61}
+	return fileDescriptor_9943feda3d652502, []int{63}
 }
 func (m *CloudCredentialCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -5990,13 +6501,14 @@ func (m *CloudCredentialCreateRequest) GetCloudCredential() *CloudCredentialInfo
 
 // Define CloudCredentialCreateResponse struct
 type CloudCredentialCreateResponse struct {
+	CloudCredential *CloudCredentialObject `protobuf:"bytes,1,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
 }
 
 func (m *CloudCredentialCreateResponse) Reset()         { *m = CloudCredentialCreateResponse{} }
 func (m *CloudCredentialCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialCreateResponse) ProtoMessage()    {}
 func (*CloudCredentialCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{62}
+	return fileDescriptor_9943feda3d652502, []int{64}
 }
 func (m *CloudCredentialCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6025,6 +6537,13 @@ func (m *CloudCredentialCreateResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CloudCredentialCreateResponse proto.InternalMessageInfo
 
+func (m *CloudCredentialCreateResponse) GetCloudCredential() *CloudCredentialObject {
+	if m != nil {
+		return m.CloudCredential
+	}
+	return nil
+}
+
 // Define CloudCredentialUpdateRequest struct
 type CloudCredentialUpdateRequest struct {
 	*CreateMetadata `protobuf:"bytes,1,opt,name=metadata,proto3,embedded=metadata" json:"metadata,omitempty"`
@@ -6035,7 +6554,7 @@ func (m *CloudCredentialUpdateRequest) Reset()         { *m = CloudCredentialUpd
 func (m *CloudCredentialUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialUpdateRequest) ProtoMessage()    {}
 func (*CloudCredentialUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{63}
+	return fileDescriptor_9943feda3d652502, []int{65}
 }
 func (m *CloudCredentialUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6079,7 +6598,7 @@ func (m *CloudCredentialUpdateResponse) Reset()         { *m = CloudCredentialUp
 func (m *CloudCredentialUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialUpdateResponse) ProtoMessage()    {}
 func (*CloudCredentialUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{64}
+	return fileDescriptor_9943feda3d652502, []int{66}
 }
 func (m *CloudCredentialUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6118,7 +6637,7 @@ func (m *CloudCredentialEnumerateRequest) Reset()         { *m = CloudCredential
 func (m *CloudCredentialEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialEnumerateRequest) ProtoMessage()    {}
 func (*CloudCredentialEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{65}
+	return fileDescriptor_9943feda3d652502, []int{67}
 }
 func (m *CloudCredentialEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6170,7 +6689,7 @@ func (m *CloudCredentialEnumerateResponse) Reset()         { *m = CloudCredentia
 func (m *CloudCredentialEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialEnumerateResponse) ProtoMessage()    {}
 func (*CloudCredentialEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{66}
+	return fileDescriptor_9943feda3d652502, []int{68}
 }
 func (m *CloudCredentialEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6218,7 +6737,7 @@ func (m *CloudCredentialInspectRequest) Reset()         { *m = CloudCredentialIn
 func (m *CloudCredentialInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialInspectRequest) ProtoMessage()    {}
 func (*CloudCredentialInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{67}
+	return fileDescriptor_9943feda3d652502, []int{69}
 }
 func (m *CloudCredentialInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6284,7 +6803,7 @@ func (m *CloudCredentialInspectResponse) Reset()         { *m = CloudCredentialI
 func (m *CloudCredentialInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialInspectResponse) ProtoMessage()    {}
 func (*CloudCredentialInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{68}
+	return fileDescriptor_9943feda3d652502, []int{70}
 }
 func (m *CloudCredentialInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6331,7 +6850,7 @@ func (m *CloudCredentialDeleteRequest) Reset()         { *m = CloudCredentialDel
 func (m *CloudCredentialDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialDeleteRequest) ProtoMessage()    {}
 func (*CloudCredentialDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{69}
+	return fileDescriptor_9943feda3d652502, []int{71}
 }
 func (m *CloudCredentialDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6389,7 +6908,7 @@ func (m *CloudCredentialDeleteResponse) Reset()         { *m = CloudCredentialDe
 func (m *CloudCredentialDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialDeleteResponse) ProtoMessage()    {}
 func (*CloudCredentialDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{70}
+	return fileDescriptor_9943feda3d652502, []int{72}
 }
 func (m *CloudCredentialDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6430,7 +6949,7 @@ func (m *CloudCredentialOwnershipUpdateRequest) Reset()         { *m = CloudCred
 func (m *CloudCredentialOwnershipUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialOwnershipUpdateRequest) ProtoMessage()    {}
 func (*CloudCredentialOwnershipUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{71}
+	return fileDescriptor_9943feda3d652502, []int{73}
 }
 func (m *CloudCredentialOwnershipUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6496,7 +7015,7 @@ func (m *CloudCredentialOwnershipUpdateResponse) Reset() {
 func (m *CloudCredentialOwnershipUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudCredentialOwnershipUpdateResponse) ProtoMessage()    {}
 func (*CloudCredentialOwnershipUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{72}
+	return fileDescriptor_9943feda3d652502, []int{74}
 }
 func (m *CloudCredentialOwnershipUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6535,7 +7054,7 @@ func (m *BackupLocationCreateRequest) Reset()         { *m = BackupLocationCreat
 func (m *BackupLocationCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationCreateRequest) ProtoMessage()    {}
 func (*BackupLocationCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{73}
+	return fileDescriptor_9943feda3d652502, []int{75}
 }
 func (m *BackupLocationCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6579,7 +7098,7 @@ func (m *BackupLocationCreateResponse) Reset()         { *m = BackupLocationCrea
 func (m *BackupLocationCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationCreateResponse) ProtoMessage()    {}
 func (*BackupLocationCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{74}
+	return fileDescriptor_9943feda3d652502, []int{76}
 }
 func (m *BackupLocationCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6618,7 +7137,7 @@ func (m *BackupLocationUpdateRequest) Reset()         { *m = BackupLocationUpdat
 func (m *BackupLocationUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationUpdateRequest) ProtoMessage()    {}
 func (*BackupLocationUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{75}
+	return fileDescriptor_9943feda3d652502, []int{77}
 }
 func (m *BackupLocationUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6662,7 +7181,7 @@ func (m *BackupLocationUpdateResponse) Reset()         { *m = BackupLocationUpda
 func (m *BackupLocationUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationUpdateResponse) ProtoMessage()    {}
 func (*BackupLocationUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{76}
+	return fileDescriptor_9943feda3d652502, []int{78}
 }
 func (m *BackupLocationUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6702,13 +7221,15 @@ type BackupLocationEnumerateRequest struct {
 	// cloud_credential is deprecated, not to be used.
 	CloudCredential    string     `protobuf:"bytes,3,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
 	CloudCredentialRef *ObjectRef `protobuf:"bytes,4,opt,name=cloud_credential_ref,json=cloudCredentialRef,proto3" json:"cloud_credential_ref,omitempty"`
+	// enable include_secrets to get the encryptionKey value.
+	IncludeSecrets bool `protobuf:"varint,5,opt,name=include_secrets,json=includeSecrets,proto3" json:"include_secrets,omitempty"`
 }
 
 func (m *BackupLocationEnumerateRequest) Reset()         { *m = BackupLocationEnumerateRequest{} }
 func (m *BackupLocationEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationEnumerateRequest) ProtoMessage()    {}
 func (*BackupLocationEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{77}
+	return fileDescriptor_9943feda3d652502, []int{79}
 }
 func (m *BackupLocationEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6765,6 +7286,13 @@ func (m *BackupLocationEnumerateRequest) GetCloudCredentialRef() *ObjectRef {
 	return nil
 }
 
+func (m *BackupLocationEnumerateRequest) GetIncludeSecrets() bool {
+	if m != nil {
+		return m.IncludeSecrets
+	}
+	return false
+}
+
 // Define BackupLocationEnumerateResponse struct
 type BackupLocationEnumerateResponse struct {
 	BackupLocations []*BackupLocationObject `protobuf:"bytes,1,rep,name=backup_locations,json=backupLocations,proto3" json:"backup_locations,omitempty"`
@@ -6774,7 +7302,7 @@ func (m *BackupLocationEnumerateResponse) Reset()         { *m = BackupLocationE
 func (m *BackupLocationEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationEnumerateResponse) ProtoMessage()    {}
 func (*BackupLocationEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{78}
+	return fileDescriptor_9943feda3d652502, []int{80}
 }
 func (m *BackupLocationEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6815,13 +7343,15 @@ type BackupLocationInspectRequest struct {
 	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	Name  string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Uid   string `protobuf:"bytes,3,opt,name=uid,proto3" json:"uid,omitempty"`
+	// enable include_secrets to get the encryptionKey value.
+	IncludeSecrets bool `protobuf:"varint,4,opt,name=include_secrets,json=includeSecrets,proto3" json:"include_secrets,omitempty"`
 }
 
 func (m *BackupLocationInspectRequest) Reset()         { *m = BackupLocationInspectRequest{} }
 func (m *BackupLocationInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationInspectRequest) ProtoMessage()    {}
 func (*BackupLocationInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{79}
+	return fileDescriptor_9943feda3d652502, []int{81}
 }
 func (m *BackupLocationInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6871,6 +7401,13 @@ func (m *BackupLocationInspectRequest) GetUid() string {
 	return ""
 }
 
+func (m *BackupLocationInspectRequest) GetIncludeSecrets() bool {
+	if m != nil {
+		return m.IncludeSecrets
+	}
+	return false
+}
+
 // Define BackupLocationInspectResponse struct
 type BackupLocationInspectResponse struct {
 	BackupLocation *BackupLocationObject `protobuf:"bytes,1,opt,name=backup_location,json=backupLocation,proto3" json:"backup_location,omitempty"`
@@ -6880,7 +7417,7 @@ func (m *BackupLocationInspectResponse) Reset()         { *m = BackupLocationIns
 func (m *BackupLocationInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationInspectResponse) ProtoMessage()    {}
 func (*BackupLocationInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{80}
+	return fileDescriptor_9943feda3d652502, []int{82}
 }
 func (m *BackupLocationInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6930,7 +7467,7 @@ func (m *BackupLocationDeleteRequest) Reset()         { *m = BackupLocationDelet
 func (m *BackupLocationDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationDeleteRequest) ProtoMessage()    {}
 func (*BackupLocationDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{81}
+	return fileDescriptor_9943feda3d652502, []int{83}
 }
 func (m *BackupLocationDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -6995,7 +7532,7 @@ func (m *BackupLocationDeleteResponse) Reset()         { *m = BackupLocationDele
 func (m *BackupLocationDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationDeleteResponse) ProtoMessage()    {}
 func (*BackupLocationDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{82}
+	return fileDescriptor_9943feda3d652502, []int{84}
 }
 func (m *BackupLocationDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7035,7 +7572,7 @@ func (m *BackupLocationValidateRequest) Reset()         { *m = BackupLocationVal
 func (m *BackupLocationValidateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationValidateRequest) ProtoMessage()    {}
 func (*BackupLocationValidateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{83}
+	return fileDescriptor_9943feda3d652502, []int{85}
 }
 func (m *BackupLocationValidateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7093,7 +7630,7 @@ func (m *BackupLocationValidateResponse) Reset()         { *m = BackupLocationVa
 func (m *BackupLocationValidateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationValidateResponse) ProtoMessage()    {}
 func (*BackupLocationValidateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{84}
+	return fileDescriptor_9943feda3d652502, []int{86}
 }
 func (m *BackupLocationValidateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7135,7 +7672,7 @@ func (m *BackupLocationOwnershipUpdateRequest) Reset()         { *m = BackupLoca
 func (m *BackupLocationOwnershipUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationOwnershipUpdateRequest) ProtoMessage()    {}
 func (*BackupLocationOwnershipUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{85}
+	return fileDescriptor_9943feda3d652502, []int{87}
 }
 func (m *BackupLocationOwnershipUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7200,7 +7737,7 @@ func (m *BackupLocationOwnershipUpdateResponse) Reset()         { *m = BackupLoc
 func (m *BackupLocationOwnershipUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupLocationOwnershipUpdateResponse) ProtoMessage()    {}
 func (*BackupLocationOwnershipUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{86}
+	return fileDescriptor_9943feda3d652502, []int{88}
 }
 func (m *BackupLocationOwnershipUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7237,7 +7774,7 @@ func (m *MetricsInspectRequest) Reset()         { *m = MetricsInspectRequest{} }
 func (m *MetricsInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*MetricsInspectRequest) ProtoMessage()    {}
 func (*MetricsInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{87}
+	return fileDescriptor_9943feda3d652502, []int{89}
 }
 func (m *MetricsInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7281,7 +7818,7 @@ func (m *MetricsInspectResponse) Reset()         { *m = MetricsInspectResponse{}
 func (m *MetricsInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*MetricsInspectResponse) ProtoMessage()    {}
 func (*MetricsInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{88}
+	return fileDescriptor_9943feda3d652502, []int{90}
 }
 func (m *MetricsInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7328,7 +7865,7 @@ func (m *MetricsInspectResponse_Stats) Reset()         { *m = MetricsInspectResp
 func (m *MetricsInspectResponse_Stats) String() string { return proto.CompactTextString(m) }
 func (*MetricsInspectResponse_Stats) ProtoMessage()    {}
 func (*MetricsInspectResponse_Stats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{88, 0}
+	return fileDescriptor_9943feda3d652502, []int{90, 0}
 }
 func (m *MetricsInspectResponse_Stats) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7420,7 +7957,7 @@ func (m *BackupCreateRequest) Reset()         { *m = BackupCreateRequest{} }
 func (m *BackupCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupCreateRequest) ProtoMessage()    {}
 func (*BackupCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{89}
+	return fileDescriptor_9943feda3d652502, []int{91}
 }
 func (m *BackupCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7548,7 +8085,7 @@ func (m *BackupCreateResponse) Reset()         { *m = BackupCreateResponse{} }
 func (m *BackupCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupCreateResponse) ProtoMessage()    {}
 func (*BackupCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{90}
+	return fileDescriptor_9943feda3d652502, []int{92}
 }
 func (m *BackupCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7590,7 +8127,7 @@ func (m *BackupUpdateRequest) Reset()         { *m = BackupUpdateRequest{} }
 func (m *BackupUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupUpdateRequest) ProtoMessage()    {}
 func (*BackupUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{91}
+	return fileDescriptor_9943feda3d652502, []int{93}
 }
 func (m *BackupUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7641,7 +8178,7 @@ func (m *BackupUpdateResponse) Reset()         { *m = BackupUpdateResponse{} }
 func (m *BackupUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupUpdateResponse) ProtoMessage()    {}
 func (*BackupUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{92}
+	return fileDescriptor_9943feda3d652502, []int{94}
 }
 func (m *BackupUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7682,7 +8219,7 @@ func (m *BackupEnumerateRequest) Reset()         { *m = BackupEnumerateRequest{}
 func (m *BackupEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupEnumerateRequest) ProtoMessage()    {}
 func (*BackupEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{93}
+	return fileDescriptor_9943feda3d652502, []int{95}
 }
 func (m *BackupEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7729,7 +8266,7 @@ func (m *BackupEnumerateResponse) Reset()         { *m = BackupEnumerateResponse
 func (m *BackupEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupEnumerateResponse) ProtoMessage()    {}
 func (*BackupEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{94}
+	return fileDescriptor_9943feda3d652502, []int{96}
 }
 func (m *BackupEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7783,13 +8320,14 @@ func (m *BackupEnumerateResponse) GetComplete() bool {
 type BackupInspectRequest struct {
 	Name  string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	OrgId string `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	Uid   string `protobuf:"bytes,4,opt,name=uid,proto3" json:"uid,omitempty"`
 }
 
 func (m *BackupInspectRequest) Reset()         { *m = BackupInspectRequest{} }
 func (m *BackupInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupInspectRequest) ProtoMessage()    {}
 func (*BackupInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{95}
+	return fileDescriptor_9943feda3d652502, []int{97}
 }
 func (m *BackupInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7832,6 +8370,13 @@ func (m *BackupInspectRequest) GetOrgId() string {
 	return ""
 }
 
+func (m *BackupInspectRequest) GetUid() string {
+	if m != nil {
+		return m.Uid
+	}
+	return ""
+}
+
 // Response message structure for object inspect
 type BackupInspectResponse struct {
 	Backup *BackupObject `protobuf:"bytes,1,opt,name=backup,proto3" json:"backup,omitempty"`
@@ -7841,7 +8386,7 @@ func (m *BackupInspectResponse) Reset()         { *m = BackupInspectResponse{} }
 func (m *BackupInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupInspectResponse) ProtoMessage()    {}
 func (*BackupInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{96}
+	return fileDescriptor_9943feda3d652502, []int{98}
 }
 func (m *BackupInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7883,13 +8428,14 @@ type BackupDeleteRequest struct {
 	OrgId string `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	// cluster name or uid to perform delete through
 	Cluster string `protobuf:"bytes,3,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Uid     string `protobuf:"bytes,4,opt,name=uid,proto3" json:"uid,omitempty"`
 }
 
 func (m *BackupDeleteRequest) Reset()         { *m = BackupDeleteRequest{} }
 func (m *BackupDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupDeleteRequest) ProtoMessage()    {}
 func (*BackupDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{97}
+	return fileDescriptor_9943feda3d652502, []int{99}
 }
 func (m *BackupDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7939,6 +8485,13 @@ func (m *BackupDeleteRequest) GetCluster() string {
 	return ""
 }
 
+func (m *BackupDeleteRequest) GetUid() string {
+	if m != nil {
+		return m.Uid
+	}
+	return ""
+}
+
 // Response message structure for object delete
 type BackupDeleteResponse struct {
 }
@@ -7947,7 +8500,7 @@ func (m *BackupDeleteResponse) Reset()         { *m = BackupDeleteResponse{} }
 func (m *BackupDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupDeleteResponse) ProtoMessage()    {}
 func (*BackupDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{98}
+	return fileDescriptor_9943feda3d652502, []int{100}
 }
 func (m *BackupDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -7976,10 +8529,117 @@ func (m *BackupDeleteResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_BackupDeleteResponse proto.InternalMessageInfo
 
+// Request message for backup share update request
+type BackupShareUpdateRequest struct {
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// Backup to be updated
+	Name        string       `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Backupshare *BackupShare `protobuf:"bytes,3,opt,name=backupshare,proto3" json:"backupshare,omitempty"`
+	Uid         string       `protobuf:"bytes,4,opt,name=uid,proto3" json:"uid,omitempty"`
+}
+
+func (m *BackupShareUpdateRequest) Reset()         { *m = BackupShareUpdateRequest{} }
+func (m *BackupShareUpdateRequest) String() string { return proto.CompactTextString(m) }
+func (*BackupShareUpdateRequest) ProtoMessage()    {}
+func (*BackupShareUpdateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{101}
+}
+func (m *BackupShareUpdateRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *BackupShareUpdateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_BackupShareUpdateRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *BackupShareUpdateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BackupShareUpdateRequest.Merge(m, src)
+}
+func (m *BackupShareUpdateRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *BackupShareUpdateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_BackupShareUpdateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_BackupShareUpdateRequest proto.InternalMessageInfo
+
+func (m *BackupShareUpdateRequest) GetOrgId() string {
+	if m != nil {
+		return m.OrgId
+	}
+	return ""
+}
+
+func (m *BackupShareUpdateRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *BackupShareUpdateRequest) GetBackupshare() *BackupShare {
+	if m != nil {
+		return m.Backupshare
+	}
+	return nil
+}
+
+func (m *BackupShareUpdateRequest) GetUid() string {
+	if m != nil {
+		return m.Uid
+	}
+	return ""
+}
+
+// Response message for backup share update request
+type BackupShareUpdateResponse struct {
+}
+
+func (m *BackupShareUpdateResponse) Reset()         { *m = BackupShareUpdateResponse{} }
+func (m *BackupShareUpdateResponse) String() string { return proto.CompactTextString(m) }
+func (*BackupShareUpdateResponse) ProtoMessage()    {}
+func (*BackupShareUpdateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{102}
+}
+func (m *BackupShareUpdateResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *BackupShareUpdateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_BackupShareUpdateResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *BackupShareUpdateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BackupShareUpdateResponse.Merge(m, src)
+}
+func (m *BackupShareUpdateResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *BackupShareUpdateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_BackupShareUpdateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_BackupShareUpdateResponse proto.InternalMessageInfo
+
 // Define RestoreCreateRequest struct
 type RestoreCreateRequest struct {
 	*CreateMetadata `protobuf:"bytes,1,opt,name=metadata,proto3,embedded=metadata" json:"metadata,omitempty"`
-	// uid or name of backup
+	// backup is deprecated, not to be used.
 	Backup string `protobuf:"bytes,2,opt,name=backup,proto3" json:"backup,omitempty"`
 	// uid or name of cluster
 	Cluster string `protobuf:"bytes,3,opt,name=cluster,proto3" json:"cluster,omitempty"`
@@ -7993,13 +8653,15 @@ type RestoreCreateRequest struct {
 	IncludeResources []*ResourceInfo `protobuf:"bytes,7,rep,name=include_resources,json=includeResources,proto3" json:"include_resources,omitempty"`
 	// storage class mapping for generic backup <source, destination>
 	StorageClassMapping map[string]string `protobuf:"bytes,8,rep,name=storage_class_mapping,json=storageClassMapping,proto3" json:"storage_class_mapping,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// backup object reference having name and id
+	BackupRef *ObjectRef `protobuf:"bytes,9,opt,name=backup_ref,json=backupRef,proto3" json:"backup_ref,omitempty"`
 }
 
 func (m *RestoreCreateRequest) Reset()         { *m = RestoreCreateRequest{} }
 func (m *RestoreCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreCreateRequest) ProtoMessage()    {}
 func (*RestoreCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{99}
+	return fileDescriptor_9943feda3d652502, []int{103}
 }
 func (m *RestoreCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8077,6 +8739,13 @@ func (m *RestoreCreateRequest) GetStorageClassMapping() map[string]string {
 	return nil
 }
 
+func (m *RestoreCreateRequest) GetBackupRef() *ObjectRef {
+	if m != nil {
+		return m.BackupRef
+	}
+	return nil
+}
+
 // Define RestoreCreateResponse struct
 type RestoreCreateResponse struct {
 }
@@ -8085,7 +8754,7 @@ func (m *RestoreCreateResponse) Reset()         { *m = RestoreCreateResponse{} }
 func (m *RestoreCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreCreateResponse) ProtoMessage()    {}
 func (*RestoreCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{100}
+	return fileDescriptor_9943feda3d652502, []int{104}
 }
 func (m *RestoreCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8123,7 +8792,7 @@ func (m *RestoreUpdateRequest) Reset()         { *m = RestoreUpdateRequest{} }
 func (m *RestoreUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreUpdateRequest) ProtoMessage()    {}
 func (*RestoreUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{101}
+	return fileDescriptor_9943feda3d652502, []int{105}
 }
 func (m *RestoreUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8160,7 +8829,7 @@ func (m *RestoreUpdateResponse) Reset()         { *m = RestoreUpdateResponse{} }
 func (m *RestoreUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreUpdateResponse) ProtoMessage()    {}
 func (*RestoreUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{102}
+	return fileDescriptor_9943feda3d652502, []int{106}
 }
 func (m *RestoreUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8201,7 +8870,7 @@ func (m *RestoreEnumerateRequest) Reset()         { *m = RestoreEnumerateRequest
 func (m *RestoreEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreEnumerateRequest) ProtoMessage()    {}
 func (*RestoreEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{103}
+	return fileDescriptor_9943feda3d652502, []int{107}
 }
 func (m *RestoreEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8248,7 +8917,7 @@ func (m *RestoreEnumerateResponse) Reset()         { *m = RestoreEnumerateRespon
 func (m *RestoreEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreEnumerateResponse) ProtoMessage()    {}
 func (*RestoreEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{104}
+	return fileDescriptor_9943feda3d652502, []int{108}
 }
 func (m *RestoreEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8308,7 +8977,7 @@ func (m *RestoreInspectRequest) Reset()         { *m = RestoreInspectRequest{} }
 func (m *RestoreInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreInspectRequest) ProtoMessage()    {}
 func (*RestoreInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{105}
+	return fileDescriptor_9943feda3d652502, []int{109}
 }
 func (m *RestoreInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8360,7 +9029,7 @@ func (m *RestoreInspectResponse) Reset()         { *m = RestoreInspectResponse{}
 func (m *RestoreInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreInspectResponse) ProtoMessage()    {}
 func (*RestoreInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{106}
+	return fileDescriptor_9943feda3d652502, []int{110}
 }
 func (m *RestoreInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8406,7 +9075,7 @@ func (m *RestoreDeleteRequest) Reset()         { *m = RestoreDeleteRequest{} }
 func (m *RestoreDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreDeleteRequest) ProtoMessage()    {}
 func (*RestoreDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{107}
+	return fileDescriptor_9943feda3d652502, []int{111}
 }
 func (m *RestoreDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8457,7 +9126,7 @@ func (m *RestoreDeleteResponse) Reset()         { *m = RestoreDeleteResponse{} }
 func (m *RestoreDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreDeleteResponse) ProtoMessage()    {}
 func (*RestoreDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{108}
+	return fileDescriptor_9943feda3d652502, []int{112}
 }
 func (m *RestoreDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8495,7 +9164,7 @@ func (m *OrganizationCreateRequest) Reset()         { *m = OrganizationCreateReq
 func (m *OrganizationCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*OrganizationCreateRequest) ProtoMessage()    {}
 func (*OrganizationCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{109}
+	return fileDescriptor_9943feda3d652502, []int{113}
 }
 func (m *OrganizationCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8532,7 +9201,7 @@ func (m *OrganizationCreateResponse) Reset()         { *m = OrganizationCreateRe
 func (m *OrganizationCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*OrganizationCreateResponse) ProtoMessage()    {}
 func (*OrganizationCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{110}
+	return fileDescriptor_9943feda3d652502, []int{114}
 }
 func (m *OrganizationCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8569,7 +9238,7 @@ func (m *OrganizationEnumerateRequest) Reset()         { *m = OrganizationEnumer
 func (m *OrganizationEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*OrganizationEnumerateRequest) ProtoMessage()    {}
 func (*OrganizationEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{111}
+	return fileDescriptor_9943feda3d652502, []int{115}
 }
 func (m *OrganizationEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8607,7 +9276,7 @@ func (m *OrganizationEnumerateResponse) Reset()         { *m = OrganizationEnume
 func (m *OrganizationEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*OrganizationEnumerateResponse) ProtoMessage()    {}
 func (*OrganizationEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{112}
+	return fileDescriptor_9943feda3d652502, []int{116}
 }
 func (m *OrganizationEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8652,7 +9321,7 @@ func (m *OrganizationInspectRequest) Reset()         { *m = OrganizationInspectR
 func (m *OrganizationInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*OrganizationInspectRequest) ProtoMessage()    {}
 func (*OrganizationInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{113}
+	return fileDescriptor_9943feda3d652502, []int{117}
 }
 func (m *OrganizationInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8697,7 +9366,7 @@ func (m *OrganizationInspectResponse) Reset()         { *m = OrganizationInspect
 func (m *OrganizationInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*OrganizationInspectResponse) ProtoMessage()    {}
 func (*OrganizationInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{114}
+	return fileDescriptor_9943feda3d652502, []int{118}
 }
 func (m *OrganizationInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8743,7 +9412,7 @@ func (m *RuleCreateRequest) Reset()         { *m = RuleCreateRequest{} }
 func (m *RuleCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*RuleCreateRequest) ProtoMessage()    {}
 func (*RuleCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{115}
+	return fileDescriptor_9943feda3d652502, []int{119}
 }
 func (m *RuleCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8786,7 +9455,7 @@ func (m *RuleCreateResponse) Reset()         { *m = RuleCreateResponse{} }
 func (m *RuleCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*RuleCreateResponse) ProtoMessage()    {}
 func (*RuleCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{116}
+	return fileDescriptor_9943feda3d652502, []int{120}
 }
 func (m *RuleCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8824,7 +9493,7 @@ func (m *RuleUpdateRequest) Reset()         { *m = RuleUpdateRequest{} }
 func (m *RuleUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*RuleUpdateRequest) ProtoMessage()    {}
 func (*RuleUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{117}
+	return fileDescriptor_9943feda3d652502, []int{121}
 }
 func (m *RuleUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8868,7 +9537,7 @@ func (m *RuleUpdateResponse) Reset()         { *m = RuleUpdateResponse{} }
 func (m *RuleUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*RuleUpdateResponse) ProtoMessage()    {}
 func (*RuleUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{118}
+	return fileDescriptor_9943feda3d652502, []int{122}
 }
 func (m *RuleUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8906,7 +9575,7 @@ func (m *RuleEnumerateRequest) Reset()         { *m = RuleEnumerateRequest{} }
 func (m *RuleEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*RuleEnumerateRequest) ProtoMessage()    {}
 func (*RuleEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{119}
+	return fileDescriptor_9943feda3d652502, []int{123}
 }
 func (m *RuleEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8951,7 +9620,7 @@ func (m *RuleEnumerateResponse) Reset()         { *m = RuleEnumerateResponse{} }
 func (m *RuleEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*RuleEnumerateResponse) ProtoMessage()    {}
 func (*RuleEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{120}
+	return fileDescriptor_9943feda3d652502, []int{124}
 }
 func (m *RuleEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -8998,7 +9667,7 @@ func (m *RuleInspectRequest) Reset()         { *m = RuleInspectRequest{} }
 func (m *RuleInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*RuleInspectRequest) ProtoMessage()    {}
 func (*RuleInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{121}
+	return fileDescriptor_9943feda3d652502, []int{125}
 }
 func (m *RuleInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9057,7 +9726,7 @@ func (m *RuleInspectResponse) Reset()         { *m = RuleInspectResponse{} }
 func (m *RuleInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*RuleInspectResponse) ProtoMessage()    {}
 func (*RuleInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{122}
+	return fileDescriptor_9943feda3d652502, []int{126}
 }
 func (m *RuleInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9104,7 +9773,7 @@ func (m *RuleDeleteRequest) Reset()         { *m = RuleDeleteRequest{} }
 func (m *RuleDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*RuleDeleteRequest) ProtoMessage()    {}
 func (*RuleDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{123}
+	return fileDescriptor_9943feda3d652502, []int{127}
 }
 func (m *RuleDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9162,7 +9831,7 @@ func (m *RuleDeleteResponse) Reset()         { *m = RuleDeleteResponse{} }
 func (m *RuleDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*RuleDeleteResponse) ProtoMessage()    {}
 func (*RuleDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{124}
+	return fileDescriptor_9943feda3d652502, []int{128}
 }
 func (m *RuleDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9204,7 +9873,7 @@ func (m *RuleOwnershipUpdateRequest) Reset()         { *m = RuleOwnershipUpdateR
 func (m *RuleOwnershipUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*RuleOwnershipUpdateRequest) ProtoMessage()    {}
 func (*RuleOwnershipUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{125}
+	return fileDescriptor_9943feda3d652502, []int{129}
 }
 func (m *RuleOwnershipUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9269,7 +9938,7 @@ func (m *RuleOwnershipUpdateResponse) Reset()         { *m = RuleOwnershipUpdate
 func (m *RuleOwnershipUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*RuleOwnershipUpdateResponse) ProtoMessage()    {}
 func (*RuleOwnershipUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{126}
+	return fileDescriptor_9943feda3d652502, []int{130}
 }
 func (m *RuleOwnershipUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9302,15 +9971,16 @@ type VersionInfo struct {
 	Major     string `protobuf:"bytes,1,opt,name=major,proto3" json:"major,omitempty"`
 	Minor     string `protobuf:"bytes,2,opt,name=minor,proto3" json:"minor,omitempty"`
 	Patch     string `protobuf:"bytes,3,opt,name=patch,proto3" json:"patch,omitempty"`
-	GitCommit string `protobuf:"bytes,4,opt,name=git_commit,json=gitCommit,proto3" json:"git_commit,omitempty"`
-	BuildDate string `protobuf:"bytes,5,opt,name=build_date,json=buildDate,proto3" json:"build_date,omitempty"`
+	Changes   string `protobuf:"bytes,4,opt,name=changes,proto3" json:"changes,omitempty"`
+	GitCommit string `protobuf:"bytes,5,opt,name=git_commit,json=gitCommit,proto3" json:"git_commit,omitempty"`
+	BuildDate string `protobuf:"bytes,6,opt,name=build_date,json=buildDate,proto3" json:"build_date,omitempty"`
 }
 
 func (m *VersionInfo) Reset()         { *m = VersionInfo{} }
 func (m *VersionInfo) String() string { return proto.CompactTextString(m) }
 func (*VersionInfo) ProtoMessage()    {}
 func (*VersionInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{127}
+	return fileDescriptor_9943feda3d652502, []int{131}
 }
 func (m *VersionInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9360,6 +10030,13 @@ func (m *VersionInfo) GetPatch() string {
 	return ""
 }
 
+func (m *VersionInfo) GetChanges() string {
+	if m != nil {
+		return m.Changes
+	}
+	return ""
+}
+
 func (m *VersionInfo) GetGitCommit() string {
 	if m != nil {
 		return m.GitCommit
@@ -9381,7 +10058,7 @@ func (m *VersionGetRequest) Reset()         { *m = VersionGetRequest{} }
 func (m *VersionGetRequest) String() string { return proto.CompactTextString(m) }
 func (*VersionGetRequest) ProtoMessage()    {}
 func (*VersionGetRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{128}
+	return fileDescriptor_9943feda3d652502, []int{132}
 }
 func (m *VersionGetRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9419,7 +10096,7 @@ func (m *VersionGetResponse) Reset()         { *m = VersionGetResponse{} }
 func (m *VersionGetResponse) String() string { return proto.CompactTextString(m) }
 func (*VersionGetResponse) ProtoMessage()    {}
 func (*VersionGetResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{129}
+	return fileDescriptor_9943feda3d652502, []int{133}
 }
 func (m *VersionGetResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9461,6 +10138,7 @@ type LicenseActivateRequest struct {
 	//	*LicenseActivateRequest_ActivationId
 	//	*LicenseActivateRequest_LicenseData
 	//	*LicenseActivateRequest_UsageBasedId
+	//	*LicenseActivateRequest_UsagedBasedAirgappedId
 	Activation isLicenseActivateRequest_Activation `protobuf_oneof:"activation"`
 }
 
@@ -9468,7 +10146,7 @@ func (m *LicenseActivateRequest) Reset()         { *m = LicenseActivateRequest{}
 func (m *LicenseActivateRequest) String() string { return proto.CompactTextString(m) }
 func (*LicenseActivateRequest) ProtoMessage()    {}
 func (*LicenseActivateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{130}
+	return fileDescriptor_9943feda3d652502, []int{134}
 }
 func (m *LicenseActivateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9513,10 +10191,14 @@ type LicenseActivateRequest_LicenseData struct {
 type LicenseActivateRequest_UsageBasedId struct {
 	UsageBasedId string `protobuf:"bytes,4,opt,name=usage_based_id,json=usageBasedId,proto3,oneof" json:"usage_based_id,omitempty"`
 }
+type LicenseActivateRequest_UsagedBasedAirgappedId struct {
+	UsagedBasedAirgappedId string `protobuf:"bytes,5,opt,name=usaged_based_airgapped_id,json=usagedBasedAirgappedId,proto3,oneof" json:"usaged_based_airgapped_id,omitempty"`
+}
 
-func (*LicenseActivateRequest_ActivationId) isLicenseActivateRequest_Activation() {}
-func (*LicenseActivateRequest_LicenseData) isLicenseActivateRequest_Activation()  {}
-func (*LicenseActivateRequest_UsageBasedId) isLicenseActivateRequest_Activation() {}
+func (*LicenseActivateRequest_ActivationId) isLicenseActivateRequest_Activation()           {}
+func (*LicenseActivateRequest_LicenseData) isLicenseActivateRequest_Activation()            {}
+func (*LicenseActivateRequest_UsageBasedId) isLicenseActivateRequest_Activation()           {}
+func (*LicenseActivateRequest_UsagedBasedAirgappedId) isLicenseActivateRequest_Activation() {}
 
 func (m *LicenseActivateRequest) GetActivation() isLicenseActivateRequest_Activation {
 	if m != nil {
@@ -9546,12 +10228,20 @@ func (m *LicenseActivateRequest) GetUsageBasedId() string {
 	return ""
 }
 
+func (m *LicenseActivateRequest) GetUsagedBasedAirgappedId() string {
+	if x, ok := m.GetActivation().(*LicenseActivateRequest_UsagedBasedAirgappedId); ok {
+		return x.UsagedBasedAirgappedId
+	}
+	return ""
+}
+
 // XXX_OneofWrappers is for the internal use of the proto package.
 func (*LicenseActivateRequest) XXX_OneofWrappers() []interface{} {
 	return []interface{}{
 		(*LicenseActivateRequest_ActivationId)(nil),
 		(*LicenseActivateRequest_LicenseData)(nil),
 		(*LicenseActivateRequest_UsageBasedId)(nil),
+		(*LicenseActivateRequest_UsagedBasedAirgappedId)(nil),
 	}
 }
 
@@ -9562,7 +10252,7 @@ func (m *LicenseActivateResponse) Reset()         { *m = LicenseActivateResponse
 func (m *LicenseActivateResponse) String() string { return proto.CompactTextString(m) }
 func (*LicenseActivateResponse) ProtoMessage()    {}
 func (*LicenseActivateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{131}
+	return fileDescriptor_9943feda3d652502, []int{135}
 }
 func (m *LicenseActivateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9600,7 +10290,7 @@ func (m *LicenseUpdateRequest) Reset()         { *m = LicenseUpdateRequest{} }
 func (m *LicenseUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*LicenseUpdateRequest) ProtoMessage()    {}
 func (*LicenseUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{132}
+	return fileDescriptor_9943feda3d652502, []int{136}
 }
 func (m *LicenseUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9643,7 +10333,7 @@ func (m *LicenseUpdateResponse) Reset()         { *m = LicenseUpdateResponse{} }
 func (m *LicenseUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*LicenseUpdateResponse) ProtoMessage()    {}
 func (*LicenseUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{133}
+	return fileDescriptor_9943feda3d652502, []int{137}
 }
 func (m *LicenseUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9680,7 +10370,7 @@ func (m *LicenseInspectRequest) Reset()         { *m = LicenseInspectRequest{} }
 func (m *LicenseInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*LicenseInspectRequest) ProtoMessage()    {}
 func (*LicenseInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{134}
+	return fileDescriptor_9943feda3d652502, []int{138}
 }
 func (m *LicenseInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9724,7 +10414,7 @@ func (m *LicenseInspectResponse) Reset()         { *m = LicenseInspectResponse{}
 func (m *LicenseInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*LicenseInspectResponse) ProtoMessage()    {}
 func (*LicenseInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{135}
+	return fileDescriptor_9943feda3d652502, []int{139}
 }
 func (m *LicenseInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9769,7 +10459,7 @@ func (m *LicenseResponseInfo) Reset()         { *m = LicenseResponseInfo{} }
 func (m *LicenseResponseInfo) String() string { return proto.CompactTextString(m) }
 func (*LicenseResponseInfo) ProtoMessage()    {}
 func (*LicenseResponseInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{136}
+	return fileDescriptor_9943feda3d652502, []int{140}
 }
 func (m *LicenseResponseInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9825,7 +10515,7 @@ func (m *LicenseResponseInfo_FeatureInfo) Reset()         { *m = LicenseResponse
 func (m *LicenseResponseInfo_FeatureInfo) String() string { return proto.CompactTextString(m) }
 func (*LicenseResponseInfo_FeatureInfo) ProtoMessage()    {}
 func (*LicenseResponseInfo_FeatureInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{136, 0}
+	return fileDescriptor_9943feda3d652502, []int{140, 0}
 }
 func (m *LicenseResponseInfo_FeatureInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9890,7 +10580,7 @@ func (m *LicenseResponseInfo_EntitlementInfo) Reset()         { *m = LicenseResp
 func (m *LicenseResponseInfo_EntitlementInfo) String() string { return proto.CompactTextString(m) }
 func (*LicenseResponseInfo_EntitlementInfo) ProtoMessage()    {}
 func (*LicenseResponseInfo_EntitlementInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{136, 1}
+	return fileDescriptor_9943feda3d652502, []int{140, 1}
 }
 func (m *LicenseResponseInfo_EntitlementInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -9958,7 +10648,7 @@ func (m *LicenseResponseInfo_Status) Reset()         { *m = LicenseResponseInfo_
 func (m *LicenseResponseInfo_Status) String() string { return proto.CompactTextString(m) }
 func (*LicenseResponseInfo_Status) ProtoMessage()    {}
 func (*LicenseResponseInfo_Status) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{136, 2}
+	return fileDescriptor_9943feda3d652502, []int{140, 2}
 }
 func (m *LicenseResponseInfo_Status) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10001,6 +10691,1408 @@ func (m *LicenseResponseInfo_Status) GetReason() string {
 	return ""
 }
 
+type LicenseUsageAirgappedObject struct {
+	*Metadata `protobuf:"bytes,1,opt,name=metadata,proto3,embedded=metadata" json:"metadata,omitempty"`
+	NodeCount int64 `protobuf:"varint,2,opt,name=node_count,json=nodeCount,proto3" json:"node_count,omitempty"`
+	// Time at which license consumption is recorded in epoch time format
+	ReportTime int64 `protobuf:"varint,3,opt,name=report_time,json=reportTime,proto3" json:"report_time,omitempty"`
+}
+
+func (m *LicenseUsageAirgappedObject) Reset()         { *m = LicenseUsageAirgappedObject{} }
+func (m *LicenseUsageAirgappedObject) String() string { return proto.CompactTextString(m) }
+func (*LicenseUsageAirgappedObject) ProtoMessage()    {}
+func (*LicenseUsageAirgappedObject) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{141}
+}
+func (m *LicenseUsageAirgappedObject) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LicenseUsageAirgappedObject) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LicenseUsageAirgappedObject.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LicenseUsageAirgappedObject) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LicenseUsageAirgappedObject.Merge(m, src)
+}
+func (m *LicenseUsageAirgappedObject) XXX_Size() int {
+	return m.Size()
+}
+func (m *LicenseUsageAirgappedObject) XXX_DiscardUnknown() {
+	xxx_messageInfo_LicenseUsageAirgappedObject.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LicenseUsageAirgappedObject proto.InternalMessageInfo
+
+func (m *LicenseUsageAirgappedObject) GetNodeCount() int64 {
+	if m != nil {
+		return m.NodeCount
+	}
+	return 0
+}
+
+func (m *LicenseUsageAirgappedObject) GetReportTime() int64 {
+	if m != nil {
+		return m.ReportTime
+	}
+	return 0
+}
+
+type LicenseUsageAirgappedRequest struct {
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// index from where object fetch has to happen
+	ObjectIndex uint64 `protobuf:"varint,2,opt,name=object_index,json=objectIndex,proto3" json:"object_index,omitempty"`
+	// max objects to fetch
+	MaxObjects uint64 `protobuf:"varint,3,opt,name=max_objects,json=maxObjects,proto3" json:"max_objects,omitempty"`
+}
+
+func (m *LicenseUsageAirgappedRequest) Reset()         { *m = LicenseUsageAirgappedRequest{} }
+func (m *LicenseUsageAirgappedRequest) String() string { return proto.CompactTextString(m) }
+func (*LicenseUsageAirgappedRequest) ProtoMessage()    {}
+func (*LicenseUsageAirgappedRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{142}
+}
+func (m *LicenseUsageAirgappedRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LicenseUsageAirgappedRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LicenseUsageAirgappedRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LicenseUsageAirgappedRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LicenseUsageAirgappedRequest.Merge(m, src)
+}
+func (m *LicenseUsageAirgappedRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *LicenseUsageAirgappedRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_LicenseUsageAirgappedRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LicenseUsageAirgappedRequest proto.InternalMessageInfo
+
+func (m *LicenseUsageAirgappedRequest) GetOrgId() string {
+	if m != nil {
+		return m.OrgId
+	}
+	return ""
+}
+
+func (m *LicenseUsageAirgappedRequest) GetObjectIndex() uint64 {
+	if m != nil {
+		return m.ObjectIndex
+	}
+	return 0
+}
+
+func (m *LicenseUsageAirgappedRequest) GetMaxObjects() uint64 {
+	if m != nil {
+		return m.MaxObjects
+	}
+	return 0
+}
+
+type LicenseUsageAirgappedResponse struct {
+	LicenseUsageAirgapped []*LicenseUsageAirgappedObject `protobuf:"bytes,1,rep,name=licenseUsageAirgapped,proto3" json:"licenseUsageAirgapped,omitempty"`
+	Complete              bool                           `protobuf:"varint,2,opt,name=complete,proto3" json:"complete,omitempty"`
+	TotalCount            uint64                         `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+}
+
+func (m *LicenseUsageAirgappedResponse) Reset()         { *m = LicenseUsageAirgappedResponse{} }
+func (m *LicenseUsageAirgappedResponse) String() string { return proto.CompactTextString(m) }
+func (*LicenseUsageAirgappedResponse) ProtoMessage()    {}
+func (*LicenseUsageAirgappedResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{143}
+}
+func (m *LicenseUsageAirgappedResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LicenseUsageAirgappedResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LicenseUsageAirgappedResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LicenseUsageAirgappedResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LicenseUsageAirgappedResponse.Merge(m, src)
+}
+func (m *LicenseUsageAirgappedResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *LicenseUsageAirgappedResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_LicenseUsageAirgappedResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LicenseUsageAirgappedResponse proto.InternalMessageInfo
+
+func (m *LicenseUsageAirgappedResponse) GetLicenseUsageAirgapped() []*LicenseUsageAirgappedObject {
+	if m != nil {
+		return m.LicenseUsageAirgapped
+	}
+	return nil
+}
+
+func (m *LicenseUsageAirgappedResponse) GetComplete() bool {
+	if m != nil {
+		return m.Complete
+	}
+	return false
+}
+
+func (m *LicenseUsageAirgappedResponse) GetTotalCount() uint64 {
+	if m != nil {
+		return m.TotalCount
+	}
+	return 0
+}
+
+// Define ManagedClusterEnumerateRequest struct
+type ManagedClusterEnumerateRequest struct {
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// cloud credential name.
+	// Enumerate will return list of managed clusters that
+	// this cloud credential has access to
+	CloudCredential *ObjectRef `protobuf:"bytes,2,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
+	IncludeSecrets  bool       `protobuf:"varint,3,opt,name=include_secrets,json=includeSecrets,proto3" json:"include_secrets,omitempty"`
+	// Number of entries to be fetched
+	MaxResults int64                                   `protobuf:"varint,4,opt,name=max_results,json=maxResults,proto3" json:"max_results,omitempty"`
+	Provider   ManagedClusterEnumerateRequest_Provider `protobuf:"varint,5,opt,name=provider,proto3,enum=ManagedClusterEnumerateRequest_Provider" json:"provider,omitempty"`
+	// Types that are valid to be assigned to Config:
+	//	*ManagedClusterEnumerateRequest_AwsConfig
+	//	*ManagedClusterEnumerateRequest_GoogleConfig_
+	//	*ManagedClusterEnumerateRequest_AzureConfig_
+	Config isManagedClusterEnumerateRequest_Config `protobuf_oneof:"Config"`
+}
+
+func (m *ManagedClusterEnumerateRequest) Reset()         { *m = ManagedClusterEnumerateRequest{} }
+func (m *ManagedClusterEnumerateRequest) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterEnumerateRequest) ProtoMessage()    {}
+func (*ManagedClusterEnumerateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{144}
+}
+func (m *ManagedClusterEnumerateRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateRequest.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateRequest proto.InternalMessageInfo
+
+type isManagedClusterEnumerateRequest_Config interface {
+	isManagedClusterEnumerateRequest_Config()
+	Equal(interface{}) bool
+	MarshalTo([]byte) (int, error)
+	Size() int
+}
+
+type ManagedClusterEnumerateRequest_AwsConfig struct {
+	AwsConfig *ManagedClusterEnumerateRequest_AWSConfig `protobuf:"bytes,100,opt,name=aws_config,json=awsConfig,proto3,oneof" json:"aws_config,omitempty"`
+}
+type ManagedClusterEnumerateRequest_GoogleConfig_ struct {
+	GoogleConfig *ManagedClusterEnumerateRequest_GoogleConfig `protobuf:"bytes,101,opt,name=google_config,json=googleConfig,proto3,oneof" json:"google_config,omitempty"`
+}
+type ManagedClusterEnumerateRequest_AzureConfig_ struct {
+	AzureConfig *ManagedClusterEnumerateRequest_AzureConfig `protobuf:"bytes,102,opt,name=azure_config,json=azureConfig,proto3,oneof" json:"azure_config,omitempty"`
+}
+
+func (*ManagedClusterEnumerateRequest_AwsConfig) isManagedClusterEnumerateRequest_Config()     {}
+func (*ManagedClusterEnumerateRequest_GoogleConfig_) isManagedClusterEnumerateRequest_Config() {}
+func (*ManagedClusterEnumerateRequest_AzureConfig_) isManagedClusterEnumerateRequest_Config()  {}
+
+func (m *ManagedClusterEnumerateRequest) GetConfig() isManagedClusterEnumerateRequest_Config {
+	if m != nil {
+		return m.Config
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateRequest) GetOrgId() string {
+	if m != nil {
+		return m.OrgId
+	}
+	return ""
+}
+
+func (m *ManagedClusterEnumerateRequest) GetCloudCredential() *ObjectRef {
+	if m != nil {
+		return m.CloudCredential
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateRequest) GetIncludeSecrets() bool {
+	if m != nil {
+		return m.IncludeSecrets
+	}
+	return false
+}
+
+func (m *ManagedClusterEnumerateRequest) GetMaxResults() int64 {
+	if m != nil {
+		return m.MaxResults
+	}
+	return 0
+}
+
+func (m *ManagedClusterEnumerateRequest) GetProvider() ManagedClusterEnumerateRequest_Provider {
+	if m != nil {
+		return m.Provider
+	}
+	return ManagedClusterEnumerateRequest_Invalid
+}
+
+func (m *ManagedClusterEnumerateRequest) GetAwsConfig() *ManagedClusterEnumerateRequest_AWSConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterEnumerateRequest_AwsConfig); ok {
+		return x.AwsConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateRequest) GetGoogleConfig() *ManagedClusterEnumerateRequest_GoogleConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterEnumerateRequest_GoogleConfig_); ok {
+		return x.GoogleConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateRequest) GetAzureConfig() *ManagedClusterEnumerateRequest_AzureConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterEnumerateRequest_AzureConfig_); ok {
+		return x.AzureConfig
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*ManagedClusterEnumerateRequest) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*ManagedClusterEnumerateRequest_AwsConfig)(nil),
+		(*ManagedClusterEnumerateRequest_GoogleConfig_)(nil),
+		(*ManagedClusterEnumerateRequest_AzureConfig_)(nil),
+	}
+}
+
+type ManagedClusterEnumerateRequest_AWSConfig struct {
+	// Region for scanning clusters
+	Region string `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
+	// Used for sending token, needed for pagination
+	NextToken string `protobuf:"bytes,2,opt,name=next_token,json=nextToken,proto3" json:"next_token,omitempty"`
+}
+
+func (m *ManagedClusterEnumerateRequest_AWSConfig) Reset() {
+	*m = ManagedClusterEnumerateRequest_AWSConfig{}
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterEnumerateRequest_AWSConfig) ProtoMessage()    {}
+func (*ManagedClusterEnumerateRequest_AWSConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{144, 0}
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateRequest_AWSConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateRequest_AWSConfig.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateRequest_AWSConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateRequest_AWSConfig proto.InternalMessageInfo
+
+func (m *ManagedClusterEnumerateRequest_AWSConfig) GetRegion() string {
+	if m != nil {
+		return m.Region
+	}
+	return ""
+}
+
+func (m *ManagedClusterEnumerateRequest_AWSConfig) GetNextToken() string {
+	if m != nil {
+		return m.NextToken
+	}
+	return ""
+}
+
+type ManagedClusterEnumerateRequest_GoogleConfig struct {
+}
+
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) Reset() {
+	*m = ManagedClusterEnumerateRequest_GoogleConfig{}
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ManagedClusterEnumerateRequest_GoogleConfig) ProtoMessage() {}
+func (*ManagedClusterEnumerateRequest_GoogleConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{144, 1}
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateRequest_GoogleConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateRequest_GoogleConfig.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateRequest_GoogleConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateRequest_GoogleConfig proto.InternalMessageInfo
+
+type ManagedClusterEnumerateRequest_AzureConfig struct {
+}
+
+func (m *ManagedClusterEnumerateRequest_AzureConfig) Reset() {
+	*m = ManagedClusterEnumerateRequest_AzureConfig{}
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ManagedClusterEnumerateRequest_AzureConfig) ProtoMessage() {}
+func (*ManagedClusterEnumerateRequest_AzureConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{144, 2}
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateRequest_AzureConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateRequest_AzureConfig.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateRequest_AzureConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateRequest_AzureConfig proto.InternalMessageInfo
+
+// Define ManagedClusterObject struct
+type ManagedClusterObject struct {
+	// Name of the managed cluster
+	// This is usually the user friendly name of the cluster
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// UID of the managed cluster
+	// This is the UID returned by the managed cluster provider
+	Uid string `protobuf:"bytes,2,opt,name=uid,proto3" json:"uid,omitempty"`
+	// Cloud Credential name used for fetching this cluster's details
+	CloudCredential *ObjectRef `protobuf:"bytes,3,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
+	// Kubeconfig if the provider supports using kubeconfigs
+	Kubeconfig string `protobuf:"bytes,4,opt,name=kubeconfig,proto3" json:"kubeconfig" secure:"true"`
+	// k8s version
+	K8SVersion string                      `protobuf:"bytes,5,opt,name=k8s_version,json=k8sVersion,proto3" json:"k8s_version,omitempty"`
+	Status     ManagedClusterObject_Status `protobuf:"varint,6,opt,name=status,proto3,enum=ManagedClusterObject_Status" json:"status,omitempty"`
+}
+
+func (m *ManagedClusterObject) Reset()         { *m = ManagedClusterObject{} }
+func (m *ManagedClusterObject) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterObject) ProtoMessage()    {}
+func (*ManagedClusterObject) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{145}
+}
+func (m *ManagedClusterObject) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterObject) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterObject.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterObject) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterObject.Merge(m, src)
+}
+func (m *ManagedClusterObject) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterObject) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterObject.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterObject proto.InternalMessageInfo
+
+func (m *ManagedClusterObject) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *ManagedClusterObject) GetUid() string {
+	if m != nil {
+		return m.Uid
+	}
+	return ""
+}
+
+func (m *ManagedClusterObject) GetCloudCredential() *ObjectRef {
+	if m != nil {
+		return m.CloudCredential
+	}
+	return nil
+}
+
+func (m *ManagedClusterObject) GetKubeconfig() string {
+	if m != nil {
+		return m.Kubeconfig
+	}
+	return ""
+}
+
+func (m *ManagedClusterObject) GetK8SVersion() string {
+	if m != nil {
+		return m.K8SVersion
+	}
+	return ""
+}
+
+func (m *ManagedClusterObject) GetStatus() ManagedClusterObject_Status {
+	if m != nil {
+		return m.Status
+	}
+	return ManagedClusterObject_Invalid
+}
+
+// Define ClusterEnumerateResponse struct
+type ManagedClusterEnumerateResponse struct {
+	Cluster  []*ManagedClusterObject                  `protobuf:"bytes,1,rep,name=cluster,proto3" json:"cluster,omitempty"`
+	Provider ManagedClusterEnumerateResponse_Provider `protobuf:"varint,2,opt,name=provider,proto3,enum=ManagedClusterEnumerateResponse_Provider" json:"provider,omitempty"`
+	// Types that are valid to be assigned to Config:
+	//	*ManagedClusterEnumerateResponse_AwsConfig
+	//	*ManagedClusterEnumerateResponse_GoogleConfig_
+	//	*ManagedClusterEnumerateResponse_AzureConfig_
+	Config isManagedClusterEnumerateResponse_Config `protobuf_oneof:"Config"`
+}
+
+func (m *ManagedClusterEnumerateResponse) Reset()         { *m = ManagedClusterEnumerateResponse{} }
+func (m *ManagedClusterEnumerateResponse) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterEnumerateResponse) ProtoMessage()    {}
+func (*ManagedClusterEnumerateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{146}
+}
+func (m *ManagedClusterEnumerateResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateResponse.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateResponse proto.InternalMessageInfo
+
+type isManagedClusterEnumerateResponse_Config interface {
+	isManagedClusterEnumerateResponse_Config()
+	Equal(interface{}) bool
+	MarshalTo([]byte) (int, error)
+	Size() int
+}
+
+type ManagedClusterEnumerateResponse_AwsConfig struct {
+	AwsConfig *ManagedClusterEnumerateResponse_AWSConfig `protobuf:"bytes,100,opt,name=aws_config,json=awsConfig,proto3,oneof" json:"aws_config,omitempty"`
+}
+type ManagedClusterEnumerateResponse_GoogleConfig_ struct {
+	GoogleConfig *ManagedClusterEnumerateResponse_GoogleConfig `protobuf:"bytes,101,opt,name=google_config,json=googleConfig,proto3,oneof" json:"google_config,omitempty"`
+}
+type ManagedClusterEnumerateResponse_AzureConfig_ struct {
+	AzureConfig *ManagedClusterEnumerateResponse_AzureConfig `protobuf:"bytes,102,opt,name=azure_config,json=azureConfig,proto3,oneof" json:"azure_config,omitempty"`
+}
+
+func (*ManagedClusterEnumerateResponse_AwsConfig) isManagedClusterEnumerateResponse_Config()     {}
+func (*ManagedClusterEnumerateResponse_GoogleConfig_) isManagedClusterEnumerateResponse_Config() {}
+func (*ManagedClusterEnumerateResponse_AzureConfig_) isManagedClusterEnumerateResponse_Config()  {}
+
+func (m *ManagedClusterEnumerateResponse) GetConfig() isManagedClusterEnumerateResponse_Config {
+	if m != nil {
+		return m.Config
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateResponse) GetCluster() []*ManagedClusterObject {
+	if m != nil {
+		return m.Cluster
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateResponse) GetProvider() ManagedClusterEnumerateResponse_Provider {
+	if m != nil {
+		return m.Provider
+	}
+	return ManagedClusterEnumerateResponse_Invalid
+}
+
+func (m *ManagedClusterEnumerateResponse) GetAwsConfig() *ManagedClusterEnumerateResponse_AWSConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterEnumerateResponse_AwsConfig); ok {
+		return x.AwsConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateResponse) GetGoogleConfig() *ManagedClusterEnumerateResponse_GoogleConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterEnumerateResponse_GoogleConfig_); ok {
+		return x.GoogleConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterEnumerateResponse) GetAzureConfig() *ManagedClusterEnumerateResponse_AzureConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterEnumerateResponse_AzureConfig_); ok {
+		return x.AzureConfig
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*ManagedClusterEnumerateResponse) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*ManagedClusterEnumerateResponse_AwsConfig)(nil),
+		(*ManagedClusterEnumerateResponse_GoogleConfig_)(nil),
+		(*ManagedClusterEnumerateResponse_AzureConfig_)(nil),
+	}
+}
+
+type ManagedClusterEnumerateResponse_AWSConfig struct {
+	// For ListClusters() AWS provides pagination and next_token
+	// is pointer for next set of cluster fetch
+	NextToken string `protobuf:"bytes,1,opt,name=next_token,json=nextToken,proto3" json:"next_token,omitempty"`
+}
+
+func (m *ManagedClusterEnumerateResponse_AWSConfig) Reset() {
+	*m = ManagedClusterEnumerateResponse_AWSConfig{}
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ManagedClusterEnumerateResponse_AWSConfig) ProtoMessage() {}
+func (*ManagedClusterEnumerateResponse_AWSConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{146, 0}
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateResponse_AWSConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateResponse_AWSConfig.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateResponse_AWSConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateResponse_AWSConfig proto.InternalMessageInfo
+
+func (m *ManagedClusterEnumerateResponse_AWSConfig) GetNextToken() string {
+	if m != nil {
+		return m.NextToken
+	}
+	return ""
+}
+
+type ManagedClusterEnumerateResponse_GoogleConfig struct {
+}
+
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) Reset() {
+	*m = ManagedClusterEnumerateResponse_GoogleConfig{}
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ManagedClusterEnumerateResponse_GoogleConfig) ProtoMessage() {}
+func (*ManagedClusterEnumerateResponse_GoogleConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{146, 1}
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateResponse_GoogleConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateResponse_GoogleConfig.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateResponse_GoogleConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateResponse_GoogleConfig proto.InternalMessageInfo
+
+type ManagedClusterEnumerateResponse_AzureConfig struct {
+}
+
+func (m *ManagedClusterEnumerateResponse_AzureConfig) Reset() {
+	*m = ManagedClusterEnumerateResponse_AzureConfig{}
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ManagedClusterEnumerateResponse_AzureConfig) ProtoMessage() {}
+func (*ManagedClusterEnumerateResponse_AzureConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{146, 2}
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterEnumerateResponse_AzureConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterEnumerateResponse_AzureConfig.Merge(m, src)
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterEnumerateResponse_AzureConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterEnumerateResponse_AzureConfig proto.InternalMessageInfo
+
+// Define ManagedClusterInspectRequest struct
+type ManagedClusterInspectRequest struct {
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// Managed cluster name to be searched for
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// cloud credential name.
+	// Enumerate will return list of managed clusters that
+	// this cloud credential has access to
+	CloudCredential *ObjectRef                            `protobuf:"bytes,3,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
+	IncludeSecrets  bool                                  `protobuf:"varint,4,opt,name=include_secrets,json=includeSecrets,proto3" json:"include_secrets,omitempty"`
+	Provider        ManagedClusterInspectRequest_Provider `protobuf:"varint,5,opt,name=provider,proto3,enum=ManagedClusterInspectRequest_Provider" json:"provider,omitempty"`
+	// Types that are valid to be assigned to Config:
+	//	*ManagedClusterInspectRequest_AwsConfig
+	//	*ManagedClusterInspectRequest_GoogleConfig_
+	//	*ManagedClusterInspectRequest_AzureConfig_
+	Config isManagedClusterInspectRequest_Config `protobuf_oneof:"Config"`
+}
+
+func (m *ManagedClusterInspectRequest) Reset()         { *m = ManagedClusterInspectRequest{} }
+func (m *ManagedClusterInspectRequest) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterInspectRequest) ProtoMessage()    {}
+func (*ManagedClusterInspectRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{147}
+}
+func (m *ManagedClusterInspectRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterInspectRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterInspectRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterInspectRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterInspectRequest.Merge(m, src)
+}
+func (m *ManagedClusterInspectRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterInspectRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterInspectRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterInspectRequest proto.InternalMessageInfo
+
+type isManagedClusterInspectRequest_Config interface {
+	isManagedClusterInspectRequest_Config()
+	Equal(interface{}) bool
+	MarshalTo([]byte) (int, error)
+	Size() int
+}
+
+type ManagedClusterInspectRequest_AwsConfig struct {
+	AwsConfig *ManagedClusterInspectRequest_AWSConfig `protobuf:"bytes,100,opt,name=aws_config,json=awsConfig,proto3,oneof" json:"aws_config,omitempty"`
+}
+type ManagedClusterInspectRequest_GoogleConfig_ struct {
+	GoogleConfig *ManagedClusterInspectRequest_GoogleConfig `protobuf:"bytes,101,opt,name=google_config,json=googleConfig,proto3,oneof" json:"google_config,omitempty"`
+}
+type ManagedClusterInspectRequest_AzureConfig_ struct {
+	AzureConfig *ManagedClusterInspectRequest_AzureConfig `protobuf:"bytes,102,opt,name=azure_config,json=azureConfig,proto3,oneof" json:"azure_config,omitempty"`
+}
+
+func (*ManagedClusterInspectRequest_AwsConfig) isManagedClusterInspectRequest_Config()     {}
+func (*ManagedClusterInspectRequest_GoogleConfig_) isManagedClusterInspectRequest_Config() {}
+func (*ManagedClusterInspectRequest_AzureConfig_) isManagedClusterInspectRequest_Config()  {}
+
+func (m *ManagedClusterInspectRequest) GetConfig() isManagedClusterInspectRequest_Config {
+	if m != nil {
+		return m.Config
+	}
+	return nil
+}
+
+func (m *ManagedClusterInspectRequest) GetOrgId() string {
+	if m != nil {
+		return m.OrgId
+	}
+	return ""
+}
+
+func (m *ManagedClusterInspectRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *ManagedClusterInspectRequest) GetCloudCredential() *ObjectRef {
+	if m != nil {
+		return m.CloudCredential
+	}
+	return nil
+}
+
+func (m *ManagedClusterInspectRequest) GetIncludeSecrets() bool {
+	if m != nil {
+		return m.IncludeSecrets
+	}
+	return false
+}
+
+func (m *ManagedClusterInspectRequest) GetProvider() ManagedClusterInspectRequest_Provider {
+	if m != nil {
+		return m.Provider
+	}
+	return ManagedClusterInspectRequest_Invalid
+}
+
+func (m *ManagedClusterInspectRequest) GetAwsConfig() *ManagedClusterInspectRequest_AWSConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterInspectRequest_AwsConfig); ok {
+		return x.AwsConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterInspectRequest) GetGoogleConfig() *ManagedClusterInspectRequest_GoogleConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterInspectRequest_GoogleConfig_); ok {
+		return x.GoogleConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterInspectRequest) GetAzureConfig() *ManagedClusterInspectRequest_AzureConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterInspectRequest_AzureConfig_); ok {
+		return x.AzureConfig
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*ManagedClusterInspectRequest) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*ManagedClusterInspectRequest_AwsConfig)(nil),
+		(*ManagedClusterInspectRequest_GoogleConfig_)(nil),
+		(*ManagedClusterInspectRequest_AzureConfig_)(nil),
+	}
+}
+
+type ManagedClusterInspectRequest_AWSConfig struct {
+	// Region for scanning clusters
+	Region string `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
+}
+
+func (m *ManagedClusterInspectRequest_AWSConfig) Reset() {
+	*m = ManagedClusterInspectRequest_AWSConfig{}
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterInspectRequest_AWSConfig) ProtoMessage()    {}
+func (*ManagedClusterInspectRequest_AWSConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{147, 0}
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterInspectRequest_AWSConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterInspectRequest_AWSConfig.Merge(m, src)
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterInspectRequest_AWSConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterInspectRequest_AWSConfig proto.InternalMessageInfo
+
+func (m *ManagedClusterInspectRequest_AWSConfig) GetRegion() string {
+	if m != nil {
+		return m.Region
+	}
+	return ""
+}
+
+type ManagedClusterInspectRequest_GoogleConfig struct {
+}
+
+func (m *ManagedClusterInspectRequest_GoogleConfig) Reset() {
+	*m = ManagedClusterInspectRequest_GoogleConfig{}
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ManagedClusterInspectRequest_GoogleConfig) ProtoMessage() {}
+func (*ManagedClusterInspectRequest_GoogleConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{147, 1}
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterInspectRequest_GoogleConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterInspectRequest_GoogleConfig.Merge(m, src)
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterInspectRequest_GoogleConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterInspectRequest_GoogleConfig proto.InternalMessageInfo
+
+type ManagedClusterInspectRequest_AzureConfig struct {
+}
+
+func (m *ManagedClusterInspectRequest_AzureConfig) Reset() {
+	*m = ManagedClusterInspectRequest_AzureConfig{}
+}
+func (m *ManagedClusterInspectRequest_AzureConfig) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterInspectRequest_AzureConfig) ProtoMessage()    {}
+func (*ManagedClusterInspectRequest_AzureConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{147, 2}
+}
+func (m *ManagedClusterInspectRequest_AzureConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterInspectRequest_AzureConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterInspectRequest_AzureConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterInspectRequest_AzureConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterInspectRequest_AzureConfig.Merge(m, src)
+}
+func (m *ManagedClusterInspectRequest_AzureConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterInspectRequest_AzureConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterInspectRequest_AzureConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterInspectRequest_AzureConfig proto.InternalMessageInfo
+
+// Define ClusterInspectResponse struct
+type ManagedClusterInspectResponse struct {
+	Cluster *ManagedClusterObject `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+}
+
+func (m *ManagedClusterInspectResponse) Reset()         { *m = ManagedClusterInspectResponse{} }
+func (m *ManagedClusterInspectResponse) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterInspectResponse) ProtoMessage()    {}
+func (*ManagedClusterInspectResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{148}
+}
+func (m *ManagedClusterInspectResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterInspectResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterInspectResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterInspectResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterInspectResponse.Merge(m, src)
+}
+func (m *ManagedClusterInspectResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterInspectResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterInspectResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterInspectResponse proto.InternalMessageInfo
+
+func (m *ManagedClusterInspectResponse) GetCluster() *ManagedClusterObject {
+	if m != nil {
+		return m.Cluster
+	}
+	return nil
+}
+
+type ManagedClusterBulkAddRequest struct {
+	OrgId           string     `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	CloudCredential *ObjectRef `protobuf:"bytes,2,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
+	// Region for scanning cluster
+	// cluster name to be added
+	ClusterName []string                              `protobuf:"bytes,3,rep,name=cluster_name,json=clusterName,proto3" json:"cluster_name,omitempty"`
+	Provider    ManagedClusterBulkAddRequest_Provider `protobuf:"varint,4,opt,name=provider,proto3,enum=ManagedClusterBulkAddRequest_Provider" json:"provider,omitempty"`
+	// Types that are valid to be assigned to Config:
+	//	*ManagedClusterBulkAddRequest_AwsConfig
+	//	*ManagedClusterBulkAddRequest_GoogleConfig_
+	//	*ManagedClusterBulkAddRequest_AzureConfig_
+	Config isManagedClusterBulkAddRequest_Config `protobuf_oneof:"Config"`
+}
+
+func (m *ManagedClusterBulkAddRequest) Reset()         { *m = ManagedClusterBulkAddRequest{} }
+func (m *ManagedClusterBulkAddRequest) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterBulkAddRequest) ProtoMessage()    {}
+func (*ManagedClusterBulkAddRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{149}
+}
+func (m *ManagedClusterBulkAddRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterBulkAddRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterBulkAddRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterBulkAddRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterBulkAddRequest.Merge(m, src)
+}
+func (m *ManagedClusterBulkAddRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterBulkAddRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterBulkAddRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterBulkAddRequest proto.InternalMessageInfo
+
+type isManagedClusterBulkAddRequest_Config interface {
+	isManagedClusterBulkAddRequest_Config()
+	Equal(interface{}) bool
+	MarshalTo([]byte) (int, error)
+	Size() int
+}
+
+type ManagedClusterBulkAddRequest_AwsConfig struct {
+	AwsConfig *ManagedClusterBulkAddRequest_AWSConfig `protobuf:"bytes,100,opt,name=aws_config,json=awsConfig,proto3,oneof" json:"aws_config,omitempty"`
+}
+type ManagedClusterBulkAddRequest_GoogleConfig_ struct {
+	GoogleConfig *ManagedClusterBulkAddRequest_GoogleConfig `protobuf:"bytes,101,opt,name=google_config,json=googleConfig,proto3,oneof" json:"google_config,omitempty"`
+}
+type ManagedClusterBulkAddRequest_AzureConfig_ struct {
+	AzureConfig *ManagedClusterBulkAddRequest_AzureConfig `protobuf:"bytes,102,opt,name=azure_config,json=azureConfig,proto3,oneof" json:"azure_config,omitempty"`
+}
+
+func (*ManagedClusterBulkAddRequest_AwsConfig) isManagedClusterBulkAddRequest_Config()     {}
+func (*ManagedClusterBulkAddRequest_GoogleConfig_) isManagedClusterBulkAddRequest_Config() {}
+func (*ManagedClusterBulkAddRequest_AzureConfig_) isManagedClusterBulkAddRequest_Config()  {}
+
+func (m *ManagedClusterBulkAddRequest) GetConfig() isManagedClusterBulkAddRequest_Config {
+	if m != nil {
+		return m.Config
+	}
+	return nil
+}
+
+func (m *ManagedClusterBulkAddRequest) GetOrgId() string {
+	if m != nil {
+		return m.OrgId
+	}
+	return ""
+}
+
+func (m *ManagedClusterBulkAddRequest) GetCloudCredential() *ObjectRef {
+	if m != nil {
+		return m.CloudCredential
+	}
+	return nil
+}
+
+func (m *ManagedClusterBulkAddRequest) GetClusterName() []string {
+	if m != nil {
+		return m.ClusterName
+	}
+	return nil
+}
+
+func (m *ManagedClusterBulkAddRequest) GetProvider() ManagedClusterBulkAddRequest_Provider {
+	if m != nil {
+		return m.Provider
+	}
+	return ManagedClusterBulkAddRequest_Invalid
+}
+
+func (m *ManagedClusterBulkAddRequest) GetAwsConfig() *ManagedClusterBulkAddRequest_AWSConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterBulkAddRequest_AwsConfig); ok {
+		return x.AwsConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterBulkAddRequest) GetGoogleConfig() *ManagedClusterBulkAddRequest_GoogleConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterBulkAddRequest_GoogleConfig_); ok {
+		return x.GoogleConfig
+	}
+	return nil
+}
+
+func (m *ManagedClusterBulkAddRequest) GetAzureConfig() *ManagedClusterBulkAddRequest_AzureConfig {
+	if x, ok := m.GetConfig().(*ManagedClusterBulkAddRequest_AzureConfig_); ok {
+		return x.AzureConfig
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*ManagedClusterBulkAddRequest) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*ManagedClusterBulkAddRequest_AwsConfig)(nil),
+		(*ManagedClusterBulkAddRequest_GoogleConfig_)(nil),
+		(*ManagedClusterBulkAddRequest_AzureConfig_)(nil),
+	}
+}
+
+type ManagedClusterBulkAddRequest_AWSConfig struct {
+	// Region for scanning clusters
+	Region string `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
+}
+
+func (m *ManagedClusterBulkAddRequest_AWSConfig) Reset() {
+	*m = ManagedClusterBulkAddRequest_AWSConfig{}
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterBulkAddRequest_AWSConfig) ProtoMessage()    {}
+func (*ManagedClusterBulkAddRequest_AWSConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{149, 0}
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterBulkAddRequest_AWSConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterBulkAddRequest_AWSConfig.Merge(m, src)
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterBulkAddRequest_AWSConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterBulkAddRequest_AWSConfig proto.InternalMessageInfo
+
+func (m *ManagedClusterBulkAddRequest_AWSConfig) GetRegion() string {
+	if m != nil {
+		return m.Region
+	}
+	return ""
+}
+
+type ManagedClusterBulkAddRequest_GoogleConfig struct {
+}
+
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) Reset() {
+	*m = ManagedClusterBulkAddRequest_GoogleConfig{}
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ManagedClusterBulkAddRequest_GoogleConfig) ProtoMessage() {}
+func (*ManagedClusterBulkAddRequest_GoogleConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{149, 1}
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterBulkAddRequest_GoogleConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterBulkAddRequest_GoogleConfig.Merge(m, src)
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterBulkAddRequest_GoogleConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterBulkAddRequest_GoogleConfig proto.InternalMessageInfo
+
+type ManagedClusterBulkAddRequest_AzureConfig struct {
+}
+
+func (m *ManagedClusterBulkAddRequest_AzureConfig) Reset() {
+	*m = ManagedClusterBulkAddRequest_AzureConfig{}
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterBulkAddRequest_AzureConfig) ProtoMessage()    {}
+func (*ManagedClusterBulkAddRequest_AzureConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{149, 2}
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterBulkAddRequest_AzureConfig.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterBulkAddRequest_AzureConfig.Merge(m, src)
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterBulkAddRequest_AzureConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterBulkAddRequest_AzureConfig proto.InternalMessageInfo
+
+type ManagedClusterBulkAddResponse struct {
+}
+
+func (m *ManagedClusterBulkAddResponse) Reset()         { *m = ManagedClusterBulkAddResponse{} }
+func (m *ManagedClusterBulkAddResponse) String() string { return proto.CompactTextString(m) }
+func (*ManagedClusterBulkAddResponse) ProtoMessage()    {}
+func (*ManagedClusterBulkAddResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9943feda3d652502, []int{150}
+}
+func (m *ManagedClusterBulkAddResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ManagedClusterBulkAddResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ManagedClusterBulkAddResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ManagedClusterBulkAddResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ManagedClusterBulkAddResponse.Merge(m, src)
+}
+func (m *ManagedClusterBulkAddResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *ManagedClusterBulkAddResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ManagedClusterBulkAddResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ManagedClusterBulkAddResponse proto.InternalMessageInfo
+
 type ActivityEnumerateRequest struct {
 	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	// Time period for which activity is needed
@@ -10018,7 +12110,7 @@ func (m *ActivityEnumerateRequest) Reset()         { *m = ActivityEnumerateReque
 func (m *ActivityEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*ActivityEnumerateRequest) ProtoMessage()    {}
 func (*ActivityEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{137}
+	return fileDescriptor_9943feda3d652502, []int{151}
 }
 func (m *ActivityEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10097,7 +12189,7 @@ func (m *ActivityEnumerateResponse) Reset()         { *m = ActivityEnumerateResp
 func (m *ActivityEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*ActivityEnumerateResponse) ProtoMessage()    {}
 func (*ActivityEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{138}
+	return fileDescriptor_9943feda3d652502, []int{152}
 }
 func (m *ActivityEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10148,7 +12240,7 @@ func (m *ActivityEnumerateResponse_Data) Reset()         { *m = ActivityEnumerat
 func (m *ActivityEnumerateResponse_Data) String() string { return proto.CompactTextString(m) }
 func (*ActivityEnumerateResponse_Data) ProtoMessage()    {}
 func (*ActivityEnumerateResponse_Data) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{138, 0}
+	return fileDescriptor_9943feda3d652502, []int{152, 0}
 }
 func (m *ActivityEnumerateResponse_Data) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10240,7 +12332,7 @@ func (m *RoleObject) Reset()         { *m = RoleObject{} }
 func (m *RoleObject) String() string { return proto.CompactTextString(m) }
 func (*RoleObject) ProtoMessage()    {}
 func (*RoleObject) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{139}
+	return fileDescriptor_9943feda3d652502, []int{153}
 }
 func (m *RoleObject) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10297,7 +12389,7 @@ func (m *RoleConfig) Reset()         { *m = RoleConfig{} }
 func (m *RoleConfig) String() string { return proto.CompactTextString(m) }
 func (*RoleConfig) ProtoMessage()    {}
 func (*RoleConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{140}
+	return fileDescriptor_9943feda3d652502, []int{154}
 }
 func (m *RoleConfig) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10354,7 +12446,7 @@ func (m *RoleCreateRequest) Reset()         { *m = RoleCreateRequest{} }
 func (m *RoleCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*RoleCreateRequest) ProtoMessage()    {}
 func (*RoleCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{141}
+	return fileDescriptor_9943feda3d652502, []int{155}
 }
 func (m *RoleCreateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10404,7 +12496,7 @@ func (m *RoleCreateResponse) Reset()         { *m = RoleCreateResponse{} }
 func (m *RoleCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*RoleCreateResponse) ProtoMessage()    {}
 func (*RoleCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{142}
+	return fileDescriptor_9943feda3d652502, []int{156}
 }
 func (m *RoleCreateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10445,7 +12537,7 @@ func (m *RoleUpdateRequest) Reset()         { *m = RoleUpdateRequest{} }
 func (m *RoleUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*RoleUpdateRequest) ProtoMessage()    {}
 func (*RoleUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{143}
+	return fileDescriptor_9943feda3d652502, []int{157}
 }
 func (m *RoleUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10496,7 +12588,7 @@ func (m *RoleUpdateResponse) Reset()         { *m = RoleUpdateResponse{} }
 func (m *RoleUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*RoleUpdateResponse) ProtoMessage()    {}
 func (*RoleUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{144}
+	return fileDescriptor_9943feda3d652502, []int{158}
 }
 func (m *RoleUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10536,7 +12628,7 @@ func (m *RoleEnumerateRequest) Reset()         { *m = RoleEnumerateRequest{} }
 func (m *RoleEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*RoleEnumerateRequest) ProtoMessage()    {}
 func (*RoleEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{145}
+	return fileDescriptor_9943feda3d652502, []int{159}
 }
 func (m *RoleEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10581,7 +12673,7 @@ func (m *RoleEnumerateResponse) Reset()         { *m = RoleEnumerateResponse{} }
 func (m *RoleEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*RoleEnumerateResponse) ProtoMessage()    {}
 func (*RoleEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{146}
+	return fileDescriptor_9943feda3d652502, []int{160}
 }
 func (m *RoleEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10628,7 +12720,7 @@ func (m *RoleInspectRequest) Reset()         { *m = RoleInspectRequest{} }
 func (m *RoleInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*RoleInspectRequest) ProtoMessage()    {}
 func (*RoleInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{147}
+	return fileDescriptor_9943feda3d652502, []int{161}
 }
 func (m *RoleInspectRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10687,7 +12779,7 @@ func (m *RoleInspectResponse) Reset()         { *m = RoleInspectResponse{} }
 func (m *RoleInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*RoleInspectResponse) ProtoMessage()    {}
 func (*RoleInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{148}
+	return fileDescriptor_9943feda3d652502, []int{162}
 }
 func (m *RoleInspectResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10734,7 +12826,7 @@ func (m *RoleDeleteRequest) Reset()         { *m = RoleDeleteRequest{} }
 func (m *RoleDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*RoleDeleteRequest) ProtoMessage()    {}
 func (*RoleDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{149}
+	return fileDescriptor_9943feda3d652502, []int{163}
 }
 func (m *RoleDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10792,7 +12884,7 @@ func (m *RoleDeleteResponse) Reset()         { *m = RoleDeleteResponse{} }
 func (m *RoleDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*RoleDeleteResponse) ProtoMessage()    {}
 func (*RoleDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{150}
+	return fileDescriptor_9943feda3d652502, []int{164}
 }
 func (m *RoleDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10830,7 +12922,7 @@ func (m *RolePermissionRequest) Reset()         { *m = RolePermissionRequest{} }
 func (m *RolePermissionRequest) String() string { return proto.CompactTextString(m) }
 func (*RolePermissionRequest) ProtoMessage()    {}
 func (*RolePermissionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{151}
+	return fileDescriptor_9943feda3d652502, []int{165}
 }
 func (m *RolePermissionRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10875,7 +12967,7 @@ func (m *RolePermissionResponse) Reset()         { *m = RolePermissionResponse{}
 func (m *RolePermissionResponse) String() string { return proto.CompactTextString(m) }
 func (*RolePermissionResponse) ProtoMessage()    {}
 func (*RolePermissionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{152}
+	return fileDescriptor_9943feda3d652502, []int{166}
 }
 func (m *RolePermissionResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10920,7 +13012,7 @@ func (m *Permission) Reset()         { *m = Permission{} }
 func (m *Permission) String() string { return proto.CompactTextString(m) }
 func (*Permission) ProtoMessage()    {}
 func (*Permission) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{153}
+	return fileDescriptor_9943feda3d652502, []int{167}
 }
 func (m *Permission) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -10973,7 +13065,7 @@ func (m *ActivityDataObject) Reset()         { *m = ActivityDataObject{} }
 func (m *ActivityDataObject) String() string { return proto.CompactTextString(m) }
 func (*ActivityDataObject) ProtoMessage()    {}
 func (*ActivityDataObject) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{154}
+	return fileDescriptor_9943feda3d652502, []int{168}
 }
 func (m *ActivityDataObject) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -11047,7 +13139,7 @@ func (m *ActivityDataObject_Opcycle) Reset()         { *m = ActivityDataObject_O
 func (m *ActivityDataObject_Opcycle) String() string { return proto.CompactTextString(m) }
 func (*ActivityDataObject_Opcycle) ProtoMessage()    {}
 func (*ActivityDataObject_Opcycle) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9943feda3d652502, []int{154, 0}
+	return fileDescriptor_9943feda3d652502, []int{168, 0}
 }
 func (m *ActivityDataObject_Opcycle) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -11099,6 +13191,7 @@ func (m *ActivityDataObject_Opcycle) GetStatus() ActivityDataObject_Status {
 
 func init() {
 	proto.RegisterEnum("ClusterInfo_StatusInfo_Status", ClusterInfo_StatusInfo_Status_name, ClusterInfo_StatusInfo_Status_value)
+	proto.RegisterEnum("ClusterInfo_BackupShareStatusInfo_Status", ClusterInfo_BackupShareStatusInfo_Status_name, ClusterInfo_BackupShareStatusInfo_Status_value)
 	proto.RegisterEnum("CloudCredentialInfo_Type", CloudCredentialInfo_Type_name, CloudCredentialInfo_Type_value)
 	proto.RegisterEnum("BackupScheduleInfo_ReclaimPolicyType", BackupScheduleInfo_ReclaimPolicyType_name, BackupScheduleInfo_ReclaimPolicyType_value)
 	proto.RegisterEnum("BackupScheduleInfo_BackupType_Type", BackupScheduleInfo_BackupType_Type_name, BackupScheduleInfo_BackupType_Type_value)
@@ -11113,11 +13206,17 @@ func init() {
 	proto.RegisterEnum("RestoreInfo_StatusInfo_Status", RestoreInfo_StatusInfo_Status_name, RestoreInfo_StatusInfo_Status_value)
 	proto.RegisterEnum("BackupScheduleCreateRequest_BackupType", BackupScheduleCreateRequest_BackupType_name, BackupScheduleCreateRequest_BackupType_value)
 	proto.RegisterEnum("BackupCreateRequest_BackupType", BackupCreateRequest_BackupType_name, BackupCreateRequest_BackupType_value)
+	proto.RegisterEnum("ManagedClusterEnumerateRequest_Provider", ManagedClusterEnumerateRequest_Provider_name, ManagedClusterEnumerateRequest_Provider_value)
+	proto.RegisterEnum("ManagedClusterObject_Status", ManagedClusterObject_Status_name, ManagedClusterObject_Status_value)
+	proto.RegisterEnum("ManagedClusterEnumerateResponse_Provider", ManagedClusterEnumerateResponse_Provider_name, ManagedClusterEnumerateResponse_Provider_value)
+	proto.RegisterEnum("ManagedClusterInspectRequest_Provider", ManagedClusterInspectRequest_Provider_name, ManagedClusterInspectRequest_Provider_value)
+	proto.RegisterEnum("ManagedClusterBulkAddRequest_Provider", ManagedClusterBulkAddRequest_Provider_name, ManagedClusterBulkAddRequest_Provider_value)
 	proto.RegisterEnum("ActivityEnumerateRequest_Interval", ActivityEnumerateRequest_Interval_name, ActivityEnumerateRequest_Interval_value)
 	proto.RegisterEnum("ActivityDataObject_Status", ActivityDataObject_Status_name, ActivityDataObject_Status_value)
 	proto.RegisterType((*OrganizationObject)(nil), "OrganizationObject")
 	proto.RegisterType((*ClusterInfo)(nil), "ClusterInfo")
 	proto.RegisterType((*ClusterInfo_StatusInfo)(nil), "ClusterInfo.StatusInfo")
+	proto.RegisterType((*ClusterInfo_BackupShareStatusInfo)(nil), "ClusterInfo.BackupShareStatusInfo")
 	proto.RegisterType((*ClusterObject)(nil), "ClusterObject")
 	proto.RegisterType((*PXConfig)(nil), "PXConfig")
 	proto.RegisterType((*AWSConfig)(nil), "AWSConfig")
@@ -11200,6 +13299,8 @@ func init() {
 	proto.RegisterType((*BackupScheduleInspectResponse)(nil), "BackupScheduleInspectResponse")
 	proto.RegisterType((*BackupScheduleDeleteRequest)(nil), "BackupScheduleDeleteRequest")
 	proto.RegisterType((*BackupScheduleDeleteResponse)(nil), "BackupScheduleDeleteResponse")
+	proto.RegisterType((*ClusterBackupShareUpdateRequest)(nil), "ClusterBackupShareUpdateRequest")
+	proto.RegisterType((*ClusterBackupShareUpdateResponse)(nil), "ClusterBackupShareUpdateResponse")
 	proto.RegisterType((*ClusterCreateRequest)(nil), "ClusterCreateRequest")
 	proto.RegisterType((*ClusterCreateResponse)(nil), "ClusterCreateResponse")
 	proto.RegisterType((*ClusterUpdateRequest)(nil), "ClusterUpdateRequest")
@@ -11252,6 +13353,8 @@ func init() {
 	proto.RegisterType((*BackupInspectResponse)(nil), "BackupInspectResponse")
 	proto.RegisterType((*BackupDeleteRequest)(nil), "BackupDeleteRequest")
 	proto.RegisterType((*BackupDeleteResponse)(nil), "BackupDeleteResponse")
+	proto.RegisterType((*BackupShareUpdateRequest)(nil), "BackupShareUpdateRequest")
+	proto.RegisterType((*BackupShareUpdateResponse)(nil), "BackupShareUpdateResponse")
 	proto.RegisterType((*RestoreCreateRequest)(nil), "RestoreCreateRequest")
 	proto.RegisterMapType((map[string]string)(nil), "RestoreCreateRequest.NamespaceMappingEntry")
 	proto.RegisterMapType((map[string]string)(nil), "RestoreCreateRequest.StorageClassMappingEntry")
@@ -11295,6 +13398,28 @@ func init() {
 	proto.RegisterType((*LicenseResponseInfo_FeatureInfo)(nil), "LicenseResponseInfo.FeatureInfo")
 	proto.RegisterType((*LicenseResponseInfo_EntitlementInfo)(nil), "LicenseResponseInfo.EntitlementInfo")
 	proto.RegisterType((*LicenseResponseInfo_Status)(nil), "LicenseResponseInfo.Status")
+	proto.RegisterType((*LicenseUsageAirgappedObject)(nil), "LicenseUsageAirgappedObject")
+	proto.RegisterType((*LicenseUsageAirgappedRequest)(nil), "LicenseUsageAirgappedRequest")
+	proto.RegisterType((*LicenseUsageAirgappedResponse)(nil), "LicenseUsageAirgappedResponse")
+	proto.RegisterType((*ManagedClusterEnumerateRequest)(nil), "ManagedClusterEnumerateRequest")
+	proto.RegisterType((*ManagedClusterEnumerateRequest_AWSConfig)(nil), "ManagedClusterEnumerateRequest.AWSConfig")
+	proto.RegisterType((*ManagedClusterEnumerateRequest_GoogleConfig)(nil), "ManagedClusterEnumerateRequest.GoogleConfig")
+	proto.RegisterType((*ManagedClusterEnumerateRequest_AzureConfig)(nil), "ManagedClusterEnumerateRequest.AzureConfig")
+	proto.RegisterType((*ManagedClusterObject)(nil), "ManagedClusterObject")
+	proto.RegisterType((*ManagedClusterEnumerateResponse)(nil), "ManagedClusterEnumerateResponse")
+	proto.RegisterType((*ManagedClusterEnumerateResponse_AWSConfig)(nil), "ManagedClusterEnumerateResponse.AWSConfig")
+	proto.RegisterType((*ManagedClusterEnumerateResponse_GoogleConfig)(nil), "ManagedClusterEnumerateResponse.GoogleConfig")
+	proto.RegisterType((*ManagedClusterEnumerateResponse_AzureConfig)(nil), "ManagedClusterEnumerateResponse.AzureConfig")
+	proto.RegisterType((*ManagedClusterInspectRequest)(nil), "ManagedClusterInspectRequest")
+	proto.RegisterType((*ManagedClusterInspectRequest_AWSConfig)(nil), "ManagedClusterInspectRequest.AWSConfig")
+	proto.RegisterType((*ManagedClusterInspectRequest_GoogleConfig)(nil), "ManagedClusterInspectRequest.GoogleConfig")
+	proto.RegisterType((*ManagedClusterInspectRequest_AzureConfig)(nil), "ManagedClusterInspectRequest.AzureConfig")
+	proto.RegisterType((*ManagedClusterInspectResponse)(nil), "ManagedClusterInspectResponse")
+	proto.RegisterType((*ManagedClusterBulkAddRequest)(nil), "ManagedClusterBulkAddRequest")
+	proto.RegisterType((*ManagedClusterBulkAddRequest_AWSConfig)(nil), "ManagedClusterBulkAddRequest.AWSConfig")
+	proto.RegisterType((*ManagedClusterBulkAddRequest_GoogleConfig)(nil), "ManagedClusterBulkAddRequest.GoogleConfig")
+	proto.RegisterType((*ManagedClusterBulkAddRequest_AzureConfig)(nil), "ManagedClusterBulkAddRequest.AzureConfig")
+	proto.RegisterType((*ManagedClusterBulkAddResponse)(nil), "ManagedClusterBulkAddResponse")
 	proto.RegisterType((*ActivityEnumerateRequest)(nil), "ActivityEnumerateRequest")
 	proto.RegisterType((*ActivityEnumerateResponse)(nil), "ActivityEnumerateResponse")
 	proto.RegisterType((*ActivityEnumerateResponse_Data)(nil), "ActivityEnumerateResponse.Data")
@@ -11321,485 +13446,568 @@ func init() {
 func init() { proto.RegisterFile("pkg/apis/v1/api.proto", fileDescriptor_9943feda3d652502) }
 
 var fileDescriptor_9943feda3d652502 = []byte{
-	// 7642 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x7d, 0x5d, 0x8c, 0x1c, 0xc7,
-	0x71, 0x30, 0x67, 0x77, 0x6f, 0x6f, 0xb7, 0x76, 0x6f, 0x6f, 0xaf, 0xef, 0x97, 0x43, 0xde, 0xed,
-	0x69, 0xc4, 0x3f, 0x91, 0xd2, 0xd0, 0x3a, 0x9a, 0x96, 0x44, 0xd1, 0x92, 0x78, 0x47, 0x51, 0xbc,
-	0x4f, 0x94, 0x48, 0xcf, 0x49, 0xb2, 0x25, 0x1b, 0x5e, 0xcc, 0xed, 0xf6, 0x1d, 0x47, 0xdc, 0x9d,
-	0x59, 0xcd, 0xcc, 0x52, 0x3c, 0x19, 0xc2, 0xe7, 0x9f, 0xcf, 0x5f, 0x82, 0xfc, 0x28, 0xb2, 0x83,
-	0x04, 0x71, 0x62, 0xc0, 0x49, 0x90, 0x07, 0x07, 0xc8, 0x4b, 0x62, 0x04, 0x49, 0x6c, 0x20, 0x48,
-	0x9e, 0x12, 0x04, 0xf9, 0x31, 0x90, 0x97, 0x3c, 0x5d, 0x12, 0x39, 0x40, 0x10, 0xfa, 0x4d, 0xc9,
-	0x43, 0x1e, 0x83, 0xfe, 0x9b, 0xdf, 0x9e, 0xbd, 0xbd, 0xdb, 0x13, 0x25, 0xc0, 0x79, 0xba, 0x9d,
-	0xea, 0xea, 0xea, 0xea, 0xee, 0xaa, 0xea, 0xaa, 0xee, 0xea, 0x3e, 0x98, 0xed, 0xdd, 0xd9, 0x3e,
-	0x6f, 0xf6, 0x2c, 0xef, 0xfc, 0xdd, 0xc7, 0xc9, 0x5f, 0xbd, 0xe7, 0x3a, 0xbe, 0xa3, 0x1e, 0xdf,
-	0x76, 0x9c, 0xed, 0x0e, 0x26, 0x90, 0xf3, 0xa6, 0x6d, 0x3b, 0xbe, 0xe9, 0x5b, 0x8e, 0xed, 0xf1,
-	0xd2, 0x06, 0x2f, 0xa5, 0x5f, 0x9b, 0xfd, 0xad, 0xf3, 0xbe, 0xd5, 0xc5, 0x9e, 0x6f, 0x76, 0x7b,
-	0x1c, 0xe1, 0xb1, 0x6d, 0xcb, 0xbf, 0xdd, 0xdf, 0xd4, 0x5b, 0x4e, 0xf7, 0xfc, 0xb6, 0xb3, 0xed,
-	0x84, 0x98, 0xe4, 0x8b, 0x7e, 0xd0, 0x5f, 0x1c, 0x7d, 0x21, 0xca, 0x44, 0xcb, 0xe9, 0x76, 0x1d,
-	0x9b, 0x95, 0x68, 0x57, 0x00, 0xdd, 0x74, 0xb7, 0x4d, 0xdb, 0x7a, 0x87, 0x32, 0x70, 0x73, 0xf3,
-	0x4d, 0xdc, 0xf2, 0xd1, 0x39, 0x28, 0x75, 0xb1, 0x6f, 0xb6, 0x4d, 0xdf, 0x5c, 0x50, 0x96, 0x95,
-	0x33, 0x95, 0x95, 0xb2, 0xfe, 0x12, 0x07, 0xac, 0x16, 0x7e, 0xbc, 0xdb, 0x50, 0x8c, 0x00, 0x41,
-	0xfb, 0xe3, 0x02, 0x54, 0xd6, 0x3a, 0x7d, 0xcf, 0xc7, 0xee, 0xba, 0xbd, 0xe5, 0xa0, 0x4f, 0x43,
-	0xb9, 0x77, 0xaf, 0xd9, 0x72, 0xec, 0x2d, 0x6b, 0x3b, 0xa8, 0x7d, 0xeb, 0x0b, 0x6b, 0x14, 0xb0,
-	0x5a, 0xbd, 0xbf, 0xdb, 0x28, 0xf5, 0xee, 0xb1, 0x62, 0xa3, 0xd4, 0xbb, 0xc7, 0xe0, 0xe8, 0x59,
-	0x80, 0x3b, 0xfd, 0x4d, 0xcc, 0xab, 0xe5, 0x96, 0x95, 0x33, 0xe5, 0xd5, 0xc6, 0xfd, 0xdd, 0x46,
-	0x04, 0xfa, 0xe1, 0x6e, 0x63, 0xc2, 0xc3, 0xad, 0xbe, 0x8b, 0x2f, 0x69, 0xbe, 0xdb, 0xc7, 0x9a,
-	0x11, 0x29, 0x44, 0x8f, 0x40, 0xbd, 0xd5, 0x71, 0xfa, 0xed, 0x66, 0xcb, 0xc5, 0x6d, 0x6c, 0xfb,
-	0x96, 0xd9, 0x59, 0xc8, 0x13, 0x32, 0xc6, 0x24, 0x85, 0xaf, 0x05, 0x60, 0x74, 0x1e, 0x8a, 0x9e,
-	0x6f, 0xfa, 0x7d, 0x6f, 0xa1, 0x40, 0xd9, 0x9b, 0xd7, 0x23, 0xfc, 0xeb, 0x1b, 0xb4, 0x88, 0xfc,
-	0x34, 0x38, 0x1a, 0x3a, 0x09, 0xb5, 0x36, 0xee, 0x60, 0x1f, 0x37, 0x37, 0xcd, 0xd6, 0x9d, 0x7e,
-	0xcf, 0x5b, 0x18, 0x5b, 0x56, 0xce, 0x94, 0x8c, 0x09, 0x06, 0x5d, 0x65, 0x40, 0x74, 0x1a, 0x26,
-	0x39, 0x9a, 0x8b, 0x3d, 0xdf, 0x71, 0xb1, 0xb7, 0x50, 0xa4, 0x78, 0xbc, 0xb6, 0xc1, 0xa1, 0xe8,
-	0x61, 0x98, 0x20, 0xbf, 0xee, 0x34, 0xef, 0x62, 0xd7, 0xb3, 0x1c, 0x7b, 0x61, 0x9c, 0x32, 0x5a,
-	0xa5, 0xc0, 0xd7, 0x18, 0x0c, 0x5d, 0x86, 0x99, 0x64, 0x87, 0x9a, 0x2e, 0xde, 0x5a, 0x28, 0x51,
-	0x9e, 0x41, 0x67, 0x73, 0x65, 0xe0, 0x2d, 0x03, 0x25, 0x3a, 0x68, 0xe0, 0x2d, 0xf5, 0x7b, 0x0a,
-	0x40, 0xd8, 0x13, 0xf4, 0x99, 0xa0, 0xcb, 0x64, 0x46, 0x6a, 0x2b, 0x4b, 0x19, 0x5d, 0xe6, 0x3f,
-	0x83, 0x9e, 0xcf, 0x41, 0xd1, 0xc5, 0xa6, 0xe7, 0xd8, 0x6c, 0x4a, 0x0c, 0xfe, 0xa5, 0x5d, 0x81,
-	0x22, 0xc3, 0x44, 0x15, 0x18, 0x5f, 0xb7, 0xef, 0x9a, 0x1d, 0xab, 0x5d, 0x3f, 0x82, 0x00, 0x8a,
-	0x37, 0xed, 0x8e, 0x65, 0xe3, 0xba, 0x42, 0x0a, 0x6e, 0x6e, 0x6d, 0xd1, 0x8f, 0x1c, 0x9a, 0x82,
-	0x89, 0xab, 0x74, 0x0c, 0x6e, 0x61, 0xbb, 0x6d, 0xd9, 0xdb, 0xf5, 0xbc, 0xf6, 0x35, 0x05, 0x26,
-	0x38, 0x13, 0x07, 0x10, 0x3b, 0xb4, 0x06, 0x95, 0x56, 0xd8, 0x05, 0xca, 0x5e, 0x65, 0xa5, 0x1a,
-	0xed, 0xd6, 0xea, 0x34, 0xa9, 0x72, 0x7f, 0xb7, 0x21, 0x10, 0x2d, 0x32, 0xa7, 0xd1, 0x5a, 0xda,
-	0x33, 0x50, 0x12, 0x92, 0x89, 0x56, 0xa0, 0x6a, 0xb6, 0x5a, 0xd8, 0xf3, 0x9a, 0xbe, 0x73, 0x07,
-	0xdb, 0x94, 0x83, 0xf2, 0xea, 0x24, 0xa9, 0xcf, 0xe0, 0x14, 0x6c, 0xf0, 0x8f, 0x57, 0xc8, 0x87,
-	0x76, 0x0f, 0xca, 0x57, 0x3e, 0xbf, 0xc1, 0x09, 0x3c, 0x0a, 0xc0, 0x09, 0xdc, 0xc1, 0x3b, 0xbc,
-	0xfa, 0xc4, 0xfd, 0xdd, 0x46, 0x99, 0x41, 0xef, 0xe0, 0x1d, 0x83, 0xff, 0x7c, 0x11, 0xef, 0xa0,
-	0xcf, 0x02, 0x78, 0xb8, 0xe5, 0x62, 0x9f, 0x62, 0x33, 0x81, 0x5f, 0x22, 0xd8, 0x0c, 0x7a, 0x07,
-	0xef, 0xa4, 0xe5, 0x9d, 0x97, 0xbd, 0x88, 0x77, 0xb4, 0x55, 0x28, 0xaf, 0xaf, 0xbe, 0xc4, 0x5b,
-	0xbe, 0x08, 0xe3, 0x66, 0xcf, 0x8a, 0x34, 0x7b, 0xfc, 0xfe, 0x6e, 0x43, 0x80, 0xd2, 0x64, 0x8a,
-	0x66, 0xcf, 0x22, 0x34, 0xfe, 0x48, 0x81, 0xd2, 0xc6, 0x05, 0x4e, 0x43, 0x85, 0x12, 0xb6, 0xdb,
-	0x3d, 0xc7, 0xb2, 0x7d, 0x46, 0xc4, 0x08, 0xbe, 0x99, 0x14, 0x6c, 0x5b, 0x51, 0x29, 0x20, 0x5f,
-	0xa8, 0x01, 0x95, 0xb6, 0xe5, 0x99, 0x9b, 0x1d, 0xdc, 0xf4, 0x3c, 0xa6, 0x6e, 0x25, 0x03, 0x38,
-	0x68, 0xc3, 0xeb, 0xa0, 0x47, 0x01, 0x09, 0x84, 0x9e, 0xe9, 0xdf, 0x6e, 0x7a, 0xfe, 0x4e, 0x07,
-	0x53, 0xad, 0x2b, 0x19, 0x75, 0x5e, 0x72, 0xcb, 0xf4, 0x6f, 0x6f, 0x10, 0xb8, 0x50, 0x0b, 0x73,
-	0x1b, 0x37, 0x5b, 0x1d, 0xd3, 0x63, 0x5a, 0xc6, 0xd5, 0xc2, 0xdc, 0xc6, 0x6b, 0x04, 0xa6, 0x7d,
-	0x35, 0x0f, 0x95, 0x2b, 0xef, 0xf4, 0x5d, 0xcc, 0xf9, 0x7e, 0x88, 0x4e, 0x9b, 0xd3, 0xb7, 0xfd,
-	0xa6, 0x6d, 0x76, 0x31, 0xe7, 0xbd, 0xc2, 0x61, 0x2f, 0x9b, 0x5d, 0x8c, 0x9e, 0x03, 0xf1, 0x19,
-	0x19, 0x6b, 0x6a, 0x5c, 0x38, 0x58, 0x3a, 0x4a, 0xa2, 0x90, 0x4c, 0xd6, 0x35, 0x98, 0x68, 0x75,
-	0x2c, 0x6c, 0xfb, 0x4d, 0x36, 0x03, 0xcc, 0xb2, 0xac, 0x3e, 0x74, 0x7f, 0xb7, 0x51, 0x65, 0x05,
-	0x0c, 0x9e, 0xa6, 0xc2, 0x8b, 0x37, 0x68, 0x31, 0xba, 0x04, 0x65, 0x4e, 0xc7, 0x6a, 0xd3, 0x61,
-	0x28, 0xaf, 0x2e, 0x12, 0x83, 0xc8, 0x80, 0x56, 0x3b, 0x5d, 0x9f, 0x17, 0xad, 0xb7, 0x49, 0x5d,
-	0x1f, 0xdb, 0x26, 0xab, 0x3b, 0x16, 0xd6, 0x65, 0x40, 0x69, 0x5d, 0x56, 0xb4, 0xde, 0x46, 0x37,
-	0x60, 0xd2, 0xeb, 0x6f, 0x7a, 0x2d, 0xd7, 0xea, 0x11, 0x33, 0x4f, 0x28, 0x14, 0x29, 0x85, 0x87,
-	0xef, 0xef, 0x36, 0x6a, 0xd1, 0x22, 0x19, 0x9d, 0x18, 0xc2, 0x7a, 0x5b, 0xdb, 0x82, 0xea, 0x0b,
-	0x74, 0x81, 0xe2, 0x53, 0xb0, 0x08, 0xd0, 0x73, 0x1d, 0xa2, 0xc2, 0x84, 0x30, 0x9b, 0x80, 0x32,
-	0x87, 0xac, 0xb7, 0xd1, 0x13, 0x50, 0x7a, 0xd3, 0x73, 0xec, 0xc8, 0xd8, 0x53, 0xf1, 0x24, 0x30,
-	0xe9, 0xc0, 0xd3, 0x12, 0x22, 0x9f, 0xff, 0x90, 0x83, 0xe9, 0xb5, 0xb8, 0x69, 0xa3, 0xc6, 0xec,
-	0x31, 0x28, 0xf8, 0x3b, 0x3d, 0xcc, 0x4d, 0xd9, 0x51, 0x5d, 0x82, 0xa3, 0xbf, 0xb2, 0xd3, 0xc3,
-	0x06, 0x45, 0x43, 0xe7, 0x00, 0xcc, 0xb7, 0x3d, 0xb1, 0x22, 0xb5, 0xb9, 0xf9, 0x0c, 0xf4, 0xf6,
-	0xfa, 0x11, 0xa3, 0x6c, 0xbe, 0xed, 0xf1, 0xbe, 0x3c, 0x0e, 0x55, 0x93, 0x48, 0x97, 0x40, 0xc7,
-	0xdc, 0xae, 0x44, 0x44, 0xee, 0xfa, 0x11, 0xa3, 0x62, 0x46, 0x24, 0xf0, 0xd3, 0x30, 0xc1, 0xd6,
-	0x6b, 0x51, 0x67, 0x8b, 0xd6, 0x99, 0xd0, 0xa3, 0x83, 0x74, 0xfd, 0x88, 0x51, 0xdd, 0x8e, 0x0e,
-	0xda, 0x39, 0x00, 0x6b, 0xb3, 0x2b, 0xaa, 0x6c, 0x73, 0xae, 0x02, 0x9d, 0x26, 0x5c, 0x59, 0x9b,
-	0x5d, 0xf6, 0xa1, 0x5d, 0x86, 0x02, 0xe9, 0x50, 0xdc, 0xd8, 0x8e, 0x43, 0xfe, 0xca, 0xe7, 0x37,
-	0xea, 0x0a, 0x2a, 0xc3, 0x18, 0x65, 0xaf, 0x9e, 0x23, 0x06, 0x98, 0xb5, 0x5a, 0xcf, 0x93, 0xf2,
-	0xf5, 0xd5, 0x97, 0xea, 0x85, 0xd5, 0x12, 0x14, 0x59, 0x33, 0xda, 0x6f, 0x2a, 0x30, 0x9b, 0x18,
-	0x2d, 0x6e, 0x7b, 0x9f, 0x18, 0x64, 0x7b, 0xeb, 0xdc, 0x90, 0x06, 0x28, 0x11, 0x3b, 0x7c, 0x1d,
-	0x66, 0x53, 0xcb, 0x94, 0x15, 0x5a, 0xe4, 0x19, 0xd9, 0xec, 0x18, 0xd3, 0xad, 0x34, 0x50, 0xfb,
-	0xfb, 0x71, 0x40, 0x1b, 0xad, 0xdb, 0xb8, 0xdd, 0xef, 0xe0, 0x5b, 0x4e, 0xc7, 0x6a, 0xed, 0xd0,
-	0xd9, 0x7e, 0x06, 0x4a, 0x96, 0xed, 0x63, 0xf7, 0xae, 0xd9, 0xe1, 0x9c, 0x69, 0x7a, 0x1a, 0x4d,
-	0x5f, 0xe7, 0x38, 0x0c, 0x64, 0x04, 0x75, 0xd0, 0x45, 0x18, 0x6b, 0x9b, 0x56, 0x67, 0x87, 0x33,
-	0xd4, 0x90, 0x55, 0xbe, 0x4a, 0x10, 0x78, 0x4d, 0x86, 0x8d, 0x9e, 0x84, 0xe2, 0xdb, 0x18, 0xdf,
-	0xe9, 0xec, 0x50, 0x5d, 0xaf, 0xac, 0x2c, 0xcb, 0xea, 0x7d, 0x9e, 0x62, 0xf0, 0x8a, 0x1c, 0x1f,
-	0x3d, 0x0d, 0xe3, 0x5d, 0xc7, 0xf6, 0x6f, 0x77, 0x76, 0xb8, 0x7f, 0xf1, 0x90, 0xac, 0xea, 0x4b,
-	0x0c, 0x85, 0xd7, 0x15, 0x35, 0x88, 0x0f, 0xc1, 0x7c, 0x8c, 0xa6, 0xc7, 0xeb, 0x2c, 0x8c, 0x2d,
-	0xe7, 0xcf, 0x94, 0x8d, 0x1a, 0x03, 0x0b, 0x4a, 0xea, 0x05, 0xa8, 0xaf, 0xdb, 0x2d, 0x17, 0x77,
-	0xb1, 0xed, 0x9b, 0x9d, 0x35, 0x62, 0xa9, 0x50, 0x03, 0xc6, 0xa8, 0xc9, 0xa2, 0xe3, 0x54, 0x58,
-	0x2d, 0xdf, 0xdf, 0x6d, 0x30, 0x80, 0xc1, 0xfe, 0xa8, 0xbf, 0xa6, 0x40, 0x2d, 0x3e, 0x50, 0x68,
-	0x01, 0xc6, 0xbb, 0x96, 0xdd, 0xf7, 0x31, 0x73, 0x0d, 0xf2, 0x86, 0xf8, 0x64, 0x56, 0xdf, 0x37,
-	0x2d, 0x66, 0xf5, 0xf3, 0x06, 0xff, 0x42, 0x9f, 0x83, 0x29, 0x2b, 0x6c, 0xb9, 0xc9, 0x5a, 0x64,
-	0x83, 0x74, 0x42, 0x3e, 0x33, 0x71, 0x36, 0x8d, 0xba, 0x95, 0x80, 0xa8, 0xbf, 0xa4, 0x40, 0x25,
-	0x32, 0x07, 0x08, 0x41, 0x81, 0xb8, 0xbc, 0xdc, 0x96, 0xd0, 0xdf, 0x0f, 0x92, 0x9d, 0xef, 0x29,
-	0x50, 0x8d, 0x4e, 0x2d, 0xaa, 0x43, 0xbe, 0x6d, 0xf2, 0xc5, 0xd5, 0x20, 0x3f, 0x03, 0x0e, 0x73,
-	0x52, 0x0e, 0xf3, 0x7b, 0x73, 0x58, 0x18, 0x89, 0xc3, 0xdf, 0x55, 0x60, 0x22, 0x26, 0x41, 0x84,
-	0xa1, 0xb6, 0xe9, 0x63, 0x3e, 0x89, 0xf4, 0xf7, 0xc7, 0xcc, 0xa4, 0xf6, 0x5d, 0x05, 0x66, 0xe2,
-	0x35, 0x47, 0x35, 0x36, 0x2f, 0xc2, 0x8c, 0x50, 0x8b, 0x66, 0x8f, 0x52, 0x8c, 0xda, 0x9a, 0x69,
-	0x09, 0x9f, 0xdc, 0x6f, 0x44, 0x5e, 0xaa, 0x44, 0xfb, 0xf3, 0x3a, 0xa0, 0xd5, 0x98, 0x52, 0x51,
-	0x7b, 0x73, 0x1a, 0x26, 0x13, 0x6d, 0xf0, 0x79, 0xaf, 0xc5, 0x69, 0x10, 0xcd, 0xf1, 0xfa, 0x5e,
-	0x0f, 0xdb, 0x6d, 0xda, 0x7e, 0xc9, 0x10, 0x9f, 0xe8, 0x06, 0xd4, 0x5c, 0xdc, 0xea, 0x98, 0x56,
-	0x57, 0x50, 0xc8, 0xd3, 0xa5, 0xea, 0xa4, 0x9e, 0x6e, 0x4f, 0x37, 0x18, 0x26, 0x23, 0x4a, 0x97,
-	0xad, 0x09, 0x37, 0x0a, 0x42, 0xff, 0x07, 0x26, 0x84, 0x49, 0x10, 0x51, 0x4b, 0xfe, 0x4c, 0x45,
-	0x4e, 0x8c, 0x83, 0x28, 0xde, 0xf3, 0xb6, 0xef, 0xee, 0x18, 0xd5, 0xcd, 0x08, 0x28, 0x62, 0x5e,
-	0x3a, 0x4e, 0x8b, 0x86, 0x7c, 0xdc, 0xc9, 0xe2, 0xe6, 0xe5, 0x06, 0x87, 0x92, 0xce, 0x71, 0x47,
-	0x99, 0x79, 0x0a, 0x86, 0xf8, 0x44, 0x4b, 0x00, 0xc4, 0xd1, 0xf2, 0x7a, 0x66, 0x0b, 0x7b, 0x0b,
-	0xe3, 0xd4, 0x38, 0x45, 0x20, 0xe8, 0x16, 0x4c, 0x76, 0xcc, 0x4d, 0xdc, 0x69, 0x7a, 0xb8, 0x83,
-	0x5b, 0xbe, 0xe3, 0x7a, 0x0b, 0x25, 0xca, 0xf0, 0x69, 0x19, 0xc3, 0x37, 0x08, 0xea, 0x86, 0xc0,
-	0x64, 0x2c, 0xd7, 0x3a, 0x31, 0x20, 0xd2, 0x60, 0xa2, 0xe7, 0xe2, 0x26, 0xbe, 0x87, 0x5b, 0x4d,
-	0x97, 0x58, 0xc4, 0x32, 0xf3, 0xf1, 0x7a, 0x2e, 0x7e, 0xfe, 0x1e, 0x6e, 0x19, 0xfd, 0x0e, 0x46,
-	0x27, 0xa0, 0xd6, 0x73, 0x3c, 0x3f, 0x82, 0x04, 0xcc, 0x79, 0x24, 0xd0, 0x00, 0x2b, 0x1d, 0xc8,
-	0x55, 0x64, 0x81, 0x5c, 0x18, 0x2d, 0x55, 0xa9, 0x60, 0x2d, 0xc9, 0x38, 0x97, 0xc4, 0x89, 0xab,
-	0x50, 0xe5, 0x22, 0x80, 0xdb, 0xcd, 0xcd, 0x9d, 0x85, 0x09, 0xbe, 0xe2, 0xc8, 0x6a, 0x0b, 0xbc,
-	0xd5, 0x1d, 0xa3, 0xe2, 0x85, 0x1f, 0xe8, 0x12, 0xd5, 0xc3, 0x4e, 0xbf, 0x4d, 0xa3, 0x48, 0xa7,
-	0xef, 0x92, 0x51, 0xae, 0xd1, 0x01, 0x9c, 0xd0, 0x0d, 0x0e, 0xa1, 0xad, 0xd6, 0x39, 0x9e, 0x00,
-	0x4a, 0xe2, 0xca, 0x49, 0x49, 0x5c, 0x79, 0x11, 0xe6, 0x5b, 0x9e, 0xd5, 0xf4, 0x6c, 0xb3, 0xe7,
-	0xdd, 0x76, 0x7c, 0xe6, 0x6a, 0x33, 0xdf, 0xb9, 0x4e, 0xd1, 0x67, 0x5a, 0x9e, 0xb5, 0xc1, 0x4b,
-	0xa9, 0xcf, 0x4d, 0x9d, 0xe8, 0x93, 0x44, 0xa6, 0x59, 0x43, 0x4d, 0xe2, 0x56, 0x79, 0x0b, 0x53,
-	0x74, 0xea, 0x27, 0x04, 0x94, 0x88, 0xae, 0x87, 0x2e, 0xc1, 0x74, 0x52, 0x43, 0x49, 0xd0, 0x8a,
-	0x52, 0x41, 0xeb, 0x54, 0x5c, 0x9b, 0x0c, 0xbc, 0x45, 0xea, 0x26, 0x84, 0x93, 0xd6, 0x9d, 0x4e,
-	0xd7, 0x8d, 0x0b, 0x2b, 0xa9, 0x7b, 0x11, 0xa6, 0x62, 0x32, 0x42, 0x6b, 0xce, 0xa4, 0x6a, 0xd6,
-	0x22, 0x32, 0x43, 0xaa, 0x3d, 0x01, 0x28, 0x2e, 0x36, 0xb4, 0xde, 0x6c, 0xaa, 0xde, 0x64, 0x54,
-	0x8c, 0x48, 0xc5, 0x67, 0xa1, 0xc2, 0x79, 0xa5, 0xae, 0xe8, 0x5c, 0xb6, 0x9c, 0x30, 0x10, 0x55,
-	0x6c, 0xd8, 0x0c, 0x7e, 0xab, 0x2d, 0x98, 0x4a, 0x29, 0x2b, 0x59, 0x67, 0x82, 0x20, 0xce, 0x20,
-	0x3f, 0xd1, 0x93, 0x30, 0x76, 0xd7, 0xec, 0xf4, 0x31, 0x37, 0x71, 0xda, 0x60, 0x49, 0xbc, 0x61,
-	0x79, 0xbe, 0xc1, 0x2a, 0x5c, 0xca, 0x3d, 0xa9, 0xa8, 0x57, 0x60, 0x5a, 0xa2, 0x60, 0x92, 0x66,
-	0x66, 0xa2, 0xcd, 0x94, 0xa3, 0x24, 0x3c, 0x80, 0xb0, 0x07, 0xe8, 0x89, 0x98, 0xeb, 0xfd, 0xf0,
-	0xe0, 0xfe, 0x46, 0x9c, 0x70, 0xed, 0x51, 0x99, 0x07, 0x5b, 0x81, 0xf1, 0x17, 0xb0, 0x8d, 0x5d,
-	0xab, 0x55, 0x57, 0x88, 0xeb, 0xfa, 0xb2, 0xe3, 0x76, 0xcd, 0x4e, 0x3d, 0xa7, 0x7e, 0x55, 0x81,
-	0x4a, 0x44, 0x43, 0xd0, 0x33, 0x50, 0x64, 0x42, 0xc6, 0x1b, 0x3e, 0xb5, 0x87, 0x4a, 0xe9, 0x1b,
-	0x14, 0xdb, 0xe0, 0xb5, 0xb4, 0xc7, 0xa1, 0xc8, 0x20, 0xf1, 0xf6, 0x4b, 0x50, 0x78, 0xd5, 0xc3,
-	0x6e, 0x5d, 0x41, 0x75, 0xa8, 0xde, 0xb0, 0x5a, 0xd8, 0xf6, 0xf0, 0xda, 0x6d, 0xdc, 0xba, 0x53,
-	0xcf, 0xa9, 0xd7, 0xa1, 0x16, 0x1f, 0xd7, 0xd8, 0x1e, 0x4a, 0x7e, 0x78, 0xab, 0xa0, 0x7e, 0x37,
-	0x1f, 0xdb, 0x8a, 0x69, 0x04, 0x92, 0x13, 0x89, 0x57, 0xb9, 0x64, 0x50, 0x4d, 0x7b, 0x1a, 0x2a,
-	0x2d, 0x17, 0x9b, 0x3e, 0x6e, 0x06, 0x8b, 0x77, 0x65, 0x45, 0xd5, 0x59, 0xf4, 0xa0, 0x8b, 0x9d,
-	0x3e, 0xfd, 0x15, 0xb1, 0x27, 0x68, 0x00, 0x43, 0x27, 0x00, 0x52, 0x79, 0xcb, 0xb2, 0x2d, 0xef,
-	0x36, 0xab, 0x9c, 0xdf, 0xbb, 0x32, 0x43, 0xa7, 0x95, 0x3f, 0x1b, 0xdb, 0x18, 0xcb, 0x58, 0xaf,
-	0x06, 0x6e, 0x16, 0x19, 0x6c, 0xb3, 0x88, 0xad, 0x29, 0xfc, 0x4b, 0xfb, 0x2d, 0x45, 0xbe, 0x5b,
-	0x54, 0x81, 0x71, 0xb1, 0x1d, 0xa4, 0xa0, 0x1a, 0xc0, 0xba, 0x7d, 0xcb, 0x75, 0xb6, 0x5d, 0xec,
-	0x79, 0xf5, 0x1c, 0x29, 0xbc, 0xb2, 0xe9, 0xb8, 0x3e, 0x6e, 0xd7, 0xf3, 0x44, 0x36, 0xae, 0x99,
-	0x56, 0x07, 0xb7, 0xeb, 0x05, 0x54, 0x85, 0x12, 0xdd, 0x4a, 0x22, 0xd5, 0xc6, 0x08, 0xda, 0x46,
-	0x9f, 0x6e, 0xaa, 0xd4, 0x8b, 0xa4, 0x68, 0xcd, 0xec, 0xf9, 0x7d, 0x17, 0xb7, 0xeb, 0xe3, 0x08,
-	0x41, 0xed, 0x96, 0xe9, 0x92, 0xf0, 0x42, 0x60, 0x94, 0xd2, 0xfb, 0x50, 0x65, 0xed, 0x49, 0x98,
-	0x4a, 0x2d, 0xc1, 0xa9, 0x5d, 0x2d, 0x56, 0x89, 0x49, 0xa9, 0x41, 0x1d, 0xa6, 0x7a, 0x8e, 0xfa,
-	0x37, 0xf1, 0x01, 0x3a, 0x04, 0xff, 0x26, 0xe1, 0xfd, 0xc7, 0xfd, 0x9b, 0xf4, 0x74, 0x08, 0xff,
-	0x66, 0x33, 0x55, 0xa2, 0x7d, 0x7f, 0x4c, 0xf8, 0x37, 0xc2, 0x50, 0x52, 0xf9, 0x7b, 0x34, 0xa6,
-	0xc2, 0x0b, 0x7a, 0x1a, 0x25, 0x1a, 0x3c, 0x23, 0x28, 0xf4, 0x4c, 0xff, 0xb6, 0x70, 0x21, 0xc9,
-	0x6f, 0xb4, 0x0e, 0x35, 0x6c, 0xb7, 0xdc, 0x1d, 0xb6, 0x97, 0x40, 0x2c, 0x09, 0xdb, 0x0e, 0xd1,
-	0xee, 0xef, 0x36, 0x26, 0xc2, 0x12, 0x69, 0x70, 0x1f, 0x29, 0x7f, 0x11, 0xef, 0x48, 0x77, 0x6d,
-	0x0b, 0xf2, 0x5d, 0xdb, 0x50, 0xfd, 0xc6, 0x62, 0xc6, 0x36, 0xc6, 0xf9, 0x50, 0x9b, 0xb7, 0x45,
-	0xd9, 0x9a, 0x7f, 0x09, 0x8e, 0xd2, 0xf9, 0x26, 0x7a, 0x97, 0x62, 0x69, 0x9c, 0xd6, 0x98, 0x17,
-	0x08, 0x89, 0x90, 0x76, 0xb4, 0xad, 0x5a, 0x74, 0x06, 0xca, 0xde, 0x85, 0xf8, 0xf6, 0x44, 0x59,
-	0x17, 0xfb, 0x72, 0xd7, 0x8f, 0x18, 0x25, 0x8f, 0xff, 0x56, 0x7f, 0x23, 0xbe, 0xa9, 0xfb, 0xd9,
-	0xc4, 0xa6, 0xee, 0xc9, 0xc1, 0x23, 0x32, 0xec, 0xde, 0xee, 0x05, 0xb9, 0xb6, 0x96, 0x61, 0xec,
-	0x35, 0xfa, 0x53, 0x49, 0x6b, 0x51, 0x4e, 0x5b, 0x91, 0xd9, 0xf7, 0x22, 0xe4, 0x36, 0x2e, 0x64,
-	0x6e, 0x50, 0x44, 0xf6, 0x25, 0x7e, 0x3d, 0xd0, 0x24, 0xc1, 0xfb, 0xa8, 0x9a, 0xf4, 0x7c, 0xa0,
-	0x49, 0x81, 0x2f, 0x21, 0xd1, 0xa4, 0xe8, 0x48, 0x09, 0x1d, 0x8a, 0xc2, 0xb4, 0xff, 0xa7, 0x40,
-	0x35, 0xea, 0x74, 0x11, 0x7d, 0x88, 0x98, 0x6d, 0xfa, 0x1b, 0x1d, 0x87, 0x72, 0xe0, 0xff, 0xf2,
-	0xb1, 0x0c, 0x01, 0x64, 0x69, 0xdd, 0x76, 0x9d, 0x7e, 0x8f, 0x9f, 0x46, 0xb0, 0x0f, 0x42, 0xe7,
-	0x8e, 0x65, 0xf3, 0x4d, 0x40, 0x83, 0xfe, 0x26, 0x3e, 0xb7, 0x70, 0xdc, 0x98, 0x01, 0x15, 0x9f,
-	0xda, 0xef, 0x4d, 0x89, 0x55, 0x58, 0x84, 0x28, 0x49, 0x2f, 0x5e, 0xd9, 0xcb, 0x8b, 0xcf, 0x0d,
-	0xf2, 0xe2, 0xf3, 0x29, 0x2f, 0xfe, 0x7a, 0xda, 0x8b, 0x67, 0x61, 0x87, 0xf0, 0x66, 0x87, 0xf6,
-	0xde, 0xf5, 0x84, 0xde, 0xce, 0x45, 0x09, 0x48, 0xf4, 0xf5, 0x1c, 0x94, 0x43, 0xc7, 0xb7, 0x28,
-	0x73, 0x7c, 0xc3, 0x72, 0xf4, 0x28, 0x8c, 0xdf, 0x75, 0x3a, 0xfd, 0x2e, 0x8f, 0x44, 0x2a, 0x2b,
-	0x28, 0x4a, 0xfd, 0x35, 0x5a, 0x64, 0x08, 0x94, 0xc8, 0xd2, 0x4b, 0x6d, 0x5a, 0x29, 0xba, 0xf4,
-	0xde, 0x22, 0x96, 0xed, 0x34, 0x8c, 0x79, 0xbe, 0xb9, 0xcd, 0x22, 0x8c, 0xda, 0xca, 0x54, 0x82,
-	0xd5, 0x6d, 0x6c, 0xb0, 0xf2, 0x74, 0x48, 0x02, 0xc3, 0x84, 0x24, 0x15, 0x49, 0x48, 0xb2, 0x96,
-	0xde, 0xf0, 0xa9, 0xf2, 0x45, 0x3b, 0xd2, 0x78, 0xdc, 0xf0, 0x27, 0x37, 0x83, 0xd0, 0x3c, 0x8c,
-	0xb7, 0x5c, 0xe6, 0x4f, 0x4c, 0x30, 0x5d, 0x6e, 0xb9, 0xd4, 0x97, 0x58, 0x04, 0xf0, 0x1d, 0x12,
-	0xcf, 0x7b, 0xd6, 0x3b, 0x78, 0xa1, 0xb6, 0xac, 0x9c, 0x29, 0x18, 0x65, 0x0a, 0xd9, 0xb0, 0xde,
-	0xc1, 0x52, 0xf3, 0x3b, 0x29, 0x37, 0xbf, 0xd2, 0xb8, 0xa4, 0x3e, 0x5c, 0x5c, 0x12, 0x8d, 0x1d,
-	0xd8, 0xc6, 0xc2, 0x14, 0xe5, 0x24, 0x88, 0x1d, 0xd8, 0xf6, 0x55, 0x2a, 0x7c, 0x41, 0xfb, 0x0b,
-	0x5f, 0xa6, 0xf7, 0x15, 0xbe, 0xcc, 0x64, 0x84, 0x2f, 0xb2, 0x10, 0x64, 0xf6, 0xc0, 0x21, 0xc8,
-	0xdc, 0x01, 0x43, 0x90, 0xf9, 0xbd, 0x43, 0x90, 0xac, 0x55, 0x67, 0x61, 0xa8, 0x55, 0xe7, 0x89,
-	0x78, 0x00, 0x73, 0x34, 0xad, 0x9b, 0x19, 0x81, 0xcb, 0x21, 0xc4, 0x14, 0x77, 0x62, 0x31, 0xc5,
-	0xf9, 0x98, 0x43, 0x72, 0x4c, 0xce, 0xc2, 0xc1, 0x63, 0x89, 0xcf, 0x40, 0x2d, 0xae, 0x3d, 0x84,
-	0xd5, 0x7e, 0x70, 0x50, 0x41, 0x7e, 0x06, 0x56, 0x3d, 0x17, 0x5a, 0x75, 0xf5, 0x0f, 0xf2, 0x50,
-	0x64, 0x06, 0xe4, 0x00, 0x46, 0xbf, 0x0e, 0xf9, 0xde, 0xdd, 0x16, 0x37, 0xf9, 0xe4, 0x27, 0x3a,
-	0x06, 0x65, 0x3e, 0xde, 0xe2, 0xe8, 0xc7, 0x28, 0x31, 0xc0, 0x7a, 0x7b, 0xdf, 0x36, 0xb2, 0x01,
-	0x95, 0xb6, 0x6b, 0xdd, 0xc5, 0x5c, 0xe7, 0xd9, 0x0e, 0x0d, 0x30, 0x10, 0x15, 0xf7, 0x19, 0x18,
-	0x7b, 0xc7, 0xb1, 0x83, 0xfd, 0x19, 0xf6, 0x81, 0x9e, 0x82, 0x71, 0x87, 0xba, 0x5e, 0x62, 0x4b,
-	0xa6, 0x91, 0xb6, 0x96, 0xfa, 0x4d, 0x86, 0xc1, 0x8c, 0xb9, 0xc0, 0x4f, 0x18, 0x92, 0x72, 0xd2,
-	0x90, 0x34, 0xa0, 0x62, 0xb6, 0xfc, 0xbe, 0x28, 0x07, 0x5a, 0x0e, 0x0c, 0x44, 0x11, 0x52, 0x67,
-	0x7b, 0x95, 0xf4, 0xd9, 0x9e, 0x7a, 0x09, 0xaa, 0xd1, 0xd6, 0xf7, 0x25, 0x53, 0xdf, 0xca, 0xc5,
-	0x7c, 0xa3, 0x8b, 0x09, 0xdf, 0x68, 0x51, 0x3e, 0xa2, 0xc3, 0xfa, 0x44, 0x3f, 0xf8, 0x24, 0x87,
-	0x30, 0x68, 0x0e, 0x10, 0x75, 0x49, 0x59, 0x17, 0x5f, 0xb2, 0x3c, 0x8f, 0xc0, 0x41, 0xb3, 0x61,
-	0x8c, 0xae, 0x5a, 0x29, 0x9e, 0xd7, 0x6d, 0x8b, 0x10, 0xad, 0x2b, 0x68, 0x12, 0x2a, 0xb7, 0x42,
-	0x7b, 0x54, 0xcf, 0x91, 0x48, 0xf8, 0x56, 0xc4, 0xd0, 0xd4, 0xf3, 0x04, 0x9f, 0x89, 0x86, 0x57,
-	0x2f, 0x90, 0xe2, 0x2b, 0xbd, 0x5e, 0xc7, 0x62, 0x66, 0xcf, 0xab, 0x8f, 0x11, 0xe7, 0xee, 0x9a,
-	0x65, 0x9b, 0x9d, 0x7a, 0x51, 0x73, 0xa0, 0xca, 0x58, 0x38, 0xc8, 0x81, 0xfe, 0x4a, 0x60, 0x90,
-	0x22, 0x8e, 0x5a, 0x25, 0x32, 0x6d, 0xbc, 0x06, 0xb7, 0x45, 0xd4, 0x3d, 0xfb, 0xcf, 0x3c, 0x94,
-	0x09, 0x97, 0x6c, 0xce, 0x9f, 0x86, 0x31, 0x62, 0x3f, 0x45, 0x7c, 0x3e, 0xad, 0x07, 0x45, 0xf4,
-	0xd7, 0xba, 0x8f, 0xbb, 0xab, 0xf5, 0x0f, 0x77, 0x1b, 0xd5, 0x1d, 0xb3, 0xdb, 0xb9, 0xa4, 0x51,
-	0x5c, 0xcd, 0x60, 0x75, 0xd4, 0x5f, 0xc8, 0x41, 0x49, 0x60, 0xa1, 0x26, 0x54, 0x7b, 0x4e, 0x3b,
-	0xf0, 0x7d, 0x38, 0xc1, 0x13, 0x12, 0x82, 0xfa, 0x2d, 0xa7, 0x2d, 0x2c, 0x21, 0x15, 0xda, 0xd5,
-	0xb9, 0x0f, 0x77, 0x1b, 0x88, 0xb5, 0xd0, 0x0b, 0xcb, 0x34, 0xa3, 0x12, 0xf9, 0x42, 0xcf, 0xc2,
-	0xb8, 0xd9, 0x62, 0x9a, 0x98, 0xa3, 0xb4, 0xa7, 0x22, 0xb4, 0xaf, 0xd0, 0x92, 0x55, 0xf4, 0xe1,
-	0x6e, 0xa3, 0xc6, 0x08, 0x71, 0x5c, 0xcd, 0x10, 0xb5, 0x88, 0xf9, 0x69, 0x39, 0x36, 0x09, 0x44,
-	0xb1, 0xcb, 0xcd, 0x4c, 0x08, 0x50, 0x9f, 0x81, 0x7a, 0x92, 0xaf, 0x7d, 0x29, 0x13, 0x89, 0xd8,
-	0x19, 0x17, 0xe8, 0x22, 0xd0, 0x01, 0x27, 0x5e, 0xab, 0xcd, 0x6c, 0x66, 0x69, 0x75, 0xf6, 0xc3,
-	0xdd, 0xc6, 0x14, 0xe3, 0x2c, 0x2c, 0xd3, 0x8c, 0x08, 0x22, 0xba, 0x0a, 0x53, 0x6e, 0x9f, 0xf8,
-	0xdc, 0x4d, 0x22, 0x8b, 0x74, 0x33, 0x90, 0x6f, 0x93, 0xaf, 0x1e, 0xfd, 0x70, 0xb7, 0x31, 0x2b,
-	0xa6, 0xc0, 0x5e, 0xb7, 0x37, 0x28, 0xc2, 0x2d, 0xa7, 0xad, 0x19, 0xb5, 0x38, 0x20, 0xe4, 0x30,
-	0x1f, 0xe1, 0x50, 0x7b, 0x13, 0xc0, 0x08, 0x83, 0xed, 0x7d, 0x09, 0xd9, 0x79, 0x00, 0x3a, 0xdd,
-	0x51, 0x19, 0x83, 0x70, 0xe8, 0x39, 0x7e, 0xd9, 0x15, 0x00, 0xed, 0x32, 0x4c, 0x18, 0xb8, 0xd7,
-	0x31, 0x5b, 0x7c, 0x9f, 0x52, 0x3b, 0x27, 0x5b, 0x7c, 0xc2, 0x5d, 0x01, 0x25, 0xb2, 0x5b, 0x90,
-	0xd3, 0x7e, 0x5a, 0x83, 0x0a, 0xcf, 0xfa, 0xa1, 0x12, 0x3a, 0x07, 0x45, 0x26, 0xbd, 0x7c, 0x1a,
-	0xf8, 0x97, 0xcc, 0xa1, 0xcf, 0x49, 0x1d, 0xfa, 0xf5, 0xb4, 0x5b, 0x9e, 0xa7, 0xf2, 0xb3, 0xac,
-	0x47, 0xda, 0x19, 0xca, 0x2f, 0xbf, 0x09, 0x53, 0xc1, 0x7a, 0xd5, 0xec, 0x9a, 0xbd, 0x9e, 0x65,
-	0x6f, 0x73, 0x1f, 0x5f, 0x8b, 0x11, 0x7b, 0x59, 0x60, 0xbd, 0xc4, 0x90, 0x18, 0xb9, 0xba, 0x9d,
-	0x00, 0xa3, 0x4b, 0xc4, 0xc5, 0xa2, 0x43, 0x25, 0x4e, 0x3d, 0xc6, 0xa8, 0xe9, 0x9d, 0xd6, 0x63,
-	0x23, 0xa8, 0x8b, 0x33, 0x8e, 0x08, 0x2c, 0x92, 0x92, 0x55, 0xe4, 0x29, 0x59, 0x51, 0x0e, 0x24,
-	0x2b, 0xe0, 0xd3, 0xd1, 0x28, 0x81, 0xb9, 0xfe, 0x8b, 0xb1, 0x3a, 0xfc, 0x77, 0x5b, 0x78, 0xa1,
-	0xd1, 0xa8, 0xe1, 0xb1, 0x30, 0x6a, 0x28, 0x09, 0x53, 0x11, 0xa9, 0x9a, 0x0c, 0x1b, 0x22, 0x51,
-	0x54, 0x39, 0x1e, 0x45, 0x3d, 0x0f, 0x0d, 0xe1, 0x14, 0xb3, 0x85, 0x92, 0xba, 0x60, 0x31, 0x37,
-	0x13, 0xe8, 0x02, 0x7c, 0x9c, 0xa3, 0xdd, 0xe4, 0x58, 0x46, 0xcc, 0xeb, 0x8c, 0x2f, 0xae, 0x95,
-	0xe4, 0xe2, 0x2a, 0x75, 0xbd, 0xab, 0x07, 0x75, 0xbd, 0x27, 0x86, 0x72, 0xbd, 0x6b, 0x12, 0xd7,
-	0x3b, 0xc3, 0x39, 0x9e, 0x1c, 0xc6, 0x39, 0x7e, 0x1d, 0x66, 0x63, 0xeb, 0x7f, 0x20, 0x71, 0x75,
-	0x7e, 0x98, 0x15, 0x9f, 0xef, 0xd0, 0x29, 0x88, 0x09, 0xdd, 0xb4, 0x97, 0x2e, 0x39, 0x0c, 0x87,
-	0x74, 0x0d, 0x66, 0xa5, 0x52, 0xbe, 0x2f, 0x22, 0xd7, 0x60, 0x21, 0x8b, 0xf1, 0x7d, 0xd1, 0xf9,
-	0x33, 0x05, 0xea, 0x49, 0xe9, 0xfd, 0x78, 0xf6, 0x1d, 0xf6, 0xad, 0x96, 0xea, 0xfb, 0xa1, 0xd3,
-	0xcc, 0x5d, 0x60, 0x25, 0x74, 0x81, 0x1f, 0x81, 0x3a, 0x97, 0xc4, 0x24, 0xdb, 0x93, 0x0c, 0x1e,
-	0xcc, 0x01, 0x95, 0x47, 0x86, 0xca, 0x94, 0x90, 0x77, 0xa2, 0xca, 0x80, 0xbc, 0x05, 0x26, 0xdb,
-	0x84, 0x1d, 0x81, 0xc5, 0x7a, 0x35, 0xc1, 0xa1, 0x1c, 0xed, 0x7c, 0xc2, 0xb9, 0xde, 0xd3, 0xb6,
-	0x1c, 0xd0, 0xbb, 0xbe, 0x94, 0xf4, 0xae, 0x97, 0x25, 0x56, 0xe5, 0x40, 0xee, 0xf5, 0x48, 0x8e,
-	0xf1, 0xbf, 0xef, 0x95, 0x09, 0x2a, 0x1f, 0x8d, 0x61, 0x3d, 0xe3, 0x9f, 0x7f, 0x80, 0x9e, 0x31,
-	0x5b, 0x63, 0xb3, 0x3c, 0x63, 0xcd, 0x23, 0x6b, 0x35, 0xed, 0xcb, 0x41, 0x5c, 0x83, 0x8b, 0x50,
-	0x15, 0xd2, 0x64, 0x45, 0x33, 0x4a, 0x23, 0xc3, 0xc3, 0xeb, 0x54, 0xdc, 0x10, 0xa4, 0xcd, 0xc2,
-	0xf4, 0x75, 0x6c, 0x76, 0xfc, 0xdb, 0x7c, 0xbc, 0xf0, 0x5b, 0x7d, 0xec, 0xf9, 0xda, 0x1c, 0xcc,
-	0xc4, 0xc1, 0x5e, 0xcf, 0xb1, 0x3d, 0xac, 0xbd, 0x0b, 0xe5, 0x57, 0xac, 0x2e, 0x36, 0x4c, 0x7b,
-	0x1b, 0xa3, 0xa7, 0x00, 0x3c, 0xdf, 0x74, 0xfd, 0x66, 0x90, 0xec, 0x32, 0xf8, 0xac, 0xa6, 0x4c,
-	0xb1, 0xe9, 0x51, 0xcd, 0x45, 0x9a, 0xae, 0x39, 0xec, 0x09, 0xd1, 0x38, 0xb6, 0xdb, 0xe4, 0x4b,
-	0xfb, 0x7a, 0x1e, 0xea, 0xcf, 0xdb, 0xfd, 0x2e, 0x76, 0x4d, 0x9f, 0x2f, 0x46, 0x1e, 0x89, 0x95,
-	0xa8, 0x6f, 0x20, 0x1c, 0xe7, 0x45, 0x3d, 0x89, 0xc2, 0x1c, 0x0a, 0x2e, 0xb4, 0x1c, 0x99, 0xa8,
-	0x49, 0xd7, 0xbc, 0xd7, 0x74, 0xe8, 0x58, 0x7b, 0x94, 0x8b, 0x82, 0x01, 0x5d, 0xf3, 0x1e, 0x1b,
-	0x7d, 0x0f, 0x3d, 0x02, 0x40, 0xf8, 0x6b, 0xba, 0xa4, 0xb3, 0xfc, 0x28, 0x0a, 0xf4, 0xa0, 0xfb,
-	0x46, 0xd9, 0x0f, 0x46, 0xa2, 0x01, 0x15, 0xa2, 0x6b, 0xcd, 0x2d, 0xab, 0x43, 0x96, 0x59, 0xa6,
-	0xc7, 0x74, 0x3f, 0xf2, 0x1a, 0x85, 0x20, 0x1d, 0xa6, 0xf9, 0xa2, 0xdb, 0x8c, 0x22, 0x32, 0x7b,
-	0x35, 0xc5, 0x8b, 0x5e, 0x0e, 0xf1, 0x1f, 0x82, 0x2a, 0x63, 0xac, 0x69, 0xd9, 0x6d, 0x7c, 0x8f,
-	0x2a, 0x71, 0xc1, 0xa8, 0x30, 0xd8, 0x3a, 0x01, 0xa1, 0xcb, 0xa0, 0x8a, 0x65, 0xb5, 0x4d, 0x04,
-	0xab, 0x83, 0xdb, 0xcd, 0xa8, 0x4f, 0xa1, 0x9c, 0x29, 0x19, 0x0b, 0x1c, 0xe3, 0x2a, 0x47, 0x08,
-	0x16, 0x56, 0xf5, 0x29, 0xa8, 0x44, 0x06, 0x65, 0x3f, 0x1a, 0xa9, 0xbd, 0xa7, 0xc0, 0xb1, 0x78,
-	0xa6, 0xca, 0x1a, 0x3d, 0xc0, 0xe3, 0xb2, 0x83, 0x1e, 0x4f, 0x89, 0xed, 0xa4, 0xce, 0x30, 0x32,
-	0x85, 0xf7, 0x72, 0x3a, 0x69, 0x25, 0x3b, 0x27, 0x26, 0x99, 0xc9, 0xa2, 0x2d, 0xc1, 0x71, 0x39,
-	0x3f, 0x5c, 0x68, 0xd3, 0x0c, 0xbf, 0xda, 0x6b, 0x7f, 0xa2, 0x18, 0x16, 0xfc, 0x70, 0x86, 0xff,
-	0x44, 0x81, 0xa5, 0x38, 0x42, 0x20, 0xd1, 0x82, 0xe7, 0x59, 0x28, 0x3a, 0xee, 0x76, 0x98, 0xb0,
-	0x3a, 0xe6, 0xb8, 0xdb, 0xeb, 0x6d, 0xb4, 0x16, 0xe8, 0x02, 0x8b, 0xcb, 0xce, 0xe9, 0x83, 0xe9,
-	0xc8, 0x34, 0x63, 0x14, 0xd9, 0xc0, 0xd0, 0xc8, 0x6c, 0x90, 0x75, 0x0e, 0xad, 0xc2, 0x54, 0x7c,
-	0xe8, 0xac, 0x20, 0xe4, 0x9d, 0xd5, 0x65, 0xf9, 0x56, 0x46, 0x3d, 0x36, 0x7c, 0x16, 0xf6, 0xb4,
-	0x2f, 0x26, 0x07, 0x70, 0xdd, 0xf6, 0x7a, 0xd4, 0x7b, 0x1b, 0x38, 0x3a, 0x92, 0x7d, 0x32, 0xb1,
-	0x9b, 0x96, 0x0f, 0x76, 0xd3, 0xb4, 0x26, 0x2c, 0x66, 0x10, 0xe7, 0x3d, 0x78, 0x46, 0x9e, 0x62,
-	0x95, 0xc9, 0x7f, 0x72, 0xfa, 0xdf, 0x48, 0x8a, 0xe3, 0x55, 0x7e, 0xbf, 0xe2, 0x10, 0x98, 0x4f,
-	0x89, 0x96, 0xa0, 0xcd, 0x45, 0xeb, 0x97, 0x15, 0x38, 0x91, 0x60, 0xf2, 0x6d, 0x1b, 0xbb, 0xde,
-	0x6d, 0xab, 0x17, 0x57, 0x8a, 0x7d, 0x70, 0x71, 0x06, 0xca, 0x8e, 0x20, 0x12, 0xd8, 0xc9, 0x80,
-	0xac, 0x11, 0x16, 0x0a, 0x7e, 0x0b, 0x21, 0xbf, 0xa7, 0xe1, 0xe4, 0x1e, 0xec, 0x70, 0xc6, 0xbf,
-	0x5d, 0x82, 0x63, 0xf1, 0x8d, 0xd0, 0x91, 0xad, 0xce, 0x69, 0xb9, 0x12, 0xa7, 0x53, 0xe5, 0x0e,
-	0x37, 0x21, 0x4e, 0x12, 0x2d, 0x17, 0xf6, 0x3a, 0xfe, 0x1a, 0x1b, 0x74, 0xfc, 0x55, 0x4c, 0x1d,
-	0x7f, 0xbd, 0x9e, 0x8e, 0xb3, 0x59, 0x90, 0xf9, 0x29, 0x7d, 0xc0, 0x18, 0x1e, 0x2c, 0x9b, 0xad,
-	0x34, 0xcc, 0xd1, 0x51, 0x59, 0x72, 0x74, 0x24, 0x8d, 0x0b, 0x61, 0xb8, 0xb8, 0x70, 0xc0, 0x31,
-	0x4a, 0x65, 0x5f, 0xc7, 0x28, 0xd5, 0x7d, 0x64, 0x81, 0x4d, 0x8c, 0x90, 0x05, 0x56, 0x3b, 0xf0,
-	0x11, 0xcc, 0xe4, 0x01, 0x8f, 0x60, 0xea, 0x7b, 0x1f, 0xc1, 0x5c, 0x8f, 0x1f, 0xa2, 0x4c, 0x51,
-	0xa1, 0x3e, 0x3d, 0x50, 0x44, 0x3e, 0xb2, 0x53, 0x15, 0x6d, 0x25, 0x76, 0xaa, 0x32, 0xd4, 0xe1,
-	0x08, 0xb1, 0x76, 0x72, 0x66, 0xb9, 0xd1, 0xf8, 0xb9, 0xf1, 0xa4, 0xd1, 0x18, 0x79, 0xe5, 0xff,
-	0x5f, 0xa3, 0x11, 0x1f, 0xc3, 0x07, 0x6c, 0x34, 0x22, 0x59, 0xcb, 0x10, 0xcf, 0x5a, 0x96, 0x9a,
-	0x93, 0xca, 0xc8, 0xe6, 0xa4, 0x3a, 0xc0, 0x9c, 0xfc, 0x8c, 0xd8, 0x89, 0xc3, 0xd0, 0xee, 0x94,
-	0xa6, 0x26, 0x96, 0xf7, 0xef, 0xe6, 0x60, 0x29, 0x8e, 0x70, 0x70, 0x97, 0x77, 0x30, 0x1d, 0x69,
-	0x30, 0x28, 0x51, 0xaf, 0xbc, 0x54, 0xbd, 0x32, 0xa6, 0xad, 0x30, 0xc4, 0xb4, 0x8d, 0xe2, 0x57,
-	0xb7, 0xa0, 0x91, 0xd9, 0x2b, 0xee, 0x95, 0x3e, 0x07, 0xf5, 0x44, 0x26, 0x46, 0xe8, 0x56, 0xcb,
-	0xd2, 0xfc, 0x8c, 0xc9, 0x78, 0x16, 0x06, 0xf5, 0xaa, 0x93, 0xa6, 0xe9, 0x50, 0xbd, 0xea, 0x0c,
-	0xe2, 0xa1, 0x57, 0x9d, 0xcc, 0x24, 0x11, 0x5e, 0xb5, 0x94, 0xfd, 0x44, 0x12, 0x89, 0xf6, 0x35,
-	0x25, 0x69, 0xeb, 0x0f, 0xec, 0x56, 0xa7, 0x73, 0xee, 0xf2, 0xb2, 0x9c, 0xbb, 0xb4, 0x37, 0x9b,
-	0x92, 0xf2, 0x84, 0xf7, 0xfd, 0xfb, 0x39, 0x98, 0xe1, 0x57, 0x7c, 0x47, 0xf6, 0x5e, 0x63, 0x17,
-	0xd5, 0x73, 0x07, 0xbb, 0xa8, 0x9e, 0x3f, 0x9c, 0x8b, 0xea, 0x19, 0x29, 0x8f, 0x59, 0x19, 0x1e,
-	0x63, 0xc3, 0x64, 0x78, 0x68, 0xf3, 0x30, 0x9b, 0x18, 0xaa, 0xf4, 0x20, 0x8e, 0xbc, 0x9a, 0xff,
-	0xec, 0x0c, 0x62, 0xc2, 0xde, 0xfe, 0x28, 0x07, 0xf3, 0xbc, 0x64, 0x58, 0x43, 0x7b, 0x39, 0x61,
-	0x68, 0x4f, 0xe8, 0x19, 0x04, 0xb2, 0x2c, 0xac, 0x58, 0x9e, 0xd9, 0x65, 0x63, 0xa1, 0x54, 0x35,
-	0x0e, 0x66, 0x77, 0x8c, 0xbd, 0x07, 0x36, 0x36, 0xa3, 0x98, 0xe3, 0x6b, 0xb0, 0x90, 0xee, 0x3b,
-	0xb7, 0x63, 0x67, 0xa1, 0xc4, 0x3d, 0x2e, 0x61, 0x7f, 0x6b, 0x7a, 0xec, 0xa1, 0x00, 0x23, 0x28,
-	0xd7, 0xee, 0x04, 0xd3, 0x73, 0x70, 0x53, 0x3b, 0xec, 0xc0, 0x6a, 0xab, 0x30, 0x97, 0x6c, 0x8c,
-	0xb3, 0x7c, 0x26, 0xf4, 0x19, 0x99, 0xde, 0x24, 0x39, 0x16, 0xc5, 0xda, 0xb7, 0x94, 0x40, 0xf7,
-	0x3e, 0x6a, 0xeb, 0x2a, 0x79, 0x8e, 0xa2, 0x20, 0x7b, 0x8e, 0x22, 0x22, 0xe3, 0x09, 0x6b, 0xfb,
-	0x6d, 0x05, 0x8e, 0x27, 0x72, 0x9d, 0x47, 0xb6, 0xba, 0xcf, 0x4a, 0xa4, 0x73, 0xd0, 0x55, 0xe1,
-	0xa4, 0xcc, 0x6a, 0x0d, 0x58, 0xcc, 0xe0, 0x29, 0x9b, 0xeb, 0x91, 0xcd, 0xdc, 0x47, 0xc0, 0x75,
-	0xc2, 0x9e, 0x98, 0xd0, 0x48, 0x20, 0x0c, 0x6b, 0x56, 0x24, 0xf2, 0x9b, 0x93, 0xca, 0xef, 0x36,
-	0x2c, 0x67, 0x37, 0xc1, 0x25, 0x79, 0x0d, 0xa6, 0x92, 0x1d, 0x15, 0x5a, 0x38, 0xa7, 0x4b, 0xaf,
-	0x8e, 0x1b, 0xf5, 0x44, 0x5f, 0x3d, 0xed, 0x9b, 0x4a, 0xaa, 0xb7, 0x1f, 0xbd, 0x7a, 0x4a, 0xbc,
-	0x89, 0x16, 0x2c, 0x65, 0xb1, 0xc1, 0xbb, 0x7b, 0x45, 0x32, 0xaf, 0x0a, 0x4f, 0xc1, 0x93, 0xf7,
-	0x36, 0x35, 0xb3, 0x5f, 0x4c, 0x49, 0xdb, 0x21, 0xee, 0x46, 0xa6, 0xc5, 0x26, 0xa1, 0xa2, 0xef,
-	0x29, 0x70, 0x32, 0xc9, 0xe8, 0xc7, 0xba, 0x1f, 0x79, 0x06, 0x4e, 0xed, 0xc5, 0x4f, 0xe4, 0x54,
-	0x21, 0x9e, 0x86, 0x7f, 0x18, 0xc7, 0x20, 0xb2, 0x3c, 0x9a, 0x8c, 0x84, 0xff, 0x44, 0x68, 0x12,
-	0x3a, 0x9f, 0x49, 0x7e, 0x32, 0x19, 0x3e, 0x8c, 0x63, 0x90, 0xc3, 0x64, 0x38, 0x31, 0xc2, 0xbf,
-	0x1d, 0xc4, 0x84, 0x02, 0x61, 0xd4, 0x98, 0x30, 0x8b, 0x8e, 0xd4, 0x63, 0xd9, 0xc7, 0x93, 0x4c,
-	0x59, 0x8e, 0x48, 0xe1, 0xa3, 0x76, 0x44, 0x82, 0xb8, 0x50, 0xd2, 0xb3, 0x54, 0x5c, 0x28, 0xe6,
-	0x28, 0x19, 0x17, 0xc6, 0x2f, 0xad, 0x88, 0xb8, 0x50, 0x40, 0x23, 0x71, 0x61, 0x38, 0x9b, 0x1f,
-	0x41, 0x5c, 0x98, 0x22, 0x9e, 0x8a, 0x0b, 0x63, 0xb7, 0x45, 0x32, 0xd9, 0x4f, 0x4a, 0xd9, 0xd7,
-	0x52, 0x62, 0xff, 0x31, 0xc6, 0x85, 0x49, 0x16, 0xb8, 0xa4, 0x7f, 0x29, 0x39, 0x08, 0xaf, 0xf1,
-	0xab, 0x5a, 0x87, 0x32, 0xc4, 0xcb, 0x49, 0x35, 0x0a, 0xa9, 0x47, 0x4e, 0x85, 0x12, 0x83, 0xf9,
-	0x71, 0x9f, 0x0a, 0xed, 0xc1, 0x0e, 0x67, 0x5c, 0x87, 0xd9, 0x97, 0xb0, 0xef, 0x5a, 0x2d, 0x6f,
-	0x28, 0x99, 0xd4, 0xfe, 0x43, 0x81, 0xb9, 0x64, 0x05, 0x2e, 0x67, 0x17, 0xe8, 0xe5, 0x19, 0x3f,
-	0xcc, 0x22, 0x90, 0xe3, 0xd1, 0xc4, 0x12, 0xcf, 0x60, 0xb8, 0xea, 0x77, 0x14, 0x9a, 0xa3, 0xec,
-	0xc7, 0xb2, 0xec, 0x94, 0xf8, 0xbe, 0xeb, 0x49, 0xa8, 0xd9, 0xfd, 0x6e, 0x33, 0xb2, 0xf7, 0xca,
-	0x72, 0x0d, 0x26, 0xec, 0x7e, 0xf7, 0xe5, 0x70, 0xfb, 0xf5, 0x2c, 0x4c, 0xb1, 0x1c, 0x1a, 0xb1,
-	0x0b, 0x62, 0xbd, 0xc3, 0xb2, 0x0e, 0x0a, 0xc6, 0x24, 0x2d, 0xe0, 0x3b, 0x0b, 0x3c, 0x1d, 0x9d,
-	0x90, 0x0c, 0x37, 0x7a, 0x0a, 0x14, 0xaf, 0x6a, 0xf7, 0xbb, 0xe1, 0x76, 0xce, 0x5f, 0x15, 0x61,
-	0x9a, 0xd5, 0x39, 0x8c, 0x93, 0xb2, 0xe1, 0x12, 0x3c, 0x23, 0xa3, 0x90, 0x1f, 0xb4, 0xfb, 0x5c,
-	0x48, 0xed, 0x3e, 0x7f, 0x2e, 0xbd, 0xfb, 0x3c, 0x46, 0x27, 0xe2, 0x8c, 0x2e, 0xe9, 0xc4, 0xc1,
-	0x76, 0x9d, 0x8b, 0xc3, 0xec, 0x3a, 0x8f, 0x0f, 0x7b, 0x54, 0x55, 0x1a, 0x79, 0x6f, 0xb9, 0xbc,
-	0xaf, 0xa3, 0x2a, 0xd8, 0xc7, 0x8d, 0x9f, 0xca, 0x81, 0xb7, 0x91, 0xab, 0x07, 0xdc, 0x46, 0x9e,
-	0xd8, 0xfb, 0xb8, 0xe9, 0xb9, 0xf8, 0x71, 0x53, 0x8d, 0x1e, 0x87, 0x34, 0xa4, 0xd3, 0xfb, 0xc9,
-	0x3a, 0x66, 0x9a, 0x13, 0xd7, 0x3b, 0x13, 0x1e, 0xd5, 0x1f, 0x2a, 0x42, 0xc3, 0x46, 0xf6, 0xa4,
-	0x1e, 0xc9, 0x88, 0xd0, 0xf6, 0xe1, 0x6c, 0xe4, 0x87, 0xda, 0x11, 0x0a, 0xfa, 0x92, 0xb0, 0xa4,
-	0x7d, 0x98, 0x63, 0xf0, 0x61, 0x7d, 0xac, 0xab, 0x30, 0x85, 0x05, 0x6a, 0x53, 0x64, 0x0e, 0x32,
-	0xef, 0x6f, 0x2a, 0x95, 0x81, 0xc5, 0xfb, 0x5b, 0xc7, 0x09, 0xb8, 0xf6, 0x7f, 0x61, 0x3e, 0xd5,
-	0x2c, 0x37, 0xc8, 0xa7, 0x61, 0x5c, 0x2c, 0xb3, 0x0a, 0x57, 0xb5, 0xe8, 0xf5, 0x0c, 0x43, 0x94,
-	0xa2, 0x06, 0x54, 0x98, 0xe5, 0x64, 0x19, 0xc2, 0x3c, 0x93, 0x8b, 0x82, 0x58, 0x7a, 0xb0, 0x0a,
-	0xa5, 0x96, 0xd3, 0xed, 0x91, 0x25, 0x97, 0xaf, 0xd8, 0xc1, 0xb7, 0x76, 0x45, 0x8c, 0x47, 0x62,
-	0x01, 0x91, 0x65, 0xac, 0x86, 0x23, 0x91, 0x8b, 0x2e, 0x2a, 0xcf, 0xc0, 0x6c, 0x82, 0x04, 0xef,
-	0xc1, 0xc9, 0x58, 0xbe, 0x7c, 0xaa, 0x03, 0xbc, 0x50, 0x7b, 0x43, 0x48, 0x51, 0xdc, 0x31, 0x19,
-	0x9e, 0x83, 0x6c, 0xb3, 0x1b, 0x4e, 0x77, 0xc2, 0xe3, 0xf8, 0xe6, 0x18, 0xcc, 0xf0, 0x1d, 0x94,
-	0x91, 0x57, 0x87, 0xf0, 0x5a, 0x40, 0x2e, 0x76, 0x2d, 0x20, 0x7b, 0x31, 0xf8, 0x42, 0x76, 0xf2,
-	0xfe, 0x39, 0x5d, 0xc6, 0xd6, 0x03, 0xc9, 0xe2, 0x1f, 0x22, 0x1d, 0xbe, 0x38, 0x44, 0x3a, 0xbc,
-	0x74, 0xb1, 0x18, 0x1f, 0x6e, 0xb1, 0xd8, 0xcc, 0xca, 0x33, 0x67, 0x8b, 0x8d, 0x2e, 0x1f, 0x9c,
-	0xfd, 0x25, 0x9c, 0x7f, 0x92, 0xb2, 0xc5, 0xb5, 0x79, 0x98, 0x4d, 0x74, 0x89, 0x0b, 0xe8, 0x7a,
-	0x20, 0x9f, 0xa3, 0xda, 0xd6, 0x48, 0x1b, 0x09, 0x9b, 0x77, 0x17, 0xe6, 0x79, 0xc1, 0x83, 0x35,
-	0x7a, 0xdf, 0x50, 0x60, 0x21, 0xdd, 0x70, 0xb8, 0x7f, 0x1c, 0x6c, 0x78, 0x8a, 0xfd, 0xe3, 0x58,
-	0x5e, 0xb0, 0x11, 0x94, 0x8f, 0x66, 0xf9, 0x56, 0x83, 0x61, 0x39, 0x70, 0x3c, 0xa7, 0xad, 0xc2,
-	0x5c, 0x92, 0x46, 0xb8, 0xa7, 0xcc, 0xd9, 0x0c, 0xf6, 0x94, 0xe3, 0xbd, 0x10, 0xc5, 0xc4, 0x02,
-	0xf3, 0x92, 0x83, 0x06, 0x66, 0x91, 0x19, 0x4e, 0x98, 0xb9, 0x97, 0xe1, 0x68, 0xf4, 0x81, 0xe8,
-	0x51, 0x4d, 0x9d, 0x76, 0x1c, 0x54, 0x19, 0x3d, 0xde, 0xda, 0x12, 0x1c, 0x8f, 0x96, 0x26, 0x85,
-	0x4a, 0x7b, 0x03, 0x16, 0x33, 0xca, 0xf9, 0xa0, 0x3d, 0x05, 0x13, 0x4e, 0x04, 0x21, 0xbc, 0x0a,
-	0x98, 0x7e, 0xe5, 0xda, 0x88, 0x63, 0x6a, 0x9f, 0x8a, 0x73, 0x96, 0xb1, 0x9a, 0x45, 0x07, 0xed,
-	0x35, 0x38, 0x26, 0xad, 0xc1, 0x79, 0x79, 0x02, 0xaa, 0xd1, 0x16, 0xf8, 0x08, 0x49, 0x59, 0x89,
-	0x21, 0x6a, 0x6f, 0xc1, 0x94, 0x71, 0x18, 0xe9, 0x79, 0x8f, 0x0c, 0xbe, 0xec, 0x16, 0xbd, 0xe6,
-	0x36, 0x03, 0xc8, 0x48, 0x67, 0xff, 0x70, 0x46, 0x0e, 0xc1, 0x37, 0xdb, 0x2f, 0x23, 0x09, 0x3b,
-	0xf3, 0x18, 0xcc, 0x18, 0xc3, 0x67, 0x34, 0x68, 0x97, 0x60, 0xd6, 0x90, 0x1e, 0xf1, 0x3f, 0x14,
-	0xbf, 0x21, 0x5a, 0xd1, 0xc3, 0x7b, 0x84, 0xfc, 0x1e, 0xa8, 0xf6, 0x39, 0xc6, 0xc0, 0x61, 0xee,
-	0xd0, 0x7c, 0x06, 0xa6, 0x0d, 0xc9, 0x79, 0x7d, 0x03, 0x0a, 0x6e, 0x78, 0x48, 0x1f, 0xe3, 0x85,
-	0x16, 0x68, 0xb7, 0xd8, 0xf0, 0x1f, 0xe2, 0x76, 0x32, 0x1f, 0xdd, 0x84, 0x8e, 0x7f, 0x43, 0x01,
-	0x95, 0x36, 0xfe, 0xb1, 0x6e, 0x59, 0x2c, 0xc2, 0x31, 0x29, 0x13, 0xe1, 0x0e, 0x4b, 0x85, 0x5f,
-	0x44, 0xa3, 0xf7, 0x58, 0x66, 0x60, 0xac, 0x6b, 0xbe, 0xe9, 0x88, 0xcd, 0x02, 0xf6, 0x41, 0xa1,
-	0x96, 0xed, 0x88, 0xe7, 0x4e, 0xd8, 0x07, 0x81, 0xf6, 0x4c, 0xbf, 0x75, 0x5b, 0x5c, 0x85, 0xa2,
-	0x1f, 0x68, 0x11, 0x60, 0xdb, 0xf2, 0x9b, 0x2d, 0xa7, 0xdb, 0xb5, 0x7c, 0xce, 0x49, 0x79, 0xdb,
-	0xf2, 0xd7, 0x28, 0x80, 0x14, 0x6f, 0xf6, 0xad, 0x4e, 0xbb, 0x49, 0x9f, 0xd5, 0x64, 0xa9, 0x60,
-	0x65, 0x0a, 0xb9, 0x6a, 0xfa, 0x58, 0x9b, 0x86, 0x29, 0xce, 0xce, 0x0b, 0x58, 0x88, 0x89, 0x76,
-	0x19, 0x50, 0x14, 0xc8, 0x27, 0xfa, 0x54, 0x78, 0xbf, 0x4a, 0xe1, 0x97, 0x4a, 0x22, 0x3d, 0x09,
-	0x5f, 0x79, 0xf9, 0x3b, 0x05, 0xe6, 0xf8, 0x2b, 0x64, 0x57, 0x5a, 0xbe, 0x75, 0x77, 0x34, 0xa5,
-	0x3b, 0x09, 0x13, 0x26, 0xa3, 0xc2, 0x5f, 0x7c, 0xa6, 0x43, 0x72, 0xfd, 0x88, 0x51, 0x0d, 0xc1,
-	0xeb, 0x6d, 0xf4, 0x30, 0x54, 0x3b, 0xac, 0xcd, 0x26, 0xa5, 0x4e, 0x86, 0xa8, 0x7a, 0xfd, 0x88,
-	0x51, 0xe1, 0xd0, 0xab, 0x84, 0xd6, 0x29, 0xa8, 0xf5, 0x3d, 0xe2, 0x53, 0x6d, 0x9a, 0x1e, 0x6e,
-	0x07, 0x2f, 0x18, 0x10, 0x62, 0x14, 0xbe, 0x4a, 0xc0, 0xeb, 0xed, 0xd5, 0x2a, 0x40, 0x48, 0x5c,
-	0x3b, 0x0a, 0xf3, 0xa9, 0xee, 0xf0, 0xd9, 0x74, 0x60, 0x86, 0x17, 0x8d, 0x6c, 0x5c, 0x4e, 0xa4,
-	0x78, 0x63, 0x73, 0x1f, 0xe3, 0x8c, 0x2c, 0x70, 0x89, 0x06, 0xc3, 0x0d, 0x30, 0x5e, 0x30, 0xdc,
-	0x06, 0xd8, 0x1b, 0xc1, 0x1c, 0x25, 0xf5, 0xf9, 0x39, 0x98, 0x12, 0x23, 0xe9, 0x62, 0x8f, 0x5f,
-	0x63, 0x57, 0xf8, 0x21, 0x21, 0xaf, 0x23, 0x90, 0xd9, 0x21, 0x61, 0x27, 0x04, 0x52, 0xe3, 0xf7,
-	0x7e, 0x01, 0xa6, 0x25, 0x88, 0x68, 0x0d, 0xaa, 0x5b, 0xd8, 0xf4, 0xfb, 0xe2, 0x6a, 0x92, 0xc2,
-	0xaf, 0x97, 0x49, 0x70, 0xf5, 0x6b, 0x0c, 0x91, 0x36, 0x50, 0xd9, 0x0a, 0x3f, 0xd0, 0x85, 0xe0,
-	0xe2, 0x17, 0x33, 0xc0, 0xc7, 0xa4, 0xd5, 0xe3, 0xb7, 0xbe, 0xd4, 0xf7, 0x14, 0xa8, 0x44, 0x28,
-	0x4a, 0x43, 0x2a, 0xea, 0x22, 0xd9, 0x5e, 0xbf, 0x8b, 0xdb, 0xfc, 0x69, 0xde, 0xe0, 0x1b, 0xdd,
-	0x84, 0x3a, 0x89, 0x9c, 0xfd, 0x0e, 0x7d, 0x18, 0x96, 0x71, 0x9f, 0xe7, 0xc9, 0x0f, 0xb2, 0xe6,
-	0x9f, 0x0f, 0x91, 0xd9, 0x10, 0xe1, 0x38, 0x40, 0xfd, 0x81, 0x02, 0x93, 0x09, 0x24, 0xa2, 0xde,
-	0xe1, 0xb3, 0xc7, 0x79, 0xfe, 0xd6, 0x31, 0xfa, 0x34, 0x8c, 0xe3, 0x7b, 0x3d, 0xcb, 0xc5, 0xde,
-	0x10, 0xaf, 0xe0, 0x09, 0x54, 0xb4, 0x42, 0x47, 0xc9, 0xf5, 0xc5, 0xff, 0x86, 0x18, 0x54, 0x89,
-	0x63, 0xa2, 0x65, 0xfe, 0x80, 0x09, 0x0b, 0x94, 0xaa, 0xa2, 0x63, 0xe1, 0x8b, 0x25, 0xea, 0x93,
-	0xc1, 0x1d, 0xb9, 0xb9, 0xd8, 0xf5, 0xbb, 0xf2, 0x9e, 0xd7, 0xeb, 0xbe, 0x9a, 0x83, 0x05, 0xaa,
-	0x3d, 0x96, 0x3f, 0xf4, 0x1d, 0x16, 0xfa, 0x14, 0xf0, 0x0e, 0x9b, 0xe7, 0x31, 0x83, 0xfe, 0x8e,
-	0xbd, 0xa2, 0xcd, 0xd2, 0x68, 0x35, 0x3d, 0x8b, 0x6e, 0xf0, 0x96, 0x76, 0xe4, 0x15, 0xed, 0x63,
-	0x40, 0x6f, 0x6b, 0x35, 0xdf, 0x71, 0x6c, 0x71, 0xcd, 0xb2, 0x44, 0x00, 0x6f, 0x38, 0x36, 0x1e,
-	0x90, 0x32, 0x2b, 0xae, 0x9b, 0x16, 0xc3, 0xeb, 0xa6, 0x9a, 0x0e, 0x25, 0xd1, 0x40, 0xea, 0x16,
-	0xfd, 0x75, 0xa7, 0xef, 0x76, 0x76, 0xd8, 0x93, 0x61, 0xf4, 0x41, 0xe8, 0x7a, 0x4e, 0xfb, 0xaf,
-	0x1c, 0x1c, 0x95, 0xb0, 0xca, 0xb5, 0xee, 0x2a, 0x37, 0x73, 0x96, 0xbf, 0xd3, 0xe4, 0x66, 0x83,
-	0xbd, 0x6c, 0x92, 0x59, 0x45, 0x27, 0x26, 0x8d, 0x5b, 0x41, 0xcb, 0xdf, 0x21, 0x5f, 0xea, 0xfb,
-	0x39, 0x28, 0x50, 0x4b, 0xf7, 0xc0, 0xaf, 0xe4, 0xa1, 0x25, 0x00, 0x8f, 0x5d, 0x61, 0xdc, 0xea,
-	0x77, 0xf8, 0x7e, 0x75, 0x04, 0x42, 0x24, 0x63, 0x8b, 0xde, 0x3d, 0xe3, 0x7b, 0xd4, 0xfc, 0x8b,
-	0x84, 0x2e, 0x96, 0xdd, 0xec, 0xf1, 0x4b, 0x95, 0x74, 0xe0, 0x0b, 0x06, 0x58, 0xc1, 0x35, 0x4b,
-	0x74, 0x1a, 0x26, 0x79, 0xa8, 0x42, 0x16, 0x00, 0xca, 0x16, 0x99, 0x06, 0xc5, 0xa8, 0x85, 0x60,
-	0xca, 0xc1, 0x0c, 0x8c, 0xd1, 0x88, 0x87, 0xee, 0xdc, 0x16, 0x0c, 0xf6, 0xa1, 0xf5, 0x01, 0x0c,
-	0xe7, 0x60, 0xaf, 0x2c, 0x04, 0x6e, 0x56, 0x4e, 0xb8, 0x59, 0x8e, 0x78, 0xf7, 0x9e, 0xbb, 0x59,
-	0x68, 0x1e, 0xc6, 0x5d, 0xa7, 0x83, 0x9b, 0x81, 0x7f, 0x52, 0x24, 0x9f, 0xeb, 0x6d, 0xed, 0x32,
-	0x6b, 0x36, 0xfc, 0xaf, 0x14, 0x1e, 0x76, 0xef, 0x5a, 0x2d, 0xee, 0xb3, 0x95, 0x8d, 0xe0, 0x9b,
-	0xc8, 0x96, 0xd9, 0xb3, 0x58, 0x23, 0x65, 0x83, 0xfe, 0xd6, 0xbe, 0xae, 0xc0, 0x14, 0xad, 0x3e,
-	0xaa, 0xef, 0x3c, 0x4a, 0x17, 0x88, 0x97, 0xe5, 0xa4, 0x9c, 0x69, 0xc1, 0xda, 0xc8, 0x0b, 0xde,
-	0x21, 0xb0, 0x96, 0x58, 0x03, 0x3d, 0x98, 0x21, 0xd0, 0x07, 0x1b, 0xc3, 0x13, 0x27, 0xdd, 0xc9,
-	0x72, 0xd2, 0x9d, 0x98, 0x93, 0xee, 0x44, 0x9c, 0x74, 0x47, 0x38, 0xe9, 0xce, 0xe1, 0x3b, 0xe9,
-	0x8e, 0xdc, 0x49, 0x77, 0xa2, 0x4e, 0xba, 0x13, 0x71, 0xd2, 0x1d, 0xee, 0xa4, 0x3b, 0x87, 0xee,
-	0xa4, 0x3b, 0x29, 0x27, 0x5d, 0x67, 0xc3, 0x75, 0x0b, 0xbb, 0x5d, 0xcb, 0xf3, 0xe8, 0x01, 0xc4,
-	0x40, 0x3f, 0xe5, 0x3b, 0x0a, 0xcc, 0x25, 0x2b, 0xf0, 0x3e, 0x3d, 0x19, 0x8f, 0x82, 0x34, 0x5d,
-	0x8e, 0xc7, 0x02, 0x34, 0xb6, 0x0f, 0xc6, 0x1f, 0xc9, 0x79, 0x9e, 0xbd, 0xbc, 0x92, 0x79, 0x6a,
-	0xf0, 0x50, 0xfc, 0xb5, 0xe2, 0x8a, 0x1e, 0xa1, 0x1a, 0xd9, 0xb3, 0x7a, 0x0c, 0x20, 0x2c, 0x20,
-	0x86, 0x6c, 0xab, 0xdf, 0xe9, 0x34, 0xd9, 0xff, 0xc6, 0x61, 0x4f, 0xcc, 0x18, 0x40, 0x40, 0x57,
-	0x28, 0x44, 0xfb, 0x9d, 0x02, 0xa0, 0x2b, 0x11, 0x6b, 0x7d, 0x10, 0x93, 0x24, 0x16, 0xa2, 0x5c,
-	0xe4, 0xdd, 0x83, 0x95, 0x60, 0x2d, 0x66, 0x2b, 0xa2, 0xaa, 0xa7, 0x5b, 0x49, 0x5e, 0x83, 0x97,
-	0x18, 0xd5, 0x82, 0xd4, 0xa8, 0x5e, 0x84, 0x71, 0xa7, 0xd7, 0xda, 0x69, 0xf1, 0x7f, 0xe0, 0x40,
-	0xfc, 0x2d, 0x09, 0xf5, 0x9b, 0x0c, 0xc5, 0x10, 0xb8, 0xd9, 0xef, 0xae, 0xab, 0x7f, 0xa1, 0xc0,
-	0x38, 0x47, 0x1f, 0x65, 0x95, 0xba, 0x06, 0x53, 0x1d, 0xd3, 0xf3, 0x9b, 0x7d, 0x6a, 0x02, 0x86,
-	0x5e, 0xae, 0x26, 0x49, 0x25, 0x66, 0x36, 0xd8, 0xb2, 0x75, 0x80, 0xc1, 0xd3, 0x5e, 0x97, 0x3f,
-	0x15, 0x40, 0x5f, 0x07, 0x10, 0x0b, 0x19, 0xfb, 0xcf, 0x51, 0xe2, 0x52, 0x7f, 0x2e, 0xf2, 0x3a,
-	0x40, 0x3e, 0xf6, 0x3a, 0x40, 0x81, 0xa0, 0x31, 0x1d, 0x69, 0xd7, 0xc7, 0x56, 0x36, 0xa0, 0xc8,
-	0xee, 0xdb, 0xa3, 0xf5, 0xa0, 0x91, 0x19, 0x5d, 0x72, 0x33, 0x5f, 0x9d, 0xd5, 0xa5, 0x17, 0xf3,
-	0xd1, 0xd7, 0xff, 0xf1, 0xdf, 0x7e, 0x35, 0x57, 0x45, 0x70, 0xfe, 0xee, 0xe3, 0xe7, 0x6f, 0x53,
-	0x8c, 0x95, 0xbf, 0x1d, 0x83, 0x5a, 0xfc, 0x72, 0x25, 0x6a, 0x43, 0x91, 0x99, 0x67, 0x74, 0x5c,
-	0x1f, 0x70, 0x87, 0x5b, 0x5d, 0xd4, 0x07, 0xde, 0xa8, 0x5e, 0xa4, 0xad, 0xcd, 0x6b, 0x88, 0xb4,
-	0x26, 0x4e, 0xa1, 0xd9, 0x7e, 0xfb, 0x25, 0xe5, 0x2c, 0x69, 0x85, 0x8d, 0x75, 0xaa, 0x95, 0xd8,
-	0xea, 0x91, 0x6a, 0x25, 0x61, 0xd7, 0x79, 0x2b, 0x6a, 0x46, 0x2b, 0x1e, 0x94, 0x03, 0xeb, 0x8b,
-	0x1a, 0x7b, 0x5c, 0x74, 0x56, 0x97, 0xf5, 0x3d, 0x2e, 0x26, 0x6b, 0x0f, 0xd3, 0xe6, 0x16, 0xd1,
-	0xb1, 0x74, 0x73, 0xe7, 0xbf, 0xc2, 0x6c, 0xd4, 0xbb, 0xc8, 0x27, 0x33, 0x4f, 0x6d, 0x2c, 0x5a,
-	0xd4, 0x07, 0xdd, 0x41, 0x56, 0x97, 0xf4, 0x81, 0xb7, 0x88, 0xb5, 0xb3, 0xb4, 0xb9, 0x13, 0x48,
-	0x1b, 0xd0, 0xdc, 0xf9, 0xaf, 0x10, 0x23, 0xfb, 0x2e, 0x7a, 0x4b, 0x3c, 0xca, 0x94, 0x1a, 0xd0,
-	0x98, 0xe1, 0x4e, 0x0d, 0x68, 0xc2, 0x08, 0xf3, 0x26, 0xcf, 0x0e, 0xd3, 0xe4, 0xaf, 0x28, 0x30,
-	0xc9, 0xe6, 0x23, 0xd8, 0xd2, 0x40, 0x27, 0xf5, 0x61, 0xae, 0x0e, 0xab, 0xa7, 0xf4, 0xe1, 0xae,
-	0xf4, 0x3e, 0x46, 0xd9, 0x39, 0xad, 0xca, 0xd8, 0x61, 0xfa, 0x1d, 0x6c, 0xb8, 0x5c, 0x52, 0xce,
-	0xae, 0xfc, 0xb0, 0x90, 0x7a, 0x0a, 0x31, 0x2a, 0xce, 0x03, 0x6e, 0x2d, 0xaa, 0x8b, 0xfa, 0xc0,
-	0x6b, 0x82, 0x31, 0x71, 0xe6, 0xa7, 0x8a, 0x1c, 0x33, 0x29, 0xce, 0x03, 0x6e, 0xc2, 0xa5, 0x5a,
-	0x19, 0x24, 0xce, 0xe9, 0x56, 0x12, 0xe2, 0x3c, 0xf8, 0x12, 0x93, 0xba, 0xac, 0xef, 0x71, 0x1f,
-	0x28, 0x2e, 0xce, 0xf1, 0xe6, 0x32, 0xc4, 0x79, 0xd0, 0xe5, 0x1f, 0x75, 0x49, 0x1f, 0x78, 0x7d,
-	0x27, 0x2e, 0xce, 0x19, 0xcd, 0xc9, 0xc4, 0x79, 0xc0, 0x95, 0x9d, 0xd4, 0x80, 0x0e, 0x12, 0xe7,
-	0xc1, 0x4d, 0xae, 0xfc, 0x4d, 0x1e, 0xc6, 0x79, 0x96, 0x38, 0xba, 0x19, 0x48, 0xcd, 0xac, 0x2e,
-	0xbb, 0x8d, 0xa3, 0xce, 0xe9, 0xf2, 0x9b, 0x27, 0x73, 0xb4, 0xc1, 0xba, 0x56, 0xa1, 0xff, 0x88,
-	0x92, 0xa1, 0x90, 0xa9, 0xbb, 0x19, 0x08, 0x48, 0x40, 0x30, 0x2e, 0x19, 0x73, 0xba, 0xfc, 0x16,
-	0x06, 0x27, 0xa8, 0x26, 0x09, 0x7e, 0x39, 0x2a, 0x0b, 0x0b, 0x59, 0xf7, 0x2c, 0xd4, 0xa3, 0x7a,
-	0xd6, 0x2d, 0x04, 0xed, 0x38, 0xa5, 0x3c, 0x87, 0x66, 0x22, 0x94, 0xc3, 0x69, 0x6f, 0x86, 0xd3,
-	0x3e, 0xa7, 0x4b, 0x6f, 0x20, 0xa8, 0xf3, 0xba, 0xfc, 0xb2, 0x40, 0x5c, 0xae, 0x92, 0x94, 0xc5,
-	0x0c, 0x7f, 0x29, 0x98, 0xe1, 0x60, 0x44, 0xe2, 0x53, 0x3b, 0xa7, 0xcb, 0x73, 0xf6, 0x39, 0xf5,
-	0xb3, 0x83, 0xa8, 0xaf, 0xfc, 0xf3, 0x18, 0x4c, 0x26, 0x1f, 0x31, 0xdf, 0x0e, 0x26, 0x75, 0x51,
-	0x1f, 0x94, 0xf4, 0xaf, 0x2e, 0xe9, 0x83, 0xf3, 0xef, 0x97, 0x28, 0x07, 0x0b, 0xda, 0x34, 0xe3,
-	0xc0, 0xe9, 0xb7, 0xc3, 0x3c, 0x0b, 0x32, 0x37, 0xdb, 0xc1, 0x64, 0xa7, 0x1a, 0x8a, 0x4f, 0xfa,
-	0x92, 0x3e, 0x38, 0x65, 0x9e, 0x37, 0xa4, 0x66, 0x35, 0x74, 0x37, 0x2a, 0x04, 0xcb, 0xfa, 0x1e,
-	0xe9, 0xf5, 0xea, 0x43, 0xfa, 0x5e, 0xd9, 0xf1, 0xda, 0x09, 0xda, 0xe2, 0x12, 0x3a, 0x2e, 0x69,
-	0x31, 0x14, 0x8e, 0xb7, 0x43, 0xe1, 0x58, 0xd2, 0x07, 0xe6, 0xc1, 0xab, 0x0d, 0x7d, 0x70, 0x82,
-	0xba, 0x76, 0x8e, 0xb6, 0x78, 0x12, 0x3d, 0x3c, 0xa8, 0x45, 0x21, 0x34, 0x7e, 0x20, 0x34, 0xa9,
-	0x91, 0x8d, 0x0b, 0xcf, 0x92, 0x3e, 0x38, 0xab, 0x9c, 0xb7, 0x7a, 0x76, 0xa8, 0x56, 0xbf, 0x2d,
-	0x59, 0xe8, 0x4e, 0xe9, 0x43, 0x25, 0xa5, 0xab, 0xa7, 0xf5, 0x21, 0x93, 0xc5, 0x75, 0xca, 0xd1,
-	0x19, 0x55, 0xca, 0x91, 0x64, 0xad, 0xfb, 0xcb, 0xa2, 0x58, 0xeb, 0x82, 0xd4, 0xba, 0xf4, 0x5a,
-	0x27, 0xcd, 0x3b, 0x0f, 0x8c, 0x66, 0x46, 0x16, 0xb8, 0x64, 0xad, 0x13, 0x99, 0x63, 0xf2, 0xb5,
-	0x4e, 0x9a, 0x2c, 0x9e, 0x6a, 0x65, 0xef, 0xb5, 0x2e, 0xda, 0x8a, 0x74, 0xad, 0xcb, 0x4a, 0xce,
-	0x0e, 0xd6, 0xba, 0xcc, 0x1c, 0x67, 0xd9, 0x5a, 0x27, 0x9a, 0x1b, 0xb8, 0xd6, 0xc9, 0x13, 0x9a,
-	0xd5, 0x25, 0x7d, 0x60, 0x4a, 0xb2, 0x6c, 0xad, 0x4b, 0x35, 0x97, 0xbd, 0xd6, 0x49, 0xd3, 0x90,
-	0x53, 0x03, 0xba, 0xf7, 0x5a, 0x97, 0xd9, 0xa4, 0x07, 0x25, 0x91, 0xe1, 0x8b, 0x92, 0x5d, 0x49,
-	0x24, 0x16, 0xab, 0x0d, 0x7d, 0x8f, 0xd4, 0xe0, 0x53, 0xb4, 0xe1, 0x65, 0x4d, 0x36, 0xb4, 0xe2,
-	0x1f, 0x4a, 0x90, 0x29, 0x95, 0xfb, 0x8b, 0xc3, 0x24, 0x15, 0xab, 0xa7, 0xf4, 0xe1, 0x92, 0x7d,
-	0x63, 0xfe, 0x62, 0x82, 0x15, 0x89, 0x0e, 0xb5, 0x60, 0x9c, 0xa7, 0xf0, 0xa2, 0x2f, 0x44, 0xd7,
-	0x3b, 0x69, 0xc2, 0xb0, 0x3a, 0x9f, 0x91, 0xef, 0x1b, 0x5f, 0x49, 0xbb, 0x0c, 0x27, 0x18, 0xf2,
-	0x95, 0x1f, 0xe6, 0xa1, 0xc8, 0xb8, 0x47, 0x37, 0x02, 0x05, 0x9d, 0x91, 0xe5, 0x34, 0xaa, 0xb3,
-	0xba, 0x34, 0x89, 0x70, 0x96, 0xd2, 0x9f, 0xd4, 0x20, 0xec, 0x15, 0x19, 0xcf, 0x1b, 0x81, 0x22,
-	0x0a, 0x6a, 0xf1, 0x41, 0x9b, 0xd5, 0xa5, 0x69, 0x7c, 0x9c, 0x9a, 0x9a, 0xa0, 0xf6, 0xc5, 0xa8,
-	0xc2, 0xcd, 0xeb, 0xf2, 0x4c, 0x3f, 0x75, 0x41, 0xcf, 0xc8, 0xc5, 0xd3, 0x8e, 0x51, 0xb2, 0xb3,
-	0x68, 0x3a, 0x24, 0x1b, 0x2a, 0xd6, 0x97, 0xc2, 0xd1, 0x9d, 0xd5, 0x65, 0xc9, 0x74, 0xea, 0x9c,
-	0x2e, 0x4d, 0x90, 0xd3, 0x34, 0x4a, 0xf6, 0x38, 0x52, 0x25, 0x64, 0x85, 0x34, 0xbf, 0x1e, 0x28,
-	0x90, 0x18, 0x88, 0xb8, 0xe2, 0xcc, 0xea, 0xd2, 0x04, 0x37, 0x4e, 0xfa, 0xec, 0x00, 0xd2, 0xd4,
-	0x29, 0xe4, 0x79, 0x23, 0x31, 0xa7, 0x50, 0x96, 0x64, 0xa5, 0xce, 0xe9, 0xf2, 0x44, 0xa5, 0x98,
-	0x53, 0xc8, 0x73, 0x5a, 0x92, 0x4e, 0xa1, 0x2c, 0x93, 0x29, 0x24, 0x38, 0xc8, 0x29, 0x8c, 0x10,
-	0x4c, 0x38, 0x85, 0x19, 0x99, 0x4b, 0xea, 0x51, 0x3d, 0x2b, 0xb5, 0x28, 0x2e, 0xca, 0x9c, 0x72,
-	0x86, 0x53, 0x28, 0xcd, 0x0c, 0x52, 0xe7, 0x75, 0x79, 0xb6, 0x4f, 0xdc, 0x00, 0x27, 0x29, 0xcb,
-	0x9c, 0x42, 0x59, 0xc6, 0x4f, 0x38, 0x22, 0x83, 0x9c, 0xc2, 0x0c, 0xea, 0x2b, 0x3f, 0xca, 0x41,
-	0x35, 0x9a, 0x9b, 0x82, 0xbe, 0x1c, 0xcc, 0xa8, 0xaa, 0x67, 0x26, 0x01, 0xa9, 0xc7, 0xf4, 0x01,
-	0x09, 0x3d, 0x5c, 0xec, 0xb5, 0x3a, 0x69, 0x38, 0x9a, 0xe4, 0xc2, 0x96, 0xca, 0xc8, 0x7c, 0x2c,
-	0xea, 0x83, 0x32, 0x7f, 0xd4, 0x25, 0x7d, 0x60, 0xe2, 0x8f, 0xb6, 0x40, 0x1b, 0x42, 0x28, 0xd5,
-	0x10, 0xc2, 0xe1, 0xac, 0xc4, 0x59, 0x4d, 0x4c, 0xcd, 0x71, 0x7d, 0x40, 0x32, 0x8f, 0xd6, 0xa0,
-	0xf4, 0x8f, 0xa2, 0xf9, 0x24, 0x7d, 0x31, 0x7a, 0xef, 0x15, 0x60, 0x8c, 0xee, 0x8d, 0xa2, 0x6b,
-	0xc1, 0xb0, 0x21, 0x3d, 0x95, 0xc7, 0xa3, 0x4e, 0xeb, 0x92, 0x44, 0x9b, 0x69, 0x4a, 0x7d, 0x42,
-	0x2b, 0xd1, 0xf9, 0xe1, 0xf1, 0xec, 0xb5, 0x40, 0xfe, 0x19, 0x9d, 0xb8, 0xf0, 0x4f, 0xeb, 0x92,
-	0x3c, 0x19, 0x4e, 0x47, 0x8d, 0xd1, 0x79, 0x35, 0x3a, 0xcc, 0xb3, 0xba, 0x2c, 0x91, 0x86, 0x08,
-	0x8e, 0x34, 0x06, 0x3e, 0x4a, 0x09, 0x4e, 0xa3, 0x29, 0x41, 0x30, 0x94, 0xf6, 0xd7, 0xc2, 0x71,
-	0x65, 0xbc, 0x24, 0xc6, 0x73, 0x46, 0x97, 0x24, 0xbd, 0x68, 0xcb, 0x94, 0xa0, 0x8a, 0x16, 0x52,
-	0x04, 0x85, 0x90, 0x6f, 0x04, 0x42, 0xce, 0xba, 0x1d, 0x97, 0xf0, 0x69, 0x5d, 0x92, 0xc0, 0xc2,
-	0x89, 0x9e, 0xcd, 0x26, 0xfa, 0x56, 0x7a, 0x6d, 0x3d, 0xa6, 0x67, 0xe7, 0xbc, 0xa8, 0xc7, 0xf5,
-	0x41, 0xb9, 0x28, 0x5c, 0x9d, 0xd4, 0xb0, 0x3d, 0xc9, 0xea, 0xf9, 0x32, 0x8c, 0x8b, 0x87, 0x93,
-	0xd7, 0x20, 0xff, 0x02, 0xf6, 0x11, 0xd2, 0x53, 0x19, 0x23, 0xea, 0xb4, 0x9e, 0x4e, 0x18, 0x11,
-	0xd3, 0x88, 0xa8, 0x01, 0xe3, 0xd9, 0x21, 0x2b, 0xbf, 0x98, 0x83, 0x71, 0x7e, 0xb2, 0x8c, 0x5e,
-	0x85, 0x92, 0x48, 0xa9, 0x40, 0xf3, 0xba, 0x3c, 0x67, 0x44, 0x5d, 0xd0, 0xb3, 0xb2, 0x2f, 0x62,
-	0x16, 0x97, 0x27, 0x21, 0x10, 0x49, 0x89, 0xad, 0xf2, 0xd2, 0xac, 0x08, 0x75, 0x5e, 0x97, 0x67,
-	0x3f, 0xc4, 0x4d, 0x23, 0xa7, 0x19, 0x0a, 0x4b, 0xd4, 0x96, 0xcb, 0x12, 0x3f, 0xd4, 0x39, 0x5d,
-	0x9e, 0x9e, 0x11, 0xb3, 0xe5, 0x21, 0xab, 0x2b, 0xff, 0x5f, 0x81, 0xba, 0xd8, 0x70, 0x7e, 0xc5,
-	0xea, 0xe2, 0x1b, 0x96, 0x8d, 0x91, 0x1b, 0x95, 0xf4, 0xa3, 0x99, 0xe7, 0xdb, 0xaa, 0x9a, 0x7d,
-	0x38, 0x2c, 0x02, 0x0d, 0x74, 0x4a, 0x6e, 0x2a, 0xdb, 0xe6, 0x8e, 0xf7, 0xee, 0xf9, 0xaf, 0x88,
-	0x73, 0xf1, 0x77, 0x57, 0x7e, 0x9a, 0x87, 0x82, 0xe1, 0x74, 0x70, 0x5c, 0xed, 0x1d, 0x89, 0xda,
-	0x3b, 0x7b, 0xa8, 0xbd, 0x23, 0x57, 0x57, 0x47, 0xae, 0xae, 0xce, 0xde, 0xea, 0xea, 0x64, 0xab,
-	0xab, 0x23, 0x53, 0x57, 0x67, 0x2f, 0x75, 0x75, 0x24, 0x9a, 0x15, 0xb3, 0x52, 0x8e, 0xc4, 0x4a,
-	0x39, 0x7b, 0x58, 0x29, 0xde, 0xed, 0x98, 0xda, 0x3b, 0x12, 0xb5, 0x77, 0xf6, 0x50, 0x7b, 0x19,
-	0x73, 0x37, 0x63, 0x07, 0x4d, 0x73, 0xba, 0xf4, 0x04, 0x8d, 0x2c, 0xca, 0xd2, 0x03, 0x30, 0xad,
-	0x4e, 0x1b, 0x00, 0x14, 0x30, 0xba, 0xfa, 0xc8, 0x7f, 0xff, 0xeb, 0x92, 0xf2, 0xfd, 0x0f, 0x96,
-	0x94, 0x3f, 0xfd, 0x60, 0x49, 0xf9, 0xeb, 0x0f, 0x96, 0x94, 0x1f, 0x7f, 0xb0, 0xa4, 0xfc, 0xcb,
-	0x07, 0x4b, 0xca, 0xfb, 0x3f, 0x59, 0x3a, 0xf2, 0xe3, 0x9f, 0x2c, 0x1d, 0xf9, 0xa7, 0x9f, 0x2c,
-	0x1d, 0x79, 0x23, 0x6f, 0xf6, 0xac, 0xcd, 0x22, 0x3d, 0x45, 0xb9, 0xf0, 0x3f, 0x01, 0x00, 0x00,
-	0xff, 0xff, 0x8c, 0xd7, 0xe7, 0xfb, 0x02, 0x86, 0x00, 0x00,
+	// 8969 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x7d, 0x5d, 0x6c, 0x24, 0xc7,
+	0x99, 0xd8, 0xf6, 0xcc, 0x90, 0x9c, 0xf9, 0x66, 0x48, 0x0e, 0x8b, 0x7f, 0xb3, 0xbd, 0x24, 0x87,
+	0x6a, 0x69, 0x7f, 0xb4, 0x92, 0x7a, 0x2d, 0x4a, 0x6b, 0xc9, 0x2b, 0x59, 0x36, 0xb9, 0xab, 0xd5,
+	0xf2, 0xb4, 0xd2, 0xae, 0x9a, 0x92, 0x6c, 0xc9, 0xc6, 0x0d, 0x9a, 0x33, 0x45, 0x6e, 0x9b, 0x33,
+	0xdd, 0xe3, 0xee, 0x9e, 0xd5, 0x52, 0x86, 0x10, 0xdb, 0x77, 0xc9, 0x05, 0x46, 0xce, 0xf1, 0x39,
+	0xf0, 0x5d, 0xee, 0xec, 0x20, 0x48, 0xf2, 0x90, 0xe4, 0x29, 0x97, 0xdc, 0x43, 0x7e, 0x0e, 0x08,
+	0xf2, 0x92, 0x5c, 0x2e, 0x40, 0x72, 0x06, 0xf2, 0xe2, 0xa7, 0x4d, 0x4e, 0x0e, 0x70, 0x88, 0xf2,
+	0xa6, 0x04, 0x48, 0x1e, 0x83, 0xfa, 0xe9, 0xee, 0xaa, 0xee, 0xea, 0x99, 0xe1, 0x8f, 0x57, 0x02,
+	0xee, 0x9e, 0x66, 0xba, 0xba, 0x7e, 0xbe, 0xaa, 0xfa, 0xfe, 0xeb, 0xfb, 0xaa, 0x61, 0xb1, 0x7f,
+	0xb0, 0x7f, 0xc5, 0xee, 0x3b, 0xc1, 0x95, 0xfb, 0xcf, 0x92, 0x5f, 0xb3, 0xef, 0x7b, 0xa1, 0xa7,
+	0xaf, 0xec, 0x7b, 0xde, 0x7e, 0x17, 0x93, 0x92, 0x2b, 0xb6, 0xeb, 0x7a, 0xa1, 0x1d, 0x3a, 0x9e,
+	0x1b, 0xf0, 0xb7, 0x4d, 0xfe, 0x96, 0x3e, 0xed, 0x0e, 0xf6, 0xae, 0x84, 0x4e, 0x0f, 0x07, 0xa1,
+	0xdd, 0xeb, 0xf3, 0x0a, 0xcf, 0xec, 0x3b, 0xe1, 0xbd, 0xc1, 0xae, 0xd9, 0xf6, 0x7a, 0x57, 0xf6,
+	0xbd, 0x7d, 0x2f, 0xa9, 0x49, 0x9e, 0xe8, 0x03, 0xfd, 0xc7, 0xab, 0x37, 0x44, 0x20, 0xda, 0x5e,
+	0xaf, 0xe7, 0xb9, 0xfc, 0x0d, 0xfb, 0x69, 0x3f, 0xb3, 0x8f, 0xdd, 0x67, 0xbc, 0x3e, 0x76, 0xed,
+	0xbe, 0x73, 0x7f, 0xe3, 0x8a, 0xd7, 0xa7, 0xd0, 0x64, 0x21, 0x33, 0x36, 0x01, 0xdd, 0xf1, 0xf7,
+	0x6d, 0xd7, 0xf9, 0x90, 0x16, 0xdf, 0xd9, 0xfd, 0x16, 0x6e, 0x87, 0xe8, 0x29, 0x28, 0xf7, 0x70,
+	0x68, 0x77, 0xec, 0xd0, 0x6e, 0x68, 0xeb, 0xda, 0xa5, 0xea, 0x46, 0xc5, 0x7c, 0x83, 0x17, 0x6c,
+	0x95, 0x7e, 0xfe, 0xb0, 0xa9, 0x59, 0x71, 0x05, 0xe3, 0xa7, 0x65, 0xa8, 0x5e, 0xef, 0x0e, 0x82,
+	0x10, 0xfb, 0xdb, 0xee, 0x9e, 0x87, 0x9e, 0x87, 0x4a, 0xff, 0x41, 0xab, 0xed, 0xb9, 0x7b, 0xce,
+	0x7e, 0xdc, 0xfa, 0xee, 0xd7, 0xaf, 0xd3, 0x82, 0xad, 0xda, 0x27, 0x0f, 0x9b, 0xe5, 0xfe, 0x03,
+	0xf6, 0xda, 0x2a, 0xf7, 0x1f, 0xb0, 0x72, 0xf4, 0x15, 0x80, 0x83, 0xc1, 0x2e, 0xe6, 0xcd, 0x0a,
+	0xeb, 0xda, 0xa5, 0xca, 0x56, 0xf3, 0x93, 0x87, 0x4d, 0xa1, 0xf4, 0xd3, 0x87, 0xcd, 0xe9, 0x00,
+	0xb7, 0x07, 0x3e, 0xbe, 0x66, 0x84, 0xfe, 0x00, 0x1b, 0x96, 0xf0, 0x12, 0x3d, 0x09, 0xf5, 0x76,
+	0xd7, 0x1b, 0x74, 0x5a, 0x6d, 0x1f, 0x77, 0xb0, 0x1b, 0x3a, 0x76, 0xb7, 0x51, 0x24, 0xdd, 0x58,
+	0xb3, 0xb4, 0xfc, 0x7a, 0x5c, 0x8c, 0xae, 0xc0, 0x64, 0x10, 0xda, 0xe1, 0x20, 0x68, 0x94, 0x28,
+	0x78, 0xcb, 0xa6, 0x00, 0xbf, 0xb9, 0x43, 0x5f, 0x91, 0xbf, 0x16, 0xaf, 0x86, 0xce, 0xc3, 0x4c,
+	0x07, 0x77, 0x71, 0x88, 0x5b, 0xbb, 0x76, 0xfb, 0x60, 0xd0, 0x0f, 0x1a, 0x13, 0xeb, 0xda, 0xa5,
+	0xb2, 0x35, 0xcd, 0x4a, 0xb7, 0x58, 0x21, 0xba, 0x08, 0xb3, 0xbc, 0x9a, 0x8f, 0x83, 0xd0, 0xf3,
+	0x71, 0xd0, 0x98, 0xa4, 0xf5, 0x78, 0x6b, 0x8b, 0x97, 0xa2, 0xc7, 0x61, 0x9a, 0xfc, 0x3b, 0x68,
+	0xdd, 0xc7, 0x7e, 0xe0, 0x78, 0x6e, 0x63, 0x8a, 0x02, 0x5a, 0xa3, 0x85, 0xef, 0xb2, 0x32, 0xf4,
+	0x32, 0x2c, 0xa4, 0x27, 0xd4, 0xf2, 0xf1, 0x5e, 0xa3, 0x4c, 0x61, 0x06, 0x93, 0xed, 0x95, 0x85,
+	0xf7, 0x2c, 0x94, 0x9a, 0xa0, 0x85, 0xf7, 0xd0, 0x17, 0xa1, 0x6e, 0x77, 0x3a, 0x1c, 0xde, 0x56,
+	0x70, 0xcf, 0xf6, 0x71, 0xa3, 0x42, 0x5b, 0xd6, 0x4c, 0x06, 0xef, 0x0e, 0x29, 0xb3, 0x66, 0xec,
+	0x4e, 0x47, 0x78, 0x26, 0xed, 0x3a, 0xb8, 0x2b, 0xb7, 0x03, 0x55, 0xbb, 0x0e, 0xee, 0x8a, 0xed,
+	0xbe, 0x01, 0x0d, 0xb1, 0x4d, 0x8b, 0xad, 0x5c, 0xcb, 0x71, 0xf7, 0xbc, 0x46, 0x95, 0xb6, 0x37,
+	0xa4, 0x55, 0x16, 0xda, 0x0a, 0x0b, 0xbe, 0xb8, 0xab, 0x2a, 0x46, 0x97, 0xa0, 0xee, 0x7d, 0xe0,
+	0x62, 0xbf, 0xb5, 0xef, 0x7b, 0x83, 0x7e, 0xab, 0xeb, 0x04, 0x61, 0xa3, 0xb6, 0x5e, 0xbc, 0x54,
+	0xb1, 0x66, 0x68, 0xf9, 0x6b, 0xa4, 0xf8, 0xb6, 0x13, 0x84, 0xfa, 0xbf, 0xd7, 0x00, 0x84, 0x86,
+	0x5f, 0x8c, 0x77, 0x9a, 0x20, 0xe2, 0xcc, 0xc6, 0x5a, 0xce, 0x4e, 0xf3, 0xbf, 0xf1, 0x86, 0x2f,
+	0xc1, 0xa4, 0x8f, 0xed, 0xc0, 0x73, 0x19, 0x26, 0x5a, 0xfc, 0xc9, 0xd8, 0x87, 0x49, 0x56, 0x13,
+	0x55, 0x61, 0x6a, 0xdb, 0xbd, 0x6f, 0x77, 0x9d, 0x4e, 0xfd, 0x0c, 0x02, 0x98, 0xbc, 0xe3, 0x76,
+	0x1d, 0x17, 0xd7, 0x35, 0xf2, 0xe2, 0xce, 0xde, 0x1e, 0x7d, 0x28, 0xa0, 0x39, 0x98, 0xbe, 0x41,
+	0xb7, 0xfe, 0x2e, 0x76, 0x3b, 0x8e, 0xbb, 0x5f, 0x2f, 0x92, 0xf7, 0xd1, 0x43, 0x89, 0x34, 0xbc,
+	0x69, 0x3b, 0x5d, 0xdc, 0xa9, 0x4f, 0x90, 0x17, 0x3b, 0x83, 0x76, 0x1b, 0x07, 0x41, 0x7d, 0x52,
+	0xff, 0x0f, 0x1a, 0x2c, 0x2a, 0x97, 0x08, 0x6d, 0xa6, 0xa6, 0xf4, 0xe4, 0xe8, 0x65, 0x1d, 0x77,
+	0x76, 0x96, 0x7a, 0x76, 0x33, 0x00, 0xdb, 0xee, 0x5d, 0xdf, 0xdb, 0xf7, 0x09, 0x6c, 0x9a, 0x00,
+	0x74, 0x41, 0x04, 0xba, 0x88, 0x10, 0xcc, 0xdc, 0xb5, 0x7d, 0x82, 0x81, 0x51, 0x59, 0xc9, 0xf8,
+	0x9e, 0x06, 0xd3, 0x1c, 0xc0, 0x63, 0x30, 0x17, 0x74, 0x1d, 0xaa, 0xed, 0x64, 0x7a, 0x14, 0x5e,
+	0x82, 0x89, 0xc2, 0x94, 0xb7, 0xe6, 0x49, 0x93, 0x4f, 0x1e, 0x36, 0xa3, 0x8a, 0x04, 0xe5, 0x2c,
+	0xb1, 0x95, 0xf1, 0x0a, 0x94, 0x23, 0xfe, 0x83, 0x36, 0xa0, 0x66, 0x53, 0xd8, 0x5a, 0xa1, 0x77,
+	0x80, 0x5d, 0x0a, 0x41, 0x65, 0x6b, 0x96, 0xb4, 0x67, 0xe5, 0xb4, 0xd8, 0xe2, 0x0f, 0x6f, 0x93,
+	0x07, 0xe3, 0x01, 0x54, 0x36, 0xbf, 0xb6, 0xc3, 0x3b, 0x78, 0x1a, 0x80, 0x77, 0x70, 0x80, 0x0f,
+	0x79, 0xf3, 0xe9, 0x4f, 0x1e, 0x36, 0x2b, 0xac, 0xf4, 0x00, 0x1f, 0x5a, 0xfc, 0xef, 0xeb, 0xf8,
+	0x10, 0x7d, 0x19, 0x20, 0xc0, 0x6d, 0x1f, 0x87, 0xb4, 0x36, 0x63, 0x6b, 0x6b, 0xa4, 0x36, 0x2b,
+	0x3d, 0xc0, 0x87, 0x59, 0xae, 0xc6, 0xdf, 0xbd, 0x8e, 0x0f, 0x8d, 0x2d, 0xa8, 0x6c, 0x6f, 0xbd,
+	0xc1, 0x47, 0xbe, 0x0a, 0x53, 0x76, 0xdf, 0x11, 0x86, 0x5d, 0xf9, 0xe4, 0x61, 0x33, 0x2a, 0xca,
+	0x76, 0x33, 0x69, 0xf7, 0x1d, 0xd2, 0xc7, 0xbf, 0xd0, 0xa0, 0xbc, 0xf3, 0x1c, 0xef, 0x43, 0x87,
+	0x32, 0x76, 0x3b, 0x7d, 0xcf, 0x71, 0x43, 0xd6, 0x89, 0x15, 0x3f, 0x33, 0xb4, 0xd8, 0x77, 0x44,
+	0xb4, 0x20, 0x4f, 0xa8, 0x09, 0xd5, 0x8e, 0x13, 0xd8, 0xbb, 0x5d, 0xdc, 0x0a, 0x02, 0xc6, 0x54,
+	0xcb, 0x16, 0xf0, 0xa2, 0x9d, 0xa0, 0x8b, 0x9e, 0x06, 0x14, 0x55, 0xe8, 0xdb, 0xe1, 0xbd, 0x56,
+	0x10, 0x1e, 0x76, 0x31, 0xe5, 0xad, 0x65, 0xab, 0xce, 0xdf, 0xdc, 0xb5, 0xc3, 0x7b, 0x3b, 0xa4,
+	0x3c, 0x62, 0x7e, 0xf6, 0x3e, 0x6e, 0xb5, 0xbb, 0x76, 0xc0, 0x78, 0x29, 0x67, 0x7e, 0xf6, 0x3e,
+	0xbe, 0x4e, 0xca, 0x8c, 0xef, 0x16, 0xa1, 0xba, 0xf9, 0xe1, 0xc0, 0xc7, 0x1c, 0xee, 0xc7, 0xe8,
+	0xb6, 0x79, 0x03, 0x37, 0x6c, 0xb9, 0x76, 0x0f, 0x73, 0xd8, 0xab, 0xbc, 0xec, 0x4d, 0xbb, 0x87,
+	0xd1, 0x57, 0x21, 0x7a, 0x14, 0xd6, 0x9a, 0x8a, 0x10, 0x5e, 0xac, 0x5c, 0xa5, 0xe8, 0x25, 0xd9,
+	0xac, 0x9b, 0x30, 0xdd, 0xee, 0x3a, 0xd8, 0x0d, 0x5b, 0x6c, 0x07, 0x98, 0xfc, 0xd8, 0x7a, 0xec,
+	0x93, 0x87, 0xcd, 0x1a, 0x7b, 0xc1, 0xca, 0xb3, 0xbd, 0xf0, 0xd7, 0x3b, 0xf4, 0x35, 0xba, 0x06,
+	0x15, 0xde, 0x8f, 0xd3, 0xa1, 0xcb, 0x50, 0xd9, 0x5a, 0x25, 0x62, 0x8f, 0x15, 0x3a, 0x9d, 0x6c,
+	0x7b, 0xfe, 0x6a, 0xbb, 0x43, 0xda, 0x86, 0xd8, 0xb5, 0x59, 0xdb, 0x89, 0xa4, 0x2d, 0x2b, 0x54,
+	0xb6, 0x65, 0xaf, 0xb6, 0x3b, 0xe8, 0x36, 0xcc, 0x06, 0x83, 0xdd, 0xa0, 0xed, 0x3b, 0x54, 0xde,
+	0x93, 0x1e, 0x26, 0x69, 0x0f, 0x8f, 0x7f, 0xf2, 0xb0, 0x39, 0x23, 0xbe, 0x52, 0xf5, 0x23, 0x55,
+	0xd8, 0xee, 0x18, 0x7b, 0x50, 0x7b, 0x8d, 0xaa, 0x2d, 0x7c, 0x0b, 0x56, 0x01, 0xfa, 0xbe, 0x47,
+	0x48, 0x98, 0x74, 0xcc, 0x36, 0xa0, 0xc2, 0x4b, 0xb6, 0x3b, 0xe8, 0x05, 0x28, 0x7f, 0x2b, 0xf0,
+	0x5c, 0x61, 0xed, 0x29, 0x7a, 0x92, 0x32, 0xe5, 0xc2, 0xd3, 0x37, 0x04, 0x3f, 0xff, 0xac, 0x00,
+	0xf3, 0xd7, 0x65, 0x01, 0x46, 0x19, 0xdd, 0x33, 0x50, 0x0a, 0x0f, 0xfb, 0x98, 0xb3, 0xb9, 0xb3,
+	0xa6, 0xa2, 0x8e, 0xf9, 0xf6, 0x61, 0x1f, 0x5b, 0xb4, 0x1a, 0x7a, 0x0a, 0xc0, 0xfe, 0x20, 0x88,
+	0xf4, 0x8e, 0x0e, 0x17, 0x92, 0x31, 0xdd, 0xde, 0x3a, 0x63, 0x55, 0xec, 0x0f, 0x02, 0x3e, 0x97,
+	0x67, 0xa1, 0x66, 0x13, 0xec, 0x8a, 0xaa, 0x63, 0xce, 0x57, 0x04, 0x94, 0xbb, 0x75, 0xc6, 0xaa,
+	0xda, 0x02, 0x06, 0x3e, 0x0f, 0xd3, 0x4c, 0x8b, 0x8b, 0xda, 0xec, 0xd1, 0x36, 0xd3, 0xa6, 0xb8,
+	0x48, 0xb7, 0xce, 0x58, 0xb5, 0x7d, 0x71, 0xd1, 0x9e, 0x02, 0x70, 0x76, 0x7b, 0x51, 0x93, 0x7d,
+	0x0e, 0x55, 0x4c, 0xd3, 0x04, 0x2a, 0x67, 0xb7, 0xc7, 0x1e, 0x8c, 0x97, 0xa1, 0x44, 0x26, 0x24,
+	0x73, 0xdf, 0x29, 0x28, 0x6e, 0x7e, 0x6d, 0xa7, 0xae, 0xa1, 0x0a, 0x4c, 0x50, 0xf0, 0xea, 0x05,
+	0xc2, 0x81, 0xd9, 0xa8, 0xf5, 0x22, 0x79, 0xbf, 0xbd, 0xf5, 0x46, 0xbd, 0xb4, 0x55, 0x86, 0x49,
+	0x36, 0x8c, 0xf1, 0x07, 0x1a, 0x2c, 0xa6, 0x56, 0x8b, 0xf3, 0xde, 0x17, 0x86, 0xf1, 0xde, 0x3a,
+	0x67, 0xa4, 0x71, 0x15, 0x81, 0x0f, 0xdf, 0x82, 0xc5, 0x8c, 0x32, 0xe2, 0x24, 0x1c, 0x79, 0x41,
+	0xb5, 0x3b, 0xd6, 0x7c, 0x3b, 0x5b, 0x68, 0xfc, 0x5e, 0x19, 0xd0, 0x4e, 0xfb, 0x1e, 0xee, 0x0c,
+	0xba, 0xf8, 0xae, 0xd7, 0x75, 0xda, 0x87, 0x74, 0xb7, 0x5f, 0x81, 0xb2, 0xe3, 0x86, 0xd8, 0xbf,
+	0x6f, 0x77, 0x39, 0x64, 0x86, 0x99, 0xad, 0x66, 0x6e, 0xf3, 0x3a, 0xac, 0xc8, 0x8a, 0xdb, 0xa0,
+	0xab, 0x30, 0xd1, 0xb1, 0x9d, 0xee, 0x21, 0x07, 0xa8, 0xa9, 0x6a, 0x7c, 0x83, 0x54, 0xe0, 0x2d,
+	0x59, 0x6d, 0xf4, 0x22, 0x4c, 0x7e, 0x80, 0xf1, 0x41, 0xf7, 0x90, 0xd2, 0x7a, 0x75, 0x63, 0x5d,
+	0xd5, 0xee, 0x6b, 0xb4, 0x06, 0x6f, 0xc8, 0xeb, 0xa3, 0x97, 0x60, 0xaa, 0xe7, 0xb9, 0xe1, 0xbd,
+	0xee, 0x21, 0xd7, 0x22, 0x1f, 0x53, 0x35, 0x7d, 0x83, 0x55, 0xe1, 0x6d, 0xa3, 0x16, 0x44, 0x53,
+	0x8c, 0xb4, 0x25, 0xde, 0xa6, 0x31, 0xc1, 0xf4, 0x19, 0xae, 0x00, 0xf1, 0x52, 0x74, 0x01, 0x66,
+	0xf7, 0x3c, 0xbf, 0xe5, 0xd1, 0xed, 0x6b, 0x75, 0xbd, 0xf6, 0x01, 0x57, 0x29, 0xa7, 0xf7, 0x3c,
+	0x2e, 0x50, 0x6f, 0x7b, 0xed, 0x03, 0xc2, 0xa3, 0xed, 0x41, 0xe8, 0xb5, 0x98, 0xa2, 0x49, 0xf5,
+	0xc9, 0xb2, 0x05, 0xa4, 0x88, 0xe9, 0x1f, 0xfa, 0x73, 0x50, 0xdf, 0x76, 0xdb, 0x3e, 0xee, 0x61,
+	0x37, 0xb4, 0xbb, 0xd7, 0x09, 0xcb, 0x43, 0x4d, 0x98, 0xa0, 0xbc, 0x8f, 0x2e, 0x78, 0x69, 0xab,
+	0xf2, 0xc9, 0xc3, 0x26, 0x2b, 0xb0, 0xd8, 0x8f, 0xfe, 0x13, 0x0d, 0x66, 0xe4, 0x15, 0x47, 0x0d,
+	0x98, 0xea, 0x39, 0xee, 0x20, 0xc4, 0x4c, 0xff, 0x28, 0x5a, 0xd1, 0x23, 0x13, 0x1f, 0xa1, 0xed,
+	0x30, 0xf1, 0x51, 0xb4, 0xf8, 0x13, 0x7a, 0x0b, 0xe6, 0x9c, 0x64, 0xe4, 0x16, 0x1b, 0x91, 0xad,
+	0xf6, 0x13, 0xea, 0x2d, 0x96, 0xc1, 0xb4, 0xea, 0x4e, 0xaa, 0x44, 0xff, 0x5b, 0x1a, 0x54, 0x85,
+	0xcd, 0x44, 0x08, 0x4a, 0xc4, 0xa2, 0xe2, 0x4c, 0x89, 0xfe, 0x7f, 0x94, 0xe0, 0xfc, 0x7d, 0x0d,
+	0x6a, 0x22, 0x8e, 0xa0, 0x3a, 0x14, 0x3b, 0x36, 0x97, 0xd2, 0x16, 0xf9, 0x1b, 0x43, 0x58, 0x50,
+	0x42, 0x58, 0x1c, 0x0d, 0x61, 0xe9, 0x44, 0x10, 0xfe, 0x43, 0x0d, 0xa6, 0x25, 0x54, 0x24, 0x00,
+	0x75, 0xec, 0x10, 0xf3, 0x4d, 0xa4, 0xff, 0x3f, 0x63, 0x20, 0x8d, 0x9f, 0x69, 0xb0, 0x20, 0xb7,
+	0x3c, 0x29, 0xd7, 0x7a, 0x1d, 0x16, 0x22, 0xfa, 0x6a, 0xf5, 0x69, 0x8f, 0x22, 0xd3, 0x9a, 0x57,
+	0xc0, 0xc9, 0x15, 0x50, 0x14, 0x64, 0xde, 0x18, 0xff, 0xb6, 0x0e, 0x68, 0x4b, 0xa2, 0x4e, 0xca,
+	0xb8, 0x2e, 0xc2, 0x6c, 0x6a, 0x0c, 0xbe, 0xef, 0x33, 0x72, 0x1f, 0x84, 0x72, 0x82, 0x41, 0xd0,
+	0xc7, 0x6e, 0x87, 0x8e, 0x5f, 0xb6, 0xa2, 0x47, 0x74, 0x1b, 0x66, 0x7c, 0xdc, 0xee, 0xda, 0x4e,
+	0x2f, 0xea, 0xa1, 0x48, 0x65, 0xde, 0x79, 0x33, 0x3b, 0x9e, 0x69, 0xb1, 0x9a, 0xac, 0x53, 0x2a,
+	0xff, 0xa6, 0x7d, 0xb1, 0x08, 0xfd, 0x1a, 0x4c, 0x47, 0xbc, 0x25, 0x32, 0x72, 0x8b, 0x97, 0xaa,
+	0xea, 0xce, 0x78, 0x11, 0xad, 0xf7, 0xaa, 0x1b, 0xfa, 0x87, 0x56, 0x6d, 0x57, 0x28, 0x12, 0xf8,
+	0x54, 0xd7, 0x6b, 0x53, 0x0f, 0x01, 0xd7, 0xd6, 0x38, 0x9f, 0xba, 0xcd, 0x4b, 0xc9, 0xe4, 0xb8,
+	0xc6, 0xcd, 0x54, 0x0e, 0x2b, 0x7a, 0x44, 0x6b, 0x00, 0x44, 0x63, 0x0b, 0xfa, 0x76, 0x1b, 0x07,
+	0x8d, 0x29, 0xca, 0xe5, 0x84, 0x12, 0x74, 0x17, 0x66, 0xbb, 0xf6, 0x2e, 0xee, 0xb6, 0x02, 0xdc,
+	0xc5, 0xed, 0xd0, 0xf3, 0x83, 0x46, 0x99, 0x02, 0x7c, 0x51, 0x05, 0xf0, 0x6d, 0x52, 0x75, 0x27,
+	0xaa, 0xc9, 0x40, 0x9e, 0xe9, 0x4a, 0x85, 0xc8, 0x80, 0xe9, 0xbe, 0x8f, 0x5b, 0xf8, 0x01, 0x6e,
+	0xb7, 0x7c, 0xc2, 0x5a, 0x2b, 0x4c, 0x59, 0xec, 0xfb, 0xf8, 0xd5, 0x07, 0xb8, 0x6d, 0x11, 0xbe,
+	0xfa, 0x04, 0xcc, 0xf4, 0xbd, 0x20, 0x14, 0x2a, 0x01, 0xd3, 0x42, 0x49, 0x69, 0x5c, 0x2b, 0x6b,
+	0xf7, 0x57, 0x55, 0x76, 0x7f, 0x62, 0x65, 0xd6, 0x28, 0x62, 0xad, 0xa9, 0x20, 0x57, 0xb8, 0x15,
+	0xb6, 0xa0, 0xc6, 0x51, 0x00, 0x77, 0x5a, 0xbb, 0x87, 0x8d, 0x69, 0x2e, 0xba, 0x54, 0xad, 0xa3,
+	0x7a, 0x5b, 0x87, 0x56, 0x35, 0x48, 0x1e, 0xd0, 0x35, 0x4a, 0x87, 0xdd, 0x41, 0x87, 0x3a, 0x1d,
+	0xbc, 0x81, 0x4f, 0x56, 0x79, 0x86, 0x2e, 0xe0, 0xb4, 0x69, 0xf1, 0x12, 0x3a, 0x6a, 0x9d, 0xd7,
+	0x8b, 0x0a, 0x15, 0x6e, 0x88, 0x59, 0x85, 0x1b, 0xe2, 0x2a, 0x2c, 0xb7, 0x03, 0xa7, 0x15, 0xb8,
+	0x76, 0x3f, 0xb8, 0xe7, 0x85, 0x4c, 0x67, 0x67, 0x4a, 0x78, 0x9d, 0x56, 0x5f, 0x68, 0x07, 0xce,
+	0x0e, 0x7f, 0x4b, 0x95, 0x77, 0xaa, 0x8d, 0x9f, 0x27, 0x38, 0xcd, 0x06, 0x6a, 0x11, 0xfd, 0x2c,
+	0x68, 0xcc, 0xd1, 0xad, 0x9f, 0x8e, 0x4a, 0x09, 0xea, 0x06, 0xe8, 0x1a, 0xcc, 0xa7, 0x29, 0xd4,
+	0xc7, 0x7b, 0x0d, 0x94, 0xf1, 0x71, 0xcc, 0xc9, 0xd4, 0x64, 0xe1, 0x3d, 0xd2, 0x36, 0x85, 0x9c,
+	0xb4, 0xed, 0x7c, 0xb6, 0xad, 0x8c, 0xac, 0xa4, 0xed, 0x55, 0x98, 0x93, 0x70, 0x84, 0xb6, 0x5c,
+	0xc8, 0xb4, 0x9c, 0x11, 0x70, 0x86, 0x34, 0x7b, 0x01, 0x90, 0x8c, 0x36, 0xb4, 0xdd, 0x62, 0xa6,
+	0xdd, 0xac, 0x88, 0x46, 0xa4, 0xe1, 0x57, 0xa0, 0xca, 0x61, 0xa5, 0x3a, 0xed, 0x52, 0x3e, 0x9e,
+	0xb0, 0x22, 0x4a, 0xd8, 0xb0, 0x1b, 0xff, 0xd7, 0xdb, 0x30, 0x97, 0x21, 0x56, 0x22, 0x67, 0x62,
+	0x6b, 0xd0, 0x22, 0x7f, 0xd1, 0x8b, 0x30, 0x71, 0xdf, 0xee, 0x0e, 0x30, 0x67, 0x71, 0xc6, 0x70,
+	0x4c, 0xbc, 0xed, 0x04, 0xa1, 0xc5, 0x1a, 0x5c, 0x2b, 0xbc, 0xa8, 0xe9, 0x9b, 0x30, 0xaf, 0x20,
+	0x30, 0xc5, 0x30, 0x0b, 0xe2, 0x30, 0x15, 0xb1, 0x8b, 0x00, 0x20, 0x99, 0x01, 0x7a, 0x41, 0xd2,
+	0xe1, 0x1f, 0x1f, 0x3e, 0x5f, 0x41, 0x9b, 0x37, 0x9e, 0x56, 0xa9, 0xc2, 0x55, 0x98, 0x7a, 0x0d,
+	0xbb, 0xd8, 0x77, 0xda, 0xcc, 0x0b, 0xf1, 0xa6, 0xe7, 0xf7, 0xec, 0x6e, 0xbd, 0xa0, 0x7f, 0x57,
+	0x83, 0xaa, 0x40, 0x21, 0xe8, 0x15, 0x98, 0x64, 0x48, 0xc6, 0x07, 0xbe, 0x30, 0x82, 0xa4, 0xcc,
+	0x1d, 0x5a, 0xdb, 0xe2, 0xad, 0x8c, 0x67, 0x61, 0x92, 0x95, 0xc8, 0xe3, 0x97, 0xa1, 0xf4, 0x4e,
+	0x80, 0xfd, 0xba, 0x86, 0xea, 0x50, 0xbb, 0xed, 0xb4, 0xb1, 0x1b, 0xe0, 0xeb, 0xf7, 0x70, 0xfb,
+	0xa0, 0x5e, 0xd0, 0x6f, 0xc1, 0x8c, 0xbc, 0xae, 0x92, 0xef, 0xa9, 0x38, 0x3e, 0x57, 0xd0, 0x7f,
+	0x56, 0x94, 0x5c, 0x58, 0xcd, 0x18, 0x73, 0x04, 0xc3, 0x97, 0x63, 0x06, 0xa5, 0xb4, 0x97, 0xa0,
+	0xda, 0xf6, 0xb1, 0x1d, 0xe2, 0x56, 0x2c, 0xbc, 0xab, 0x1b, 0xba, 0xc9, 0xcc, 0x10, 0x33, 0x72,
+	0x24, 0x9b, 0x6f, 0x47, 0x2e, 0x67, 0x0b, 0x58, 0x75, 0x52, 0x40, 0x1a, 0xef, 0x39, 0xae, 0x13,
+	0xdc, 0x63, 0x8d, 0x8b, 0xa3, 0x1b, 0xb3, 0xea, 0xb4, 0xf1, 0x97, 0x25, 0x3f, 0x6a, 0x8e, 0xbc,
+	0x1a, 0xea, 0x86, 0xb2, 0x98, 0x1b, 0x8a, 0xc9, 0x14, 0xfe, 0x64, 0xfc, 0x54, 0x53, 0xfb, 0xa1,
+	0x04, 0xcf, 0x99, 0x96, 0x72, 0x4a, 0x51, 0x47, 0xd4, 0xe6, 0xae, 0xe7, 0x87, 0xb8, 0x53, 0x2f,
+	0x0a, 0x1e, 0xaa, 0x12, 0xaa, 0x41, 0x99, 0xaa, 0xc0, 0xa4, 0x99, 0xec, 0x64, 0x23, 0xaf, 0xae,
+	0xdb, 0xfd, 0x70, 0xe0, 0xe3, 0x4e, 0x7d, 0x4a, 0xe1, 0xbd, 0x2a, 0x67, 0xfd, 0x77, 0x15, 0xe3,
+	0x45, 0x98, 0xcb, 0x88, 0xe0, 0x8c, 0x37, 0x90, 0x35, 0x62, 0x58, 0x6a, 0x51, 0x85, 0xa9, 0x5e,
+	0xa0, 0xfa, 0x8d, 0xbc, 0x40, 0xa7, 0xa0, 0xdf, 0xa4, 0xcc, 0x08, 0x59, 0xbf, 0xc9, 0x6e, 0x47,
+	0xa4, 0xdf, 0xec, 0x66, 0xde, 0x18, 0xbf, 0x98, 0x88, 0xf4, 0x9b, 0x88, 0x51, 0x52, 0xfc, 0x7b,
+	0x5a, 0x22, 0xe1, 0x86, 0x99, 0xad, 0x22, 0x5a, 0xe1, 0x08, 0x4a, 0x7d, 0x3b, 0xbc, 0x17, 0xa9,
+	0x90, 0xe4, 0x3f, 0xda, 0x86, 0x19, 0xec, 0xb6, 0xfd, 0x43, 0xe6, 0x94, 0x20, 0x9c, 0x84, 0xf9,
+	0x55, 0x8c, 0x4f, 0x1e, 0x36, 0xa7, 0x93, 0x37, 0x4a, 0x2f, 0x81, 0xf0, 0xfe, 0x75, 0x7c, 0xa8,
+	0x74, 0xf2, 0x97, 0xd4, 0x4e, 0xfe, 0x84, 0xfc, 0x26, 0x24, 0x66, 0x2b, 0x41, 0x3e, 0x96, 0xaf,
+	0x7f, 0x52, 0x25, 0xf3, 0xaf, 0xc1, 0x59, 0xba, 0xdf, 0x84, 0xee, 0x32, 0x20, 0x31, 0xf3, 0x6b,
+	0x39, 0xaa, 0x90, 0xb2, 0x8d, 0x4f, 0xe8, 0xd9, 0xbf, 0x04, 0x95, 0xe0, 0x39, 0xd9, 0xcf, 0x51,
+	0x31, 0x23, 0x07, 0xdf, 0xad, 0x33, 0x56, 0x39, 0x88, 0x9c, 0x7d, 0x26, 0xcc, 0x0b, 0x86, 0x63,
+	0x0b, 0xbb, 0xf6, 0x6e, 0x17, 0x77, 0xa8, 0x3a, 0x54, 0xb6, 0xe6, 0xbc, 0xd8, 0x7a, 0x7c, 0x95,
+	0xbd, 0xd0, 0xff, 0xae, 0xec, 0x3c, 0xff, 0x72, 0xca, 0xd3, 0x7c, 0x7e, 0xf8, 0x0a, 0x8e, 0xeb,
+	0x65, 0x7e, 0x4e, 0x4d, 0xdd, 0x15, 0x98, 0x78, 0x97, 0xfe, 0xd5, 0xb2, 0x54, 0x57, 0x30, 0x36,
+	0x54, 0xf2, 0x60, 0x12, 0x0a, 0x3b, 0xcf, 0xe5, 0x7a, 0x46, 0x04, 0x87, 0xc8, 0xef, 0xc6, 0x94,
+	0x17, 0xc1, 0x7e, 0x52, 0xca, 0x7b, 0x35, 0xa6, 0xbc, 0x58, 0xf7, 0x50, 0x50, 0x9e, 0xb8, 0x52,
+	0x11, 0xcd, 0x89, 0x65, 0xc6, 0x6f, 0x6a, 0x50, 0x13, 0x95, 0x34, 0x42, 0x3f, 0x02, 0x9b, 0xa7,
+	0xff, 0xd1, 0x0a, 0x54, 0x62, 0x7d, 0x99, 0xaf, 0x65, 0x52, 0x40, 0x44, 0x31, 0x3d, 0x15, 0xe1,
+	0x87, 0x5d, 0xec, 0x81, 0xf4, 0x73, 0xe0, 0xb8, 0xdc, 0xfb, 0x68, 0xd1, 0xff, 0x44, 0x47, 0x8f,
+	0x14, 0x3d, 0xc6, 0x70, 0xa3, 0x47, 0xe3, 0x4f, 0xe7, 0x23, 0xa9, 0x1d, 0x99, 0x34, 0x69, 0xad,
+	0x5f, 0x1b, 0xa5, 0xf5, 0x17, 0x86, 0x69, 0xfd, 0xc5, 0x8c, 0xd6, 0x7f, 0x2b, 0xab, 0xf5, 0x33,
+	0x33, 0x25, 0xd2, 0x7e, 0xc7, 0xd6, 0xf6, 0xcd, 0x14, 0x9d, 0x2f, 0x89, 0x1d, 0x28, 0xe8, 0xfb,
+	0x29, 0xa8, 0x24, 0x8a, 0xf2, 0xa4, 0x4a, 0x51, 0x4e, 0xde, 0xa3, 0xa7, 0x61, 0xea, 0xbe, 0xd7,
+	0x1d, 0xf4, 0xb8, 0xe5, 0x52, 0xdd, 0x40, 0x62, 0xef, 0xef, 0xd2, 0x57, 0x56, 0x54, 0x45, 0x10,
+	0xd5, 0x94, 0x07, 0x96, 0x45, 0x51, 0x7d, 0x97, 0x70, 0xc2, 0x8b, 0x30, 0x11, 0x84, 0xf6, 0x3e,
+	0xb3, 0x48, 0x66, 0x36, 0xe6, 0x52, 0xa0, 0xee, 0x63, 0x8b, 0xbd, 0xcf, 0x9a, 0x30, 0x30, 0x8e,
+	0x09, 0x53, 0x55, 0x98, 0x30, 0xd7, 0xb3, 0x9e, 0xa6, 0x1a, 0x17, 0xf2, 0xc2, 0xe0, 0xb2, 0xa0,
+	0xc8, 0x78, 0xa1, 0x96, 0x61, 0xaa, 0xed, 0x33, 0xfd, 0x63, 0x9a, 0xd1, 0x72, 0xdb, 0xa7, 0xba,
+	0xc7, 0x2a, 0x40, 0xe8, 0x11, 0xfb, 0x3f, 0x70, 0x3e, 0xc4, 0x8d, 0x99, 0x75, 0xed, 0x52, 0xc9,
+	0xaa, 0xd0, 0x92, 0x1d, 0xe7, 0x43, 0xac, 0x64, 0xd7, 0xb3, 0x6a, 0x76, 0xad, 0xb4, 0x63, 0xea,
+	0xe3, 0xd9, 0x31, 0xa2, 0xad, 0xc1, 0x1c, 0x11, 0x73, 0x14, 0x92, 0xd8, 0xd6, 0x60, 0xee, 0xae,
+	0x8c, 0xb9, 0x83, 0x8e, 0x66, 0xee, 0xcc, 0x1f, 0xc9, 0xdc, 0x59, 0xc8, 0x31, 0x77, 0x54, 0x26,
+	0xcb, 0xe2, 0xb1, 0x4d, 0x96, 0xa5, 0x63, 0x9a, 0x2c, 0xcb, 0xa3, 0x4d, 0x96, 0x3c, 0x29, 0xd5,
+	0x18, 0x4b, 0x4a, 0xbd, 0x20, 0x1b, 0x3c, 0x67, 0xb3, 0xb4, 0xa9, 0x36, 0x74, 0xd0, 0x22, 0x4c,
+	0xb6, 0xfd, 0xd6, 0xc0, 0xe9, 0x34, 0x74, 0xc6, 0xd0, 0xda, 0xfe, 0x3b, 0x4e, 0x87, 0xa0, 0x92,
+	0x8f, 0x43, 0xd2, 0xbf, 0xe7, 0xb6, 0xfa, 0xd8, 0x77, 0xbc, 0x4e, 0xe3, 0x1c, 0xf5, 0x48, 0xcd,
+	0xc6, 0xe5, 0x77, 0x69, 0x31, 0xba, 0x02, 0x35, 0xe9, 0xf8, 0x7a, 0x45, 0x71, 0x7c, 0x5d, 0x15,
+	0x0e, 0x9a, 0xd1, 0x1d, 0x58, 0x1e, 0x04, 0xd8, 0x8f, 0x04, 0x3e, 0x3d, 0xbf, 0x66, 0x47, 0x78,
+	0x8d, 0x55, 0x4a, 0xa8, 0xcb, 0x62, 0x5b, 0x73, 0x93, 0x1d, 0x0d, 0x12, 0xc0, 0x17, 0x49, 0xbb,
+	0xad, 0xa4, 0x19, 0x7b, 0x75, 0x1a, 0x76, 0xd4, 0x81, 0x64, 0x47, 0x5d, 0x91, 0x94, 0xb0, 0x73,
+	0xea, 0x65, 0x3c, 0xbe, 0xfd, 0xf4, 0x45, 0x98, 0x91, 0x39, 0x00, 0x01, 0x75, 0x10, 0x9f, 0xf2,
+	0x90, 0xbf, 0xb1, 0x64, 0x2a, 0x24, 0x92, 0x49, 0xff, 0xed, 0x12, 0x4c, 0x32, 0x26, 0x78, 0x0c,
+	0xc1, 0x55, 0x87, 0x62, 0xff, 0x7e, 0x9b, 0x8b, 0x2d, 0xf2, 0x17, 0x9d, 0x83, 0x0a, 0xdf, 0xb8,
+	0xe8, 0xdc, 0xcc, 0x2a, 0xb3, 0x82, 0xed, 0xce, 0x91, 0xf9, 0x7c, 0x13, 0xaa, 0x1d, 0xdf, 0xb9,
+	0x8f, 0x39, 0xdf, 0x62, 0x5e, 0x29, 0x60, 0x45, 0x94, 0x64, 0x17, 0x60, 0xe2, 0x43, 0xcf, 0x8d,
+	0x7d, 0x52, 0xec, 0x01, 0x7d, 0x09, 0xa6, 0x78, 0xb4, 0x0c, 0x77, 0x43, 0x35, 0xb3, 0x1c, 0xdf,
+	0xbc, 0xc3, 0x6a, 0x30, 0x81, 0x14, 0xd5, 0x4f, 0x31, 0xc3, 0x4a, 0x9a, 0x19, 0x36, 0xa1, 0x6a,
+	0xb7, 0xc3, 0x41, 0xf4, 0x1e, 0xe8, 0x7b, 0x60, 0x45, 0xb4, 0x42, 0xe6, 0x60, 0xb4, 0x9a, 0x3d,
+	0x18, 0x25, 0xe4, 0xd1, 0xbf, 0xdf, 0x26, 0x0b, 0x54, 0x63, 0x28, 0xd3, 0xbf, 0xdf, 0xde, 0xee,
+	0xa0, 0x75, 0xa8, 0xf6, 0x7d, 0xef, 0xbe, 0x43, 0x78, 0x18, 0xf6, 0x39, 0x97, 0x16, 0x8b, 0xd0,
+	0x05, 0x98, 0xe1, 0x72, 0x8a, 0x33, 0x2f, 0xca, 0xae, 0x2b, 0x56, 0xaa, 0x54, 0xbf, 0x06, 0x35,
+	0x71, 0x7a, 0x47, 0x42, 0xda, 0xdf, 0x29, 0x48, 0x0a, 0xe4, 0xd5, 0x94, 0x02, 0xb9, 0xaa, 0xde,
+	0xb2, 0x71, 0x15, 0xc7, 0x3f, 0xfa, 0x3c, 0xdb, 0x85, 0x68, 0x09, 0x10, 0xd5, 0xf3, 0xd9, 0x14,
+	0xdf, 0x70, 0x82, 0x80, 0x94, 0x83, 0xe1, 0xc2, 0x04, 0x15, 0xed, 0x19, 0x98, 0xb7, 0x5d, 0x87,
+	0x74, 0x5a, 0xd7, 0xd0, 0x2c, 0x54, 0xef, 0x26, 0x4c, 0xbb, 0x5e, 0x40, 0x75, 0xa8, 0xdd, 0x15,
+	0xb8, 0x31, 0x8b, 0x1a, 0x61, 0xb8, 0x17, 0xd4, 0x4b, 0xe4, 0xf5, 0x66, 0xbf, 0xdf, 0x75, 0x98,
+	0x6c, 0x08, 0xea, 0x13, 0x44, 0x03, 0xbe, 0xe9, 0xb8, 0x76, 0xb7, 0x3e, 0x69, 0x78, 0x50, 0x63,
+	0x20, 0x1c, 0x27, 0xdc, 0x62, 0x23, 0xe6, 0xda, 0x82, 0x36, 0x5b, 0x15, 0xb6, 0x8d, 0xb7, 0xe0,
+	0x0c, 0x9b, 0xea, 0xb0, 0xff, 0xbb, 0x08, 0x15, 0x02, 0x25, 0xdb, 0xf3, 0x97, 0x60, 0x82, 0x08,
+	0x99, 0xc8, 0xe9, 0x31, 0x6f, 0xc6, 0xaf, 0xe8, 0xbf, 0xed, 0x10, 0xf7, 0xb6, 0xea, 0x9f, 0x3e,
+	0x6c, 0xd6, 0x0e, 0xed, 0x5e, 0xf7, 0x9a, 0x41, 0xeb, 0x1a, 0x16, 0x6b, 0xa3, 0xff, 0xa0, 0x00,
+	0xe5, 0xa8, 0x16, 0x6a, 0x41, 0xad, 0xef, 0x75, 0x62, 0x05, 0x91, 0x77, 0xf8, 0x84, 0xa2, 0x43,
+	0xf3, 0xae, 0xd7, 0x89, 0x58, 0x2d, 0x45, 0xda, 0xad, 0xa5, 0x4f, 0x1f, 0x36, 0x11, 0x1b, 0xa1,
+	0x9f, 0xbc, 0x33, 0xac, 0xaa, 0xf0, 0x84, 0xbe, 0x02, 0x53, 0x76, 0x9b, 0x91, 0x7a, 0x81, 0xf6,
+	0x3d, 0x27, 0xf4, 0xbd, 0x49, 0xdf, 0x6c, 0xa1, 0x4f, 0x1f, 0x36, 0x67, 0x58, 0x47, 0xbc, 0xae,
+	0x61, 0x45, 0xad, 0x08, 0x7f, 0x6b, 0x7b, 0x2e, 0xb1, 0xee, 0xb1, 0xcf, 0xf9, 0x58, 0x52, 0xa0,
+	0xbf, 0x02, 0xf5, 0x34, 0x5c, 0x47, 0x22, 0xa6, 0x9f, 0x6a, 0x30, 0xc9, 0xa0, 0x40, 0x57, 0x81,
+	0x2e, 0x38, 0x51, 0xed, 0x5d, 0xc6, 0x94, 0xcb, 0x5b, 0x8b, 0x9f, 0x3e, 0x6c, 0xce, 0x31, 0xc8,
+	0x92, 0x77, 0x86, 0x25, 0x54, 0x44, 0x37, 0x60, 0xce, 0x1f, 0x10, 0xc3, 0xa4, 0x45, 0x70, 0x91,
+	0x7a, 0x58, 0xf9, 0xd9, 0xc3, 0xd6, 0xd9, 0x4f, 0x1f, 0x36, 0x17, 0xa3, 0x2d, 0x70, 0xb7, 0xdd,
+	0x1d, 0x5a, 0xe1, 0xae, 0xd7, 0x31, 0xac, 0x19, 0xb9, 0x20, 0x81, 0xb0, 0x28, 0x40, 0x68, 0x7c,
+	0x0b, 0xc0, 0x4a, 0x3c, 0x18, 0x47, 0x42, 0xb2, 0x2b, 0x00, 0x74, 0xbb, 0x45, 0x1c, 0x83, 0x64,
+	0xe9, 0x79, 0xfd, 0x8a, 0x1f, 0x15, 0x18, 0x2f, 0xc3, 0xb4, 0x85, 0xfb, 0x5d, 0xbb, 0xcd, 0x9d,
+	0xbf, 0xc6, 0x53, 0x2a, 0xe9, 0x96, 0xb8, 0x5a, 0x34, 0xc1, 0x05, 0x53, 0x30, 0x7e, 0x77, 0x16,
+	0xaa, 0x3c, 0xf2, 0x8e, 0x62, 0xe8, 0x12, 0x4c, 0x32, 0xec, 0xe5, 0xdb, 0xc0, 0x9f, 0x54, 0x56,
+	0x4f, 0x41, 0x69, 0xf5, 0x6c, 0x67, 0x6d, 0x97, 0x22, 0xc5, 0x9f, 0x75, 0x53, 0x18, 0x67, 0x2c,
+	0xe3, 0xe5, 0x0e, 0xcc, 0xc5, 0x02, 0xb1, 0xd5, 0xb3, 0xfb, 0x7d, 0xc7, 0xdd, 0xe7, 0x86, 0x90,
+	0x21, 0x75, 0xf6, 0x66, 0x54, 0xeb, 0x0d, 0x56, 0x89, 0x75, 0x57, 0x77, 0x53, 0xc5, 0xe8, 0x1a,
+	0xd1, 0x43, 0xe9, 0x52, 0x45, 0x47, 0x49, 0x13, 0x94, 0xf5, 0xce, 0x9b, 0xd2, 0x0a, 0x9a, 0xd1,
+	0xc1, 0x91, 0x50, 0x26, 0x84, 0x45, 0x4e, 0xf2, 0xb0, 0x48, 0x11, 0x02, 0x85, 0x88, 0x7d, 0x49,
+	0x34, 0xa5, 0x98, 0x7d, 0xb4, 0x2a, 0xb5, 0xe1, 0xff, 0x3b, 0x91, 0xaa, 0x2e, 0x9a, 0x56, 0xcf,
+	0x24, 0xa6, 0x55, 0x39, 0x62, 0x15, 0x42, 0xd3, 0xb4, 0x6d, 0x25, 0x98, 0x9a, 0x15, 0xd9, 0xd4,
+	0x7c, 0x15, 0x9a, 0x91, 0xe5, 0xc0, 0x24, 0x31, 0xd5, 0x53, 0x25, 0x5d, 0x1c, 0xa8, 0x84, 0x5f,
+	0xe1, 0xd5, 0xee, 0xf0, 0x5a, 0x96, 0xa4, 0x9a, 0xcb, 0xd2, 0xbb, 0x9a, 0x96, 0xde, 0x4a, 0xfb,
+	0xa4, 0x76, 0x5c, 0xfb, 0x64, 0x7a, 0x2c, 0xfb, 0x64, 0x46, 0x61, 0x9f, 0xe4, 0x58, 0x10, 0xb3,
+	0xe3, 0x58, 0x10, 0xef, 0xc1, 0xa2, 0xa4, 0x60, 0xc4, 0x18, 0x57, 0xe7, 0x27, 0x84, 0xf2, 0x7e,
+	0x27, 0x5a, 0x87, 0x84, 0x74, 0xf3, 0x41, 0xf6, 0x0d, 0x7a, 0x12, 0xb8, 0x48, 0xa0, 0xd0, 0xcc,
+	0x65, 0xa0, 0xe1, 0x8a, 0x9d, 0x85, 0xf7, 0x4e, 0x43, 0x39, 0xbe, 0x0e, 0x8b, 0x4a, 0x82, 0x38,
+	0x52, 0x27, 0x37, 0xa1, 0x91, 0x37, 0xc7, 0x23, 0xf5, 0xf3, 0xaf, 0x35, 0xa8, 0xa7, 0x11, 0xfd,
+	0xb3, 0xf1, 0xe3, 0x1c, 0x99, 0x82, 0xf5, 0x1f, 0x15, 0x63, 0x05, 0x9e, 0xab, 0xe3, 0x5a, 0xa2,
+	0x8e, 0x3f, 0x09, 0x75, 0x8e, 0xb4, 0x69, 0xb0, 0x67, 0x59, 0x79, 0xbc, 0x07, 0x14, 0x75, 0x59,
+	0x55, 0x46, 0xaf, 0x7c, 0x12, 0x35, 0x56, 0xc8, 0x47, 0x60, 0x64, 0x40, 0xc0, 0x89, 0x6a, 0xb1,
+	0x59, 0x4d, 0xf3, 0x52, 0x5e, 0xed, 0x4a, 0x4a, 0xd1, 0x1f, 0xc9, 0x86, 0x8e, 0xa9, 0xe9, 0x5f,
+	0x4b, 0x6b, 0xfa, 0xeb, 0x0a, 0x06, 0x74, 0x2c, 0x55, 0xff, 0x44, 0x3a, 0xf4, 0x5f, 0x8c, 0x8a,
+	0x60, 0x56, 0xaf, 0xc6, 0xb8, 0x4a, 0xf4, 0xdf, 0x7c, 0x84, 0x4a, 0x34, 0x13, 0xc7, 0x79, 0x4a,
+	0xb4, 0x11, 0x10, 0xb1, 0x4e, 0xe7, 0x72, 0x1c, 0x2d, 0xe2, 0x2a, 0xd4, 0x22, 0x6c, 0x72, 0xc4,
+	0xd0, 0x60, 0x61, 0x79, 0x78, 0x9b, 0xaa, 0x9f, 0x14, 0x19, 0x8b, 0x30, 0x7f, 0x0b, 0xdb, 0xdd,
+	0xf0, 0x1e, 0x5f, 0x2f, 0xfc, 0xed, 0x01, 0x0e, 0x42, 0x63, 0x09, 0x16, 0xe4, 0xe2, 0xa0, 0xef,
+	0xb9, 0x01, 0x36, 0x3e, 0x82, 0xca, 0xdb, 0x4e, 0x0f, 0x5b, 0xb6, 0xbb, 0x8f, 0xd1, 0x97, 0x00,
+	0x82, 0xd0, 0xf6, 0xc3, 0x56, 0x1c, 0x6c, 0x34, 0xfc, 0xac, 0xac, 0x42, 0x6b, 0xd3, 0xa3, 0xb2,
+	0xab, 0x34, 0xee, 0x76, 0xdc, 0x13, 0xba, 0x29, 0xec, 0x76, 0xc8, 0x93, 0xf1, 0xfd, 0x22, 0xd4,
+	0x5f, 0x75, 0x07, 0x3d, 0xec, 0xdb, 0x21, 0x97, 0x5b, 0x01, 0x31, 0xab, 0xa8, 0x1a, 0x11, 0xe9,
+	0xd8, 0xab, 0x66, 0xba, 0x0a, 0xd3, 0x3d, 0x38, 0xd2, 0xf2, 0xca, 0x84, 0x4c, 0x7a, 0xf6, 0x03,
+	0x1e, 0x4a, 0x16, 0x50, 0x28, 0x4a, 0x16, 0xf4, 0xec, 0x07, 0x6c, 0xf5, 0x03, 0xc2, 0xc3, 0x09,
+	0x7c, 0x2d, 0x9f, 0x4c, 0x96, 0x1f, 0x05, 0x82, 0x19, 0x4f, 0xdf, 0xaa, 0x84, 0xf1, 0x4a, 0x34,
+	0xa1, 0x4a, 0x68, 0xad, 0xb5, 0xe7, 0x74, 0x89, 0x44, 0x66, 0x74, 0x4c, 0xfd, 0xbb, 0x37, 0x69,
+	0x09, 0x32, 0x61, 0x9e, 0xcb, 0xe7, 0x96, 0x58, 0x91, 0xf1, 0xab, 0x39, 0xfe, 0xea, 0xcd, 0xa4,
+	0xfe, 0x63, 0x50, 0xe3, 0x47, 0x15, 0x8e, 0xdb, 0xc1, 0x0f, 0x28, 0x11, 0x97, 0xac, 0x2a, 0x2b,
+	0xdb, 0x26, 0x45, 0xe8, 0x65, 0xd0, 0x23, 0x09, 0xdc, 0x21, 0x88, 0xd5, 0xc5, 0x9d, 0x96, 0xa8,
+	0x7e, 0x68, 0x97, 0xca, 0x56, 0x83, 0xd7, 0xb8, 0xc1, 0x2b, 0xc4, 0x32, 0x58, 0xff, 0x12, 0x54,
+	0x85, 0x45, 0x39, 0x0a, 0x45, 0x1a, 0x3f, 0xd4, 0xe0, 0x9c, 0x1c, 0x29, 0x74, 0x9d, 0x1e, 0xa0,
+	0x72, 0xdc, 0x41, 0xcf, 0x66, 0xd0, 0x76, 0xd6, 0x64, 0x35, 0x72, 0x91, 0xf7, 0xe5, 0x6c, 0xd0,
+	0x50, 0x7e, 0x4c, 0x52, 0x3a, 0x92, 0xc8, 0x58, 0x83, 0x15, 0x35, 0x3c, 0x1c, 0x69, 0xb3, 0x00,
+	0xbf, 0xd3, 0xef, 0x7c, 0xae, 0x00, 0x8e, 0xe0, 0xe1, 0x00, 0xff, 0x4b, 0x0d, 0xd6, 0xe4, 0x0a,
+	0x31, 0x46, 0x47, 0x30, 0x2f, 0xc2, 0xa4, 0xe7, 0xef, 0x27, 0x91, 0xc7, 0x13, 0x9e, 0xbf, 0xbf,
+	0xdd, 0x41, 0xd7, 0x63, 0x5a, 0x60, 0x26, 0xdc, 0x53, 0xe6, 0xf0, 0x7e, 0x54, 0x94, 0x71, 0x12,
+	0xdc, 0xc0, 0xd0, 0xcc, 0x1d, 0x90, 0x4d, 0x0e, 0x6d, 0xc1, 0x9c, 0xbc, 0x74, 0x4e, 0x6c, 0x1d,
+	0x2f, 0x9a, 0xaa, 0x78, 0x37, 0xab, 0x2e, 0x2d, 0x9f, 0x83, 0x03, 0xe3, 0x1b, 0xe9, 0x05, 0xdc,
+	0x76, 0x83, 0x3e, 0x55, 0xad, 0x86, 0xae, 0x8e, 0xc2, 0x67, 0x17, 0x79, 0xf6, 0x8a, 0xb1, 0x67,
+	0xcf, 0x68, 0xc1, 0x6a, 0x4e, 0xe7, 0x7c, 0x06, 0xaf, 0xa8, 0x43, 0xdc, 0x72, 0xe1, 0x4f, 0x6f,
+	0xff, 0xfb, 0x69, 0x74, 0xbc, 0xc1, 0xd3, 0xa1, 0x4e, 0x01, 0xf8, 0x0c, 0x6a, 0x45, 0x7d, 0x73,
+	0xd4, 0xfa, 0x6d, 0x0d, 0x9e, 0x48, 0x01, 0xf9, 0x81, 0x8b, 0xfd, 0xe0, 0x9e, 0xd3, 0x97, 0x89,
+	0xe2, 0x08, 0x50, 0x5c, 0x82, 0x8a, 0x17, 0x75, 0x12, 0xf3, 0xc9, 0xb8, 0x5b, 0x2b, 0x79, 0x19,
+	0xc1, 0x5b, 0x4a, 0xe0, 0xbd, 0x08, 0xe7, 0x47, 0x80, 0xc3, 0x01, 0xff, 0x71, 0x19, 0xce, 0xc9,
+	0x4e, 0xd9, 0x13, 0x73, 0x9d, 0x8b, 0x6a, 0x22, 0xce, 0x86, 0x2a, 0x9e, 0x6e, 0x40, 0xa2, 0xc2,
+	0xb0, 0x2e, 0x8d, 0x3a, 0x4e, 0x9c, 0x18, 0x76, 0x9c, 0x38, 0x99, 0x39, 0x4e, 0x7c, 0x2f, 0x6b,
+	0x92, 0x33, 0x7b, 0xf4, 0x0b, 0xe6, 0x90, 0x35, 0x3c, 0x5e, 0x34, 0x61, 0x79, 0x9c, 0xa3, 0xb8,
+	0x8a, 0xe2, 0x28, 0x4e, 0x69, 0x42, 0xc2, 0x78, 0x26, 0xe4, 0x90, 0x63, 0xa9, 0xea, 0x91, 0x8e,
+	0xa5, 0x6a, 0x47, 0x88, 0xc2, 0x9b, 0x3e, 0x41, 0x14, 0xde, 0xcc, 0xb1, 0x8f, 0xb4, 0x66, 0x8f,
+	0x79, 0xa4, 0x55, 0x1f, 0x7d, 0xa4, 0x75, 0x4b, 0x3e, 0x94, 0x9a, 0xa3, 0x48, 0x7d, 0x71, 0x28,
+	0x8a, 0xe4, 0x84, 0xe3, 0x9d, 0xdc, 0x88, 0x35, 0x36, 0xa4, 0x13, 0x9e, 0xb1, 0x0e, 0x6a, 0x08,
+	0xb7, 0x53, 0x03, 0xcb, 0x99, 0xc6, 0x6f, 0x4d, 0xa5, 0x99, 0xc6, 0x89, 0x25, 0xff, 0x5f, 0x31,
+	0x0d, 0x79, 0x0d, 0x1f, 0x31, 0xd3, 0x10, 0xa2, 0xc6, 0x41, 0x8e, 0x1a, 0x57, 0xb2, 0x93, 0xea,
+	0x89, 0xd9, 0x49, 0x6d, 0x08, 0x3b, 0xf9, 0x4b, 0xc2, 0x27, 0x4e, 0x83, 0xba, 0x33, 0x94, 0x9a,
+	0x12, 0xef, 0x3f, 0x2b, 0xc0, 0x9a, 0x5c, 0xe1, 0xf8, 0x2a, 0xef, 0xf0, 0x7e, 0x94, 0xc6, 0xa0,
+	0x82, 0xbc, 0x8a, 0x4a, 0xf2, 0xca, 0xd9, 0xb6, 0xd2, 0x18, 0xdb, 0x76, 0x12, 0xbd, 0xba, 0x0d,
+	0xcd, 0xdc, 0x59, 0x71, 0xad, 0xf4, 0xab, 0x50, 0x4f, 0x45, 0xb6, 0x24, 0x6a, 0xb5, 0x2a, 0xcc,
+	0xd2, 0x9a, 0x95, 0xa3, 0x5a, 0xa8, 0x56, 0x9d, 0x66, 0x4d, 0xa7, 0xaa, 0x55, 0xe7, 0x74, 0x9e,
+	0x68, 0xd5, 0xe9, 0xc8, 0x9c, 0x48, 0xab, 0x56, 0x82, 0x9f, 0x0a, 0xca, 0x31, 0xbe, 0xa7, 0xa5,
+	0x79, 0xfd, 0xb1, 0xd5, 0xea, 0x6c, 0xcc, 0x63, 0x51, 0x15, 0xf3, 0x98, 0xd5, 0x66, 0x33, 0x58,
+	0x9e, 0xd2, 0xbe, 0xff, 0x8b, 0x06, 0x4d, 0x9e, 0xab, 0x2d, 0x44, 0x50, 0x1c, 0x5b, 0xf1, 0x56,
+	0x5d, 0x6a, 0x50, 0x3c, 0xe6, 0xa5, 0x06, 0xa5, 0x31, 0x2e, 0x35, 0xe0, 0x13, 0x9e, 0x48, 0x26,
+	0x6c, 0xc0, 0x7a, 0xfe, 0x7c, 0xf8, 0xa4, 0xff, 0x69, 0x01, 0x16, 0x78, 0xa5, 0x13, 0xab, 0xec,
+	0xd2, 0x65, 0x1a, 0x85, 0xe3, 0x5d, 0xa6, 0x51, 0x3c, 0x9d, 0xcb, 0x34, 0x72, 0xe2, 0x6c, 0xf3,
+	0xc2, 0x84, 0x26, 0xc6, 0x09, 0x13, 0x32, 0x96, 0x61, 0x31, 0xb5, 0x54, 0xd9, 0x45, 0x3c, 0xb1,
+	0x0a, 0xf3, 0x97, 0x67, 0x11, 0x53, 0x98, 0xf8, 0x17, 0x05, 0x58, 0xe6, 0x6f, 0xc6, 0x95, 0x2e,
+	0x2f, 0xa7, 0xa4, 0xcb, 0x13, 0x66, 0x4e, 0x07, 0x79, 0x62, 0x25, 0xd2, 0x49, 0x58, 0xaa, 0x7c,
+	0xc4, 0x49, 0x66, 0x78, 0x31, 0xcb, 0x90, 0x0f, 0x1e, 0xd9, 0xda, 0xa0, 0xcb, 0x30, 0xe7, 0xb9,
+	0xdd, 0x43, 0x99, 0xf6, 0x59, 0x44, 0xf7, 0x2c, 0x79, 0x21, 0x90, 0xf1, 0x49, 0xe4, 0xd5, 0x4d,
+	0x68, 0x64, 0xd7, 0x89, 0x33, 0xfa, 0xcb, 0x50, 0xe6, 0x2a, 0x69, 0x24, 0xa0, 0x66, 0x4c, 0xe9,
+	0x4a, 0x0c, 0x2b, 0x7e, 0x6f, 0x1c, 0xc4, 0x5b, 0x79, 0x7c, 0x59, 0x34, 0xee, 0x26, 0x18, 0x5b,
+	0xb0, 0x94, 0x1e, 0x8c, 0x83, 0x7c, 0x29, 0x51, 0xaa, 0x19, 0x8d, 0xa5, 0x21, 0x8e, 0x5e, 0x1b,
+	0xbf, 0xa3, 0xc5, 0x74, 0xfa, 0xab, 0x16, 0x3f, 0x8a, 0xeb, 0x75, 0x4a, 0xaa, 0xeb, 0x75, 0x04,
+	0x7a, 0x48, 0x89, 0xa3, 0x1f, 0x6b, 0xb0, 0x92, 0x0a, 0xc6, 0x3f, 0x31, 0x87, 0xfe, 0x8a, 0x02,
+	0x93, 0x87, 0x25, 0xc5, 0xa7, 0xf1, 0xdb, 0xd8, 0x85, 0xd5, 0x1c, 0x98, 0xf8, 0x66, 0x6c, 0x2a,
+	0x46, 0xd0, 0x78, 0x0c, 0x9c, 0x32, 0xcd, 0x3f, 0x3b, 0x86, 0x62, 0xe2, 0x27, 0xe6, 0xaa, 0x27,
+	0x9e, 0x78, 0x33, 0x33, 0xf1, 0x14, 0xfb, 0xb2, 0x89, 0xf2, 0x20, 0x55, 0x18, 0x97, 0x8b, 0x29,
+	0x48, 0xa0, 0xa0, 0x24, 0x81, 0x7d, 0x22, 0xcf, 0xf3, 0x86, 0xe0, 0xeb, 0x7f, 0x1d, 0xe6, 0xd2,
+	0x13, 0x8d, 0x08, 0x39, 0x6f, 0x03, 0xea, 0xa9, 0xb9, 0x06, 0xc6, 0x5f, 0xd7, 0x32, 0xb3, 0xfd,
+	0xd5, 0x53, 0xb8, 0x42, 0x63, 0x6b, 0xc3, 0x5a, 0x1e, 0x18, 0xa7, 0x87, 0x6e, 0xdf, 0xc8, 0x60,
+	0xdb, 0x29, 0x7a, 0x7c, 0xb3, 0x68, 0x93, 0xa2, 0xf2, 0x1f, 0x6a, 0x70, 0x3e, 0x0d, 0xe8, 0x67,
+	0xea, 0xf3, 0xbd, 0x04, 0x17, 0x46, 0xc1, 0x23, 0x9c, 0xdc, 0xc8, 0xa9, 0x23, 0xa7, 0x71, 0xd4,
+	0xa4, 0x0a, 0x6b, 0xca, 0x49, 0x52, 0x49, 0x99, 0x7f, 0x89, 0x82, 0x9f, 0x86, 0x27, 0x17, 0xe0,
+	0xd3, 0x38, 0x6a, 0x3a, 0x4d, 0x80, 0x53, 0x2b, 0xfc, 0xa7, 0xb1, 0xdd, 0x1d, 0x55, 0x38, 0xa9,
+	0xdd, 0x9d, 0xd7, 0x8f, 0x52, 0x41, 0x3a, 0xc2, 0x2d, 0x75, 0x79, 0x7a, 0x4f, 0x69, 0x2c, 0xbd,
+	0x47, 0xc1, 0x22, 0x26, 0x54, 0x2c, 0xe2, 0x54, 0x8c, 0x74, 0xc5, 0x12, 0x64, 0x8c, 0xf4, 0x68,
+	0x33, 0xd3, 0x46, 0xba, 0x9c, 0x91, 0x15, 0x19, 0xe9, 0x51, 0x69, 0x60, 0xfc, 0xa6, 0x96, 0xde,
+	0xd1, 0x53, 0xb4, 0xd2, 0x55, 0xcb, 0x54, 0x52, 0x0a, 0x8a, 0xd8, 0x9c, 0xcf, 0x40, 0x91, 0x31,
+	0xe7, 0xa5, 0xa4, 0xa9, 0xdc, 0x89, 0xa6, 0x11, 0xf7, 0x7b, 0x19, 0x4a, 0xfa, 0x0c, 0xcd, 0xf9,
+	0x34, 0x08, 0x9c, 0x78, 0xbe, 0x99, 0x5e, 0x84, 0x77, 0x79, 0x86, 0xe3, 0xa9, 0x30, 0xf6, 0xf5,
+	0x34, 0x65, 0x26, 0xbd, 0x0b, 0x87, 0x79, 0xa9, 0xc5, 0xfc, 0xac, 0x0f, 0xf3, 0x46, 0x80, 0xc3,
+	0x01, 0x37, 0x61, 0xf1, 0x0d, 0x1c, 0xfa, 0x4e, 0x3b, 0x18, 0x0b, 0x79, 0x8d, 0xff, 0xa9, 0xc1,
+	0x52, 0xba, 0x01, 0xc7, 0xb3, 0xe7, 0x68, 0x0e, 0x59, 0x98, 0x04, 0x7f, 0xa8, 0xeb, 0xd1, 0x78,
+	0xa0, 0xc0, 0x62, 0x75, 0xf5, 0xdf, 0xd7, 0x68, 0x14, 0x7a, 0x28, 0xc5, 0x51, 0x6a, 0xb2, 0xbb,
+	0xfc, 0x3c, 0xcc, 0xb8, 0x83, 0x5e, 0x4b, 0x70, 0x99, 0xb3, 0x10, 0x91, 0x69, 0x77, 0xd0, 0x7b,
+	0x33, 0xf1, 0x9a, 0x5f, 0x86, 0x39, 0x16, 0xfa, 0x14, 0x59, 0x54, 0xce, 0x87, 0xcc, 0x09, 0x53,
+	0xb2, 0x66, 0xe9, 0x0b, 0x6e, 0x51, 0xf1, 0x8c, 0x06, 0xd2, 0x65, 0xe2, 0x9f, 0x2b, 0xd1, 0x7a,
+	0x35, 0x77, 0xd0, 0x4b, 0xbc, 0x70, 0x7f, 0x32, 0x09, 0xf3, 0xac, 0xcd, 0x69, 0x1c, 0x70, 0x8e,
+	0x17, 0xc2, 0x2b, 0xac, 0x42, 0x71, 0xd8, 0xa1, 0x41, 0x29, 0x73, 0x68, 0xf0, 0x56, 0xf6, 0xd0,
+	0x60, 0x82, 0x6e, 0xc4, 0x25, 0x53, 0x31, 0x89, 0xe3, 0x1d, 0x16, 0x4c, 0x8e, 0x73, 0x58, 0x30,
+	0x35, 0xee, 0x09, 0x63, 0xf9, 0xc4, 0x47, 0x02, 0x95, 0x23, 0x9d, 0x30, 0xc2, 0x11, 0x12, 0xdf,
+	0xaa, 0xc7, 0xf6, 0xfe, 0xd7, 0x8e, 0xe9, 0xfd, 0x9f, 0x1e, 0x7d, 0x4a, 0xf8, 0x55, 0xf9, 0x94,
+	0x70, 0x86, 0x9e, 0x62, 0x35, 0x95, 0xdb, 0xfb, 0xf9, 0x3a, 0x1d, 0x5c, 0x8a, 0xb2, 0x9c, 0x53,
+	0x4a, 0xda, 0x3f, 0xd7, 0x22, 0x0a, 0x3b, 0xb1, 0x72, 0xf6, 0x64, 0x8e, 0xd1, 0x77, 0x04, 0xfd,
+	0xa5, 0x38, 0x96, 0x4f, 0x2b, 0x9e, 0x4b, 0x8a, 0x93, 0x0e, 0x60, 0x89, 0x95, 0x8f, 0xab, 0xb6,
+	0xdd, 0x80, 0x39, 0x1c, 0x55, 0x6d, 0x45, 0x01, 0x9f, 0x4c, 0xa1, 0x9c, 0xcb, 0x04, 0xce, 0xf1,
+	0xf9, 0xd6, 0x71, 0xaa, 0xdc, 0xf8, 0x6b, 0xb0, 0x9c, 0x19, 0x96, 0x33, 0xe4, 0x8b, 0x30, 0x15,
+	0x89, 0x59, 0x8d, 0x93, 0x9a, 0x98, 0x80, 0x63, 0x45, 0x6f, 0x51, 0x13, 0xaa, 0x8c, 0x73, 0xb2,
+	0x18, 0x70, 0x1e, 0x80, 0x47, 0x8b, 0x58, 0x00, 0xb8, 0x0e, 0xe5, 0xb6, 0xd7, 0xeb, 0xd3, 0x1b,
+	0xdc, 0x98, 0xc4, 0x8e, 0x9f, 0x8d, 0x9d, 0x68, 0x3d, 0x52, 0x02, 0x44, 0x15, 0x68, 0x9c, 0xac,
+	0x44, 0x41, 0x5c, 0x89, 0xac, 0xfc, 0x7a, 0x25, 0xba, 0x64, 0x36, 0x2d, 0x64, 0xce, 0x4b, 0x39,
+	0x12, 0x99, 0x29, 0xf1, 0x97, 0x46, 0x37, 0xc2, 0x2b, 0x59, 0x55, 0x39, 0x02, 0x4c, 0xf9, 0x8c,
+	0x38, 0x0b, 0x6d, 0x8c, 0x12, 0x29, 0xad, 0xe4, 0xb7, 0x34, 0x68, 0x9c, 0xc6, 0xe9, 0x82, 0x19,
+	0xd1, 0x7d, 0xfe, 0xc1, 0x82, 0x58, 0x41, 0x01, 0xe1, 0x39, 0x38, 0x9b, 0x7f, 0x2c, 0xf0, 0x87,
+	0x13, 0xb0, 0xc0, 0x5d, 0x54, 0x27, 0x16, 0x74, 0x49, 0x0e, 0x4b, 0x41, 0xca, 0x61, 0xc9, 0x5f,
+	0xce, 0xaf, 0xe7, 0x67, 0x9a, 0x3c, 0x65, 0xaa, 0xc0, 0x7a, 0x24, 0x29, 0x27, 0x63, 0xe4, 0x6e,
+	0x4c, 0x8e, 0x91, 0xbb, 0xa1, 0x94, 0x7b, 0x53, 0xe3, 0xc9, 0xbd, 0xdd, 0xbc, 0xa4, 0x08, 0x26,
+	0x37, 0x4d, 0xf5, 0xe2, 0x9c, 0x24, 0x3b, 0xa2, 0x32, 0x2c, 0x3b, 0xe2, 0xf3, 0x94, 0xda, 0x60,
+	0x2c, 0xc3, 0x62, 0x6a, 0xf6, 0x1c, 0x97, 0xb7, 0x63, 0x54, 0x3e, 0xa9, 0x44, 0x11, 0xc6, 0x48,
+	0xd1, 0xcb, 0x7d, 0x58, 0xe6, 0x2f, 0x1e, 0x2d, 0xab, 0xff, 0x0d, 0x0d, 0x1a, 0xd9, 0x81, 0x13,
+	0x5f, 0x7e, 0xec, 0x7c, 0x8e, 0x7c, 0xf9, 0x52, 0x10, 0xbb, 0x15, 0xbf, 0x3f, 0x19, 0xbf, 0xdf,
+	0x8a, 0x97, 0xe5, 0xd8, 0xe6, 0xae, 0xb1, 0x05, 0x4b, 0xe9, 0x3e, 0x12, 0xff, 0x3e, 0x07, 0x33,
+	0xf6, 0xef, 0xcb, 0xb3, 0x88, 0x5e, 0x1b, 0x9b, 0xf1, 0x4e, 0x1f, 0xd7, 0x1c, 0x15, 0x76, 0x38,
+	0xc5, 0xb8, 0xdf, 0x84, 0xb3, 0xe2, 0xc7, 0x07, 0x4e, 0xca, 0x15, 0x8d, 0x15, 0xd0, 0x55, 0xfd,
+	0xf1, 0xd1, 0xd6, 0x60, 0x45, 0x7c, 0x9b, 0x46, 0x2a, 0xe3, 0x7d, 0x58, 0xcd, 0x79, 0xcf, 0x17,
+	0xed, 0x4b, 0x30, 0xed, 0x09, 0x15, 0x92, 0x14, 0xd7, 0xec, 0x17, 0x14, 0x2c, 0xb9, 0xa6, 0xf1,
+	0x05, 0x19, 0xb2, 0x1c, 0x19, 0x2e, 0x2e, 0xda, 0xbb, 0x70, 0x4e, 0xd9, 0x82, 0xc3, 0xf2, 0x02,
+	0xd4, 0xc4, 0x11, 0xf8, 0x0a, 0x29, 0x41, 0x91, 0x2a, 0x1a, 0xdf, 0x86, 0x39, 0xeb, 0x34, 0x62,
+	0x49, 0x9f, 0x1c, 0x9e, 0xc4, 0x29, 0xa6, 0x6f, 0x2e, 0x00, 0xb2, 0xb2, 0xa1, 0x6a, 0x1c, 0x90,
+	0x53, 0xd0, 0x48, 0x8f, 0x0a, 0x48, 0x8a, 0xcf, 0x3c, 0x03, 0x0b, 0xd6, 0xf8, 0xe1, 0x37, 0xc6,
+	0x35, 0x58, 0xb4, 0x94, 0xf1, 0x28, 0x8f, 0xc9, 0x99, 0xcf, 0x55, 0x33, 0xc9, 0x8f, 0xe5, 0xf9,
+	0xcd, 0xc6, 0x5b, 0x0c, 0x80, 0xd3, 0x0c, 0x33, 0xf9, 0x22, 0xcc, 0x5b, 0x8a, 0xe0, 0x92, 0x26,
+	0x94, 0xfc, 0x24, 0xa2, 0x44, 0x82, 0x85, 0xbe, 0x30, 0xee, 0xb2, 0xe5, 0x3f, 0x45, 0xbf, 0x3c,
+	0x5f, 0xdd, 0x14, 0x8d, 0xff, 0x86, 0x06, 0x3a, 0x1d, 0xfc, 0x33, 0x75, 0xd4, 0xac, 0xc2, 0x39,
+	0x25, 0x10, 0x1c, 0xc8, 0x7f, 0xac, 0x41, 0x95, 0x27, 0x58, 0xd2, 0xa4, 0xab, 0x05, 0x98, 0xe8,
+	0xd9, 0xdf, 0xf2, 0x22, 0x17, 0x09, 0x7b, 0xa0, 0xa5, 0x8e, 0xeb, 0x45, 0x77, 0x1d, 0xb1, 0x07,
+	0x52, 0xda, 0xb7, 0xc3, 0xf6, 0xbd, 0x28, 0x6f, 0x8f, 0x3e, 0x50, 0x45, 0xec, 0x9e, 0xed, 0xee,
+	0x73, 0x9f, 0x07, 0x51, 0xc4, 0xd8, 0x23, 0x5a, 0x05, 0xd8, 0x77, 0xc2, 0x56, 0xdb, 0xeb, 0xf5,
+	0x9c, 0x90, 0x87, 0x96, 0x54, 0xf6, 0x9d, 0xf0, 0x3a, 0x2d, 0x20, 0xaf, 0x77, 0x07, 0x4e, 0xb7,
+	0xd3, 0xa2, 0xb7, 0xf3, 0x32, 0x4f, 0x40, 0x85, 0x96, 0xdc, 0xb0, 0x43, 0x6c, 0xcc, 0xc3, 0x1c,
+	0x07, 0xf4, 0x35, 0x1c, 0x21, 0x90, 0xf1, 0x32, 0x20, 0xb1, 0x90, 0xa3, 0xc0, 0x85, 0x24, 0x4d,
+	0x50, 0xe3, 0xaa, 0xac, 0x30, 0xc7, 0xe4, 0xf2, 0xa7, 0x1f, 0x14, 0x60, 0x89, 0x5f, 0x66, 0xb8,
+	0xd9, 0x0e, 0x9d, 0xfb, 0x27, 0x23, 0xc7, 0xf3, 0x30, 0x6d, 0xb3, 0x5e, 0xf8, 0x0d, 0xf4, 0x74,
+	0xb1, 0x6e, 0x9d, 0xb1, 0x6a, 0x49, 0xf1, 0x76, 0x07, 0x3d, 0x0e, 0xb5, 0x2e, 0x1b, 0xb3, 0x45,
+	0x7b, 0x27, 0x8b, 0x57, 0xbb, 0x75, 0xc6, 0xaa, 0xf2, 0xd2, 0x1b, 0xa4, 0xaf, 0x0b, 0x30, 0x33,
+	0x08, 0x88, 0x62, 0xb6, 0x6b, 0x07, 0xb8, 0x13, 0x5f, 0x0a, 0x42, 0x3a, 0xa3, 0xe5, 0x5b, 0xa4,
+	0x78, 0xbb, 0x83, 0x5e, 0x82, 0xb3, 0xf4, 0xb9, 0xc3, 0x2b, 0xda, 0x8e, 0xbf, 0x6f, 0xf7, 0xfb,
+	0xac, 0xc9, 0x04, 0x6f, 0xb2, 0xc4, 0xaa, 0xd0, 0x36, 0x9b, 0x51, 0x85, 0xed, 0xce, 0x56, 0x0d,
+	0x20, 0x81, 0xcc, 0x38, 0x0b, 0xcb, 0x99, 0xb5, 0xe0, 0x48, 0xe2, 0xc1, 0x02, 0x7f, 0x75, 0x62,
+	0x9e, 0xf5, 0x44, 0x66, 0x62, 0x0c, 0xa5, 0xa4, 0x69, 0x11, 0xb9, 0x99, 0x1a, 0x30, 0xf1, 0x26,
+	0xf2, 0x17, 0xe3, 0x79, 0x13, 0xdf, 0x8f, 0x37, 0x38, 0xcd, 0x26, 0xbe, 0x0a, 0x73, 0xd1, 0x36,
+	0xf8, 0x38, 0xe0, 0xb7, 0x3e, 0x68, 0xfc, 0x10, 0x97, 0xb7, 0x89, 0x2a, 0xb3, 0x43, 0xdc, 0x6e,
+	0x52, 0x48, 0x79, 0xea, 0x8f, 0x4a, 0x30, 0xaf, 0xa8, 0x88, 0xae, 0x43, 0x6d, 0x0f, 0xdb, 0xe1,
+	0x20, 0x4a, 0xcf, 0xd3, 0x78, 0x8a, 0xa5, 0xa2, 0xae, 0x79, 0x93, 0x55, 0xa4, 0x03, 0x54, 0xf7,
+	0x92, 0x07, 0xf4, 0x5c, 0x9c, 0xfc, 0xc8, 0xf8, 0xfa, 0x39, 0x65, 0x73, 0x39, 0xf3, 0x51, 0xff,
+	0xa1, 0x06, 0x55, 0xa1, 0x47, 0xa5, 0x35, 0x4a, 0x35, 0x2f, 0x37, 0x18, 0xf4, 0x70, 0x87, 0x5f,
+	0x0f, 0x1e, 0x3f, 0xa3, 0x3b, 0x50, 0xc7, 0x6e, 0xe8, 0x84, 0x5d, 0x7a, 0x39, 0x35, 0x83, 0xbe,
+	0xc8, 0x63, 0x61, 0x54, 0xc3, 0xbf, 0x9a, 0x54, 0x66, 0x4b, 0x84, 0xe5, 0x02, 0xfd, 0x8f, 0x34,
+	0x98, 0x4d, 0x55, 0x22, 0x5c, 0x23, 0xb9, 0x7a, 0xbd, 0xc8, 0xef, 0x5b, 0x47, 0xcf, 0xc3, 0x14,
+	0x7e, 0xd0, 0x77, 0x7c, 0x1c, 0x8c, 0x71, 0x13, 0x67, 0x54, 0x15, 0x6d, 0xd0, 0x55, 0xf2, 0xc3,
+	0xe8, 0x73, 0x46, 0xc3, 0x1a, 0xf1, 0x9a, 0x68, 0x9d, 0x5f, 0x28, 0xc4, 0x4c, 0xb5, 0x5a, 0x34,
+	0xb1, 0xe4, 0x06, 0x21, 0xfd, 0xc5, 0x38, 0x4f, 0x74, 0x49, 0x4a, 0x41, 0xad, 0x8c, 0x4c, 0x31,
+	0xfd, 0x81, 0x06, 0xe7, 0x22, 0xc4, 0x25, 0xf8, 0x1c, 0x53, 0xdb, 0x71, 0xd2, 0x3c, 0x57, 0x01,
+	0x5c, 0xaf, 0x83, 0x05, 0x1d, 0xba, 0x68, 0x55, 0x48, 0x49, 0x74, 0x85, 0x7d, 0xd5, 0xc7, 0x7d,
+	0x2f, 0xca, 0xc9, 0x64, 0x77, 0x94, 0x03, 0x2b, 0xa2, 0x19, 0x94, 0x87, 0xb0, 0xa2, 0x84, 0x65,
+	0x84, 0x00, 0x4a, 0xe7, 0x23, 0x16, 0xb2, 0xf9, 0x88, 0xa9, 0x7c, 0xca, 0x62, 0x3a, 0x9f, 0xd2,
+	0xf8, 0x43, 0x0d, 0x56, 0x73, 0xc6, 0xe6, 0xe4, 0x67, 0xc1, 0x62, 0x57, 0x55, 0x81, 0x53, 0xcb,
+	0x8a, 0x39, 0x64, 0x19, 0x2d, 0x75, 0x53, 0xc9, 0xa8, 0x28, 0xc8, 0x46, 0x45, 0xda, 0x22, 0x29,
+	0xa6, 0x2d, 0x12, 0xe3, 0xf7, 0x26, 0x60, 0xed, 0x0d, 0xdb, 0x25, 0x8c, 0xf2, 0x88, 0x71, 0x63,
+	0x57, 0x73, 0xa3, 0x41, 0x24, 0x5f, 0x6b, 0xda, 0x49, 0x38, 0x76, 0x24, 0x03, 0x5f, 0x6d, 0x1f,
+	0x07, 0x83, 0x2e, 0xc7, 0xf4, 0x22, 0x5d, 0x6d, 0x8b, 0x95, 0xa0, 0x1b, 0x50, 0xa6, 0xd7, 0x1d,
+	0x75, 0x78, 0x22, 0xc0, 0xcc, 0xc6, 0x25, 0x73, 0xf8, 0x54, 0xcc, 0xbb, 0xbc, 0xbe, 0x15, 0xb7,
+	0x44, 0xbf, 0xa6, 0xf8, 0x8a, 0xc8, 0x93, 0xa3, 0xfa, 0xc9, 0xf9, 0xc8, 0xc8, 0x4e, 0xfa, 0x8b,
+	0x21, 0xec, 0x2b, 0x23, 0x4f, 0x8f, 0xea, 0x6e, 0xe8, 0x07, 0x45, 0xee, 0xa6, 0xbe, 0x5c, 0xc2,
+	0xbe, 0x42, 0xf2, 0xd4, 0x48, 0x10, 0x73, 0x3f, 0x6c, 0xa2, 0x6f, 0x89, 0x5f, 0x37, 0x4a, 0xbe,
+	0x01, 0xa4, 0x49, 0xdf, 0x00, 0x22, 0x64, 0x88, 0x1f, 0x84, 0xfc, 0xa3, 0x49, 0xd1, 0xe5, 0x05,
+	0xf8, 0x41, 0x48, 0xbf, 0x90, 0xa4, 0xcf, 0xc8, 0xdf, 0x8a, 0xd1, 0xa7, 0xa5, 0xaf, 0xf7, 0x18,
+	0x2f, 0x40, 0x39, 0x5a, 0xeb, 0x23, 0x7d, 0xdc, 0x64, 0xab, 0x0c, 0x93, 0xbc, 0x8b, 0x3f, 0x2e,
+	0xc0, 0x82, 0x3c, 0x47, 0xce, 0x4d, 0x54, 0xec, 0x9d, 0x2b, 0x80, 0x85, 0xe4, 0x9c, 0xf7, 0x6a,
+	0xce, 0xb9, 0xfb, 0x08, 0xf4, 0x94, 0x63, 0x40, 0x4b, 0x47, 0x8f, 0x01, 0x6d, 0x42, 0xf5, 0xe0,
+	0xc5, 0xa0, 0x25, 0xdf, 0xd7, 0x00, 0x07, 0x2f, 0x06, 0xd1, 0x7d, 0x1e, 0xcf, 0x4b, 0x57, 0x36,
+	0xcc, 0x6c, 0xac, 0x98, 0xaa, 0x59, 0xa6, 0x64, 0x9c, 0x61, 0xaa, 0x93, 0xf8, 0x6b, 0x50, 0x7e,
+	0xd3, 0x0b, 0x37, 0x3b, 0x1d, 0xdc, 0xe1, 0x6b, 0x4a, 0xff, 0x16, 0x8c, 0xbf, 0x57, 0x82, 0x66,
+	0x2e, 0x86, 0x70, 0x66, 0x74, 0x45, 0x3c, 0x19, 0x64, 0x27, 0xf4, 0x2a, 0x50, 0xc4, 0x8b, 0x57,
+	0x12, 0x8a, 0x2b, 0xf0, 0x6f, 0x91, 0x8d, 0x18, 0x44, 0x45, 0x72, 0xaf, 0x2b, 0x48, 0xee, 0xf2,
+	0xc8, 0x8e, 0x72, 0x68, 0xee, 0x6d, 0x35, 0xcd, 0x3d, 0x33, 0xb2, 0xbf, 0xa1, 0x44, 0xf7, 0x96,
+	0x92, 0xe8, 0x9e, 0x1e, 0x0d, 0x64, 0x3e, 0xd5, 0x5d, 0x16, 0xa9, 0x4e, 0xa6, 0x2e, 0xed, 0xd1,
+	0x53, 0xd7, 0x9f, 0x97, 0x60, 0x45, 0x9e, 0xcc, 0xf1, 0x6d, 0xd4, 0x63, 0x92, 0xda, 0xb8, 0x91,
+	0x18, 0x68, 0x2b, 0xc3, 0xe8, 0x2f, 0x98, 0xc3, 0x60, 0x57, 0xe1, 0xdc, 0x2d, 0x05, 0xce, 0x5d,
+	0x1c, 0xde, 0x4b, 0x0e, 0xc2, 0xbd, 0xa5, 0x46, 0xb8, 0xcb, 0xc3, 0x3b, 0x1b, 0x8a, 0x6d, 0x6f,
+	0x2a, 0xb1, 0xed, 0xc9, 0x11, 0xe0, 0xe5, 0xa3, 0xda, 0xe3, 0x63, 0x30, 0xf8, 0x47, 0x80, 0x63,
+	0x77, 0x61, 0x35, 0x67, 0x06, 0x2a, 0x06, 0xa4, 0x8d, 0x66, 0x40, 0xc6, 0x9f, 0x64, 0xb0, 0x76,
+	0x6b, 0xd0, 0x3d, 0xd8, 0xec, 0x74, 0x7e, 0x35, 0xba, 0xca, 0x63, 0x50, 0x13, 0xef, 0xb4, 0xe0,
+	0xb7, 0x1a, 0x57, 0x85, 0xcb, 0x2c, 0x24, 0xdc, 0x2c, 0x29, 0x71, 0x53, 0x86, 0xf0, 0xb8, 0xb8,
+	0x99, 0xea, 0xe5, 0x64, 0xb8, 0x99, 0xea, 0xec, 0x14, 0x70, 0x33, 0x0d, 0xde, 0xe7, 0x1e, 0x37,
+	0x9b, 0x69, 0xdc, 0x8c, 0x67, 0xc0, 0x4d, 0xee, 0xef, 0x16, 0xa0, 0x41, 0x3d, 0x02, 0x4e, 0x38,
+	0xf6, 0xdd, 0x14, 0xf4, 0x13, 0x4b, 0x87, 0xcc, 0x76, 0x9d, 0xb0, 0xe8, 0x7f, 0xe9, 0x33, 0x67,
+	0x2c, 0x3d, 0xd6, 0x30, 0xf3, 0xfa, 0x8d, 0x3f, 0x76, 0x26, 0x7c, 0xe6, 0xec, 0x1c, 0xd0, 0x5b,
+	0x58, 0x5a, 0x1f, 0x7a, 0x6e, 0x74, 0x7d, 0x52, 0x99, 0x14, 0xbc, 0xef, 0xb9, 0x78, 0x48, 0x2a,
+	0x6c, 0x74, 0x8d, 0xd4, 0x64, 0x72, 0x8d, 0x94, 0x61, 0x42, 0x39, 0x1a, 0x20, 0x73, 0x91, 0xde,
+	0x2d, 0x6f, 0xe0, 0x77, 0x0f, 0xd9, 0xca, 0xd1, 0x0f, 0x6d, 0xd5, 0x0b, 0xc6, 0xff, 0x29, 0xc0,
+	0x59, 0x05, 0xa8, 0x9c, 0x78, 0x6f, 0x70, 0xbf, 0x8f, 0x13, 0x1e, 0xb6, 0xb8, 0x65, 0xc7, 0x6e,
+	0x4f, 0xcd, 0x6d, 0x62, 0xde, 0xb0, 0x43, 0x9b, 0xbb, 0x85, 0x9c, 0xf0, 0x90, 0x3c, 0xe9, 0x3f,
+	0x2a, 0x40, 0x89, 0xba, 0x7e, 0x1e, 0xf9, 0x55, 0x3b, 0x68, 0x0d, 0x20, 0x60, 0x57, 0x13, 0xed,
+	0x0d, 0xba, 0x91, 0x69, 0x94, 0x94, 0x10, 0xe4, 0xdc, 0xa3, 0x77, 0xca, 0xf0, 0x20, 0x26, 0xfe,
+	0x44, 0x34, 0x3c, 0xc7, 0x6d, 0xf5, 0xf9, 0x65, 0x49, 0x74, 0xe1, 0x4b, 0x16, 0x38, 0xf1, 0xf5,
+	0x49, 0x44, 0xb0, 0x71, 0x03, 0xcc, 0xf1, 0x5c, 0x06, 0x16, 0xd9, 0x06, 0xcd, 0x9a, 0x49, 0x8a,
+	0x29, 0x04, 0x0b, 0x30, 0x41, 0x4d, 0x31, 0x1a, 0xda, 0x53, 0xb2, 0xd8, 0x83, 0x31, 0x00, 0xb0,
+	0xbc, 0xe3, 0x5d, 0xb4, 0x18, 0x7b, 0xa4, 0x0b, 0x91, 0x47, 0xda, 0x8b, 0x68, 0x88, 0x7b, 0xa4,
+	0xd1, 0x32, 0x4c, 0xf9, 0x5e, 0x17, 0xb7, 0x62, 0x57, 0xee, 0x24, 0x79, 0xdc, 0xee, 0x18, 0x2f,
+	0xb3, 0x61, 0x93, 0xcf, 0x86, 0x06, 0xd8, 0xbf, 0xef, 0xb4, 0xb9, 0x7b, 0xbb, 0x62, 0xc5, 0xcf,
+	0x04, 0xb7, 0xec, 0xbe, 0xc3, 0x06, 0xa9, 0x58, 0xf4, 0xbf, 0xf1, 0x7d, 0x0d, 0xe6, 0x68, 0xf3,
+	0x93, 0x1e, 0x33, 0x9c, 0x64, 0x0a, 0x0b, 0x80, 0x44, 0x18, 0x38, 0x25, 0x47, 0xa0, 0x9d, 0xd8,
+	0x89, 0x77, 0x0a, 0xa0, 0xa5, 0xfc, 0x7a, 0x01, 0x2c, 0x90, 0xd2, 0x47, 0x7b, 0xdc, 0x79, 0x0d,
+	0x16, 0x53, 0x83, 0x0a, 0xe7, 0x19, 0x9e, 0x74, 0x9e, 0xe1, 0x09, 0xe7, 0x19, 0x5e, 0x74, 0x9e,
+	0xe1, 0x9d, 0xfe, 0x79, 0x86, 0xa7, 0x3e, 0xcf, 0xf0, 0xc4, 0xf3, 0x0c, 0x4f, 0x38, 0xcf, 0xf0,
+	0xf8, 0x79, 0x86, 0x77, 0xea, 0xe7, 0x19, 0x5e, 0xe6, 0x3c, 0xc3, 0x64, 0xcb, 0x75, 0x17, 0xfb,
+	0x3d, 0x27, 0x08, 0x68, 0x84, 0xda, 0x50, 0xdf, 0xeb, 0xef, 0x6b, 0xb0, 0x94, 0x6e, 0xc0, 0xe7,
+	0xf4, 0xa2, 0x7c, 0x60, 0x64, 0x98, 0xea, 0x7a, 0xec, 0x2c, 0x8b, 0x45, 0x17, 0xf0, 0x7b, 0x72,
+	0x5f, 0x65, 0x97, 0xaf, 0xe6, 0x86, 0x95, 0x3d, 0x26, 0x7f, 0x05, 0xaa, 0x6a, 0x0a, 0xbd, 0x0a,
+	0xc7, 0xfb, 0xcf, 0x00, 0x24, 0x2f, 0x08, 0x23, 0xdb, 0x1b, 0x74, 0xbb, 0xd1, 0xcd, 0xe7, 0x1a,
+	0xfb, 0x84, 0x24, 0x29, 0x62, 0xb7, 0x9a, 0x1b, 0xff, 0xa0, 0x04, 0x68, 0x53, 0xe0, 0xd6, 0xc7,
+	0x61, 0x49, 0x91, 0x20, 0x2a, 0x08, 0xf7, 0x19, 0x6e, 0xc4, 0x26, 0x30, 0x93, 0x88, 0xba, 0x99,
+	0x1d, 0x25, 0x7d, 0xbd, 0x9d, 0x82, 0xa9, 0x96, 0x94, 0x4c, 0xf5, 0x2a, 0x4c, 0x79, 0xfd, 0xf6,
+	0x61, 0x9b, 0x7f, 0x61, 0xb3, 0xba, 0x71, 0x4e, 0xd5, 0xfb, 0x1d, 0x56, 0xc5, 0x8a, 0xea, 0xe6,
+	0x7f, 0xcf, 0x4e, 0xff, 0x77, 0x1a, 0x4c, 0xf1, 0xea, 0x27, 0x91, 0x52, 0x37, 0x61, 0xae, 0x6b,
+	0x07, 0x61, 0x6b, 0x40, 0x59, 0xc0, 0xd8, 0xe2, 0x6a, 0x96, 0x34, 0x62, 0x6c, 0x83, 0x89, 0xad,
+	0x63, 0x2c, 0x9e, 0xf1, 0xde, 0x90, 0xef, 0x7c, 0xf7, 0x93, 0xef, 0x7c, 0x0b, 0xd7, 0xf9, 0x15,
+	0x84, 0x5b, 0xff, 0x8a, 0xd2, 0xad, 0x7f, 0x25, 0x52, 0x8d, 0xd1, 0x48, 0xa7, 0x3e, 0xb1, 0xb1,
+	0x03, 0x93, 0xec, 0x1e, 0x3d, 0xb4, 0x1d, 0x0f, 0xb2, 0x60, 0x2a, 0x6e, 0xdc, 0xd3, 0x17, 0x4d,
+	0xe5, 0x85, 0x7b, 0xe8, 0xfb, 0xff, 0xf5, 0x7f, 0xfc, 0x9d, 0x42, 0x0d, 0xc1, 0x95, 0xfb, 0xcf,
+	0x5e, 0xb9, 0x47, 0x6b, 0x6c, 0xfc, 0x62, 0x02, 0x66, 0xe4, 0x4b, 0x93, 0x50, 0x07, 0x26, 0x19,
+	0x7b, 0x46, 0x2b, 0xe6, 0x90, 0xbb, 0xd9, 0xf4, 0x55, 0x73, 0xe8, 0x4d, 0x69, 0xab, 0x74, 0xb4,
+	0x65, 0x03, 0x91, 0xd1, 0xa2, 0x30, 0x65, 0x16, 0xc5, 0x74, 0x4d, 0xbb, 0x4c, 0x46, 0x61, 0x6b,
+	0x9d, 0x19, 0x45, 0x92, 0x1e, 0x99, 0x51, 0x52, 0x7c, 0x9d, 0x8f, 0xa2, 0xe7, 0x8c, 0x12, 0x40,
+	0x25, 0xe6, 0xbe, 0xa8, 0x39, 0xe2, 0x02, 0x33, 0x7d, 0xdd, 0x1c, 0x71, 0xe1, 0x98, 0xf1, 0x38,
+	0x1d, 0x6e, 0x15, 0x9d, 0xcb, 0x0e, 0x77, 0xe5, 0x3b, 0x8c, 0x47, 0x7d, 0x84, 0x3e, 0x24, 0x3b,
+	0x4f, 0x79, 0x2c, 0x5a, 0x35, 0x87, 0xdd, 0x2d, 0xa6, 0xaf, 0x99, 0x43, 0x6f, 0x07, 0x33, 0xbe,
+	0x40, 0x87, 0xbb, 0x8c, 0x2e, 0x0d, 0x19, 0xee, 0xca, 0x77, 0x08, 0x93, 0xfd, 0xe8, 0xca, 0x77,
+	0x06, 0x64, 0xec, 0x0f, 0xa2, 0xdb, 0x99, 0x33, 0xcb, 0x2a, 0xb1, 0xef, 0xcc, 0xb2, 0xa6, 0x58,
+	0x31, 0x1f, 0xf8, 0xf2, 0xf8, 0x03, 0xff, 0x6d, 0x0d, 0x66, 0xd9, 0xde, 0xc4, 0x27, 0xc1, 0xe8,
+	0xbc, 0x39, 0xce, 0xf5, 0x60, 0xfa, 0x05, 0x73, 0xbc, 0x6b, 0xbb, 0x9e, 0xa1, 0x40, 0x5d, 0xd4,
+	0x0d, 0x05, 0x50, 0x8c, 0xd6, 0xe3, 0x73, 0xea, 0x6b, 0xda, 0xe5, 0x8d, 0x7f, 0x53, 0xca, 0x7c,
+	0x7a, 0x41, 0x44, 0xed, 0x21, 0x37, 0x13, 0xe9, 0xab, 0xe6, 0xd0, 0xab, 0x80, 0x24, 0xd4, 0xe6,
+	0x61, 0x8b, 0xbc, 0x66, 0x1a, 0xb5, 0x87, 0xdc, 0x76, 0x93, 0x19, 0x65, 0x18, 0x6a, 0x67, 0x47,
+	0x49, 0xa1, 0xf6, 0xf0, 0x8b, 0x4a, 0xf4, 0x75, 0x73, 0xc4, 0x9d, 0x1f, 0x32, 0x6a, 0xcb, 0xc3,
+	0x25, 0xa8, 0x1d, 0x8a, 0xa8, 0x3d, 0xec, 0x82, 0x0f, 0x7d, 0xcd, 0x1c, 0x7a, 0x45, 0x87, 0x71,
+	0x99, 0x0e, 0xf7, 0x04, 0x32, 0x86, 0x0c, 0xc7, 0x31, 0x0c, 0x7d, 0x5b, 0x40, 0xea, 0x21, 0xd7,
+	0x72, 0x64, 0x16, 0x34, 0x85, 0xd4, 0x7c, 0xc8, 0xcb, 0x63, 0x0c, 0xb9, 0xf1, 0x67, 0x25, 0x98,
+	0xe2, 0xf6, 0x2a, 0xba, 0x13, 0x63, 0xcd, 0xa2, 0xa9, 0xba, 0x7c, 0x42, 0x5f, 0x32, 0xd5, 0x17,
+	0x2d, 0x2c, 0xd1, 0x01, 0xeb, 0x46, 0x95, 0x0c, 0xc8, 0x85, 0x1c, 0xd9, 0xba, 0x3b, 0x31, 0x82,
+	0xc4, 0x1d, 0xca, 0x98, 0xb1, 0x64, 0xaa, 0x2f, 0x1d, 0xe0, 0x1d, 0xea, 0xe9, 0x0e, 0x7f, 0x5d,
+	0xc4, 0x85, 0x46, 0xde, 0xb5, 0x02, 0xfa, 0x59, 0x33, 0xcf, 0x9d, 0x6a, 0xac, 0xd0, 0x9e, 0x97,
+	0xd0, 0x82, 0xd0, 0x73, 0xb2, 0xed, 0xad, 0x64, 0xdb, 0x63, 0xd0, 0x52, 0xfb, 0xbd, 0x6c, 0xaa,
+	0x5d, 0x4f, 0x32, 0x5e, 0xa5, 0x7b, 0x8e, 0x76, 0xf8, 0x9b, 0xf1, 0x0e, 0xc7, 0x2b, 0x22, 0x6f,
+	0xed, 0x92, 0xa9, 0x4e, 0x3b, 0xe7, 0xbd, 0x5f, 0x1e, 0xda, 0x3b, 0xb1, 0x4b, 0xd8, 0x4a, 0x8a,
+	0x37, 0x90, 0xac, 0x9b, 0x23, 0xae, 0x4f, 0xd1, 0x1f, 0x33, 0x47, 0x5e, 0x48, 0x72, 0x89, 0x8e,
+	0x6f, 0xe8, 0xab, 0xe2, 0xf8, 0x8c, 0x19, 0x09, 0xf1, 0xcc, 0x84, 0x1d, 0xfd, 0xaf, 0x09, 0x98,
+	0x4d, 0x7f, 0xad, 0x6e, 0x3f, 0xc6, 0xac, 0x55, 0x73, 0x58, 0xf2, 0xbc, 0xbe, 0x66, 0x0e, 0xcd,
+	0x63, 0x37, 0xd6, 0x28, 0x18, 0x0d, 0x63, 0x9e, 0x81, 0xe1, 0x0d, 0x3a, 0x89, 0xff, 0x8d, 0x20,
+	0xc8, 0x7e, 0x8c, 0x71, 0x99, 0x81, 0xe4, 0x29, 0xaf, 0x99, 0xc3, 0xf3, 0xc6, 0xf9, 0x40, 0x7a,
+	0xde, 0x40, 0xf7, 0x45, 0x4c, 0x5c, 0x37, 0x47, 0xe4, 0x98, 0xd3, 0x15, 0x1e, 0x9e, 0x22, 0x6e,
+	0x3c, 0x41, 0x47, 0x5c, 0x43, 0x2b, 0x8a, 0x11, 0x13, 0x0c, 0xfd, 0x28, 0xc1, 0xd0, 0x35, 0x73,
+	0x68, 0x32, 0xb8, 0xde, 0x34, 0x87, 0x67, 0x69, 0x1b, 0xcf, 0xd2, 0x11, 0x9f, 0x42, 0x4f, 0x0e,
+	0x1b, 0x51, 0x96, 0x7e, 0x1f, 0xc6, 0xf8, 0x9b, 0x59, 0x5f, 0x19, 0x8f, 0xd7, 0xcc, 0xe1, 0x09,
+	0xd6, 0x7c, 0xec, 0xcb, 0x47, 0x18, 0xfb, 0xc7, 0x0a, 0xc9, 0x7b, 0xc1, 0x1c, 0x2b, 0x4b, 0x5b,
+	0xbf, 0x68, 0x8e, 0x99, 0x3d, 0x6d, 0x52, 0xb8, 0x2e, 0xe9, 0x8f, 0xab, 0xe0, 0x52, 0x08, 0xdf,
+	0xff, 0x3c, 0x19, 0x09, 0xdf, 0x38, 0x31, 0x2c, 0x2b, 0x7c, 0x95, 0x89, 0xd8, 0x31, 0x17, 0xcf,
+	0x49, 0x8b, 0x56, 0x08, 0xdf, 0x28, 0xef, 0x49, 0x2d, 0x7c, 0x95, 0xd9, 0xd3, 0x99, 0x51, 0x46,
+	0x0b, 0x5f, 0x71, 0x14, 0xa5, 0xf0, 0xcd, 0xcb, 0x56, 0x8e, 0x85, 0x6f, 0x6e, 0x2e, 0xaf, 0x4a,
+	0xf8, 0x46, 0xc3, 0xe5, 0xe8, 0x95, 0xc3, 0xf2, 0x76, 0xf5, 0x35, 0x73, 0x68, 0x42, 0xad, 0xac,
+	0x57, 0xe6, 0x0c, 0x97, 0xaf, 0x57, 0x0e, 0x49, 0xa5, 0xcd, 0x2c, 0xeb, 0x30, 0xbd, 0x72, 0xac,
+	0x81, 0x03, 0x28, 0x47, 0xb9, 0xaa, 0x28, 0x3d, 0xad, 0x54, 0x8a, 0xac, 0xde, 0x34, 0x47, 0x24,
+	0xb9, 0x5e, 0xa0, 0xc3, 0xaf, 0x1b, 0xaa, 0x65, 0x8e, 0xbe, 0x28, 0x4a, 0xb6, 0x57, 0xad, 0xcc,
+	0x8e, 0x93, 0x1e, 0xab, 0x5f, 0x30, 0xc7, 0x4b, 0x5b, 0x95, 0x94, 0xd9, 0x14, 0x28, 0x0a, 0x7a,
+	0x6a, 0xc3, 0x14, 0x4f, 0x46, 0x45, 0x5f, 0x17, 0x85, 0xb1, 0x32, 0xf5, 0x55, 0x5f, 0xce, 0xc9,
+	0x5c, 0x95, 0xc5, 0x7c, 0x8f, 0xd5, 0x89, 0x17, 0x7e, 0xe3, 0x9f, 0x95, 0x60, 0x92, 0x41, 0x8f,
+	0x6e, 0xc7, 0xc4, 0xba, 0xa0, 0xca, 0xce, 0xd3, 0x17, 0x4d, 0x65, 0x3a, 0xdc, 0x22, 0xed, 0x7f,
+	0xd6, 0x80, 0x64, 0x56, 0x64, 0x3d, 0x6f, 0xc7, 0x44, 0x19, 0xf5, 0x26, 0x2f, 0xda, 0xa2, 0xa9,
+	0x4c, 0x48, 0xe3, 0xbd, 0xe9, 0xa9, 0xde, 0xbe, 0x21, 0x12, 0x5f, 0xf4, 0xfd, 0xb8, 0x0c, 0xd1,
+	0x35, 0xcc, 0x9c, 0xac, 0x32, 0xe3, 0x1c, 0xed, 0x76, 0x11, 0xcd, 0x27, 0xdd, 0x26, 0x44, 0xf6,
+	0xcd, 0x64, 0x75, 0x17, 0x4d, 0x55, 0x5a, 0x98, 0xbe, 0x64, 0x2a, 0x13, 0xbb, 0x0c, 0x83, 0x76,
+	0xbb, 0x82, 0x74, 0x45, 0xb7, 0x91, 0x26, 0xf2, 0x5e, 0x4c, 0x46, 0xd1, 0x42, 0xc8, 0xe4, 0xb3,
+	0x68, 0x2a, 0xd3, 0xb0, 0x78, 0xd7, 0x97, 0x87, 0x75, 0x1d, 0xa8, 0x74, 0x9c, 0xb3, 0x66, 0xae,
+	0x72, 0xa3, 0x9b, 0xf9, 0x5a, 0xcd, 0x45, 0x3a, 0xde, 0x63, 0xfa, 0x8a, 0x30, 0x9e, 0x52, 0xa9,
+	0xf9, 0x4f, 0x45, 0x98, 0xe2, 0x09, 0x08, 0x92, 0x9a, 0xac, 0x4a, 0xec, 0xd1, 0x97, 0x4c, 0x75,
+	0xc6, 0x8b, 0xa4, 0x26, 0xf3, 0xe4, 0x88, 0xb4, 0x9a, 0xac, 0x4a, 0x89, 0x49, 0x3a, 0x1c, 0xa6,
+	0x26, 0x0b, 0x1d, 0xa6, 0xd4, 0xe4, 0x9c, 0x14, 0x18, 0xfd, 0xac, 0x99, 0x97, 0xa3, 0x22, 0xd3,
+	0x0f, 0xef, 0x39, 0x47, 0x4d, 0x56, 0xa6, 0x98, 0xe8, 0xcb, 0xa6, 0x3a, 0x6d, 0x44, 0x96, 0x00,
+	0xe9, 0x9e, 0x55, 0x6a, 0xb2, 0x2a, 0x75, 0x24, 0x59, 0x91, 0x61, 0x6a, 0x72, 0x4e, 0xef, 0x1b,
+	0x7f, 0x5c, 0x80, 0x9a, 0x98, 0xe4, 0x80, 0x7e, 0x3d, 0xde, 0x51, 0xdd, 0xcc, 0xcd, 0x26, 0xd1,
+	0xcf, 0x99, 0x43, 0x32, 0x43, 0x38, 0xad, 0x19, 0x75, 0x32, 0xb0, 0x98, 0x2d, 0xc1, 0x64, 0xb5,
+	0xb0, 0x1f, 0xab, 0xe6, 0xb0, 0x14, 0x12, 0x7d, 0xcd, 0x1c, 0x9a, 0x41, 0x62, 0x34, 0xe8, 0x40,
+	0x08, 0x65, 0x06, 0x42, 0x38, 0xd9, 0x15, 0x19, 0xd4, 0xd4, 0xd6, 0xac, 0x98, 0x43, 0xb2, 0x42,
+	0x8c, 0x26, 0xed, 0xff, 0x2c, 0x5a, 0x4e, 0xf7, 0x1f, 0xad, 0xde, 0x1f, 0x94, 0x60, 0x82, 0x7a,
+	0x8e, 0xd1, 0xcd, 0x78, 0xd9, 0x90, 0x99, 0x49, 0x08, 0xd1, 0xe7, 0x4d, 0x45, 0xc6, 0xc6, 0x3c,
+	0xed, 0x7d, 0xda, 0x28, 0xd3, 0xfd, 0xe1, 0x16, 0xfe, 0xcd, 0x18, 0xff, 0x59, 0x3f, 0x32, 0xf2,
+	0xcf, 0x9b, 0x8a, 0x84, 0x0b, 0xde, 0x8f, 0x2e, 0xf5, 0xf3, 0x8e, 0xb8, 0xcc, 0x8b, 0xa6, 0x2a,
+	0x23, 0x83, 0x20, 0x8e, 0xd2, 0x2b, 0x70, 0x96, 0x76, 0x38, 0x8f, 0xe6, 0xa2, 0x0e, 0x95, 0x9c,
+	0x92, 0xc1, 0x92, 0x5a, 0xcf, 0x05, 0x53, 0x91, 0x3d, 0x11, 0x89, 0x60, 0xb4, 0x96, 0xe9, 0x50,
+	0x96, 0xfb, 0x09, 0xa7, 0x64, 0x93, 0x97, 0xf1, 0x7c, 0xde, 0x54, 0xe4, 0x43, 0xf0, 0xae, 0x2f,
+	0x8f, 0xea, 0xfa, 0xdb, 0x59, 0xe1, 0x7e, 0xce, 0xcc, 0x4f, 0xa4, 0xd0, 0x57, 0xcc, 0x61, 0x09,
+	0x0e, 0x9c, 0xb4, 0xf4, 0x46, 0x3c, 0xaa, 0x42, 0x7c, 0xbf, 0x09, 0x53, 0x51, 0x54, 0xda, 0x75,
+	0x28, 0xbe, 0x86, 0x43, 0x84, 0xcc, 0x4c, 0xb2, 0x81, 0x3e, 0x6f, 0x66, 0x73, 0x0d, 0xa2, 0x2d,
+	0x45, 0x94, 0x99, 0xf1, 0x60, 0xb7, 0x8d, 0x7f, 0x54, 0x84, 0x29, 0x1e, 0xc0, 0x8a, 0xde, 0x81,
+	0x72, 0x14, 0x50, 0x8f, 0x96, 0x4d, 0x75, 0xba, 0x81, 0xde, 0x30, 0xf3, 0x62, 0xef, 0x25, 0xee,
+	0xcb, 0xe3, 0x5e, 0x09, 0xd6, 0x48, 0x6a, 0x86, 0x32, 0x26, 0x5e, 0x5f, 0x36, 0xd5, 0xb1, 0xef,
+	0x32, 0x9b, 0xe4, 0x7d, 0x26, 0x88, 0x23, 0xf2, 0x75, 0x55, 0xd8, 0xbf, 0xbe, 0x64, 0xaa, 0x83,
+	0xf3, 0x25, 0xbe, 0x2e, 0x80, 0xfa, 0x13, 0x0d, 0xd6, 0x62, 0xd4, 0x4d, 0xc5, 0xf5, 0xbe, 0xc6,
+	0x42, 0x77, 0x57, 0xcd, 0x61, 0xa1, 0xca, 0xfa, 0x9a, 0x39, 0x34, 0x9a, 0xd8, 0x78, 0x9e, 0x8e,
+	0x6c, 0xa2, 0xa7, 0x55, 0x13, 0x8a, 0x0a, 0x5a, 0x2c, 0xf1, 0x20, 0x4e, 0x91, 0xd8, 0xf8, 0x6f,
+	0x05, 0x98, 0x95, 0x63, 0x1f, 0x82, 0xb4, 0xe5, 0x30, 0x3c, 0xb6, 0x54, 0x5f, 0x1f, 0x15, 0x07,
+	0x27, 0xcb, 0x8d, 0x1e, 0xab, 0x9c, 0xf1, 0xdf, 0xf4, 0x44, 0xcb, 0x61, 0x58, 0xac, 0x93, 0xbe,
+	0x66, 0x0e, 0x0d, 0x24, 0x1a, 0x6f, 0xb8, 0x7b, 0x30, 0xc5, 0x83, 0x3c, 0x32, 0xc3, 0xc9, 0xe1,
+	0x2b, 0x99, 0xe1, 0xd2, 0xb1, 0x21, 0x92, 0x5f, 0x43, 0x1e, 0x2e, 0x20, 0x74, 0xf5, 0x37, 0x34,
+	0xa8, 0x47, 0x87, 0x32, 0x6f, 0x3b, 0x3d, 0x7c, 0xdb, 0x71, 0x31, 0xf2, 0xc5, 0x25, 0x3e, 0x9b,
+	0x1b, 0x03, 0xa2, 0xeb, 0xf9, 0x01, 0x14, 0x91, 0xbd, 0x8b, 0x2e, 0xa8, 0x05, 0x66, 0xc7, 0x3e,
+	0x0c, 0x3e, 0xba, 0xf2, 0x9d, 0x28, 0x76, 0xe4, 0xa3, 0x8d, 0xff, 0x5b, 0x84, 0x92, 0xe5, 0x75,
+	0xb1, 0xcc, 0xfc, 0x3d, 0x05, 0xf3, 0xf7, 0x46, 0x30, 0x7f, 0x4f, 0xcd, 0xb4, 0x3d, 0x35, 0xd3,
+	0xf6, 0x46, 0x33, 0x6d, 0x2f, 0x9f, 0x69, 0x7b, 0x2a, 0xa6, 0xed, 0x8d, 0x62, 0xda, 0x5e, 0x2e,
+	0x67, 0x95, 0x24, 0x96, 0xa7, 0x90, 0x58, 0xde, 0x08, 0x89, 0xc5, 0x27, 0x2f, 0x31, 0x7f, 0x4f,
+	0xc1, 0xfc, 0xbd, 0x11, 0xcc, 0x3f, 0x1f, 0xc4, 0x3b, 0xd2, 0xc1, 0xec, 0x92, 0xa9, 0x3c, 0x71,
+	0x26, 0x6a, 0x9a, 0xf2, 0xc0, 0xd8, 0xa8, 0xd3, 0x61, 0x00, 0xc5, 0xe0, 0x6e, 0xfd, 0x44, 0xfb,
+	0xf1, 0xa6, 0xf3, 0xfe, 0x7b, 0xf0, 0x35, 0x98, 0xdc, 0xc5, 0xb6, 0x8f, 0x7d, 0xf4, 0x46, 0xb9,
+	0x80, 0x5e, 0xdc, 0x1c, 0x84, 0xf7, 0xb0, 0x1b, 0xf2, 0x0f, 0xc9, 0xae, 0xd3, 0xf0, 0xd3, 0xa7,
+	0xd7, 0xfb, 0x3e, 0xde, 0x73, 0x1e, 0xe0, 0xce, 0xfa, 0xee, 0xe1, 0xfa, 0x16, 0xad, 0x7d, 0x8d,
+	0xff, 0xae, 0xbf, 0x4c, 0xab, 0xbc, 0xa2, 0x4f, 0x93, 0x96, 0x9e, 0xcf, 0xb5, 0x8b, 0xf5, 0xc2,
+	0x6e, 0x0d, 0x20, 0xee, 0xfa, 0xcc, 0xff, 0xfb, 0xf3, 0x35, 0xed, 0x9f, 0x7c, 0xbc, 0xa6, 0xfd,
+	0xab, 0x8f, 0xd7, 0xb4, 0xff, 0xf8, 0xf1, 0x9a, 0xf6, 0xf3, 0x8f, 0xd7, 0xb4, 0xff, 0xfe, 0xf1,
+	0x9a, 0xf6, 0xa3, 0x5f, 0xae, 0x9d, 0xf9, 0xf9, 0x2f, 0xd7, 0xce, 0xfc, 0xe2, 0x97, 0x6b, 0x67,
+	0xde, 0x2f, 0xda, 0x7d, 0x67, 0x77, 0x92, 0x1e, 0x71, 0x3e, 0xf7, 0xff, 0x03, 0x00, 0x00, 0xff,
+	0xff, 0xa2, 0xdc, 0xda, 0xf1, 0x56, 0x9d, 0x00, 0x00,
 }
 
 func (this *OrganizationObject) Equal(that interface{}) bool {
@@ -11869,6 +14077,23 @@ func (this *ClusterInfo) Equal(that interface{}) bool {
 	if !this.CloudCredentialRef.Equal(that1.CloudCredentialRef) {
 		return false
 	}
+	if !this.AddBackupShare.Equal(that1.AddBackupShare) {
+		return false
+	}
+	if !this.DelBackupShare.Equal(that1.DelBackupShare) {
+		return false
+	}
+	if !this.BackupShareStatusInfo.Equal(that1.BackupShareStatusInfo) {
+		return false
+	}
+	if len(this.OwnerGroupList) != len(that1.OwnerGroupList) {
+		return false
+	}
+	for i := range this.OwnerGroupList {
+		if this.OwnerGroupList[i] != that1.OwnerGroupList[i] {
+			return false
+		}
+	}
 	return true
 }
 func (this *ClusterInfo_StatusInfo) Equal(that interface{}) bool {
@@ -11879,6 +14104,33 @@ func (this *ClusterInfo_StatusInfo) Equal(that interface{}) bool {
 	that1, ok := that.(*ClusterInfo_StatusInfo)
 	if !ok {
 		that2, ok := that.(ClusterInfo_StatusInfo)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Status != that1.Status {
+		return false
+	}
+	if this.Reason != that1.Reason {
+		return false
+	}
+	return true
+}
+func (this *ClusterInfo_BackupShareStatusInfo) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ClusterInfo_BackupShareStatusInfo)
+	if !ok {
+		that2, ok := that.(ClusterInfo_BackupShareStatusInfo)
 		if ok {
 			that1 = &that2
 		} else {
@@ -12296,6 +14548,12 @@ func (this *SchedulePolicyInfo) Equal(that interface{}) bool {
 		if this.BackupSchedule[i] != that1.BackupSchedule[i] {
 			return false
 		}
+	}
+	if this.ForObjectLock != that1.ForObjectLock {
+		return false
+	}
+	if this.AutoDelete != that1.AutoDelete {
+		return false
 	}
 	return true
 }
@@ -12780,6 +15038,9 @@ func (this *BackupLocationInfo) Equal(that interface{}) bool {
 	} else if !this.Config.Equal(that1.Config) {
 		return false
 	}
+	if this.ObjectLockEnabled != that1.ObjectLockEnabled {
+		return false
+	}
 	return true
 }
 func (this *BackupLocationInfo_S3Config) Equal(that interface{}) bool {
@@ -13020,6 +15281,18 @@ func (this *BackupInfo) Equal(that interface{}) bool {
 	if !this.BackupType.Equal(that1.BackupType) {
 		return false
 	}
+	if this.CrUid != that1.CrUid {
+		return false
+	}
+	if this.RetentionPeriod != that1.RetentionPeriod {
+		return false
+	}
+	if !this.BackupShare.Equal(that1.BackupShare) {
+		return false
+	}
+	if this.UserBackupshareAccess != that1.UserBackupshareAccess {
+		return false
+	}
 	return true
 }
 func (this *BackupInfo_BackupType) Equal(that interface{}) bool {
@@ -13133,6 +15406,15 @@ func (this *BackupInfo_Volume) Equal(that interface{}) bool {
 		return false
 	}
 	if this.StorageClass != that1.StorageClass {
+		return false
+	}
+	if this.PvcId != that1.PvcId {
+		return false
+	}
+	if this.Provisioner != that1.Provisioner {
+		return false
+	}
+	if this.Volumesnapshot != that1.Volumesnapshot {
 		return false
 	}
 	return true
@@ -13439,6 +15721,9 @@ func (this *RestoreInfo) Equal(that interface{}) bool {
 		if this.StorageClassMapping[i] != that1.StorageClassMapping[i] {
 			return false
 		}
+	}
+	if !this.BackupRef.Equal(that1.BackupRef) {
+		return false
 	}
 	return true
 }
@@ -14418,6 +16703,63 @@ func (this *BackupScheduleDeleteResponse) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *ClusterBackupShareUpdateRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ClusterBackupShareUpdateRequest)
+	if !ok {
+		that2, ok := that.(ClusterBackupShareUpdateRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.OrgId != that1.OrgId {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if !this.AddBackupShare.Equal(that1.AddBackupShare) {
+		return false
+	}
+	if !this.DelBackupShare.Equal(that1.DelBackupShare) {
+		return false
+	}
+	if this.Uid != that1.Uid {
+		return false
+	}
+	return true
+}
+func (this *ClusterBackupShareUpdateResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ClusterBackupShareUpdateResponse)
+	if !ok {
+		that2, ok := that.(ClusterBackupShareUpdateResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
 func (this *ClusterCreateRequest) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
@@ -14569,6 +16911,9 @@ func (this *ClusterEnumerateRequest) Equal(that interface{}) bool {
 		return false
 	}
 	if !this.CloudCredentialRef.Equal(that1.CloudCredentialRef) {
+		return false
+	}
+	if this.OnlyBackupShare != that1.OnlyBackupShare {
 		return false
 	}
 	return true
@@ -14754,6 +17099,9 @@ func (this *CloudCredentialCreateResponse) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
+		return false
+	}
+	if !this.CloudCredential.Equal(that1.CloudCredential) {
 		return false
 	}
 	return true
@@ -15156,6 +17504,9 @@ func (this *BackupLocationEnumerateRequest) Equal(that interface{}) bool {
 	if !this.CloudCredentialRef.Equal(that1.CloudCredentialRef) {
 		return false
 	}
+	if this.IncludeSecrets != that1.IncludeSecrets {
+		return false
+	}
 	return true
 }
 func (this *BackupLocationEnumerateResponse) Equal(that interface{}) bool {
@@ -15213,6 +17564,9 @@ func (this *BackupLocationInspectRequest) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Uid != that1.Uid {
+		return false
+	}
+	if this.IncludeSecrets != that1.IncludeSecrets {
 		return false
 	}
 	return true
@@ -15728,6 +18082,9 @@ func (this *BackupInspectRequest) Equal(that interface{}) bool {
 	if this.OrgId != that1.OrgId {
 		return false
 	}
+	if this.Uid != that1.Uid {
+		return false
+	}
 	return true
 }
 func (this *BackupInspectResponse) Equal(that interface{}) bool {
@@ -15782,6 +18139,9 @@ func (this *BackupDeleteRequest) Equal(that interface{}) bool {
 	if this.Cluster != that1.Cluster {
 		return false
 	}
+	if this.Uid != that1.Uid {
+		return false
+	}
 	return true
 }
 func (this *BackupDeleteResponse) Equal(that interface{}) bool {
@@ -15792,6 +18152,60 @@ func (this *BackupDeleteResponse) Equal(that interface{}) bool {
 	that1, ok := that.(*BackupDeleteResponse)
 	if !ok {
 		that2, ok := that.(BackupDeleteResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *BackupShareUpdateRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BackupShareUpdateRequest)
+	if !ok {
+		that2, ok := that.(BackupShareUpdateRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.OrgId != that1.OrgId {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if !this.Backupshare.Equal(that1.Backupshare) {
+		return false
+	}
+	if this.Uid != that1.Uid {
+		return false
+	}
+	return true
+}
+func (this *BackupShareUpdateResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BackupShareUpdateResponse)
+	if !ok {
+		that2, ok := that.(BackupShareUpdateResponse)
 		if ok {
 			that1 = &that2
 		} else {
@@ -15867,6 +18281,9 @@ func (this *RestoreCreateRequest) Equal(that interface{}) bool {
 		if this.StorageClassMapping[i] != that1.StorageClassMapping[i] {
 			return false
 		}
+	}
+	if !this.BackupRef.Equal(that1.BackupRef) {
+		return false
 	}
 	return true
 }
@@ -16576,6 +18993,9 @@ func (this *VersionInfo) Equal(that interface{}) bool {
 	if this.Patch != that1.Patch {
 		return false
 	}
+	if this.Changes != that1.Changes {
+		return false
+	}
 	if this.GitCommit != that1.GitCommit {
 		return false
 	}
@@ -16730,6 +19150,30 @@ func (this *LicenseActivateRequest_UsageBasedId) Equal(that interface{}) bool {
 		return false
 	}
 	if this.UsageBasedId != that1.UsageBasedId {
+		return false
+	}
+	return true
+}
+func (this *LicenseActivateRequest_UsagedBasedAirgappedId) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LicenseActivateRequest_UsagedBasedAirgappedId)
+	if !ok {
+		that2, ok := that.(LicenseActivateRequest_UsagedBasedAirgappedId)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.UsagedBasedAirgappedId != that1.UsagedBasedAirgappedId {
 		return false
 	}
 	return true
@@ -16974,6 +19418,918 @@ func (this *LicenseResponseInfo_Status) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Reason != that1.Reason {
+		return false
+	}
+	return true
+}
+func (this *LicenseUsageAirgappedObject) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LicenseUsageAirgappedObject)
+	if !ok {
+		that2, ok := that.(LicenseUsageAirgappedObject)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Metadata.Equal(that1.Metadata) {
+		return false
+	}
+	if this.NodeCount != that1.NodeCount {
+		return false
+	}
+	if this.ReportTime != that1.ReportTime {
+		return false
+	}
+	return true
+}
+func (this *LicenseUsageAirgappedRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LicenseUsageAirgappedRequest)
+	if !ok {
+		that2, ok := that.(LicenseUsageAirgappedRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.OrgId != that1.OrgId {
+		return false
+	}
+	if this.ObjectIndex != that1.ObjectIndex {
+		return false
+	}
+	if this.MaxObjects != that1.MaxObjects {
+		return false
+	}
+	return true
+}
+func (this *LicenseUsageAirgappedResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LicenseUsageAirgappedResponse)
+	if !ok {
+		that2, ok := that.(LicenseUsageAirgappedResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.LicenseUsageAirgapped) != len(that1.LicenseUsageAirgapped) {
+		return false
+	}
+	for i := range this.LicenseUsageAirgapped {
+		if !this.LicenseUsageAirgapped[i].Equal(that1.LicenseUsageAirgapped[i]) {
+			return false
+		}
+	}
+	if this.Complete != that1.Complete {
+		return false
+	}
+	if this.TotalCount != that1.TotalCount {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateRequest)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.OrgId != that1.OrgId {
+		return false
+	}
+	if !this.CloudCredential.Equal(that1.CloudCredential) {
+		return false
+	}
+	if this.IncludeSecrets != that1.IncludeSecrets {
+		return false
+	}
+	if this.MaxResults != that1.MaxResults {
+		return false
+	}
+	if this.Provider != that1.Provider {
+		return false
+	}
+	if that1.Config == nil {
+		if this.Config != nil {
+			return false
+		}
+	} else if this.Config == nil {
+		return false
+	} else if !this.Config.Equal(that1.Config) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateRequest_AwsConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateRequest_AwsConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateRequest_AwsConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AwsConfig.Equal(that1.AwsConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateRequest_GoogleConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateRequest_GoogleConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateRequest_GoogleConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.GoogleConfig.Equal(that1.GoogleConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateRequest_AzureConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateRequest_AzureConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateRequest_AzureConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AzureConfig.Equal(that1.AzureConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateRequest_AWSConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateRequest_AWSConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateRequest_AWSConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Region != that1.Region {
+		return false
+	}
+	if this.NextToken != that1.NextToken {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateRequest_GoogleConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateRequest_GoogleConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateRequest_GoogleConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateRequest_AzureConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateRequest_AzureConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateRequest_AzureConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterObject) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterObject)
+	if !ok {
+		that2, ok := that.(ManagedClusterObject)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.Uid != that1.Uid {
+		return false
+	}
+	if !this.CloudCredential.Equal(that1.CloudCredential) {
+		return false
+	}
+	if this.Kubeconfig != that1.Kubeconfig {
+		return false
+	}
+	if this.K8SVersion != that1.K8SVersion {
+		return false
+	}
+	if this.Status != that1.Status {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateResponse)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Cluster) != len(that1.Cluster) {
+		return false
+	}
+	for i := range this.Cluster {
+		if !this.Cluster[i].Equal(that1.Cluster[i]) {
+			return false
+		}
+	}
+	if this.Provider != that1.Provider {
+		return false
+	}
+	if that1.Config == nil {
+		if this.Config != nil {
+			return false
+		}
+	} else if this.Config == nil {
+		return false
+	} else if !this.Config.Equal(that1.Config) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateResponse_AwsConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateResponse_AwsConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateResponse_AwsConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AwsConfig.Equal(that1.AwsConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateResponse_GoogleConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateResponse_GoogleConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateResponse_GoogleConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.GoogleConfig.Equal(that1.GoogleConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateResponse_AzureConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateResponse_AzureConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateResponse_AzureConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AzureConfig.Equal(that1.AzureConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateResponse_AWSConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateResponse_AWSConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateResponse_AWSConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.NextToken != that1.NextToken {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateResponse_GoogleConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateResponse_GoogleConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateResponse_GoogleConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterEnumerateResponse_AzureConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterEnumerateResponse_AzureConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterEnumerateResponse_AzureConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectRequest)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.OrgId != that1.OrgId {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if !this.CloudCredential.Equal(that1.CloudCredential) {
+		return false
+	}
+	if this.IncludeSecrets != that1.IncludeSecrets {
+		return false
+	}
+	if this.Provider != that1.Provider {
+		return false
+	}
+	if that1.Config == nil {
+		if this.Config != nil {
+			return false
+		}
+	} else if this.Config == nil {
+		return false
+	} else if !this.Config.Equal(that1.Config) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectRequest_AwsConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectRequest_AwsConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectRequest_AwsConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AwsConfig.Equal(that1.AwsConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectRequest_GoogleConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectRequest_GoogleConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectRequest_GoogleConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.GoogleConfig.Equal(that1.GoogleConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectRequest_AzureConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectRequest_AzureConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectRequest_AzureConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AzureConfig.Equal(that1.AzureConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectRequest_AWSConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectRequest_AWSConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectRequest_AWSConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Region != that1.Region {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectRequest_GoogleConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectRequest_GoogleConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectRequest_GoogleConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectRequest_AzureConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectRequest_AzureConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectRequest_AzureConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterInspectResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterInspectResponse)
+	if !ok {
+		that2, ok := that.(ManagedClusterInspectResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Cluster.Equal(that1.Cluster) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddRequest)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.OrgId != that1.OrgId {
+		return false
+	}
+	if !this.CloudCredential.Equal(that1.CloudCredential) {
+		return false
+	}
+	if len(this.ClusterName) != len(that1.ClusterName) {
+		return false
+	}
+	for i := range this.ClusterName {
+		if this.ClusterName[i] != that1.ClusterName[i] {
+			return false
+		}
+	}
+	if this.Provider != that1.Provider {
+		return false
+	}
+	if that1.Config == nil {
+		if this.Config != nil {
+			return false
+		}
+	} else if this.Config == nil {
+		return false
+	} else if !this.Config.Equal(that1.Config) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddRequest_AwsConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddRequest_AwsConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddRequest_AwsConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AwsConfig.Equal(that1.AwsConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddRequest_GoogleConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddRequest_GoogleConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddRequest_GoogleConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.GoogleConfig.Equal(that1.GoogleConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddRequest_AzureConfig_) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddRequest_AzureConfig_)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddRequest_AzureConfig_)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.AzureConfig.Equal(that1.AzureConfig) {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddRequest_AWSConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddRequest_AWSConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddRequest_AWSConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Region != that1.Region {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddRequest_GoogleConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddRequest_GoogleConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddRequest_GoogleConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddRequest_AzureConfig) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddRequest_AzureConfig)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddRequest_AzureConfig)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ManagedClusterBulkAddResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ManagedClusterBulkAddResponse)
+	if !ok {
+		that2, ok := that.(ManagedClusterBulkAddResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
 		return false
 	}
 	return true
@@ -17671,7 +21027,7 @@ var _Health_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type SchedulePolicyClient interface {
-	// Create creates new schedule policy.
+	// Creates new schedule policy.
 	Create(ctx context.Context, in *SchedulePolicyCreateRequest, opts ...grpc.CallOption) (*SchedulePolicyCreateResponse, error)
 	// Update given schedule policy details
 	Update(ctx context.Context, in *SchedulePolicyUpdateRequest, opts ...grpc.CallOption) (*SchedulePolicyUpdateResponse, error)
@@ -17749,7 +21105,7 @@ func (c *schedulePolicyClient) UpdateOwnership(ctx context.Context, in *Schedule
 
 // SchedulePolicyServer is the server API for SchedulePolicy service.
 type SchedulePolicyServer interface {
-	// Create creates new schedule policy.
+	// Creates new schedule policy.
 	Create(context.Context, *SchedulePolicyCreateRequest) (*SchedulePolicyCreateResponse, error)
 	// Update given schedule policy details
 	Update(context.Context, *SchedulePolicyUpdateRequest) (*SchedulePolicyUpdateResponse, error)
@@ -17935,9 +21291,9 @@ var _SchedulePolicy_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type BackupScheduleClient interface {
-	// Create creates new backup schedule
+	// Creates new backup schedule
 	Create(ctx context.Context, in *BackupScheduleCreateRequest, opts ...grpc.CallOption) (*BackupScheduleCreateResponse, error)
-	// Update updates a backup schedule
+	// Updates a backup schedule
 	Update(ctx context.Context, in *BackupScheduleUpdateRequest, opts ...grpc.CallOption) (*BackupScheduleUpdateResponse, error)
 	// Enumerate returns a list of backup schedule
 	Enumerate(ctx context.Context, in *BackupScheduleEnumerateRequest, opts ...grpc.CallOption) (*BackupScheduleEnumerateResponse, error)
@@ -18002,9 +21358,9 @@ func (c *backupScheduleClient) Delete(ctx context.Context, in *BackupScheduleDel
 
 // BackupScheduleServer is the server API for BackupSchedule service.
 type BackupScheduleServer interface {
-	// Create creates new backup schedule
+	// Creates new backup schedule
 	Create(context.Context, *BackupScheduleCreateRequest) (*BackupScheduleCreateResponse, error)
-	// Update updates a backup schedule
+	// Updates a backup schedule
 	Update(context.Context, *BackupScheduleUpdateRequest) (*BackupScheduleUpdateResponse, error)
 	// Enumerate returns a list of backup schedule
 	Enumerate(context.Context, *BackupScheduleEnumerateRequest) (*BackupScheduleEnumerateResponse, error)
@@ -18161,7 +21517,7 @@ var _BackupSchedule_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ClusterClient interface {
-	// Create creates a new cluster
+	// Creates a new cluster
 	Create(ctx context.Context, in *ClusterCreateRequest, opts ...grpc.CallOption) (*ClusterCreateResponse, error)
 	// Update given cluster details
 	Update(ctx context.Context, in *ClusterUpdateRequest, opts ...grpc.CallOption) (*ClusterUpdateResponse, error)
@@ -18171,6 +21527,9 @@ type ClusterClient interface {
 	Inspect(ctx context.Context, in *ClusterInspectRequest, opts ...grpc.CallOption) (*ClusterInspectResponse, error)
 	// Delete removes a cluster
 	Delete(ctx context.Context, in *ClusterDeleteRequest, opts ...grpc.CallOption) (*ClusterDeleteResponse, error)
+	// UpdateBackupShare updates ownership details for backup share at cluster
+	// level
+	UpdateBackupShare(ctx context.Context, in *ClusterBackupShareUpdateRequest, opts ...grpc.CallOption) (*ClusterBackupShareUpdateResponse, error)
 }
 
 type clusterClient struct {
@@ -18226,9 +21585,18 @@ func (c *clusterClient) Delete(ctx context.Context, in *ClusterDeleteRequest, op
 	return out, nil
 }
 
+func (c *clusterClient) UpdateBackupShare(ctx context.Context, in *ClusterBackupShareUpdateRequest, opts ...grpc.CallOption) (*ClusterBackupShareUpdateResponse, error) {
+	out := new(ClusterBackupShareUpdateResponse)
+	err := c.cc.Invoke(ctx, "/Cluster/UpdateBackupShare", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClusterServer is the server API for Cluster service.
 type ClusterServer interface {
-	// Create creates a new cluster
+	// Creates a new cluster
 	Create(context.Context, *ClusterCreateRequest) (*ClusterCreateResponse, error)
 	// Update given cluster details
 	Update(context.Context, *ClusterUpdateRequest) (*ClusterUpdateResponse, error)
@@ -18238,6 +21606,9 @@ type ClusterServer interface {
 	Inspect(context.Context, *ClusterInspectRequest) (*ClusterInspectResponse, error)
 	// Delete removes a cluster
 	Delete(context.Context, *ClusterDeleteRequest) (*ClusterDeleteResponse, error)
+	// UpdateBackupShare updates ownership details for backup share at cluster
+	// level
+	UpdateBackupShare(context.Context, *ClusterBackupShareUpdateRequest) (*ClusterBackupShareUpdateResponse, error)
 }
 
 // UnimplementedClusterServer can be embedded to have forward compatible implementations.
@@ -18258,6 +21629,9 @@ func (*UnimplementedClusterServer) Inspect(ctx context.Context, req *ClusterInsp
 }
 func (*UnimplementedClusterServer) Delete(ctx context.Context, req *ClusterDeleteRequest) (*ClusterDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
+}
+func (*UnimplementedClusterServer) UpdateBackupShare(ctx context.Context, req *ClusterBackupShareUpdateRequest) (*ClusterBackupShareUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateBackupShare not implemented")
 }
 
 func RegisterClusterServer(s *grpc.Server, srv ClusterServer) {
@@ -18354,6 +21728,24 @@ func _Cluster_Delete_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Cluster_UpdateBackupShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClusterBackupShareUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClusterServer).UpdateBackupShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Cluster/UpdateBackupShare",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClusterServer).UpdateBackupShare(ctx, req.(*ClusterBackupShareUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Cluster_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "Cluster",
 	HandlerType: (*ClusterServer)(nil),
@@ -18378,6 +21770,10 @@ var _Cluster_serviceDesc = grpc.ServiceDesc{
 			MethodName: "Delete",
 			Handler:    _Cluster_Delete_Handler,
 		},
+		{
+			MethodName: "UpdateBackupShare",
+			Handler:    _Cluster_UpdateBackupShare_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "pkg/apis/v1/api.proto",
@@ -18387,7 +21783,7 @@ var _Cluster_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type CloudCredentialClient interface {
-	// Create creates new cloud credential
+	// Creates new cloud credential
 	Create(ctx context.Context, in *CloudCredentialCreateRequest, opts ...grpc.CallOption) (*CloudCredentialCreateResponse, error)
 	// Update given cloud credential details
 	Update(ctx context.Context, in *CloudCredentialUpdateRequest, opts ...grpc.CallOption) (*CloudCredentialUpdateResponse, error)
@@ -18465,7 +21861,7 @@ func (c *cloudCredentialClient) UpdateOwnership(ctx context.Context, in *CloudCr
 
 // CloudCredentialServer is the server API for CloudCredential service.
 type CloudCredentialServer interface {
-	// Create creates new cloud credential
+	// Creates new cloud credential
 	Create(context.Context, *CloudCredentialCreateRequest) (*CloudCredentialCreateResponse, error)
 	// Update given cloud credential details
 	Update(context.Context, *CloudCredentialUpdateRequest) (*CloudCredentialUpdateResponse, error)
@@ -18651,7 +22047,7 @@ var _CloudCredential_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type BackupLocationClient interface {
-	// Create creates new backup location
+	// Creates new backup location
 	Create(ctx context.Context, in *BackupLocationCreateRequest, opts ...grpc.CallOption) (*BackupLocationCreateResponse, error)
 	// Update given backup location details
 	Update(ctx context.Context, in *BackupLocationUpdateRequest, opts ...grpc.CallOption) (*BackupLocationUpdateResponse, error)
@@ -18740,7 +22136,7 @@ func (c *backupLocationClient) UpdateOwnership(ctx context.Context, in *BackupLo
 
 // BackupLocationServer is the server API for BackupLocation service.
 type BackupLocationServer interface {
-	// Create creates new backup location
+	// Creates new backup location
 	Create(context.Context, *BackupLocationCreateRequest) (*BackupLocationCreateResponse, error)
 	// Update given backup location details
 	Update(context.Context, *BackupLocationUpdateRequest) (*BackupLocationUpdateResponse, error)
@@ -18953,6 +22349,7 @@ var _BackupLocation_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type MetricsClient interface {
+	// Returns metrics details of backups
 	Inspect(ctx context.Context, in *MetricsInspectRequest, opts ...grpc.CallOption) (*MetricsInspectResponse, error)
 }
 
@@ -18975,6 +22372,7 @@ func (c *metricsClient) Inspect(ctx context.Context, in *MetricsInspectRequest, 
 
 // MetricsServer is the server API for Metrics service.
 type MetricsServer interface {
+	// Returns metrics details of backups
 	Inspect(context.Context, *MetricsInspectRequest) (*MetricsInspectResponse, error)
 }
 
@@ -19025,7 +22423,7 @@ var _Metrics_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type BackupClient interface {
-	// Create creates a new backup object
+	// Creates a new backup object
 	Create(ctx context.Context, in *BackupCreateRequest, opts ...grpc.CallOption) (*BackupCreateResponse, error)
 	// Update given backup details
 	Update(ctx context.Context, in *BackupUpdateRequest, opts ...grpc.CallOption) (*BackupUpdateResponse, error)
@@ -19035,6 +22433,8 @@ type BackupClient interface {
 	Inspect(ctx context.Context, in *BackupInspectRequest, opts ...grpc.CallOption) (*BackupInspectResponse, error)
 	// Delete triggers delete of a backup
 	Delete(ctx context.Context, in *BackupDeleteRequest, opts ...grpc.CallOption) (*BackupDeleteResponse, error)
+	// UpdateBackupShare updates backupshare of existing backup object
+	UpdateBackupShare(ctx context.Context, in *BackupShareUpdateRequest, opts ...grpc.CallOption) (*BackupShareUpdateResponse, error)
 }
 
 type backupClient struct {
@@ -19090,9 +22490,18 @@ func (c *backupClient) Delete(ctx context.Context, in *BackupDeleteRequest, opts
 	return out, nil
 }
 
+func (c *backupClient) UpdateBackupShare(ctx context.Context, in *BackupShareUpdateRequest, opts ...grpc.CallOption) (*BackupShareUpdateResponse, error) {
+	out := new(BackupShareUpdateResponse)
+	err := c.cc.Invoke(ctx, "/Backup/UpdateBackupShare", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackupServer is the server API for Backup service.
 type BackupServer interface {
-	// Create creates a new backup object
+	// Creates a new backup object
 	Create(context.Context, *BackupCreateRequest) (*BackupCreateResponse, error)
 	// Update given backup details
 	Update(context.Context, *BackupUpdateRequest) (*BackupUpdateResponse, error)
@@ -19102,6 +22511,8 @@ type BackupServer interface {
 	Inspect(context.Context, *BackupInspectRequest) (*BackupInspectResponse, error)
 	// Delete triggers delete of a backup
 	Delete(context.Context, *BackupDeleteRequest) (*BackupDeleteResponse, error)
+	// UpdateBackupShare updates backupshare of existing backup object
+	UpdateBackupShare(context.Context, *BackupShareUpdateRequest) (*BackupShareUpdateResponse, error)
 }
 
 // UnimplementedBackupServer can be embedded to have forward compatible implementations.
@@ -19122,6 +22533,9 @@ func (*UnimplementedBackupServer) Inspect(ctx context.Context, req *BackupInspec
 }
 func (*UnimplementedBackupServer) Delete(ctx context.Context, req *BackupDeleteRequest) (*BackupDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
+}
+func (*UnimplementedBackupServer) UpdateBackupShare(ctx context.Context, req *BackupShareUpdateRequest) (*BackupShareUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateBackupShare not implemented")
 }
 
 func RegisterBackupServer(s *grpc.Server, srv BackupServer) {
@@ -19218,6 +22632,24 @@ func _Backup_Delete_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Backup_UpdateBackupShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BackupShareUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackupServer).UpdateBackupShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Backup/UpdateBackupShare",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackupServer).UpdateBackupShare(ctx, req.(*BackupShareUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Backup_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "Backup",
 	HandlerType: (*BackupServer)(nil),
@@ -19242,6 +22674,10 @@ var _Backup_serviceDesc = grpc.ServiceDesc{
 			MethodName: "Delete",
 			Handler:    _Backup_Delete_Handler,
 		},
+		{
+			MethodName: "UpdateBackupShare",
+			Handler:    _Backup_UpdateBackupShare_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "pkg/apis/v1/api.proto",
@@ -19251,7 +22687,7 @@ var _Backup_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type RestoreClient interface {
-	// Create creates new restore object in datastore
+	// Creates new restore object in datastore
 	// It will also trigger a restore operation on the target cluster
 	Create(ctx context.Context, in *RestoreCreateRequest, opts ...grpc.CallOption) (*RestoreCreateResponse, error)
 	// Update given restore details
@@ -19319,7 +22755,7 @@ func (c *restoreClient) Delete(ctx context.Context, in *RestoreDeleteRequest, op
 
 // RestoreServer is the server API for Restore service.
 type RestoreServer interface {
-	// Create creates new restore object in datastore
+	// Creates new restore object in datastore
 	// It will also trigger a restore operation on the target cluster
 	Create(context.Context, *RestoreCreateRequest) (*RestoreCreateResponse, error)
 	// Update given restore details
@@ -19479,7 +22915,7 @@ var _Restore_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type OrganizationClient interface {
-	// Create creates new organization object in datastore
+	// Creates new organization object in datastore
 	Create(ctx context.Context, in *OrganizationCreateRequest, opts ...grpc.CallOption) (*OrganizationCreateResponse, error)
 	// Enumerate returns a list of organization object
 	Enumerate(ctx context.Context, in *OrganizationEnumerateRequest, opts ...grpc.CallOption) (*OrganizationEnumerateResponse, error)
@@ -19524,7 +22960,7 @@ func (c *organizationClient) Inspect(ctx context.Context, in *OrganizationInspec
 
 // OrganizationServer is the server API for Organization service.
 type OrganizationServer interface {
-	// Create creates new organization object in datastore
+	// Creates new organization object in datastore
 	Create(context.Context, *OrganizationCreateRequest) (*OrganizationCreateResponse, error)
 	// Enumerate returns a list of organization object
 	Enumerate(context.Context, *OrganizationEnumerateRequest) (*OrganizationEnumerateResponse, error)
@@ -19629,7 +23065,7 @@ var _Organization_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type RulesClient interface {
-	// Create creates new rule
+	// Creates new rule
 	Create(ctx context.Context, in *RuleCreateRequest, opts ...grpc.CallOption) (*RuleCreateResponse, error)
 	// Update given rule details
 	Update(ctx context.Context, in *RuleUpdateRequest, opts ...grpc.CallOption) (*RuleUpdateResponse, error)
@@ -19707,7 +23143,7 @@ func (c *rulesClient) UpdateOwnership(ctx context.Context, in *RuleOwnershipUpda
 
 // RulesServer is the server API for Rules service.
 type RulesServer interface {
-	// Create creates new rule
+	// Creates new rule
 	Create(context.Context, *RuleCreateRequest) (*RuleCreateResponse, error)
 	// Update given rule details
 	Update(context.Context, *RuleUpdateRequest) (*RuleUpdateResponse, error)
@@ -19893,7 +23329,7 @@ var _Rules_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type VersionClient interface {
-	// Get gets the version of the server
+	// gets the version of the server
 	Get(ctx context.Context, in *VersionGetRequest, opts ...grpc.CallOption) (*VersionGetResponse, error)
 }
 
@@ -19916,7 +23352,7 @@ func (c *versionClient) Get(ctx context.Context, in *VersionGetRequest, opts ...
 
 // VersionServer is the server API for Version service.
 type VersionServer interface {
-	// Get gets the version of the server
+	// gets the version of the server
 	Get(context.Context, *VersionGetRequest) (*VersionGetResponse, error)
 }
 
@@ -19971,8 +23407,9 @@ type LicenseClient interface {
 	Activate(ctx context.Context, in *LicenseActivateRequest, opts ...grpc.CallOption) (*LicenseActivateResponse, error)
 	// Enumerate returns a list of license for given cluster
 	Inspect(ctx context.Context, in *LicenseInspectRequest, opts ...grpc.CallOption) (*LicenseInspectResponse, error)
-	// Update updates Usage Based activation ID
+	// Updates Usage Based activation ID
 	Update(ctx context.Context, in *LicenseUpdateRequest, opts ...grpc.CallOption) (*LicenseUpdateResponse, error)
+	EnumerateLicenseUsageAirGapped(ctx context.Context, in *LicenseUsageAirgappedRequest, opts ...grpc.CallOption) (*LicenseUsageAirgappedResponse, error)
 }
 
 type licenseClient struct {
@@ -20010,14 +23447,24 @@ func (c *licenseClient) Update(ctx context.Context, in *LicenseUpdateRequest, op
 	return out, nil
 }
 
+func (c *licenseClient) EnumerateLicenseUsageAirGapped(ctx context.Context, in *LicenseUsageAirgappedRequest, opts ...grpc.CallOption) (*LicenseUsageAirgappedResponse, error) {
+	out := new(LicenseUsageAirgappedResponse)
+	err := c.cc.Invoke(ctx, "/License/EnumerateLicenseUsageAirGapped", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LicenseServer is the server API for License service.
 type LicenseServer interface {
 	// Activate activate a new license
 	Activate(context.Context, *LicenseActivateRequest) (*LicenseActivateResponse, error)
 	// Enumerate returns a list of license for given cluster
 	Inspect(context.Context, *LicenseInspectRequest) (*LicenseInspectResponse, error)
-	// Update updates Usage Based activation ID
+	// Updates Usage Based activation ID
 	Update(context.Context, *LicenseUpdateRequest) (*LicenseUpdateResponse, error)
+	EnumerateLicenseUsageAirGapped(context.Context, *LicenseUsageAirgappedRequest) (*LicenseUsageAirgappedResponse, error)
 }
 
 // UnimplementedLicenseServer can be embedded to have forward compatible implementations.
@@ -20032,6 +23479,9 @@ func (*UnimplementedLicenseServer) Inspect(ctx context.Context, req *LicenseInsp
 }
 func (*UnimplementedLicenseServer) Update(ctx context.Context, req *LicenseUpdateRequest) (*LicenseUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
+}
+func (*UnimplementedLicenseServer) EnumerateLicenseUsageAirGapped(ctx context.Context, req *LicenseUsageAirgappedRequest) (*LicenseUsageAirgappedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnumerateLicenseUsageAirGapped not implemented")
 }
 
 func RegisterLicenseServer(s *grpc.Server, srv LicenseServer) {
@@ -20092,6 +23542,24 @@ func _License_Update_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _License_EnumerateLicenseUsageAirGapped_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LicenseUsageAirgappedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LicenseServer).EnumerateLicenseUsageAirGapped(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/License/EnumerateLicenseUsageAirGapped",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LicenseServer).EnumerateLicenseUsageAirGapped(ctx, req.(*LicenseUsageAirgappedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _License_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "License",
 	HandlerType: (*LicenseServer)(nil),
@@ -20107,6 +23575,170 @@ var _License_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Update",
 			Handler:    _License_Update_Handler,
+		},
+		{
+			MethodName: "EnumerateLicenseUsageAirGapped",
+			Handler:    _License_EnumerateLicenseUsageAirGapped_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pkg/apis/v1/api.proto",
+}
+
+// ManagedClustersClient is the client API for ManagedClusters service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type ManagedClustersClient interface {
+	// Enumerate returns a list of managed clusters from providers like
+	// AWS, Azure, GCE, IBM
+	// using the given credentials
+	Enumerate(ctx context.Context, in *ManagedClusterEnumerateRequest, opts ...grpc.CallOption) (*ManagedClusterEnumerateResponse, error)
+	// Inspect returns detailed information on a managed cluster from providers
+	// like
+	// AWS, Azure, GCE, IBM
+	// using the given credentials
+	Inspect(ctx context.Context, in *ManagedClusterInspectRequest, opts ...grpc.CallOption) (*ManagedClusterInspectResponse, error)
+	// Bulk add discovered clusters
+	BulkAdd(ctx context.Context, in *ManagedClusterBulkAddRequest, opts ...grpc.CallOption) (*ManagedClusterBulkAddResponse, error)
+}
+
+type managedClustersClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewManagedClustersClient(cc *grpc.ClientConn) ManagedClustersClient {
+	return &managedClustersClient{cc}
+}
+
+func (c *managedClustersClient) Enumerate(ctx context.Context, in *ManagedClusterEnumerateRequest, opts ...grpc.CallOption) (*ManagedClusterEnumerateResponse, error) {
+	out := new(ManagedClusterEnumerateResponse)
+	err := c.cc.Invoke(ctx, "/ManagedClusters/Enumerate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedClustersClient) Inspect(ctx context.Context, in *ManagedClusterInspectRequest, opts ...grpc.CallOption) (*ManagedClusterInspectResponse, error) {
+	out := new(ManagedClusterInspectResponse)
+	err := c.cc.Invoke(ctx, "/ManagedClusters/Inspect", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedClustersClient) BulkAdd(ctx context.Context, in *ManagedClusterBulkAddRequest, opts ...grpc.CallOption) (*ManagedClusterBulkAddResponse, error) {
+	out := new(ManagedClusterBulkAddResponse)
+	err := c.cc.Invoke(ctx, "/ManagedClusters/BulkAdd", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ManagedClustersServer is the server API for ManagedClusters service.
+type ManagedClustersServer interface {
+	// Enumerate returns a list of managed clusters from providers like
+	// AWS, Azure, GCE, IBM
+	// using the given credentials
+	Enumerate(context.Context, *ManagedClusterEnumerateRequest) (*ManagedClusterEnumerateResponse, error)
+	// Inspect returns detailed information on a managed cluster from providers
+	// like
+	// AWS, Azure, GCE, IBM
+	// using the given credentials
+	Inspect(context.Context, *ManagedClusterInspectRequest) (*ManagedClusterInspectResponse, error)
+	// Bulk add discovered clusters
+	BulkAdd(context.Context, *ManagedClusterBulkAddRequest) (*ManagedClusterBulkAddResponse, error)
+}
+
+// UnimplementedManagedClustersServer can be embedded to have forward compatible implementations.
+type UnimplementedManagedClustersServer struct {
+}
+
+func (*UnimplementedManagedClustersServer) Enumerate(ctx context.Context, req *ManagedClusterEnumerateRequest) (*ManagedClusterEnumerateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Enumerate not implemented")
+}
+func (*UnimplementedManagedClustersServer) Inspect(ctx context.Context, req *ManagedClusterInspectRequest) (*ManagedClusterInspectResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Inspect not implemented")
+}
+func (*UnimplementedManagedClustersServer) BulkAdd(ctx context.Context, req *ManagedClusterBulkAddRequest) (*ManagedClusterBulkAddResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BulkAdd not implemented")
+}
+
+func RegisterManagedClustersServer(s *grpc.Server, srv ManagedClustersServer) {
+	s.RegisterService(&_ManagedClusters_serviceDesc, srv)
+}
+
+func _ManagedClusters_Enumerate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManagedClusterEnumerateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedClustersServer).Enumerate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ManagedClusters/Enumerate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedClustersServer).Enumerate(ctx, req.(*ManagedClusterEnumerateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedClusters_Inspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManagedClusterInspectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedClustersServer).Inspect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ManagedClusters/Inspect",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedClustersServer).Inspect(ctx, req.(*ManagedClusterInspectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedClusters_BulkAdd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManagedClusterBulkAddRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedClustersServer).BulkAdd(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ManagedClusters/BulkAdd",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedClustersServer).BulkAdd(ctx, req.(*ManagedClusterBulkAddRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _ManagedClusters_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "ManagedClusters",
+	HandlerType: (*ManagedClustersServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Enumerate",
+			Handler:    _ManagedClusters_Enumerate_Handler,
+		},
+		{
+			MethodName: "Inspect",
+			Handler:    _ManagedClusters_Inspect_Handler,
+		},
+		{
+			MethodName: "BulkAdd",
+			Handler:    _ManagedClusters_BulkAdd_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -20191,7 +23823,7 @@ var _ActivityTimeLine_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type RoleClient interface {
-	// Create creates new role object in datastore
+	// Creates new role object in datastore
 	Create(ctx context.Context, in *RoleCreateRequest, opts ...grpc.CallOption) (*RoleCreateResponse, error)
 	// Enumerate returns a list of roles object
 	Enumerate(ctx context.Context, in *RoleEnumerateRequest, opts ...grpc.CallOption) (*RoleEnumerateResponse, error)
@@ -20269,7 +23901,7 @@ func (c *roleClient) Permission(ctx context.Context, in *RolePermissionRequest, 
 
 // RoleServer is the server API for Role service.
 type RoleServer interface {
-	// Create creates new role object in datastore
+	// Creates new role object in datastore
 	Create(context.Context, *RoleCreateRequest) (*RoleCreateResponse, error)
 	// Enumerate returns a list of roles object
 	Enumerate(context.Context, *RoleEnumerateRequest) (*RoleEnumerateResponse, error)
@@ -20506,6 +24138,51 @@ func (m *ClusterInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.OwnerGroupList) > 0 {
+		for iNdEx := len(m.OwnerGroupList) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.OwnerGroupList[iNdEx])
+			copy(dAtA[i:], m.OwnerGroupList[iNdEx])
+			i = encodeVarintApi(dAtA, i, uint64(len(m.OwnerGroupList[iNdEx])))
+			i--
+			dAtA[i] = 0x62
+		}
+	}
+	if m.BackupShareStatusInfo != nil {
+		{
+			size, err := m.BackupShareStatusInfo.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x5a
+	}
+	if m.DelBackupShare != nil {
+		{
+			size, err := m.DelBackupShare.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x52
+	}
+	if m.AddBackupShare != nil {
+		{
+			size, err := m.AddBackupShare.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x4a
+	}
 	if m.CloudCredentialRef != nil {
 		{
 			size, err := m.CloudCredentialRef.MarshalToSizedBuffer(dAtA[:i])
@@ -20602,6 +24279,41 @@ func (m *ClusterInfo_StatusInfo) MarshalTo(dAtA []byte) (int, error) {
 }
 
 func (m *ClusterInfo_StatusInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Reason) > 0 {
+		i -= len(m.Reason)
+		copy(dAtA[i:], m.Reason)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Reason)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Status != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.Status))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ClusterInfo_BackupShareStatusInfo) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ClusterInfo_BackupShareStatusInfo) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ClusterInfo_BackupShareStatusInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -21127,6 +24839,26 @@ func (m *SchedulePolicyInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.AutoDelete {
+		i--
+		if m.AutoDelete {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
+	}
+	if m.ForObjectLock {
+		i--
+		if m.ForObjectLock {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
 	if len(m.BackupSchedule) > 0 {
 		for iNdEx := len(m.BackupSchedule) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.BackupSchedule[iNdEx])
@@ -21967,6 +25699,16 @@ func (m *BackupLocationInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			}
 		}
 	}
+	if m.ObjectLockEnabled {
+		i--
+		if m.ObjectLockEnabled {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x48
+	}
 	if m.CloudCredentialRef != nil {
 		{
 			size, err := m.CloudCredentialRef.MarshalToSizedBuffer(dAtA[:i])
@@ -22223,6 +25965,43 @@ func (m *BackupInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.UserBackupshareAccess != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.UserBackupshareAccess))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xe8
+	}
+	if m.BackupShare != nil {
+		{
+			size, err := m.BackupShare.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xe2
+	}
+	if m.RetentionPeriod != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.RetentionPeriod))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xd8
+	}
+	if len(m.CrUid) > 0 {
+		i -= len(m.CrUid)
+		copy(dAtA[i:], m.CrUid)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.CrUid)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xd2
+	}
 	if m.BackupType != nil {
 		{
 			size, err := m.BackupType.MarshalToSizedBuffer(dAtA[:i])
@@ -22572,6 +26351,27 @@ func (m *BackupInfo_Volume) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.Volumesnapshot) > 0 {
+		i -= len(m.Volumesnapshot)
+		copy(dAtA[i:], m.Volumesnapshot)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Volumesnapshot)))
+		i--
+		dAtA[i] = 0x72
+	}
+	if len(m.Provisioner) > 0 {
+		i -= len(m.Provisioner)
+		copy(dAtA[i:], m.Provisioner)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Provisioner)))
+		i--
+		dAtA[i] = 0x6a
+	}
+	if len(m.PvcId) > 0 {
+		i -= len(m.PvcId)
+		copy(dAtA[i:], m.PvcId)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.PvcId)))
+		i--
+		dAtA[i] = 0x62
+	}
 	if len(m.StorageClass) > 0 {
 		i -= len(m.StorageClass)
 		copy(dAtA[i:], m.StorageClass)
@@ -22989,6 +26789,20 @@ func (m *RestoreInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.BackupRef != nil {
+		{
+			size, err := m.BackupRef.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x8a
+	}
 	if len(m.StorageClassMapping) > 0 {
 		for k := range m.StorageClassMapping {
 			v := m.StorageClassMapping[k]
@@ -24737,6 +28551,97 @@ func (m *BackupScheduleDeleteResponse) MarshalToSizedBuffer(dAtA []byte) (int, e
 	return len(dAtA) - i, nil
 }
 
+func (m *ClusterBackupShareUpdateRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ClusterBackupShareUpdateRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ClusterBackupShareUpdateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Uid) > 0 {
+		i -= len(m.Uid)
+		copy(dAtA[i:], m.Uid)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Uid)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.DelBackupShare != nil {
+		{
+			size, err := m.DelBackupShare.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.AddBackupShare != nil {
+		{
+			size, err := m.AddBackupShare.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.OrgId) > 0 {
+		i -= len(m.OrgId)
+		copy(dAtA[i:], m.OrgId)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.OrgId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ClusterBackupShareUpdateResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ClusterBackupShareUpdateResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ClusterBackupShareUpdateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
 func (m *ClusterCreateRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -24949,6 +28854,16 @@ func (m *ClusterEnumerateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error)
 	_ = i
 	var l int
 	_ = l
+	if m.OnlyBackupShare {
+		i--
+		if m.OnlyBackupShare {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
 	if m.CloudCredentialRef != nil {
 		{
 			size, err := m.CloudCredentialRef.MarshalToSizedBuffer(dAtA[:i])
@@ -25273,6 +29188,18 @@ func (m *CloudCredentialCreateResponse) MarshalToSizedBuffer(dAtA []byte) (int, 
 	_ = i
 	var l int
 	_ = l
+	if m.CloudCredential != nil {
+		{
+			size, err := m.CloudCredential.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -25818,6 +29745,16 @@ func (m *BackupLocationEnumerateRequest) MarshalToSizedBuffer(dAtA []byte) (int,
 	_ = i
 	var l int
 	_ = l
+	if m.IncludeSecrets {
+		i--
+		if m.IncludeSecrets {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
 	if m.CloudCredentialRef != nil {
 		{
 			size, err := m.CloudCredentialRef.MarshalToSizedBuffer(dAtA[:i])
@@ -25923,6 +29860,16 @@ func (m *BackupLocationInspectRequest) MarshalToSizedBuffer(dAtA []byte) (int, e
 	_ = i
 	var l int
 	_ = l
+	if m.IncludeSecrets {
+		i--
+		if m.IncludeSecrets {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.Uid) > 0 {
 		i -= len(m.Uid)
 		copy(dAtA[i:], m.Uid)
@@ -26693,6 +30640,13 @@ func (m *BackupInspectRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.Uid) > 0 {
+		i -= len(m.Uid)
+		copy(dAtA[i:], m.Uid)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Uid)))
+		i--
+		dAtA[i] = 0x22
+	}
 	if len(m.OrgId) > 0 {
 		i -= len(m.OrgId)
 		copy(dAtA[i:], m.OrgId)
@@ -26765,6 +30719,13 @@ func (m *BackupDeleteRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.Uid) > 0 {
+		i -= len(m.Uid)
+		copy(dAtA[i:], m.Uid)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Uid)))
+		i--
+		dAtA[i] = 0x22
+	}
 	if len(m.Cluster) > 0 {
 		i -= len(m.Cluster)
 		copy(dAtA[i:], m.Cluster)
@@ -26812,6 +30773,85 @@ func (m *BackupDeleteResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *BackupShareUpdateRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *BackupShareUpdateRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *BackupShareUpdateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Uid) > 0 {
+		i -= len(m.Uid)
+		copy(dAtA[i:], m.Uid)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Uid)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.Backupshare != nil {
+		{
+			size, err := m.Backupshare.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.OrgId) > 0 {
+		i -= len(m.OrgId)
+		copy(dAtA[i:], m.OrgId)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.OrgId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *BackupShareUpdateResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *BackupShareUpdateResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *BackupShareUpdateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
 func (m *RestoreCreateRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -26832,6 +30872,18 @@ func (m *RestoreCreateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.BackupRef != nil {
+		{
+			size, err := m.BackupRef.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x4a
+	}
 	if len(m.StorageClassMapping) > 0 {
 		for k := range m.StorageClassMapping {
 			v := m.StorageClassMapping[k]
@@ -27874,12 +31926,19 @@ func (m *VersionInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.BuildDate)
 		i = encodeVarintApi(dAtA, i, uint64(len(m.BuildDate)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x32
 	}
 	if len(m.GitCommit) > 0 {
 		i -= len(m.GitCommit)
 		copy(dAtA[i:], m.GitCommit)
 		i = encodeVarintApi(dAtA, i, uint64(len(m.GitCommit)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.Changes) > 0 {
+		i -= len(m.Changes)
+		copy(dAtA[i:], m.Changes)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Changes)))
 		i--
 		dAtA[i] = 0x22
 	}
@@ -28051,6 +32110,20 @@ func (m *LicenseActivateRequest_UsageBasedId) MarshalToSizedBuffer(dAtA []byte) 
 	i = encodeVarintApi(dAtA, i, uint64(len(m.UsageBasedId)))
 	i--
 	dAtA[i] = 0x22
+	return len(dAtA) - i, nil
+}
+func (m *LicenseActivateRequest_UsagedBasedAirgappedId) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LicenseActivateRequest_UsagedBasedAirgappedId) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	i -= len(m.UsagedBasedAirgappedId)
+	copy(dAtA[i:], m.UsagedBasedAirgappedId)
+	i = encodeVarintApi(dAtA, i, uint64(len(m.UsagedBasedAirgappedId)))
+	i--
+	dAtA[i] = 0x2a
 	return len(dAtA) - i, nil
 }
 func (m *LicenseActivateResponse) Marshal() (dAtA []byte, err error) {
@@ -28395,6 +32468,1116 @@ func (m *LicenseResponseInfo_Status) MarshalToSizedBuffer(dAtA []byte) (int, err
 		i--
 		dAtA[i] = 0xa
 	}
+	return len(dAtA) - i, nil
+}
+
+func (m *LicenseUsageAirgappedObject) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LicenseUsageAirgappedObject) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LicenseUsageAirgappedObject) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.ReportTime != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.ReportTime))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.NodeCount != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.NodeCount))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.Metadata != nil {
+		{
+			size, err := m.Metadata.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *LicenseUsageAirgappedRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LicenseUsageAirgappedRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LicenseUsageAirgappedRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.MaxObjects != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.MaxObjects))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.ObjectIndex != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.ObjectIndex))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.OrgId) > 0 {
+		i -= len(m.OrgId)
+		copy(dAtA[i:], m.OrgId)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.OrgId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *LicenseUsageAirgappedResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LicenseUsageAirgappedResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LicenseUsageAirgappedResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.TotalCount != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.TotalCount))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Complete {
+		i--
+		if m.Complete {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.LicenseUsageAirgapped) > 0 {
+		for iNdEx := len(m.LicenseUsageAirgapped) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.LicenseUsageAirgapped[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintApi(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Config != nil {
+		{
+			size := m.Config.Size()
+			i -= size
+			if _, err := m.Config.MarshalTo(dAtA[i:]); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if m.Provider != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.Provider))
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.MaxResults != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.MaxResults))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.IncludeSecrets {
+		i--
+		if m.IncludeSecrets {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.CloudCredential != nil {
+		{
+			size, err := m.CloudCredential.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.OrgId) > 0 {
+		i -= len(m.OrgId)
+		copy(dAtA[i:], m.OrgId)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.OrgId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateRequest_AwsConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateRequest_AwsConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AwsConfig != nil {
+		{
+			size, err := m.AwsConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xa2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateRequest_GoogleConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.GoogleConfig != nil {
+		{
+			size, err := m.GoogleConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xaa
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateRequest_AzureConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AzureConfig != nil {
+		{
+			size, err := m.AzureConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xb2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateRequest_AWSConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateRequest_AWSConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.NextToken) > 0 {
+		i -= len(m.NextToken)
+		copy(dAtA[i:], m.NextToken)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.NextToken)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Region) > 0 {
+		i -= len(m.Region)
+		copy(dAtA[i:], m.Region)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Region)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateRequest_AzureConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateRequest_AzureConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateRequest_AzureConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterObject) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterObject) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterObject) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Status != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.Status))
+		i--
+		dAtA[i] = 0x30
+	}
+	if len(m.K8SVersion) > 0 {
+		i -= len(m.K8SVersion)
+		copy(dAtA[i:], m.K8SVersion)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.K8SVersion)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.Kubeconfig) > 0 {
+		i -= len(m.Kubeconfig)
+		copy(dAtA[i:], m.Kubeconfig)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Kubeconfig)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.CloudCredential != nil {
+		{
+			size, err := m.CloudCredential.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Uid) > 0 {
+		i -= len(m.Uid)
+		copy(dAtA[i:], m.Uid)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Uid)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Config != nil {
+		{
+			size := m.Config.Size()
+			i -= size
+			if _, err := m.Config.MarshalTo(dAtA[i:]); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if m.Provider != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.Provider))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Cluster) > 0 {
+		for iNdEx := len(m.Cluster) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Cluster[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintApi(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateResponse_AwsConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateResponse_AwsConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AwsConfig != nil {
+		{
+			size, err := m.AwsConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xa2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateResponse_GoogleConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.GoogleConfig != nil {
+		{
+			size, err := m.GoogleConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xaa
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateResponse_AzureConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AzureConfig != nil {
+		{
+			size, err := m.AzureConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xb2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateResponse_AWSConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateResponse_AWSConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.NextToken) > 0 {
+		i -= len(m.NextToken)
+		copy(dAtA[i:], m.NextToken)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.NextToken)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterEnumerateResponse_AzureConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterEnumerateResponse_AzureConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterEnumerateResponse_AzureConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterInspectRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterInspectRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Config != nil {
+		{
+			size := m.Config.Size()
+			i -= size
+			if _, err := m.Config.MarshalTo(dAtA[i:]); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if m.Provider != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.Provider))
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.IncludeSecrets {
+		i--
+		if m.IncludeSecrets {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.CloudCredential != nil {
+		{
+			size, err := m.CloudCredential.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.OrgId) > 0 {
+		i -= len(m.OrgId)
+		copy(dAtA[i:], m.OrgId)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.OrgId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterInspectRequest_AwsConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectRequest_AwsConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AwsConfig != nil {
+		{
+			size, err := m.AwsConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xa2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectRequest_GoogleConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.GoogleConfig != nil {
+		{
+			size, err := m.GoogleConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xaa
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterInspectRequest_AzureConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectRequest_AzureConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AzureConfig != nil {
+		{
+			size, err := m.AzureConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xb2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterInspectRequest_AWSConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectRequest_AWSConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Region) > 0 {
+		i -= len(m.Region)
+		copy(dAtA[i:], m.Region)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Region)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterInspectRequest_GoogleConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterInspectRequest_GoogleConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectRequest_GoogleConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterInspectRequest_AzureConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterInspectRequest_AzureConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectRequest_AzureConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterInspectResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterInspectResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterInspectResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Cluster != nil {
+		{
+			size, err := m.Cluster.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterBulkAddRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterBulkAddRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Config != nil {
+		{
+			size := m.Config.Size()
+			i -= size
+			if _, err := m.Config.MarshalTo(dAtA[i:]); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if m.Provider != 0 {
+		i = encodeVarintApi(dAtA, i, uint64(m.Provider))
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.ClusterName) > 0 {
+		for iNdEx := len(m.ClusterName) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ClusterName[iNdEx])
+			copy(dAtA[i:], m.ClusterName[iNdEx])
+			i = encodeVarintApi(dAtA, i, uint64(len(m.ClusterName[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if m.CloudCredential != nil {
+		{
+			size, err := m.CloudCredential.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.OrgId) > 0 {
+		i -= len(m.OrgId)
+		copy(dAtA[i:], m.OrgId)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.OrgId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterBulkAddRequest_AwsConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddRequest_AwsConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AwsConfig != nil {
+		{
+			size, err := m.AwsConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xa2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddRequest_GoogleConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.GoogleConfig != nil {
+		{
+			size, err := m.GoogleConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xaa
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig_) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddRequest_AzureConfig_) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.AzureConfig != nil {
+		{
+			size, err := m.AzureConfig.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintApi(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x6
+		i--
+		dAtA[i] = 0xb2
+	}
+	return len(dAtA) - i, nil
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterBulkAddRequest_AWSConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddRequest_AWSConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Region) > 0 {
+		i -= len(m.Region)
+		copy(dAtA[i:], m.Region)
+		i = encodeVarintApi(dAtA, i, uint64(len(m.Region)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterBulkAddRequest_AzureConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterBulkAddRequest_AzureConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddRequest_AzureConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *ManagedClusterBulkAddResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ManagedClusterBulkAddResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ManagedClusterBulkAddResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
 	return len(dAtA) - i, nil
 }
 
@@ -29324,6 +34507,20 @@ func NewPopulatedClusterInfo(r randyApi, easy bool) *ClusterInfo {
 	if r.Intn(5) != 0 {
 		this.CloudCredentialRef = NewPopulatedObjectRef(r, easy)
 	}
+	if r.Intn(5) != 0 {
+		this.AddBackupShare = NewPopulatedBackupShare(r, easy)
+	}
+	if r.Intn(5) != 0 {
+		this.DelBackupShare = NewPopulatedBackupShare(r, easy)
+	}
+	if r.Intn(5) != 0 {
+		this.BackupShareStatusInfo = NewPopulatedClusterInfo_BackupShareStatusInfo(r, easy)
+	}
+	v1 := r.Intn(10)
+	this.OwnerGroupList = make([]string, v1)
+	for i := 0; i < v1; i++ {
+		this.OwnerGroupList[i] = string(randStringApi(r))
+	}
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -29331,7 +34528,16 @@ func NewPopulatedClusterInfo(r randyApi, easy bool) *ClusterInfo {
 
 func NewPopulatedClusterInfo_StatusInfo(r randyApi, easy bool) *ClusterInfo_StatusInfo {
 	this := &ClusterInfo_StatusInfo{}
-	this.Status = ClusterInfo_StatusInfo_Status([]int32{0, 1, 2, 3}[r.Intn(4)])
+	this.Status = ClusterInfo_StatusInfo_Status([]int32{0, 1, 2, 3, 4, 5, 6}[r.Intn(7)])
+	this.Reason = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedClusterInfo_BackupShareStatusInfo(r randyApi, easy bool) *ClusterInfo_BackupShareStatusInfo {
+	this := &ClusterInfo_BackupShareStatusInfo{}
+	this.Status = ClusterInfo_BackupShareStatusInfo_Status([]int32{0, 1, 2, 3, 4}[r.Intn(5)])
 	this.Reason = string(randStringApi(r))
 	if !easy && r.Intn(10) != 0 {
 	}
@@ -29476,11 +34682,13 @@ func NewPopulatedSchedulePolicyInfo(r randyApi, easy bool) *SchedulePolicyInfo {
 	if r.Intn(5) != 0 {
 		this.Monthly = NewPopulatedSchedulePolicyInfo_MonthlyPolicy(r, easy)
 	}
-	v1 := r.Intn(10)
-	this.BackupSchedule = make([]string, v1)
-	for i := 0; i < v1; i++ {
+	v2 := r.Intn(10)
+	this.BackupSchedule = make([]string, v2)
+	for i := 0; i < v2; i++ {
 		this.BackupSchedule[i] = string(randStringApi(r))
 	}
+	this.ForObjectLock = bool(bool(r.Intn(2) == 0))
+	this.AutoDelete = bool(bool(r.Intn(2) == 0))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -29581,23 +34789,23 @@ func NewPopulatedBackupScheduleInfo(r randyApi, easy bool) *BackupScheduleInfo {
 	this.Suspend = bool(bool(r.Intn(2) == 0))
 	this.ReclaimPolicy = BackupScheduleInfo_ReclaimPolicyType([]int32{0, 1, 2}[r.Intn(3)])
 	if r.Intn(5) != 0 {
-		v2 := r.Intn(10)
+		v3 := r.Intn(10)
 		this.BackupStatus = make(map[string]*BackupScheduleInfo_StatusInfoList)
-		for i := 0; i < v2; i++ {
+		for i := 0; i < v3; i++ {
 			this.BackupStatus[randStringApi(r)] = NewPopulatedBackupScheduleInfo_StatusInfoList(r, easy)
 		}
 	}
 	this.BackupLocation = string(randStringApi(r))
 	this.Cluster = string(randStringApi(r))
-	v3 := r.Intn(10)
-	this.Namespaces = make([]string, v3)
-	for i := 0; i < v3; i++ {
+	v4 := r.Intn(10)
+	this.Namespaces = make([]string, v4)
+	for i := 0; i < v4; i++ {
 		this.Namespaces[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v4 := r.Intn(10)
+		v5 := r.Intn(10)
 		this.LabelSelectors = make(map[string]string)
-		for i := 0; i < v4; i++ {
+		for i := 0; i < v5; i++ {
 			this.LabelSelectors[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -29611,17 +34819,17 @@ func NewPopulatedBackupScheduleInfo(r randyApi, easy bool) *BackupScheduleInfo {
 		this.SuspendedBy = NewPopulatedBackupScheduleInfo_SuspendedBy(r, easy)
 	}
 	if r.Intn(5) != 0 {
-		v5 := r.Intn(5)
-		this.IncludeResources = make([]*ResourceInfo, v5)
-		for i := 0; i < v5; i++ {
+		v6 := r.Intn(5)
+		this.IncludeResources = make([]*ResourceInfo, v6)
+		for i := 0; i < v6; i++ {
 			this.IncludeResources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
 	this.StorkVersion = string(randStringApi(r))
 	this.CsiSnapshotClassName = string(randStringApi(r))
-	v6 := r.Intn(10)
-	this.ResourceTypes = make([]string, v6)
-	for i := 0; i < v6; i++ {
+	v7 := r.Intn(10)
+	this.ResourceTypes = make([]string, v7)
+	for i := 0; i < v7; i++ {
 		this.ResourceTypes[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
@@ -29663,9 +34871,9 @@ func NewPopulatedBackupScheduleInfo_SuspendedBy(r randyApi, easy bool) *BackupSc
 func NewPopulatedBackupScheduleInfo_StatusInfoList(r randyApi, easy bool) *BackupScheduleInfo_StatusInfoList {
 	this := &BackupScheduleInfo_StatusInfoList{}
 	if r.Intn(5) != 0 {
-		v7 := r.Intn(5)
-		this.Status = make([]*BackupScheduleInfo_StatusInfo, v7)
-		for i := 0; i < v7; i++ {
+		v8 := r.Intn(5)
+		this.Status = make([]*BackupScheduleInfo_StatusInfo, v8)
+		for i := 0; i < v8; i++ {
 			this.Status[i] = NewPopulatedBackupScheduleInfo_StatusInfo(r, easy)
 		}
 	}
@@ -29717,6 +34925,7 @@ func NewPopulatedBackupLocationInfo(r randyApi, easy bool) *BackupLocationInfo {
 	if r.Intn(5) != 0 {
 		this.CloudCredentialRef = NewPopulatedObjectRef(r, easy)
 	}
+	this.ObjectLockEnabled = bool(bool(r.Intn(2) == 0))
 	oneofNumber_Config := []int32{100}[r.Intn(1)]
 	switch oneofNumber_Config {
 	case 100:
@@ -29770,15 +34979,15 @@ func NewPopulatedBackupInfo(r randyApi, easy bool) *BackupInfo {
 	this := &BackupInfo{}
 	this.BackupLocation = string(randStringApi(r))
 	this.Cluster = string(randStringApi(r))
-	v8 := r.Intn(10)
-	this.Namespaces = make([]string, v8)
-	for i := 0; i < v8; i++ {
+	v9 := r.Intn(10)
+	this.Namespaces = make([]string, v9)
+	for i := 0; i < v9; i++ {
 		this.Namespaces[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v9 := r.Intn(10)
+		v10 := r.Intn(10)
 		this.LabelSelectors = make(map[string]string)
-		for i := 0; i < v9; i++ {
+		for i := 0; i < v10; i++ {
 			this.LabelSelectors[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -29786,16 +34995,16 @@ func NewPopulatedBackupInfo(r randyApi, easy bool) *BackupInfo {
 		this.Status = NewPopulatedBackupInfo_StatusInfo(r, easy)
 	}
 	if r.Intn(5) != 0 {
-		v10 := r.Intn(5)
-		this.Resources = make([]*ResourceInfo, v10)
-		for i := 0; i < v10; i++ {
+		v11 := r.Intn(5)
+		this.Resources = make([]*ResourceInfo, v11)
+		for i := 0; i < v11; i++ {
 			this.Resources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
 	if r.Intn(5) != 0 {
-		v11 := r.Intn(5)
-		this.Volumes = make([]*BackupInfo_Volume, v11)
-		for i := 0; i < v11; i++ {
+		v12 := r.Intn(5)
+		this.Volumes = make([]*BackupInfo_Volume, v12)
+		for i := 0; i < v12; i++ {
 			this.Volumes[i] = NewPopulatedBackupInfo_Volume(r, easy)
 		}
 	}
@@ -29810,18 +35019,18 @@ func NewPopulatedBackupInfo(r randyApi, easy bool) *BackupInfo {
 	this.TotalSize = uint64(uint64(r.Uint32()))
 	this.CloudCredential = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v12 := r.Intn(5)
-		this.IncludeResources = make([]*ResourceInfo, v12)
-		for i := 0; i < v12; i++ {
+		v13 := r.Intn(5)
+		this.IncludeResources = make([]*ResourceInfo, v13)
+		for i := 0; i < v13; i++ {
 			this.IncludeResources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
 	this.ResourceCount = uint64(uint64(r.Uint32()))
 	this.StorkVersion = string(randStringApi(r))
 	this.CsiSnapshotClassName = string(randStringApi(r))
-	v13 := r.Intn(10)
-	this.ResourceTypes = make([]string, v13)
-	for i := 0; i < v13; i++ {
+	v14 := r.Intn(10)
+	this.ResourceTypes = make([]string, v14)
+	for i := 0; i < v14; i++ {
 		this.ResourceTypes[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
@@ -29839,6 +35048,15 @@ func NewPopulatedBackupInfo(r randyApi, easy bool) *BackupInfo {
 	if r.Intn(5) != 0 {
 		this.BackupType = NewPopulatedBackupInfo_BackupType(r, easy)
 	}
+	this.CrUid = string(randStringApi(r))
+	this.RetentionPeriod = int64(r.Int63())
+	if r.Intn(2) == 0 {
+		this.RetentionPeriod *= -1
+	}
+	if r.Intn(5) != 0 {
+		this.BackupShare = NewPopulatedBackupShare(r, easy)
+	}
+	this.UserBackupshareAccess = BackupShare_AccessType([]int32{0, 1, 2, 3}[r.Intn(4)])
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -29871,21 +35089,24 @@ func NewPopulatedBackupInfo_Volume(r randyApi, easy bool) *BackupInfo_Volume {
 		this.Status = NewPopulatedBackupInfo_StatusInfo(r, easy)
 	}
 	this.DriverName = string(randStringApi(r))
-	v14 := r.Intn(10)
-	this.Zones = make([]string, v14)
-	for i := 0; i < v14; i++ {
+	v15 := r.Intn(10)
+	this.Zones = make([]string, v15)
+	for i := 0; i < v15; i++ {
 		this.Zones[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v15 := r.Intn(10)
+		v16 := r.Intn(10)
 		this.Options = make(map[string]string)
-		for i := 0; i < v15; i++ {
+		for i := 0; i < v16; i++ {
 			this.Options[randStringApi(r)] = randStringApi(r)
 		}
 	}
 	this.TotalSize = uint64(uint64(r.Uint32()))
 	this.ActualSize = uint64(uint64(r.Uint32()))
 	this.StorageClass = string(randStringApi(r))
+	this.PvcId = string(randStringApi(r))
+	this.Provisioner = string(randStringApi(r))
+	this.Volumesnapshot = string(randStringApi(r))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -29916,9 +35137,9 @@ func NewPopulatedBackupObject(r randyApi, easy bool) *BackupObject {
 func NewPopulatedRulesInfo(r randyApi, easy bool) *RulesInfo {
 	this := &RulesInfo{}
 	if r.Intn(5) != 0 {
-		v16 := r.Intn(5)
-		this.Rules = make([]*RulesInfo_RuleItem, v16)
-		for i := 0; i < v16; i++ {
+		v17 := r.Intn(5)
+		this.Rules = make([]*RulesInfo_RuleItem, v17)
+		for i := 0; i < v17; i++ {
 			this.Rules[i] = NewPopulatedRulesInfo_RuleItem(r, easy)
 		}
 	}
@@ -29930,16 +35151,16 @@ func NewPopulatedRulesInfo(r randyApi, easy bool) *RulesInfo {
 func NewPopulatedRulesInfo_RuleItem(r randyApi, easy bool) *RulesInfo_RuleItem {
 	this := &RulesInfo_RuleItem{}
 	if r.Intn(5) != 0 {
-		v17 := r.Intn(10)
+		v18 := r.Intn(10)
 		this.PodSelector = make(map[string]string)
-		for i := 0; i < v17; i++ {
+		for i := 0; i < v18; i++ {
 			this.PodSelector[randStringApi(r)] = randStringApi(r)
 		}
 	}
 	if r.Intn(5) != 0 {
-		v18 := r.Intn(5)
-		this.Actions = make([]*RulesInfo_Action, v18)
-		for i := 0; i < v18; i++ {
+		v19 := r.Intn(5)
+		this.Actions = make([]*RulesInfo_Action, v19)
+		for i := 0; i < v19; i++ {
 			this.Actions[i] = NewPopulatedRulesInfo_Action(r, easy)
 		}
 	}
@@ -29984,16 +35205,16 @@ func NewPopulatedRestoreInfo(r randyApi, easy bool) *RestoreInfo {
 	this.Backup = string(randStringApi(r))
 	this.BackupLocation = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v19 := r.Intn(10)
+		v20 := r.Intn(10)
 		this.LabelSelectors = make(map[string]string)
-		for i := 0; i < v19; i++ {
+		for i := 0; i < v20; i++ {
 			this.LabelSelectors[randStringApi(r)] = randStringApi(r)
 		}
 	}
 	if r.Intn(5) != 0 {
-		v20 := r.Intn(10)
+		v21 := r.Intn(10)
 		this.NamespaceMapping = make(map[string]string)
-		for i := 0; i < v20; i++ {
+		for i := 0; i < v21; i++ {
 			this.NamespaceMapping[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30002,30 +35223,30 @@ func NewPopulatedRestoreInfo(r randyApi, easy bool) *RestoreInfo {
 		this.Status = NewPopulatedRestoreInfo_StatusInfo(r, easy)
 	}
 	if r.Intn(5) != 0 {
-		v21 := r.Intn(5)
-		this.Resources = make([]*RestoreInfo_RestoredResource, v21)
-		for i := 0; i < v21; i++ {
+		v22 := r.Intn(5)
+		this.Resources = make([]*RestoreInfo_RestoredResource, v22)
+		for i := 0; i < v22; i++ {
 			this.Resources[i] = NewPopulatedRestoreInfo_RestoredResource(r, easy)
 		}
 	}
 	if r.Intn(5) != 0 {
-		v22 := r.Intn(5)
-		this.Volumes = make([]*RestoreInfo_Volume, v22)
-		for i := 0; i < v22; i++ {
+		v23 := r.Intn(5)
+		this.Volumes = make([]*RestoreInfo_Volume, v23)
+		for i := 0; i < v23; i++ {
 			this.Volumes[i] = NewPopulatedRestoreInfo_Volume(r, easy)
 		}
 	}
 	this.Cluster = string(randStringApi(r))
-	v23 := r.Intn(10)
-	this.IncludeOptionalResourceTypes = make([]string, v23)
-	for i := 0; i < v23; i++ {
+	v24 := r.Intn(10)
+	this.IncludeOptionalResourceTypes = make([]string, v24)
+	for i := 0; i < v24; i++ {
 		this.IncludeOptionalResourceTypes[i] = string(randStringApi(r))
 	}
 	this.TotalSize = uint64(uint64(r.Uint32()))
 	if r.Intn(5) != 0 {
-		v24 := r.Intn(5)
-		this.IncludeResources = make([]*ResourceInfo, v24)
-		for i := 0; i < v24; i++ {
+		v25 := r.Intn(5)
+		this.IncludeResources = make([]*ResourceInfo, v25)
+		for i := 0; i < v25; i++ {
 			this.IncludeResources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
@@ -30035,11 +35256,14 @@ func NewPopulatedRestoreInfo(r randyApi, easy bool) *RestoreInfo {
 		this.BackupLocationRef = NewPopulatedObjectRef(r, easy)
 	}
 	if r.Intn(5) != 0 {
-		v25 := r.Intn(10)
+		v26 := r.Intn(10)
 		this.StorageClassMapping = make(map[string]string)
-		for i := 0; i < v25; i++ {
+		for i := 0; i < v26; i++ {
 			this.StorageClassMapping[randStringApi(r)] = randStringApi(r)
 		}
+	}
+	if r.Intn(5) != 0 {
+		this.BackupRef = NewPopulatedObjectRef(r, easy)
 	}
 	if !easy && r.Intn(10) != 0 {
 	}
@@ -30071,15 +35295,15 @@ func NewPopulatedRestoreInfo_Volume(r randyApi, easy bool) *RestoreInfo_Volume {
 		this.Status = NewPopulatedRestoreInfo_StatusInfo(r, easy)
 	}
 	this.DriverName = string(randStringApi(r))
-	v26 := r.Intn(10)
-	this.Zones = make([]string, v26)
-	for i := 0; i < v26; i++ {
+	v27 := r.Intn(10)
+	this.Zones = make([]string, v27)
+	for i := 0; i < v27; i++ {
 		this.Zones[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v27 := r.Intn(10)
+		v28 := r.Intn(10)
 		this.Options = make(map[string]string)
-		for i := 0; i < v27; i++ {
+		for i := 0; i < v28; i++ {
 			this.Options[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30141,9 +35365,9 @@ func NewPopulatedTimeRange(r randyApi, easy bool) *TimeRange {
 func NewPopulatedEnumerateOptions(r randyApi, easy bool) *EnumerateOptions {
 	this := &EnumerateOptions{}
 	if r.Intn(5) != 0 {
-		v28 := r.Intn(10)
+		v29 := r.Intn(10)
 		this.Labels = make(map[string]string)
-		for i := 0; i < v28; i++ {
+		for i := 0; i < v29; i++ {
 			this.Labels[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30204,9 +35428,9 @@ func NewPopulatedSchedulePolicyEnumerateRequest(r randyApi, easy bool) *Schedule
 	this := &SchedulePolicyEnumerateRequest{}
 	this.OrgId = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v29 := r.Intn(10)
+		v30 := r.Intn(10)
 		this.Labels = make(map[string]string)
-		for i := 0; i < v29; i++ {
+		for i := 0; i < v30; i++ {
 			this.Labels[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30218,9 +35442,9 @@ func NewPopulatedSchedulePolicyEnumerateRequest(r randyApi, easy bool) *Schedule
 func NewPopulatedSchedulePolicyEnumerateResponse(r randyApi, easy bool) *SchedulePolicyEnumerateResponse {
 	this := &SchedulePolicyEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v30 := r.Intn(5)
-		this.SchedulePolicies = make([]*SchedulePolicyObject, v30)
-		for i := 0; i < v30; i++ {
+		v31 := r.Intn(5)
+		this.SchedulePolicies = make([]*SchedulePolicyObject, v31)
+		for i := 0; i < v31; i++ {
 			this.SchedulePolicies[i] = NewPopulatedSchedulePolicyObject(r, easy)
 		}
 	}
@@ -30295,31 +35519,31 @@ func NewPopulatedBackupScheduleCreateRequest(r randyApi, easy bool) *BackupSched
 	this.ReclaimPolicy = BackupScheduleInfo_ReclaimPolicyType([]int32{0, 1, 2}[r.Intn(3)])
 	this.BackupLocation = string(randStringApi(r))
 	this.Cluster = string(randStringApi(r))
-	v31 := r.Intn(10)
-	this.Namespaces = make([]string, v31)
-	for i := 0; i < v31; i++ {
+	v32 := r.Intn(10)
+	this.Namespaces = make([]string, v32)
+	for i := 0; i < v32; i++ {
 		this.Namespaces[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v32 := r.Intn(10)
+		v33 := r.Intn(10)
 		this.LabelSelectors = make(map[string]string)
-		for i := 0; i < v32; i++ {
+		for i := 0; i < v33; i++ {
 			this.LabelSelectors[randStringApi(r)] = randStringApi(r)
 		}
 	}
 	this.PreExecRule = string(randStringApi(r))
 	this.PostExecRule = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v33 := r.Intn(5)
-		this.IncludeResources = make([]*ResourceInfo, v33)
-		for i := 0; i < v33; i++ {
+		v34 := r.Intn(5)
+		this.IncludeResources = make([]*ResourceInfo, v34)
+		for i := 0; i < v34; i++ {
 			this.IncludeResources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
 	this.CsiSnapshotClassName = string(randStringApi(r))
-	v34 := r.Intn(10)
-	this.ResourceTypes = make([]string, v34)
-	for i := 0; i < v34; i++ {
+	v35 := r.Intn(10)
+	this.ResourceTypes = make([]string, v35)
+	for i := 0; i < v35; i++ {
 		this.ResourceTypes[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
@@ -30356,15 +35580,15 @@ func NewPopulatedBackupScheduleUpdateRequest(r randyApi, easy bool) *BackupSched
 	this.ReclaimPolicy = BackupScheduleInfo_ReclaimPolicyType([]int32{0, 1, 2}[r.Intn(3)])
 	this.BackupLocation = string(randStringApi(r))
 	this.Cluster = string(randStringApi(r))
-	v35 := r.Intn(10)
-	this.Namespaces = make([]string, v35)
-	for i := 0; i < v35; i++ {
+	v36 := r.Intn(10)
+	this.Namespaces = make([]string, v36)
+	for i := 0; i < v36; i++ {
 		this.Namespaces[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v36 := r.Intn(10)
+		v37 := r.Intn(10)
 		this.LabelSelectors = make(map[string]string)
-		for i := 0; i < v36; i++ {
+		for i := 0; i < v37; i++ {
 			this.LabelSelectors[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30372,9 +35596,9 @@ func NewPopulatedBackupScheduleUpdateRequest(r randyApi, easy bool) *BackupSched
 	this.PostExecRule = string(randStringApi(r))
 	this.Suspend = bool(bool(r.Intn(2) == 0))
 	if r.Intn(5) != 0 {
-		v37 := r.Intn(5)
-		this.IncludeResources = make([]*ResourceInfo, v37)
-		for i := 0; i < v37; i++ {
+		v38 := r.Intn(5)
+		this.IncludeResources = make([]*ResourceInfo, v38)
+		for i := 0; i < v38; i++ {
 			this.IncludeResources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
@@ -30407,9 +35631,9 @@ func NewPopulatedBackupScheduleEnumerateRequest(r randyApi, easy bool) *BackupSc
 	this := &BackupScheduleEnumerateRequest{}
 	this.OrgId = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v38 := r.Intn(10)
+		v39 := r.Intn(10)
 		this.Labels = make(map[string]string)
-		for i := 0; i < v38; i++ {
+		for i := 0; i < v39; i++ {
 			this.Labels[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30425,9 +35649,9 @@ func NewPopulatedBackupScheduleEnumerateRequest(r randyApi, easy bool) *BackupSc
 func NewPopulatedBackupScheduleEnumerateResponse(r randyApi, easy bool) *BackupScheduleEnumerateResponse {
 	this := &BackupScheduleEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v39 := r.Intn(5)
-		this.BackupSchedules = make([]*BackupScheduleObject, v39)
-		for i := 0; i < v39; i++ {
+		v40 := r.Intn(5)
+		this.BackupSchedules = make([]*BackupScheduleObject, v40)
+		for i := 0; i < v40; i++ {
 			this.BackupSchedules[i] = NewPopulatedBackupScheduleObject(r, easy)
 		}
 	}
@@ -30469,6 +35693,29 @@ func NewPopulatedBackupScheduleDeleteRequest(r randyApi, easy bool) *BackupSched
 
 func NewPopulatedBackupScheduleDeleteResponse(r randyApi, easy bool) *BackupScheduleDeleteResponse {
 	this := &BackupScheduleDeleteResponse{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedClusterBackupShareUpdateRequest(r randyApi, easy bool) *ClusterBackupShareUpdateRequest {
+	this := &ClusterBackupShareUpdateRequest{}
+	this.OrgId = string(randStringApi(r))
+	this.Name = string(randStringApi(r))
+	if r.Intn(5) != 0 {
+		this.AddBackupShare = NewPopulatedBackupShare(r, easy)
+	}
+	if r.Intn(5) != 0 {
+		this.DelBackupShare = NewPopulatedBackupShare(r, easy)
+	}
+	this.Uid = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedClusterBackupShareUpdateResponse(r randyApi, easy bool) *ClusterBackupShareUpdateResponse {
+	this := &ClusterBackupShareUpdateResponse{}
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -30528,9 +35775,9 @@ func NewPopulatedClusterEnumerateRequest(r randyApi, easy bool) *ClusterEnumerat
 	this := &ClusterEnumerateRequest{}
 	this.OrgId = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v40 := r.Intn(10)
+		v41 := r.Intn(10)
 		this.Labels = make(map[string]string)
-		for i := 0; i < v40; i++ {
+		for i := 0; i < v41; i++ {
 			this.Labels[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30539,6 +35786,7 @@ func NewPopulatedClusterEnumerateRequest(r randyApi, easy bool) *ClusterEnumerat
 	if r.Intn(5) != 0 {
 		this.CloudCredentialRef = NewPopulatedObjectRef(r, easy)
 	}
+	this.OnlyBackupShare = bool(bool(r.Intn(2) == 0))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -30547,9 +35795,9 @@ func NewPopulatedClusterEnumerateRequest(r randyApi, easy bool) *ClusterEnumerat
 func NewPopulatedClusterEnumerateResponse(r randyApi, easy bool) *ClusterEnumerateResponse {
 	this := &ClusterEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v41 := r.Intn(5)
-		this.Clusters = make([]*ClusterObject, v41)
-		for i := 0; i < v41; i++ {
+		v42 := r.Intn(5)
+		this.Clusters = make([]*ClusterObject, v42)
+		for i := 0; i < v42; i++ {
 			this.Clusters[i] = NewPopulatedClusterObject(r, easy)
 		}
 	}
@@ -30611,6 +35859,9 @@ func NewPopulatedCloudCredentialCreateRequest(r randyApi, easy bool) *CloudCrede
 
 func NewPopulatedCloudCredentialCreateResponse(r randyApi, easy bool) *CloudCredentialCreateResponse {
 	this := &CloudCredentialCreateResponse{}
+	if r.Intn(5) != 0 {
+		this.CloudCredential = NewPopulatedCloudCredentialObject(r, easy)
+	}
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -30648,9 +35899,9 @@ func NewPopulatedCloudCredentialEnumerateRequest(r randyApi, easy bool) *CloudCr
 func NewPopulatedCloudCredentialEnumerateResponse(r randyApi, easy bool) *CloudCredentialEnumerateResponse {
 	this := &CloudCredentialEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v42 := r.Intn(5)
-		this.CloudCredentials = make([]*CloudCredentialObject, v42)
-		for i := 0; i < v42; i++ {
+		v43 := r.Intn(5)
+		this.CloudCredentials = make([]*CloudCredentialObject, v43)
+		for i := 0; i < v43; i++ {
 			this.CloudCredentials[i] = NewPopulatedCloudCredentialObject(r, easy)
 		}
 	}
@@ -30761,9 +36012,9 @@ func NewPopulatedBackupLocationEnumerateRequest(r randyApi, easy bool) *BackupLo
 	this := &BackupLocationEnumerateRequest{}
 	this.OrgId = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v43 := r.Intn(10)
+		v44 := r.Intn(10)
 		this.Labels = make(map[string]string)
-		for i := 0; i < v43; i++ {
+		for i := 0; i < v44; i++ {
 			this.Labels[randStringApi(r)] = randStringApi(r)
 		}
 	}
@@ -30771,6 +36022,7 @@ func NewPopulatedBackupLocationEnumerateRequest(r randyApi, easy bool) *BackupLo
 	if r.Intn(5) != 0 {
 		this.CloudCredentialRef = NewPopulatedObjectRef(r, easy)
 	}
+	this.IncludeSecrets = bool(bool(r.Intn(2) == 0))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -30779,9 +36031,9 @@ func NewPopulatedBackupLocationEnumerateRequest(r randyApi, easy bool) *BackupLo
 func NewPopulatedBackupLocationEnumerateResponse(r randyApi, easy bool) *BackupLocationEnumerateResponse {
 	this := &BackupLocationEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v44 := r.Intn(5)
-		this.BackupLocations = make([]*BackupLocationObject, v44)
-		for i := 0; i < v44; i++ {
+		v45 := r.Intn(5)
+		this.BackupLocations = make([]*BackupLocationObject, v45)
+		for i := 0; i < v45; i++ {
 			this.BackupLocations[i] = NewPopulatedBackupLocationObject(r, easy)
 		}
 	}
@@ -30795,6 +36047,7 @@ func NewPopulatedBackupLocationInspectRequest(r randyApi, easy bool) *BackupLoca
 	this.OrgId = string(randStringApi(r))
 	this.Name = string(randStringApi(r))
 	this.Uid = string(randStringApi(r))
+	this.IncludeSecrets = bool(bool(r.Intn(2) == 0))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -30876,9 +36129,9 @@ func NewPopulatedMetricsInspectRequest(r randyApi, easy bool) *MetricsInspectReq
 func NewPopulatedMetricsInspectResponse(r randyApi, easy bool) *MetricsInspectResponse {
 	this := &MetricsInspectResponse{}
 	if r.Intn(5) != 0 {
-		v45 := r.Intn(5)
-		this.Stats = make([]*MetricsInspectResponse_Stats, v45)
-		for i := 0; i < v45; i++ {
+		v46 := r.Intn(5)
+		this.Stats = make([]*MetricsInspectResponse_Stats, v46)
+		for i := 0; i < v46; i++ {
 			this.Stats[i] = NewPopulatedMetricsInspectResponse_Stats(r, easy)
 		}
 	}
@@ -30905,31 +36158,31 @@ func NewPopulatedBackupCreateRequest(r randyApi, easy bool) *BackupCreateRequest
 	}
 	this.BackupLocation = string(randStringApi(r))
 	this.Cluster = string(randStringApi(r))
-	v46 := r.Intn(10)
-	this.Namespaces = make([]string, v46)
-	for i := 0; i < v46; i++ {
+	v47 := r.Intn(10)
+	this.Namespaces = make([]string, v47)
+	for i := 0; i < v47; i++ {
 		this.Namespaces[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v47 := r.Intn(10)
+		v48 := r.Intn(10)
 		this.LabelSelectors = make(map[string]string)
-		for i := 0; i < v47; i++ {
+		for i := 0; i < v48; i++ {
 			this.LabelSelectors[randStringApi(r)] = randStringApi(r)
 		}
 	}
 	this.PreExecRule = string(randStringApi(r))
 	this.PostExecRule = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v48 := r.Intn(5)
-		this.IncludeResources = make([]*ResourceInfo, v48)
-		for i := 0; i < v48; i++ {
+		v49 := r.Intn(5)
+		this.IncludeResources = make([]*ResourceInfo, v49)
+		for i := 0; i < v49; i++ {
 			this.IncludeResources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
 	this.CsiSnapshotClassName = string(randStringApi(r))
-	v49 := r.Intn(10)
-	this.ResourceTypes = make([]string, v49)
-	for i := 0; i < v49; i++ {
+	v50 := r.Intn(10)
+	this.ResourceTypes = make([]string, v50)
+	for i := 0; i < v50; i++ {
 		this.ResourceTypes[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
@@ -30989,9 +36242,9 @@ func NewPopulatedBackupEnumerateRequest(r randyApi, easy bool) *BackupEnumerateR
 func NewPopulatedBackupEnumerateResponse(r randyApi, easy bool) *BackupEnumerateResponse {
 	this := &BackupEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v50 := r.Intn(5)
-		this.Backups = make([]*BackupObject, v50)
-		for i := 0; i < v50; i++ {
+		v51 := r.Intn(5)
+		this.Backups = make([]*BackupObject, v51)
+		for i := 0; i < v51; i++ {
 			this.Backups[i] = NewPopulatedBackupObject(r, easy)
 		}
 	}
@@ -31006,6 +36259,7 @@ func NewPopulatedBackupInspectRequest(r randyApi, easy bool) *BackupInspectReque
 	this := &BackupInspectRequest{}
 	this.Name = string(randStringApi(r))
 	this.OrgId = string(randStringApi(r))
+	this.Uid = string(randStringApi(r))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -31026,6 +36280,7 @@ func NewPopulatedBackupDeleteRequest(r randyApi, easy bool) *BackupDeleteRequest
 	this.Name = string(randStringApi(r))
 	this.OrgId = string(randStringApi(r))
 	this.Cluster = string(randStringApi(r))
+	this.Uid = string(randStringApi(r))
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -31033,6 +36288,26 @@ func NewPopulatedBackupDeleteRequest(r randyApi, easy bool) *BackupDeleteRequest
 
 func NewPopulatedBackupDeleteResponse(r randyApi, easy bool) *BackupDeleteResponse {
 	this := &BackupDeleteResponse{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedBackupShareUpdateRequest(r randyApi, easy bool) *BackupShareUpdateRequest {
+	this := &BackupShareUpdateRequest{}
+	this.OrgId = string(randStringApi(r))
+	this.Name = string(randStringApi(r))
+	if r.Intn(5) != 0 {
+		this.Backupshare = NewPopulatedBackupShare(r, easy)
+	}
+	this.Uid = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedBackupShareUpdateResponse(r randyApi, easy bool) *BackupShareUpdateResponse {
+	this := &BackupShareUpdateResponse{}
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -31046,31 +36321,34 @@ func NewPopulatedRestoreCreateRequest(r randyApi, easy bool) *RestoreCreateReque
 	this.Backup = string(randStringApi(r))
 	this.Cluster = string(randStringApi(r))
 	if r.Intn(5) != 0 {
-		v51 := r.Intn(10)
+		v52 := r.Intn(10)
 		this.NamespaceMapping = make(map[string]string)
-		for i := 0; i < v51; i++ {
+		for i := 0; i < v52; i++ {
 			this.NamespaceMapping[randStringApi(r)] = randStringApi(r)
 		}
 	}
 	this.ReplacePolicy = ReplacePolicy_Type([]int32{0, 1, 2}[r.Intn(3)])
-	v52 := r.Intn(10)
-	this.IncludeOptionalResourceTypes = make([]string, v52)
-	for i := 0; i < v52; i++ {
+	v53 := r.Intn(10)
+	this.IncludeOptionalResourceTypes = make([]string, v53)
+	for i := 0; i < v53; i++ {
 		this.IncludeOptionalResourceTypes[i] = string(randStringApi(r))
 	}
 	if r.Intn(5) != 0 {
-		v53 := r.Intn(5)
-		this.IncludeResources = make([]*ResourceInfo, v53)
-		for i := 0; i < v53; i++ {
+		v54 := r.Intn(5)
+		this.IncludeResources = make([]*ResourceInfo, v54)
+		for i := 0; i < v54; i++ {
 			this.IncludeResources[i] = NewPopulatedResourceInfo(r, easy)
 		}
 	}
 	if r.Intn(5) != 0 {
-		v54 := r.Intn(10)
+		v55 := r.Intn(10)
 		this.StorageClassMapping = make(map[string]string)
-		for i := 0; i < v54; i++ {
+		for i := 0; i < v55; i++ {
 			this.StorageClassMapping[randStringApi(r)] = randStringApi(r)
 		}
+	}
+	if r.Intn(5) != 0 {
+		this.BackupRef = NewPopulatedObjectRef(r, easy)
 	}
 	if !easy && r.Intn(10) != 0 {
 	}
@@ -31115,9 +36393,9 @@ func NewPopulatedRestoreEnumerateRequest(r randyApi, easy bool) *RestoreEnumerat
 func NewPopulatedRestoreEnumerateResponse(r randyApi, easy bool) *RestoreEnumerateResponse {
 	this := &RestoreEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v55 := r.Intn(5)
-		this.Restores = make([]*RestoreObject, v55)
-		for i := 0; i < v55; i++ {
+		v56 := r.Intn(5)
+		this.Restores = make([]*RestoreObject, v56)
+		for i := 0; i < v56; i++ {
 			this.Restores[i] = NewPopulatedRestoreObject(r, easy)
 		}
 	}
@@ -31190,9 +36468,9 @@ func NewPopulatedOrganizationEnumerateRequest(r randyApi, easy bool) *Organizati
 func NewPopulatedOrganizationEnumerateResponse(r randyApi, easy bool) *OrganizationEnumerateResponse {
 	this := &OrganizationEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v56 := r.Intn(5)
-		this.Organizations = make([]*OrganizationObject, v56)
-		for i := 0; i < v56; i++ {
+		v57 := r.Intn(5)
+		this.Organizations = make([]*OrganizationObject, v57)
+		for i := 0; i < v57; i++ {
 			this.Organizations[i] = NewPopulatedOrganizationObject(r, easy)
 		}
 	}
@@ -31270,9 +36548,9 @@ func NewPopulatedRuleEnumerateRequest(r randyApi, easy bool) *RuleEnumerateReque
 func NewPopulatedRuleEnumerateResponse(r randyApi, easy bool) *RuleEnumerateResponse {
 	this := &RuleEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v57 := r.Intn(5)
-		this.Rules = make([]*RuleObject, v57)
-		for i := 0; i < v57; i++ {
+		v58 := r.Intn(5)
+		this.Rules = make([]*RuleObject, v58)
+		for i := 0; i < v58; i++ {
 			this.Rules[i] = NewPopulatedRuleObject(r, easy)
 		}
 	}
@@ -31343,6 +36621,7 @@ func NewPopulatedVersionInfo(r randyApi, easy bool) *VersionInfo {
 	this.Major = string(randStringApi(r))
 	this.Minor = string(randStringApi(r))
 	this.Patch = string(randStringApi(r))
+	this.Changes = string(randStringApi(r))
 	this.GitCommit = string(randStringApi(r))
 	this.BuildDate = string(randStringApi(r))
 	if !easy && r.Intn(10) != 0 {
@@ -31372,7 +36651,7 @@ func NewPopulatedLicenseActivateRequest(r randyApi, easy bool) *LicenseActivateR
 	if r.Intn(5) != 0 {
 		this.CreateMetadata = NewPopulatedCreateMetadata(r, easy)
 	}
-	oneofNumber_Activation := []int32{2, 3, 4}[r.Intn(3)]
+	oneofNumber_Activation := []int32{2, 3, 4, 5}[r.Intn(4)]
 	switch oneofNumber_Activation {
 	case 2:
 		this.Activation = NewPopulatedLicenseActivateRequest_ActivationId(r, easy)
@@ -31380,6 +36659,8 @@ func NewPopulatedLicenseActivateRequest(r randyApi, easy bool) *LicenseActivateR
 		this.Activation = NewPopulatedLicenseActivateRequest_LicenseData(r, easy)
 	case 4:
 		this.Activation = NewPopulatedLicenseActivateRequest_UsageBasedId(r, easy)
+	case 5:
+		this.Activation = NewPopulatedLicenseActivateRequest_UsagedBasedAirgappedId(r, easy)
 	}
 	if !easy && r.Intn(10) != 0 {
 	}
@@ -31393,9 +36674,9 @@ func NewPopulatedLicenseActivateRequest_ActivationId(r randyApi, easy bool) *Lic
 }
 func NewPopulatedLicenseActivateRequest_LicenseData(r randyApi, easy bool) *LicenseActivateRequest_LicenseData {
 	this := &LicenseActivateRequest_LicenseData{}
-	v58 := r.Intn(100)
-	this.LicenseData = make([]byte, v58)
-	for i := 0; i < v58; i++ {
+	v59 := r.Intn(100)
+	this.LicenseData = make([]byte, v59)
+	for i := 0; i < v59; i++ {
 		this.LicenseData[i] = byte(r.Intn(256))
 	}
 	return this
@@ -31403,6 +36684,11 @@ func NewPopulatedLicenseActivateRequest_LicenseData(r randyApi, easy bool) *Lice
 func NewPopulatedLicenseActivateRequest_UsageBasedId(r randyApi, easy bool) *LicenseActivateRequest_UsageBasedId {
 	this := &LicenseActivateRequest_UsageBasedId{}
 	this.UsageBasedId = string(randStringApi(r))
+	return this
+}
+func NewPopulatedLicenseActivateRequest_UsagedBasedAirgappedId(r randyApi, easy bool) *LicenseActivateRequest_UsagedBasedAirgappedId {
+	this := &LicenseActivateRequest_UsagedBasedAirgappedId{}
+	this.UsagedBasedAirgappedId = string(randStringApi(r))
 	return this
 }
 func NewPopulatedLicenseActivateResponse(r randyApi, easy bool) *LicenseActivateResponse {
@@ -31451,9 +36737,9 @@ func NewPopulatedLicenseInspectResponse(r randyApi, easy bool) *LicenseInspectRe
 func NewPopulatedLicenseResponseInfo(r randyApi, easy bool) *LicenseResponseInfo {
 	this := &LicenseResponseInfo{}
 	if r.Intn(5) != 0 {
-		v59 := r.Intn(5)
-		this.FeatureInfo = make([]*LicenseResponseInfo_FeatureInfo, v59)
-		for i := 0; i < v59; i++ {
+		v60 := r.Intn(5)
+		this.FeatureInfo = make([]*LicenseResponseInfo_FeatureInfo, v60)
+		for i := 0; i < v60; i++ {
 			this.FeatureInfo[i] = NewPopulatedLicenseResponseInfo_FeatureInfo(r, easy)
 		}
 	}
@@ -31473,9 +36759,9 @@ func NewPopulatedLicenseResponseInfo_FeatureInfo(r randyApi, easy bool) *License
 		this.Consumed *= -1
 	}
 	if r.Intn(5) != 0 {
-		v60 := r.Intn(5)
-		this.EntitlementInfo = make([]*LicenseResponseInfo_EntitlementInfo, v60)
-		for i := 0; i < v60; i++ {
+		v61 := r.Intn(5)
+		this.EntitlementInfo = make([]*LicenseResponseInfo_EntitlementInfo, v61)
+		for i := 0; i < v61; i++ {
 			this.EntitlementInfo[i] = NewPopulatedLicenseResponseInfo_EntitlementInfo(r, easy)
 		}
 	}
@@ -31496,7 +36782,7 @@ func NewPopulatedLicenseResponseInfo_EntitlementInfo(r randyApi, easy bool) *Lic
 	if r.Intn(5) != 0 {
 		this.Starts = types.NewPopulatedTimestamp(r, easy)
 	}
-	this.Type = LicenseType([]int32{0, 1, 2, 3, 4, 5, 6}[r.Intn(7)])
+	this.Type = LicenseType([]int32{0, 1, 2, 3, 4, 5, 6, 7, 8}[r.Intn(9)])
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -31506,6 +36792,330 @@ func NewPopulatedLicenseResponseInfo_Status(r randyApi, easy bool) *LicenseRespo
 	this := &LicenseResponseInfo_Status{}
 	this.Status = string(randStringApi(r))
 	this.Reason = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedLicenseUsageAirgappedObject(r randyApi, easy bool) *LicenseUsageAirgappedObject {
+	this := &LicenseUsageAirgappedObject{}
+	if r.Intn(5) != 0 {
+		this.Metadata = NewPopulatedMetadata(r, easy)
+	}
+	this.NodeCount = int64(r.Int63())
+	if r.Intn(2) == 0 {
+		this.NodeCount *= -1
+	}
+	this.ReportTime = int64(r.Int63())
+	if r.Intn(2) == 0 {
+		this.ReportTime *= -1
+	}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedLicenseUsageAirgappedRequest(r randyApi, easy bool) *LicenseUsageAirgappedRequest {
+	this := &LicenseUsageAirgappedRequest{}
+	this.OrgId = string(randStringApi(r))
+	this.ObjectIndex = uint64(uint64(r.Uint32()))
+	this.MaxObjects = uint64(uint64(r.Uint32()))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedLicenseUsageAirgappedResponse(r randyApi, easy bool) *LicenseUsageAirgappedResponse {
+	this := &LicenseUsageAirgappedResponse{}
+	if r.Intn(5) != 0 {
+		v62 := r.Intn(5)
+		this.LicenseUsageAirgapped = make([]*LicenseUsageAirgappedObject, v62)
+		for i := 0; i < v62; i++ {
+			this.LicenseUsageAirgapped[i] = NewPopulatedLicenseUsageAirgappedObject(r, easy)
+		}
+	}
+	this.Complete = bool(bool(r.Intn(2) == 0))
+	this.TotalCount = uint64(uint64(r.Uint32()))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateRequest(r randyApi, easy bool) *ManagedClusterEnumerateRequest {
+	this := &ManagedClusterEnumerateRequest{}
+	this.OrgId = string(randStringApi(r))
+	if r.Intn(5) != 0 {
+		this.CloudCredential = NewPopulatedObjectRef(r, easy)
+	}
+	this.IncludeSecrets = bool(bool(r.Intn(2) == 0))
+	this.MaxResults = int64(r.Int63())
+	if r.Intn(2) == 0 {
+		this.MaxResults *= -1
+	}
+	this.Provider = ManagedClusterEnumerateRequest_Provider([]int32{0, 1, 2, 3}[r.Intn(4)])
+	oneofNumber_Config := []int32{100, 101, 102}[r.Intn(3)]
+	switch oneofNumber_Config {
+	case 100:
+		this.Config = NewPopulatedManagedClusterEnumerateRequest_AwsConfig(r, easy)
+	case 101:
+		this.Config = NewPopulatedManagedClusterEnumerateRequest_GoogleConfig_(r, easy)
+	case 102:
+		this.Config = NewPopulatedManagedClusterEnumerateRequest_AzureConfig_(r, easy)
+	}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateRequest_AwsConfig(r randyApi, easy bool) *ManagedClusterEnumerateRequest_AwsConfig {
+	this := &ManagedClusterEnumerateRequest_AwsConfig{}
+	this.AwsConfig = NewPopulatedManagedClusterEnumerateRequest_AWSConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterEnumerateRequest_GoogleConfig_(r randyApi, easy bool) *ManagedClusterEnumerateRequest_GoogleConfig_ {
+	this := &ManagedClusterEnumerateRequest_GoogleConfig_{}
+	this.GoogleConfig = NewPopulatedManagedClusterEnumerateRequest_GoogleConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterEnumerateRequest_AzureConfig_(r randyApi, easy bool) *ManagedClusterEnumerateRequest_AzureConfig_ {
+	this := &ManagedClusterEnumerateRequest_AzureConfig_{}
+	this.AzureConfig = NewPopulatedManagedClusterEnumerateRequest_AzureConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterEnumerateRequest_AWSConfig(r randyApi, easy bool) *ManagedClusterEnumerateRequest_AWSConfig {
+	this := &ManagedClusterEnumerateRequest_AWSConfig{}
+	this.Region = string(randStringApi(r))
+	this.NextToken = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateRequest_GoogleConfig(r randyApi, easy bool) *ManagedClusterEnumerateRequest_GoogleConfig {
+	this := &ManagedClusterEnumerateRequest_GoogleConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateRequest_AzureConfig(r randyApi, easy bool) *ManagedClusterEnumerateRequest_AzureConfig {
+	this := &ManagedClusterEnumerateRequest_AzureConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterObject(r randyApi, easy bool) *ManagedClusterObject {
+	this := &ManagedClusterObject{}
+	this.Name = string(randStringApi(r))
+	this.Uid = string(randStringApi(r))
+	if r.Intn(5) != 0 {
+		this.CloudCredential = NewPopulatedObjectRef(r, easy)
+	}
+	this.Kubeconfig = string(randStringApi(r))
+	this.K8SVersion = string(randStringApi(r))
+	this.Status = ManagedClusterObject_Status([]int32{0, 1, 2}[r.Intn(3)])
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateResponse(r randyApi, easy bool) *ManagedClusterEnumerateResponse {
+	this := &ManagedClusterEnumerateResponse{}
+	if r.Intn(5) != 0 {
+		v63 := r.Intn(5)
+		this.Cluster = make([]*ManagedClusterObject, v63)
+		for i := 0; i < v63; i++ {
+			this.Cluster[i] = NewPopulatedManagedClusterObject(r, easy)
+		}
+	}
+	this.Provider = ManagedClusterEnumerateResponse_Provider([]int32{0, 1, 2, 3}[r.Intn(4)])
+	oneofNumber_Config := []int32{100, 101, 102}[r.Intn(3)]
+	switch oneofNumber_Config {
+	case 100:
+		this.Config = NewPopulatedManagedClusterEnumerateResponse_AwsConfig(r, easy)
+	case 101:
+		this.Config = NewPopulatedManagedClusterEnumerateResponse_GoogleConfig_(r, easy)
+	case 102:
+		this.Config = NewPopulatedManagedClusterEnumerateResponse_AzureConfig_(r, easy)
+	}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateResponse_AwsConfig(r randyApi, easy bool) *ManagedClusterEnumerateResponse_AwsConfig {
+	this := &ManagedClusterEnumerateResponse_AwsConfig{}
+	this.AwsConfig = NewPopulatedManagedClusterEnumerateResponse_AWSConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterEnumerateResponse_GoogleConfig_(r randyApi, easy bool) *ManagedClusterEnumerateResponse_GoogleConfig_ {
+	this := &ManagedClusterEnumerateResponse_GoogleConfig_{}
+	this.GoogleConfig = NewPopulatedManagedClusterEnumerateResponse_GoogleConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterEnumerateResponse_AzureConfig_(r randyApi, easy bool) *ManagedClusterEnumerateResponse_AzureConfig_ {
+	this := &ManagedClusterEnumerateResponse_AzureConfig_{}
+	this.AzureConfig = NewPopulatedManagedClusterEnumerateResponse_AzureConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterEnumerateResponse_AWSConfig(r randyApi, easy bool) *ManagedClusterEnumerateResponse_AWSConfig {
+	this := &ManagedClusterEnumerateResponse_AWSConfig{}
+	this.NextToken = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateResponse_GoogleConfig(r randyApi, easy bool) *ManagedClusterEnumerateResponse_GoogleConfig {
+	this := &ManagedClusterEnumerateResponse_GoogleConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterEnumerateResponse_AzureConfig(r randyApi, easy bool) *ManagedClusterEnumerateResponse_AzureConfig {
+	this := &ManagedClusterEnumerateResponse_AzureConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterInspectRequest(r randyApi, easy bool) *ManagedClusterInspectRequest {
+	this := &ManagedClusterInspectRequest{}
+	this.OrgId = string(randStringApi(r))
+	this.Name = string(randStringApi(r))
+	if r.Intn(5) != 0 {
+		this.CloudCredential = NewPopulatedObjectRef(r, easy)
+	}
+	this.IncludeSecrets = bool(bool(r.Intn(2) == 0))
+	this.Provider = ManagedClusterInspectRequest_Provider([]int32{0, 1, 2, 3}[r.Intn(4)])
+	oneofNumber_Config := []int32{100, 101, 102}[r.Intn(3)]
+	switch oneofNumber_Config {
+	case 100:
+		this.Config = NewPopulatedManagedClusterInspectRequest_AwsConfig(r, easy)
+	case 101:
+		this.Config = NewPopulatedManagedClusterInspectRequest_GoogleConfig_(r, easy)
+	case 102:
+		this.Config = NewPopulatedManagedClusterInspectRequest_AzureConfig_(r, easy)
+	}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterInspectRequest_AwsConfig(r randyApi, easy bool) *ManagedClusterInspectRequest_AwsConfig {
+	this := &ManagedClusterInspectRequest_AwsConfig{}
+	this.AwsConfig = NewPopulatedManagedClusterInspectRequest_AWSConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterInspectRequest_GoogleConfig_(r randyApi, easy bool) *ManagedClusterInspectRequest_GoogleConfig_ {
+	this := &ManagedClusterInspectRequest_GoogleConfig_{}
+	this.GoogleConfig = NewPopulatedManagedClusterInspectRequest_GoogleConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterInspectRequest_AzureConfig_(r randyApi, easy bool) *ManagedClusterInspectRequest_AzureConfig_ {
+	this := &ManagedClusterInspectRequest_AzureConfig_{}
+	this.AzureConfig = NewPopulatedManagedClusterInspectRequest_AzureConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterInspectRequest_AWSConfig(r randyApi, easy bool) *ManagedClusterInspectRequest_AWSConfig {
+	this := &ManagedClusterInspectRequest_AWSConfig{}
+	this.Region = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterInspectRequest_GoogleConfig(r randyApi, easy bool) *ManagedClusterInspectRequest_GoogleConfig {
+	this := &ManagedClusterInspectRequest_GoogleConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterInspectRequest_AzureConfig(r randyApi, easy bool) *ManagedClusterInspectRequest_AzureConfig {
+	this := &ManagedClusterInspectRequest_AzureConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterInspectResponse(r randyApi, easy bool) *ManagedClusterInspectResponse {
+	this := &ManagedClusterInspectResponse{}
+	if r.Intn(5) != 0 {
+		this.Cluster = NewPopulatedManagedClusterObject(r, easy)
+	}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterBulkAddRequest(r randyApi, easy bool) *ManagedClusterBulkAddRequest {
+	this := &ManagedClusterBulkAddRequest{}
+	this.OrgId = string(randStringApi(r))
+	if r.Intn(5) != 0 {
+		this.CloudCredential = NewPopulatedObjectRef(r, easy)
+	}
+	v64 := r.Intn(10)
+	this.ClusterName = make([]string, v64)
+	for i := 0; i < v64; i++ {
+		this.ClusterName[i] = string(randStringApi(r))
+	}
+	this.Provider = ManagedClusterBulkAddRequest_Provider([]int32{0, 1, 2, 3}[r.Intn(4)])
+	oneofNumber_Config := []int32{100, 101, 102}[r.Intn(3)]
+	switch oneofNumber_Config {
+	case 100:
+		this.Config = NewPopulatedManagedClusterBulkAddRequest_AwsConfig(r, easy)
+	case 101:
+		this.Config = NewPopulatedManagedClusterBulkAddRequest_GoogleConfig_(r, easy)
+	case 102:
+		this.Config = NewPopulatedManagedClusterBulkAddRequest_AzureConfig_(r, easy)
+	}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterBulkAddRequest_AwsConfig(r randyApi, easy bool) *ManagedClusterBulkAddRequest_AwsConfig {
+	this := &ManagedClusterBulkAddRequest_AwsConfig{}
+	this.AwsConfig = NewPopulatedManagedClusterBulkAddRequest_AWSConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterBulkAddRequest_GoogleConfig_(r randyApi, easy bool) *ManagedClusterBulkAddRequest_GoogleConfig_ {
+	this := &ManagedClusterBulkAddRequest_GoogleConfig_{}
+	this.GoogleConfig = NewPopulatedManagedClusterBulkAddRequest_GoogleConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterBulkAddRequest_AzureConfig_(r randyApi, easy bool) *ManagedClusterBulkAddRequest_AzureConfig_ {
+	this := &ManagedClusterBulkAddRequest_AzureConfig_{}
+	this.AzureConfig = NewPopulatedManagedClusterBulkAddRequest_AzureConfig(r, easy)
+	return this
+}
+func NewPopulatedManagedClusterBulkAddRequest_AWSConfig(r randyApi, easy bool) *ManagedClusterBulkAddRequest_AWSConfig {
+	this := &ManagedClusterBulkAddRequest_AWSConfig{}
+	this.Region = string(randStringApi(r))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterBulkAddRequest_GoogleConfig(r randyApi, easy bool) *ManagedClusterBulkAddRequest_GoogleConfig {
+	this := &ManagedClusterBulkAddRequest_GoogleConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterBulkAddRequest_AzureConfig(r randyApi, easy bool) *ManagedClusterBulkAddRequest_AzureConfig {
+	this := &ManagedClusterBulkAddRequest_AzureConfig{}
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedManagedClusterBulkAddResponse(r randyApi, easy bool) *ManagedClusterBulkAddResponse {
+	this := &ManagedClusterBulkAddResponse{}
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -31530,9 +37140,9 @@ func NewPopulatedActivityEnumerateRequest(r randyApi, easy bool) *ActivityEnumer
 func NewPopulatedActivityEnumerateResponse(r randyApi, easy bool) *ActivityEnumerateResponse {
 	this := &ActivityEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v61 := r.Intn(5)
-		this.ActivityData = make([]*ActivityEnumerateResponse_Data, v61)
-		for i := 0; i < v61; i++ {
+		v65 := r.Intn(5)
+		this.ActivityData = make([]*ActivityEnumerateResponse_Data, v65)
+		for i := 0; i < v65; i++ {
 			this.ActivityData[i] = NewPopulatedActivityEnumerateResponse_Data(r, easy)
 		}
 	}
@@ -31568,9 +37178,9 @@ func NewPopulatedRoleObject(r randyApi, easy bool) *RoleObject {
 		this.Metadata = NewPopulatedMetadata(r, easy)
 	}
 	if r.Intn(5) != 0 {
-		v62 := r.Intn(5)
-		this.Rules = make([]*RoleConfig, v62)
-		for i := 0; i < v62; i++ {
+		v66 := r.Intn(5)
+		this.Rules = make([]*RoleConfig, v66)
+		for i := 0; i < v66; i++ {
 			this.Rules[i] = NewPopulatedRoleConfig(r, easy)
 		}
 	}
@@ -31582,14 +37192,14 @@ func NewPopulatedRoleObject(r randyApi, easy bool) *RoleObject {
 
 func NewPopulatedRoleConfig(r randyApi, easy bool) *RoleConfig {
 	this := &RoleConfig{}
-	v63 := r.Intn(10)
-	this.Services = make([]string, v63)
-	for i := 0; i < v63; i++ {
+	v67 := r.Intn(10)
+	this.Services = make([]string, v67)
+	for i := 0; i < v67; i++ {
 		this.Services[i] = string(randStringApi(r))
 	}
-	v64 := r.Intn(10)
-	this.Apis = make([]string, v64)
-	for i := 0; i < v64; i++ {
+	v68 := r.Intn(10)
+	this.Apis = make([]string, v68)
+	for i := 0; i < v68; i++ {
 		this.Apis[i] = string(randStringApi(r))
 	}
 	if !easy && r.Intn(10) != 0 {
@@ -31603,9 +37213,9 @@ func NewPopulatedRoleCreateRequest(r randyApi, easy bool) *RoleCreateRequest {
 		this.CreateMetadata = NewPopulatedCreateMetadata(r, easy)
 	}
 	if r.Intn(5) != 0 {
-		v65 := r.Intn(5)
-		this.Rules = make([]*RoleConfig, v65)
-		for i := 0; i < v65; i++ {
+		v69 := r.Intn(5)
+		this.Rules = make([]*RoleConfig, v69)
+		for i := 0; i < v69; i++ {
 			this.Rules[i] = NewPopulatedRoleConfig(r, easy)
 		}
 	}
@@ -31628,9 +37238,9 @@ func NewPopulatedRoleUpdateRequest(r randyApi, easy bool) *RoleUpdateRequest {
 		this.CreateMetadata = NewPopulatedCreateMetadata(r, easy)
 	}
 	if r.Intn(5) != 0 {
-		v66 := r.Intn(5)
-		this.Rules = make([]*RoleConfig, v66)
-		for i := 0; i < v66; i++ {
+		v70 := r.Intn(5)
+		this.Rules = make([]*RoleConfig, v70)
+		for i := 0; i < v70; i++ {
 			this.Rules[i] = NewPopulatedRoleConfig(r, easy)
 		}
 	}
@@ -31661,9 +37271,9 @@ func NewPopulatedRoleEnumerateRequest(r randyApi, easy bool) *RoleEnumerateReque
 func NewPopulatedRoleEnumerateResponse(r randyApi, easy bool) *RoleEnumerateResponse {
 	this := &RoleEnumerateResponse{}
 	if r.Intn(5) != 0 {
-		v67 := r.Intn(5)
-		this.Roles = make([]*RoleObject, v67)
-		for i := 0; i < v67; i++ {
+		v71 := r.Intn(5)
+		this.Roles = make([]*RoleObject, v71)
+		for i := 0; i < v71; i++ {
 			this.Roles[i] = NewPopulatedRoleObject(r, easy)
 		}
 	}
@@ -31720,9 +37330,9 @@ func NewPopulatedRolePermissionRequest(r randyApi, easy bool) *RolePermissionReq
 func NewPopulatedRolePermissionResponse(r randyApi, easy bool) *RolePermissionResponse {
 	this := &RolePermissionResponse{}
 	if r.Intn(5) != 0 {
-		v68 := r.Intn(10)
+		v72 := r.Intn(10)
 		this.Rules = make(map[string]*Permission)
-		for i := 0; i < v68; i++ {
+		for i := 0; i < v72; i++ {
 			this.Rules[randStringApi(r)] = NewPopulatedPermission(r, easy)
 		}
 	}
@@ -31751,9 +37361,9 @@ func NewPopulatedActivityDataObject(r randyApi, easy bool) *ActivityDataObject {
 		this.CompletionTime *= -1
 	}
 	if r.Intn(5) != 0 {
-		v69 := r.Intn(5)
-		this.Opcycle = make([]*ActivityDataObject_Opcycle, v69)
-		for i := 0; i < v69; i++ {
+		v73 := r.Intn(5)
+		this.Opcycle = make([]*ActivityDataObject_Opcycle, v73)
+		for i := 0; i < v73; i++ {
 			this.Opcycle[i] = NewPopulatedActivityDataObject_Opcycle(r, easy)
 		}
 	}
@@ -31796,9 +37406,9 @@ func randUTF8RuneApi(r randyApi) rune {
 	return rune(ru + 61)
 }
 func randStringApi(r randyApi) string {
-	v70 := r.Intn(100)
-	tmps := make([]rune, v70)
-	for i := 0; i < v70; i++ {
+	v74 := r.Intn(100)
+	tmps := make([]rune, v74)
+	for i := 0; i < v74; i++ {
 		tmps[i] = randUTF8RuneApi(r)
 	}
 	return string(tmps)
@@ -31820,11 +37430,11 @@ func randFieldApi(dAtA []byte, r randyApi, fieldNumber int, wire int) []byte {
 	switch wire {
 	case 0:
 		dAtA = encodeVarintPopulateApi(dAtA, uint64(key))
-		v71 := r.Int63()
+		v75 := r.Int63()
 		if r.Intn(2) == 0 {
-			v71 *= -1
+			v75 *= -1
 		}
-		dAtA = encodeVarintPopulateApi(dAtA, uint64(v71))
+		dAtA = encodeVarintPopulateApi(dAtA, uint64(v75))
 	case 1:
 		dAtA = encodeVarintPopulateApi(dAtA, uint64(key))
 		dAtA = append(dAtA, byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)))
@@ -31898,10 +37508,44 @@ func (m *ClusterInfo) Size() (n int) {
 		l = m.CloudCredentialRef.Size()
 		n += 1 + l + sovApi(uint64(l))
 	}
+	if m.AddBackupShare != nil {
+		l = m.AddBackupShare.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.DelBackupShare != nil {
+		l = m.DelBackupShare.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.BackupShareStatusInfo != nil {
+		l = m.BackupShareStatusInfo.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if len(m.OwnerGroupList) > 0 {
+		for _, s := range m.OwnerGroupList {
+			l = len(s)
+			n += 1 + l + sovApi(uint64(l))
+		}
+	}
 	return n
 }
 
 func (m *ClusterInfo_StatusInfo) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Status != 0 {
+		n += 1 + sovApi(uint64(m.Status))
+	}
+	l = len(m.Reason)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *ClusterInfo_BackupShareStatusInfo) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -32161,6 +37805,12 @@ func (m *SchedulePolicyInfo) Size() (n int) {
 			l = len(s)
 			n += 1 + l + sovApi(uint64(l))
 		}
+	}
+	if m.ForObjectLock {
+		n += 2
+	}
+	if m.AutoDelete {
+		n += 2
 	}
 	return n
 }
@@ -32512,6 +38162,9 @@ func (m *BackupLocationInfo) Size() (n int) {
 		l = m.CloudCredentialRef.Size()
 		n += 1 + l + sovApi(uint64(l))
 	}
+	if m.ObjectLockEnabled {
+		n += 2
+	}
 	if m.Config != nil {
 		n += m.Config.Size()
 	}
@@ -32709,6 +38362,20 @@ func (m *BackupInfo) Size() (n int) {
 		l = m.BackupType.Size()
 		n += 2 + l + sovApi(uint64(l))
 	}
+	l = len(m.CrUid)
+	if l > 0 {
+		n += 2 + l + sovApi(uint64(l))
+	}
+	if m.RetentionPeriod != 0 {
+		n += 2 + sovApi(uint64(m.RetentionPeriod))
+	}
+	if m.BackupShare != nil {
+		l = m.BackupShare.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	if m.UserBackupshareAccess != 0 {
+		n += 2 + sovApi(uint64(m.UserBackupshareAccess))
+	}
 	return n
 }
 
@@ -32792,6 +38459,18 @@ func (m *BackupInfo_Volume) Size() (n int) {
 		n += 1 + sovApi(uint64(m.ActualSize))
 	}
 	l = len(m.StorageClass)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.PvcId)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Provisioner)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Volumesnapshot)
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
 	}
@@ -33004,6 +38683,10 @@ func (m *RestoreInfo) Size() (n int) {
 			mapEntrySize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
 			n += mapEntrySize + 2 + sovApi(uint64(mapEntrySize))
 		}
+	}
+	if m.BackupRef != nil {
+		l = m.BackupRef.Size()
+		n += 2 + l + sovApi(uint64(l))
 	}
 	return n
 }
@@ -33676,6 +39359,44 @@ func (m *BackupScheduleDeleteResponse) Size() (n int) {
 	return n
 }
 
+func (m *ClusterBackupShareUpdateRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.OrgId)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.AddBackupShare != nil {
+		l = m.AddBackupShare.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.DelBackupShare != nil {
+		l = m.DelBackupShare.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *ClusterBackupShareUpdateResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
 func (m *ClusterCreateRequest) Size() (n int) {
 	if m == nil {
 		return 0
@@ -33780,6 +39501,9 @@ func (m *ClusterEnumerateRequest) Size() (n int) {
 	if m.CloudCredentialRef != nil {
 		l = m.CloudCredentialRef.Size()
 		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.OnlyBackupShare {
+		n += 2
 	}
 	return n
 }
@@ -33887,6 +39611,10 @@ func (m *CloudCredentialCreateResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	if m.CloudCredential != nil {
+		l = m.CloudCredential.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
 	return n
 }
 
@@ -34126,6 +39854,9 @@ func (m *BackupLocationEnumerateRequest) Size() (n int) {
 		l = m.CloudCredentialRef.Size()
 		n += 1 + l + sovApi(uint64(l))
 	}
+	if m.IncludeSecrets {
+		n += 2
+	}
 	return n
 }
 
@@ -34161,6 +39892,9 @@ func (m *BackupLocationInspectRequest) Size() (n int) {
 	l = len(m.Uid)
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.IncludeSecrets {
+		n += 2
 	}
 	return n
 }
@@ -34490,6 +40224,10 @@ func (m *BackupInspectRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
 	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
 	return n
 }
 
@@ -34524,10 +40262,48 @@ func (m *BackupDeleteRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
 	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
 	return n
 }
 
 func (m *BackupDeleteResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *BackupShareUpdateRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.OrgId)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.Backupshare != nil {
+		l = m.Backupshare.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *BackupShareUpdateResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -34584,6 +40360,10 @@ func (m *RestoreCreateRequest) Size() (n int) {
 			mapEntrySize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
 			n += mapEntrySize + 1 + sovApi(uint64(mapEntrySize))
 		}
+	}
+	if m.BackupRef != nil {
+		l = m.BackupRef.Size()
+		n += 1 + l + sovApi(uint64(l))
 	}
 	return n
 }
@@ -34981,6 +40761,10 @@ func (m *VersionInfo) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
 	}
+	l = len(m.Changes)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
 	l = len(m.GitCommit)
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
@@ -35059,6 +40843,16 @@ func (m *LicenseActivateRequest_UsageBasedId) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.UsageBasedId)
+	n += 1 + l + sovApi(uint64(l))
+	return n
+}
+func (m *LicenseActivateRequest_UsagedBasedAirgappedId) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.UsagedBasedAirgappedId)
 	n += 1 + l + sovApi(uint64(l))
 	return n
 }
@@ -35201,6 +40995,500 @@ func (m *LicenseResponseInfo_Status) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
 	}
+	return n
+}
+
+func (m *LicenseUsageAirgappedObject) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Metadata != nil {
+		l = m.Metadata.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.NodeCount != 0 {
+		n += 1 + sovApi(uint64(m.NodeCount))
+	}
+	if m.ReportTime != 0 {
+		n += 1 + sovApi(uint64(m.ReportTime))
+	}
+	return n
+}
+
+func (m *LicenseUsageAirgappedRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.OrgId)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.ObjectIndex != 0 {
+		n += 1 + sovApi(uint64(m.ObjectIndex))
+	}
+	if m.MaxObjects != 0 {
+		n += 1 + sovApi(uint64(m.MaxObjects))
+	}
+	return n
+}
+
+func (m *LicenseUsageAirgappedResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.LicenseUsageAirgapped) > 0 {
+		for _, e := range m.LicenseUsageAirgapped {
+			l = e.Size()
+			n += 1 + l + sovApi(uint64(l))
+		}
+	}
+	if m.Complete {
+		n += 2
+	}
+	if m.TotalCount != 0 {
+		n += 1 + sovApi(uint64(m.TotalCount))
+	}
+	return n
+}
+
+func (m *ManagedClusterEnumerateRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.OrgId)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.CloudCredential != nil {
+		l = m.CloudCredential.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.IncludeSecrets {
+		n += 2
+	}
+	if m.MaxResults != 0 {
+		n += 1 + sovApi(uint64(m.MaxResults))
+	}
+	if m.Provider != 0 {
+		n += 1 + sovApi(uint64(m.Provider))
+	}
+	if m.Config != nil {
+		n += m.Config.Size()
+	}
+	return n
+}
+
+func (m *ManagedClusterEnumerateRequest_AwsConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AwsConfig != nil {
+		l = m.AwsConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.GoogleConfig != nil {
+		l = m.GoogleConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AzureConfig != nil {
+		l = m.AzureConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Region)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.NextToken)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterEnumerateRequest_AzureConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterObject) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.CloudCredential != nil {
+		l = m.CloudCredential.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Kubeconfig)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.K8SVersion)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.Status != 0 {
+		n += 1 + sovApi(uint64(m.Status))
+	}
+	return n
+}
+
+func (m *ManagedClusterEnumerateResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Cluster) > 0 {
+		for _, e := range m.Cluster {
+			l = e.Size()
+			n += 1 + l + sovApi(uint64(l))
+		}
+	}
+	if m.Provider != 0 {
+		n += 1 + sovApi(uint64(m.Provider))
+	}
+	if m.Config != nil {
+		n += m.Config.Size()
+	}
+	return n
+}
+
+func (m *ManagedClusterEnumerateResponse_AwsConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AwsConfig != nil {
+		l = m.AwsConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.GoogleConfig != nil {
+		l = m.GoogleConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AzureConfig != nil {
+		l = m.AzureConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NextToken)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterEnumerateResponse_AzureConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterInspectRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.OrgId)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.CloudCredential != nil {
+		l = m.CloudCredential.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.IncludeSecrets {
+		n += 2
+	}
+	if m.Provider != 0 {
+		n += 1 + sovApi(uint64(m.Provider))
+	}
+	if m.Config != nil {
+		n += m.Config.Size()
+	}
+	return n
+}
+
+func (m *ManagedClusterInspectRequest_AwsConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AwsConfig != nil {
+		l = m.AwsConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.GoogleConfig != nil {
+		l = m.GoogleConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterInspectRequest_AzureConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AzureConfig != nil {
+		l = m.AzureConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Region)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *ManagedClusterInspectRequest_GoogleConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterInspectRequest_AzureConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterInspectResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Cluster != nil {
+		l = m.Cluster.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *ManagedClusterBulkAddRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.OrgId)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if m.CloudCredential != nil {
+		l = m.CloudCredential.Size()
+		n += 1 + l + sovApi(uint64(l))
+	}
+	if len(m.ClusterName) > 0 {
+		for _, s := range m.ClusterName {
+			l = len(s)
+			n += 1 + l + sovApi(uint64(l))
+		}
+	}
+	if m.Provider != 0 {
+		n += 1 + sovApi(uint64(m.Provider))
+	}
+	if m.Config != nil {
+		n += m.Config.Size()
+	}
+	return n
+}
+
+func (m *ManagedClusterBulkAddRequest_AwsConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AwsConfig != nil {
+		l = m.AwsConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.GoogleConfig != nil {
+		l = m.GoogleConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig_) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AzureConfig != nil {
+		l = m.AzureConfig.Size()
+		n += 2 + l + sovApi(uint64(l))
+	}
+	return n
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Region)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterBulkAddRequest_AzureConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *ManagedClusterBulkAddResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
 	return n
 }
 
@@ -35951,6 +42239,146 @@ func (m *ClusterInfo) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AddBackupShare", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.AddBackupShare == nil {
+				m.AddBackupShare = &BackupShare{}
+			}
+			if err := m.AddBackupShare.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DelBackupShare", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.DelBackupShare == nil {
+				m.DelBackupShare = &BackupShare{}
+			}
+			if err := m.DelBackupShare.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupShareStatusInfo", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BackupShareStatusInfo == nil {
+				m.BackupShareStatusInfo = &ClusterInfo_BackupShareStatusInfo{}
+			}
+			if err := m.BackupShareStatusInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OwnerGroupList", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OwnerGroupList = append(m.OwnerGroupList, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -36016,6 +42444,107 @@ func (m *ClusterInfo_StatusInfo) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Status |= ClusterInfo_StatusInfo_Status(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ClusterInfo_BackupShareStatusInfo) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BackupShareStatusInfo: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BackupShareStatusInfo: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
+			}
+			m.Status = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Status |= ClusterInfo_BackupShareStatusInfo_Status(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -37551,6 +44080,46 @@ func (m *SchedulePolicyInfo) Unmarshal(dAtA []byte) error {
 			}
 			m.BackupSchedule = append(m.BackupSchedule, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ForObjectLock", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ForObjectLock = bool(v != 0)
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AutoDelete", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AutoDelete = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -40093,6 +46662,26 @@ func (m *BackupLocationInfo) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ObjectLockEnabled", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ObjectLockEnabled = bool(v != 0)
 		case 100:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field S3Config", wireType)
@@ -41501,6 +48090,112 @@ func (m *BackupInfo) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 26:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CrUid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CrUid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 27:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RetentionPeriod", wireType)
+			}
+			m.RetentionPeriod = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RetentionPeriod |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 28:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupShare", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BackupShare == nil {
+				m.BackupShare = &BackupShare{}
+			}
+			if err := m.BackupShare.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 29:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UserBackupshareAccess", wireType)
+			}
+			m.UserBackupshareAccess = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.UserBackupshareAccess |= BackupShare_AccessType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -42158,6 +48853,102 @@ func (m *BackupInfo_Volume) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.StorageClass = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PvcId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PvcId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 13:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Provisioner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Provisioner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 14:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Volumesnapshot", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Volumesnapshot = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -43824,6 +50615,42 @@ func (m *RestoreInfo) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.StorageClassMapping[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 17:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupRef", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BackupRef == nil {
+				m.BackupRef = &ObjectRef{}
+			}
+			if err := m.BackupRef.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -48841,6 +55668,274 @@ func (m *BackupScheduleDeleteResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *ClusterBackupShareUpdateRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ClusterBackupShareUpdateRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ClusterBackupShareUpdateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OrgId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AddBackupShare", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.AddBackupShare == nil {
+				m.AddBackupShare = &BackupShare{}
+			}
+			if err := m.AddBackupShare.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DelBackupShare", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.DelBackupShare == nil {
+				m.DelBackupShare = &BackupShare{}
+			}
+			if err := m.DelBackupShare.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ClusterBackupShareUpdateResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ClusterBackupShareUpdateResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ClusterBackupShareUpdateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *ClusterCreateRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -49661,6 +56756,26 @@ func (m *ClusterEnumerateRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OnlyBackupShare", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.OnlyBackupShare = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -50341,6 +57456,42 @@ func (m *CloudCredentialCreateResponse) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: CloudCredentialCreateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CloudCredential", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CloudCredential == nil {
+				m.CloudCredential = &CloudCredentialObject{}
+			}
+			if err := m.CloudCredential.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -52000,6 +59151,26 @@ func (m *BackupLocationEnumerateRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeSecrets", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeSecrets = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -52230,6 +59401,26 @@ func (m *BackupLocationInspectRequest) Unmarshal(dAtA []byte) error {
 			}
 			m.Uid = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeSecrets", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeSecrets = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -54472,6 +61663,38 @@ func (m *BackupInspectRequest) Unmarshal(dAtA []byte) error {
 			}
 			m.OrgId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -54704,6 +61927,38 @@ func (m *BackupDeleteRequest) Unmarshal(dAtA []byte) error {
 			}
 			m.Cluster = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -54752,6 +62007,238 @@ func (m *BackupDeleteResponse) Unmarshal(dAtA []byte) error {
 		}
 		if fieldNum <= 0 {
 			return fmt.Errorf("proto: BackupDeleteResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *BackupShareUpdateRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BackupShareUpdateRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BackupShareUpdateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OrgId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Backupshare", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Backupshare == nil {
+				m.Backupshare = &BackupShare{}
+			}
+			if err := m.Backupshare.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *BackupShareUpdateResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BackupShareUpdateResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BackupShareUpdateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -55242,6 +62729,42 @@ func (m *RestoreCreateRequest) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.StorageClassMapping[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupRef", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BackupRef == nil {
+				m.BackupRef = &ObjectRef{}
+			}
+			if err := m.BackupRef.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -57790,6 +65313,38 @@ func (m *VersionInfo) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Changes", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Changes = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field GitCommit", wireType)
 			}
 			var stringLen uint64
@@ -57820,7 +65375,7 @@ func (m *VersionInfo) Unmarshal(dAtA []byte) error {
 			}
 			m.GitCommit = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BuildDate", wireType)
 			}
@@ -58170,6 +65725,38 @@ func (m *LicenseActivateRequest) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Activation = &LicenseActivateRequest_UsageBasedId{string(dAtA[iNdEx:postIndex])}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UsagedBasedAirgappedId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Activation = &LicenseActivateRequest_UsagedBasedAirgappedId{string(dAtA[iNdEx:postIndex])}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -59086,6 +66673,2559 @@ func (m *LicenseResponseInfo_Status) Unmarshal(dAtA []byte) error {
 			}
 			m.Reason = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LicenseUsageAirgappedObject) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LicenseUsageAirgappedObject: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LicenseUsageAirgappedObject: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Metadata", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Metadata == nil {
+				m.Metadata = &Metadata{}
+			}
+			if err := m.Metadata.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeCount", wireType)
+			}
+			m.NodeCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.NodeCount |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReportTime", wireType)
+			}
+			m.ReportTime = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ReportTime |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LicenseUsageAirgappedRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LicenseUsageAirgappedRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LicenseUsageAirgappedRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OrgId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ObjectIndex", wireType)
+			}
+			m.ObjectIndex = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ObjectIndex |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxObjects", wireType)
+			}
+			m.MaxObjects = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxObjects |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LicenseUsageAirgappedResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LicenseUsageAirgappedResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LicenseUsageAirgappedResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LicenseUsageAirgapped", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LicenseUsageAirgapped = append(m.LicenseUsageAirgapped, &LicenseUsageAirgappedObject{})
+			if err := m.LicenseUsageAirgapped[len(m.LicenseUsageAirgapped)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Complete", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Complete = bool(v != 0)
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TotalCount", wireType)
+			}
+			m.TotalCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TotalCount |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ManagedClusterEnumerateRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ManagedClusterEnumerateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OrgId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CloudCredential", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CloudCredential == nil {
+				m.CloudCredential = &ObjectRef{}
+			}
+			if err := m.CloudCredential.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeSecrets", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeSecrets = bool(v != 0)
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxResults", wireType)
+			}
+			m.MaxResults = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxResults |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Provider", wireType)
+			}
+			m.Provider = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Provider |= ManagedClusterEnumerateRequest_Provider(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 100:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AwsConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterEnumerateRequest_AWSConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterEnumerateRequest_AwsConfig{v}
+			iNdEx = postIndex
+		case 101:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GoogleConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterEnumerateRequest_GoogleConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterEnumerateRequest_GoogleConfig_{v}
+			iNdEx = postIndex
+		case 102:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AzureConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterEnumerateRequest_AzureConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterEnumerateRequest_AzureConfig_{v}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateRequest_AWSConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AWSConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AWSConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Region", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Region = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NextToken", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NextToken = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateRequest_GoogleConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GoogleConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GoogleConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateRequest_AzureConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AzureConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AzureConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterObject) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ManagedClusterObject: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ManagedClusterObject: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CloudCredential", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CloudCredential == nil {
+				m.CloudCredential = &ObjectRef{}
+			}
+			if err := m.CloudCredential.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Kubeconfig", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Kubeconfig = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field K8SVersion", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.K8SVersion = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
+			}
+			m.Status = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Status |= ManagedClusterObject_Status(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ManagedClusterEnumerateResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ManagedClusterEnumerateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cluster", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cluster = append(m.Cluster, &ManagedClusterObject{})
+			if err := m.Cluster[len(m.Cluster)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Provider", wireType)
+			}
+			m.Provider = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Provider |= ManagedClusterEnumerateResponse_Provider(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 100:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AwsConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterEnumerateResponse_AWSConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterEnumerateResponse_AwsConfig{v}
+			iNdEx = postIndex
+		case 101:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GoogleConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterEnumerateResponse_GoogleConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterEnumerateResponse_GoogleConfig_{v}
+			iNdEx = postIndex
+		case 102:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AzureConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterEnumerateResponse_AzureConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterEnumerateResponse_AzureConfig_{v}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateResponse_AWSConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AWSConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AWSConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NextToken", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NextToken = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateResponse_GoogleConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GoogleConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GoogleConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterEnumerateResponse_AzureConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AzureConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AzureConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterInspectRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ManagedClusterInspectRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ManagedClusterInspectRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OrgId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CloudCredential", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CloudCredential == nil {
+				m.CloudCredential = &ObjectRef{}
+			}
+			if err := m.CloudCredential.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeSecrets", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeSecrets = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Provider", wireType)
+			}
+			m.Provider = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Provider |= ManagedClusterInspectRequest_Provider(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 100:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AwsConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterInspectRequest_AWSConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterInspectRequest_AwsConfig{v}
+			iNdEx = postIndex
+		case 101:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GoogleConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterInspectRequest_GoogleConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterInspectRequest_GoogleConfig_{v}
+			iNdEx = postIndex
+		case 102:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AzureConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterInspectRequest_AzureConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterInspectRequest_AzureConfig_{v}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterInspectRequest_AWSConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AWSConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AWSConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Region", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Region = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterInspectRequest_GoogleConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GoogleConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GoogleConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterInspectRequest_AzureConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AzureConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AzureConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterInspectResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ManagedClusterInspectResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ManagedClusterInspectResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cluster", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Cluster == nil {
+				m.Cluster = &ManagedClusterObject{}
+			}
+			if err := m.Cluster.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterBulkAddRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ManagedClusterBulkAddRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ManagedClusterBulkAddRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OrgId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CloudCredential", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CloudCredential == nil {
+				m.CloudCredential = &ObjectRef{}
+			}
+			if err := m.CloudCredential.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterName = append(m.ClusterName, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Provider", wireType)
+			}
+			m.Provider = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Provider |= ManagedClusterBulkAddRequest_Provider(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 100:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AwsConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterBulkAddRequest_AWSConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterBulkAddRequest_AwsConfig{v}
+			iNdEx = postIndex
+		case 101:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GoogleConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterBulkAddRequest_GoogleConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterBulkAddRequest_GoogleConfig_{v}
+			iNdEx = postIndex
+		case 102:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AzureConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &ManagedClusterBulkAddRequest_AzureConfig{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Config = &ManagedClusterBulkAddRequest_AzureConfig_{v}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterBulkAddRequest_AWSConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AWSConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AWSConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Region", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthApi
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Region = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterBulkAddRequest_GoogleConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GoogleConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GoogleConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterBulkAddRequest_AzureConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AzureConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AzureConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ManagedClusterBulkAddResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ManagedClusterBulkAddResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ManagedClusterBulkAddResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])

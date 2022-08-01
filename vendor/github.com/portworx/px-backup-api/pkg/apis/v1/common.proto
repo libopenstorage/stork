@@ -21,6 +21,9 @@ enum LicenseType {
     IBM = 4;
     AWS = 5;
     GCP = 6;
+    // In future we might have different baas licensing
+    BaasStd = 7;
+    UsageBasedAirGapped = 8;
 }
 
 message Metadata {
@@ -58,6 +61,49 @@ message CreateMetadata {
     Ownership ownership = 5;
     // uid of the object
     string uid = 6;
+}
+
+// BackupShare for storing user and group details for whom the backups
+// will be shared
+message BackupShare {
+    enum AccessType {
+        Invalid = 0;
+        // view access means the backup is shared for view only
+        // It can not be used for restore
+        View = 1;
+        // Restorable access means the backup is shared for view and it can be
+        // restore as well
+        Restorable = 2;
+        // The FullAccess means the backup is shared for view/restore and other
+        // admin operations like update and delete
+        FullAccess = 3;
+    }
+    message AccessConfig {
+        string id = 1;
+        AccessType access = 2;
+    }
+
+    // Group access to objects which must match the group set in the
+    // authorization token.
+    // Can be set by the owner or the system administrator only.
+    // Possible values are:
+    // 1. no groups: Means no groups are given access.
+    // 2. `["*"]`: All groups are allowed.
+    // 3. `["group1", "group2"]`: Only certain groups are allowed. In this
+    // example only
+    // _group1_ and _group2_ are allowed.
+    repeated AccessConfig groups = 2;
+
+    // Collaborator access to objects gives access to other user.
+    // Must be the username (unique id) set in the authorization token.
+    // The owner or the administrator can set this value. Possible values
+    // are:
+    // 1. no collaborators: Means no users are given access.
+    // 2. `["*"]`: All users are allowed.
+    // 3. `["username1", "username2"]`: Only certain usernames are allowed.
+    // In this example only
+    // _username1_ and _username2_ are allowed.
+    repeated AccessConfig collaborators = 3;
 }
 
 // Ownership information for objects(eg: backup object, schedule object).

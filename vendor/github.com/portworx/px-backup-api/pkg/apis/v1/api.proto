@@ -10,10 +10,26 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "pkg/apis/v1/common.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 
 option (gogoproto.populate_all) = true;
 option (gogoproto.equal_all) = true;
 option (gogoproto.testgen_all) = true;
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+    security_definitions : {
+        security : {
+            key : "bearer"
+            value : {
+                type : TYPE_API_KEY
+                in : IN_HEADER
+                name : "Authorization"
+                description : "Authentication token, prefixed by Bearer: "
+                              "Bearer <token>"
+            }
+        }
+    }
+    security : {security_requirement : {key : "bearer"}}
+};
 
 message OrganizationObject {
     Metadata metadata = 1 [ (gogoproto.embed) = true ];
@@ -36,7 +52,10 @@ message ClusterInfo {
     bool delete_restores = 6;
     string stork_version = 7;
     ObjectRef cloud_credential_ref = 8;
-
+    BackupShare add_backup_share = 9;
+    BackupShare del_backup_share = 10;
+    BackupShareStatusInfo backup_share_status_info = 11;
+    repeated string owner_group_list = 12;
     // Message for maintaining status of the cluster.
     message StatusInfo {
         enum Status {
@@ -44,6 +63,32 @@ message ClusterInfo {
             Online = 1;
             Offline = 2;
             DeletePending = 3;
+            // Pending If a cluster addition is in pending state
+            Pending = 4;
+            // Failed If a cluster failed to be added
+            Failed = 5;
+            // Success If cluster was successfully added but not Online yet
+            Success = 6;
+        }
+        Status status = 1;
+        string reason = 2;
+    }
+    // Message for maintaining status of the backup share.
+    message BackupShareStatusInfo {
+        enum Status {
+            Invalid = 0;
+            // InProgress if backupshare is going on for backups belonging to
+            // the cluster
+            InProgress = 1;
+            // Failed if backupshare fails for some backups belonging to the
+            // cluster
+            Failed = 2;
+            // Success if backupshare is successful for all current backups
+            // belonging to the cluster
+            Success = 3;
+            // Parital Success if backupshare is successful for only few
+            // backups.
+            PartialSuccess = 4;
         }
         Status status = 1;
         string reason = 2;
@@ -205,6 +250,12 @@ message SchedulePolicyInfo {
     MonthlyPolicy monthly = 4;
     // list of backup schedule object that uses this schedule policy.
     repeated string backup_schedule = 5;
+    // for_object_lock should be set, if this policy is planned to be used with
+    // locked bucket while taking backup.
+    bool for_object_lock = 6;
+    // auto-delete - this option is to indicate, whether the backup
+    // should be deleted after the retention of the backup object is expired
+    bool auto_delete = 7;
 }
 
 message SchedulePolicyObject {
@@ -327,6 +378,7 @@ message BackupLocationInfo {
         Status status = 1;
         string reason = 2;
     }
+    bool object_lock_enabled = 9;
 }
 
 message BackupLocationObject {
@@ -380,6 +432,10 @@ message BackupInfo {
     ObjectRef cloud_credential_ref = 24;
     // To get type of backup (generic or non-generic)
     BackupType backup_type = 25;
+    string cr_uid = 26;
+    int64 retention_period = 27;
+    BackupShare backup_share = 28;
+    BackupShare.AccessType user_backupshare_access = 29;
     message BackupType {
         Type type = 1;
         enum Type {
@@ -418,6 +474,9 @@ message BackupInfo {
         // incase of incremental, it's the incremental backup size
         uint64 actual_size = 10;
         string storage_class = 11;
+        string pvc_id = 12;
+        string provisioner = 13;
+        string volumesnapshot = 14;
     }
 
     // Message for maintaining status of the object.
@@ -482,7 +541,7 @@ message ReplacePolicy {
 
 // Message for restore info
 message RestoreInfo {
-    // Name of backup to restore from
+    // backup is deprecated, not to be used.
     string backup = 1;
     // Name of backup location to restore from.
     // backup_location is deprecated, not to be used.
@@ -506,6 +565,8 @@ message RestoreInfo {
     ObjectRef backup_location_ref = 15;
     // storage class mapping for generic backup <source, destination>
     map<string, string> storage_class_mapping = 16;
+    // backup to restore from
+    ObjectRef backup_ref = 17;
 
     message RestoredResource {
         string name = 1;
@@ -594,7 +655,7 @@ message EnumerateOptions {
 }
 
 service SchedulePolicy {
-    // Create creates new schedule policy.
+    // Creates new schedule policy.
     rpc Create(SchedulePolicyCreateRequest)
         returns (SchedulePolicyCreateResponse) {
         option (google.api.http) = {
@@ -624,7 +685,7 @@ service SchedulePolicy {
     rpc Inspect(SchedulePolicyInspectRequest)
         returns (SchedulePolicyInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/schedulepolicy/{org_id}/{name}"
+            get : "/v1/schedulepolicy/{org_id}/{name}/{uid}"
         };
     }
 
@@ -632,7 +693,7 @@ service SchedulePolicy {
     rpc Delete(SchedulePolicyDeleteRequest)
         returns (SchedulePolicyDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/schedulepolicy/{org_id}/{name}"
+            delete : "/v1/schedulepolicy/{org_id}/{name}/{uid}"
         };
     }
 
@@ -699,7 +760,7 @@ message SchedulePolicyOwnershipUpdateRequest {
 message SchedulePolicyOwnershipUpdateResponse {}
 
 service BackupSchedule {
-    // Create creates new backup schedule
+    // Creates new backup schedule
     rpc Create(BackupScheduleCreateRequest)
         returns (BackupScheduleCreateResponse) {
         option (google.api.http) = {
@@ -708,7 +769,7 @@ service BackupSchedule {
         };
     }
 
-    // Update updates a backup schedule
+    // Updates a backup schedule
     rpc Update(BackupScheduleUpdateRequest)
         returns (BackupScheduleUpdateResponse) {
         option (google.api.http) = {
@@ -856,7 +917,7 @@ message BackupScheduleDeleteResponse {}
 
 service Cluster {
 
-    // Create creates a new cluster
+    // Creates a new cluster
     rpc Create(ClusterCreateRequest) returns (ClusterCreateResponse) {
         option (google.api.http) = {
             post : "/v1/cluster"
@@ -892,7 +953,26 @@ service Cluster {
             delete : "/v1/cluster/{org_id}/{name}"
         };
     }
+    // UpdateBackupShare updates ownership details for backup share at cluster
+    // level
+    rpc UpdateBackupShare(ClusterBackupShareUpdateRequest)
+        returns (ClusterBackupShareUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/cluster/updatebackupshare"
+            body : "*"
+        };
+    }
 }
+
+message ClusterBackupShareUpdateRequest {
+    string org_id = 1;
+    string name = 2;
+    BackupShare add_backup_share = 3;
+    BackupShare del_backup_share = 4;
+    string uid = 5;
+}
+
+message ClusterBackupShareUpdateResponse {}
 
 // Define ClusterCreateRequest struct
 message ClusterCreateRequest {
@@ -938,6 +1018,8 @@ message ClusterEnumerateRequest {
     // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
     ObjectRef cloud_credential_ref = 5;
+    // Set this to true, to get the backupshare enabled cluster list
+    bool only_backup_share = 6;
 }
 
 // Define ClusterEnumerateResponse struct
@@ -969,7 +1051,7 @@ message ClusterDeleteRequest {
 message ClusterDeleteResponse {}
 
 service CloudCredential {
-    // Create creates new cloud credential
+    // Creates new cloud credential
     rpc Create(CloudCredentialCreateRequest)
         returns (CloudCredentialCreateResponse) {
         option (google.api.http) = {
@@ -999,7 +1081,7 @@ service CloudCredential {
     rpc Inspect(CloudCredentialInspectRequest)
         returns (CloudCredentialInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/cloudcredential/{org_id}/{name}"
+            get : "/v1/cloudcredential/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1007,7 +1089,7 @@ service CloudCredential {
     rpc Delete(CloudCredentialDeleteRequest)
         returns (CloudCredentialDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/cloudcredential/{org_id}/{name}"
+            delete : "/v1/cloudcredential/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1028,7 +1110,9 @@ message CloudCredentialCreateRequest {
 }
 
 // Define CloudCredentialCreateResponse struct
-message CloudCredentialCreateResponse {}
+message CloudCredentialCreateResponse {
+    CloudCredentialObject cloud_credential = 1;
+}
 
 // Define CloudCredentialUpdateRequest struct
 message CloudCredentialUpdateRequest {
@@ -1084,7 +1168,7 @@ message CloudCredentialOwnershipUpdateRequest {
 message CloudCredentialOwnershipUpdateResponse {}
 
 service BackupLocation {
-    // Create creates new backup location
+    // Creates new backup location
     rpc Create(BackupLocationCreateRequest)
         returns (BackupLocationCreateResponse) {
         option (google.api.http) = {
@@ -1114,7 +1198,7 @@ service BackupLocation {
     rpc Inspect(BackupLocationInspectRequest)
         returns (BackupLocationInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/backuplocation/{org_id}/{name}"
+            get : "/v1/backuplocation/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1122,7 +1206,7 @@ service BackupLocation {
     rpc Delete(BackupLocationDeleteRequest)
         returns (BackupLocationDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/backuplocation/{org_id}/{name}"
+            delete : "/v1/backuplocation/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1174,6 +1258,8 @@ message BackupLocationEnumerateRequest {
     // cloud_credential is deprecated, not to be used.
     string cloud_credential = 3;
     ObjectRef cloud_credential_ref = 4;
+    // enable include_secrets to get the encryptionKey value.
+    bool include_secrets = 5;
 }
 
 // Define BackupLocationEnumerateResponse struct
@@ -1186,6 +1272,8 @@ message BackupLocationInspectRequest {
     string org_id = 1;
     string name = 2;
     string uid = 3;
+    // enable include_secrets to get the encryptionKey value.
+    bool include_secrets = 4;
 }
 
 // Define BackupLocationInspectResponse struct
@@ -1229,6 +1317,7 @@ message BackupLocationOwnershipUpdateRequest {
 message BackupLocationOwnershipUpdateResponse {}
 
 service Metrics {
+    // Returns metrics details of backups
     rpc Inspect(MetricsInspectRequest) returns (MetricsInspectResponse) {
         option (google.api.http) = {
             get : "/v1/metrics/{org_id}"
@@ -1249,7 +1338,7 @@ message MetricsInspectResponse {
 }
 
 service Backup {
-    // Create creates a new backup object
+    // Creates a new backup object
     rpc Create(BackupCreateRequest) returns (BackupCreateResponse) {
         option (google.api.http) = {
             post : "/v1/backup"
@@ -1283,6 +1372,15 @@ service Backup {
     rpc Delete(BackupDeleteRequest) returns (BackupDeleteResponse) {
         option (google.api.http) = {
             delete : "/v1/backup/{org_id}/{name}"
+        };
+    }
+
+    // UpdateBackupShare updates backupshare of existing backup object
+    rpc UpdateBackupShare(BackupShareUpdateRequest)
+        returns (BackupShareUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/backup/updatebackupshare"
+            body : "*"
         };
     }
 }
@@ -1357,6 +1455,7 @@ message BackupEnumerateResponse {
 message BackupInspectRequest {
     string name = 1;
     string org_id = 2;
+    string uid = 4;
 }
 
 // Response message structure for object inspect
@@ -1368,13 +1467,26 @@ message BackupDeleteRequest {
     string org_id = 2;
     // cluster name or uid to perform delete through
     string cluster = 3;
+    string uid = 4;
 }
 
 // Response message structure for object delete
 message BackupDeleteResponse {}
 
+// Request message for backup share update request
+message BackupShareUpdateRequest {
+    string org_id = 1;
+    // Backup to be updated
+    string name = 2;
+    BackupShare backupshare = 3;
+    string uid = 4;
+}
+
+// Response message for backup share update request
+message BackupShareUpdateResponse {}
+
 service Restore {
-    // Create creates new restore object in datastore
+    // Creates new restore object in datastore
     // It will also trigger a restore operation on the target cluster
     rpc Create(RestoreCreateRequest) returns (RestoreCreateResponse) {
         option (google.api.http) = {
@@ -1416,7 +1528,7 @@ service Restore {
 // Define RestoreCreateRequest struct
 message RestoreCreateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
-    // uid or name of backup
+    // backup is deprecated, not to be used.
     string backup = 2;
     // uid or name of cluster
     string cluster = 3;
@@ -1430,6 +1542,8 @@ message RestoreCreateRequest {
     repeated ResourceInfo include_resources = 7;
     // storage class mapping for generic backup <source, destination>
     map<string, string> storage_class_mapping = 8;
+    // backup object reference having name and id
+    ObjectRef backup_ref = 9;
 }
 
 // Define RestoreCreateResponse struct
@@ -1476,7 +1590,7 @@ message RestoreDeleteRequest {
 message RestoreDeleteResponse {}
 
 service Organization {
-    // Create creates new organization object in datastore
+    // Creates new organization object in datastore
     rpc Create(OrganizationCreateRequest) returns (OrganizationCreateResponse) {
         option (google.api.http) = {
             post : "/v1/organization"
@@ -1577,7 +1691,7 @@ message RuleOwnershipUpdateRequest {
 message RuleOwnershipUpdateResponse {}
 
 service Rules {
-    // Create creates new rule
+    // Creates new rule
     rpc Create(RuleCreateRequest) returns (RuleCreateResponse) {
         option (google.api.http) = {
             post : "/v1/rule"
@@ -1603,14 +1717,14 @@ service Rules {
     // Inspect returns detailed information about the specified rule
     rpc Inspect(RuleInspectRequest) returns (RuleInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/rule/{org_id}/{name}"
+            get : "/v1/rule/{org_id}/{name}/{uid}"
         };
     }
 
     // Delete removes rule from px-backup
     rpc Delete(RuleDeleteRequest) returns (RuleDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/rule/{org_id}/{name}"
+            delete : "/v1/rule/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1625,7 +1739,7 @@ service Rules {
 }
 
 service Version {
-    // Get gets the version of the server
+    // gets the version of the server
     rpc Get(VersionGetRequest) returns (VersionGetResponse) {
         option (google.api.http) = {
             get : "/v1/version"
@@ -1637,8 +1751,9 @@ message VersionInfo {
     string major = 1;
     string minor = 2;
     string patch = 3;
-    string git_commit = 4;
-    string build_date = 5;
+    string changes = 4;
+    string git_commit = 5;
+    string build_date = 6;
 }
 
 message VersionGetRequest {}
@@ -1654,6 +1769,7 @@ message LicenseActivateRequest {
         string activation_id = 2;
         bytes license_data = 3;
         string usage_based_id = 4;
+        string usaged_based_airgapped_id = 5;
     }
 }
 
@@ -1702,6 +1818,27 @@ message LicenseResponseInfo {
     }
 }
 
+message LicenseUsageAirgappedObject {
+    Metadata metadata = 1 [ (gogoproto.embed) = true ];
+    int64 node_count = 2;
+    // Time at which license consumption is recorded in epoch time format
+    int64 report_time = 3;
+}
+
+message LicenseUsageAirgappedRequest {
+    string org_id = 1;
+    // index from where object fetch has to happen
+    uint64 object_index = 2;
+    // max objects to fetch
+    uint64 max_objects = 3;
+}
+
+message LicenseUsageAirgappedResponse {
+    repeated LicenseUsageAirgappedObject licenseUsageAirgapped = 1;
+    bool complete = 2;
+    uint64 total_count = 3;
+}
+
 service License {
     // Activate activate a new license
     rpc Activate(LicenseActivateRequest) returns (LicenseActivateResponse) {
@@ -1718,14 +1855,220 @@ service License {
         };
     }
 
-    // Update updates Usage Based activation ID
+    // Updates Usage Based activation ID
     rpc Update(LicenseUpdateRequest) returns (LicenseUpdateResponse) {
         option (google.api.http) = {
             put : "/v1/license"
             body : "*"
         };
     }
+
+    rpc EnumerateLicenseUsageAirGapped(LicenseUsageAirgappedRequest)
+        returns (LicenseUsageAirgappedResponse) {
+        option (google.api.http) = {
+            get : "/v1/license/{org_id}/license_usage_airgapped"
+        };
+    }
 }
+
+service ManagedClusters {
+
+    // Enumerate returns a list of managed clusters from providers like
+    // AWS, Azure, GCE, IBM
+    // using the given credentials
+    rpc Enumerate(ManagedClusterEnumerateRequest)
+        returns (ManagedClusterEnumerateResponse) {
+        option (google.api.http) = {
+            get : "/v1/managedcluster/{org_id}"
+        };
+    }
+
+    // Inspect returns detailed information on a managed cluster from providers
+    // like
+    // AWS, Azure, GCE, IBM
+    // using the given credentials
+    rpc Inspect(ManagedClusterInspectRequest)
+        returns (ManagedClusterInspectResponse) {
+        option (google.api.http) = {
+            get : "/v1/managedcluster/{org_id}"
+        };
+    }
+
+    // Bulk add discovered clusters
+    rpc BulkAdd(ManagedClusterBulkAddRequest)
+        returns (ManagedClusterBulkAddResponse) {
+        option (google.api.http) = {
+            post : "/v1/managedclusters"
+            body : "*"
+        };
+    }
+}
+
+// Define ManagedClusterEnumerateRequest struct
+message ManagedClusterEnumerateRequest {
+    string org_id = 1;
+    // cloud credential name.
+    // Enumerate will return list of managed clusters that
+    // this cloud credential has access to
+    ObjectRef cloud_credential = 2;
+    bool include_secrets = 3;
+    // Number of entries to be fetched
+    int64 max_results = 4;
+
+    // Cloud provider type
+    enum Provider {
+        Invalid = 0;
+        AWS = 1;
+        Azure = 2;
+        Google = 3;
+    }
+
+    Provider provider = 5;
+    oneof Config {
+        AWSConfig aws_config = 100;
+        GoogleConfig google_config = 101;
+        AzureConfig azure_config = 102;
+    }
+
+    message AWSConfig {
+        // Region for scanning clusters
+        string region = 1;
+        // Used for sending token, needed for pagination
+        string next_token = 2;
+    }
+
+    message GoogleConfig {}
+    message AzureConfig {}
+}
+
+// Define ManagedClusterObject struct
+message ManagedClusterObject {
+    // Name of the managed cluster
+    // This is usually the user friendly name of the cluster
+    string name = 1;
+    // UID of the managed cluster
+    // This is the UID returned by the managed cluster provider
+    string uid = 2;
+    // Cloud Credential name used for fetching this cluster's details
+    ObjectRef cloud_credential = 3;
+    // Kubeconfig if the provider supports using kubeconfigs
+    string kubeconfig = 4 [
+        (gogoproto.jsontag) = "kubeconfig",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    // k8s version
+    string k8s_version = 5;
+    // This flag indicates if the discovered cluster is already added in the
+    // objectstore.
+    // This will help UI to help user understand which clusters are already
+    // added and need to
+    // be added.
+
+    // Status hold if the cluster is already present in datastore or not
+    enum Status {
+        Invalid = 0;
+        NotAdded = 1;
+        Added = 2;
+    }
+    Status status = 6;
+}
+
+// Define ClusterEnumerateResponse struct
+message ManagedClusterEnumerateResponse {
+    repeated ManagedClusterObject cluster = 1;
+    Provider provider = 2;
+    // Cloud provider type
+    enum Provider {
+        Invalid = 0;
+        AWS = 1;
+        Azure = 2;
+        Google = 3;
+    }
+
+    oneof Config {
+        AWSConfig aws_config = 100;
+        GoogleConfig google_config = 101;
+        AzureConfig azure_config = 102;
+    }
+
+    message AWSConfig {
+        // For ListClusters() AWS provides pagination and next_token
+        // is pointer for next set of cluster fetch
+        string next_token = 1;
+    }
+
+    message GoogleConfig {}
+    message AzureConfig {}
+}
+
+// Define ManagedClusterInspectRequest struct
+message ManagedClusterInspectRequest {
+    string org_id = 1;
+    // Managed cluster name to be searched for
+    string name = 2;
+    // cloud credential name.
+    // Enumerate will return list of managed clusters that
+    // this cloud credential has access to
+    ObjectRef cloud_credential = 3;
+    bool include_secrets = 4;
+
+    // Cloud provider type
+    enum Provider {
+        Invalid = 0;
+        AWS = 1;
+        Azure = 2;
+        Google = 3;
+    }
+
+    Provider provider = 5;
+    oneof Config {
+        AWSConfig aws_config = 100;
+        GoogleConfig google_config = 101;
+        AzureConfig azure_config = 102;
+    }
+
+    message AWSConfig {
+        // Region for scanning clusters
+        string region = 1;
+    }
+
+    message GoogleConfig {}
+    message AzureConfig {}
+}
+
+// Define ClusterInspectResponse struct
+message ManagedClusterInspectResponse { ManagedClusterObject cluster = 1; }
+
+message ManagedClusterBulkAddRequest {
+    string org_id = 1;
+    ObjectRef cloud_credential = 2;
+    // Region for scanning cluster
+    // cluster name to be added
+    repeated string cluster_name = 3;
+    // Cloud provider type
+    enum Provider {
+        Invalid = 0;
+        AWS = 1;
+        Azure = 2;
+        Google = 3;
+    }
+
+    Provider provider = 4;
+    oneof Config {
+        AWSConfig aws_config = 100;
+        GoogleConfig google_config = 101;
+        AzureConfig azure_config = 102;
+    }
+
+    message AWSConfig {
+        // Region for scanning clusters
+        string region = 1;
+    }
+    message GoogleConfig {}
+    message AzureConfig {}
+}
+
+message ManagedClusterBulkAddResponse {}
 
 service ActivityTimeLine {
     // Enumerate returns a list of activity data for a given time period
@@ -1792,7 +2135,7 @@ message RoleConfig {
 }
 
 service Role {
-    // Create creates new role object in datastore
+    // Creates new role object in datastore
     rpc Create(RoleCreateRequest) returns (RoleCreateResponse) {
         option (google.api.http) = {
             post : "/v1/role"
@@ -1809,7 +2152,7 @@ service Role {
     // Inspect returns detailed information about requested role object
     rpc Inspect(RoleInspectRequest) returns (RoleInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/role/{org_id}/{name}"
+            get : "/v1/role/{org_id}/{name}/{uid}"
         };
     }
     // Update given role information
@@ -1822,7 +2165,7 @@ service Role {
     // Delete removes given role from px-backup
     rpc Delete(RoleDeleteRequest) returns (RoleDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/role/{org_id}/{name}"
+            delete : "/v1/role/{org_id}/{name}/{uid}"
         };
     }
     // Permission returns list of service,apis permission for given user
