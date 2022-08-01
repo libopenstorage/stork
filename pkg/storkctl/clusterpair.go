@@ -3,13 +3,18 @@ package storkctl
 import (
 	"bufio"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"io/ioutil"
+	"net"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
+	"github.com/libopenstorage/stork/pkg/utils"
+
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/utils"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/validation"
@@ -248,14 +253,22 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				util.CheckErr(err)
 				return
 			}
-
-			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false)
+			printMsg("Using PX-Service Endpoint of DR cluster to create clusterpair...\n", ioStreams.Out)
+			ip, port, token, err := getClusterPairParams(dFile, dIP)
 			if err != nil {
+				err := fmt.Errorf("unable to create clusterpair from source to DR cluster. Err: %v", err)
 				util.CheckErr(err)
 				return
 			}
+			dIP = ip
+			if dPort == "" {
+				dPort = port
+			}
+			if destToken == "" {
+				destToken = token
+			}
 
-			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true)
+			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -274,6 +287,28 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 			printMsg("ClusterPair "+clusterPairName+" created successfully on source cluster", ioStreams.Out)
+			if sFile == "" {
+				return
+			}
+			printMsg("Using PX-Service endpoints of source cluster to create clusterpair...\n", ioStreams.Out)
+			ip, port, token, err = getClusterPairParams(sFile, sIP)
+			if err != nil {
+				err := fmt.Errorf("unable to create clusterpair from DR to source cluster. Err: %v", err)
+				util.CheckErr(err)
+				return
+			}
+			sIP = ip
+			if sPort == "" {
+				sPort = port
+			}
+			if srcToken == "" {
+				srcToken = token
+			}
+			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true)
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
 			// Create cluster-pair on dest cluster
 			conf, err = getConfig(dFile).ClientConfig()
 			if err != nil {
@@ -297,8 +332,8 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "kube-config of destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9001", "port of storage node from destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "kube-config of destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "source cluster token for cluster pairing")
-	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "destination cluster token for cluster pairing")
+	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(optional)source cluster token for cluster pairing")
+	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(optional)destination cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "",
 		"project mappings between source and destination clusters, use comma-separated <source-project-id>=<dest-project-id> pairs (Currently supported only for Rancher)")
 
@@ -435,4 +470,49 @@ func getConfig(configFile string) clientcmd.ClientConfig {
 	configLoadingRules.ExplicitPath = configFile
 	configOverrides := &clientcmd.ConfigOverrides{}
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
+}
+
+func getClusterPairParams(config, endpoint string) (string, string, string, error) {
+	var ip, port, token string
+	client, err := core.NewInstanceFromConfigFile(config)
+	if err != nil {
+		return ip, port, token, err
+	}
+
+	services, err := client.ListServices("", meta.ListOptions{LabelSelector: "name=portworx-api"})
+	if err != nil || len(services.Items) == 0 {
+		err := fmt.Errorf("unable to retrieve portworx-api service from DR cluster. Err: %v", err)
+		return ip, port, token, err
+	}
+	// TODO: in case of setting up aync-dr over cloud,
+	// users set up different service as load-balancer over px apis
+	// accept px-service name as env variable
+	svc := services.Items[0]
+	ip = endpoint
+	if ip == "" {
+		// this works only if px service is converted as load balancer type
+		// TODO: for 2 cluster where worker nodes are reachable, figure out
+		// any one worker ip by looking at px/enabled label
+		ip = svc.Spec.LoadBalancerIP
+	}
+	pxToken := os.Getenv("PX_AUTH_TOKEN")
+	for _, svcPort := range svc.Spec.Ports {
+		if svcPort.Name == "px-api" {
+			port = strconv.Itoa(int(svcPort.Port))
+			break
+		}
+	}
+	pxEndpoint := net.JoinHostPort(ip, port)
+	// TODO: support https as well
+	clnt, err := clusterclient.NewAuthClusterClient("http://"+pxEndpoint, "v1", pxToken, "")
+	if err != nil {
+		return ip, port, token, err
+	}
+	mgr := clusterclient.ClusterManager(clnt)
+	resp, err := mgr.GetPairToken(false)
+	if err != nil {
+		return ip, port, token, err
+	}
+	token = resp.GetToken()
+	return ip, port, token, nil
 }
