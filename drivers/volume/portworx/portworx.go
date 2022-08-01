@@ -2421,7 +2421,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
 		}
 		for _, pvc := range pvcList.Items {
-			if !p.OwnsPVC(core.Instance(), &pvc) {
+			if !p.IsSupportedPVC(core.Instance(), &pvc, true) {
 				continue
 			}
 			if resourcecollector.SkipResource(pvc.Annotations) {
