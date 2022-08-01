@@ -118,6 +118,14 @@ type NamespacedSchedulePolicyListerExpansion interface{}
 // NamespacedSchedulePolicyNamespaceLister.
 type NamespacedSchedulePolicyNamespaceListerExpansion interface{}
 
+// ResourceTransformationListerExpansion allows custom methods to be added to
+// ResourceTransformationLister.
+type ResourceTransformationListerExpansion interface{}
+
+// ResourceTransformationNamespaceListerExpansion allows custom methods to be added to
+// ResourceTransformationNamespaceLister.
+type ResourceTransformationNamespaceListerExpansion interface{}
+
 // RuleListerExpansion allows custom methods to be added to
 // RuleLister.
 type RuleListerExpansion interface{}
