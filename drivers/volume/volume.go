@@ -344,13 +344,16 @@ func GetPVCDriverForBackup(coreOps core.Ops,
 	crBackupType string,
 ) (string, error) {
 	for _, driverName := range orderedListOfDrivers {
-		d, ok := volDrivers[driverName]
+		//d, ok := volDrivers[driverName]
+		_, ok := volDrivers[driverName]
 		if !ok {
 			continue
 		}
-		if d.OwnsPVCForBackup(coreOps, pvc, cmBackupType, crBackupType) {
+		/*if d.OwnsPVCForBackup(coreOps, pvc, cmBackupType, crBackupType) {
 			return driverName, nil
-		}
+		}*/
+		// DBG returning kdmp always
+		return KDMPDriverName, nil
 	}
 	return "", &errors.ErrNotSupported{
 		Feature: "VolumeDriver",

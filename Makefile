@@ -1,13 +1,13 @@
 DOCKER_HUB_REPO ?= openstorage
 
 DOCKER_HUB_STORK_IMAGE ?= stork
-DOCKER_HUB_STORK_TAG ?= dev
+DOCKER_HUB_STORK_TAG ?= nfs-dev
 
 DOCKER_HUB_CMD_EXECUTOR_IMAGE ?= cmdexecutor
-DOCKER_HUB_CMD_EXECUTOR_TAG ?= dev
+DOCKER_HUB_CMD_EXECUTOR_TAG ?= nfs-dev
 
 DOCKER_HUB_STORK_TEST_IMAGE ?= stork_test
-DOCKER_HUB_STORK_TEST_TAG ?= dev
+DOCKER_HUB_STORK_TEST_TAG ?= nfs-dev
 
 STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
 CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
@@ -139,8 +139,8 @@ container: help
 	@echo "Building container: docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile . "
 	sudo docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile .
 
-	@echo "Building container: docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor ."
-	sudo docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor .
+	#@echo "Building container: docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor ."
+	#sudo docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor .
 
 help:
 	@echo "Updating help file"
@@ -149,7 +149,7 @@ help:
 
 deploy:
 	sudo docker push $(STORK_IMG)
-	sudo docker push $(CMD_EXECUTOR_IMG)
+	#sudo docker push $(CMD_EXECUTOR_IMG)
 
 clean:
 	-rm -rf $(BIN)
