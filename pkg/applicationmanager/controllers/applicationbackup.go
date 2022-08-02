@@ -1159,6 +1159,7 @@ func (a *ApplicationBackupController) backupResources(
 			}
 		}
 	}
+
 	if backup.Status.Resources == nil {
 		// Save the collected resources infos in the status
 		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
@@ -1252,7 +1253,32 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	backup.Status.LastUpdateTimestamp = metav1.Now()
-
+	// DBG nFS
+	objInfo := []stork_api.ObjectInfo{}
+	for _, val := range backup.Status.Resources {
+		objInfo = append(objInfo, val.ObjectInfo)
+	}
+	dummyObjects := stork_api.CreateObjectsMap(objInfo)
+	objects, err := a.resourceCollector.GetResources(
+		namespacelist,
+		backup.Spec.Selectors,
+		dummyObjects,
+		optionalBackupResources,
+		true,
+		resourceCollectorOpts,
+	)
+	if err != nil {
+		log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
+		return err
+	}
+	for _, obj := range objects {
+		metadata, err := meta.Accessor(obj)
+		logrus.Infof("*** line 1271 metadata: %+v", metadata)
+		if err != nil {
+			logrus.Infof("line 1273")
+			return err
+		}
+	}
 	if err = a.client.Update(context.TODO(), backup); err != nil {
 		return err
 	}

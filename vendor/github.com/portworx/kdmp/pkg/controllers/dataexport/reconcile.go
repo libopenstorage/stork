@@ -1266,12 +1266,12 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 			return fmt.Errorf("delete %s job: %s", de.Status.TransferID, err)
 		}
 	}
-
-	if err := core.Instance().DeleteSecret(utils.GetCredSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
+	// DBG temp
+	/*if err := core.Instance().DeleteSecret(utils.GetCredSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", de.Name, err)
 		logrus.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
-	}
+	}*/
 	// Deleting image secret, if present
 	// Not checking for presence of the secret, instead try delete and ignore if the error is NotFound
 	if err := core.Instance().DeleteSecret(utils.GetImageSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
