@@ -96,9 +96,9 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 	}
 	vm := vmMap[n.Name]
 	cmd := "hostname"
-
 	t := func() (interface{}, bool, error) {
 		powerState, err := vm.PowerState(v.ctx)
+		logrus.Infof("Power state of VM : %s state %v ", vm.Name(), powerState)
 		if err != nil || powerState != types.VirtualMachinePowerStatePoweredOn {
 			return nil, true, &node.ErrFailedToTestConnection{
 				Node:  n,
@@ -122,8 +122,7 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 // getVMFinder return find.Finder instance
 func (v *vsphere) getVMFinder() (*find.Finder, error) {
 	login := fmt.Sprintf("%s%s:%s@%s/sdk", Protocol, v.vsphereUsername, v.vspherePassword, v.vsphereHostIP)
-	logrus.Infof("Logging in to ESXi using: %s", login)
-
+	logrus.Infof("Logging in to Virtual Center using: %s", login)
 	u, err := url.Parse(login)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing url %s", login)
@@ -161,7 +160,8 @@ func (v *vsphere) connect() error {
 	if err != nil {
 		return err
 	}
-
+	// vmMap Reset to get the new valid VMs info.
+	vmMap = make(map[string]*object.VirtualMachine)
 	// Find virtual machines in datacenter
 	vms, err := f.VirtualMachineList(v.ctx, "*")
 	if err != nil {
@@ -206,9 +206,9 @@ func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	if _, ok := vmMap[n.Name]; !ok {
 		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
 	}
-
+	//Reestblish connection to avoid session timeout.
+	v.connect()
 	vm := vmMap[n.Name]
-
 	logrus.Infof("Rebooting VM: %s  ", vm.Name())
 	err := vm.RebootGuest(v.ctx)
 	if err != nil {
