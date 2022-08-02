@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -4761,7 +4762,7 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 					logrus.Error(err)
 					UpdateOutcome(event, err)
 				}
-				if expectedDevMapperCount-actualCount > 1 || (expectedDevMapperCount == 0 && actualCount >= 1) || (actualCount == 0 && expectedDevMapperCount >= 1) {
+				if int(math.Abs(float64(expectedDevMapperCount)-float64(actualCount))) > 1 || (expectedDevMapperCount == 0 && actualCount >= 1) || (actualCount == 0 && expectedDevMapperCount >= 1) {
 					err := fmt.Errorf("device count mismatch in node: %v. Expected device: %v, Found %v device",
 						n.Name, expectedDevMapperCount, actualCount)
 					logrus.Error(err)
