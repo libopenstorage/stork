@@ -93,6 +93,7 @@ const (
 const (
 	defaultTimeout                    = 2 * time.Minute
 	defaultRetryInterval              = 10 * time.Second
+	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
 	maintenanceWaitTimeout            = 2 * time.Minute
 	inspectVolumeTimeout              = 1 * time.Minute
@@ -101,6 +102,7 @@ const (
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
 	validatePXStartTimeout            = 5 * time.Minute
+	validatePxPodsUpTimeout           = 30 * time.Minute
 	validateNodeStopTimeout           = 5 * time.Minute
 	validateStoragePoolSizeTimeout    = 3 * time.Hour
 	validateStoragePoolSizeInterval   = 30 * time.Second
@@ -437,7 +439,7 @@ func (d *portworx) WaitForPxPodsToBeUp(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validatePxPodsUpTimeout, podUpRetryInterval); err != nil {
 		return fmt.Errorf("PX pod failed to come up on node : [%s]. Error: [%v]", n.Name, err)
 	}
 	return nil
