@@ -73,7 +73,7 @@ import (
 const (
 
 	// default API port
-	defaultAPIPort = 9023
+	defaultAPIPort = 9001
 
 	// provisioner names for portworx volumes
 	provisionerName = "kubernetes.io/portworx-volume"
