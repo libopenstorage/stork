@@ -908,6 +908,23 @@ func (d *dcos) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scList map[stri
 
 }
 
+func (d *dcos) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) error {
+	// DeleteCsiSnapsForVolumes is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteCsiSnapsForVolumes()",
+	}
+
+}
+
+func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, snapshotNameSpace string) error {
+	// DeleteCsiSnapshot is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteCsiSnapshot()",
+	}
+
+}
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

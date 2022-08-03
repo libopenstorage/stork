@@ -3332,6 +3332,26 @@ func (k *K8s) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameS
 
 }
 
+// DeleteCsiSnapshot delete the snapshots
+func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
+
+	if err := k8sExternalsnap.DeleteSnapshot(snapshotName, snapshotNameSpace); err != nil {
+		if k8serrors.IsNotFound(err) {
+			logrus.Infof("[%v] Csi Snapshot not found: %v, skipping deletion", ctx.App.Key, snapshotName)
+
+		}
+		return &scheduler.ErrFailedToDestroyStorage{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("Failed to delete snapshot: %v. Err: %v", snapshotName, err),
+		}
+	}
+
+	logrus.Infof("[%v] Deleted Snapshot: %v", ctx.App.Key, snapshotName)
+
+	return nil
+
+}
+
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
 func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
 
@@ -4975,7 +4995,6 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 	// Only FA (pure_block) volume is supported
 	volTypes := []string{PureBlock}
 	var volSnapMap = make(map[string]*v1beta1.VolumeSnapshot)
-	var snaplist []*v1beta1.VolumeSnapshot
 
 	for _, specObj := range ctx.App.SpecList {
 
@@ -4986,14 +5005,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 				return nil, err
 			}
 			if snapshotOkay {
-				if snaplist, err = k.GetCsiSnapshots(obj.Namespace, pvc.Name); err != nil {
-					return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to list csi snapshot in namespace: %v. Err: %v", obj.Namespace, err),
-					}
-
-				}
-				snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(len(snaplist))
+				snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(int(time.Now().Unix()))
 				logrus.Debugf("Creating snapshot: [%s] for pvc: %s", snapName, pvc.Name)
 				volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name)
 				if err != nil {
@@ -5025,14 +5037,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 					return nil, err
 				}
 				if snapshotOkay {
-					if snaplist, err = k.GetCsiSnapshots(obj.Namespace, pvc.Name); err != nil {
-						return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Failed to list csi snapshot in namespace: %v. Err: %v", obj.Namespace, err),
-						}
-
-					}
-					snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(len(snaplist))
+					snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(int(time.Now().Unix()))
 					logrus.Debugf("Creating snapshot: [%s] for pvc: %s", snapName, pvc.Name)
 					volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name)
 					if err != nil {
@@ -5046,6 +5051,86 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 	}
 
 	return volSnapMap, nil
+}
+
+// DeleteCsiSnapsForVolumes delete csi snapshots for Apps
+func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) error {
+	// Only FA (pure_block) volume is supported
+	volTypes := []string{PureBlock}
+
+	for _, specObj := range ctx.App.SpecList {
+
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, volTypes)
+			if err != nil {
+				return err
+			}
+			if snapshotOkay {
+				snaplistForDelete, err := k.GetCsiSnapshots(obj.Namespace, pvc.Name)
+				if err != nil {
+					return &scheduler.ErrFailedToGetSnapshotList{
+						Name:  obj.Namespace,
+						Cause: fmt.Errorf("failed to list csi snapshot in namespace: %v. Err: %v", obj.Namespace, err),
+					}
+
+				}
+				logrus.Infof("Current [%v] snapshot exist for [%v] pvc", len(snaplistForDelete), pvc.Name)
+				if len(snaplistForDelete) > retainCount {
+					resVolIndex := random.Intn(len(snaplistForDelete))
+					logrus.Infof("Deleting snapshot: [%v] for pvc: [%v]", snaplistForDelete[resVolIndex].Name, pvc.Name)
+					err = k.DeleteCsiSnapshot(ctx, snaplistForDelete[resVolIndex].Name, obj.Namespace)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return &scheduler.ErrFailedToDeleteSnapshot{
+					Name:  obj.Namespace,
+					Cause: fmt.Errorf("failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return &scheduler.ErrFailedToDeleteSnapshot{
+					Name:  obj.Namespace,
+					Cause: fmt.Errorf("failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, volTypes)
+				if err != nil {
+					return err
+				}
+				if snapshotOkay {
+					snaplistFromStatefulset, err := k.GetCsiSnapshots(obj.Namespace, pvc.Name)
+					if err != nil {
+						return &scheduler.ErrFailedToGetSnapshotList{
+							Name:  obj.Namespace,
+							Cause: fmt.Errorf("failed to list csi snapshot in namespace: %v. Err: %v", obj.Namespace, err),
+						}
+
+					}
+					logrus.Infof("Current [%v] snapshot exist for [%v] pvc", len(snaplistFromStatefulset), pvc.Name)
+					if len(snaplistFromStatefulset) > retainCount {
+						resVolIndex := random.Intn(len(snaplistFromStatefulset))
+						logrus.Infof("Deleting snapshot: [%v] for pvc: [%v]", snaplistFromStatefulset[resVolIndex].Name, pvc.Name)
+						err = k.DeleteCsiSnapshot(ctx, snaplistFromStatefulset[resVolIndex].Name, obj.Namespace)
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (k *K8s) restoreAndValidate(
@@ -5315,10 +5400,13 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.Volu
 
 	for _, snapshot := range snaplist.Items {
 		if snap, err = k8sExternalsnap.GetSnapshot(snapshot.Name, namespace); err != nil {
-			return nil, err
+			// Not returning error when it failed to get snapshot as snapshot could be deleting
+			logrus.Warnf("Unable to get snapshot: [%v]. It could be deleting", snapshot.Name)
+			continue
 		}
-		if *snap.Spec.Source.PersistentVolumeClaimName == pvcName {
-			snapshots = append(snapshots, &snapshot)
+		if strings.Compare(*snap.Spec.Source.PersistentVolumeClaimName, pvcName) == 0 {
+			logrus.Infof("[%v] snapshot source pvc: [%v] matches with: [%v] pvc", snapshot.Name, *snap.Spec.Source.PersistentVolumeClaimName, pvcName)
+			snapshots = append(snapshots, snap)
 		}
 	}
 	return snapshots, nil
