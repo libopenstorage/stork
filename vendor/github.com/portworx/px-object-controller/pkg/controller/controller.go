@@ -19,6 +19,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -144,6 +145,14 @@ func New(cfg *Config) (*Controller, error) {
 func (ctrl *Controller) Run(workers int, stopCh chan struct{}) {
 	ctrl.objectFactory.Start(stopCh)
 
+	informers := []cache.InformerSynced{ctrl.accessListerSynced, ctrl.bucketListerSynced}
+	if !cache.WaitForCacheSync(stopCh, informers...) {
+		logrus.Errorf("Cannot sync caches")
+		return
+	}
+
+	ctrl.loadCaches(ctrl.bucketLister, ctrl.accessLister)
+
 	for i := 0; i < workers; i++ {
 		go wait.Until(ctrl.bucketWorker, 0, stopCh)
 		go wait.Until(ctrl.accessWorker, 0, stopCh)
@@ -235,9 +244,7 @@ func (ctrl *Controller) processBucket(ctx context.Context, key string) error {
 	ctx = ctrl.setupContextFromValue(ctx, bucketclaim.Status.BackendType)
 
 	logrus.WithContext(ctx).Infof("deleting bucketclaim %q with driver %s", key, bucketclaim.Status.BackendType)
-	ctrl.deleteBucket(ctx, bucketclaim)
-
-	return nil
+	return ctrl.deleteBucket(ctx, bucketclaim)
 }
 
 // enqueueBucketClaimWork adds bucketclaim to given work queue.
@@ -374,4 +381,35 @@ func (ctrl *Controller) enqueueAccessWork(obj interface{}) {
 		logrus.Infof("enqueued %q for sync", objName)
 		ctrl.accessQueue.Add(objName)
 	}
+}
+
+// loadCache fills all controller caches with initial data.
+// without this, the caches will be empty and not be able to process
+// any new requests when the controller is restarted
+func (ctrl *Controller) loadCaches(bucketLister bucketlisters.PXBucketClaimLister, accessLister bucketlisters.PXBucketAccessLister) {
+	bucketList, err := bucketLister.List(labels.Everything())
+	if err != nil {
+		logrus.Errorf("Controller can't initialize caches: %v", err)
+		return
+	}
+	for _, bucket := range bucketList {
+		bucketClone := bucket.DeepCopy()
+		if _, err = ctrl.storeBucketUpdate(bucketClone); err != nil {
+			logrus.Errorf("error updating bucket cache: %v", err)
+		}
+	}
+
+	accessList, err := accessLister.List(labels.Everything())
+	if err != nil {
+		logrus.Errorf("Controller can't initialize caches: %v", err)
+		return
+	}
+	for _, access := range accessList {
+		accessClone := access.DeepCopy()
+		if _, err = ctrl.storeAccessUpdate(accessClone); err != nil {
+			logrus.Errorf("error updating bucket access cache: %v", err)
+		}
+	}
+
+	logrus.Info("controller initialized for PXBucketClaims and PXBucketAccesses")
 }
