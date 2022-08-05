@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/server/sdk"
@@ -21,6 +22,7 @@ const (
 	commonObjectServiceKeyPrefix = "object.portworx.io/"
 	backendTypeKey               = commonObjectServiceKeyPrefix + "backend-type"
 	endpointKey                  = commonObjectServiceKeyPrefix + "endpoint"
+	clearBucketKey               = commonObjectServiceKeyPrefix + "clear-bucket"
 
 	commonObjectServiceFinalizerKeyPrefix = "finalizers.object.portworx.io/"
 	accessGrantedFinalizer                = commonObjectServiceFinalizerKeyPrefix + "access-granted"
@@ -57,16 +59,27 @@ func (ctrl *Controller) deleteBucket(ctx context.Context, pbc *crdv1alpha1.PXBuc
 		return nil
 	}
 
+	clearBucket := false
+	if clearBucketVal, ok := pbc.Annotations[clearBucketKey]; ok {
+		var err error
+		clearBucket, err = strconv.ParseBool(clearBucketVal)
+		if err != nil {
+			logrus.Errorf("invalid value %s for %s, defaulting to false: %v", clearBucketVal, clearBucketKey, err)
+		}
+	}
+
 	// Provisioned and deletionPolicy is delete. Delete the bucket here.
 	_, err := ctrl.bucketClient.DeleteBucket(ctx, &api.BucketDeleteRequest{
-		BucketId: pbc.Status.BucketID,
-		Region:   pbc.Status.Region,
-		Endpoint: pbc.Status.Endpoint,
+		BucketId:    pbc.Status.BucketID,
+		Region:      pbc.Status.Region,
+		Endpoint:    pbc.Status.Endpoint,
+		ClearBucket: clearBucket,
 	})
 	if err != nil {
 		errMsg := fmt.Sprintf("delete bucket %s failed: %v", pbc.Name, err)
 		logrus.WithContext(ctx).Errorf(errMsg)
 		ctrl.eventRecorder.Event(pbc, v1.EventTypeWarning, "DeleteBucketError", errMsg)
+		return err
 	}
 
 	err = ctrl.removeBucketFinalizers(ctx, pbc)
@@ -108,6 +121,12 @@ func (ctrl *Controller) createBucket(ctx context.Context, pbc *crdv1alpha1.PXBuc
 	pbc.Status.BackendType = pbclass.Parameters[backendTypeKey]
 	pbc.Status.Endpoint = pbclass.Parameters[endpointKey]
 	pbc.Finalizers = append(pbc.Finalizers, bucketProvisionedFinalizer)
+	if pbc.Annotations == nil {
+		pbc.Annotations = make(map[string]string)
+	}
+	if clearBucketVal, ok := pbclass.Parameters[clearBucketKey]; ok {
+		pbc.Annotations[clearBucketKey] = clearBucketVal
+	}
 	pbc, err = ctrl.k8sBucketClient.ObjectV1alpha1().PXBucketClaims(pbc.Namespace).Update(ctx, pbc, metav1.UpdateOptions{})
 	if err != nil {
 		ctrl.eventRecorder.Event(pbc, v1.EventTypeWarning, "CreateBucketError", fmt.Sprintf("failed to update bucket: %v", err))
@@ -147,8 +166,8 @@ func (ctrl *Controller) setupContextFromClass(ctx context.Context, pbclass *crdv
 	return grpcserver.AddMetadataToContext(ctx, sdk.ContextDriverKey, backendTypeValue), nil
 }
 
-func getAccountName(pbclass *crdv1alpha1.PXBucketClass) string {
-	return fmt.Sprintf("px-os-account-%v", pbclass.ObjectMeta.UID)
+func getAccountName(namespace *v1.Namespace) string {
+	return fmt.Sprintf("px-os-account-%v", namespace.GetUID())
 }
 
 func getCredentialsSecretName(pba *crdv1alpha1.PXBucketAccess) string {
@@ -159,9 +178,18 @@ func getCredentialsSecretName(pba *crdv1alpha1.PXBucketAccess) string {
 }
 
 func (ctrl *Controller) createAccess(ctx context.Context, pba *crdv1alpha1.PXBucketAccess, pbclass *crdv1alpha1.PXBucketClass, bucketID string) error {
+	// Get namespace UID for multitenancy
+	namespace, err := ctrl.k8sClient.CoreV1().Namespaces().Get(ctx, pba.Namespace, metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to get namespace during grant bucket access %s: %v", pba.Name, err)
+		logrus.WithContext(ctx).Errorf(errMsg)
+		ctrl.eventRecorder.Event(pba, v1.EventTypeWarning, "GrantAccessError", errMsg)
+		return err
+	}
+
 	resp, err := ctrl.bucketClient.AccessBucket(ctx, &api.BucketGrantAccessRequest{
 		BucketId:    bucketID,
-		AccountName: getAccountName(pbclass),
+		AccountName: getAccountName(namespace),
 	})
 	if err != nil {
 		errMsg := fmt.Sprintf("create bucket access %s failed: %v", pba.Name, err)
