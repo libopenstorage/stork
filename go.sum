@@ -1421,8 +1421,8 @@ github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467 h1:jkqzdbOnejgSN5HG/FLt4enNrozWT/K+nlmaRm3P1II=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af/go.mod h1:3+gfGSSmuF1pO9qkOuKiLWpiTKDXpijSg4VNgluGUX0=
-github.com/portworx/px-object-controller v0.0.0-20220727220448-306ddfd28652 h1:Kv8k3Zw4hVHcw1zGsWgDlIaG/gUUXLu47PWIz6CCF2g=
-github.com/portworx/px-object-controller v0.0.0-20220727220448-306ddfd28652/go.mod h1:g3pw2lI2AjqAixUCRhaBdKTY98znsCPR7NGRrlpimVU=
+github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987 h1:VNBTmIPjJRZ2QP64zdsrif3ELDHiMzoyNNX74VNHgZ8=
+github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987/go.mod h1:g3pw2lI2AjqAixUCRhaBdKTY98znsCPR7NGRrlpimVU=
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220714042759-8f183fe386ca h1:jrjwiQdqgDRsQZuiRDaWsbvx/z5t1icQPf7dgJOQUKE=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220714042759-8f183fe386ca/go.mod h1:0IQvado0rnmbRMORaCqCDrrzjBrX5sU+Sz2+vQwEsjM=
