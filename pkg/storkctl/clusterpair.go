@@ -3,11 +3,12 @@ package storkctl
 import (
 	"bufio"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
+
+	"github.com/libopenstorage/stork/pkg/utils"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -292,10 +293,10 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	}
 
 	createClusterPairCommand.Flags().StringVarP(&sIP, "src-ip", "", "", "ip of storage node from source cluster")
-	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9023", "port of storage node from source cluster")
+	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9001", "port of storage node from source cluster")
 	createClusterPairCommand.Flags().StringVarP(&sFile, "src-kube-file", "", "", "kube-config of source cluster")
 	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "kube-config of destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9023", "port of storage node from destination cluster")
+	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9001", "port of storage node from destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "kube-config of destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "destination cluster token for cluster pairing")
