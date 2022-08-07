@@ -273,6 +273,18 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			compressionType = kdmpData.Data[compressionKey]
 			podDataPath = kdmpData.Data[backupPath]
 		}
+		blName := dataExport.Spec.Destination.Name
+		blNamespace := dataExport.Spec.Destination.Namespace
+		backupLocation, err := readBackupLocation(blName, blNamespace, "")
+		if err != nil {
+			msg := fmt.Sprintf("reading of backuplocationi[%v/%v] failed: %v", blNamespace, blName, err)
+			logrus.Errorf(msg)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: msg,
+			}
+			return false, c.updateStatus(dataExport, data)
+		}
 
 		// start data transfer
 		id, err := startTransferJob(
@@ -283,6 +295,8 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			podDataPath,
 			utils.KdmpConfigmapName,
 			utils.KdmpConfigmapNamespace,
+			backupLocation.Location.NfsConfig.NfsServerAddr,
+			backupLocation.Location.NfsConfig.NfsExportPath,
 		)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
@@ -1557,7 +1571,10 @@ func startTransferJob(
 	dataExport *kdmpapi.DataExport,
 	podDataPath string,
 	jobConfigMap string,
-	jobConfigMapNs string) (string, error) {
+	jobConfigMapNs string,
+	nfsServerAddr string,
+	nfsExportPath string,
+) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
 	}
@@ -1605,6 +1622,8 @@ func startTransferJob(
 			drivers.WithPodDatapathType(podDataPath),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
+			drivers.WithNfsServer(nfsServerAddr),
+			drivers.WithNfsExportDir(nfsExportPath),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(

@@ -26,7 +26,9 @@ const (
 	// BackupObjectUIDKey - label key to store backup object uid
 	BackupObjectUIDKey = "backup-object-uid"
 	// TLSCertMountVol mount vol name for tls certificate secret
-	TLSCertMountVol       = "tls-secret"
+	TLSCertMountVol = "tls-secret"
+	// NfsMountPoint mount point directory for the nfs PVC ( nfs backuplocation target)
+	NfsMountPoint         = "nfs-target"
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	// KdmpConfigmapName kdmp config map name
