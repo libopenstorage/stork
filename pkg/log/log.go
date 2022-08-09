@@ -157,6 +157,18 @@ func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 	return logrus.WithFields(logrus.Fields{})
 }
 
+// TransformLog formats a log message with resource transformation CR information
+func TransformLog(transform *storkv1.ResourceTransformation) *logrus.Entry {
+	if transform != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ResourceTransformationName":      transform.Name,
+			"ResourceTransformationNamespace": transform.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
 // MigrationScheduleLog formats a log message with migrationschedule information
 func MigrationScheduleLog(migrationSchedule *storkv1.MigrationSchedule) *logrus.Entry {
 	if migrationSchedule != nil {
