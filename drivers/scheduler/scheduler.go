@@ -350,6 +350,12 @@ type Driver interface {
 
 	// RestoreCsiSnapAndValidate restore csi snapshot and validate the restore.
 	RestoreCsiSnapAndValidate(*Context, map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error)
+
+	// DeleteCsiSnapsForVolumes delete csi snapshots for app volumes
+	DeleteCsiSnapsForVolumes(ctx *Context, retainCount int) error
+
+	// DeleteCsiSnapshot delete a snapshots from namespace
+	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
 }
 
 var (

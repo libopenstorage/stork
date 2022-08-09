@@ -79,6 +79,8 @@ const (
 	ReclaimPolicyDelete = "Delete"
 	// PureBackend is a key for parameter map
 	PureBackend = "backend"
+	// EssentialsFaFbSKU is license strings for FA/FB essential license
+	EssentialsFaFbSKU = "Portworx CSI for FA/FB"
 )
 
 const (
@@ -149,6 +151,9 @@ var volSnapshotClass *v1beta1.VolumeSnapshotClass
 
 // pureStorageClassMap is map of pure storage class
 var pureStorageClassMap map[string]*storageapi.StorageClass
+
+// DefaultSnapshotRetainCount is default snapshot retain count
+var DefaultSnapshotRetainCount = 10
 
 // Event describes type of test trigger
 type Event struct {
@@ -4320,6 +4325,8 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		*recordChan <- event
 	}()
 
+	// Keeping retainSnapCount
+	retainSnapCount := DefaultSnapshotRetainCount
 	Step("Create and Validate snapshots for FA DA volumes", func() {
 		if !isCsiVolumeSnapshotClassExist {
 			logrus.Info("Creating csi volume snapshot class")
@@ -4330,10 +4337,31 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 			logrus.Infof("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
 			isCsiVolumeSnapshotClassExist = true
+			summary, err := Inst().V.GetLicenseSummary()
+
+			if err != nil {
+				logrus.Errorf("Failed to get license summary.Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+
+			// For essential license max 5 snapshots to be created for each volume
+			if summary.SKU == EssentialsFaFbSKU {
+				retainSnapCount = 4
+
+			}
+			logrus.Infof("Cluster is having: [%v] license. Setting snap retain count to: [%v]", summary.SKU, retainSnapCount)
 		}
 		for _, ctx := range *contexts {
 			var volumeSnapshotMap map[string]*v1beta1.VolumeSnapshot
 			var err error
+			Step(fmt.Sprintf("Deleting snapshots when retention count limit got exceeded for %s app", ctx.App.Key), func() {
+				err = Inst().S.DeleteCsiSnapsForVolumes(ctx, retainSnapCount)
+				if err != nil {
+					logrus.Errorf("Snapshot delete is failing with error: [%v]", err)
+					UpdateOutcome(event, err)
+				}
+			})
+
 			Step(fmt.Sprintf("Creating snapshots for %s app", ctx.App.Key), func() {
 				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, volSnapshotClass.Name)
 				if err != nil {
