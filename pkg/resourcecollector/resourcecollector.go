@@ -148,7 +148,15 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 			return true
 		}
 	}
-	switch resource.Kind {
+
+	return GetSupportedK8SResources(resource.Kind, optionalResourceTypes)
+}
+
+// GetSupportedK8SResources returns supported k8s resources by resource collector
+// pkgs, this can be used to validate list of resources supported by different stork
+// controller like migration, backup, clone etc
+func GetSupportedK8SResources(kind string, optionalResourceTypes []string) bool {
+	switch kind {
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
 		"Deployment",
