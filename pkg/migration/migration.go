@@ -39,5 +39,6 @@ func (m *Migration) Init(mgr manager.Manager, migrationAdminNamespace string, mi
 	if err != nil {
 		return fmt.Errorf("error initializing migration schedule controller: %v", err)
 	}
-	return nil
+	rt := controllers.NewResourceTransformation(mgr, m.Driver, m.Recorder, m.ResourceCollector)
+	return rt.Init(mgr)
 }

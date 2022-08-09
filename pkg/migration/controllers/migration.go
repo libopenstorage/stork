@@ -3,12 +3,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/utils"
 
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -65,7 +66,8 @@ const (
 	PVReclaimAnnotation = "stork.libopenstorage.org/reclaimPolicy"
 	// StorkAnnotationPrefix for resources created/managed by stork
 	StorkAnnotationPrefix = "stork.libopenstorage.org/"
-
+	// StorkNamespacePrefix for namespace created for applying dry run resources
+	StorkNamespacePrefix = "stork-transform"
 	// Max number of times to retry applying resources on the desination
 	maxApplyRetries      = 10
 	deletedMaxRetries    = 12
