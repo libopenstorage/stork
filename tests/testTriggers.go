@@ -234,7 +234,7 @@ func GenerateUUID() string {
 // UpdateOutcome updates outcome based on error
 func UpdateOutcome(event *EventRecord, err error) {
 
-	if err != nil {
+	if err != nil && event != nil {
 		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
 		er := fmt.Errorf(err.Error() + "<br>")
 		event.Outcome = append(event.Outcome, er)
@@ -348,6 +348,8 @@ const (
 	ValidateDeviceMapper = "validateDeviceMapper"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// HAIncreaseAndReboot performs repl-add
+	HAIncreaseAndReboot = "haIncreaseAndReboot"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -443,7 +445,92 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 	})
 }
 
-// TriggerHAIncrease peforms repl-add on all volumes of given contexts
+// TriggerHAIncreaseAndReboot triggers repl increase and reboots target and source nodes
+func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: HAIncreaseAndReboot,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	//Reboot target node and source node while repl increase is in progress
+	Step("get a volume to  increase replication factor and reboot source  and target node", func() {
+		storageNodeMap := make(map[string]node.Node)
+		storageNodes, err := GetStorageNodes()
+		UpdateOutcome(event, err)
+
+		for _, n := range storageNodes {
+			storageNodeMap[n.Id] = n
+		}
+
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
+			})
+
+			if strings.Contains(ctx.App.Key, "fio-fstrim") {
+				for _, v := range appVolumes {
+					// Check if volumes are Pure FA/FB DA volumes
+					isPureVol, err := Inst().V.IsPureVolume(v)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						continue
+					}
+
+					currRep, err := Inst().V.GetReplicationFactor(v)
+					UpdateOutcome(event, err)
+
+					if currRep != 0 {
+						//Changing replication factor to 1
+						if currRep > 1 {
+							logrus.Infof("Current replication is > 1, setting it to 1 before proceeding")
+							opts := volume.Options{
+								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+							}
+							rep := currRep
+							for rep > 1 {
+								err = Inst().V.SetReplicationFactor(v, rep-1, nil, true, opts)
+								if err != nil {
+									logrus.Errorf("There is an error decreasing repl [%v]", err.Error())
+									UpdateOutcome(event, err)
+
+								}
+								rep--
+
+							}
+
+						}
+					}
+
+					if err == nil {
+						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap)
+						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap)
+					}
+				}
+			}
+		}
+	})
+}
+
+// TriggerHAIncrease performs repl-add on all volumes of given contexts
 func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
@@ -483,10 +570,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
-					logrus.Warningf(
-						"Repl increase on Pure DA Volume [%s] not supported.",
-						"Skiping this operation", v.Name,
-					)
+					logrus.Warningf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
 					continue
 				}
 				MaxRF := Inst().V.GetMaxReplicationFactor()
@@ -525,7 +609,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						logrus.Infof("Max Replication factor %v", MaxRF)
 						expReplMap[v] = expRF
 						if !errExpected {
-							err = Inst().V.SetReplicationFactor(v, expRF, nil, opts)
+							err = Inst().V.SetReplicationFactor(v, expRF, nil, true, opts)
 							if err != nil {
 								logrus.Errorf("There is a error setting repl [%v]", err.Error())
 							}
@@ -608,10 +692,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
-					logrus.Warningf(
-						"Repl decrease on Pure DA volume:[%s] not supported.",
-						"Skipping repl decrease operation in pure volume", v.Name,
-					)
+					logrus.Warningf("Repl decrease on Pure DA volume:[%s] not supported.Skipping repl decrease operation in pure volume", v.Name)
 					continue
 				}
 				MinRF := Inst().V.GetMinReplicationFactor()
@@ -633,7 +714,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						logrus.Infof("Expected Replication factor %v", expRF)
 						logrus.Infof("Min Replication factor %v", MinRF)
 						if !errExpected {
-							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true, opts)
 							if err != nil {
 								logrus.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}
@@ -3349,6 +3430,9 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 				}
 
 				logrus.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
+				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
+					break
+				}
 				time.Sleep(time.Second * 90)
 				continue
 			}

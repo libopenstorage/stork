@@ -88,7 +88,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 								errExpected = true
 							}
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
-							err = Inst().V.SetReplicationFactor(v, currRep-1, nil)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
 							if !errExpected {
 								Expect(err).NotTo(HaveOccurred())
 							} else {
@@ -124,7 +124,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 								errExpected = true
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, true)
 							if !errExpected {
 								Expect(err).NotTo(HaveOccurred())
 							} else {
@@ -332,7 +332,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							}
 
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
-							err = Inst().V.SetReplicationFactor(v, currRep-1, updateReplicaSet)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, updateReplicaSet, true)
 							if !errExpected {
 								Expect(err).NotTo(HaveOccurred())
 							} else {
@@ -389,7 +389,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 								errExpected = true
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, true)
 							if !errExpected {
 								Expect(err).NotTo(HaveOccurred())
 							} else {

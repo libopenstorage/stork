@@ -7,6 +7,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -2910,6 +2912,198 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteAzureBucket(bucketName)
 		}
 	})
+}
+
+//HaIncreaseRebootTargetNode repl increase and reboot target node
+func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
+
+	Step(
+		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
+			Inst().V.String(), ctx.App.Key, v),
+		func() {
+			currRep, err := Inst().V.GetReplicationFactor(v)
+
+			if err != nil {
+				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
+				logrus.Error(err)
+				UpdateOutcome(event, err)
+				return
+			}
+			//if repl is 3 cannot increase repl for the volume
+			if currRep == 3 {
+				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
+				logrus.Warn(err)
+				UpdateOutcome(event, err)
+				return
+			}
+
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err == nil {
+				replicaNodes := replicaSets[0].Nodes
+				logrus.Infof("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
+				var newReplID string
+				var newReplNode node.Node
+
+				//selecting the target node for repl increase
+				for nID, node := range storageNodeMap {
+					nExist := false
+					for _, id := range replicaNodes {
+						if nID == id {
+							nExist = true
+							break
+						}
+					}
+					if !nExist {
+						newReplID = nID
+						newReplNode = node
+						break
+					}
+				}
+
+				Step(
+					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v),
+					func() {
+						logrus.Infof("Increasing repl with target node  [%v]", newReplID)
+						err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
+						if err != nil {
+							logrus.Errorf("There is an error increasing repl [%v]", err.Error())
+							UpdateOutcome(event, err)
+						}
+					})
+
+				if err == nil {
+					Step(
+						fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+							newReplNode.Hostname),
+						func() {
+
+							logrus.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
+							time.Sleep(10 * time.Second)
+
+							err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
+								Force: true,
+								ConnectionOpts: node.ConnectionOpts{
+									Timeout:         1 * time.Minute,
+									TimeBeforeRetry: 5 * time.Second,
+								},
+							})
+							if err != nil {
+								logrus.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+								UpdateOutcome(event, err)
+							}
+
+							err = validateReplFactorUpdate(v, currRep+1)
+							if err != nil {
+								err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
+								logrus.Error(err)
+								UpdateOutcome(event, err)
+							} else {
+								logrus.Infof("repl successfully increased to %d", currRep+1)
+							}
+						})
+				}
+			} else {
+				logrus.Error(err)
+				UpdateOutcome(event, err)
+
+			}
+		})
+}
+
+//HaIncreaseRebootSourceNode repl increase and reboot source node
+func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
+	Step(
+		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
+			Inst().V.String(), ctx.App.Key, v),
+		func() {
+			currRep, err := Inst().V.GetReplicationFactor(v)
+			if err != nil {
+				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
+				logrus.Error(err)
+				UpdateOutcome(event, err)
+				return
+			}
+
+			//if repl is 3 cannot increase repl for the volume
+			if currRep == 3 {
+				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
+				logrus.Warn(err)
+				UpdateOutcome(event, err)
+				return
+			}
+
+			if err == nil {
+				Step(
+					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v),
+					func() {
+						replicaSets, err := Inst().V.GetReplicaSets(v)
+						if err == nil {
+							replicaNodes := replicaSets[0].Nodes
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, false)
+							if err != nil {
+								logrus.Errorf("There is an error increasing repl [%v]", err.Error())
+								UpdateOutcome(event, err)
+							} else {
+								logrus.Info("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
+								time.Sleep(10 * time.Second)
+								//rebooting source nodes one by one
+								for _, nID := range replicaNodes {
+									replNodeToReboot := storageNodeMap[nID]
+									err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
+										Force: true,
+										ConnectionOpts: node.ConnectionOpts{
+											Timeout:         1 * time.Minute,
+											TimeBeforeRetry: 5 * time.Second,
+										},
+									})
+									if err != nil {
+										logrus.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
+										UpdateOutcome(event, err)
+									}
+								}
+								err = validateReplFactorUpdate(v, currRep+1)
+								if err != nil {
+									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
+									logrus.Error(err)
+									UpdateOutcome(event, err)
+								} else {
+									logrus.Infof("repl successfully increased to %d", currRep+1)
+								}
+							}
+						} else {
+							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
+							logrus.Error(err)
+							UpdateOutcome(event, err)
+						}
+
+					})
+			} else {
+				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
+				logrus.Error(err)
+				UpdateOutcome(event, err)
+			}
+
+		})
+}
+
+func validateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
+	t := func() (interface{}, bool, error) {
+		err := Inst().V.WaitForReplicationToComplete(v, expaectedReplFactor, validateReplicationUpdateTimeout)
+		if err != nil {
+			statusErr, _ := status.FromError(err)
+			if statusErr.Code() == codes.NotFound || strings.Contains(err.Error(), "code = NotFound") {
+				return nil, false, err
+			}
+			return nil, true, err
+		}
+		return 0, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval); err != nil {
+		return fmt.Errorf("failed to set replication factor of the volume: %v due to err: %v", v.Name, err.Error())
+	}
+	return nil
 }
 
 // TearDownBackupRestoreAll enumerates backups and restores before deleting them

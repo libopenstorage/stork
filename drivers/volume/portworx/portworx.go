@@ -2187,7 +2187,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 	return replFactor, nil
 }
 
-func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, opts ...torpedovolume.Options) error {
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, waitForUpdateToFinish bool, opts ...torpedovolume.Options) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	var replicationUpdateTimeout time.Duration
 	if len(opts) > 0 {
@@ -2227,24 +2227,14 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		if err != nil {
 			return nil, false, err
 		}
-		quitFlag := false
-		wdt := time.After(replicationUpdateTimeout)
-		for !quitFlag && !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
-			select {
-			case <-wdt:
-				quitFlag = true
-			default:
-				volumeInspectResponse, err = volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
-				if err != nil && errIsNotFound(err) {
-					return nil, false, err
-				} else if err != nil {
-					return nil, true, err
-				}
-				time.Sleep(defaultRetryInterval)
-			}
+		if !waitForUpdateToFinish {
+			return nil, false, nil
 		}
-		if !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
-			return 0, false, fmt.Errorf("volume didn't successfully change to replication factor of %d", replFactor)
+		err = d.WaitForReplicationToComplete(vol, replFactor, replicationUpdateTimeout)
+		if err != nil && errIsNotFound(err) {
+			return nil, false, err
+		} else if err != nil {
+			return nil, true, err
 		}
 		return 0, false, nil
 	}
@@ -2255,7 +2245,34 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			Cause: err.Error(),
 		}
 	}
+	return nil
+}
 
+func (d *portworx) WaitForReplicationToComplete(vol *torpedovolume.Volume, replFactor int64, replicationUpdateTimeout time.Duration) error {
+	volumeName := d.schedOps.GetVolumeName(vol)
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+	if err != nil {
+		return err
+	}
+
+	quitFlag := false
+	waitTime := time.After(replicationUpdateTimeout)
+	for !quitFlag && !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
+		select {
+		case <-waitTime:
+			quitFlag = true
+		default:
+			volumeInspectResponse, err = volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+			if err != nil {
+				return err
+			}
+			time.Sleep(defaultRetryInterval)
+		}
+	}
+	if !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
+		return fmt.Errorf("volume didn't successfully change to replication factor of %d", replFactor)
+	}
 	return nil
 }
 

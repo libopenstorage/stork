@@ -190,7 +190,10 @@ type Driver interface {
 	GetReplicationFactor(vol *Volume) (int64, error)
 
 	// SetReplicationFactor sets the volume's replication factor to the passed param rf and nodes.
-	SetReplicationFactor(vol *Volume, rf int64, nodesToBeUpdated []string, opts ...Options) error
+	SetReplicationFactor(vol *Volume, rf int64, nodesToBeUpdated []string, waitForUpdateToFinish bool, opts ...Options) error
+
+	//WaitForReplicationToComplete waits for replication factor change to complete
+	WaitForReplicationToComplete(vol *Volume, replFactor int64, replicationUpdateTimeout time.Duration) error
 
 	// GetMaxReplicationFactor returns the max supported repl factor of a volume
 	GetMaxReplicationFactor() int64
