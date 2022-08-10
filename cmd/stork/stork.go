@@ -493,7 +493,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 	if c.Bool("px-object-controller") {
 		objectController := &objectcontroller.ObjectController{}
 		if err := objectController.Init(); err != nil {
-			log.Fatalf("Error initializing px-object-controller : %v", err)
+			log.Warnf("Error initializing px-object-controller : %v", err)
 		}
 	}
 	if c.Bool("kdmp-controller") {
