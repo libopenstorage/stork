@@ -195,6 +195,14 @@ type Driver interface {
 	// IsNodeRebootedInGivenTimeRange check if node is rebooted within given time range
 	IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error)
 
+	// InjectNetworkError by dropping packets or introdiucing delay in packet tramission
+	// nodes=> list of nodes where network injection should be done.
+	// errorInjectionType => pass "delay" or "drop"
+	// operationType => add/change/delete
+	// dropPercentage => intger value from 1 to 100
+	// delayInMilliseconds => 1 to 1000
+	InjectNetworkError(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
+
 	// GetDeviceMapperCount return devicemapper count
 	GetDeviceMapperCount(Node, time.Duration) (int, error)
 }
@@ -418,5 +426,13 @@ func (d *notSupportedDriver) GetDeviceMapperCount(Node, time.Duration) (int, err
 	return -1, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetDeviceMapperCount()",
+	}
+}
+
+func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType string, operationType string,
+	dropPercentage int, delayInMilliseconds int) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InjectNetworkError()",
 	}
 }
