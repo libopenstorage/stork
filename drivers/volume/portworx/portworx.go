@@ -585,7 +585,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
-			logrus.Infof("Checking PX node %+v for address %s", pxNode, address)
+			logrus.Tracef("Checking PX node %+v for address %s", pxNode, address)
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.SchedulerNodeName {
 				if len(pxNode.Id) > 0 {
 					n.StorageNode = pxNode

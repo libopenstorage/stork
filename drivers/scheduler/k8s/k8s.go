@@ -344,12 +344,12 @@ func (k *K8s) RefreshNodeRegistry() error {
 
 // ParseSpecs parses the application spec file
 func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
-	logrus.Infof("ParseSpecs k.CustomConfig = %v", k.customConfig)
+	logrus.Tracef("ParseSpecs k.CustomConfig = %v", k.customConfig)
 	fileList := make([]string, 0)
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
 		if f != nil && !f.IsDir() {
 			if isValidProvider(path, storageProvisioner) {
-				logrus.Infof("	add filepath: %s", path)
+				logrus.Tracef("	add filepath: %s", path)
 				fileList = append(fileList, path)
 			}
 		}
@@ -359,7 +359,7 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 		return nil, err
 	}
 
-	logrus.Infof("fileList: %v", fileList)
+	logrus.Tracef("fileList: %v", fileList)
 	var specs []interface{}
 
 	splitPath := strings.Split(specDir, "/")
@@ -456,7 +456,7 @@ func (k *K8s) IsAppHelmChartType(fileName string) (bool, error) {
 
 	// Parse the files and check for certain keys for helmRepo info
 
-	logrus.Infof("Reading file: %s", fileName)
+	logrus.Tracef("Reading file: %s", fileName)
 	file, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return false, err
