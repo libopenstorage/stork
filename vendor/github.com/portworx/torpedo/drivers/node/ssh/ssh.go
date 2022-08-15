@@ -128,6 +128,35 @@ func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duratio
 	return true, nil
 }
 
+// GetDeviceMapperCount return device mapper count in a node
+func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, error) {
+	logrus.Infof("Getting the current devicemapper devices counts in a node %s", n.SchedulerNodeName)
+	devMappCmd := "sudo multipath -ll 2>&1|grep dm-|wc -l"
+
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}, devMappCmd, true)
+		return out, true, err
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return -1, &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to run multipath command in node %v", n),
+		}
+	}
+
+	count, err := strconv.Atoi(strings.Fields(strings.TrimSpace(out.(string)))[0])
+	if err != nil {
+		return -1, err
+	}
+	logrus.Infof("Currently [%v] device mapped to a node: [%v]", count, n.Name)
+	return count, nil
+}
+
 // Init initializes SSH node driver
 func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	s.specDir = nodeOpts.SpecDir
@@ -277,6 +306,52 @@ func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		}
 	}
 
+	return nil
+}
+
+// InjectNetworkError by dropping packets or introdiucing delay in packet tramission
+// nodes=> list of nodes where network injection should be done.
+// errorInjectionType => pass "delay" or "drop"
+// operationType => add/change/delete
+// dropPercentage => intger value from 1 to 100
+// delayInMilliseconds => 1 to 1000
+func (s *SSH) InjectNetworkError(nodes []node.Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error {
+	//tc qdisc add dev eth0 root netem loss 20%
+	//tc qdisc change dev eth0 root netem delay 5000ms 5000ms
+	var cmd string
+	dropInPercentage := strconv.Itoa(dropPercentage) + "%"
+	delayInMillisescond := strconv.Itoa(delayInMilliseconds) + "ms"
+	if errorInjectionType == "delay" {
+		cmd = fmt.Sprintf("%s %s  %s %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem delay ",
+			delayInMillisescond, delayInMillisescond)
+		logrus.Infof("Delay %v ", delayInMillisescond)
+	} else if errorInjectionType == "drop" {
+		cmd = fmt.Sprintf("%s %s  %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem loss",
+			dropInPercentage)
+		logrus.Infof("DropPercentage %v ", dropInPercentage)
+	} else {
+		return fmt.Errorf("Invalid network error injection type %v", errorInjectionType)
+	}
+	logrus.Infof("Error injection type %v ", errorInjectionType)
+	logrus.Infof("Operation type %v ", operationType)
+	connectionOps := node.ConnectionOpts{
+		Timeout:         10 * time.Second,
+		TimeBeforeRetry: 10 * time.Second,
+	}
+	for _, n := range nodes {
+		logrus.Infof("Error injection on Node name : %s of type : %s ", n.Name, errorInjectionType)
+		t := func() (interface{}, bool, error) {
+			out, err := s.doCmd(n, connectionOps, cmd, true)
+			return out, true, err
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, 10*time.Second, 10*time.Second); err != nil {
+			return &node.ErrFailedToSetNetworkErrorOnNode{
+				Node:  n,
+				Cause: err.Error(),
+			}
+		}
+	}
 	return nil
 }
 

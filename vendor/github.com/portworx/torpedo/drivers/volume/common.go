@@ -63,6 +63,16 @@ type DiagOps struct {
 	Async bool
 }
 
+// MetadataNode TODO temporary solution until sdk supports metadataNode response
+type MetadataNode struct {
+	PeerUrls   []string `json:"PeerUrls"`
+	ClientUrls []string `json:"ClientUrls"`
+	Leader     bool     `json:"Leader"`
+	DbSize     int      `json:"DbSize"`
+	IsHealthy  bool     `json:"IsHealthy"`
+	ID         string   `json:"ID"`
+}
+
 // DefaultDriver implements defaults for Driver interface
 type DefaultDriver struct {
 }
@@ -387,10 +397,18 @@ func (d *DefaultDriver) GetReplicationFactor(vol *Volume) (int64, error) {
 }
 
 // SetReplicationFactor sets the volume's replication factor to the passed param rf.
-func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, nodesToBeUpdated []string, opts ...Options) error {
+func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, nodesToBeUpdated []string, waitForUpdateToFinish bool, opts ...Options) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetReplicationFactor()",
+	}
+}
+
+// WaitForReplicationToComplete waits for replication factor to complete .
+func (d *DefaultDriver) WaitForReplicationToComplete(vol *Volume, replFactor int64, replicationUpdateTimeout time.Duration) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForReplicationToComplete()",
 	}
 }
 
@@ -454,11 +472,11 @@ func (d *DefaultDriver) DecommissionNode(n *node.Node) error {
 	}
 }
 
-// RejoinNode rejoins a given node back to the cluster
-func (d *DefaultDriver) RejoinNode(n *node.Node) error {
+// RecoverNode recovers node back to the normal
+func (d *DefaultDriver) RecoverNode(n *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "RejoinNode()",
+		Operation: "RecoverNode()",
 	}
 }
 
@@ -645,6 +663,14 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 	}
 }
 
+//UpdateIOPriority update IO priority on volume
+func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateIOPriority",
+	}
+}
+
 // GetPxNode return api.Storage Node
 func (d *DefaultDriver) GetPxNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
 	return &api.StorageNode{}, &errors.ErrNotSupported{
@@ -710,6 +736,22 @@ func (d *DefaultDriver) IsOperatorBasedInstall() (bool, error) {
 	}
 }
 
+// RunSecretsLogin runs secrets login using pxctl
+func (d *DefaultDriver) RunSecretsLogin(n node.Node, secretType string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RunSecretsLogin()",
+	}
+}
+
+// GetStorageCluster returns the StorageCluster object
+func (d *DefaultDriver) GetStorageCluster() (*v1.StorageCluster, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetStorageCluster()",
+	}
+}
+
 //UpdateStorageClusterImage update storage cluster image version
 func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
 	return &errors.ErrNotSupported{
@@ -771,5 +813,29 @@ func (d *DefaultDriver) IsPureFileVolume(volume *Volume) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsPureFileVolume()",
+	}
+}
+
+// GetKvdbMembers returns the kvdb members of the PX cluster
+func (d *DefaultDriver) GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetKvdbMembers()",
+	}
+}
+
+// GetNodePureVolumeAttachedCountMap return Map of nodeName and number of pure volume attached on that node
+func (d *DefaultDriver) GetNodePureVolumeAttachedCountMap() (map[string]int, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePureVolumeAttachedCountMap()",
+	}
+}
+
+// RejoinNode rejoins a given node back to the cluster
+func (d *DefaultDriver) RejoinNode(n *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RejoinNode()",
 	}
 }

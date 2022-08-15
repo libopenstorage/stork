@@ -190,7 +190,10 @@ type Driver interface {
 	GetReplicationFactor(vol *Volume) (int64, error)
 
 	// SetReplicationFactor sets the volume's replication factor to the passed param rf and nodes.
-	SetReplicationFactor(vol *Volume, rf int64, nodesToBeUpdated []string, opts ...Options) error
+	SetReplicationFactor(vol *Volume, rf int64, nodesToBeUpdated []string, waitForUpdateToFinish bool, opts ...Options) error
+
+	//WaitForReplicationToComplete waits for replication factor change to complete
+	WaitForReplicationToComplete(vol *Volume, replFactor int64, replicationUpdateTimeout time.Duration) error
 
 	// GetMaxReplicationFactor returns the max supported repl factor of a volume
 	GetMaxReplicationFactor() int64
@@ -206,6 +209,9 @@ type Driver interface {
 
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error
+
+	// RecoverNode makes a given node back to normal
+	RecoverNode(n *node.Node) error
 
 	// RejoinNode rejoins a given node back to the cluster
 	RejoinNode(n *node.Node) error
@@ -262,11 +268,19 @@ type Driver interface {
 	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
 
+	//UpdateIOPriority IO priority using pxctl command
+	UpdateIOPriority(volumeName string, priorityType string) error
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
 
 	//IsOperatorBasedInstall returns if px is operator based
 	IsOperatorBasedInstall() (bool, error)
+
+	// RunSecretsLogin runs secrets login using pxctl
+	RunSecretsLogin(n node.Node, secretType string) error
+
+	// GetStorageCluster returns the storageCluster object
+	GetStorageCluster() (*v1.StorageCluster, error)
 
 	//UpdateStorageClusterImage update storage cluster image version
 	UpdateStorageClusterImage(string) error
@@ -321,6 +335,12 @@ type Driver interface {
 
 	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
 	GetTrashCanVolumeIds(n node.Node) ([]string, error)
+
+	//GetKvdbMembers returns KVDB memebers of the PX cluster
+	GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error)
+
+	// GetNodePureVolumeAttachedCountMap returns map of node name and count of pure volume attached on that node
+	GetNodePureVolumeAttachedCountMap() (map[string]int, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

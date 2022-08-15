@@ -67,12 +67,14 @@ func (in *Context) GetID() string {
 
 // AppConfig custom settings
 type AppConfig struct {
-	Replicas      int      `yaml:"replicas"`
-	VolumeSize    string   `yaml:"volume_size"`
-	WorkloadSize  string   `yaml:"workload_size"`
-	ClaimsCount   int      `yaml:"claims_count"`
-	CustomCommand []string `yaml:"custom_command"`
-	CustomArgs    []string `yaml:"custom_args"`
+	Replicas             int      `yaml:"replicas"`
+	VolumeSize           string   `yaml:"volume_size"`
+	WorkloadSize         string   `yaml:"workload_size"`
+	ClaimsCount          int      `yaml:"claims_count"`
+	CustomCommand        []string `yaml:"custom_command"`
+	CustomArgs           []string `yaml:"custom_args"`
+	StorageClassSharedv4 string   `yaml:"storage_class_sharedv4"`
+	PVCAccessMode        string   `yaml:"pvc_access_mode"`
 }
 
 // InitOptions initialization options
@@ -348,6 +350,12 @@ type Driver interface {
 
 	// RestoreCsiSnapAndValidate restore csi snapshot and validate the restore.
 	RestoreCsiSnapAndValidate(*Context, map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error)
+
+	// DeleteCsiSnapsForVolumes delete csi snapshots for app volumes
+	DeleteCsiSnapsForVolumes(ctx *Context, retainCount int) error
+
+	// DeleteCsiSnapshot delete a snapshots from namespace
+	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
 }
 
 var (

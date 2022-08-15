@@ -20,9 +20,9 @@ var appSpecFactory = make(map[string]*AppSpec)
 // register registers a new spec with the factory
 func (f *Factory) register(id string, app *AppSpec) {
 	if _, ok := appSpecFactory[id]; !ok {
-		logrus.Infof("Registering new app: %v", id)
+		logrus.Tracef("Registering new app: %v", id)
 	} else {
-		logrus.Infof("Substitute with new app: %v", id)
+		logrus.Tracef("Substitute with new app: %v", id)
 	}
 	// NOTE: In case of spec rescan we need to substitute old app with another one
 	appSpecFactory[id] = app
@@ -76,8 +76,8 @@ func NewFactory(specDir, storageProvisioner string, parser Parser) (*Factory, er
 			specID := file.Name()
 
 			specToParse := path.Join(f.specDir, specID)
-			logrus.Infof("Parsing: %v...", path.Join(f.specDir, specID))
-			logrus.Infof("Storage provisioner %s", storageProvisioner)
+			logrus.Tracef("Parsing: %v...", path.Join(f.specDir, specID))
+			logrus.Tracef("Storage provisioner %s", storageProvisioner)
 			specs, err := f.specParser.ParseSpecs(specToParse, storageProvisioner)
 			if err != nil {
 				return nil, err

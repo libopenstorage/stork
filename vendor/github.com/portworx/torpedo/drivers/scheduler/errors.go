@@ -612,3 +612,15 @@ type ErrFailedToRestore struct {
 func (e *ErrFailedToRestore) Error() string {
 	return fmt.Sprintf("Failed to validate PVC for App: %v due to err: %v", e.App, e.Cause)
 }
+
+// ErrFailedToDeleteSnapshot error is failed to restore from snapshot
+type ErrFailedToDeleteSnapshot struct {
+	// Name is the name of the namespace
+	Name string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrFailedToDeleteSnapshot) Error() string {
+	return fmt.Sprintf("Failed to delete snapshot in namespace: %v due to err: %v", e.Name, e.Cause)
+}
