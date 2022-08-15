@@ -42,7 +42,7 @@ require (
 	gocloud.dev v0.20.0
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
 	google.golang.org/api v0.30.0
-	google.golang.org/grpc v1.43.0
+	google.golang.org/grpc v1.48.0
 	google.golang.org/grpc/examples v0.0.0-20220715232852-f601dfac73c9 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.24.0
@@ -51,7 +51,7 @@ require (
 	k8s.io/apiserver v0.21.4
 	k8s.io/cli-runtime v0.21.4
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.21.4
+	k8s.io/code-generator v0.22.1
 	k8s.io/component-helpers v0.21.4
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.21.4
@@ -77,7 +77,7 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220714042759-8f183fe386ca
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220714042817-25f6ab6dc5d1
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.0
 
