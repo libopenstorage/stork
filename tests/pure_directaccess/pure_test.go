@@ -3,6 +3,7 @@ package puredirectaccess
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
@@ -62,6 +63,10 @@ func createCloudsnapCredential() {
 		TimeBeforeRetry: k8s.DefaultRetryInterval,
 		Sudo:            true,
 	})
+	// if the cloudsnap credentials already exist, just leave them there
+	if err != nil && strings.Contains(err.Error(), "already exist") {
+		err = nil
+	}
 	Expect(err).NotTo(HaveOccurred(), "unexpected error creating cloudsnap credential")
 }
 
