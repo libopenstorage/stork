@@ -946,6 +946,7 @@ func (r *ResourceCollector) getDynamicClient(
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("kafka", "kafkas")
 	resource := &metav1.APIResource{
 		Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
