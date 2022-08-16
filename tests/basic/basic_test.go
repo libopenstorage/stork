@@ -577,10 +577,12 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 var _ = Describe("{SecretsVaultFunctional}", func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
+	var provider string
 
 	const (
-		secretsProvider       = "vault"
-		portworxContainerName = "portworx"
+		vaultSecretProvider        = "vault"
+		vaultTransitSecretProvider = "vault-transit"
+		portworxContainerName      = "portworx"
 	)
 
 	BeforeEach(func() {
@@ -597,21 +599,24 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
 				if container.Name == portworxContainerName {
 					for _, arg := range container.Args {
-						if arg == secretsProvider {
+						if arg == vaultSecretProvider || arg == vaultTransitSecretProvider {
 							usingVault = true
+							provider = arg
 						}
 					}
 				}
 			}
 			if !usingVault {
-				Skip(fmt.Sprintf("Skip test for not using %s", secretsProvider))
+				Skip(fmt.Sprintf("Skip test for not using %s or %s ", vaultSecretProvider, vaultTransitSecretProvider))
 			}
 		} else {
 			spec, err := Inst().V.GetStorageCluster()
 			Expect(err).ToNot(HaveOccurred())
-			if *spec.Spec.SecretsProvider != secretsProvider {
-				Skip(fmt.Sprintf("Skip test for not using %s", secretsProvider))
+			if *spec.Spec.SecretsProvider != vaultSecretProvider &&
+				*spec.Spec.SecretsProvider != vaultTransitSecretProvider {
+				Skip(fmt.Sprintf("Skip test for not using %s or %s ", vaultSecretProvider, vaultTransitSecretProvider))
 			}
+			provider = *spec.Spec.SecretsProvider
 		}
 	})
 
@@ -622,10 +627,14 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			runID = testrailuttils.AddRunsToMilestone(testrailID)
 		})
 
-		It("has to run secrets login for vault", func() {
+		It("has to run secrets login for vault or vault-transit", func() {
 			contexts = make([]*scheduler.Context, 0)
 			n := node.GetWorkerNodes()[0]
-			err := Inst().V.RunSecretsLogin(n, secretsProvider)
+			if provider == vaultTransitSecretProvider {
+				// vault-transit login with `pxctl secrets vaulttransit login`
+				provider = "vaulttransit"
+			}
+			err := Inst().V.RunSecretsLogin(n, provider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

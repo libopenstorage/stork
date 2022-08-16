@@ -1,0 +1,13 @@
+##### Persistent volume claim
+#### expects cluster wide secret to be set
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-legacy-shared
+spec:
+  storageClassName: nginx-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
