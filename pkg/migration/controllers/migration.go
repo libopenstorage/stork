@@ -366,7 +366,37 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 						err.Error())
 					err = m.updateMigrationCR(context.Background(), migration)
 					if err != nil {
-						log.MigrationLog(migration).Errorf("Error updating")
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+					}
+					return nil
+				}
+			}
+			// Make sure if transformation CR is in ready state
+			if migration.Spec.UpdateResourceSpecs != "" {
+				resp, err := storkops.Instance().GetResourceTransformation(migration.Spec.UpdateResourceSpecs, ns)
+				if err != nil && !errors.IsNotFound(err) {
+					errMsg := fmt.Sprintf("unable to retrive transformation %s, err: %v", migration.Spec.UpdateResourceSpecs, err)
+					log.MigrationLog(migration).Errorf(errMsg)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+					}
+					return nil
+				}
+				if resp != nil && resp.Status.Status != stork_api.ResourceTransformationStatusReady {
+					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.UpdateResourceSpecs, resp.Status.Status)
+					log.MigrationLog(migration).Errorf(errMsg)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
 					}
 					return nil
 				}
@@ -995,7 +1025,11 @@ func (m *MigrationController) prepareResources(
 	if err != nil {
 		return err
 	}
-
+	resPatch, err := resourcecollector.GetResourcePatch(migration.Spec.UpdateResourceSpecs, migration.Spec.Namespaces)
+	if err != nil {
+		log.MigrationLog(migration).
+			Warnf("Unable to get transformation spec from :%s, skipping transformation for this migration, err: %v", err)
+	}
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -1009,7 +1043,7 @@ func (m *MigrationController) prepareResources(
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
-			err := m.prepareApplicationResource(migration, clusterPair, o)
+			err := m.prepareApplicationResource(migration, clusterPair, o, resPatch[metadata.GetNamespace()][resource.Kind])
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
@@ -1018,6 +1052,18 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
+		default:
+			// if namespace has resource transformation spec
+			if ns, found := resPatch[metadata.GetNamespace()]; found {
+				// if transformspec present for current resource kind
+				if kind, ok := ns[resource.Kind]; ok {
+					err := resourcecollector.TransformResources(o, kind, metadata.GetName(), metadata.GetNamespace())
+					if err != nil {
+						return fmt.Errorf("error updating %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+					}
+				}
+			}
+			// do nothing
 		}
 
 		// prepare CR resources
@@ -1034,7 +1080,6 @@ func (m *MigrationController) prepareResources(
 				}
 			}
 		}
-
 	}
 	return nil
 }
@@ -1242,6 +1287,7 @@ func (m *MigrationController) prepareApplicationResource(
 	migration *stork_api.Migration,
 	clusterPair *stork_api.ClusterPair,
 	object runtime.Unstructured,
+	resPatch []stork_api.TransformResourceInfo,
 ) error {
 	content := object.UnstructuredContent()
 	if clusterPair.Spec.PlatformOptions.Rancher != nil &&

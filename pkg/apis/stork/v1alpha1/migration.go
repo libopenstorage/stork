@@ -27,6 +27,7 @@ type MigrationSpec struct {
 	PostExecRule                 string            `json:"postExecRule"`
 	IncludeOptionalResourceTypes []string          `json:"includeOptionalResourceTypes"`
 	SkipDeletedNamespaces        *bool             `json:"skipDeletedNamespaces"`
+	UpdateResourceSpecs          string            `json:"updateResourceSpecs"`
 }
 
 // MigrationStatus is the status of a migration operation
