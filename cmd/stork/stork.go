@@ -143,7 +143,7 @@ func main() {
 			Name:  "application-controller",
 			Usage: "Start the controllers for managing applications (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "px-object-controller",
 			Usage: "Start the px object controller.",
 		},

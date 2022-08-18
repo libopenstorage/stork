@@ -1114,8 +1114,12 @@ github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952/go.mod h1:Tj
 github.com/libopenstorage/gossip v0.0.0-20200808224301-d5287c7c8b24/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e h1:4l9N2Sw8VGGUqe50yC2BnTFMRJuHJGpIGZcCUZ2S6gg=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
-github.com/libopenstorage/openstorage v1.0.1-0.20220707215604-afbea03c04c5 h1:E+RhNbojbVfwYYZOquT7i5HN5lrCUjesszlWVPcrcFo=
-github.com/libopenstorage/openstorage v1.0.1-0.20220707215604-afbea03c04c5/go.mod h1:/FzPtmmVov3VTIIbfglyl9iRN5/rFPfwjP5wf9Sc0aU=
+github.com/libopenstorage/openstorage v1.0.1-0.20220426191846-06ff1e09348f h1:Rqr5GnkFLp56nBxCwfdx/tN4BQnTlaSG/x43XKwmr50=
+github.com/libopenstorage/openstorage v1.0.1-0.20220426191846-06ff1e09348f/go.mod h1:daFF+wbRassagPGXquXGlrZL86cme6wIw86cLct/YD8=
+github.com/libopenstorage/openstorage v1.0.1-0.20220727163544-20c1713d7ad8 h1:hCS6f0kn8HTwdEk919CY4ZpQvXMYaxJOS5Uwg9gUfFQ=
+github.com/libopenstorage/openstorage v1.0.1-0.20220727163544-20c1713d7ad8/go.mod h1:/FzPtmmVov3VTIIbfglyl9iRN5/rFPfwjP5wf9Sc0aU=
+github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4 h1:TNNQWzSkYcefedF6IS69BLVcmrEALE6orZ6S/xERvF4=
+github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4/go.mod h1:/FzPtmmVov3VTIIbfglyl9iRN5/rFPfwjP5wf9Sc0aU=
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
 github.com/libopenstorage/operator v0.0.0-20210303221358-0bb211a9908c/go.mod h1:+83bY859mKGwHmWW8TPNYGrXAgt/hXOX2Ia7EytK17I=
 github.com/libopenstorage/operator v0.0.0-20220603212904-3320db3aef81 h1:Dq/Tj9qM3FxgIiTzIvWSUZy7wWA5nVLgUTl3f52DrsY=
@@ -1888,6 +1892,7 @@ golang.org/x/net v0.0.0-20210428140749-89ef3d95e781/go.mod h1:OJAsFXCWl8Ukc7SiCT
 golang.org/x/net v0.0.0-20210520170846-37e1c6afe023/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20210614182718-04defd469f4e/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
+golang.org/x/net v0.0.0-20211216030914-fe4d6282115f/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd/go.mod h1:CfG3xpIq0wQ8r1q4Su4UZFWDARRcnwPjda9FqA0JpMk=
 golang.org/x/net v0.0.0-20220225172249-27dd8689420f/go.mod h1:CfG3xpIq0wQ8r1q4Su4UZFWDARRcnwPjda9FqA0JpMk=
 golang.org/x/net v0.0.0-20220722155237-a158d28d115b h1:PxfKdU9lEEDYjdIzOtC4qFWgkU2rGHdKlKowJSMN9h0=
@@ -2308,7 +2313,6 @@ gopkg.in/check.v1 v1.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
-gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
 gopkg.in/cheggaaa/pb.v1 v1.0.25/go.mod h1:V/YB90LKu/1FcN3WVnfiiE5oMCibMjukxqG/qStrOgw=
 gopkg.in/errgo.v2 v2.1.0/go.mod h1:hNsd1EY+bozCKY1Ytp96fpM3vjJbqLJn88ws8XvfDNI=

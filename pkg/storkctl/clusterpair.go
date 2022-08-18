@@ -3,11 +3,12 @@ package storkctl
 import (
 	"bufio"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
+
+	"github.com/libopenstorage/stork/pkg/utils"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
