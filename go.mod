@@ -28,7 +28,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149
-	github.com/portworx/px-object-controller v0.0.0-20220727220448-306ddfd28652
+	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.11.0

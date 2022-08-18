@@ -32,6 +32,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -1018,6 +1019,39 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	v1CrdApiReqrd, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if v1CrdApiReqrd {
+		var crds []*apiextensionsv1.CustomResourceDefinition
+		for _, crd := range crdList.Items {
+			for _, v := range crd.Resources {
+				if _, ok := resKinds[v.Kind]; !ok {
+					continue
+				}
+				crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+				res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
+				if err != nil {
+					if k8s_errors.IsNotFound(err) {
+						continue
+					}
+					log.ApplicationBackupLog(backup).Errorf("Unable to get custom resource definition for %s, err: %v", v.Kind, err)
+					return err
+				}
+				crds = append(crds, res)
+			}
+
+		}
+		jsonBytes, err := json.MarshalIndent(crds, "", " ")
+		if err != nil {
+			return err
+		}
+		if err := a.uploadObject(backup, crdObjectName, jsonBytes); err != nil {
+			return err
+		}
+		return nil
+	}
 	var crds []*apiextensionsv1beta1.CustomResourceDefinition
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {

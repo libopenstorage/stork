@@ -11,6 +11,7 @@ import (
 	"github.com/libopenstorage/secrets/aws/credentials"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/objectstore/common"
+	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/s3blob"
 )
@@ -90,7 +91,9 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 	objLockInfo := &common.ObjLockInfo{}
 	out, err := s3.New(sess).GetObjectLockConfiguration(input)
 	if err != nil {
+		logrus.Warnf("GetObjLockInfo: GetObjectLockConfiguration failed with: %v", err)
 		if awsErr, ok := err.(awserr.Error); ok {
+			logrus.Warnf("GetObjLockInfo: GetObjectLockConfiguration awsErr.Code %v", awsErr.Code())
 			// When a Minio server doesn't have object-lock implemented then above API
 			// throws following error codes depending on version it runs for normal buckets
 			//	1. "ObjectLockConfigurationNotFoundError"
@@ -109,9 +112,11 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 		return nil, err
 	}
 	if (out != nil) && (out.ObjectLockConfiguration != nil) {
+		logrus.Warnf("GetObjLockInfo: out.ObjectLockConfiguration.ObjectLockEnabled: %v", aws.StringValue(out.ObjectLockConfiguration.ObjectLockEnabled))
 		if aws.StringValue(out.ObjectLockConfiguration.ObjectLockEnabled) == "Enabled" {
 			objLockInfo.LockEnabled = true
 		} else {
+			logrus.Infof("GetObjLockInfo ObjectLockConfiguration is empty: %v", out.ObjectLockConfiguration)
 			// For some of the objectstore like FB and dell ECS, GetObjectLockConfiguration
 			// will return empty objectlockconfiguration instead of nil or error
 			return objLockInfo, nil
@@ -123,9 +128,13 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 			objLockInfo.RetentionPeriodDays = aws.Int64Value(out.ObjectLockConfiguration.Rule.DefaultRetention.Days)
 		} else {
 			//This is an invalid object-lock config, no default-retention but object-loc enabled
+			logrus.Errorf("GetObjLockInfo: invalid config: object lock is enabled but default retention period is not set on the bucket")
 			objLockInfo.LockEnabled = false
 			return nil, fmt.Errorf("invalid config: object lock is enabled but default retention period is not set on the bucket")
 		}
 	}
+	// This debug statement will not be executed as both err and out can not be nil at the same time.
+	// Adding it, just in case, we hit it.
+	logrus.Infof("GetObjLockInfo: returning objLockInfo: %v - err %v", objLockInfo, err)
 	return objLockInfo, err
 }

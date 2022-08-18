@@ -717,7 +717,7 @@ github.com/portworx/kdmp/pkg/version
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/px-object-controller v0.0.0-20220727220448-306ddfd28652
+# github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 ## explicit
 github.com/portworx/px-object-controller/client/apis/objectservice/v1alpha1
 github.com/portworx/px-object-controller/client/clientset/versioned
