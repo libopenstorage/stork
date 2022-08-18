@@ -295,6 +295,7 @@ func jobFor(
 	} else {
 		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
 	}
+	logrus.Infof("XYZ: NON_LIVE kopia; The cred secret file name is %v", utils.GetCredSecretName(jobOption.DataExportName))
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{

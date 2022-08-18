@@ -1918,6 +1918,8 @@ func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string, 
 		return createGoogleSecret(secretName, backupLocation, namespace, labels)
 	case storkapi.BackupLocationAzure:
 		return createAzureSecret(secretName, backupLocation, namespace, labels)
+	case storkapi.BackupLocationNFS:
+		return createNfsSecret(secretName, backupLocation, namespace, labels)
 	}
 
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
@@ -1980,6 +1982,19 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
 	err := createJobSecret(secretName, namespace, credentialData, labels)
+
+	return err
+}
+
+func createNfsSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
+	credentialData := make(map[string][]byte)
+	credentialData["type"] = []byte(backupLocation.Location.Type)
+	credentialData["exportPath"] = []byte(backupLocation.Location.NfsConfig.NfsExportPath)
+	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.NfsServerAddr)
+	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["path"] = []byte(backupLocation.Location.Path)
+	err := createJobSecret(secretName, namespace, credentialData, labels)
+	logrus.Infof("XYZ: the credential data to be populated to secret %+v, namespace %v, secret Name: %v", credentialData, namespace, secretName)
 
 	return err
 }
