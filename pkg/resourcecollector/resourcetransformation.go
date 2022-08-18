@@ -126,13 +126,11 @@ func getNewValueForPath(oldVal, valType string) interface{} {
 			newVal[keyPair[0]] = keyPair[1]
 		}
 		updatedValue = newVal
-		logrus.Infof("map updated : %v", updatedValue, mapList)
 	} else if valType == string(stork_api.SliceResourceType) {
 		newVal := []string{}
 		arrList := strings.Split(oldVal, ",")
 		newVal = append(newVal, arrList...)
 		updatedValue = newVal
-		logrus.Infof("map updated : %v", updatedValue, arrList)
 	} else {
 		updatedValue = oldVal
 	}

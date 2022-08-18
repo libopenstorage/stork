@@ -1028,7 +1028,7 @@ func (m *MigrationController) prepareResources(
 	resPatch, err := resourcecollector.GetResourcePatch(migration.Spec.UpdateResourceSpecs, migration.Spec.Namespaces)
 	if err != nil {
 		log.MigrationLog(migration).
-			Warnf("Unable to get transformation spec from :%s, skipping transformation for this migration, err: %v", err)
+			Warnf("Unable to get transformation spec from :%s, skipping transformation for this migration, err: %v", migration.Spec.UpdateResourceSpecs, err)
 	}
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
