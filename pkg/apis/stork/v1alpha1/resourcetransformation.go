@@ -35,6 +35,8 @@ const (
 // path in resource specs
 type ResourceTransformationValueType string
 
+type KindResourceTransform map[string][]TransformResourceInfo
+
 const (
 	// IntResourceType is to update integer value to specified resource path
 	IntResourceType ResourceTransformationValueType = "int"
@@ -90,6 +92,7 @@ type TransformResourceInfo struct {
 	meta.GroupVersionKind `json:",inline"`
 	Status                ResourceTransformationStatusType `json:"status"`
 	Reason                string                           `json:"reason"`
+	Specs                 TransformSpecs                   `json:"specs"`
 }
 
 // ResourceTransformationSpec is used to update k8s resources
@@ -109,6 +112,14 @@ type TransformSpecs struct {
 	Selectors map[string]string `json:"selectors"`
 	// Paths collection of resource path to update
 	Paths []ResourcePaths `json:"paths"`
+}
+
+type TransformSpecPatch struct {
+	GVK map[string]PatchStruct
+}
+type PatchStruct struct {
+	// namespace - resource in namespace
+	Resources map[string]TransformResourceInfo
 }
 
 // ResourcePaths specifies the patch to modify resource
