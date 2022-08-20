@@ -49,6 +49,7 @@ func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 		role.Annotations = map[string]string{
 			SkipResourceAnnotation: "true",
 		}
+		logrus.Infof("SetupServiceAccount -- dumping roles %+v", role)
 		if _, err := rbacops.Instance().CreateRole(role); err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("create %s/%s role: %s", namespace, name, err)
 		}
