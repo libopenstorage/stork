@@ -188,7 +188,7 @@ const (
 	defaultAppScaleFactor                 = 1
 	defaultMinRunTimeMins                 = 0
 	defaultChaosLevel                     = 5
-	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com/upgrade"
+	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com"
 	defaultStorageUpgradeEndpointVersion  = "2.1.1"
 	defaultStorageProvisioner             = "portworx"
 	defaultStorageNodesPerAZ              = 2
@@ -207,6 +207,10 @@ const (
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
+)
+
+const (
+	pxctlCDListCmd = "pxctl cd list"
 )
 
 var (
@@ -1862,6 +1866,83 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 		}(&wg, ctx)
 	}
 	wg.Wait()
+}
+
+//UpgradePxStorageCluster perform storage cluster upgrade
+func UpgradePxStorageCluster() (bool, error) {
+
+	logrus.Info("Initiating operator based install upgrade")
+	operatorTag, err := getOperatorLatestVersion()
+
+	if err != nil {
+		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
+	}
+	operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
+	logrus.Info(operatorImage)
+
+	err = Inst().V.UpdateStorageClusterImage(operatorImage)
+	if err != nil {
+		return false, fmt.Errorf("error updating storage cluster image. Cause: %v", err)
+	}
+	expectedVersion := operatorTag
+	checkTag := false
+	if strings.Contains(operatorImage, "-") {
+		expectedTag := strings.Split(operatorImage, "_")[1]
+		expectedVersion = fmt.Sprintf("%v-%v", Inst().StorageDriverUpgradeEndpointVersion, expectedTag)
+		checkTag = true
+	}
+
+	logrus.Infof("Expected version %s", expectedVersion)
+
+	nodes := node.GetStorageDriverNodes()
+	nodesUpgradeMap := make(map[string]bool)
+	nodesMap := make(map[string]node.Node)
+
+	for _, n := range nodes {
+		nodesUpgradeMap[n.Name] = false
+		nodesMap[n.Name] = n
+
+	}
+	isUpgradeDone := false
+	waitCount := 2 * len(nodes)
+	for {
+		isNodeUpgraded := true
+		for k, v := range nodesMap {
+			if !nodesUpgradeMap[k] {
+				t := func() (interface{}, bool, error) {
+
+					pxVersion, err := Inst().V.GetPxVersionOnNode(v)
+					if err != nil {
+						return pxVersion, true, err
+					}
+					return pxVersion, false, nil
+				}
+				versionVal, err := task.DoRetryWithTimeout(t, defaultTimeout, 10*time.Second)
+				if err != nil {
+					return false, fmt.Errorf("error getting PX version for node %s. Cause: %v", k, err)
+				}
+				pxVersion := fmt.Sprintf("%v", versionVal)
+				logrus.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
+
+				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
+					logrus.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
+					nodesUpgradeMap[k] = true
+				}
+			}
+		}
+		for _, val := range nodesUpgradeMap {
+			isNodeUpgraded = isNodeUpgraded && val
+		}
+
+		if isNodeUpgraded || waitCount == 0 {
+			isUpgradeDone = isNodeUpgraded
+			break
+		}
+		logrus.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
+		time.Sleep(2 * time.Minute)
+		waitCount--
+	}
+	return isUpgradeDone, nil
 }
 
 // CreateBackupGetErr creates backup without ending the test if it errors
@@ -3716,4 +3797,22 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 
 func getInt64Address(x int64) *int64 {
 	return &x
+}
+
+//IsCloudDriveInitialised checks if cloud drive is initialised in the PX cluster
+func IsCloudDriveInitialised(n node.Node) (bool, error) {
+
+	_, err := Inst().N.RunCommandWithNoRetry(n, pxctlCDListCmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+
+	if err != nil && strings.Contains(err.Error(), "Cloud Drive is not initialized") {
+		logrus.Warnf("cd list error : %v", err)
+		return false, nil
+	}
+	if err == nil {
+		return true, nil
+	}
+	return false, err
 }

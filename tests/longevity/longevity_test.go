@@ -573,6 +573,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
+	triggerInterval[AddDrive] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1089,6 +1090,13 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper][2] = 24 * baseInterval
 	triggerInterval[ValidateDeviceMapper][1] = 27 * baseInterval
 
+	triggerInterval[AddDrive][10] = 1 * baseInterval
+	triggerInterval[AddDrive][9] = 2 * baseInterval
+	triggerInterval[AddDrive][8] = 3 * baseInterval
+	triggerInterval[AddDrive][7] = 4 * baseInterval
+	triggerInterval[AddDrive][6] = 5 * baseInterval
+	triggerInterval[AddDrive][5] = 6 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1134,6 +1142,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
+	triggerInterval[AddDrive][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

@@ -303,7 +303,7 @@ type Driver interface {
 	// GetPxNode return api.StorageNode
 	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
 
-	// GetStoragelessNodes() return list of storageless nodes
+	// GetStoragelessNodes return list of storageless nodes
 	GetStoragelessNodes() ([]*api.StorageNode, error)
 
 	// RecyclePXHost Recycle a node and validate the storageless node picked all it drives
@@ -341,6 +341,9 @@ type Driver interface {
 
 	// GetNodePureVolumeAttachedCountMap returns map of node name and count of pure volume attached on that node
 	GetNodePureVolumeAttachedCountMap() (map[string]int, error)
+
+	// AddBlockDrives add drives to the node using PXCTL
+	AddBlockDrives(n *node.Node, drivePath []string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

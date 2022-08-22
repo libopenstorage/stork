@@ -2,19 +2,22 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -23,6 +26,7 @@ var storkLabel = map[string]string{"name": "stork"}
 const (
 	storkDeploymentName = "stork"
 	storkNamespace      = "kube-system"
+	pxctlCDListCmd      = "pxctl cd list"
 )
 
 func TestUpgrade(t *testing.T) {
@@ -50,20 +54,62 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	It("upgrade volume driver and ensure everything is running fine", func() {
 		contexts = make([]*scheduler.Context, 0)
 
+		storageNodes := node.GetStorageNodes()
+
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		Expect(err).NotTo(HaveOccurred())
+
+		if !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				err := Inst().V.AddBlockDrives(&storageNode, nil)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
+		var timeBeforeUpgrade time.Time
+		var timeAfterUpgrade time.Time
 
 		Step("start the upgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
-				Inst().StorageDriverUpgradeEndpointVersion,
-				Inst().EnableStorkUpgrade)
-			Expect(err).NotTo(HaveOccurred())
+			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
+			if IsOperatorBasedInstall {
+				timeBeforeUpgrade = time.Now()
+				status, err := UpgradePxStorageCluster()
+				timeAfterUpgrade = time.Now()
+				if status {
+					logrus.Info("Volume Driver upgrade is successful")
+				} else {
+					logrus.Error("Volume Driver upgrade failed")
+				}
+				Expect(err).NotTo(HaveOccurred())
+
+			} else {
+				timeBeforeUpgrade = time.Now()
+				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
+					Inst().StorageDriverUpgradeEndpointVersion,
+					false)
+				timeAfterUpgrade = time.Now()
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+			if durationInMins <= expectedUpgradeTime {
+				logrus.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+			} else {
+				logrus.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutee", durationInMins, expectedUpgradeTime)
+				Expect(durationInMins <= expectedUpgradeTime).To(BeTrue())
+			}
 		})
 
 		Step("reinstall and validate all apps after upgrade", func() {
+			logrus.Infof("Schedulings apps after upgrade")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
 			}

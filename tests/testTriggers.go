@@ -350,6 +350,8 @@ const (
 	AsyncDR = "asyncdr"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
+	// AddDrive performs drive add for on-prem cluster
+	AddDrive = "addDrive"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -1713,7 +1715,6 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				logrus.Infof("Namespace : %v", appNamespace)
 
 				Step(fmt.Sprintf("create schedule policy for %s app", ctx.App.Key), func() {
-
 					policyName := "intervalpolicy"
 
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
@@ -1759,8 +1760,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					}
 					if isPureVol {
 						logrus.Warningf(
-							"Cloud snapshot is not supported for Pure DA volumes: [%s]",
-							"Skipping cloud snapshot trigger for pure volume.", v.Name,
+							"Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name,
 						)
 						continue
 					}
@@ -2012,6 +2012,7 @@ func TriggerEmailReporter() {
 
 		}
 		if n.StorageNode != nil {
+			logrus.Infof("Getting node %s status", n.Name)
 			status, err := Inst().V.GetNodeStatus(n)
 			if err != nil {
 				pxStatus = pxStatusError
@@ -2026,6 +2027,8 @@ func TriggerEmailReporter() {
 
 			emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
 				PxVersion: pxVersion, Status: pxStatus, NodeStatus: k8sNodeStatus, Cores: coresMap[n.Name]})
+		} else {
+			logrus.Infof("node %s storage is nil, %+v", n.Name, n)
 		}
 	}
 
@@ -3533,9 +3536,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 				UpdateOutcome(event, err)
 			}
 		}
-
 	}
-
 }
 
 // TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
@@ -3651,62 +3652,16 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 		Step("start the volume driver upgrade", func() {
 			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 			if IsOperatorBasedInstall {
-				logrus.Info("Initiating operator based install upgrade")
-				operatorTag, err := getOperatorLatestVersion()
-				UpdateOutcome(event, err)
-				if operatorTag != "" {
-					operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-					logrus.Info(operatorImage)
-					err = Inst().V.UpdateStorageClusterImage(operatorImage)
+				status, err := UpgradePxStorageCluster()
+				if status {
+					logrus.Info("Volume Driver upgrade is successful")
+				} else {
+					logrus.Error("Volume Driver upgrade failed")
 					UpdateOutcome(event, err)
-					if err == nil {
-						expectedTag := strings.Split(operatorImage, "_")[1]
-						expectedVersion := fmt.Sprintf("%v-%v", Inst().StorageDriverUpgradeEndpointVersion, expectedTag)
-
-						nodes := node.GetStorageDriverNodes()
-						for _, n := range nodes {
-							isUpgradeDone := false
-							isExit := false
-							waitCount := 10
-							for !isUpgradeDone && !isExit {
-								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								if err == nil {
-									pxVersion, err := Inst().V.GetPxVersionOnNode(n)
-									UpdateOutcome(event, err)
-									if err == nil {
-										if pxVersion == expectedVersion {
-											isUpgradeDone = true
-											logrus.Infof("Node [%x] successfully upgraded to %v", n.Name, pxVersion)
-										} else {
-											waitCount--
-											logrus.Infof("Waiting for 2 mins for PX upgrade to initiate on node: %v", n.Name)
-											time.Sleep(2 * time.Minute)
-											if waitCount == 0 {
-												isExit = true
-												err = fmt.Errorf("node [%x] upgrade to %v failed", n.Name, expectedVersion)
-												logrus.Error(err)
-												UpdateOutcome(event, err)
-											}
-
-										}
-
-									}
-
-								} else {
-									isExit = true
-									UpdateOutcome(event, err)
-
-								}
-							}
-
-						}
-
-					}
-
 				}
 
 			} else {
-				logrus.Info("Initiating Daemonset based install upgrade")
+				logrus.Info("Initiating Daemon set based install upgrade")
 				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion,
 					Inst().EnableStorkUpgrade)
@@ -4892,6 +4847,72 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			}
 		}
 	})
+}
+
+// TriggerAddDrive performs add drive operation
+func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AddDrive,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step(fmt.Sprintf("Perform add drive on all the worker nodes"), func() {
+
+		storageNodes := node.GetStorageNodes()
+
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		UpdateOutcome(event, err)
+		systemOpts := node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         defaultTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			},
+			Action: "start",
+		}
+		if err == nil && !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				blockDrives, err := Inst().N.GetBlockDrives(storageNode, systemOpts)
+				UpdateOutcome(event, err)
+
+				drvPaths := make([]string, 5)
+
+				for _, drv := range blockDrives {
+					if drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
+						drvPaths = append(drvPaths, drv.Path)
+						break
+					}
+				}
+				err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				UpdateOutcome(event, err)
+			}
+
+			for _, ctx := range *contexts {
+				Step(fmt.Sprintf("validating context after add drive on storage nodes"), func() {
+					errorChan := make(chan error, errorChannelSize)
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			}
+		}
+
+	})
+
 }
 
 // TriggerAsyncDR triggers Async DR

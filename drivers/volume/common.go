@@ -839,3 +839,11 @@ func (d *DefaultDriver) RejoinNode(n *node.Node) error {
 		Operation: "RejoinNode()",
 	}
 }
+
+// AddBlockDrives add drives to the node using PXCTL
+func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddBlockDrives()",
+	}
+}

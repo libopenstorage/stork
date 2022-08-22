@@ -83,6 +83,8 @@ const (
 	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
+	pxctlDriveAddStart                        = "%s -j service drive add -d %s -o start"
+	pxctlDriveAddStatus                       = "%s -j service drive add -d %s -o status"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
@@ -127,6 +129,11 @@ const (
 	secretNamespace = "openstorage.io/auth-secret-namespace"
 	// DeviceMapper is a string in dev mapper path
 	DeviceMapper = "mapper"
+)
+
+const (
+	driveAddSuccessStatus = "Drive add done"
+	driveExitsStatus      = "Device already exists"
 )
 
 // Provisioners types of supported provisioners
@@ -181,6 +188,12 @@ type portworx struct {
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
+}
+
+type statusJSON struct {
+	Status string
+	Error  string
+	Cmd    string
 }
 
 // ExpandPool resizes a pool of a given ID
@@ -4166,6 +4179,141 @@ func (d *portworx) RecoverNode(n *node.Node) error {
 			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
 		}
 	}
+	return nil
+
+}
+
+// AddBlockDrives add drives to the node using PXCTL
+func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
+
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	logrus.Infof("Getting available block drives on %s.", n.Name)
+	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
+
+	if err != nil {
+		return err
+	}
+
+	eligibleDrives := make(map[string]*node.BlockDrive)
+
+	for _, drv := range blockDrives {
+		if !strings.Contains(drv.Path, "pxd") && drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
+			eligibleDrives[drv.Path] = drv
+		}
+	}
+
+	if len(blockDrives) == 0 || len(eligibleDrives) == 0 {
+		return fmt.Errorf("no block drives available to add")
+	}
+
+	if drivePath == nil || len(drivePath) == 0 {
+		logrus.Infof("Adding all the available drives")
+		for _, drv := range eligibleDrives {
+			err := addDrive(*n, drv.Path, d)
+			if err != nil {
+				return err
+			}
+			err = waitForAddDriveToComplete(*n, drv.Path, d)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, drvPath := range drivePath {
+			drv, ok := eligibleDrives[drvPath]
+			if ok {
+				err := addDrive(*n, drv.Path, d)
+				if err != nil {
+					return err
+				}
+				err = waitForAddDriveToComplete(*n, drv.Path, d)
+				if err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("block drive path %s is not eligible or does not exist to perform drive add", drvPath)
+			}
+
+		}
+	}
+	return nil
+}
+
+func addDrive(n node.Node, drivePath string, d *portworx) error {
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		err = fmt.Errorf("error when adding drive %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
+		return err
+	}
+	output := []byte(out)
+	var addDriveStatus statusJSON
+	err = json.Unmarshal(output, &addDriveStatus)
+	if err != nil {
+		return fmt.Errorf("ERROR of unmarshal adding drive: %v", err)
+	}
+	if &addDriveStatus == nil {
+		return fmt.Errorf("failed to add drive %s in node %s", drivePath, n.Name)
+	}
+
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) {
+		return fmt.Errorf("failed to add drive %s in node %s,AddDrive Status : %+v ", drivePath, n.Name, addDriveStatus)
+
+	}
+	logrus.Infof("Added drive %s to node %s successfully", drivePath, n.Name)
+
+	return nil
+
+}
+
+func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error {
+
+	waitCount := 180
+
+	for {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStatus, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+		if err != nil {
+
+			if strings.Contains(err.Error(), driveExitsStatus) {
+				return nil
+			}
+			err = fmt.Errorf("error while getting add drive status for path %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
+			return err
+		}
+		output := []byte(out)
+		var addDriveStatus statusJSON
+		err = json.Unmarshal(output, &addDriveStatus)
+		if err != nil {
+			return fmt.Errorf("ERROR of unmarshal add drive status: %v", err)
+		}
+		if &addDriveStatus == nil {
+			return fmt.Errorf("failed to get add drive status for path %s in node %s", drivePath, n.Name)
+		}
+		logrus.Infof("Current add drive for path %s status : %+v", drivePath, addDriveStatus)
+
+		if strings.Contains(addDriveStatus.Status, "Drive add: Storage rebalance complete") || strings.Contains(addDriveStatus.Status, "Device already exists") {
+			break
+		}
+		if waitCount == 0 {
+			return fmt.Errorf("failed to  add drive for path %s in node %s, status: %+v", drivePath, n.Name, addDriveStatus)
+		}
+		waitCount--
+		logrus.Info("Waiting for 30 seconds to check the status again")
+		time.Sleep(60 * time.Second)
+	}
+	logrus.Infof("Added drive %s to node %s completed", drivePath, n.Name)
 	return nil
 
 }
