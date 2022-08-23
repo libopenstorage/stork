@@ -339,6 +339,8 @@ type Driver interface {
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
 
+	// CreateCsiSnapsAndValidate create csi snapshot and return a pvc using that snapshot
+	CreateCsiSnapsAndValidate(*Context, string) error
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
 	CreateCsiSnapsForVolumes(*Context, string) (map[string]*v1beta1.VolumeSnapshot, error)
 

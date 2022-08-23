@@ -476,6 +476,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
+		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeSnapshotAndRestore(ctx, errChan...)
+			}
+		})
+
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
 				return
@@ -542,6 +548,12 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 		Step(fmt.Sprintf("validate %s app's pure volumes has no replicaset", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidatePureVolumeNoReplicaSet(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeSnapshotAndRestore(ctx, errChan...)
 			}
 		})
 
@@ -795,6 +807,22 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
 		expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+
+	})
+}
+
+// ValidatePureVolumeSnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
+func ValidatePureVolumeSnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an snapshot and restoring", func() {
+		timestamp := strconv.Itoa(int(time.Now().Unix()))
+		snapShotClassName := PureSnapShotClass + "-" + timestamp
+		if _, err := Inst().S.CreateCsiSanpshotClass(snapShotClassName, "Delete"); err != nil {
+			logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
+			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
+		}
+
+		err := Inst().S.CreateCsiSnapsAndValidate(ctx, snapShotClassName)
+		processError(err, errChan...)
 
 	})
 }
