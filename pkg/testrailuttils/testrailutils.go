@@ -38,7 +38,12 @@ type Testrail struct {
 // CreateMilestone Creates a milestone if it does not exists, else creates it
 func CreateMilestone() {
 	logrus.Infof("Create Testrail milestone")
-	milestoneID = getMilestoneByProjectID(pwxProjectID, MilestoneName)
+	var err error
+	milestoneID, err = getMilestoneByProjectID(pwxProjectID, MilestoneName)
+	if err != nil {
+		logrus.Errorf("error in getting milestone: %s", MilestoneName)
+		return
+	}
 	if milestoneID == 0 {
 		logrus.Debugf("Creating milesone, since it does not exists")
 		sendatbleMs := testrail.SendableMilestone{
@@ -50,25 +55,26 @@ func CreateMilestone() {
 			logrus.Errorf("error in creating milestone: %s", MilestoneName)
 		}
 		milestoneID = msCreated.ID
-		logrus.Debugf("Milestone %s created successfully", MilestoneName)
+		logrus.Debugf("Milestone %s created successfully ID - %d", MilestoneName, msCreated.ID)
 	} else {
-		logrus.Debugf("Milestone %s already exists\n", MilestoneName)
+		logrus.Debugf("Milestone %s already exists ID - %d \n", MilestoneName, milestoneID)
 	}
 }
 
-func getMilestoneByProjectID(projectID int, milestonename string) int {
+func getMilestoneByProjectID(projectID int, milestonename string) (int, error) {
 	logrus.Infof("Getting the milestone ID for projectID: %d", projectID)
 	milestones, err := client.GetMilestones(projectID)
 	if err != nil {
 		logrus.Warningf("Error in getting milestone: %s", err)
-		return 0
+		testRailConnectionSuccessful = false
+		return 0, fmt.Errorf("Error in getting milestone %s", err)
 	}
 	for _, ms := range milestones {
 		if ms.Name == milestonename {
-			return ms.ID
+			return ms.ID, nil
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 // AddRunsToMilestone Adds a run to the milestone, if it does not exists
