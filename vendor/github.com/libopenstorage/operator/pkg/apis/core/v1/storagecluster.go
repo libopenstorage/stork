@@ -545,6 +545,8 @@ type TelemetrySpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// Image is docker image of the telemetry container
 	Image string `json:"image,omitempty"`
+	// LogUploaderImage is docker image of the log-upload-service container.
+	LogUploaderImage string `json:"logUploaderImage,omitempty"`
 }
 
 // PrometheusSpec contains configuration of Prometheus stack
@@ -607,7 +609,9 @@ type ComponentImages struct {
 	AlertManager               string `json:"alertManager,omitempty"`
 	Telemetry                  string `json:"telemetry,omitempty"`
 	MetricsCollector           string `json:"metricsCollector,omitempty"`
-	MetricsCollectorProxy      string `json:"metricsCollectorProxy,omitempty"`
+	MetricsCollectorProxy      string `json:"metricsCollectorProxy,omitempty"` // TODO: use TelemetryProxy only
+	LogUploader                string `json:"logUploader,omitempty"`
+	TelemetryProxy             string `json:"telemetryProxy,omitempty"`
 	PxRepo                     string `json:"pxRepo,omitempty"`
 }
 
