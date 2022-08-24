@@ -1043,7 +1043,7 @@ func (m *MigrationController) prepareResources(
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
-			err := m.prepareApplicationResource(migration, clusterPair, o, resPatch[metadata.GetNamespace()][resource.Kind])
+			err := m.prepareApplicationResource(migration, clusterPair, o)
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
@@ -1287,7 +1287,6 @@ func (m *MigrationController) prepareApplicationResource(
 	migration *stork_api.Migration,
 	clusterPair *stork_api.ClusterPair,
 	object runtime.Unstructured,
-	resPatch []stork_api.TransformResourceInfo,
 ) error {
 	content := object.UnstructuredContent()
 	if clusterPair.Spec.PlatformOptions.Rancher != nil &&
