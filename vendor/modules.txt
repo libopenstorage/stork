@@ -48,9 +48,8 @@ github.com/Azure/go-autorest/autorest/validation
 github.com/Azure/go-autorest/logger
 # github.com/Azure/go-autorest/tracing v0.6.0
 github.com/Azure/go-autorest/tracing
-# github.com/BurntSushi/toml v1.1.0
+# github.com/BurntSushi/toml v0.3.1
 github.com/BurntSushi/toml
-github.com/BurntSushi/toml/internal
 # github.com/GoogleCloudPlatform/k8s-cloud-provider v0.0.0-20200415212048-7901bc822317
 github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/meta
 # github.com/LINBIT/golinstor v0.27.0 => github.com/LINBIT/golinstor v0.39.0
@@ -568,7 +567,7 @@ github.com/libopenstorage/openstorage/volume/drivers/fake
 github.com/libopenstorage/openstorage/volume/drivers/nfs
 github.com/libopenstorage/openstorage/volume/drivers/pwx
 github.com/libopenstorage/openstorage/volume/drivers/vfs
-# github.com/libopenstorage/operator v0.0.0-20220603212904-3320db3aef81
+# github.com/libopenstorage/operator v0.0.0-20220927184959-7d7a4c157f9c
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/pkg/apis/core/v1
 github.com/libopenstorage/operator/pkg/client/clientset/versioned
@@ -641,6 +640,17 @@ github.com/monochromegane/go-gitignore
 github.com/morikuni/aec
 # github.com/moul/http2curl v1.0.0
 github.com/moul/http2curl
+# github.com/onsi/gomega v1.19.0
+github.com/onsi/gomega
+github.com/onsi/gomega/format
+github.com/onsi/gomega/internal
+github.com/onsi/gomega/internal/gutil
+github.com/onsi/gomega/matchers
+github.com/onsi/gomega/matchers/support/goraph/bipartitegraph
+github.com/onsi/gomega/matchers/support/goraph/edge
+github.com/onsi/gomega/matchers/support/goraph/node
+github.com/onsi/gomega/matchers/support/goraph/util
+github.com/onsi/gomega/types
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
 # github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799
@@ -731,7 +741,7 @@ github.com/portworx/px-object-controller/client/listers/objectservice/v1alpha1
 github.com/portworx/px-object-controller/pkg/client
 github.com/portworx/px-object-controller/pkg/controller
 github.com/portworx/px-object-controller/pkg/utils
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -754,7 +764,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20221003064431-02c4d9163abb
 ## explicit
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
@@ -775,6 +785,8 @@ github.com/portworx/torpedo/pkg/aututils
 github.com/portworx/torpedo/pkg/errors
 github.com/portworx/torpedo/pkg/netutil
 github.com/portworx/torpedo/pkg/osutils
+github.com/portworx/torpedo/pkg/pureutils
+github.com/portworx/torpedo/pkg/s3utils
 github.com/portworx/torpedo/pkg/units
 github.com/portworx/torpedo/porx/px/api
 # github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35
@@ -943,6 +955,9 @@ golang.org/x/mod/semver
 golang.org/x/net/bpf
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
+golang.org/x/net/html
+golang.org/x/net/html/atom
+golang.org/x/net/html/charset
 golang.org/x/net/http/httpguts
 golang.org/x/net/http/httpproxy
 golang.org/x/net/http2
@@ -968,7 +983,7 @@ golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20220731174439-a90be440212d
+# golang.org/x/sys v0.0.0-20220818161305-2296e01440c6
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
@@ -980,10 +995,20 @@ golang.org/x/sys/windows/registry
 golang.org/x/term
 # golang.org/x/text v0.3.7
 golang.org/x/text/encoding
+golang.org/x/text/encoding/charmap
+golang.org/x/text/encoding/htmlindex
 golang.org/x/text/encoding/internal
 golang.org/x/text/encoding/internal/identifier
+golang.org/x/text/encoding/japanese
+golang.org/x/text/encoding/korean
+golang.org/x/text/encoding/simplifiedchinese
+golang.org/x/text/encoding/traditionalchinese
 golang.org/x/text/encoding/unicode
+golang.org/x/text/internal/language
+golang.org/x/text/internal/language/compact
+golang.org/x/text/internal/tag
 golang.org/x/text/internal/utf8internal
+golang.org/x/text/language
 golang.org/x/text/runes
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
@@ -1044,7 +1069,7 @@ google.golang.org/appengine/internal/socket
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/socket
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20220728213248-dd149ef739b9
+# google.golang.org/genproto v0.0.0-20220819174105-e9f053255caa
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/httpbody
 google.golang.org/genproto/googleapis/iam/credentials/v1
@@ -1758,7 +1783,7 @@ k8s.io/kubernetes/pkg/volume/util/types
 k8s.io/kubernetes/pkg/volume/util/volumepathhandler
 # k8s.io/mount-utils v0.0.0 => k8s.io/mount-utils v0.21.5
 k8s.io/mount-utils
-# k8s.io/utils v0.0.0-20210722164352-7f3ee0f31471
+# k8s.io/utils v0.0.0-20210802155522-efc7438f0176
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
@@ -1910,8 +1935,8 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221003064431-02c4d9163abb
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.1
 # k8s.io/api => k8s.io/api v0.21.5
