@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	random "math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -51,6 +52,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
@@ -126,7 +128,8 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 3 * time.Minute
 	// SnapshotReadyTimeout timeout for snapshot to be ready
-	SnapshotReadyTimeout = 5 * time.Minute
+	SnapshotReadyTimeout             = 5 * time.Minute
+	numOfRestoredPVCForCloneManyTest = 500
 
 	autopilotServiceName          = "autopilot"
 	autopilotDefaultNamespace     = "kube-system"
@@ -198,17 +201,19 @@ var (
 
 // K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory             *spec.Factory
-	NodeDriverName          string
-	VolDriverName           string
-	secretConfigMapName     string
-	customConfig            map[string]scheduler.AppConfig
-	eventsStorage           map[string][]scheduler.Event
-	SecretType              string
-	VaultAddress            string
-	VaultToken              string
-	PureVolumes             bool
-	helmValuesConfigMapName string
+	SpecFactory                      *spec.Factory
+	NodeDriverName                   string
+	VolDriverName                    string
+	secretConfigMapName              string
+	customConfig                     map[string]scheduler.AppConfig
+	eventsStorage                    map[string][]scheduler.Event
+	SecretType                       string
+	VaultAddress                     string
+	VaultToken                       string
+	PureVolumes                      bool
+	PureSANType                      string
+	RunCSISnapshotAndRestoreManyTest bool
+	helmValuesConfigMapName          string
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -246,6 +251,8 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
+	k.PureSANType = schedOpts.PureSANType
+	k.RunCSISnapshotAndRestoreManyTest = schedOpts.RunCSISnapshotAndRestoreManyTest
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -647,6 +654,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*corev1.Endpoints); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*storkapi.ResourceTransformation); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
@@ -657,6 +666,15 @@ func validateSpec(in interface{}) (interface{}, error) {
 // volumes are valid.
 func (k *K8s) filterPureVolumesIfEnabled(claim *v1.PersistentVolumeClaim) (bool, error) {
 	volTypes := []string{PureFile, PureBlock}
+
+	return k.filterPureTypeVolumeIfEnabled(claim, volTypes)
+}
+
+// filterPureVolumesIfEnabled will return whether or not the given PVC is a Pure
+// direct access volume, only if PureVolumes is true. If PureVolumes is false, all
+// volumes are valid.
+func (k *K8s) filterPureVolumesIfEnabledByPureVolBackend(claim *v1.PersistentVolumeClaim, pureVolBackend string) (bool, error) {
+	volTypes := []string{pureVolBackend}
 
 	return k.filterPureTypeVolumeIfEnabled(claim, volTypes)
 }
@@ -1261,6 +1279,20 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			obj.Provisioner = volume.GetStorageProvisioner()
 		}
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
+
+		if k.PureVolumes {
+			// Pure NVMe volumes don't support QoS yet, so we need to remove it for NVMe tests
+			if k.PureSANType == "NVMEOF-RDMA" {
+				delete(obj.Parameters, "max_iops")
+				delete(obj.Parameters, "max_bandwidth")
+				logrus.Infof("Removing QoS parameters in %v for Pure NVMeoF-RDMA SAN type", obj.Name)
+			}
+			if k.RunCSISnapshotAndRestoreManyTest {
+				immediate := storageapi.VolumeBindingImmediate
+				obj.VolumeBindingMode = &immediate
+				logrus.Infof("Setting SC %s volumebinding mode to immediate ", obj.Name)
+			}
+		}
 
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
@@ -2263,6 +2295,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated Job: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+			if err := k8sStork.ValidateResourceTransformation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate ResourceTransformation: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated ResourceTransformation: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -3181,6 +3222,71 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
+// GetPureVolumes  Get the Pure volumes (if enabled) by type (PureFile or PureBlock)
+//
+func (k *K8s) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*volume.Volume, error) {
+	k8sOps := k8sApps
+	var vols []*volume.Volume
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			shouldAdd, err := k.filterPureVolumesIfEnabledByPureVolBackend(pvcObj, pureVolType)
+			if err != nil {
+				return nil, err
+			}
+			if !shouldAdd {
+				continue
+			}
+
+			pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+			pvcSize, _ := pvcSizeObj.AsInt64()
+			vol := &volume.Volume{
+				ID:          string(pvcObj.Spec.VolumeName),
+				Name:        obj.Name,
+				Namespace:   obj.Namespace,
+				Shared:      k.isPVCShared(obj),
+				Annotations: make(map[string]string),
+				Labels:      pvcObj.Labels,
+				Size:        uint64(pvcSize),
+			}
+			for key, val := range obj.Annotations {
+				vol.Annotations[key] = val
+			}
+			vols = append(vols, vol)
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:        pvc.Spec.VolumeName,
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
+				})
+			}
+		}
+	}
+
+	return vols, nil
+}
+
 // ResizeVolume  Resize the volume
 func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
@@ -3956,6 +4062,17 @@ func (k *K8s) createMigrationObjects(
 		}
 		logrus.Infof("[%v] Created SchedulePolicy: %v", app.Key, schedPolicy.Name)
 		return schedPolicy, nil
+	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+		obj.Namespace = ns.Name
+		transform, err := k8sOps.CreateResourceTransformation(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ResourceTransformation: %v/%v. Obj: %v, Err: %v", obj.Name, obj.Namespace, obj, err),
+			}
+		}
+		logrus.Infof("[%v] Created ResourceTransformation: %v", app.Key, transform.Name)
+		return transform, nil
 	}
 
 	return nil, nil
@@ -4046,6 +4163,14 @@ func (k *K8s) destroyMigrationObject(
 			}
 		}
 		logrus.Infof("[%v] Destroyed SchedulePolicy: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+		err := k8sOps.DeleteResourceTransformation(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete ResourceTransformation: %v. Err: %v", obj.Name, err),
+			}
+		}
 	}
 	return nil
 }
@@ -5047,10 +5172,386 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 					volSnapMap[pvc.Spec.VolumeName] = volSnapshot
 				}
 			}
+
 		}
 	}
 
 	return volSnapMap, nil
+}
+
+// CSISnapshotTest create CSI snapshot for volumes and restore them to new PVCs, and validate the content
+// (Testrail cases C58775, 58091)
+func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+	// This test will validate the content of the volume as opposed to just verify creation of volume.
+
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+
+	if err != nil {
+		logrus.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		logrus.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	storageClassName := originalStorageClass.Name
+	logrus.Infof("Procedding with SC %s", storageClassName)
+
+	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
+	if err != nil {
+		logrus.Errorf("Failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
+		return err
+	}
+	pod := podsUsingPVC[0]
+	mountPath, _ := pureutils.GetAppDataDir(podsUsingPVC[0].Namespace)
+	dirtyData := "thisIsJustSomeRandomText"
+	snapName := request.SnapName
+	for i := 0; i < 3; i++ {
+		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
+		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+		if err != nil {
+			logrus.Errorf("failed to write data to restored PVC: %s", err)
+			return err
+		}
+		err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+		if err != nil {
+			logrus.Errorf("failed to validate restored PVC content: %s ", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// CSICloneTest create new PVC by cloning an existing PVC and make sure the contents of volume are same
+// (Testrail cases C58509)
+func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest) error {
+	// This test will validate the content of the volume as opposed to just verify creation of volume.
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	if err != nil {
+		logrus.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		logrus.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	storageClassName := originalStorageClass.Name
+	logrus.Infof("Procedding with SC %s", storageClassName)
+
+	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
+	if err != nil {
+		logrus.Errorf("Failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
+		return err
+	}
+	pod := podsUsingPVC[0]
+	mountPath, _ := pureutils.GetAppDataDir(podsUsingPVC[0].Namespace)
+	dirtyData := "thisIsJustSomeRandomText"
+
+	for i := 0; i < 3; i++ {
+		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
+		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+		if err != nil {
+			logrus.Errorf("failed to write data to cloned PVC: %s", err)
+			return err
+		}
+		err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+		if err != nil {
+			logrus.Errorf("failed to validate cloned PVC content: %s ", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// CSISnapshotAndRestoreMany create CSI snapshot and restore to many PVCs, and we validate the PVCs are up and bound
+// (Testrail cases C58775, 58091)
+func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+	// This test will validate the content of the volume as opposed to just verify creation of volume.
+	if !k.RunCSISnapshotAndRestoreManyTest {
+		logrus.Info("RunCSISnapshotAndRestoreManyTest job disabled, skipping")
+		return nil
+	}
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+
+	if err != nil {
+		logrus.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		logrus.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	storageClassName := originalStorageClass.Name
+	logrus.Infof("Procedding with SC %s", storageClassName)
+
+	// creating the snapshot
+	volSnapshot, err := k.CreateCsiSnapshot(request.SnapName, pvcObj.Namespace, request.SnapshotclassName, pvcObj.Name)
+	if err != nil {
+		logrus.Errorf("Failed to create snapshot %s for volume %s", request.SnapName, pvcObj.Name)
+		return err
+	}
+
+	logrus.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, pvcObj.Name)
+	for i := 0; i < numOfRestoredPVCForCloneManyTest; i++ {
+		restoredPVCName := fmt.Sprint(request.RestoredPVCName, i)
+		restoredPVCSpec, err := GeneratePVCRestoreSpec(size, pvcObj.Namespace, restoredPVCName, volSnapshot.Name, storageClassName)
+		if err != nil {
+			logrus.Errorf("Failed to build cloned PVC Spec: %s", err)
+			return err
+		}
+		_, err = k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+		if err != nil {
+			logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
+			return err
+		}
+
+	}
+	logrus.Info("Finished issueing PVC creation request, proceed to validate")
+
+	if err = k.waitForRestoredPVCsToBound(request.RestoredPVCName, pvcObj.Namespace); err != nil {
+		logrus.Errorf("failed to wait %d pvcs go into bound", numOfRestoredPVCForCloneManyTest)
+		return fmt.Errorf("%d PVCs did not go into bound after 30 mins", numOfRestoredPVCForCloneManyTest)
+	}
+
+	return nil
+}
+
+func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) error {
+	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  %s/aaaa.txt", data, mountPath)}
+	command := exec.Command("kubectl", cmdArgs...)
+	_, err := command.Output()
+	if err != nil {
+		logrus.Errorf("Failed to write data to pod: %s", err)
+		return err
+	}
+	// Sync the data, wait 20 secs and then proceed to snapshot the volume
+	cmdArgs2 := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sync"}
+	command2 := exec.Command("kubectl", cmdArgs2...)
+	_, err = command2.Output()
+	if err != nil {
+		logrus.Errorf("Failed to sync: %s", err)
+		return err
+	}
+	fmt.Println("Sleep for 20 secs to let data write through")
+	time.Sleep(time.Second * 20)
+	return nil
+}
+
+// snapshotAndVerify takes an existing PVC mounted to a new pod, snapshot the PVC and mount the restored volume to a new pod, returns an error if
+// the restored PVC doesn't contain the file content of the original PVC
+func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespace, storageClass, snapClass, restoredPVCName, originalPVC string) error {
+	clientset, err := getKubeClient("")
+	if err != nil {
+		logrus.Errorf("Failed to get kube client: %s", err)
+		return err
+	}
+
+	// creating the snapshot
+	volSnapshot, err := k.CreateCsiSnapshot(snapName, namespace, snapClass, originalPVC)
+	if err != nil {
+		logrus.Errorf("Failed to create snapshot %s for volume %s", snapName, originalPVC)
+		return err
+	}
+
+	logrus.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, originalPVC)
+	restoredPVCSpec, err := GeneratePVCRestoreSpec(size, namespace, restoredPVCName, volSnapshot.Name, storageClass)
+	if err != nil {
+		logrus.Errorf("Failed to build restored PVC Spec: %s", err)
+		return err
+	}
+	restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+	if err != nil {
+		logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
+		return err
+	}
+	logrus.Infof("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
+	restoredPodSpec := MakePod(namespace, []*v1.PersistentVolumeClaim{restoredPVC}, "ls", false)
+	restoredPod, err := clientset.CoreV1().Pods(namespace).Create(context.TODO(), restoredPodSpec, metav1.CreateOptions{})
+	if err != nil {
+		logrus.Errorf("Error creating restored pod: %s", err)
+		return err
+	}
+
+	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
+		return &scheduler.ErrFailedToSchedulePod{
+			App:   nil,
+			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
+		}
+	}
+	// Run a cat command from within the pod to verify the content of dirtydata
+	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
+	command := exec.Command("kubectl", cmdArgs...)
+	fileConent, err := command.Output()
+	if !strings.Contains(string(fileConent), data) {
+		return fmt.Errorf("restored volume does NOT contain data from original volume")
+	}
+	logrus.Info("Validation complete")
+	return nil
+}
+
+// cloneAndVerify takes an existing PVC mounted to a pod, clones the PVC and mount it to a new pod, returns an error if
+// the cloned PVC doesn't contain the file content of the original PVC
+func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageClass, clonedPVCName, originalPVC string) error {
+	clientset, err := getKubeClient("")
+	if err != nil {
+		logrus.Errorf("Failed to get kube client: %s", err)
+		return err
+	}
+
+	clonedPVCSpec, err := GeneratePVCCloneSpec(size, namespace, clonedPVCName, originalPVC, storageClass)
+	if err != nil {
+		logrus.Errorf("Failed to build cloned PVC Spec: %s", err)
+		return err
+	}
+	clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
+	if err != nil {
+		logrus.Errorf("Failed to clone PVC from source PVC %s: %s", originalPVC, err)
+		return err
+	}
+	logrus.Infof("Successfully clone PVC %s, proceed to mount to a new pod", clonedPVC.Name)
+	restoredPodSpec := MakePod(namespace, []*v1.PersistentVolumeClaim{clonedPVC}, "ls", false)
+	restoredPod, err := clientset.CoreV1().Pods(namespace).Create(context.TODO(), restoredPodSpec, metav1.CreateOptions{})
+	if err != nil {
+		logrus.Errorf("Error creating restored pod: %s", err)
+		return err
+	}
+
+	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
+		return &scheduler.ErrFailedToSchedulePod{
+			App:   nil,
+			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
+		}
+	}
+	// Run a cat command from within the pod to verify the content of dirtydata
+	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
+	command := exec.Command("kubectl", cmdArgs...)
+	fileConent, err := command.Output()
+	if !strings.Contains(string(fileConent), data) {
+		return fmt.Errorf("restored volume does NOT contain data from original volume")
+	}
+	logrus.Info("Validation complete")
+	return nil
+}
+
+// MakePod Returns a pod definition based on the namespace. The pod references the PVC's
+// name.  A slice of BASH commands can be supplied as args to be run by the pod
+func MakePod(ns string, pvclaims []*v1.PersistentVolumeClaim, command string, privileged bool) *v1.Pod {
+	var cmd = "while true; do sleep 1; done"
+	if 0 < len(command) {
+		cmd = command + " && " + cmd
+	}
+
+	podSpec := &v1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "testMountSnapshotToPod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "testpod-",
+			Namespace:    ns,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:            "test-pod",
+					Image:           "alpine:3.10",
+					Command:         []string{"/bin/sh", "-c"},
+					Args:            []string{cmd},
+					SecurityContext: &v1.SecurityContext{Privileged: &privileged},
+				},
+			},
+			RestartPolicy: v1.RestartPolicyOnFailure,
+		},
+	}
+	var volumeMounts = make([]v1.VolumeMount, 0)
+	var volumeDevices = make([]v1.VolumeDevice, 0)
+	var volumes = make([]v1.Volume, len(pvclaims))
+	for index, pvclaim := range pvclaims {
+		if pvclaim.Spec.VolumeMode != nil {
+			fmt.Printf("mount pvc %s as %s\n", pvclaim.Name, *pvclaim.Spec.VolumeMode)
+		} else {
+			fmt.Printf("mount pvc %s, volume mode is nil\n", pvclaim.Name)
+		}
+		volumename := fmt.Sprintf("volume%v", index+1)
+
+		if pvclaim.Spec.VolumeMode == nil || *pvclaim.Spec.VolumeMode == v1.PersistentVolumeFilesystem {
+			volumeMounts = append(volumeMounts, v1.VolumeMount{Name: volumename, MountPath: "/mnt/" + volumename})
+			volumes[index] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
+		} else {
+			// Raw block device
+			volumeDevices = append(volumeDevices, v1.VolumeDevice{Name: volumename, DevicePath: fmt.Sprintf("/dev/xvda%d", index)})
+			volumes[index] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
+		}
+	}
+	podSpec.Spec.Containers[0].VolumeMounts = volumeMounts
+	podSpec.Spec.Containers[0].VolumeDevices = volumeDevices
+	podSpec.Spec.Volumes = volumes
+	return podSpec
+}
+
+// MakePVC takes namespace, name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
+func MakePVC(size resource.Quantity, ns string, name string, storageClass string) *v1.PersistentVolumeClaim {
+	PVCSpec := &v1.PersistentVolumeClaim{
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceStorage: size,
+				},
+			},
+			StorageClassName: &storageClass,
+		},
+	}
+	PVCSpec.ObjectMeta.Name = name
+	PVCSpec.Namespace = ns
+	PVCSpec.ObjectMeta.Namespace = ns
+	return PVCSpec
+}
+
+// GeneratePVCRestoreSpec takes namespace, name, source snapshot name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
+func GeneratePVCRestoreSpec(size resource.Quantity, ns string, name string, sourceSnapshotName string, storageClass string) (*v1.PersistentVolumeClaim, error) {
+	snapshotAPIGroup := "snapshot.storage.k8s.io"
+	PVCSpec := MakePVC(size, ns, name, storageClass)
+	PVCSpec.ObjectMeta.Name = name
+	PVCSpec.Namespace = ns
+	PVCSpec.ObjectMeta.Namespace = ns
+	if sourceSnapshotName == "" {
+		return nil, fmt.Errorf("source snapshot name is empty for PVC restoring request")
+	}
+
+	PVCSpec.Spec.DataSource = &v1.TypedLocalObjectReference{
+		APIGroup: &snapshotAPIGroup,
+		Kind:     "VolumeSnapshot",
+		Name:     sourceSnapshotName,
+	}
+
+	return PVCSpec, nil
+}
+
+// GeneratePVCCloneSpec takes namespace, name, source snapshot name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
+func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, sourcePVCName string, storageClass string) (*v1.PersistentVolumeClaim, error) {
+	PVCSpec := MakePVC(size, ns, name, storageClass)
+	PVCSpec.ObjectMeta.Name = name
+	PVCSpec.Namespace = ns
+	PVCSpec.ObjectMeta.Namespace = ns
+	if sourcePVCName == "" {
+		return nil, fmt.Errorf("source PVC name is empty for PVC cloning request")
+	}
+
+	PVCSpec.Spec.DataSource = &v1.TypedLocalObjectReference{
+		Kind: "PersistentVolumeClaim",
+		Name: sourcePVCName,
+	}
+
+	return PVCSpec, nil
 }
 
 // DeleteCsiSnapsForVolumes delete csi snapshots for Apps
@@ -5293,8 +5794,8 @@ func (k *K8s) restoreCsiSnapshot(
 	return resPvc, nil
 }
 
-// CreateCsiSanpshotClass creates csi volume snapshot class
-func (k *K8s) CreateCsiSanpshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+// CreateCsiSnapshotClass creates csi volume snapshot class
+func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
 	var err error
 	var annotation = make(map[string]string)
 	var volumeSnapClass *v1beta1.VolumeSnapshotClass
@@ -5342,6 +5843,62 @@ func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 		return err
 	}
 	logrus.Infof("Snapshot is ready to use: %s", snap.Name)
+	return nil
+}
+
+// waitForCsiSnapToBeReady wait for snapshot status to be ready
+func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
+	var pod *v1.Pod
+	var err error
+	kubeClient, err := getKubeClient("")
+	if err != nil {
+		logrus.Error("Failed to get Kube client")
+		return err
+	}
+	logrus.Infof("Waiting for pod [%s] to be ready in namespace: %s ", podname, namespace)
+	t := func() (interface{}, bool, error) {
+		if pod, err = kubeClient.CoreV1().Pods(namespace).Get(context.TODO(), podname, metav1.GetOptions{}); err != nil {
+			return "", true, err
+		}
+		if pod.Status.Phase != v1.PodRunning {
+			return "", true, fmt.Errorf("Pod %s not up yet", podname)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	logrus.Infof("Pod is up and running: %s", pod.Name)
+	return nil
+}
+
+// waitForRestoredPVCsToBound retries and wait up to 30 minutes for all PVCs to bound
+func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string) error {
+	var pvc *v1.PersistentVolumeClaim
+	var err error
+	kubeClient, err := getKubeClient("")
+	if err != nil {
+		logrus.Error("Failed to get Kube client")
+		return err
+	}
+	logrus.Infof("Waiting for pvcs [%s] to be bound in namespace: %s ", pvcNamePrefix, namespace)
+	t := func() (interface{}, bool, error) {
+		for j := 0; j < numOfRestoredPVCForCloneManyTest; j++ {
+			restoredPVCName := fmt.Sprint(pvcNamePrefix, j)
+			if pvc, err = kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), restoredPVCName, metav1.GetOptions{}); err != nil {
+				return "", true, err
+			}
+			if pvc.Status.Phase != v1.ClaimBound {
+				return "", true, fmt.Errorf("PVC %s not bound yet", pvcNamePrefix)
+			}
+		}
+		return "", false, nil
+
+	}
+	if _, err := task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second); err != nil {
+		return err
+	}
+	logrus.Infof("PVC is in bound: %s", pvc.Name)
 	return nil
 }
 

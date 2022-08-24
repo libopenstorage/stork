@@ -202,7 +202,6 @@ func validateAndDestroyMigration(
 	skipDestDeletion bool,
 ) {
 	var err error
-
 	timeout := defaultWaitTimeout
 	if !migrationSuccessExpected {
 		timeout = timeout / 2
@@ -237,7 +236,6 @@ func validateAndDestroyMigration(
 		}*/
 
 		// Validate the migration summary
-
 		// destroy mysql app on cluster 2
 		if !skipAppDeletion && !skipDestDeletion {
 			destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
@@ -1533,7 +1531,7 @@ func transformResourceTest(t *testing.T) {
 	// verify service resource migration on destination cluster
 	// Verify if statefulset get delete
 	svcs, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
-	require.Error(t, err, "unable to query services in namespace : %s", namespace)
+	require.NoError(t, err, "unable to query services in namespace : %s", namespace)
 
 	for _, svc := range svcs.Items {
 		if string(svc.Spec.Type) != expectedServiceType {
@@ -1550,5 +1548,5 @@ func transformResourceTest(t *testing.T) {
 	}
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, true)
 }

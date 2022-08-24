@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portworx/sched-ops/k8s/common"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -204,7 +205,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.kubernetes, err = kubernetes.NewForConfig(c.config)
 	if err != nil {
 		return err

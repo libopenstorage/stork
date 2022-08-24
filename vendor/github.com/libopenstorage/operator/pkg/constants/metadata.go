@@ -13,6 +13,8 @@ const (
 	LabelKeyKVDBPod = "kvdb"
 	// LabelValueTrue is the constant for a "true" label value
 	LabelValueTrue = "true"
+	// AnnotationGarbageCollection is the annotation to let operator clean up external objects on uninstallation.
+	AnnotationGarbageCollection = OperatorPrefix + "/garbage-collection"
 	// AnnotationNodeLabels is the storage pod annotation that contains node labels
 	AnnotationNodeLabels = OperatorPrefix + "/node-labels"
 	// AnnotationDisableStorage annotation to disable the storage pods from running (default: false)

@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/s3utils"
+
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -83,11 +85,14 @@ const (
 	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
+	pxctlDriveAddStart                        = "%s -j service drive add -d %s -o start"
+	pxctlDriveAddStatus                       = "%s -j service drive add -d %s -o status"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
+	clusterIDFile                             = "/etc/pwx/cluster_uuid"
 )
 
 const (
@@ -119,14 +124,23 @@ const (
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 	asyncTimeout                      = 15 * time.Minute
+	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 )
-
+const (
+	telemetryNotEnabled = "15"
+	telemetryEnabled    = "100"
+)
 const (
 	secretName      = "openstorage.io/auth-secret-name"
 	secretNamespace = "openstorage.io/auth-secret-namespace"
 	// DeviceMapper is a string in dev mapper path
 	DeviceMapper = "mapper"
+)
+
+const (
+	driveAddSuccessStatus = "Drive add done"
+	driveExitsStatus      = "Device already exists"
 )
 
 // Provisioners types of supported provisioners
@@ -181,6 +195,13 @@ type portworx struct {
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
+	DiagsFile             string
+}
+
+type statusJSON struct {
+	Status string
+	Error  string
+	Cmd    string
 }
 
 // ExpandPool resizes a pool of a given ID
@@ -3168,13 +3189,82 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return collectDiags(n, config, diagOps, d)
 }
 
-func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
-	var err error
-
-	pxNode, err := d.GetPxNode(&n)
+func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+	logrus.Info("Validating diags uploaded on S3")
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	clusterUUID, err := d.GetClusterID(n, opts)
 	if err != nil {
 		return err
 	}
+
+	//// Check S3 bucket for diags
+	logrus.Debugf("Node name %s", n.Name)
+	if diagsFile != "" {
+		d.DiagsFile = diagsFile
+	}
+	start := time.Now()
+	for {
+		if time.Since(start) >= asyncTimeout {
+			return fmt.Errorf("waiting for async diags job timed out")
+		}
+		var objects []s3utils.Object
+		var err error
+		if time.Since(start) >= timeToTryPreviousFolder {
+			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
+			if err != nil {
+				return err
+			}
+		} else {
+			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
+			if err != nil {
+				return err
+			}
+		}
+		for _, obj := range objects {
+			if strings.Contains(obj.Key, d.DiagsFile) {
+				logrus.Debugf("File validated on S3")
+				logrus.Debugf("Object Name is %s", obj.Key)
+				logrus.Debugf("Object Created on %s", obj.LastModified.String())
+				logrus.Debugf("Object Size %d", obj.Size)
+				return nil
+
+			}
+		}
+		logrus.Debugf("File %s not found in S3 yet, re-trying in 30s", d.DiagsFile)
+		time.Sleep(30 * time.Second)
+	}
+}
+
+func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, error) {
+
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterIDFile), opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+	return out, nil
+}
+
+func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
+	var hostname string
+	var status api.Status
+
+	if !diagOps.PxStopped {
+		pxNode, err := d.GetPxNode(&n)
+		if err != nil {
+			return err
+		}
+		hostname = pxNode.Hostname
+		status = pxNode.Status
+	} else {
+		hostname = n.Name
+		status = api.Status_STATUS_OFFLINE
+	}
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3183,57 +3273,75 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-		logrus.Infof("Collecting diags on node %v. Will skip validation", pxNode.Hostname)
+		logrus.Infof("Collecting diags on node %v. Will skip validation", hostname)
 	}
 
-	if pxNode.Status == api.Status_STATUS_OFFLINE {
-		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
+	if status == api.Status_STATUS_OFFLINE {
+		logrus.Debugf("Node %v is offline, collecting diags using pxctl", hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f", d.getPxctlPath(n)), opts)
+		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f --output %s", d.getPxctlPath(n), config.OutputFile), opts)
 		if err != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
+		}
+	} else {
+		diagsPort := 9014
+		// Need to get the diags server port based on the px mgmnt port for OCP its not the standard 9001
+		out, err := d.nodeDriver.RunCommand(n, "cat /etc/pwx/px_env", opts)
+		if err == nil {
+			envVars := map[string]string{}
+			for _, line := range strings.Split(out, "\n") {
+				splits := strings.Split(line, "=")
+				if len(splits) > 1 {
+					envVars[splits[0]] = splits[1]
+				}
+			}
+			pxMgmntPort, err := strconv.Atoi(envVars["PWX_MGMT_PORT"])
+			if err == nil {
+				if pxMgmntPort != 9001 {
+					diagsPort = pxMgmntPort + 10
+				}
+			}
 		}
 
-		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
-		return nil
-	}
+		url := netutil.MakeURL("http://", n.Addresses[0], diagsPort)
+		logrus.Infof("Diags server url: %s", url)
 
-	url := netutil.MakeURL("http://", n.Addresses[0], 9014)
+		c, err := client.NewClient(url, "", "")
+		if err != nil {
+			return err
+		}
+		req := c.Post().Resource(pxDiagPath).Body(config)
 
-	c, err := client.NewClient(url, "", "")
-	if err != nil {
-		return err
-	}
-	req := c.Post().Resource(pxDiagPath).Body(config)
-
-	resp := req.Do()
-	if resp.Error() != nil {
-		return fmt.Errorf("failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+		resp := req.Do()
+		if resp.Error() != nil {
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v", hostname, resp.Error())
+		}
 	}
 
 	if diagOps.Validate {
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", hostname, err, out)
 		}
 
-		logrus.Debug("Validating CCM health")
-		// Change to config package.
-		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-		resp, err := http.Get(url)
+		pxctlPath := d.getPxctlPath(n)
+		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status -j | jq .telemetrystatus.connection_status.error_code", pxctlPath), opts)
 		if err != nil {
-			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
 		}
-		defer resp.Body.Close()
+		logrus.Debugf("Status returned by pxctl %s", out)
+		if strings.TrimSpace(out) == telemetryNotEnabled {
+			logrus.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
+			return nil
+		}
 
-		// Check S3 bucket for diags
-
-		// TODO: Waiting for S3 credentials.
+		logrus.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
+		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
 	}
 
-	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	logrus.Debugf("Successfully collected diags on node %v", hostname)
 	return nil
 }
 
@@ -3304,19 +3412,21 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate async diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 
-		logrus.Debug("Validating CCM health")
-		// Change to config package.
-		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-		ccmresp, err := http.Get(url)
-		if err != nil {
-			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-		}
+		logrus.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
+		/*
+			logrus.Debug("Validating CCM health")
+			// Change to config package.
+			url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
+			ccmresp, err := http.Get(url)
+			if err != nil {
+				return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+			}
 
-		defer ccmresp.Body.Close()
-
+			defer ccmresp.Body.Close()
+		*/
 		// Check S3 bucket for diags
 		// TODO: Waiting for S3 credentials.
 
@@ -4166,6 +4276,141 @@ func (d *portworx) RecoverNode(n *node.Node) error {
 			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
 		}
 	}
+	return nil
+
+}
+
+// AddBlockDrives add drives to the node using PXCTL
+func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
+
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	logrus.Infof("Getting available block drives on %s.", n.Name)
+	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
+
+	if err != nil {
+		return err
+	}
+
+	eligibleDrives := make(map[string]*node.BlockDrive)
+
+	for _, drv := range blockDrives {
+		if !strings.Contains(drv.Path, "pxd") && drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
+			eligibleDrives[drv.Path] = drv
+		}
+	}
+
+	if len(blockDrives) == 0 || len(eligibleDrives) == 0 {
+		return fmt.Errorf("no block drives available to add")
+	}
+
+	if drivePath == nil || len(drivePath) == 0 {
+		logrus.Infof("Adding all the available drives")
+		for _, drv := range eligibleDrives {
+			err := addDrive(*n, drv.Path, d)
+			if err != nil {
+				return err
+			}
+			err = waitForAddDriveToComplete(*n, drv.Path, d)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, drvPath := range drivePath {
+			drv, ok := eligibleDrives[drvPath]
+			if ok {
+				err := addDrive(*n, drv.Path, d)
+				if err != nil {
+					return err
+				}
+				err = waitForAddDriveToComplete(*n, drv.Path, d)
+				if err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("block drive path %s is not eligible or does not exist to perform drive add", drvPath)
+			}
+
+		}
+	}
+	return nil
+}
+
+func addDrive(n node.Node, drivePath string, d *portworx) error {
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		err = fmt.Errorf("error when adding drive %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
+		return err
+	}
+	output := []byte(out)
+	var addDriveStatus statusJSON
+	err = json.Unmarshal(output, &addDriveStatus)
+	if err != nil {
+		return fmt.Errorf("ERROR of unmarshal adding drive: %v", err)
+	}
+	if &addDriveStatus == nil {
+		return fmt.Errorf("failed to add drive %s in node %s", drivePath, n.Name)
+	}
+
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) {
+		return fmt.Errorf("failed to add drive %s in node %s,AddDrive Status : %+v ", drivePath, n.Name, addDriveStatus)
+
+	}
+	logrus.Infof("Added drive %s to node %s successfully", drivePath, n.Name)
+
+	return nil
+
+}
+
+func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error {
+
+	waitCount := 180
+
+	for {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStatus, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+		if err != nil {
+
+			if strings.Contains(err.Error(), driveExitsStatus) {
+				return nil
+			}
+			err = fmt.Errorf("error while getting add drive status for path %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
+			return err
+		}
+		output := []byte(out)
+		var addDriveStatus statusJSON
+		err = json.Unmarshal(output, &addDriveStatus)
+		if err != nil {
+			return fmt.Errorf("ERROR of unmarshal add drive status: %v", err)
+		}
+		if &addDriveStatus == nil {
+			return fmt.Errorf("failed to get add drive status for path %s in node %s", drivePath, n.Name)
+		}
+		logrus.Infof("Current add drive for path %s status : %+v", drivePath, addDriveStatus)
+
+		if strings.Contains(addDriveStatus.Status, "Drive add: Storage rebalance complete") || strings.Contains(addDriveStatus.Status, "Device already exists") {
+			break
+		}
+		if waitCount == 0 {
+			return fmt.Errorf("failed to  add drive for path %s in node %s, status: %+v", drivePath, n.Name, addDriveStatus)
+		}
+		waitCount--
+		logrus.Info("Waiting for 30 seconds to check the status again")
+		time.Sleep(60 * time.Second)
+	}
+	logrus.Infof("Added drive %s to node %s completed", drivePath, n.Name)
 	return nil
 
 }
