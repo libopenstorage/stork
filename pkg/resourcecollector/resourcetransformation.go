@@ -19,7 +19,7 @@ func GetResourcePatch(transformName string, namespaces []string) (map[string]sto
 	// namespace- Kind:TransformSpec map for faster lookup
 	patch := make(map[string]stork_api.KindResourceTransform)
 	if transformName == "" {
-		logrus.Infof("empty name ")
+		logrus.Error("Empty name received for resource transformation")
 		return patch, nil
 	}
 	for _, namespace := range namespaces {
@@ -30,11 +30,10 @@ func GetResourcePatch(transformName string, namespaces []string) (map[string]sto
 		}
 		resMap := make(map[string][]stork_api.TransformResourceInfo)
 		for _, resource := range resp.Status.Resources {
-			resMap[resource.Kind] = append(resMap[resource.Group], *resource)
+			resMap[resource.Kind] = append(resMap[resource.Kind], *resource)
 		}
 		patch[namespace] = resMap
 	}
-	logrus.Infof("resource patch : %v", patch)
 	return patch, nil
 }
 
@@ -42,10 +41,10 @@ func GetResourcePatch(transformName string, namespaces []string) (map[string]sto
 func TransformResources(
 	object runtime.Unstructured,
 	resPatch []stork_api.TransformResourceInfo,
-	name, namespace string,
+	objName, objNamespace string,
 ) error {
 	for _, patch := range resPatch {
-		if patch.Name == name && patch.Namespace == namespace {
+		if patch.Name == objName && patch.Namespace == objNamespace {
 			content := object.UnstructuredContent()
 			for _, path := range patch.Specs.Paths {
 				switch path.Operation {
