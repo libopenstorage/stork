@@ -372,10 +372,9 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 				}
 			}
 			// Make sure if transformation CR is in ready state
-			if migration.Spec.UpdateResourceSpecs != "" {
-				resp, err := storkops.Instance().GetResourceTransformation(migration.Spec.UpdateResourceSpecs, ns)
-				if err != nil && !errors.IsNotFound(err) {
-					errMsg := fmt.Sprintf("unable to retrive transformation %s, err: %v", migration.Spec.UpdateResourceSpecs, err)
+			if len(migration.Spec.TransformSpecs) != 0 {
+				if len(migration.Spec.TransformSpecs) > 1 {
+					errMsg := fmt.Sprintf("providing multiple transformation specs is not supported in this release %v, err: %v", migration.Spec.TransformSpecs, err)
 					log.MigrationLog(migration).Errorf(errMsg)
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
@@ -387,8 +386,9 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 					}
 					return nil
 				}
-				if resp != nil && resp.Status.Status != stork_api.ResourceTransformationStatusReady {
-					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.UpdateResourceSpecs, resp.Status.Status)
+				resp, err := storkops.Instance().GetResourceTransformation(migration.Spec.TransformSpecs[0], ns)
+				if err != nil && !errors.IsNotFound(err) {
+					errMsg := fmt.Sprintf("unable to retrive transformation %s, err: %v", migration.Spec.TransformSpecs, err)
 					log.MigrationLog(migration).Errorf(errMsg)
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
@@ -399,6 +399,44 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
 					}
 					return nil
+				}
+				if resp != nil {
+					// ensure to re-run dry-run for newly introduced object before
+					// starting migration
+					resp.Status.Resources = []*stork_api.TransformResourceInfo{}
+					resp.Status.Status = stork_api.ResourceTransformationStatusInitial
+					resp.ResourceVersion = ""
+					transform, err := storkops.Instance().UpdateResourceTransformation(resp)
+					if err != nil && !errors.IsNotFound(err) {
+						errMsg := fmt.Sprintf("Error updating transformation CR: %v", err)
+						log.MigrationLog(migration).Errorf(errMsg)
+						m.recorder.Event(migration,
+							v1.EventTypeWarning,
+							string(stork_api.MigrationStatusFailed),
+							err.Error())
+						err = m.updateMigrationCR(context.Background(), migration)
+						if err != nil {
+							if err != nil {
+								log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+							}
+						}
+						return nil
+					}
+					if err := storkops.Instance().ValidateResourceTransformation(transform.Name, ns, 1*time.Minute, 5*time.Second); err != nil {
+						errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.TransformSpecs, resp.Status.Status)
+						log.MigrationLog(migration).Errorf(errMsg)
+						m.recorder.Event(migration,
+							v1.EventTypeWarning,
+							string(stork_api.MigrationStatusFailed),
+							err.Error())
+						err = m.updateMigrationCR(context.Background(), migration)
+						if err != nil {
+							if err != nil {
+								log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+							}
+						}
+						return nil
+					}
 				}
 			}
 		}
@@ -1025,10 +1063,16 @@ func (m *MigrationController) prepareResources(
 	if err != nil {
 		return err
 	}
-	resPatch, err := resourcecollector.GetResourcePatch(migration.Spec.UpdateResourceSpecs, migration.Spec.Namespaces)
+	transformName := ""
+	// this is already handled in pre-checks, we dont support multiple resource transformation
+	// rules specified in migration specs
+	if len(migration.Spec.TransformSpecs) != 0 && len(migration.Spec.TransformSpecs) == 1 {
+		transformName = migration.Spec.TransformSpecs[0]
+	}
+	resPatch, err := resourcecollector.GetResourcePatch(transformName, migration.Spec.Namespaces)
 	if err != nil {
 		log.MigrationLog(migration).
-			Warnf("Unable to get transformation spec from :%s, skipping transformation for this migration, err: %v", err)
+			Warnf("Unable to get transformation spec from :%s, skipping transformation for this migration, err: %v", transformName, err)
 	}
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)

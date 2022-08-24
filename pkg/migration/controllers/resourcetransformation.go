@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	resourceTransformationController = "resource-transformation-controller"
+	// ResourceTransformationControllerName of resource transformation CR handler
+	ResourceTransformationControllerName = "resource-transformation-controller"
 )
 
 // NewResourceTransformation creates a new instance of ResourceTransformation Manager
@@ -59,7 +60,7 @@ func (r *ResourceTransformationController) Init(mgr manager.Manager) error {
 		return err
 	}
 
-	return controllers.RegisterTo(mgr, resourceTransformationController, r, &stork_api.ResourceTransformation{})
+	return controllers.RegisterTo(mgr, ResourceTransformationControllerName, r, &stork_api.ResourceTransformation{})
 }
 
 // Reconcile manages ResourceTransformation resources.
