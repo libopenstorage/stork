@@ -29,6 +29,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/metrics"
 	"github.com/libopenstorage/stork/pkg/migration"
+	"github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/objectcontroller"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
@@ -200,6 +201,10 @@ func main() {
 			Name:  "migration-max-threads",
 			Value: 4,
 			Usage: "Max threads for apply resources during migration (default: 4)",
+		},
+		cli.BoolTFlag{
+			Name:  controllers.ResourceTransformationControllerName,
+			Usage: "Start the resource transformation controller (default: true)",
 		},
 	}
 
@@ -465,6 +470,13 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 			}
 			if err := migration.Init(mgr, adminNamespace, c.Int("migration-max-threads")); err != nil {
 				log.Fatalf("Error initializing migration: %v", err)
+			}
+		}
+
+		if c.Bool(controllers.ResourceTransformationControllerName) {
+			rt := controllers.NewResourceTransformation(mgr, d, recorder, resourceCollector)
+			if err := rt.Init(mgr); err != nil {
+				log.Fatalf("Error initializing resource transformation controller: %v", err)
 			}
 		}
 
