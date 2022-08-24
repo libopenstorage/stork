@@ -1,0 +1,16 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind : ResourceTransformation
+metadata:
+   name: mysql-service-transform
+specs:
+  transformSpecs:
+  - paths:
+      - path: "spec.type"
+        value: "LoadBalancer"
+        type: "string"
+        operation: "add"
+      - path: "metadata.labels"
+        value: "handler:project,app:mysql-2"
+        type: "keypair"
+        operation: "modify"
+    resource: "/v1/Service"

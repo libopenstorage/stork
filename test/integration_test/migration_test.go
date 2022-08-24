@@ -80,6 +80,7 @@ func testMigration(t *testing.T) {
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
 	t.Run("pvcResizeTest", pvcResizeMigrationTest)
+	t.Run("transformResourceTest", transformResourceTest)
 	t.Run("suspendMigrationTest", suspendMigrationTest)
 	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
 	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
@@ -1488,6 +1489,65 @@ func validateNetworkPolicyMigration(t *testing.T, all bool) {
 
 	logrus.Infof("Successfully verified migrated network policies on destination cluster")
 
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+}
+
+func transformResourceTest(t *testing.T) {
+	var err error
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	// the schedule interval for these specs it set to 5 minutes
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"mysql-migration-transform-interval",
+		"mysql-1-pvc",
+		[]string{"transform-service"},
+		[]string{"mysql-migration-transform-interval"},
+		true,
+		false,
+		false,
+		false,
+		"",
+		nil,
+	)
+	namespace := "mysql-1-pvc-mysql-migration-transform-interval"
+	validateMigration(t, "mysql-migration-transform-interval", preMigrationCtx.GetID())
+
+	// expected service changes after transformation
+	expectedServiceType := "LoadBalancer"
+	expectedLabels := make(map[string]string)
+	expectedLabels["handler"] = "project"
+	expectedLabels["app"] = "mysql-2"
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// verify service resource migration on destination cluster
+	// Verify if statefulset get delete
+	svcs, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
+	require.Error(t, err, "unable to query services in namespace : %s", namespace)
+
+	for _, svc := range svcs.Items {
+		if string(svc.Spec.Type) != expectedServiceType {
+			matchErr := fmt.Errorf("transformed service type does not match")
+			require.NoError(t, matchErr, "actual: %s, expected: %s", svc.Spec.Type, expectedServiceType)
+		}
+		labels := svc.GetLabels()
+		for k, v := range expectedLabels {
+			if val, ok := labels[k]; !ok || val != v {
+				matchErr := fmt.Errorf("transformed service labels does not match")
+				require.NoError(t, matchErr, "actual: %s, expected: %s", labels, expectedLabels)
+			}
+		}
+	}
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
