@@ -116,7 +116,7 @@ var TestSpecPath = "testspec"
 var (
 	pxVer2_12, _  = version.NewVersion("2.12.0")
 	opVer1_10, _  = version.NewVersion("1.10.0")
-	opVer1_9_1, _ = version.NewVersion("1.9.1")
+	opVer1_9_1, _ = version.NewVersion("1.9.1-")
 )
 
 // MockDriver creates a mock storage driver
@@ -1112,7 +1112,7 @@ func validateComponents(pxImageList map[string]string, cluster *corev1.StorageCl
 	}
 
 	// Validate CSI components and images
-	if validateCSI(pxImageList, cluster, timeout, interval); err != nil {
+	if ValidateCSI(pxImageList, cluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -1631,7 +1631,8 @@ func validateStorkNamespaceEnvVar(namespace string, storkDeployment *appsv1.Depl
 	return nil
 }
 
-func validateCSI(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+// ValidateCSI validates CSI components and images
+func ValidateCSI(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	csi := cluster.Spec.CSI.Enabled
 	pxCsiDp := &appsv1.Deployment{}
 	pxCsiDp.Name = "px-csi-ext"
@@ -1677,6 +1678,11 @@ func validateCSI(pxImageList map[string]string, cluster *corev1.StorageCluster, 
 
 		// Validate CSI topology specs
 		if err := validateCSITopologySpecs(cluster.Namespace, cluster.Spec.CSI.Topology, timeout, interval); err != nil {
+			return err
+		}
+
+		// Validate CSI snapshot controller
+		if err := validateCSISnapshotController(cluster, pxImageList, timeout, interval); err != nil {
 			return err
 		}
 	} else {
@@ -1887,6 +1893,47 @@ func validateCSITopologyFeatureGate(pod v1.Pod, topologyEnabled bool) error {
 	return nil
 }
 
+func validateCSISnapshotController(cluster *corev1.StorageCluster, pxImageList map[string]string, timeout, interval time.Duration) error {
+	deployment := &appsv1.Deployment{}
+	deployment.Namespace = cluster.Namespace
+	deployment.Name = "px-csi-ext"
+	t := func() (interface{}, bool, error) {
+		existingDeployment, err := appops.Instance().GetDeployment(deployment.Name, deployment.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get deployment %s/%s", deployment.Namespace, deployment.Name)
+		}
+		pods, err := appops.Instance().GetDeploymentPods(existingDeployment)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get pods of deployment %s/%s", deployment.Namespace, deployment.Name)
+		}
+		if cluster.Spec.CSI.InstallSnapshotController != nil && *cluster.Spec.CSI.InstallSnapshotController {
+			if image, ok := pxImageList["csiSnapshotController"]; ok {
+				if err := validateContainerImageInsidePods(cluster, image, "csi-snapshot-controller", &v1.PodList{Items: pods}); err != nil {
+					return nil, true, err
+				}
+			} else {
+				return nil, false, fmt.Errorf("failed to find image for csiSnapshotController")
+			}
+		} else {
+			for _, pod := range pods {
+				for _, c := range pod.Spec.Containers {
+					if c.Name == "csi-snapshot-controller" {
+						return nil, true, fmt.Errorf("found unexpected csi-snapshot-controller container in pod %s/%s", pod.Namespace, pod.Name)
+					}
+				}
+			}
+		}
+
+		return nil, false, nil
+	}
+
+	logrus.Info("validating csi snapshot controller")
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+	return nil
+}
+
 func getPxVersion(pxImageList map[string]string, cluster *corev1.StorageCluster) string {
 	var pxVersion string
 
@@ -1999,14 +2046,18 @@ func validateContainerImageInsidePods(cluster *corev1.StorageCluster, expectedIm
 
 		for _, container := range containerList {
 			if container.Name == containerName {
-				if opVersion.GreaterThanOrEqual(opVer1_9_1) && container.Image == expectedImage {
-					logrus.Infof("Image inside %s[%s] matches, expected: %s, actual: %s", pod.Name, containerName, expectedImage, container.Image)
+				foundImage = container.Image
+				if opVersion.GreaterThanOrEqual(opVer1_9_1) && foundImage == expectedImage {
+					logrus.Infof("Image inside %s[%s] matches, expected: %s, actual: %s", pod.Name, containerName, expectedImage, foundImage)
 					foundContainer = true
 					break
-				} else if strings.Contains(container.Image, expectedImage) {
-					logrus.Infof("Image inside %s[%s] matches, expected: %s, actual: %s", pod.Name, containerName, expectedImage, container.Image)
+				} else if strings.Contains(foundImage, expectedImage) {
+					logrus.Infof("Image inside %s[%s] matches, expected: %s, actual: %s", pod.Name, containerName, expectedImage, foundImage)
 					foundContainer = true
 					break
+				} else {
+					return fmt.Errorf("failed to match container %s[%s] image, expected: %s, actual: %s",
+						pod.Name, containerName, expectedImage, foundImage)
 				}
 			}
 		}
@@ -2939,7 +2990,7 @@ func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.S
 	}
 
 	/* TODO: We need to make this work for spawn
-	expectedDeployment := GetExpectedDeployment(&testing.T{}, "metricsCollectorDeployment.yaml")
+	   expectedDeployment := GetExpectedDeployment(&testing.T{}, "metricsCollectorDeployment.yaml")
 	*/
 
 	deployment, err := appops.Instance().GetDeployment(dep.Name, dep.Namespace)
@@ -2948,9 +2999,9 @@ func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.S
 	}
 
 	/* TODO: We need to make this work for spawn
-	if equal, err := util.DeploymentDeepEqual(expectedDeployment, deployment); !equal {
-		return err
-	}
+	   if equal, err := util.DeploymentDeepEqual(expectedDeployment, deployment); !equal {
+	      	return err
+	   }
 	*/
 
 	_, err = rbacops.Instance().GetRole("px-metrics-collector", cluster.Namespace)
@@ -3298,7 +3349,7 @@ func ValidateStorageClusterFailedEvents(
 		return err
 	}
 
-	return validateK8Events(clusterSpec, timeout, interval, eventsFieldSelector, eventsNewerThan)
+	return validateK8Events(clusterSpec, timeout, interval, eventsFieldSelector, eventsNewerThan, "")
 }
 
 // ValidateStorageClusterInstallFailedWithEvents checks a StorageCluster installation failed with a logged event
@@ -3307,6 +3358,7 @@ func ValidateStorageClusterInstallFailedWithEvents(
 	timeout, interval time.Duration,
 	eventsFieldSelector string,
 	eventsNewerThan time.Time,
+	reason string,
 ) error {
 	// Validate StorageCluster started Initializing  (note: will be stuck in this phase...)
 	err := validateStorageClusterIsInitializing(clusterSpec, timeout, interval)
@@ -3314,14 +3366,15 @@ func ValidateStorageClusterInstallFailedWithEvents(
 		return err
 	}
 	logrus.Debug("Validating K8 event for NodeStartFailure")
-	return validateK8Events(clusterSpec, timeout, interval, eventsFieldSelector, eventsNewerThan)
+	return validateK8Events(clusterSpec, timeout, interval, eventsFieldSelector, eventsNewerThan, reason)
 }
 
 func validateK8Events(
 	clusterSpec *corev1.StorageCluster,
 	timeout, interval time.Duration,
 	eventsFieldSelector string,
-	eventsNewerThan time.Time) error {
+	eventsNewerThan time.Time,
+	reason string) error {
 	// List newer events -- ensure requested `eventsFieldSelector` is listed
 	t := func() (interface{}, bool, error) {
 		tmout := int64(timeout.Seconds() / 2)
@@ -3336,7 +3389,9 @@ func validateK8Events(
 		seen := make(map[string]bool)
 		v1Time := metav1.NewTime(eventsNewerThan)
 		for _, ev := range events.Items {
-			if ev.LastTimestamp.Before(&v1Time) {
+			// Checking for a specific failure reason from kubernetes
+			if ev.LastTimestamp.Before(&v1Time) ||
+				(len(reason) > 0 && ev.Reason != reason) {
 				continue
 			}
 			seen[ev.Source.Host] = true
