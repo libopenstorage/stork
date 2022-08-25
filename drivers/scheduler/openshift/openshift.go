@@ -34,10 +34,12 @@ const (
 	// SystemdSchedServiceName is the name of the system service responsible for scheduling
 	SystemdSchedServiceName = "atomic-openshift-node"
 	// OpenshiftMirror is the mirror we use do download ocp client
-	OpenshiftMirror   = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
-	defaultCmdTimeout = 5 * time.Minute
-	driverUpTimeout   = 10 * time.Minute
-	defaultCmdRetry   = 15 * time.Second
+	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
+	defaultCmdTimeout           = 5 * time.Minute
+	driverUpTimeout             = 10 * time.Minute
+	defaultCmdRetry             = 15 * time.Second
+	defaultUpgradeTimeout       = 4 * time.Hour
+	defaultUpgradeRetryInterval = 5 * time.Minute
 )
 
 var (
@@ -390,7 +392,7 @@ func waitUpgradeCompletion(upgradeVersion string) error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 2*time.Hour, 15*time.Second)
+	_, err = task.DoRetryWithTimeout(t, defaultUpgradeTimeout, defaultUpgradeRetryInterval)
 	return err
 }
 
