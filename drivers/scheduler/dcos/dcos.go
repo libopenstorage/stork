@@ -883,6 +883,14 @@ func (d *dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string
 	}
 }
 
+func (d *dcos) CreateCsiSnapsAndValidate(ctx *scheduler.Context, snapClass string) error {
+	//CreateCsiSnapsAndValidate is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateCsiSnapsAndValidate()",
+	}
+}
+
 func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
 	// GetCsiSnapshots is not supported
 	return nil, &errors.ErrNotSupported{
