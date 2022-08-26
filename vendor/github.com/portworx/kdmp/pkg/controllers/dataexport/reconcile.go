@@ -429,6 +429,17 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		data := updateDataExportDetail{
 			stage: kdmpapi.DataExportStageFinal,
 		}
+		// Append the job-pod log to stork's pod log in case of failure
+		// it is best effort approach, hence errors are ignored.
+		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+			if dataExport.Status.TransferID != "" {
+				namespace, name, err := utils.ParseJobID(dataExport.Status.TransferID)
+				if err != nil {
+					logrus.Infof("job-pod name and namespace extraction failed: %v", err)
+				}
+				appendPodLogToStork(name, namespace)
+			}
+		}
 		cleanupTask := func() (interface{}, bool, error) {
 			cleanupErr := c.cleanUp(driver, dataExport)
 			if cleanupErr != nil {
@@ -450,6 +461,34 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		return false, nil
 	}
 	return false, nil
+}
+
+func appendPodLogToStork(jobName string, namespace string) {
+	// Get job and check whether it has live pod attaced to it
+	job, err := batch.Instance().GetJob(jobName, namespace)
+	if err != nil && !k8sErrors.IsNotFound(err) {
+		logrus.Infof("failed in getting job %v/%v with err: %v", namespace, jobName, err)
+	}
+	pods, err := core.Instance().GetPods(
+		job.Namespace,
+		map[string]string{
+			"job-name": job.Name,
+		},
+	)
+	if err != nil {
+		logrus.Infof("failed in fetching job pods %s/%s: %v", namespace, jobName, err)
+	}
+	for _, pod := range pods.Items {
+		numLogLines := int64(50)
+		podLog, err := core.Instance().GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{TailLines: &numLogLines})
+		if err != nil {
+			logrus.Infof("error fetching log of job-pod %s: %v", pod.Name, err)
+		} else {
+			logrus.Infof("start of job-pod [%s]'s log...", pod.Name)
+			logrus.Infof(podLog)
+			logrus.Infof("end of job-pod [%s]'s log...", pod.Name)
+		}
+	}
 }
 
 func (c *Controller) createJobCredCertSecrets(
@@ -1190,6 +1229,13 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 
 func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) error {
 	var bl *storkapi.BackupLocation
+	doCleanup, err := utils.DoCleanupResource()
+	if err != nil {
+		return err
+	}
+	if (de.Status.Status == kdmpapi.DataExportStatusFailed) && !doCleanup {
+		return nil
+	}
 	if driver == nil {
 		return fmt.Errorf("driver is nil")
 	}
