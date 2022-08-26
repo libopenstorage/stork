@@ -65,8 +65,6 @@ func (r *ResourceTransformationController) Init(mgr manager.Manager) error {
 
 // Reconcile manages ResourceTransformation resources.
 func (r *ResourceTransformationController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	logrus.Infof("Reconciling ResourceTransformation %s/%s", request.Namespace, request.Name)
-
 	resourceTransformation := &stork_api.ResourceTransformation{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, resourceTransformation)
 	if err != nil {
@@ -111,7 +109,7 @@ func (r *ResourceTransformationController) handle(ctx context.Context, transform
 		ns := &v1.Namespace{}
 		ns.Name = getTransformNamespace(transform.Namespace)
 		_, err := core.Instance().CreateNamespace(ns)
-		if err != nil {
+		if err != nil && !errors.IsAlreadyExists(err) {
 			message := fmt.Sprintf("Unable to create resource transformation namespace: %v", err)
 			log.TransformLog(transform).Errorf(message)
 			r.recorder.Event(transform,
@@ -213,7 +211,6 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			Namespaced: true,
 			Group:      group,
 		}
-		log.TransformLog(transform).Infof("querying resource: %v", resource)
 		objects, err := r.resourceCollector.GetResourcesForType(
 			resource,
 			nil,
@@ -275,7 +272,9 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 					object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(getTransformNamespace(transform.Namespace))
 
 				unstructured.SetNamespace(getTransformNamespace(transform.Namespace))
-				log.TransformLog(transform).Infof("Applying %v %v", object.GetObjectKind(), metadata.GetName())
+				log.TransformLog(transform).Infof("Applying object %s, %s",
+					object.GetObjectKind().GroupVersionKind().Kind,
+					metadata.GetName())
 				_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{DryRun: []string{"All"}})
 				if err != nil {
 					log.TransformLog(transform).Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
@@ -290,10 +289,18 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			}
 		}
 	}
+
 	transform.Status.Status = stork_api.ResourceTransformationStatusReady
+	// verify if all resource dry-run is successful
+	for _, resource := range transform.Status.Resources {
+		if resource.Status != stork_api.ResourceTransformationStatusReady {
+			transform.Status.Status = stork_api.ResourceTransformationStatusFailed
+		}
+	}
 	return r.client.Update(ctx, transform)
 }
 
+// return group,version,kind from give resource type
 func getGVK(resource string) (string, string, string, error) {
 	gvk := strings.Split(resource, "/")
 	if len(gvk) != 3 {

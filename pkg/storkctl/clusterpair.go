@@ -12,8 +12,8 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/utils"
 
+	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
