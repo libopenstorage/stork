@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/utils"
+
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -64,10 +66,10 @@ const (
 	PVReclaimAnnotation = "stork.libopenstorage.org/reclaimPolicy"
 	// StorkAnnotationPrefix for resources created/managed by stork
 	StorkAnnotationPrefix = "stork.libopenstorage.org/"
-
+	// StorkNamespacePrefix for namespace created for applying dry run resources
+	StorkNamespacePrefix = "stork-transform"
 	// Max number of times to retry applying resources on the desination
 	maxApplyRetries      = 10
-	cattleAnnotations    = "cattle.io"
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
 	boundRetryInterval   = 5 * time.Second
@@ -191,6 +193,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 	if spec.SkipServiceUpdate == nil {
 		defaultBool := false
 		spec.SkipServiceUpdate = &defaultBool
+	}
+	if spec.IncludeNetworkPolicyWithCIDR == nil {
+		defaultBool := false
+		spec.IncludeNetworkPolicyWithCIDR = &defaultBool
 	}
 	return spec
 }
@@ -336,20 +342,98 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		for _, ns := range migration.Spec.Namespaces {
 			_, err := core.Instance().GetNamespace(ns)
 			if err != nil {
-				migration.Status.Status = stork_api.MigrationStatusFailed
-				migration.Status.Stage = stork_api.MigrationStageFinal
-				migration.Status.FinishTimestamp = metav1.Now()
-				err = fmt.Errorf("error getting namespace %v: %v", ns, err)
-				log.MigrationLog(migration).Errorf(err.Error())
-				m.recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					err.Error())
-				err = m.updateMigrationCR(context.Background(), migration)
-				if err != nil {
-					log.MigrationLog(migration).Errorf("Error updating")
+				if *migration.Spec.SkipDeletedNamespaces {
+					// Instead of throwing an error here check for the SkipDeletedNamespaces  flag
+					// and based on that either throw an error or continue for deleted namespaces
+					migration.Status.Status = stork_api.MigrationStatusInitial
+					migration.Status.Stage = stork_api.MigrationStageInitial
+					migration.Status.FinishTimestamp = metav1.Now()
+					skipWarning := fmt.Sprintf("namespace  %s was deleted, skipping migration", ns)
+					log.MigrationLog(migration).Warnf(skipWarning)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						skipWarning,
+						err.Error())
+				} else {
+					migration.Status.Status = stork_api.MigrationStatusFailed
+					migration.Status.Stage = stork_api.MigrationStageFinal
+					migration.Status.FinishTimestamp = metav1.Now()
+					err = fmt.Errorf("error getting namespace %v: %v", ns, err)
+					log.MigrationLog(migration).Errorf(err.Error())
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+					}
+					return nil
 				}
-				return nil
+			}
+			// Make sure if transformation CR is in ready state
+			if len(migration.Spec.TransformSpecs) != 0 {
+				// Check if multiple transformation specs are provided
+				if len(migration.Spec.TransformSpecs) > 1 {
+					errMsg := fmt.Sprintf("providing multiple transformation specs is not supported in this release %v, err: %v", migration.Spec.TransformSpecs, err)
+					log.MigrationLog(migration).Errorf(errMsg)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+					}
+					return nil
+				}
+				// verify if transform specs are created
+				resp, err := storkops.Instance().GetResourceTransformation(migration.Spec.TransformSpecs[0], ns)
+				if err != nil {
+					errMsg := fmt.Sprintf("unable to retrieve transformation %s, err: %v", migration.Spec.TransformSpecs, err)
+					log.MigrationLog(migration).Errorf(errMsg)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+					}
+					return nil
+				}
+				// ensure to re-run dry-run for newly introduced object before
+				// starting migration
+				resp.Status.Resources = []*stork_api.TransformResourceInfo{}
+				resp.Status.Status = stork_api.ResourceTransformationStatusInitial
+				transform, err := storkops.Instance().UpdateResourceTransformation(resp)
+				if err != nil && !errors.IsNotFound(err) {
+					errMsg := fmt.Sprintf("Error updating transformation CR: %v", err)
+					log.MigrationLog(migration).Errorf(errMsg)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+					}
+					return nil
+				}
+				// wait for re-run of dry-run resources
+				if err := storkops.Instance().ValidateResourceTransformation(transform.Name, ns, 1*time.Minute, 5*time.Second); err != nil {
+					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.TransformSpecs, resp.Status.Status)
+					log.MigrationLog(migration).Errorf(errMsg)
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						err.Error())
+					err = m.updateMigrationCR(context.Background(), migration)
+					if err != nil {
+						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
+					}
+					return nil
+				}
 			}
 		}
 		// Make sure the rules exist if configured
@@ -437,7 +521,10 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 	return nil
 }
 
-func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migration) error {
+func (m *MigrationController) purgeMigratedResources(
+	migration *stork_api.Migration,
+	resourceCollectorOpts resourcecollector.Options,
+) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
@@ -459,7 +546,9 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 		migration.Spec.Selectors,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
-		false)
+		false,
+		resourceCollectorOpts,
+	)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -473,7 +562,9 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 		migration.Spec.Selectors,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
-		false)
+		false,
+		resourceCollectorOpts,
+	)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -811,10 +902,11 @@ func (m *MigrationController) runPostExecRule(migration *stork_api.Migration) er
 }
 
 func (m *MigrationController) migrateResources(migration *stork_api.Migration, volumesOnly bool) error {
-	schedulerStatus, err := getClusterPairSchedulerStatus(migration.Spec.ClusterPair, migration.Namespace)
+	clusterPair, err := storkops.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
 	}
+	schedulerStatus := clusterPair.Status.SchedulerStatus
 
 	if schedulerStatus != stork_api.ClusterPairStatusReady {
 		return fmt.Errorf("scheduler Cluster pair is not ready. Status: %v", schedulerStatus)
@@ -830,28 +922,44 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		}
 	}
 	resKinds := make(map[string]string)
-	var updateObjects []runtime.Unstructured
-
+	var updateObjects, allObjects []runtime.Unstructured
 	// Don't modify resources if mentioned explicitly in specs
+	resourceCollectorOpts := resourcecollector.Options{}
 	if *migration.Spec.SkipServiceUpdate {
-		if m.resourceCollector.Opts == nil {
-			m.resourceCollector.Opts = make(map[string]string)
-		}
-		m.resourceCollector.Opts[resourcecollector.ServiceKind] = "true"
+		resourceCollectorOpts.SkipServices = true
 	}
-	allObjects, err := m.resourceCollector.GetResources(
-		migration.Spec.Namespaces,
-		migration.Spec.Selectors,
-		nil,
-		migration.Spec.IncludeOptionalResourceTypes,
-		false)
-	if err != nil {
-		m.recorder.Event(migration,
-			v1.EventTypeWarning,
-			string(stork_api.MigrationStatusFailed),
-			fmt.Sprintf("Error getting resource: %v", err))
-		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
-		return err
+	if clusterPair.Spec.PlatformOptions.Rancher != nil && len(clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings) > 0 {
+		resourceCollectorOpts.RancherProjectMappings = make(map[string]string)
+		for k, v := range clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings {
+			resourceCollectorOpts.RancherProjectMappings[k] = v
+		}
+	}
+	if *migration.Spec.IncludeNetworkPolicyWithCIDR {
+		resourceCollectorOpts.IncludeAllNetworkPolicies = true
+	}
+	if volumesOnly {
+		allObjects, err = m.getVolumeOnlyMigrationResources(migration, resourceCollectorOpts)
+		if err != nil {
+			// already raised event in getVolumeOnlyMigrationResources()
+			return err
+		}
+	} else {
+		allObjects, err = m.resourceCollector.GetResources(
+			migration.Spec.Namespaces,
+			migration.Spec.Selectors,
+			nil,
+			migration.Spec.IncludeOptionalResourceTypes,
+			false,
+			resourceCollectorOpts,
+		)
+		if err != nil {
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				fmt.Sprintf("Error getting resource: %v", err))
+			log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
+			return err
+		}
 	}
 
 	// Save the collected resources infos in the status
@@ -894,7 +1002,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	err = m.prepareResources(migration, updateObjects)
+	err = m.prepareResources(migration, updateObjects, clusterPair)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -903,7 +1011,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, updateObjects, resKinds)
+	err = m.applyResources(migration, updateObjects, resKinds, clusterPair)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -923,7 +1031,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		}
 	}
 	if *migration.Spec.PurgeDeletedResources {
-		if err := m.purgeMigratedResources(migration); err != nil {
+		if err := m.purgeMigratedResources(migration, resourceCollectorOpts); err != nil {
 			message := fmt.Sprintf("Error cleaning up resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
 			m.recorder.Event(migration,
@@ -945,10 +1053,27 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
+	clusterPair *stork_api.ClusterPair,
 ) error {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
 		return err
+	}
+	transformName := ""
+	// this is already handled in pre-checks, we dont support multiple resource transformation
+	// rules specified in migration specs
+	if len(migration.Spec.TransformSpecs) != 0 && len(migration.Spec.TransformSpecs) == 1 {
+		transformName = migration.Spec.TransformSpecs[0]
+	}
+
+	resPatch := make(map[string]stork_api.KindResourceTransform)
+	if transformName != "" {
+		resPatch, err = resourcecollector.GetResourcePatch(transformName, migration.Spec.Namespaces)
+		if err != nil {
+			log.MigrationLog(migration).
+				Warnf("Unable to get transformation spec from :%s, skipping transformation for this migration, err: %v", transformName, err)
+			return err
+		}
 	}
 
 	for _, o := range objects {
@@ -964,7 +1089,7 @@ func (m *MigrationController) prepareResources(
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
-			err := m.prepareApplicationResource(migration, o)
+			err := m.prepareApplicationResource(migration, clusterPair, o)
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
@@ -973,6 +1098,18 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
+		default:
+			// if namespace has resource transformation spec
+			if ns, found := resPatch[metadata.GetNamespace()]; found {
+				// if transformspec present for current resource kind
+				if kind, ok := ns[resource.Kind]; ok {
+					err := resourcecollector.TransformResources(o, kind, metadata.GetName(), metadata.GetNamespace())
+					if err != nil {
+						return fmt.Errorf("error updating %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+					}
+				}
+			}
+			// do nothing
 		}
 
 		// prepare CR resources
@@ -989,7 +1126,6 @@ func (m *MigrationController) prepareResources(
 				}
 			}
 		}
-
 	}
 	return nil
 }
@@ -1195,13 +1331,33 @@ func (m *MigrationController) prepareJobResource(
 
 func (m *MigrationController) prepareApplicationResource(
 	migration *stork_api.Migration,
+	clusterPair *stork_api.ClusterPair,
 	object runtime.Unstructured,
 ) error {
+	content := object.UnstructuredContent()
+	if clusterPair.Spec.PlatformOptions.Rancher != nil &&
+		len(clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings) > 0 {
+		podSpecField, found, err := unstructured.NestedFieldCopy(content, "spec", "template", "spec")
+		if err != nil {
+			logrus.Warnf("Unable to parse object %v while handling"+
+				" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+		}
+		podSpec, ok := podSpecField.(v1.PodSpec)
+		if found && ok {
+			podSpecPtr := resourcecollector.PreparePodSpecNamespaceSelector(
+				&podSpec,
+				clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings,
+			)
+			if err := unstructured.SetNestedField(content, *podSpecPtr, "spec", "template", "spec"); err != nil {
+				logrus.Warnf("Unable to set namespace selector for object %v while handling"+
+					" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+			}
+		}
+	}
 	if *migration.Spec.StartApplications {
 		return nil
 	}
 
-	content := object.UnstructuredContent()
 	// Reset the replicas to 0 and store the current replicas in an annotation
 	replicas, found, err := unstructured.NestedInt64(content, "spec", "replicas")
 	if err != nil {
@@ -1277,8 +1433,8 @@ func (m *MigrationController) prepareCRDClusterResource(
 				disableVersion = int64(0)
 				currVal = fmt.Sprintf("%v", curr)
 			} else if suspend.Type == "string" {
-				curr, found, err := unstructured.NestedString(content, fields...)
-				if err != nil || !found {
+				curr, _, err := unstructured.NestedString(content, fields...)
+				if err != nil {
 					return fmt.Errorf("unable to find suspend path, err: %v", err)
 				}
 				disableVersion = suspend.Value
@@ -1298,20 +1454,50 @@ func (m *MigrationController) prepareCRDClusterResource(
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
 
-func (m *MigrationController) getPrunedAnnotations(annotations map[string]string) map[string]string {
+func (m *MigrationController) getParsedMap(
+	inputMap map[string]string,
+	clusterPair *stork_api.ClusterPair,
+) map[string]string {
+	if inputMap == nil {
+		return nil
+	}
 	a := make(map[string]string)
-	for k, v := range annotations {
-		if !strings.Contains(k, cattleAnnotations) {
+	for k, v := range inputMap {
+		if !strings.Contains(k, utils.CattlePrefix) {
 			a[k] = v
+		} else {
+			if strings.Contains(k, utils.CattleProjectPrefix) {
+				if clusterPair.Spec.PlatformOptions.Rancher != nil {
+					if targetProjectID, ok := clusterPair.Spec.PlatformOptions.Rancher.ProjectMappings[v]; ok &&
+						targetProjectID != "" {
+						a[k] = targetProjectID
+					} // else skip the project label
+				} // else skip the project label
+			} // skip all the other cattle label
 		}
 	}
 	return a
+}
+
+func (m *MigrationController) getParsedAnnotations(
+	annotations map[string]string,
+	clusterPair *stork_api.ClusterPair,
+) map[string]string {
+	return m.getParsedMap(annotations, clusterPair)
+}
+
+func (m *MigrationController) getParsedLabels(
+	labels map[string]string,
+	clusterPair *stork_api.ClusterPair,
+) map[string]string {
+	return m.getParsedMap(labels, clusterPair)
 }
 
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 	resKinds map[string]string,
+	clusterPair *stork_api.ClusterPair,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -1422,11 +1608,16 @@ func (m *MigrationController) applyResources(
 		}
 	}
 
+	// TODO: Create rancher projects if not present on the DR side.
+
 	// First make sure all the namespaces are created on the
 	// remote cluster
 	for _, ns := range migration.Spec.Namespaces {
 		namespace, err := core.Instance().GetNamespace(ns)
 		if err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
 			return err
 		}
 
@@ -1436,11 +1627,12 @@ func (m *MigrationController) applyResources(
 			continue
 		}
 
-		annotations := m.getPrunedAnnotations(namespace.Annotations)
+		annotations := m.getParsedAnnotations(namespace.Annotations, clusterPair)
+		labels := m.getParsedLabels(namespace.Labels, clusterPair)
 		_, err = adminClient.CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        namespace.Name,
-				Labels:      namespace.Labels,
+				Labels:      labels,
 				Annotations: annotations,
 			},
 		}, metav1.CreateOptions{})
@@ -1496,6 +1688,8 @@ func (m *MigrationController) applyResources(
 		pv.Annotations[StorkMigrationAnnotation] = "true"
 		pv.Annotations[StorkMigrationName] = migration.GetName()
 		pv.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
+		pv.Annotations = m.getParsedAnnotations(pv.Annotations, clusterPair)
+		pv.Labels = m.getParsedLabels(pv.Labels, clusterPair)
 		_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
 		if err != nil {
 			if err != nil && errors.IsAlreadyExists(err) {
@@ -1621,6 +1815,8 @@ func (m *MigrationController) applyResources(
 		pvc.Annotations[StorkMigrationName] = migration.GetName()
 		pvc.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		pvc.Annotations[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
+		pvc.Annotations = m.getParsedAnnotations(pvc.Annotations, clusterPair)
+		pvc.Labels = m.getParsedLabels(pvc.Labels, clusterPair)
 		_, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Create(context.TODO(), &pvc, metav1.CreateOptions{})
 		if err != nil {
 			msg := fmt.Errorf("error in recreating pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
@@ -1792,12 +1988,22 @@ func (m *MigrationController) applyResources(
 			migrAnnot[StorkMigrationAnnotation] = "true"
 			migrAnnot[StorkMigrationName] = migration.GetName()
 			migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
+			migrAnnot = m.getParsedAnnotations(migrAnnot, clusterPair)
+
 			objHash, err := hashstructure.Hash(o, &hashstructure.HashOptions{})
 			if err != nil {
 				log.MigrationLog(migration).Warnf("unable to generate hash for an object %v %v, err: %v", objectType.GetKind(), metadata.GetName(), err)
 			}
 			migrAnnot[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
 			unstructured.SetAnnotations(migrAnnot)
+
+			// parse and set labels on all objects
+			currentLabels := metadata.GetLabels()
+			newLabels := m.getParsedLabels(currentLabels, clusterPair)
+			if len(newLabels) > 0 {
+				unstructured.SetLabels(newLabels)
+			}
+
 			retries := 0
 			log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 			for {
@@ -1923,11 +2129,11 @@ func (m *MigrationController) getMigrationSummary(migration *stork_api.Migration
 		}
 		elapsedTimeVolume := "NA"
 		if !migration.CreationTimestamp.IsZero() {
-			if migration.Status.Stage == stork_api.MigrationStageApplications {
+			if migration.Status.Stage == stork_api.MigrationStageApplications || migration.Status.Stage == stork_api.MigrationStageFinal {
 				if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
 					elapsedTimeVolume = migration.Status.VolumeMigrationFinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
 				}
-			} else {
+			} else { // Volume migration hasn't finished, use current total time
 				elapsedTimeVolume = time.Since(migration.CreationTimestamp.Time).String()
 			}
 		}
@@ -1995,4 +2201,62 @@ func (m *MigrationController) createCRD() error {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+func (m *MigrationController) getVolumeOnlyMigrationResources(
+	migration *stork_api.Migration,
+	resourceCollectorOpts resourcecollector.Options,
+) ([]runtime.Unstructured, error) {
+	var resources []runtime.Unstructured
+	// add pv objects
+	resource := metav1.APIResource{
+		Name:       "persistentvolumes",
+		Kind:       "PersistentVolume",
+		Version:    "v1",
+		Namespaced: false,
+	}
+	objects, err := m.resourceCollector.GetResourcesForType(
+		resource,
+		nil,
+		migration.Spec.Namespaces,
+		migration.Spec.Selectors,
+		nil,
+		false,
+		resourceCollectorOpts,
+	)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting pv resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
+		return resources, err
+	}
+	resources = append(resources, objects.Items...)
+	// add pvcs to resource list
+	resource = metav1.APIResource{
+		Name:       "persistentvolumeclaims",
+		Kind:       "PersistentVolumeClaim",
+		Version:    "v1",
+		Namespaced: true,
+	}
+	objects, err = m.resourceCollector.GetResourcesForType(
+		resource,
+		nil,
+		migration.Spec.Namespaces,
+		migration.Spec.Selectors,
+		nil,
+		false,
+		resourceCollectorOpts,
+	)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting pv resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
+		return resources, err
+	}
+	resources = append(resources, objects.Items...)
+	return resources, nil
 }

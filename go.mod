@@ -7,7 +7,7 @@ require (
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/andygrunwald/go-jira v1.15.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
-	github.com/aws/aws-sdk-go v1.40.39
+	github.com/aws/aws-sdk-go v1.44.45
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
@@ -23,9 +23,9 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
-	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
-	github.com/libopenstorage/operator v0.0.0-20220927184959-7d7a4c157f9c
-	github.com/libopenstorage/stork v1.4.1-0.20220323180113-0ea773109d05
+	github.com/libopenstorage/openstorage v9.4.20+incompatible
+	github.com/libopenstorage/operator v0.0.0-20220914214053-b7951f0cd10a
+	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
@@ -37,7 +37,7 @@ require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.2-0.20220317124727-77977386932a
 	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
@@ -47,9 +47,9 @@ require (
 	google.golang.org/grpc v1.48.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
-	k8s.io/api v0.22.1
+	k8s.io/api v0.24.0
 	k8s.io/apiextensions-apiserver v0.21.4
-	k8s.io/apimachinery v0.22.1
+	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v12.0.0+incompatible
 )
 
@@ -70,8 +70,8 @@ replace (
 	//github.com/libopenstorage/operator => github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 
 	// Stork dependencies
-	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20220323180113-0ea773109d05
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220711165201-be5e8919faf9
+	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20220826160831-d630f1478d0e
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.0
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency

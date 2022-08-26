@@ -64,9 +64,9 @@ func (c *ClusterPairController) Init(mgr manager.Manager) error {
 func (c *ClusterPairController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ClusterPair %s/%s", request.Namespace, request.Name)
 
-	// Fetch the ApplicationBackup instance
-	backup := &stork_api.ClusterPair{}
-	err := c.client.Get(context.TODO(), request.NamespacedName, backup)
+	// Fetch the ClusterPair instance
+	clusterPair := &stork_api.ClusterPair{}
+	err := c.client.Get(context.TODO(), request.NamespacedName, clusterPair)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -78,13 +78,13 @@ func (c *ClusterPairController) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	if !controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
-		controllers.SetFinalizer(backup, controllers.FinalizerCleanup)
-		return reconcile.Result{Requeue: true}, c.client.Update(context.TODO(), backup)
+	if !controllers.ContainsFinalizer(clusterPair, controllers.FinalizerCleanup) {
+		controllers.SetFinalizer(clusterPair, controllers.FinalizerCleanup)
+		return reconcile.Result{Requeue: true}, c.client.Update(context.TODO(), clusterPair)
 	}
 
-	if err = c.handle(context.TODO(), backup); err != nil {
-		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(c), backup.Namespace, backup.Name, err)
+	if err = c.handle(context.TODO(), clusterPair); err != nil {
+		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(c), clusterPair.Namespace, clusterPair.Name, err)
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 

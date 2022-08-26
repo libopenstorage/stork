@@ -17,7 +17,7 @@ const (
 	KillFileFormat     = "/tmp/killme-%s"
 	cmdWaitFormat      = "touch %s && tail -f /dev/null;"
 	cmdStatusFormat    = "stat %s"
-	waitScriptLocation = "/tmp/wait.sh"
+	waitScriptFormat   = "/tmp/wait-%s.sh"
 	waitCmdPlaceholder = "${WAIT_CMD}"
 )
 
@@ -69,6 +69,7 @@ func (c *cmdExecutor) Start(errChan chan error) error {
 	// create status script in target pod
 	c.statusFile = fmt.Sprintf(StatusFileFormat, c.taskID)
 	killFile := fmt.Sprintf(KillFileFormat, c.taskID)
+	waitScriptLocation := fmt.Sprintf(waitScriptFormat, c.taskID)
 	waitScriptCreateCmd := fmt.Sprintf("rm -rf %s %s && echo 'touch %s && while [ ! -f %s ]; do sleep 2; done' > %s && chmod +x %s",
 		c.statusFile, killFile, c.statusFile, killFile, waitScriptLocation, waitScriptLocation)
 	cmdSplit := []string{"/bin/sh", "-c", waitScriptCreateCmd}

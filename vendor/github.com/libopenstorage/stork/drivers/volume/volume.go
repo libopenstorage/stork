@@ -18,6 +18,7 @@ import (
 	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -106,8 +107,9 @@ type Driver interface {
 	// InspectNode using ID
 	InspectNode(id string) (*NodeInfo, error)
 
-	// GetPodVolumes Get all the volumes used by a pod backed by the driver
-	GetPodVolumes(*v1.PodSpec, string) ([]*Info, error)
+	// GetPodVolumes Gets the volumes used by a pod backed by the driver
+	// If includePendingWFFC is set, also returns volumes that are pending due to WaitForFirstConsumer binding
+	GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*Info, []*Info, error)
 
 	// GetVolumeClaimTemplates Get all the volume templates from the list backed by
 	// the driver
@@ -135,6 +137,9 @@ type Driver interface {
 
 	// GetClusterID returns the clusterID for the driver
 	GetClusterID() (string, error)
+
+	// GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
+	GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error)
 
 	// GroupSnapshotPluginInterface Interface for group snapshots
 	GroupSnapshotPluginInterface
