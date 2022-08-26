@@ -183,6 +183,13 @@
             "in": "query",
             "required": false,
             "type": "boolean"
+          },
+          {
+            "name": "enumerate_options.cluster_uid_filter",
+            "description": "Filter to use with cluster uid on objects. Any object that contains the\nfilter will be returned\nCurrently backup enumerate request should pass this along with cluster\nname.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -1775,6 +1782,13 @@
             "in": "query",
             "required": false,
             "type": "boolean"
+          },
+          {
+            "name": "enumerate_options.cluster_uid_filter",
+            "description": "Filter to use with cluster uid on objects. Any object that contains the\nfilter will be returned\nCurrently backup enumerate request should pass this along with cluster\nname.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -2091,6 +2105,13 @@
             "in": "query",
             "required": false,
             "type": "boolean"
+          },
+          {
+            "name": "enumerate_options.cluster_uid_filter",
+            "description": "Filter to use with cluster uid on objects. Any object that contains the\nfilter will be returned\nCurrently backup enumerate request should pass this along with cluster\nname.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -2786,6 +2807,9 @@
         "backup_type": {
           "$ref": "#/definitions/BackupCreateRequestBackupType",
           "title": "To get type of backup (generic or non-generic)"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       },
       "title": "Request message structure for backup create"
@@ -2944,6 +2968,9 @@
         },
         "user_backupshare_access": {
           "$ref": "#/definitions/BackupShareAccessType"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       }
     },
@@ -4135,6 +4162,10 @@
         "include_detailed_resources": {
           "type": "boolean",
           "description": "Ths option will be set to true by the caller, when they want to have\ncomplete backup object. That means the backupObject's\nresource list will be set to complete list of resources.\nIf this option is set to false, resource list will be\nset to nil and rest of the backupObject details will be returned in the\nresponse."
+        },
+        "cluster_uid_filter": {
+          "type": "string",
+          "description": "Filter to use with cluster uid on objects. Any object that contains the\nfilter will be returned\nCurrently backup enumerate request should pass this along with cluster\nname."
         }
       }
     },

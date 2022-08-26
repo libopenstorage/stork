@@ -436,6 +436,7 @@ message BackupInfo {
     int64 retention_period = 27;
     BackupShare backup_share = 28;
     BackupShare.AccessType user_backupshare_access = 29;
+    ObjectRef cluster_ref = 30;
     message BackupType {
         Type type = 1;
         enum Type {
@@ -652,6 +653,11 @@ message EnumerateOptions {
     // set to nil and rest of the backupObject details will be returned in the
     // response.
     bool include_detailed_resources = 7;
+    // Filter to use with cluster uid on objects. Any object that contains the
+    // filter will be returned
+    // Currently backup enumerate request should pass this along with cluster
+    // name.
+    string cluster_uid_filter = 8;
 }
 
 service SchedulePolicy {
@@ -1414,6 +1420,7 @@ message BackupCreateRequest {
     ObjectRef post_exec_rule_ref = 13;
     // To get type of backup (generic or non-generic)
     BackupType backup_type = 14;
+    ObjectRef cluster_ref = 15;
     enum BackupType {
         Invalid = 0;
         Generic = 1;
