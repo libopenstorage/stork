@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	resourceTransformationController = "resource-transformation-controller"
+	// ResourceTransformationControllerName of resource transformation CR handler
+	ResourceTransformationControllerName = "resource-transformation-controller"
 )
 
 // NewResourceTransformation creates a new instance of ResourceTransformation Manager
@@ -59,13 +60,11 @@ func (r *ResourceTransformationController) Init(mgr manager.Manager) error {
 		return err
 	}
 
-	return controllers.RegisterTo(mgr, resourceTransformationController, r, &stork_api.ResourceTransformation{})
+	return controllers.RegisterTo(mgr, ResourceTransformationControllerName, r, &stork_api.ResourceTransformation{})
 }
 
 // Reconcile manages ResourceTransformation resources.
 func (r *ResourceTransformationController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	logrus.Infof("Reconciling ResourceTransformation %s/%s", request.Namespace, request.Name)
-
 	resourceTransformation := &stork_api.ResourceTransformation{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, resourceTransformation)
 	if err != nil {
@@ -110,7 +109,7 @@ func (r *ResourceTransformationController) handle(ctx context.Context, transform
 		ns := &v1.Namespace{}
 		ns.Name = getTransformNamespace(transform.Namespace)
 		_, err := core.Instance().CreateNamespace(ns)
-		if err != nil {
+		if err != nil && !errors.IsAlreadyExists(err) {
 			message := fmt.Sprintf("Unable to create resource transformation namespace: %v", err)
 			log.TransformLog(transform).Errorf(message)
 			r.recorder.Event(transform,
@@ -138,6 +137,10 @@ func (r *ResourceTransformationController) handle(ctx context.Context, transform
 				return err
 			}
 			return nil
+		}
+		transform.Status.Status = stork_api.ResourceTransformationStatusInProgress
+		if err = r.client.Update(ctx, transform); err != nil {
+			return err
 		}
 	case stork_api.ResourceTransformationStatusInProgress:
 		err = r.validateTransformResource(ctx, transform)
@@ -179,7 +182,8 @@ func (r *ResourceTransformationController) validateSpecPath(transform *stork_api
 			if path.Operation == stork_api.JsonResourcePatch {
 				return fmt.Errorf("json patch for resources is not supported, operation: %s", path.Operation)
 			}
-			if !(path.Operation == stork_api.AddResourcePath || path.Operation == stork_api.DeleteResourcePath) {
+			if !(path.Operation == stork_api.AddResourcePath || path.Operation == stork_api.DeleteResourcePath ||
+				path.Operation == stork_api.ModifyResourcePathValue) {
 				return fmt.Errorf("unsupported resource patch operation given for kind :%s, operation: %s", kind, path.Operation)
 			}
 			if !(path.Type == stork_api.BoolResourceType || path.Type == stork_api.IntResourceType ||
@@ -189,6 +193,7 @@ func (r *ResourceTransformationController) validateSpecPath(transform *stork_api
 			}
 		}
 	}
+	log.TransformLog(transform).Infof("validated paths ")
 	return nil
 }
 
@@ -206,7 +211,6 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			Namespaced: true,
 			Group:      group,
 		}
-		log.TransformLog(transform).Infof("querying resource: %v", resource)
 		objects, err := r.resourceCollector.GetResourcesForType(
 			resource,
 			nil,
@@ -224,12 +228,22 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			log.TransformLog(transform).Errorf("Error getting resources kind:%s, err: %v", kind, err)
 			return err
 		}
+		// TODO: we can pass in remote config and dry run on remote cluster as well
+		localconfig, err := clientcmd.BuildConfigFromFlags("", "")
+		if err != nil {
+			return err
+		}
+		localInterface, err := dynamic.NewForConfig(localconfig)
+		if err != nil {
+			return err
+		}
 		for _, path := range spec.Paths {
-			if !(path.Operation == stork_api.AddResourcePath || path.Operation == stork_api.DeleteResourcePath) {
+			// This can be handle by CRD validation- v1 version crd support
+			if !(path.Operation == stork_api.AddResourcePath || path.Operation == stork_api.DeleteResourcePath ||
+				path.Operation == stork_api.ModifyResourcePathValue) {
 				return fmt.Errorf("unsupported operation type for given path : %s", path.Operation)
 			}
 			for _, object := range objects.Items {
-				content := object.UnstructuredContent()
 				metadata, err := meta.Accessor(object)
 				if err != nil {
 					log.TransformLog(transform).Errorf("Unable to read metadata for resource %v, err: %v", kind, err)
@@ -239,9 +253,9 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 					Name:             metadata.GetName(),
 					Namespace:        metadata.GetNamespace(),
 					GroupVersionKind: metav1.GroupVersionKind(object.GetObjectKind().GroupVersionKind()),
+					Specs:            spec,
 				}
-				err = unstructured.SetNestedField(content, path.Value, strings.Split(path.Path, ".")...)
-				if err != nil {
+				if err := resourcecollector.TransformResources(object, []stork_api.TransformResourceInfo{*resInfo}, metadata.GetName(), metadata.GetNamespace()); err != nil {
 					log.TransformLog(transform).Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
 					resInfo.Status = stork_api.ResourceTransformationStatusFailed
 					resInfo.Reason = err.Error()
@@ -250,24 +264,17 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 				if !ok {
 					return fmt.Errorf("unable to cast object to unstructured: %v", object)
 				}
-				// TODO: we can pass in remote config and dry run on remote cluster as well
-				localconfig, err := clientcmd.BuildConfigFromFlags("", "")
-				if err != nil {
-					return err
-				}
-				localInterface, err := dynamic.NewForConfig(localconfig)
-				if err != nil {
-					return err
-				}
 				resource := &metav1.APIResource{
 					Name:       inflect.Pluralize(strings.ToLower(kind)),
 					Namespaced: len(metadata.GetNamespace()) > 0,
 				}
 				dynamicClient := localInterface.Resource(
-					object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+					object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(getTransformNamespace(transform.Namespace))
 
 				unstructured.SetNamespace(getTransformNamespace(transform.Namespace))
-				log.TransformLog(transform).Infof("Applying %v %v", object.GetObjectKind(), metadata.GetName())
+				log.TransformLog(transform).Infof("Applying object %s, %s",
+					object.GetObjectKind().GroupVersionKind().Kind,
+					metadata.GetName())
 				_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{DryRun: []string{"All"}})
 				if err != nil {
 					log.TransformLog(transform).Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
@@ -282,10 +289,18 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			}
 		}
 	}
+
 	transform.Status.Status = stork_api.ResourceTransformationStatusReady
+	// verify if all resource dry-run is successful
+	for _, resource := range transform.Status.Resources {
+		if resource.Status != stork_api.ResourceTransformationStatusReady {
+			transform.Status.Status = stork_api.ResourceTransformationStatusFailed
+		}
+	}
 	return r.client.Update(ctx, transform)
 }
 
+// return group,version,kind from give resource type
 func getGVK(resource string) (string, string, string, error) {
 	gvk := strings.Split(resource, "/")
 	if len(gvk) != 3 {
