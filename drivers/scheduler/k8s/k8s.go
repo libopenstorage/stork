@@ -52,6 +52,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
@@ -658,6 +659,15 @@ func validateSpec(in interface{}) (interface{}, error) {
 // volumes are valid.
 func (k *K8s) filterPureVolumesIfEnabled(claim *v1.PersistentVolumeClaim) (bool, error) {
 	volTypes := []string{PureFile, PureBlock}
+
+	return k.filterPureTypeVolumeIfEnabled(claim, volTypes)
+}
+
+// filterPureVolumesIfEnabled will return whether or not the given PVC is a Pure
+// direct access volume, only if PureVolumes is true. If PureVolumes is false, all
+// volumes are valid.
+func (k *K8s) filterPureVolumesIfEnabledByPureVolBackend(claim *v1.PersistentVolumeClaim, pureVolBackend string) (bool, error) {
+	volTypes := []string{pureVolBackend}
 
 	return k.filterPureTypeVolumeIfEnabled(claim, volTypes)
 }
@@ -3182,6 +3192,71 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
+// GetPureVolumes  Get the Pure volumes (if enabled) by type (PureFile or PureBlock)
+//
+func (k *K8s) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*volume.Volume, error) {
+	k8sOps := k8sApps
+	var vols []*volume.Volume
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			shouldAdd, err := k.filterPureVolumesIfEnabledByPureVolBackend(pvcObj, pureVolType)
+			if err != nil {
+				return nil, err
+			}
+			if !shouldAdd {
+				continue
+			}
+
+			pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+			pvcSize, _ := pvcSizeObj.AsInt64()
+			vol := &volume.Volume{
+				ID:          string(pvcObj.Spec.VolumeName),
+				Name:        obj.Name,
+				Namespace:   obj.Namespace,
+				Shared:      k.isPVCShared(obj),
+				Annotations: make(map[string]string),
+				Labels:      pvcObj.Labels,
+				Size:        uint64(pvcSize),
+			}
+			for key, val := range obj.Annotations {
+				vol.Annotations[key] = val
+			}
+			vols = append(vols, vol)
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:        pvc.Spec.VolumeName,
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
+				})
+			}
+		}
+	}
+
+	return vols, nil
+}
+
 // ResizeVolume  Resize the volume
 func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
@@ -5055,55 +5130,43 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 	return volSnapMap, nil
 }
 
-// CreateCsiSnapsAndValidate create CSI snapshot for Pure FA volumes and restore them to new PVCs, and validate the content
+// CSISnapshotTest create CSI snapshot for volumes and restore them to new PVCs, and validate the content
 // (Testrail cases C58775, 58091)
-func (k *K8s) CreateCsiSnapsAndValidate(ctx *scheduler.Context, snapClass string) error {
-	// This test will validate the content of the snapshot as opposed to just verify creation of snapshot.
-	timestamp := strings.Split(snapClass, "-")[0]
-	namespace := "fada-basic-snapshot-and-restore-test-" + timestamp
-	clientset, err := getKubeClient("")
+func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+	// This test will validate the content of the volume as opposed to just verify creation of volume.
+
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+
 	if err != nil {
-		logrus.Errorf("Failed to get kube client for FADA snapshot and restore test: %s", err)
+		logrus.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
 	}
-
-	// create a namespace for snapshot and restore test for FADA
-	nsSpec := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
-	_, err = k8sCore.CreateNamespace(nsSpec)
+	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
 	if err != nil {
-		logrus.Errorf("Failed to create new namespace %s FADA snapshot and restore test: %s", namespace, err)
+		logrus.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
 	}
+	storageClassName := originalStorageClass.Name
+	logrus.Infof("Procedding with SC %s", storageClassName)
 
-
-	originalPVCName := "fada-basic-pvc"
-	snapName := "fada-basic-pvc-snapshot" + timestamp
-	restoredPVCName := "fada-basic-pvc-restored" + timestamp
+	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
+	if err != nil {
+		logrus.Errorf("Failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
+		return err
+	}
+	pod := podsUsingPVC[0]
+	mountPath, _ := pureutils.GetAppDataDir(podsUsingPVC[0].Namespace)
 	dirtyData := "thisIsJustSomeRandomText"
-	elasticsearchSC := "elasticsearch-sc"
-
-	logrus.Infof("Create original PVC: %s", originalPVCName)
-	originalPVCSpec := MakePVC(namespace, originalPVCName, elasticsearchSC)
-	originalPVC, err := k8sCore.CreatePersistentVolumeClaim(originalPVCSpec)
-
-	originalPodSpec := MakePod(originalPVCSpec.Namespace, []*v1.PersistentVolumeClaim{originalPVC}, "ls", false)
-
-	originalPod, err := clientset.CoreV1().Pods(namespace).Create(context.TODO(), originalPodSpec, metav1.CreateOptions{})
-	if err != nil {
-		logrus.Errorf("Failed to create original pod: err")
-		return err
-	}
-
-	if err = k.waitForPodToBeReady(originalPod.Name, originalPod.Namespace); err != nil {
-		return &scheduler.ErrFailedToSchedulePod{
-			App: nil,
-			Cause:   fmt.Sprintf("Original pod is not ready. Error: %v", err),
-		}
-	}
-	fmt.Println("Original pod up and running, creating multiple snapshots and verify")
+	snapName := request.SnapName
 	for i :=0; i < 3; i++ {
 		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
-		err = k.createSnapshotAndVerify(data, fmt.Sprint(snapName, i), namespace, snapClass, fmt.Sprint(restoredPVCName, i), originalPod.Name, originalPVC.Name)
+		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+		if err != nil {
+			logrus.Errorf("failed to write data to restored PVC: %s", err)
+			return err
+		}
+		err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
 		if err != nil {
 			logrus.Errorf("failed to validate restored PVC content: %s ", err)
 			return err
@@ -5113,31 +5176,80 @@ func (k *K8s) CreateCsiSnapsAndValidate(ctx *scheduler.Context, snapClass string
 	return nil
 }
 
-func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, restoredPVCName, originalPod, originalPVC string) error {
-	elasticsearchSC := "elasticsearch-sc"
-	clientset, err := getKubeClient("")
+// CSICloneTest create new PVC by cloning an existing PVC and make sure the contents of volume are same
+// (Testrail cases C58509)
+func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest)  error {
+	// This test will validate the content of the volume as opposed to just verify creation of volume.
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
 	if err != nil {
-		logrus.Errorf("Failed to get kube client for FADA snapshot and restore test: %s", err)
+		logrus.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
 	}
-	cmdArgs2 := []string{"exec", "-it", originalPod, "-n", namespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  /mnt/volume1/aaaa.txt", data)}
-	command2 := exec.Command("kubectl", cmdArgs2...)
-	_ , err = command2.Output()
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		logrus.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	storageClassName := originalStorageClass.Name
+	logrus.Infof("Procedding with SC %s", storageClassName)
+
+	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
+	if err != nil {
+		logrus.Errorf("Failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
+		return err
+	}
+	pod := podsUsingPVC[0]
+	mountPath, _ := pureutils.GetAppDataDir(podsUsingPVC[0].Namespace)
+	dirtyData := "thisIsJustSomeRandomText"
+
+	for i :=0; i < 3; i++ {
+		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
+		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+		if err != nil {
+			logrus.Errorf("failed to write data to cloned PVC: %s", err)
+			return err
+		}
+		err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+		if err != nil {
+			logrus.Errorf("failed to validate cloned PVC content: %s ", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) error {
+	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  %s/aaaa.txt", data, mountPath)}
+	command := exec.Command("kubectl", cmdArgs...)
+	_ , err := command.Output()
 	if err != nil {
 		logrus.Errorf("Failed to write data to pod: %s", err)
 		return err
 	}
-
 	// Sync the data, wait 10 secs and then proceed to snapshot the volume
-	cmdArgs3 := []string{"exec", "-it", originalPod, "-n", namespace, "--", "/bin/sync"}
-	command3 := exec.Command("kubectl", cmdArgs3...)
-	_ , err = command3.Output()
+	cmdArgs2 := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sync"}
+	command2 := exec.Command("kubectl", cmdArgs2...)
+	_ , err = command2.Output()
 	if err != nil {
-		logrus.Errorf("Failed to sync: err")
+		logrus.Errorf("Failed to sync: %s", err)
 		return err
 	}
 	fmt.Println("Sleep for 10 secs to let data write through")
 	time.Sleep(time.Second * 10)
+	return nil
+}
+
+// snapshotAndVerify takes an existing PVC mounted to a new pod, snapshot the PVC and mount the restored volume to a new pod, returns an error if
+// the restored PVC doesn't contain the file content of the original PVC
+func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespace, storageClass, snapClass, restoredPVCName, originalPVC string) error {
+	clientset, err := getKubeClient("")
+	if err != nil {
+		logrus.Errorf("Failed to get kube client: %s", err)
+		return err
+	}
+
 	// creating the snapshot
 	volSnapshot, err := k.CreateCsiSnapshot(snapName, namespace, snapClass, originalPVC)
 	if err != nil {
@@ -5146,7 +5258,11 @@ func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, rest
 	}
 
 	logrus.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, originalPVC)
-	restoredPVCSpec := MakePVCFromSnapshot(namespace, restoredPVCName, volSnapshot.Name, elasticsearchSC)
+	restoredPVCSpec, err := GeneratePVCRestoreSpec(size, namespace, restoredPVCName, volSnapshot.Name, storageClass)
+	if err != nil {
+		logrus.Errorf("Failed to build restored PVC Spec: %s", err)
+		return err
+	}
 	restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 	if err != nil {
 		logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err )
@@ -5154,6 +5270,50 @@ func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, rest
 	}
 	logrus.Infof("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
 	restoredPodSpec := MakePod(namespace, []*v1.PersistentVolumeClaim{restoredPVC}, "ls", false)
+	restoredPod, err := clientset.CoreV1().Pods(namespace).Create(context.TODO(), restoredPodSpec, metav1.CreateOptions{})
+	if err != nil {
+		logrus.Errorf("Error creating restored pod: %s", err)
+		return err
+	}
+
+	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
+		return &scheduler.ErrFailedToSchedulePod{
+			App: nil,
+			Cause:   fmt.Sprintf("restored pod is not ready. Error: %v", err),
+		}
+	}
+	// Run a cat command from within the pod to verify the content of dirtydata
+	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
+	command := exec.Command("kubectl", cmdArgs...)
+	fileConent, err := command.Output()
+	if !strings.Contains(string(fileConent), data) {
+		return fmt.Errorf("restored volume does NOT contain data from original volume")
+	}
+	logrus.Info("Validation complete")
+	return nil
+}
+
+// cloneAndVerify takes an existing PVC mounted to a pod, clones the PVC and mount it to a new pod, returns an error if
+// the cloned PVC doesn't contain the file content of the original PVC
+func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageClass, clonedPVCName, originalPVC string) error {
+	clientset, err := getKubeClient("")
+	if err != nil {
+		logrus.Errorf("Failed to get kube client: %s", err)
+		return err
+	}
+
+	clonedPVCSpec, err := GeneratePVCCloneSpec(size, namespace, clonedPVCName, originalPVC, storageClass)
+	if err != nil {
+		logrus.Errorf("Failed to build cloned PVC Spec: %s", err)
+		return err
+	}
+	clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
+	if err != nil {
+		logrus.Errorf("Failed to clone PVC from source PVC %s: %s", originalPVC, err )
+		return err
+	}
+	logrus.Infof("Successfully clone PVC %s, proceed to mount to a new pod", clonedPVC.Name)
+	restoredPodSpec := MakePod(namespace, []*v1.PersistentVolumeClaim{clonedPVC}, "ls", false)
 	restoredPod, err := clientset.CoreV1().Pods(namespace).Create(context.TODO(), restoredPodSpec, metav1.CreateOptions{})
 	if err != nil {
 		logrus.Errorf("Error creating restored pod: %s", err)
@@ -5235,13 +5395,13 @@ func MakePod(ns string, pvclaims []*v1.PersistentVolumeClaim, command string, pr
 }
 
 // MakePVC takes namespace, name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
-func MakePVC(ns string, name string, storageClass string) *v1.PersistentVolumeClaim {
+func MakePVC(size resource.Quantity, ns string, name string, storageClass string) *v1.PersistentVolumeClaim {
 	PVCSpec := &v1.PersistentVolumeClaim{
 		Spec: v1.PersistentVolumeClaimSpec{
 			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
-					v1.ResourceStorage: resource.MustParse("1Gi"),
+					v1.ResourceStorage: size,
 				},
 			},
 			StorageClassName: &storageClass,
@@ -5253,21 +5413,42 @@ func MakePVC(ns string, name string, storageClass string) *v1.PersistentVolumeCl
 	return PVCSpec
 }
 
-// MakePVCFromSnapshot takes namespace, name, source snapshot name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
-func MakePVCFromSnapshot(ns string, name string, sourceSnapshotName string, storageClass string) *v1.PersistentVolumeClaim {
+// GeneratePVCRestoreSpec takes namespace, name, source snapshot name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
+func GeneratePVCRestoreSpec(size resource.Quantity, ns string, name string, sourceSnapshotName string, storageClass string) (*v1.PersistentVolumeClaim, error) {
 	snapshotAPIGroup := "snapshot.storage.k8s.io"
-	PVCSpec := MakePVC(ns, name, storageClass)
+	PVCSpec := MakePVC(size, ns, name, storageClass)
 	PVCSpec.ObjectMeta.Name = name
 	PVCSpec.Namespace = ns
 	PVCSpec.ObjectMeta.Namespace = ns
-	if sourceSnapshotName != "" {
-		PVCSpec.Spec.DataSource = &v1.TypedLocalObjectReference{
-			APIGroup: &snapshotAPIGroup,
-			Kind:     "VolumeSnapshot",
-			Name:     sourceSnapshotName,
-		}
+	if sourceSnapshotName == "" {
+		return nil, fmt.Errorf("source snapshot name is empty for PVC restoring request")
 	}
-	return PVCSpec
+
+	PVCSpec.Spec.DataSource = &v1.TypedLocalObjectReference{
+		APIGroup: &snapshotAPIGroup,
+		Kind:     "VolumeSnapshot",
+		Name:     sourceSnapshotName,
+	}
+
+	return PVCSpec, nil
+}
+
+// GeneratePVCCloneSpec takes namespace, name, source snapshot name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
+func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, sourcePVCName string, storageClass string) (*v1.PersistentVolumeClaim, error) {
+	PVCSpec := MakePVC(size, ns, name, storageClass)
+	PVCSpec.ObjectMeta.Name = name
+	PVCSpec.Namespace = ns
+	PVCSpec.ObjectMeta.Namespace = ns
+	if sourcePVCName == "" {
+		return nil, fmt.Errorf("source PVC name is empty for PVC cloning request")
+	}
+
+	PVCSpec.Spec.DataSource = &v1.TypedLocalObjectReference{
+		Kind:     "PersistentVolumeClaim",
+		Name:     sourcePVCName,
+	}
+
+	return PVCSpec, nil
 }
 
 // DeleteCsiSnapsForVolumes delete csi snapshots for Apps
