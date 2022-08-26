@@ -24,8 +24,13 @@ func GetResourcePatch(transformName string, namespaces []string) (map[string]sto
 	}
 	for _, namespace := range namespaces {
 		resp, err := storkops.Instance().GetResourceTransformation(transformName, namespace)
-		if err != nil && !errors.IsNotFound(err) {
-			logrus.Infof("not found in namespace: %v", transformName)
+		if err != nil {
+			// current namespace does not have any transform CR
+			// skip it from map
+			if errors.IsNotFound(err) {
+				continue
+			}
+			logrus.Errorf("Unable to get resource transfomration specs %s/%s, err: %v", namespace, transformName, err)
 			return nil, err
 		}
 		resMap := make(map[string][]stork_api.TransformResourceInfo)
@@ -66,7 +71,7 @@ func TransformResources(
 					} else {
 						err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
 						if err != nil {
-							logrus.Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, patch.Kind, patch.Namespace, patch.Name, err)
+							logrus.Errorf("Unable to perform operation %s on path %s on resource kind: %s/,%s/%s,  err: %v", path.Operation, path, patch.Kind, patch.Namespace, patch.Name, err)
 							return err
 						}
 					}
@@ -103,13 +108,13 @@ func TransformResources(
 					}
 					err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
 					if err != nil {
-						logrus.Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, patch.Kind, patch.Namespace, patch.Name, err)
+						logrus.Errorf("Unable to perform operation %s on path %s on resource kind: %s/,%s/%s,  err: %v", path.Operation, path, patch.Kind, patch.Namespace, patch.Name, err)
 						return err
 					}
 				}
 			}
 			object.SetUnstructuredContent(content)
-			logrus.Infof("updated resource of kind %v with patch , resource: %v", patch.Kind, object)
+			logrus.Infof("Updated resource of kind %v with patch , resource: %v", patch.Kind, object)
 		}
 	}
 	return nil
@@ -125,13 +130,11 @@ func getNewValueForPath(oldVal, valType string) interface{} {
 			newVal[keyPair[0]] = keyPair[1]
 		}
 		updatedValue = newVal
-		logrus.Infof("map updated : %v", updatedValue, mapList)
 	} else if valType == string(stork_api.SliceResourceType) {
 		newVal := []string{}
 		arrList := strings.Split(oldVal, ",")
 		newVal = append(newVal, arrList...)
 		updatedValue = newVal
-		logrus.Infof("map updated : %v", updatedValue, arrList)
 	} else {
 		updatedValue = oldVal
 	}
