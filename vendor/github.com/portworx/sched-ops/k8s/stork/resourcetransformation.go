@@ -27,7 +27,7 @@ type ResourceTransformOps interface {
 	ValidateResourceTransformation(string, string, time.Duration, time.Duration) error
 }
 
-// CreateResourceTransformation creates the ResourceTransformation
+// CreateResourceTransformation creates the ResourceTransformation CR
 func (c *Client) CreateResourceTransformation(ResourceTransformation *storkv1alpha1.ResourceTransformation) (*storkv1alpha1.ResourceTransformation, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func (c *Client) CreateResourceTransformation(ResourceTransformation *storkv1alp
 	return c.stork.StorkV1alpha1().ResourceTransformations(ResourceTransformation.Namespace).Create(context.TODO(), ResourceTransformation, metav1.CreateOptions{})
 }
 
-// GetResourceTransformation gets the ResourceTransformation
+// GetResourceTransformation gets the ResourceTransformation CR
 func (c *Client) GetResourceTransformation(name string, namespace string) (*storkv1alpha1.ResourceTransformation, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (c *Client) GetResourceTransformation(name string, namespace string) (*stor
 	return ResourceTransformation, nil
 }
 
-// ListResourceTransformations lists all the ResourceTransformations
+// ListResourceTransformations lists all the ResourceTransformations CR
 func (c *Client) ListResourceTransformations(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.ResourceTransformationList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (c *Client) ListResourceTransformations(namespace string, filterOptions met
 	return ResourceTransformations, nil
 }
 
-// UpdateResourceTransformation updates the ResourceTransformation
+// UpdateResourceTransformation updates the ResourceTransformation CR
 func (c *Client) UpdateResourceTransformation(ResourceTransformation *storkv1alpha1.ResourceTransformation) (*storkv1alpha1.ResourceTransformation, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (c *Client) UpdateResourceTransformation(ResourceTransformation *storkv1alp
 	return c.stork.StorkV1alpha1().ResourceTransformations(ResourceTransformation.Namespace).Update(context.TODO(), ResourceTransformation, metav1.UpdateOptions{})
 }
 
-// DeleteResourceTransformation deletes the ResourceTransformation
+// DeleteResourceTransformation deletes the ResourceTransformation CR
 func (c *Client) DeleteResourceTransformation(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
