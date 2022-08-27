@@ -7,6 +7,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+const (
+	headlessService = "service.kubernetes.io/headless"
+)
+
 func (r *ResourceCollector) endpointsToBeCollected(
 	object runtime.Unstructured,
 ) (bool, error) {
@@ -32,6 +36,13 @@ func (r *ResourceCollector) endpointsToBeCollected(
 	if endpoint.Annotations != nil {
 		// collect manually created endpoint resources
 		if _, ok := endpoint.Annotations[v1.LastAppliedConfigAnnotation]; !ok {
+			return false, nil
+		}
+	}
+	if endpoint.Labels != nil {
+		// skip collecting endpointfs for headless service
+		// https://kubernetes.io/docs/reference/labels-annotations-taints/#servicekubernetesioheadless
+		if _, ok := endpoint.Labels[headlessService]; ok {
 			return false, nil
 		}
 
