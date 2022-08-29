@@ -10,6 +10,9 @@ const (
 	CattlePrefix = "cattle.io"
 	// CattleProjectPrefix is the prefix used in all Rancher project related annotations and labels
 	CattleProjectPrefix = "cattle.io/projectId"
+	// PXIncrementalCountAnnotation is the annotation used to set cloud backup incremental count
+	// for volume
+	PXIncrementalCountAnnotation = "portworx.io/cloudsnap-incremental-count"
 )
 
 // ParseKeyValueList parses a list of key=values string into a map
