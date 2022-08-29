@@ -124,6 +124,8 @@ type DailyPolicy struct {
 	// Options to be passed in to the driver. These will be passed in
 	// to the object being triggered
 	Options map[string]string `json:"options"`
+	// ForceFullSnapshotDay specifies day of the week for full snapshot to take place
+	ForceFullSnapshotDay string `json:"forceFullSnapshotDay"`
 }
 
 // GetHourMinute parses and return the hour and minute specified in the policy

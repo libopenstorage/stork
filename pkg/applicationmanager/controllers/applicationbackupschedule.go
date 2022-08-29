@@ -14,6 +14,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/schedule"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -41,7 +42,6 @@ const (
 	// ApplicationBackupObjectLockRetentionAnnotation - object lock retention period annotation
 	// Since this annotation is used in the px-backup, creating with portworx.io annotation prefix.
 	ApplicationBackupObjectLockRetentionAnnotation = "portworx.io/" + "object-lock-retention-period"
-	incrementalCountAnnotation                     = "portworx.io/cloudsnap-incremental-count"
 	dayInSec                                       = 86400
 	//ObjectLockDefaultIncrementalCount default incremental backup count
 	ObjectLockDefaultIncrementalCount = 5
@@ -453,8 +453,8 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 				backupscheduleCreationTime, diff, elaspedDays, elaspedDaysInSecs, currentDayStartTime)
 
 			if lastSuccessfulBackupCreateTime < currentDayStartTime {
-				// forcing it to be full backup, by setting the incrementalCountAnnotation to zero
-				backup.Spec.Options[incrementalCountAnnotation] = fmt.Sprintf("%v", 0)
+				// forcing it to be full backup, by setting the PXIncrementalCountAnnotation to zero
+				backup.Spec.Options[utils.PXIncrementalCountAnnotation] = fmt.Sprintf("%v", 0)
 			}
 		}
 	}
