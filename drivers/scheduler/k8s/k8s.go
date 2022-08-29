@@ -208,6 +208,7 @@ type K8s struct {
 	VaultAddress            string
 	VaultToken              string
 	PureVolumes             bool
+	PureSANType             string
 	helmValuesConfigMapName string
 }
 
@@ -246,6 +247,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
+	k.PureSANType = schedOpts.PureSANType
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -1261,6 +1263,15 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			obj.Provisioner = volume.GetStorageProvisioner()
 		}
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
+
+		if k.PureVolumes {
+			// Pure NVMe volumes don't support QoS yet, so we need to remove it for NVMe tests
+			if k.PureSANType == "NVMEOF-RDMA" {
+				delete(obj.Parameters, "max_iops")
+				delete(obj.Parameters, "max_bandwidth")
+				logrus.Infof("Removing QoS parameters in %v for Pure NVMeoF-RDMA SAN type", obj.Name)
+			}
+		}
 
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {

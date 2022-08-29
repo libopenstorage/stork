@@ -102,6 +102,8 @@ type InitOptions struct {
 	VaultToken string
 	// PureVolumes identifies if this setup is using Pure backend
 	PureVolumes bool
+	// PureSANType identifies which SAN type is being used for Pure volumes
+	PureSANType string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

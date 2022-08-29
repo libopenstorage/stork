@@ -287,6 +287,7 @@ func InitInstance() {
 		VaultAddress:            Inst().VaultAddress,
 		VaultToken:              Inst().VaultToken,
 		PureVolumes:             Inst().PureVolumes,
+		PureSANType:             Inst().PureSANType,
 		HelmValuesConfigMapName: Inst().HelmValuesConfigMap,
 	})
 	expect(err).NotTo(haveOccurred())
@@ -3145,6 +3146,7 @@ type Torpedo struct {
 	Backup                              backup.Driver
 	SecretType                          string
 	PureVolumes                         bool
+	PureSANType                         string
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
@@ -3185,6 +3187,7 @@ func ParseFlags() {
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool
+	var pureSANType string
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
@@ -3220,6 +3223,7 @@ func ParseFlags() {
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
 	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
+	flag.StringVar(&pureSANType, "pure-san-type", "ISCSI", "If using Pure volumes, which SAN type is being used. ISCSI, FC, and NVMEOF-RDMA are all valid values.")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
@@ -3304,6 +3308,7 @@ func ParseFlags() {
 				Backup:                              backupDriver,
 				SecretType:                          secretType,
 				PureVolumes:                         pureVolumes,
+				PureSANType:                         pureSANType,
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,
