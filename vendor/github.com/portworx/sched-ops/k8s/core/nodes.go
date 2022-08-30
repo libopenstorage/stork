@@ -138,7 +138,8 @@ func (c *Client) IsNodeMaster(node corev1.Node) bool {
 	// for newer k8s these fields exist but they are empty
 	_, hasMasterLabel := node.Labels[masterLabelKey]
 	_, hasControlPlaneLabel := node.Labels[controlplaneLabelKey]
-	if hasMasterLabel || hasControlPlaneLabel {
+	_, hasControlDashPlaneLabel := node.Labels[controlDashPlaneLabelKey]
+	if hasMasterLabel || hasControlPlaneLabel || hasControlDashPlaneLabel {
 		return true
 	}
 	return false
