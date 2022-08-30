@@ -69,6 +69,10 @@ if [ -z "${IS_PURE_VOLUMES}" ]; then
     IS_PURE_VOLUMES=false
 fi
 
+if [ -z "${PURE_SAN_TYPE}" ]; then
+    PURE_SAN_TYPE=ISCSI
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -424,6 +428,7 @@ spec:
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",
+            "--pure-san-type=$PURE_SAN_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
