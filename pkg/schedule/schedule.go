@@ -238,7 +238,7 @@ func GetOptions(policyName string, namespace string, policyType stork_api.Schedu
 			if currentDay == scheduledDay {
 				options[utils.PXIncrementalCountAnnotation] = "0"
 			}
-			logrus.Debugf("Forcing full-snapshot for daily snapshotschedule policy on the day %s", schedulePolicy.Policy.Daily.ForceFullSnapshotDay)
+			logrus.Infof("Forcing full-snapshot for daily snapshotschedule policy on the day %s", schedulePolicy.Policy.Daily.ForceFullSnapshotDay)
 		}
 		return options, nil
 	case stork_api.SchedulePolicyTypeWeekly:
