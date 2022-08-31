@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: sysbench-sc-secure
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+  priority_io: "high"
+  io_profile: "db"
+  snap_schedule: "periodic=120,1"
+allowVolumeExpansion: true
