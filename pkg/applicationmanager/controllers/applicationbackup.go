@@ -1025,9 +1025,21 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	}
 	if v1CrdApiReqrd {
 		var crds []*apiextensionsv1.CustomResourceDefinition
+		crdsGroups := make(map[string]bool)
+		// First collect the group detail for the CRDs, which has CR
 		for _, crd := range crdList.Items {
 			for _, v := range crd.Resources {
 				if _, ok := resKinds[v.Kind]; !ok {
+					continue
+				}
+				crdsGroups[v.Group] = true
+			}
+
+		}
+		// pick up all the CRDs that belongs to the group in the crdsGroups map
+		for _, crd := range crdList.Items {
+			for _, v := range crd.Resources {
+				if _, ok := crdsGroups[v.Group]; !ok {
 					continue
 				}
 				crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
@@ -1053,9 +1065,20 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 		return nil
 	}
 	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	crdsGroups := make(map[string]bool)
+	// First collect the group detail for the CRDs, which has CR
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
 			if _, ok := resKinds[v.Kind]; !ok {
+				continue
+			}
+			crdsGroups[v.Group] = true
+		}
+	}
+	// pick up all the CRDs that belongs to the group in the crdsGroups map
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			if _, ok := crdsGroups[v.Group]; !ok {
 				continue
 			}
 			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
