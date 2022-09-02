@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aquilax/truncate"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -23,7 +25,8 @@ import (
 
 const (
 	defaultPXNamespace = "kube-system"
-	kdmpConfig         = "kdmp-config"
+	// KdmpConfig defines the config map name of kdmp module
+	KdmpConfig = "kdmp-config"
 	// TriggeredFromStork - denotes the kopia job is triggered from stork module
 	TriggeredFromStork = "stork"
 	// TriggeredFromPxBackup - denotes the kopia job is triggered from px-backup module
@@ -39,6 +42,10 @@ const (
 	ImageSecret = "image-secret"
 	// CertSecret - cert secret prefix
 	CertSecret = "cert-secret"
+	// ResourceCleanupKey - this key controls the enable or disable of the resource cleanup process.
+	ResourceCleanupKey = "RESOURCE_CLEANUP"
+	// ResourceCleanupDefaultValue is true as resource cleanup process is enabled by default for debugging user can set to false.
+	ResourceCleanupDefaultValue = "true"
 )
 
 var (
@@ -215,11 +222,28 @@ func GetConfigValue(cm, ns, key string) string {
 		ns,
 	)
 	if err != nil {
-		logrus.Warnf("Failed in getting value for key [%v] from configmap[%v]", key, kdmpConfig)
+		logrus.Warnf("Failed in getting value for key [%v] from configmap[%v]", key, KdmpConfig)
 		// try reading from the Env variable
 		return os.Getenv(key)
 	}
 	return configMap.Data[key]
+}
+
+// DoCleanupResource returns whether to cleanup the CRs & other resources.
+func DoCleanupResource() (bool, error) {
+	doCleanup := true
+	cleanupResourceVal, err := k8sutils.GetConfigValue(KdmpConfig, defaultPXNamespace, ResourceCleanupKey)
+	if err != nil {
+		logrus.Errorf("Failed to get %s key from kdmp-config-map: %v", ResourceCleanupKey, err)
+		return true, err
+	}
+	if cleanupResourceVal != "" {
+		doCleanup, err = strconv.ParseBool(cleanupResourceVal)
+		if err != nil {
+			return true, err
+		}
+	}
+	return doCleanup, nil
 }
 
 // ResticExecutorImage returns a docker image that contains resticexecutor binary.
