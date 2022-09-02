@@ -2,6 +2,7 @@ package drivers
 
 import (
 	"fmt"
+
 	batchv1 "k8s.io/api/batch/v1"
 )
 
@@ -46,6 +47,7 @@ const (
 	CertFileName         = "public.crt"
 	CertSecretName       = "tls-s3-cert"
 	CertMount            = "/etc/tls-s3-cert"
+	NfsMount             = "/tmp/nfs-target/"
 )
 
 // Driver job options.

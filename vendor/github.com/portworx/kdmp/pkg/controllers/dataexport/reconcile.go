@@ -273,6 +273,18 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			compressionType = kdmpData.Data[compressionKey]
 			podDataPath = kdmpData.Data[backupPath]
 		}
+		blName := dataExport.Spec.Destination.Name
+		blNamespace := dataExport.Spec.Destination.Namespace
+		backupLocation, err := readBackupLocation(blName, blNamespace, "")
+		if err != nil {
+			msg := fmt.Sprintf("reading of backuplocation [%v/%v] failed: %v", blNamespace, blName, err)
+			logrus.Errorf(msg)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: msg,
+			}
+			return false, c.updateStatus(dataExport, data)
+		}
 
 		// start data transfer
 		id, err := startTransferJob(
@@ -283,6 +295,8 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			podDataPath,
 			utils.KdmpConfigmapName,
 			utils.KdmpConfigmapNamespace,
+			backupLocation.Location.NfsConfig.NfsServerAddr,
+			backupLocation.Location.Path,
 		)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
@@ -429,6 +443,17 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		data := updateDataExportDetail{
 			stage: kdmpapi.DataExportStageFinal,
 		}
+		// Append the job-pod log to stork's pod log in case of failure
+		// it is best effort approach, hence errors are ignored.
+		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+			if dataExport.Status.TransferID != "" {
+				namespace, name, err := utils.ParseJobID(dataExport.Status.TransferID)
+				if err != nil {
+					logrus.Infof("job-pod name and namespace extraction failed: %v", err)
+				}
+				appendPodLogToStork(name, namespace)
+			}
+		}
 		cleanupTask := func() (interface{}, bool, error) {
 			cleanupErr := c.cleanUp(driver, dataExport)
 			if cleanupErr != nil {
@@ -450,6 +475,34 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		return false, nil
 	}
 	return false, nil
+}
+
+func appendPodLogToStork(jobName string, namespace string) {
+	// Get job and check whether it has live pod attaced to it
+	job, err := batch.Instance().GetJob(jobName, namespace)
+	if err != nil && !k8sErrors.IsNotFound(err) {
+		logrus.Infof("failed in getting job %v/%v with err: %v", namespace, jobName, err)
+	}
+	pods, err := core.Instance().GetPods(
+		job.Namespace,
+		map[string]string{
+			"job-name": job.Name,
+		},
+	)
+	if err != nil {
+		logrus.Infof("failed in fetching job pods %s/%s: %v", namespace, jobName, err)
+	}
+	for _, pod := range pods.Items {
+		numLogLines := int64(50)
+		podLog, err := core.Instance().GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{TailLines: &numLogLines})
+		if err != nil {
+			logrus.Infof("error fetching log of job-pod %s: %v", pod.Name, err)
+		} else {
+			logrus.Infof("start of job-pod [%s]'s log...", pod.Name)
+			logrus.Infof(podLog)
+			logrus.Infof("end of job-pod [%s]'s log...", pod.Name)
+		}
+	}
 }
 
 func (c *Controller) createJobCredCertSecrets(
@@ -1190,6 +1243,13 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 
 func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) error {
 	var bl *storkapi.BackupLocation
+	doCleanup, err := utils.DoCleanupResource()
+	if err != nil {
+		return err
+	}
+	if (de.Status.Status == kdmpapi.DataExportStatusFailed) && !doCleanup {
+		return nil
+	}
 	if driver == nil {
 		return fmt.Errorf("driver is nil")
 	}
@@ -1557,7 +1617,10 @@ func startTransferJob(
 	dataExport *kdmpapi.DataExport,
 	podDataPath string,
 	jobConfigMap string,
-	jobConfigMapNs string) (string, error) {
+	jobConfigMapNs string,
+	nfsServerAddr string,
+	nfsExportPath string,
+) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
 	}
@@ -1605,6 +1668,8 @@ func startTransferJob(
 			drivers.WithPodDatapathType(podDataPath),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
+			drivers.WithNfsServer(nfsServerAddr),
+			drivers.WithNfsExportDir(nfsExportPath),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
@@ -1899,6 +1964,8 @@ func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string, 
 		return createGoogleSecret(secretName, backupLocation, namespace, labels)
 	case storkapi.BackupLocationAzure:
 		return createAzureSecret(secretName, backupLocation, namespace, labels)
+	case storkapi.BackupLocationNFS:
+		return createNfsSecret(secretName, backupLocation, namespace, labels)
 	}
 
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
@@ -1960,6 +2027,17 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
+	err := createJobSecret(secretName, namespace, credentialData, labels)
+
+	return err
+}
+
+func createNfsSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
+	credentialData := make(map[string][]byte)
+	credentialData["type"] = []byte(backupLocation.Location.Type)
+	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.NfsServerAddr)
+	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["path"] = []byte(backupLocation.Location.Path)
 	err := createJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
