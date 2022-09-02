@@ -506,6 +506,14 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	}
 }
 
+func (d *dcos) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*volume.Volume, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPureVolumes()",
+	}
+}
+
 func (d *dcos) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
@@ -879,15 +887,23 @@ func (d *dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string
 	//CreateCsiSnapsForVolumes is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "CreateCsiSanpshot()",
+		Operation: "CreateCsiSnapsForVolumes()",
 	}
 }
 
-func (d *dcos) CreateCsiSnapsAndValidate(ctx *scheduler.Context, snapClass string) error {
-	//CreateCsiSnapsAndValidate is not supported
+func (d *dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest) error {
+	//CSICloneTest is not supported for DCOS
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "CreateCsiSnapsAndValidate()",
+		Operation: "CSICloneTest()",
+	}
+}
+
+func (d *dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+	//CSISnapshotTest is not supported for DCOS
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CSISnapshotTest()",
 	}
 }
 

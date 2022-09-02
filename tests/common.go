@@ -35,7 +35,6 @@ import (
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,6 +50,7 @@ import (
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
@@ -477,9 +477,15 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
+		Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCSIVolumeClone(ctx, errChan...)
+			}
+		})
+
 		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeSnapshotAndRestore(ctx, errChan...)
+				ValidateCSISnapshotAndRestore(ctx, errChan...)
 			}
 		})
 
@@ -552,9 +558,15 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			}
 		})
 
+		Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCSIVolumeClone(ctx, errChan...)
+			}
+		})
+
 		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeSnapshotAndRestore(ctx, errChan...)
+				ValidateCSISnapshotAndRestore(ctx, errChan...)
 			}
 		})
 
@@ -794,7 +806,7 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
 		processError(err, errChan...)
 
-		mountPath, bytesToWrite := getPureAppDataDir(pods[0].Namespace)
+		mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
 
 		// write to the Direct Access volume
 		ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s/myfile", bytesToWrite/512, mountPath)
@@ -812,9 +824,10 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 	})
 }
 
-// ValidatePureVolumeSnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
-func ValidatePureVolumeSnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
+// ValidateCSISnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
+func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an snapshot and restoring", func() {
+		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "-" + timestamp
 		if _, err := Inst().S.CreateCsiSanpshotClass(snapShotClassName, "Delete"); err != nil {
@@ -822,9 +835,53 @@ func ValidatePureVolumeSnapshotAndRestore(ctx *scheduler.Context, errChan ...*ch
 			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
 		}
 
-		err := Inst().S.CreateCsiSnapsAndValidate(ctx, snapShotClassName)
-		processError(err, errChan...)
+		var vols []*volume.Volume
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx, "pure_block")
+			processError(err, errChan...)
+		})
+		if len(vols) == 0 {
+			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
+			processError(err, errChan...)
+		} else {
+			request := scheduler.CSISnapshotRequest {
+				Namespace: vols[0].Namespace,
+				Timestamp: timestamp,
+				OriginalPVCName: vols[0].Name,
+				SnapName: "basic-csi-snapshot-" + timestamp,
+				RestoredPVCName: "csi-restored-" + timestamp,
+				SnapshotclassName: snapShotClassName,
+			}
+			err = Inst().S.CSISnapshotTest(ctx, request)
+			processError(err, errChan...)
+		}
+	})
+}
 
+// ValidateCSIVolumeClone is the ginkgo spec for cloning a volume and verifying the content
+func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an cloning", func() {
+		var err error
+		var vols []*volume.Volume
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx, "pure_block")
+			processError(err, errChan...)
+		})
+		if len(vols) == 0 {
+			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
+			processError(err, errChan...)
+		} else {
+			timestamp := strconv.Itoa(int(time.Now().Unix()))
+			request := scheduler.CSICloneRequest{
+				Timestamp: timestamp,
+				Namespace: vols[0].Namespace,
+				OriginalPVCName: vols[0].Name,
+				RestoredPVCName: "csi-cloned-" + timestamp,
+			}
+
+			err = Inst().S.CSICloneTest(ctx, request)
+			processError(err, errChan...)
+		}
 	})
 }
 
@@ -833,26 +890,6 @@ func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 		return errUnexpectedSizeChangeAfterPureIO
 	}
 	return nil
-}
-
-// getPureAppDataDir checks the pod namespace prefix, and returns a path that we can
-// write data to on a volume. Because the mountpath varies so heavily between applications
-// (some have multiple PVCs, some have configmap vols, etc. etc.) this is the easiest way
-// at the moment. As more apps get added to our test suite, we should add them here.
-func getPureAppDataDir(namespace string) (string, int) {
-	if strings.HasPrefix(namespace, "nginx-without-enc") {
-		return "/usr/share/nginx/html", units.GiB / 2
-	}
-	if strings.HasPrefix(namespace, "wordpress") {
-		return "/var/www/html", units.GiB / 2
-	}
-	if strings.HasPrefix(namespace, "elasticsearch") {
-		return "/usr/share/elasticsearch/data", units.GiB * 2
-	}
-	if strings.HasPrefix(namespace, "mysql-without-enc") {
-		return "/var/lib/mysql", units.GiB
-	}
-	return "", 0
 }
 
 // GetVolumeParameters returns volume parameters for all volumes for given context
