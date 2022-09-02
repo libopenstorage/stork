@@ -514,7 +514,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20220824204524-83eb5c1e8e71
+# github.com/libopenstorage/operator v0.0.0-20220902021548-739a5302030d
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/pkg/apis/core/v1
 github.com/libopenstorage/operator/pkg/client/clientset/versioned

@@ -787,8 +787,10 @@ func ValidateUninstallStorageCluster(
 	}
 
 	// Verify telemetry secret is deleted on UninstallAndWipe
+	// Only do the validation when telemetry is enabled, since if it's disabled, there's a chance secret owner is not set yet
+	telemetryEnabled := cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil && cluster.Spec.Monitoring.Telemetry.Enabled
 	_, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace)
-	if !errors.IsNotFound(err) {
+	if !errors.IsNotFound(err) && telemetryEnabled {
 		return fmt.Errorf("telemetry secret pure-telemetry-certs was found when shouldn't have been")
 	}
 
@@ -1112,7 +1114,7 @@ func validateComponents(pxImageList map[string]string, cluster *corev1.StorageCl
 	}
 
 	// Validate CSI components and images
-	if ValidateCSI(pxImageList, cluster, timeout, interval); err != nil {
+	if err := ValidateCSI(pxImageList, cluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -1122,7 +1124,7 @@ func validateComponents(pxImageList map[string]string, cluster *corev1.StorageCl
 	}
 
 	// Validate PortworxProxy
-	if err = ValidatePortworxProxy(cluster, timeout); err != nil {
+	if err = ValidatePortworxProxy(cluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -1142,42 +1144,76 @@ func validateComponents(pxImageList map[string]string, cluster *corev1.StorageCl
 
 // ValidateKvdb validates Portworx KVDB components
 func ValidateKvdb(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	logrus.Info("Validate Internal KVDB components")
 	if cluster.Spec.Kvdb.Internal {
-		logrus.Debug("Internal KVDB is Enabled")
+		logrus.Debug("Internal KVDB is enabled in StorageCluster")
+		return ValidateInternalKvdbEnabled(cluster, timeout, interval)
+	}
+	logrus.Debug("Internal KVDB is disabled in StorageCluster")
+	return ValidateInternalKvdbDisabled(cluster, timeout, interval)
+}
 
-		t := func() (interface{}, bool, error) {
-			// Validate KVDB pods
-			listOptions := map[string]string{"kvdb": "true"}
-			podList, err := coreops.Instance().GetPods(cluster.Namespace, listOptions)
-			if err != nil {
-				return nil, true, fmt.Errorf("failed to get KVDB pods, Err: %v", err)
-			}
+// ValidateInternalKvdbEnabled validates that all Internal KVDB components are enabled/created
+func ValidateInternalKvdbEnabled(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	logrus.Debug("Validate Internal KVDB components are enabled")
 
-			desiredKvdbPodCount := 3
-			if len(podList.Items) != desiredKvdbPodCount {
-				return nil, true, fmt.Errorf("failed to validate KVDB pod count, expected: %d, actual: %d", desiredKvdbPodCount, len(podList.Items))
-			}
-			logrus.Debugf("Found all %d/%d Internal KVDB pods", len(podList.Items), desiredKvdbPodCount)
-
-			// Validate Portworx KVDB service
-			portworxKvdbServiceName := "portworx-kvdb-service"
-			_, err = coreops.Instance().GetService(portworxKvdbServiceName, cluster.Namespace)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					return nil, true, fmt.Errorf("failed to validate Portworx KVDB service %s, Err: %v", portworxKvdbServiceName, err)
-				}
-				return nil, true, fmt.Errorf("failed to get Portworx KVDB service %s, Err: %v", portworxKvdbServiceName, err)
-			}
-			return nil, false, nil
+	t := func() (interface{}, bool, error) {
+		// Validate KVDB pods
+		listOptions := map[string]string{"kvdb": "true"}
+		podList, err := coreops.Instance().GetPods(cluster.Namespace, listOptions)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get KVDB pods, Err: %v", err)
 		}
 
-		if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
-			return err
+		desiredKvdbPodCount := 3
+		if len(podList.Items) != desiredKvdbPodCount {
+			return nil, true, fmt.Errorf("failed to validate KVDB pod count, expected: %d, actual: %d", desiredKvdbPodCount, len(podList.Items))
+		}
+		logrus.Debugf("Found all %d/%d Internal KVDB pods", len(podList.Items), desiredKvdbPodCount)
+
+		// Validate Portworx KVDB service
+		portworxKvdbServiceName := "portworx-kvdb-service"
+		_, err = coreops.Instance().GetService(portworxKvdbServiceName, cluster.Namespace)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil, true, fmt.Errorf("failed to validate Portworx KVDB service %s, Err: %v", portworxKvdbServiceName, err)
+			}
+			return nil, true, fmt.Errorf("failed to get Portworx KVDB service %s, Err: %v", portworxKvdbServiceName, err)
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateInternalKvdbDisabled validates that all Internal KVDB components are disabled/deleted
+func ValidateInternalKvdbDisabled(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	logrus.Debug("Validate Internal KVDB components are disabled")
+
+	t := func() (interface{}, bool, error) {
+		// Validate KVDB pods
+		listOptions := map[string]string{"kvdb": "true"}
+		_, err := coreops.Instance().GetPods(cluster.Namespace, listOptions)
+		if !errors.IsNotFound(err) {
+			return nil, true, fmt.Errorf("found KVDB pods, waiting for deletion")
 		}
 
-		logrus.Debug("Successfully validated Internal KVDB and its components")
-	} else {
-		logrus.Debug("Internal KVDB is Disabled")
+		// Validate Portworx KVDB service
+		portworxKvdbServiceName := "portworx-kvdb-service"
+		_, err = coreops.Instance().GetService(portworxKvdbServiceName, cluster.Namespace)
+		if !errors.IsNotFound(err) {
+			return nil, true, fmt.Errorf("found %s service, waiting for deletion", portworxKvdbServiceName)
+		}
+
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
 	}
 
 	return nil
@@ -1185,93 +1221,146 @@ func ValidateKvdb(cluster *corev1.StorageCluster, timeout, interval time.Duratio
 
 // ValidatePvcController validates PVC Controller components and images
 func ValidatePvcController(pxImageList map[string]string, cluster *corev1.StorageCluster, k8sVersion string, timeout, interval time.Duration) error {
-	pvcControllerDp := &appsv1.Deployment{}
-	pvcControllerDp.Name = "portworx-pvc-controller"
-	pvcControllerDp.Namespace = cluster.Namespace
+	logrus.Info("Validate PVC Controller components")
 
+	pvcControllerDp := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "portworx-pvc-controller",
+			Namespace: cluster.Namespace,
+		},
+	}
+
+	// Check if PVC Controller is enabled or disabled
 	if isPVCControllerEnabled(cluster) {
-		logrus.Debug("PVC Controller is Enabled")
+		return ValidatePvcControllerEnabled(pvcControllerDp, cluster, k8sVersion, timeout, interval)
+	}
+	return ValidatePvcControllerDisabled(pvcControllerDp, timeout, interval)
+}
 
+// ValidatePvcControllerEnabled validates that all PVC Controller components are enabled/created
+func ValidatePvcControllerEnabled(pvcControllerDp *appsv1.Deployment, cluster *corev1.StorageCluster, k8sVersion string, timeout, interval time.Duration) error {
+	logrus.Info("PVC Controller should be enabled")
+
+	t := func() (interface{}, bool, error) {
 		if err := appops.Instance().ValidateDeployment(pvcControllerDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
-		if err := validateImageTag(k8sVersion, cluster.Namespace, map[string]string{"name": "portworx-pvc-controller"}); err != nil {
-			return err
+		if err := validateImageTag(k8sVersion, pvcControllerDp.Namespace, map[string]string{"name": "portworx-pvc-controller"}); err != nil {
+			return nil, true, err
 		}
 
 		// Validate PVC Controller custom port, if any were set
 		if err := validatePvcControllerPorts(cluster, pvcControllerDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate PVC Controller ClusterRole
 		_, err := rbacops.Instance().GetClusterRole(pvcControllerDp.Name)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRole %s, Err: %v", pvcControllerDp.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ClusterRole %s, Err: %v", pvcControllerDp.Name, err)
 		}
 
 		// Validate PVC Controller ClusterRoleBinding
 		_, err = rbacops.Instance().GetClusterRoleBinding(pvcControllerDp.Name)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRoleBinding %s, Err: %v", pvcControllerDp.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ClusterRoleBinding %s, Err: %v", pvcControllerDp.Name, err)
 		}
 
 		// Validate PVC Controller ServiceAccount
 		_, err = coreops.Instance().GetServiceAccount(pvcControllerDp.Name, pvcControllerDp.Namespace)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ServiceAccount %s, Err: %v", pvcControllerDp.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ServiceAccount %s, Err: %v", pvcControllerDp.Name, err)
 		}
 
 		// Validate PVC controller deployment pod topology spread constraints
 		if err := validatePodTopologySpreadConstraints(pvcControllerDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
-	} else {
-		logrus.Debug("PVC Controller is Disabled")
+
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	logrus.Info("PVC Controller is enabled")
+	return nil
+}
+
+// ValidatePvcControllerDisabled validates that all PVC Controller components are disabled/deleted
+func ValidatePvcControllerDisabled(pvcControllerDp *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Info("PVC Controller should be disabled")
+
+	t := func() (interface{}, bool, error) {
 		// Validate portworx-pvc-controller deployment is terminated or doesn't exist
 		if err := validateTerminatedDeployment(pvcControllerDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate VC Controller ClusterRole doesn't exist
 		_, err := rbacops.Instance().GetClusterRole(pvcControllerDp.Name)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRole %s, is found when shouldn't be", pvcControllerDp.Name)
+			return nil, true, fmt.Errorf("failed to validate ClusterRole %s, is found when shouldn't be", pvcControllerDp.Name)
 		}
 
 		// Validate VC Controller ClusterRoleBinding doesn't exist
 		_, err = rbacops.Instance().GetClusterRoleBinding(pvcControllerDp.Name)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRoleBinding %s, is found when shouldn't be", pvcControllerDp.Name)
+			return nil, true, fmt.Errorf("failed to validate ClusterRoleBinding %s, is found when shouldn't be", pvcControllerDp.Name)
 		}
 
 		// Validate VC Controller ServiceAccount doesn't exist
 		_, err = coreops.Instance().GetServiceAccount(pvcControllerDp.Name, pvcControllerDp.Namespace)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ServiceAccount %s, is found when shouldn't be", pvcControllerDp.Name)
+			return nil, true, fmt.Errorf("failed to validate ServiceAccount %s, is found when shouldn't be", pvcControllerDp.Name)
 		}
+
+		return "", false, nil
 	}
 
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	logrus.Info("PVC Controller is disabled")
 	return nil
 }
 
 // ValidateStork validates Stork components and images
 func ValidateStork(pxImageList map[string]string, cluster *corev1.StorageCluster, k8sVersion string, timeout, interval time.Duration) error {
-	storkDp := &appsv1.Deployment{}
-	storkDp.Name = "stork"
-	storkDp.Namespace = cluster.Namespace
+	logrus.Info("Validate Stork components")
 
-	storkSchedulerDp := &appsv1.Deployment{}
-	storkSchedulerDp.Name = "stork-scheduler"
-	storkSchedulerDp.Namespace = cluster.Namespace
+	storkDp := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "stork",
+			Namespace: cluster.Namespace,
+		},
+	}
+
+	storkSchedulerDp := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "stork-scheduler",
+			Namespace: cluster.Namespace,
+		},
+	}
 
 	if cluster.Spec.Stork != nil && cluster.Spec.Stork.Enabled {
-		logrus.Debug("Stork is Enabled in StorageCluster")
+		logrus.Debug("Stork is enabled in StorageCluster")
+		return ValidateStorkEnabled(pxImageList, cluster, storkDp, storkSchedulerDp, k8sVersion, timeout, interval)
+	}
+	logrus.Debug("Stork is disabled in StorageCluster")
+	return ValidateStorkDisabled(cluster, storkDp, storkSchedulerDp, timeout, interval)
+}
 
-		// Validate stork deployment and pods
+// ValidateStorkEnabled validates that all Stork components are enabled/created
+func ValidateStorkEnabled(pxImageList map[string]string, cluster *corev1.StorageCluster, storkDp, storkSchedulerDp *appsv1.Deployment, k8sVersion string, timeout, interval time.Duration) error {
+	logrus.Info("Validate Stork components are enabled")
+
+	t := func() (interface{}, bool, error) {
 		if err := validateDeployment(storkDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		var storkImage string
@@ -1279,7 +1368,7 @@ func ValidateStork(pxImageList map[string]string, cluster *corev1.StorageCluster
 			if value, ok := pxImageList["stork"]; ok {
 				storkImage = value
 			} else {
-				return fmt.Errorf("failed to find image for stork")
+				return nil, true, fmt.Errorf("failed to find image for stork")
 			}
 		} else {
 			storkImage = cluster.Spec.Stork.Image
@@ -1287,88 +1376,123 @@ func ValidateStork(pxImageList map[string]string, cluster *corev1.StorageCluster
 
 		pods, err := coreops.Instance().GetPods(cluster.Namespace, map[string]string{"name": "stork"})
 		if err != nil {
-			return err
+			return nil, true, err
 		}
 
 		if err := validateContainerImageInsidePods(cluster, storkImage, "stork", pods); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate stork namespace env var
 		if err := validateStorkNamespaceEnvVar(cluster.Namespace, storkDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate stork-scheduler deployment and pods
 		if err := validateDeployment(storkSchedulerDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		K8sVer1_22, _ := version.NewVersion("1.22")
 		kubeVersion, _, err := GetFullVersion()
 		if err != nil {
-			return err
+			return nil, true, err
 		}
 
 		if kubeVersion != nil && kubeVersion.GreaterThanOrEqual(K8sVer1_22) {
 			// TODO Image tag for stork-scheduler is hardcoded to v1.21.4 for clusters 1.22 and up
 			if err = validateImageTag("v1.21.4", cluster.Namespace, map[string]string{"name": "stork-scheduler"}); err != nil {
-				return err
+				return nil, true, err
 			}
 		} else {
 			if err = validateImageTag(k8sVersion, cluster.Namespace, map[string]string{"name": "stork-scheduler"}); err != nil {
-				return err
+				return nil, true, err
 			}
 		}
 
 		// Validate webhook-controller arguments
 		if err := validateStorkWebhookController(cluster.Spec.Stork.Args, storkDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate hostNetwork parameter
 		if err := validateStorkHostNetwork(cluster.Spec.Stork.HostNetwork, storkDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate stork deployment pod topology spread constraints
 		if err := validatePodTopologySpreadConstraints(storkDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate stork scheduler deployment pod topology spread constraints
 		if err := validatePodTopologySpreadConstraints(storkSchedulerDp, timeout, interval); err != nil {
-			return err
-		}
-	} else {
-		logrus.Debug("Stork is Disabled in StorageCluster")
-		// Validate stork deployment is terminated or doesn't exist
-		if err := validateTerminatedDeployment(storkDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
-		// Validate stork-scheduler deployment is terminated or doesn't exist
-		if err := validateTerminatedDeployment(storkSchedulerDp, timeout, interval); err != nil {
-			return err
-		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
 	}
 
 	return nil
 }
 
+// ValidateStorkDisabled validates that all Stork components are disabled/deleted
+func ValidateStorkDisabled(cluster *corev1.StorageCluster, storkDp, storkSchedulerDp *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Info("Validate Stork components are disabled")
+
+	t := func() (interface{}, bool, error) {
+		// Validate stork deployment is terminated or doesn't exist
+		if err := validateTerminatedDeployment(storkDp, timeout, interval); err != nil {
+			return nil, true, err
+		}
+
+		// Validate stork-scheduler deployment is terminated or doesn't exist
+		if err := validateTerminatedDeployment(storkSchedulerDp, timeout, interval); err != nil {
+			return nil, true, err
+		}
+
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
 // ValidateAutopilot validates Autopilot components and images
 func ValidateAutopilot(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
-	autopilotDp := &appsv1.Deployment{}
-	autopilotDp.Name = "autopilot"
-	autopilotDp.Namespace = cluster.Namespace
-	autopilotConfigMapName := "autopilot-config"
+	logrus.Info("Validate Autopilot components")
+
+	autopilotDp := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "autopilot",
+			Namespace: cluster.Namespace,
+		},
+	}
 
 	if cluster.Spec.Autopilot != nil && cluster.Spec.Autopilot.Enabled {
 		logrus.Debug("Autopilot is Enabled in StorageCluster")
+		return ValidateAutopilotEnabled(pxImageList, cluster, autopilotDp, timeout, interval)
+	}
+	logrus.Debug("Autopilot is Disabled in StorageCluster")
+	return ValidateAutopilotDisabled(cluster, autopilotDp, timeout, interval)
+}
 
+// ValidateAutopilotEnabled validates that all Autopilot components are enabled/created
+func ValidateAutopilotEnabled(pxImageList map[string]string, cluster *corev1.StorageCluster, autopilotDp *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Info("Validate Autopilot components are enabled")
+
+	t := func() (interface{}, bool, error) {
 		// Validate autopilot deployment and pods
 		if err := validateDeployment(autopilotDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		var autopilotImage string
@@ -1376,143 +1500,197 @@ func ValidateAutopilot(pxImageList map[string]string, cluster *corev1.StorageClu
 			if value, ok := pxImageList[autopilotDp.Name]; ok {
 				autopilotImage = value
 			} else {
-				return fmt.Errorf("failed to find image for %s", autopilotDp.Name)
+				return nil, true, fmt.Errorf("failed to find image for %s", autopilotDp.Name)
 			}
 		} else {
 			autopilotImage = cluster.Spec.Autopilot.Image
 		}
 
-		pods, err := coreops.Instance().GetPods(cluster.Namespace, map[string]string{"name": "autopilot"})
+		pods, err := coreops.Instance().GetPods(cluster.Namespace, map[string]string{"name": autopilotDp.Name})
 		if err != nil {
-			return err
+			return nil, true, err
 		}
-		if err := validateContainerImageInsidePods(cluster, autopilotImage, "autopilot", pods); err != nil {
-			return err
+		if err := validateContainerImageInsidePods(cluster, autopilotImage, autopilotDp.Name, pods); err != nil {
+			return nil, true, err
 		}
 
 		// Validate Autopilot ClusterRole
 		_, err = rbacops.Instance().GetClusterRole(autopilotDp.Name)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRole %s, Err: %v", autopilotDp.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ClusterRole %s, Err: %v", autopilotDp.Name, err)
 		}
 
 		// Validate Autopilot ClusterRoleBinding
 		_, err = rbacops.Instance().GetClusterRoleBinding(autopilotDp.Name)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRoleBinding %s, Err: %v", autopilotDp.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ClusterRoleBinding %s, Err: %v", autopilotDp.Name, err)
 		}
 
 		// Validate Autopilot ConfigMap
-		_, err = coreops.Instance().GetConfigMap(autopilotConfigMapName, autopilotDp.Namespace)
+		_, err = coreops.Instance().GetConfigMap("autopilot-config", autopilotDp.Namespace)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ConfigMap %s, Err: %v", autopilotConfigMapName, err)
+			return nil, true, fmt.Errorf("failed to validate autopilot-config, Err: %v", err)
 		}
 
 		// Validate Autopilot ServiceAccount
 		_, err = coreops.Instance().GetServiceAccount(autopilotDp.Name, autopilotDp.Namespace)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ServiceAccount %s, Err: %v", autopilotDp.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ServiceAccount %s, Err: %v", autopilotDp.Name, err)
 		}
-	} else {
-		logrus.Debug("Autopilot is Disabled in StorageCluster")
+
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateAutopilotDisabled validates that all Autopilot components are disabled/deleted
+func ValidateAutopilotDisabled(cluster *corev1.StorageCluster, autopilotDp *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Info("Validate Autopilot components are disabled")
+
+	t := func() (interface{}, bool, error) {
 		// Validate autopilot deployment is terminated or doesn't exist
 		if err := validateTerminatedDeployment(autopilotDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate Autopilot ClusterRole doesn't exist
 		_, err := rbacops.Instance().GetClusterRole(autopilotDp.Name)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRole %s, is found when shouldn't be", autopilotDp.Name)
+			return nil, true, fmt.Errorf("failed to validate ClusterRole %s, is found when shouldn't be", autopilotDp.Name)
 		}
 
 		// Validate Autopilot ClusterRoleBinding doesn't exist
 		_, err = rbacops.Instance().GetClusterRoleBinding(autopilotDp.Name)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRoleBinding %s, is found when shouldn't be", autopilotDp.Name)
+			return nil, true, fmt.Errorf("failed to validate ClusterRoleBinding %s, is found when shouldn't be", autopilotDp.Name)
 		}
 
 		// Validate Autopilot ConfigMap doesn't exist
-		_, err = coreops.Instance().GetConfigMap(autopilotConfigMapName, autopilotDp.Namespace)
+		_, err = coreops.Instance().GetConfigMap("autopilot-config", autopilotDp.Namespace)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ConfigMap %s, is found when shouldn't be", autopilotConfigMapName)
+			return nil, true, fmt.Errorf("failed to validate autopilot-config, is found when shouldn't be")
 		}
 
 		// Validate Autopilot ServiceAccount doesn't exist
 		_, err = coreops.Instance().GetServiceAccount(autopilotDp.Name, autopilotDp.Namespace)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ServiceAccount %s, is found when shouldn't be", autopilotDp.Name)
+			return nil, true, fmt.Errorf("failed to validate ServiceAccount %s, is found when shouldn't be", autopilotDp.Name)
 		}
+
+		return nil, true, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // ValidatePortworxProxy validates portworx proxy components
-func ValidatePortworxProxy(cluster *corev1.StorageCluster, timeout time.Duration) error {
-	proxyDs := &appsv1.DaemonSet{}
-	proxyDs.Name = "portworx-proxy"
-	proxyDs.Namespace = "kube-system"
+func ValidatePortworxProxy(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	logrus.Info("Validate Portworx Proxy components")
 
-	pxService := &v1.Service{}
-	pxService.Name = "portworx-service"
-	pxService.Namespace = "kube-system"
+	proxyDs := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "portworx-proxy",
+			Namespace: "kube-system",
+		},
+	}
+
+	pxService := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "portworx-service",
+			Namespace: "kube-system",
+		},
+	}
 
 	if isPortworxProxyEnabled(cluster) {
 		logrus.Debug("Portworx proxy is enabled in StorageCluster")
+		return ValidatePortworxProxyEnabled(cluster, proxyDs, pxService, timeout, interval)
+	}
 
+	logrus.Debug("Portworx proxy is disabled in StorageCluster")
+	return ValidatePortworxProxyDisabled(cluster, proxyDs, pxService, timeout, interval)
+}
+
+// ValidatePortworxProxyEnabled validates that all Portworx Proxy components are enabled/created
+func ValidatePortworxProxyEnabled(cluster *corev1.StorageCluster, proxyDs *appsv1.DaemonSet, pxService *v1.Service, timeout, interval time.Duration) error {
+	logrus.Info("Validate Portworx Proxy components are enabled")
+
+	t := func() (interface{}, bool, error) {
 		// Validate Portworx proxy DaemonSet
 		if err := validateDaemonSet(proxyDs, timeout); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate Portworx proxy ServiceAccount
 		_, err := coreops.Instance().GetServiceAccount(proxyDs.Name, proxyDs.Namespace)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ServiceAccount %s, Err: %v", proxyDs.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ServiceAccount %s, Err: %v", proxyDs.Name, err)
 		}
 
 		// Validate Portworx proxy ClusterRoleBinding
 		_, err = rbacops.Instance().GetClusterRoleBinding(proxyDs.Name)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRoleBinding %s, Err: %v", proxyDs.Name, err)
+			return nil, true, fmt.Errorf("failed to validate ClusterRoleBinding %s, Err: %v", proxyDs.Name, err)
 		}
 
 		// Validate Portworx proxy Service in kube-system namespace
 		if err := validatePortworxService("kube-system"); err != nil {
-			return err
+			return nil, true, err
 		}
 		_, err = coreops.Instance().GetService(pxService.Name, pxService.Namespace)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate Service %s, Err: %v", pxService.Name, err)
+			return nil, true, fmt.Errorf("failed to validate Service %s, Err: %v", pxService.Name, err)
 		}
-	} else {
-		logrus.Debug("Portworx proxy is disabled in StorageCluster")
+		return nil, false, nil
+	}
 
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidatePortworxProxyDisabled validates that all Portworx Proxy components are disabled/deleted
+func ValidatePortworxProxyDisabled(cluster *corev1.StorageCluster, proxyDs *appsv1.DaemonSet, pxService *v1.Service, timeout, interval time.Duration) error {
+	logrus.Info("Validate Portworx Proxy components are disabled")
+
+	t := func() (interface{}, bool, error) {
 		// Validate Portworx proxy DaemonSet is terminated or doesn't exist
 		if err := validateTerminatedDaemonSet(proxyDs, timeout); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate Portworx proxy Service doesn't exist if cluster is not deployed in kube-system namespace
 		if cluster.Namespace != "kube-system" {
 			_, err := coreops.Instance().GetService(pxService.Name, pxService.Namespace)
 			if !errors.IsNotFound(err) {
-				return fmt.Errorf("failed to validate Service %s, is found when shouldn't be", pxService.Name)
+				return nil, true, fmt.Errorf("failed to validate Service %s, is found when shouldn't be", pxService.Name)
 			}
 		}
 
 		// Validate Portworx proxy ClusterRoleBinding doesn't exist
 		_, err := rbacops.Instance().GetClusterRoleBinding(proxyDs.Name)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ClusterRoleBinding %s, is found when shouldn't be", proxyDs.Name)
+			return nil, true, fmt.Errorf("failed to validate ClusterRoleBinding %s, is found when shouldn't be", proxyDs.Name)
 		}
 
 		// Validate Portworx proxy ServiceAccount doesn't exist
 		_, err = coreops.Instance().GetServiceAccount(proxyDs.Name, proxyDs.Namespace)
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to validate ServiceAccount %s, is found when shouldn't be", proxyDs.Name)
+			return nil, true, fmt.Errorf("failed to validate ServiceAccount %s, is found when shouldn't be", proxyDs.Name)
 		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
 	}
 
 	return nil
@@ -1633,69 +1811,106 @@ func validateStorkNamespaceEnvVar(namespace string, storkDeployment *appsv1.Depl
 
 // ValidateCSI validates CSI components and images
 func ValidateCSI(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
-	csi := cluster.Spec.CSI.Enabled
-	pxCsiDp := &appsv1.Deployment{}
-	pxCsiDp.Name = "px-csi-ext"
-	pxCsiDp.Namespace = cluster.Namespace
+	logrus.Info("Validate CSI components")
 
-	if csi {
+	pxCsiDp := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "px-csi-ext",
+			Namespace: cluster.Namespace,
+		},
+	}
+
+	if cluster.Spec.CSI.Enabled {
 		logrus.Debug("CSI is enabled in StorageCluster")
-		if err := validateCsiContainerInPxPods(cluster.Namespace, csi, timeout, interval); err != nil {
-			return err
-		}
+		return ValidateCsiEnabled(pxImageList, cluster, pxCsiDp, timeout, interval)
+	}
+	logrus.Debug("CSI is disabled in StorageCluster")
+	return ValidateCsiDisabled(cluster, pxCsiDp, timeout, interval)
+}
 
+// ValidateCsiEnabled validates that all CSI components are enabled/created
+func ValidateCsiEnabled(pxImageList map[string]string, cluster *corev1.StorageCluster, pxCsiDp *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Info("Validate CSI components are enabled")
+
+	t := func() (interface{}, bool, error) {
+		logrus.Debug("CSI is enabled in StorageCluster")
+		if err := validateCsiContainerInPxPods(cluster.Namespace, true, timeout, interval); err != nil {
+			return nil, true, err
+		}
 		// Validate CSI container image inside Portworx OCI Monitor pods
 		var csiNodeDriverRegistrarImage string
 		if value, ok := pxImageList["csiNodeDriverRegistrar"]; ok {
 			csiNodeDriverRegistrarImage = value
 		} else {
-			return fmt.Errorf("failed to find image for csiNodeDriverRegistrar")
+			return nil, true, fmt.Errorf("failed to find image for csiNodeDriverRegistrar")
 		}
 
 		pods, err := coreops.Instance().GetPods(cluster.Namespace, map[string]string{"name": "portworx"})
 		if err != nil {
-			return err
+			return nil, true, err
 		}
 
 		if err := validateContainerImageInsidePods(cluster, csiNodeDriverRegistrarImage, "csi-node-driver-registrar", pods); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate px-csi-ext deployment and pods
 		if err := validateDeployment(pxCsiDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate CSI container images inside px-csi-ext pods
 		if err := validateCsiExtImages(cluster, pxImageList); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate CSI deployment pod topology spread constraints
 		if err := validatePodTopologySpreadConstraints(pxCsiDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
 		// Validate CSI topology specs
 		if err := validateCSITopologySpecs(cluster.Namespace, cluster.Spec.CSI.Topology, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
 
-		// Validate CSI snapshot controller
-		if err := validateCSISnapshotController(cluster, pxImageList, timeout, interval); err != nil {
-			return err
+		// Validate CSI snapshot controller on non-ocp env, since ocp deploys its own snapshot controller
+		if !isOpenshift(cluster) {
+			if err := validateCSISnapshotController(cluster, pxImageList, timeout, interval); err != nil {
+				return nil, true, err
+			}
 		}
-	} else {
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateCsiDisabled validates that all CSI components are disabled/deleted
+func ValidateCsiDisabled(cluster *corev1.StorageCluster, pxCsiDp *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Info("Validate CSI components are disabled")
+
+	t := func() (interface{}, bool, error) {
 		logrus.Debug("CSI is disabled in StorageCluster")
-		if err := validateCsiContainerInPxPods(cluster.Namespace, csi, timeout, interval); err != nil {
-			return err
+		if err := validateCsiContainerInPxPods(cluster.Namespace, false, timeout, interval); err != nil {
+			return nil, true, err
 		}
 
 		// Validate px-csi-ext deployment doesn't exist
 		if err := validateTerminatedDeployment(pxCsiDp, timeout, interval); err != nil {
-			return err
+			return nil, true, err
 		}
+		return nil, false, nil
 	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -2093,53 +2308,60 @@ func validateImageTag(tag, namespace string, listOptions map[string]string) erro
 
 // ValidateSecurity validates all PX Security components
 func ValidateSecurity(cluster *corev1.StorageCluster, previouslyEnabled bool, timeout, interval time.Duration) error {
-	if cluster.Spec.Security != nil &&
-		cluster.Spec.Security.Enabled {
-		logrus.Infof("PX Security is enabled")
-		return ValidateSecurityEnabled(cluster, timeout, interval)
+	logrus.Info("Validate PX Security components")
+
+	storkDp := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "stork",
+			Namespace: cluster.Namespace,
+		},
 	}
 
-	logrus.Infof("PX Security is not enabled")
-	return ValidateSecurityDisabled(cluster, previouslyEnabled, timeout, interval)
+	if cluster.Spec.Security != nil &&
+		cluster.Spec.Security.Enabled {
+		logrus.Infof("PX Security is enabled in StorageCluster")
+		return ValidateSecurityEnabled(cluster, storkDp, timeout, interval)
+	}
+
+	logrus.Infof("PX Security is disabled in StorageCluster")
+	return ValidateSecurityDisabled(cluster, storkDp, previouslyEnabled, timeout, interval)
 }
 
 // ValidateSecurityEnabled validates PX Security components are enabled/running as expected
-func ValidateSecurityEnabled(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
-	storkDp := &appsv1.Deployment{}
-	storkDp.Name = "stork"
-	storkDp.Namespace = cluster.Namespace
+func ValidateSecurityEnabled(cluster *corev1.StorageCluster, storkDp *appsv1.Deployment, timeout, interval time.Duration) error {
+	logrus.Info("Validate PX Security components are enabled")
 
 	t := func() (interface{}, bool, error) {
 		// Validate Stork ENV vars, if Stork is enabled
 		if cluster.Spec.Stork != nil && cluster.Spec.Stork.Enabled {
 			// Validate stork deployment and pods
 			if err := validateDeployment(storkDp, timeout, interval); err != nil {
-				return "", true, fmt.Errorf("failed to validate Stork deployment and pods, err %v", err)
+				return nil, true, fmt.Errorf("failed to validate Stork deployment and pods, err %v", err)
 			}
 
 			// Validate Security ENv vars in Stork pods
 			if err := validateStorkSecurityEnvVar(cluster, storkDp, timeout, interval); err != nil {
-				return "", true, fmt.Errorf("failed to validate Stork Security ENV vars, err %v", err)
+				return nil, true, fmt.Errorf("failed to validate Stork Security ENV vars, err %v", err)
 			}
 		}
 
 		if _, err := coreops.Instance().GetSecret("px-admin-token", cluster.Namespace); err != nil {
-			return "", true, fmt.Errorf("failed to find secret px-admin-token, err %v", err)
+			return nil, true, fmt.Errorf("failed to find secret px-admin-token, err %v", err)
 		}
 
 		if _, err := coreops.Instance().GetSecret("px-user-token", cluster.Namespace); err != nil {
-			return "", true, fmt.Errorf("failed to find secret px-user-token, err %v", err)
+			return nil, true, fmt.Errorf("failed to find secret px-user-token, err %v", err)
 		}
 
 		if _, err := coreops.Instance().GetSecret("px-shared-secret", cluster.Namespace); err != nil {
-			return "", true, fmt.Errorf("failed to find secret px-shared-secret, err %v", err)
+			return nil, true, fmt.Errorf("failed to find secret px-shared-secret, err %v", err)
 		}
 
 		if _, err := coreops.Instance().GetSecret("px-system-secrets", cluster.Namespace); err != nil {
-			return "", true, fmt.Errorf("failed to find secret px-system-secrets, err %v", err)
+			return nil, true, fmt.Errorf("failed to find secret px-system-secrets, err %v", err)
 		}
 
-		return "", false, nil
+		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
@@ -2150,57 +2372,55 @@ func ValidateSecurityEnabled(cluster *corev1.StorageCluster, timeout, interval t
 }
 
 // ValidateSecurityDisabled validates PX Security components are disabled/uninstalled as expected
-func ValidateSecurityDisabled(cluster *corev1.StorageCluster, previouslyEnabled bool, timeout, interval time.Duration) error {
-	storkDp := &appsv1.Deployment{}
-	storkDp.Name = "stork"
-	storkDp.Namespace = cluster.Namespace
+func ValidateSecurityDisabled(cluster *corev1.StorageCluster, storkDp *appsv1.Deployment, previouslyEnabled bool, timeout, interval time.Duration) error {
+	logrus.Info("Validate PX Security components are not disabled")
 
 	t := func() (interface{}, bool, error) {
 		// Validate Stork ENV vars, if Stork is enabled
 		if cluster.Spec.Stork != nil && cluster.Spec.Stork.Enabled {
 			// Validate Stork deployment and pods
 			if err := validateDeployment(storkDp, timeout, interval); err != nil {
-				return "", true, fmt.Errorf("failed to validate Stork deployment and pods, err %v", err)
+				return nil, true, fmt.Errorf("failed to validate Stork deployment and pods, err %v", err)
 			}
 
 			// Validate Security ENv vars in Stork pods
 			if err := validateStorkSecurityEnvVar(cluster, storkDp, timeout, interval); err != nil {
-				return "", true, fmt.Errorf("failed to validate Stork Security ENV vars, err %v", err)
+				return nil, true, fmt.Errorf("failed to validate Stork Security ENV vars, err %v", err)
 			}
 		}
 
 		// *-token secrets are always deleted regardless if security was previously enabled or not
 		_, err := coreops.Instance().GetSecret("px-admin-token", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found secret px-admin-token, when should't have, err %v", err)
+			return nil, true, fmt.Errorf("found secret px-admin-token, when should't have, err %v", err)
 		}
 
 		_, err = coreops.Instance().GetSecret("px-user-token", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found secret px-user-token, when shouldn't have, err %v", err)
+			return nil, true, fmt.Errorf("found secret px-user-token, when shouldn't have, err %v", err)
 		}
 
 		if previouslyEnabled {
 			if _, err := coreops.Instance().GetSecret("px-shared-secret", cluster.Namespace); err != nil {
-				return "", true, fmt.Errorf("failed to find secret px-shared-secret, err %v", err)
+				return nil, true, fmt.Errorf("failed to find secret px-shared-secret, err %v", err)
 			}
 
 			if _, err := coreops.Instance().GetSecret("px-system-secrets", cluster.Namespace); err != nil {
-				return "", true, fmt.Errorf("failed to find secret px-system-secrets, err %v", err)
+				return nil, true, fmt.Errorf("failed to find secret px-system-secrets, err %v", err)
 			}
 		} else {
 			_, err := coreops.Instance().GetSecret("px-shared-secret", cluster.Namespace)
 			if !errors.IsNotFound(err) {
-				return "", true, fmt.Errorf("found secret px-shared-secret, when shouldn't have, err %v", err)
+				return nil, true, fmt.Errorf("found secret px-shared-secret, when shouldn't have, err %v", err)
 			}
 
 			_, err = coreops.Instance().GetSecret("px-system-secrets", cluster.Namespace)
 			if !errors.IsNotFound(err) {
-				return "", true, fmt.Errorf("found secret px-system-secrets, when shouldn't have, err %v", err)
+				return nil, true, fmt.Errorf("found secret px-system-secrets, when shouldn't have, err %v", err)
 			}
 		}
 
-		return "", false, nil
+		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
@@ -2670,77 +2890,84 @@ func ValidateAlertManagerDisabled(pxImageList map[string]string, cluster *corev1
 func ValidateTelemetryV2Enabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components are enabled")
 
-	// Validate px-telemetry-registration deployment, pods and container images
-	if err := validatePxTelemetryRegistrationV2(pxImageList, cluster, timeout, interval); err != nil {
-		return err
+	t := func() (interface{}, bool, error) {
+		// Validate px-telemetry-registration deployment, pods and container images
+		if err := validatePxTelemetryRegistrationV2(pxImageList, cluster, timeout, interval); err != nil {
+			return nil, true, err
+		}
+
+		// Validate px-telemetry-metrics  deployment, pods and container images
+		if err := validatePxTelemetryMetricsCollectorV2(pxImageList, cluster, timeout, interval); err != nil {
+			return nil, true, err
+		}
+
+		// Validate px-telemetry-phonehome daemonset, pods and container images
+		if err := validatePxTelemetryPhonehomeV2(pxImageList, cluster, timeout, interval); err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry secrets
+		if _, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry roles
+		if _, err := rbacops.Instance().GetRole("px-telemetry", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry rolebindings
+		if _, err := rbacops.Instance().GetRoleBinding("px-telemetry", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry clusterroles
+		if _, err := rbacops.Instance().GetClusterRole("px-telemetry"); err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry clusterrolebindings
+		if _, err := rbacops.Instance().GetClusterRoleBinding("px-telemetry"); err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry configmaps
+		if _, err := coreops.Instance().GetConfigMap("px-telemetry-collector", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		if _, err := coreops.Instance().GetConfigMap("px-telemetry-collector-proxy", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		if _, err := coreops.Instance().GetConfigMap("px-telemetry-phonehome", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		if _, err := coreops.Instance().GetConfigMap("px-telemetry-phonehome-proxy", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		if _, err := coreops.Instance().GetConfigMap("px-telemetry-register", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		if _, err := coreops.Instance().GetConfigMap("px-telemetry-register-proxy", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		if _, err := coreops.Instance().GetConfigMap("px-telemetry-tls-certificate", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry serviceaccounts
+		if _, err := coreops.Instance().GetServiceAccount("px-telemetry", cluster.Namespace); err != nil {
+			return nil, true, err
+		}
+		return nil, false, nil
 	}
 
-	// Validate px-telemetry-metrics  deployment, pods and container images
-	if err := validatePxTelemetryMetricsCollectorV2(pxImageList, cluster, timeout, interval); err != nil {
-		return err
-	}
-
-	// Validate px-telemetry-phonehome daemonset, pods and container images
-	if err := validatePxTelemetryPhonehomeV2(pxImageList, cluster, timeout, interval); err != nil {
-		return err
-	}
-
-	// Verify telemetry secrets
-	if _, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace); err != nil {
-		return err
-	}
-
-	// Verify telemetry roles
-	if _, err := rbacops.Instance().GetRole("px-telemetry", cluster.Namespace); err != nil {
-		return err
-	}
-
-	// Verify telemetry rolebindings
-	if _, err := rbacops.Instance().GetRoleBinding("px-telemetry", cluster.Namespace); err != nil {
-		return err
-	}
-
-	// Verify telemetry clusterroles
-	if _, err := rbacops.Instance().GetClusterRole("px-telemetry"); err != nil {
-		return err
-	}
-
-	// Verify telemetry clusterrolebindings
-	if _, err := rbacops.Instance().GetClusterRoleBinding("px-telemetry"); err != nil {
-		return err
-	}
-
-	// Verify telemetry configmaps
-	if _, err := coreops.Instance().GetConfigMap("px-telemetry-collector", cluster.Namespace); err != nil {
-		return err
-	}
-
-	if _, err := coreops.Instance().GetConfigMap("px-telemetry-collector-proxy", cluster.Namespace); err != nil {
-		return err
-	}
-
-	if _, err := coreops.Instance().GetConfigMap("px-telemetry-phonehome", cluster.Namespace); err != nil {
-		return err
-	}
-
-	if _, err := coreops.Instance().GetConfigMap("px-telemetry-phonehome-proxy", cluster.Namespace); err != nil {
-		return err
-	}
-
-	if _, err := coreops.Instance().GetConfigMap("px-telemetry-register", cluster.Namespace); err != nil {
-		return err
-	}
-
-	if _, err := coreops.Instance().GetConfigMap("px-telemetry-register-proxy", cluster.Namespace); err != nil {
-		return err
-	}
-
-	if _, err := coreops.Instance().GetConfigMap("px-telemetry-tls-certificate", cluster.Namespace); err != nil {
-		return err
-	}
-
-	// Verify telemetry serviceaccounts
-	if _, err := coreops.Instance().GetServiceAccount("px-telemetry", cluster.Namespace); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
 		return err
 	}
 
@@ -2883,89 +3110,90 @@ func validatePxTelemetryRegistrationV2(pxImageList map[string]string, cluster *c
 // ValidateTelemetryV2Disabled validates telemetry component is running as expected
 func ValidateTelemetryV2Disabled(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components are disabled")
+
 	t := func() (interface{}, bool, error) {
 		_, err := appops.Instance().GetDeployment("px-telemetry-metrics-collector", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-metrics-collector deployment, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-metrics-collector deployment, waiting for deletion")
 		}
 
 		_, err = appops.Instance().GetDeployment("px-telemetry-registration", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-registration deployment, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-registration deployment, waiting for deletion")
 		}
 
 		_, err = appops.Instance().GetDaemonSet("px-telemetry-phonehome", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-phonehome daemonset, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-phonehome daemonset, waiting for deletion")
 		}
 
 		// Verify telemetry roles
 		_, err = rbacops.Instance().GetRole("px-telemetry", cluster.Name)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry role, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry role, waiting for deletion")
 		}
 
 		// Verify telemetry rolebindings
 		_, err = rbacops.Instance().GetRoleBinding("px-telemetry", cluster.Name)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry rolebinding, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry rolebinding, waiting for deletion")
 		}
 
 		// Verify telemetry clusterroles
 		_, err = rbacops.Instance().GetClusterRole("px-telemetry")
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry clusterrole, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry clusterrole, waiting for deletion")
 		}
 
 		// Verify telemetry clusterrolebindings
 		_, err = rbacops.Instance().GetClusterRoleBinding("px-telemetry")
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry clusterrolebinding, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry clusterrolebinding, waiting for deletion")
 		}
 
 		// Verify telemetry configmaps
 		_, err = coreops.Instance().GetConfigMap("px-telemetry-collector", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-collector configmap, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-collector configmap, waiting for deletion")
 		}
 
 		_, err = coreops.Instance().GetConfigMap("px-telemetry-collector-proxy", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-collector-proxy configmap, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-collector-proxy configmap, waiting for deletion")
 		}
 
 		_, err = coreops.Instance().GetConfigMap("px-telemetry-phonehome", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-phonehome configmap, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-phonehome configmap, waiting for deletion")
 		}
 
 		_, err = coreops.Instance().GetConfigMap("px-telemetry-phonehome-proxy", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-phonehome-proxy configmap, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-phonehome-proxy configmap, waiting for deletion")
 		}
 
 		_, err = coreops.Instance().GetConfigMap("px-telemetry-register", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-register configmap, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-register configmap, waiting for deletion")
 		}
 
 		_, err = coreops.Instance().GetConfigMap("px-telemetry-register-proxy", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-register-proxy configmap, wait for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-register-proxy configmap, wait for deletion")
 		}
 
 		_, err = coreops.Instance().GetConfigMap("px-telemetry-tls-certificate", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry-tls-certificate configmap, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry-tls-certificate configmap, waiting for deletion")
 		}
 
 		// Verify telemetry serviceaccounts
 		_, err = coreops.Instance().GetServiceAccount("px-telemetry", cluster.Namespace)
 		if !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("found px-telemetry serviceaccount, waiting for deletion")
+			return nil, true, fmt.Errorf("found px-telemetry serviceaccount, waiting for deletion")
 		}
 
-		return "", false, nil
+		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
@@ -2978,6 +3206,8 @@ func ValidateTelemetryV2Disabled(cluster *corev1.StorageCluster, timeout, interv
 
 // ValidateTelemetryV1Enabled validates telemetry component is running as expected
 func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	logrus.Info("Validate Telemetry components are enabled")
+
 	// Wait for the deployment to become online
 	dep := appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2985,83 +3215,91 @@ func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.S
 			Namespace: cluster.Namespace,
 		},
 	}
-	if err := appops.Instance().ValidateDeployment(&dep, timeout, interval); err != nil {
+
+	t := func() (interface{}, bool, error) {
+		if err := appops.Instance().ValidateDeployment(&dep, timeout, interval); err != nil {
+			return nil, true, err
+		}
+
+		/* TODO: We need to make this work for spawn
+		expectedDeployment := GetExpectedDeployment(&testing.T{}, "metricsCollectorDeployment.yaml")
+		*/
+
+		deployment, err := appops.Instance().GetDeployment(dep.Name, dep.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		/* TODO: We need to make this work for spawn
+		if equal, err := util.DeploymentDeepEqual(expectedDeployment, deployment); !equal {
+			return err
+		}
+		*/
+
+		_, err = rbacops.Instance().GetRole("px-metrics-collector", cluster.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		_, err = rbacops.Instance().GetRoleBinding("px-metrics-collector", cluster.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Verify telemetry config map
+		_, err = coreops.Instance().GetConfigMap("px-telemetry-config", cluster.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Verify collector config map
+		_, err = coreops.Instance().GetConfigMap("px-collector-config", cluster.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Verify collector proxy config map
+		_, err = coreops.Instance().GetConfigMap("px-collector-proxy-config", cluster.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Verify collector service account
+		_, err = coreops.Instance().GetServiceAccount("px-metrics-collector", cluster.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Verify metrics collector image
+		imageName, ok := pxImageList["metricsCollector"]
+		if !ok {
+			return nil, true, fmt.Errorf("failed to find image for metrics collector")
+		}
+		imageName = util.GetImageURN(cluster, imageName)
+
+		if deployment.Spec.Template.Spec.Containers[0].Image != imageName {
+			return nil, true, fmt.Errorf("collector image mismatch, image: %s, expected: %s",
+				deployment.Spec.Template.Spec.Containers[0].Image,
+				imageName)
+		}
+
+		// Verify metrics collector proxy image
+		imageName, ok = pxImageList["metricsCollectorProxy"]
+		if !ok {
+			return nil, true, fmt.Errorf("failed to find image for metrics collector proxy")
+		}
+		imageName = util.GetImageURN(cluster, imageName)
+
+		if deployment.Spec.Template.Spec.Containers[1].Image != imageName {
+			return nil, true, fmt.Errorf("collector proxy image mismatch, image: %s, expected: %s",
+				deployment.Spec.Template.Spec.Containers[1].Image,
+				imageName)
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
 		return err
-	}
-
-	/* TODO: We need to make this work for spawn
-	   expectedDeployment := GetExpectedDeployment(&testing.T{}, "metricsCollectorDeployment.yaml")
-	*/
-
-	deployment, err := appops.Instance().GetDeployment(dep.Name, dep.Namespace)
-	if err != nil {
-		return err
-	}
-
-	/* TODO: We need to make this work for spawn
-	   if equal, err := util.DeploymentDeepEqual(expectedDeployment, deployment); !equal {
-	      	return err
-	   }
-	*/
-
-	_, err = rbacops.Instance().GetRole("px-metrics-collector", cluster.Namespace)
-	if err != nil {
-		return err
-	}
-
-	_, err = rbacops.Instance().GetRoleBinding("px-metrics-collector", cluster.Namespace)
-	if err != nil {
-		return err
-	}
-
-	// Verify telemetry config map
-	_, err = coreops.Instance().GetConfigMap("px-telemetry-config", cluster.Namespace)
-	if err != nil {
-		return err
-	}
-
-	// Verify collector config map
-	_, err = coreops.Instance().GetConfigMap("px-collector-config", cluster.Namespace)
-	if err != nil {
-		return err
-	}
-
-	// Verify collector proxy config map
-	_, err = coreops.Instance().GetConfigMap("px-collector-proxy-config", cluster.Namespace)
-	if err != nil {
-		return err
-	}
-
-	// Verify collector service account
-	_, err = coreops.Instance().GetServiceAccount("px-metrics-collector", cluster.Namespace)
-	if err != nil {
-		return err
-	}
-
-	// Verify metrics collector image
-	imageName, ok := pxImageList["metricsCollector"]
-	if !ok {
-		return fmt.Errorf("failed to find image for metrics collector")
-	}
-	imageName = util.GetImageURN(cluster, imageName)
-
-	if deployment.Spec.Template.Spec.Containers[0].Image != imageName {
-		return fmt.Errorf("collector image mismatch, image: %s, expected: %s",
-			deployment.Spec.Template.Spec.Containers[0].Image,
-			imageName)
-	}
-
-	// Verify metrics collector proxy image
-	imageName, ok = pxImageList["metricsCollectorProxy"]
-	if !ok {
-		return fmt.Errorf("failed to find image for metrics collector proxy")
-	}
-	imageName = util.GetImageURN(cluster, imageName)
-
-	if deployment.Spec.Template.Spec.Containers[1].Image != imageName {
-		return fmt.Errorf("collector proxy image mismatch, image: %s, expected: %s",
-			deployment.Spec.Template.Spec.Containers[1].Image,
-			imageName)
 	}
 
 	logrus.Infof("Telemetry is enabled")

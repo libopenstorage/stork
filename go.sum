@@ -1086,6 +1086,8 @@ github.com/libopenstorage/operator v0.0.0-20220822230935-0f95f5887baa h1:CdHqgfJ
 github.com/libopenstorage/operator v0.0.0-20220822230935-0f95f5887baa/go.mod h1:BVcRy+p0kYhG7YYMxMM3ba48oifYQ4ZmhdXpbK/C2HU=
 github.com/libopenstorage/operator v0.0.0-20220824204524-83eb5c1e8e71 h1:gbDXay0JpnsUOMOzsfAxrFzJTmX7GLdLih/l4llRQgs=
 github.com/libopenstorage/operator v0.0.0-20220824204524-83eb5c1e8e71/go.mod h1:BVcRy+p0kYhG7YYMxMM3ba48oifYQ4ZmhdXpbK/C2HU=
+github.com/libopenstorage/operator v0.0.0-20220902021548-739a5302030d h1:99i90MPvTIyd58HvXCbrr+r04sTn0yJ4PXPQPw/8tu4=
+github.com/libopenstorage/operator v0.0.0-20220902021548-739a5302030d/go.mod h1:BVcRy+p0kYhG7YYMxMM3ba48oifYQ4ZmhdXpbK/C2HU=
 github.com/libopenstorage/secrets v0.0.0-20190403224602-c282e8dc17bf/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
