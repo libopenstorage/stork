@@ -24,7 +24,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
 	github.com/libopenstorage/openstorage v9.4.20+incompatible
-	github.com/libopenstorage/operator v0.0.0-20220914214053-b7951f0cd10a
+	github.com/libopenstorage/operator v0.0.0-20220927184959-7d7a4c157f9c
 	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
