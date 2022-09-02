@@ -26,7 +26,9 @@ const (
 	// BackupObjectUIDKey - label key to store backup object uid
 	BackupObjectUIDKey = "backup-object-uid"
 	// TLSCertMountVol mount vol name for tls certificate secret
-	TLSCertMountVol       = "tls-secret"
+	TLSCertMountVol = "tls-secret"
+	// NfsVolumeName is the Volume spec's name to be used in kopia Job Spec
+	NfsVolumeName         = "nfs-target"
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	// KdmpConfigmapName kdmp config map name

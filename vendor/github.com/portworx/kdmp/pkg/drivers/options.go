@@ -45,6 +45,24 @@ type JobOpts struct {
 	KopiaImageExecutorSource   string
 	KopiaImageExecutorSourceNs string
 	NodeAffinity               map[string]string
+	NfsServer                  string
+	NfsExportDir               string
+}
+
+// WithNfsServer is job parameter.
+func WithNfsServer(server string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsServer = strings.TrimSpace(server)
+		return nil
+	}
+}
+
+// WithNfsExportDir is job parameter.
+func WithNfsExportDir(exportDir string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsExportDir = strings.TrimSpace(exportDir)
+		return nil
+	}
 }
 
 // WithKopiaImageExecutorSource is job parameter.
