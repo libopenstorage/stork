@@ -181,7 +181,9 @@ func GetSupportedK8SResources(kind string, optionalResourceTypes []string) bool 
 		"LimitRange",
 		"NetworkPolicy",
 		"PodDisruptionBudget",
-		"Endpoints":
+		"Endpoints",
+		"ValidatingWebhookConfiguration",
+		"MutatingWebhookConfiguration":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -524,7 +526,6 @@ func (r *ResourceCollector) objectToBeCollected(
 	} else if !include {
 		return false, nil
 	}
-
 	switch objectType.GetKind() {
 	case "Service":
 		return r.serviceToBeCollected(object)
@@ -558,6 +559,10 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.virtualMachineInstanceToBeCollected(object)
 	case "Endpoints":
 		return r.endpointsToBeCollected(object)
+	case "MutatingWebhookConfiguration":
+		return r.mutatingWebHookToBeCollected(object, namespace)
+	case "ValidatingWebhookConfiguration":
+		return r.validatingWebHookToBeCollected(object, namespace)
 	}
 
 	return true, nil
@@ -766,7 +771,6 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	optionalResourceTypes []string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
 ) (bool, error) {
-
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
 		return false, err
@@ -793,7 +797,6 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		// Update the namespace of the object, will be no-op for clustered resources
 		metadata.SetNamespace(val)
 	}
-
 	switch objectType.GetKind() {
 	case "Job":
 		if slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -809,6 +812,10 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	case "RoleBinding":
 		return false, r.prepareRoleBindingForApply(object, namespaceMappings)
+	case "ValidatingWebhookConfiguration":
+		return false, r.prepareValidatingWebHookForApply(object, namespaceMappings)
+	case "MutatingWebhookConfiguration":
+		return false, r.prepareMutatingWebHookForApply(object, namespaceMappings)
 	}
 	return false, nil
 }
