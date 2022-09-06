@@ -867,11 +867,11 @@ func (d *dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	}
 }
 
-func (d *dcos) CreateCsiSanpshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
-	//CreateCsiSanpshotClass is not supported
+func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+	//CreateCsiSnapshotClass is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "CreateCsiSanpshotClasss()",
+		Operation: "CreateCsiSnapshotClass()",
 	}
 }
 
@@ -904,6 +904,14 @@ func (d *dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnap
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CSISnapshotTest()",
+	}
+}
+
+func (d *dcos) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+	//CSISnapshotAndRestoreMany is not supported for DCOS
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CSISnapshotAndRestoreMany()",
 	}
 }
 
