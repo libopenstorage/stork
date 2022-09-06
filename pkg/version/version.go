@@ -24,6 +24,7 @@ var (
 const (
 	k8sMinVersionCSIDriverV1      = "1.22"
 	k8sMinVersionVolumeSnapshotV1 = "1.20"
+	K8sMinVersionWebhookv1        = "1.22"
 )
 
 // RequiresV1Registration returns true if crd needs to be registered as apiVersion V1
@@ -38,6 +39,23 @@ func RequiresV1Registration() (bool, error) {
 
 	}
 	if k8sVersion.GreaterThanOrEqual(k8sVer1_16) {
+		return true, nil
+	}
+	return false, nil
+}
+
+// RequiresV1Webhooks returns true if V1 version of webhook object is needed
+func RequiresV1Webhooks() (bool, error) {
+	clusterK8sVersion, _, err := GetFullVersion()
+	if err != nil {
+		return false, err
+	}
+	requiredK8sVer, err := version.NewVersion(K8sMinVersionWebhookv1)
+	if err != nil {
+		return false, err
+
+	}
+	if clusterK8sVersion.GreaterThanOrEqual(requiredK8sVer) {
 		return true, nil
 	}
 	return false, nil
