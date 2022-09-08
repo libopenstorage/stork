@@ -47,7 +47,7 @@ var (
 	k8sCore            = k8s.Instance()
 	crdOps             = apiextensions.Instance()
 	snapshoterOps      = externalsnapshotter.Instance()
-	versionReg         = regexp.MustCompile(`^(stable|candidate|fast)(-\d\.\d)?$`)
+	versionReg         = regexp.MustCompile(`^(stable|candidate|fast)(-\d\.\d+)?$`)
 	volumeSnapshotCRDs = []string{
 		"volumesnapshotclasses.snapshot.storage.k8s.io",
 		"volumesnapshotcontents.snapshot.storage.k8s.io",
