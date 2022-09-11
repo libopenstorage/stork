@@ -38,6 +38,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&VolumeBackupDeleteList{},
 		&BackupLocationMaintenance{},
 		&BackupLocationMaintenanceList{},
+		&ResourceExport{},
+		&ResourceExportList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
