@@ -18,6 +18,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
@@ -123,7 +124,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 	// delete an object on the init stage without cleanup
 	if dataExport.DeletionTimestamp != nil && dataExport.Status.Stage == kdmpapi.DataExportStageInitial {
-		if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
+		if !controllers.ContainsFinalizer(dataExport, kdmpcontroller.CleanupFinalizer) {
 			return false, nil
 		}
 
@@ -158,7 +159,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 	}
 
 	if dataExport.DeletionTimestamp != nil {
-		if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
+		if !controllers.ContainsFinalizer(dataExport, kdmpcontroller.CleanupFinalizer) {
 			return false, nil
 		}
 		if err = c.cleanUp(driver, dataExport); err != nil {
@@ -1449,7 +1450,7 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, data updateDataExportD
 			de.Status.SnapshotNamespace = data.snapshotNamespace
 		}
 		if data.removeFinalizer {
-			controllers.RemoveFinalizer(de, cleanupFinalizer)
+			controllers.RemoveFinalizer(de, kdmpcontroller.CleanupFinalizer)
 		}
 		if data.volumeSnapshot != "" {
 			de.Status.VolumeSnapshot = data.volumeSnapshot

@@ -3,11 +3,11 @@ package dataexport
 import (
 	"context"
 	"reflect"
-	"time"
 
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/utils"
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -21,15 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-)
-
-var (
-	resyncPeriod                      = 10 * time.Second
-	requeuePeriod                     = 5 * time.Second
-	validateCRDInterval time.Duration = 10 * time.Second
-	validateCRDTimeout  time.Duration = 2 * time.Minute
-
-	cleanupFinalizer = "kdmp.portworx.com/finalizer-cleanup"
 )
 
 // Controller is a k8s controller that handles DataExport resources.
@@ -84,24 +75,24 @@ func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return reconcile.Result{RequeueAfter: requeuePeriod}, nil
+		return reconcile.Result{RequeueAfter: kdmpcontroller.RequeuePeriod}, nil
 	}
 
-	if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
-		controllers.SetFinalizer(dataExport, cleanupFinalizer)
+	if !controllers.ContainsFinalizer(dataExport, kdmpcontroller.CleanupFinalizer) {
+		controllers.SetFinalizer(dataExport, kdmpcontroller.CleanupFinalizer)
 		return reconcile.Result{Requeue: true}, c.client.Update(context.TODO(), dataExport)
 	}
 
 	requeue, err := c.sync(context.TODO(), dataExport)
 	if err != nil {
 		logrus.Errorf("kdmp controller: %s/%s: %s", request.Namespace, request.Name, err)
-		return reconcile.Result{RequeueAfter: requeuePeriod}, nil
+		return reconcile.Result{RequeueAfter: kdmpcontroller.RequeuePeriod}, nil
 	}
 	if requeue {
-		return reconcile.Result{RequeueAfter: requeuePeriod}, nil
+		return reconcile.Result{RequeueAfter: kdmpcontroller.RequeuePeriod}, nil
 	}
 
-	return reconcile.Result{RequeueAfter: resyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: kdmpcontroller.ResyncPeriod}, nil
 }
 
 func (c *Controller) createCRD() error {
@@ -124,7 +115,7 @@ func (c *Controller) createCRD() error {
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
-		if err := apiextensions.Instance().ValidateCRD(vb.Plural+"."+vb.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+		if err := apiextensions.Instance().ValidateCRD(vb.Plural+"."+vb.Group, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
 			return err
 		}
 	} else {
@@ -132,7 +123,7 @@ func (c *Controller) createCRD() error {
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
-		if err := apiextensions.Instance().ValidateCRDV1beta1(vb, validateCRDTimeout, validateCRDInterval); err != nil {
+		if err := apiextensions.Instance().ValidateCRDV1beta1(vb, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
 			return err
 		}
 	}
@@ -151,7 +142,7 @@ func (c *Controller) createCRD() error {
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
-		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+vb.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+vb.Group, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
 			return err
 		}
 	} else {
@@ -159,7 +150,7 @@ func (c *Controller) createCRD() error {
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
-		if err := apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval); err != nil {
+		if err := apiextensions.Instance().ValidateCRDV1beta1(resource, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
 			return err
 		}
 	}
