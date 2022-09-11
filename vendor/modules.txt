@@ -701,13 +701,14 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20220902105026-dc14791e1508
+# github.com/portworx/kdmp v0.4.1-0.20220908094923-3e9b5bfbc1b4
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
 github.com/portworx/kdmp/pkg/client/clientset/versioned
 github.com/portworx/kdmp/pkg/client/clientset/versioned/scheme
 github.com/portworx/kdmp/pkg/client/clientset/versioned/typed/kdmp/v1alpha1
+github.com/portworx/kdmp/pkg/controllers
 github.com/portworx/kdmp/pkg/controllers/dataexport
 github.com/portworx/kdmp/pkg/drivers
 github.com/portworx/kdmp/pkg/drivers/driversinstance
@@ -741,7 +742,7 @@ github.com/portworx/px-object-controller/client/listers/objectservice/v1alpha1
 github.com/portworx/px-object-controller/pkg/client
 github.com/portworx/px-object-controller/pkg/controller
 github.com/portworx/px-object-controller/pkg/utils
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20220906082910-13c2ce746e50 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
