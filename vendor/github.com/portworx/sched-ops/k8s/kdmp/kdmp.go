@@ -25,6 +25,7 @@ type Ops interface {
 	VolumeBackupOps
 	VolumeBackupDeleteOps
 	BackupLocationMaintenanceOps
+	ResourceExportOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
