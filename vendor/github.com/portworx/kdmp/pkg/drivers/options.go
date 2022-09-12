@@ -47,6 +47,17 @@ type JobOpts struct {
 	NodeAffinity               map[string]string
 	NfsServer                  string
 	NfsExportDir               string
+	RestoreExportName          string
+	AppCRName                  string
+	AppCRNamespace             string
+}
+
+// WithRestoreExport is job parameter
+func WithRestoreExport(name string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.RestoreExportName = strings.TrimSpace(name)
+		return nil
+	}
 }
 
 // WithNfsServer is job parameter.
