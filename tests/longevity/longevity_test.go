@@ -141,6 +141,9 @@ var _ = Describe("{Longevity}", func() {
 			}
 		})
 		logrus.Infof("Finished registering test triggers")
+		if Inst().MinRunTimeMins != 0 {
+			logrus.Infof("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
+		}
 
 		Step("Register email trigger", func() {
 			for triggerType, triggerFunc := range emailTriggerFunction {
@@ -182,6 +185,7 @@ func testTrigger(wg *sync.WaitGroup,
 	for {
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
+			logrus.Infof("Longevity Tests timed out with timeout %d  minutes", minRunTime)
 			break
 		}
 
@@ -222,6 +226,7 @@ func testTrigger(wg *sync.WaitGroup,
 		}
 		time.Sleep(controlLoopSleepTime)
 	}
+	os.Exit(0)
 }
 
 func emailEventTrigger(wg *sync.WaitGroup,
