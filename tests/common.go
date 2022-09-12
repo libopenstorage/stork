@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io/ioutil"
+	storageapi "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/url"
 	"os"
 	"os/exec"
@@ -20,37 +22,36 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	storageapi "k8s.io/api/storage/v1"
-
-	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
@@ -844,12 +845,12 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
-			request := scheduler.CSISnapshotRequest {
-				Namespace: vols[0].Namespace,
-				Timestamp: timestamp,
-				OriginalPVCName: vols[0].Name,
-				SnapName: "basic-csi-snapshot-" + timestamp,
-				RestoredPVCName: "csi-restored-" + timestamp,
+			request := scheduler.CSISnapshotRequest{
+				Namespace:         vols[0].Namespace,
+				Timestamp:         timestamp,
+				OriginalPVCName:   vols[0].Name,
+				SnapName:          "basic-csi-snapshot-" + timestamp,
+				RestoredPVCName:   "csi-restored-" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
 			err = Inst().S.CSISnapshotTest(ctx, request)
@@ -873,8 +874,8 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 		} else {
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
 			request := scheduler.CSICloneRequest{
-				Timestamp: timestamp,
-				Namespace: vols[0].Namespace,
+				Timestamp:       timestamp,
+				Namespace:       vols[0].Namespace,
 				OriginalPVCName: vols[0].Name,
 				RestoredPVCName: "csi-cloned-" + timestamp,
 			}
@@ -3885,4 +3886,111 @@ func IsCloudDriveInitialised(n node.Node) (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+//WaitForExpansionToStart waits for pool expansion to trigger
+func WaitForExpansionToStart(poolID string) error {
+	f := func() (interface{}, bool, error) {
+		expandedPool, err := GetStoragePoolByUUID(poolID)
+
+		if err != nil {
+			return nil, false, err
+		}
+		if expandedPool.LastOperation != nil {
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
+				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
+			}
+
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
+				// storage pool resize has been triggered
+				logrus.Infof("Pool %s expansion started", poolID)
+				return nil, true, nil
+			}
+		}
+		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
+	}
+
+	_, err := task.DoRetryWithTimeout(f, 2*time.Minute, 10*time.Second)
+	return err
+}
+
+//RebootNodeAndWait reboots node and waits for to be up
+func RebootNodeAndWait(n node.Node) error {
+
+	if &n == nil {
+		return fmt.Errorf("no Node is provided to reboot")
+	}
+
+	err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 5 * time.Second,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	err = Inst().N.TestConnection(n, node.ConnectionOpts{
+		Timeout:         15 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	err = Inst().V.WaitDriverDownOnNode(n)
+	if err != nil {
+		return err
+	}
+	err = Inst().S.IsNodeReady(n)
+	if err != nil {
+		return err
+	}
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+//GetNodeWithGivenPoolID returns node having pool id
+func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
+	pxNodes, err := GetStorageNodes()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, n := range pxNodes {
+		pools := n.Pools
+		for _, p := range pools {
+			if poolID == p.Uuid {
+				return &n, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no storage node found with given Pool UUID : %s", poolID)
+}
+
+//GetStoragePoolByUUID reruns storage pool based on ID
+func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pools) == 0 {
+		return nil, fmt.Errorf("Got 0 pools listed")
+	}
+
+	pool := pools[poolUUID]
+	if pool == nil {
+		return nil, fmt.Errorf("unable to find pool with given ID: %s", poolUUID)
+	}
+
+	return pool, nil
 }

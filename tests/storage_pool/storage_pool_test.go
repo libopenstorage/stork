@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -53,10 +54,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		Expect(len(pools)).NotTo(Equal(0))
 
 		// pick a random pool from a pools list and resize it
-		for _, pool := range pools {
-			poolIDToResize = pool.Uuid
-			break
-		}
+		poolIDToResize = getRandomPoolID(pools)
 		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
 
 		poolToBeResized := pools[poolIDToResize]
@@ -68,7 +66,8 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		Step("Verify that pool resize is non in progress", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
-				poolToBeResized = getStoragePoolByUUID(poolIDToResize)
+				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 
@@ -97,7 +96,8 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		Step("Ensure that new pool has been expanded to the expected size", func() {
 			ValidateApplications(contexts)
 
-			resizedPool := getStoragePoolByUUID(poolIDToResize)
+			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -129,10 +129,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		Expect(len(pools)).NotTo(Equal(0))
 
 		// pick a random pool from a pools list and resize it
-		for _, pool := range pools {
-			poolIDToResize = pool.Uuid
-			break
-		}
+		poolIDToResize = getRandomPoolID(pools)
 		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
 
 		poolToBeResized := pools[poolIDToResize]
@@ -143,7 +140,8 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		Step("Verify that pool resize is non in progress", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
-				poolToBeResized = getStoragePoolByUUID(poolIDToResize)
+				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 
@@ -172,7 +170,172 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		Step("Ensure that new pool has been expanded to the expected size", func() {
 			ValidateApplications(contexts)
 
-			resizedPool := getStoragePoolByUUID(poolIDToResize)
+			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
+			newPoolSize := resizedPool.TotalSize / units.GiB
+			isExpansionSuccess := false
+			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
+				isExpansionSuccess = true
+			}
+			Expect(isExpansionSuccess).To(BeTrue(), fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+
+		})
+	})
+})
+
+var _ = Describe("{PoolResizeDiskReboot}", func() {
+	var contexts []*scheduler.Context
+
+	It("has to schedule apps, and expand it by resizing a disk", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		var poolIDToResize string
+
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(len(pools)).NotTo(Equal(0))
+
+		// pick a random pool from a pools list and resize it
+		poolIDToResize = getRandomPoolID(pools)
+
+		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
+
+		poolToBeResized := pools[poolIDToResize]
+		Expect(poolToBeResized).ShouldNot(BeNil())
+
+		// px will put a new request in a queue, but in this case we can't calculate the expected size,
+		// so need to wain until the ongoing operation is completed
+		time.Sleep(time.Second * 60)
+		Step("Verify that pool resize is non in progress", func() {
+			if poolResizeIsInProgress(poolToBeResized) {
+				// wait until resize is completed and get the updated pool again
+				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		var expectedSize uint64
+		var expectedSizeWithJournal uint64
+
+		Step("Calculate expected pool size and trigger pool resize", func() {
+			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+
+			isjournal, err := isJournalEnabled()
+			Expect(err).NotTo(HaveOccurred())
+
+			//To-Do Need to handle the case for multiple pools
+			expectedSizeWithJournal = expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = WaitForExpansionToStart(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
+
+			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
+			err = RebootNodeAndWait(*storageNode)
+			Expect(err).NotTo(HaveOccurred())
+			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+			Expect(resizeErr).ToNot(HaveOccurred(), fmt.Sprintf("expected new size to be '%d' or '%d', and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
+		})
+
+		Step("Ensure that new pool has been expanded to the expected size", func() {
+			ValidateApplications(contexts)
+
+			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
+			newPoolSize := resizedPool.TotalSize / units.GiB
+			isExpansionSuccess := false
+			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
+				isExpansionSuccess = true
+			}
+			Expect(isExpansionSuccess).To(BeTrue(), fmt.Sprintf("expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+
+		})
+	})
+})
+
+var _ = Describe("{PoolAddDiskReboot}", func() {
+	var contexts []*scheduler.Context
+
+	It("should get the existing pool and expand it by adding a disk", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverdown-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		var poolIDToResize string
+
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(len(pools)).NotTo(Equal(0))
+
+		// pick a random pool from a pools list and resize it
+		poolIDToResize = getRandomPoolID(pools)
+		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
+
+		poolToBeResized := pools[poolIDToResize]
+		Expect(poolToBeResized).ShouldNot(BeNil())
+
+		// px will put a new request in a queue, but in this case we can't calculate the expected size,
+		// so need to wain until the ongoing operation is completed
+		Step("Verify that pool resize is non in progress", func() {
+			if poolResizeIsInProgress(poolToBeResized) {
+				// wait until resize is completed and get the updated pool again
+				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		var expectedSize uint64
+		var expectedSizeWithJournal uint64
+
+		Step("Calculate expected pool size and trigger pool resize", func() {
+			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+			expectedSize = roundUpValue(expectedSize)
+			isjournal, err := isJournalEnabled()
+			Expect(err).NotTo(HaveOccurred())
+
+			//To-Do Need to handle the case for multiple pools
+			expectedSizeWithJournal = expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = WaitForExpansionToStart(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
+
+			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
+			err = RebootNodeAndWait(*storageNode)
+			Expect(err).NotTo(HaveOccurred())
+			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+			Expect(resizeErr).ToNot(HaveOccurred(), fmt.Sprintf("expected new size to be '%d' or '%d' if pool has journal, and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
+		})
+
+		Step("Ensure that new pool has been expanded to the expected size", func() {
+			ValidateApplications(contexts)
+
+			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+			Expect(err).NotTo(HaveOccurred())
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -218,20 +381,12 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 	return poolSizeHasBeenChanged
 }
 
-func getStoragePoolByUUID(poolUUID string) *api.StoragePool {
-	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(len(pools)).NotTo(Equal(0))
-
-	pool := pools[poolUUID]
-	Expect(pool).ShouldNot(BeNil(), "Expected pool to not be nil")
-	return pool
-}
-
 func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
 
 	f := func() (interface{}, bool, error) {
-		expandedPool := getStoragePoolByUUID(poolIDToResize)
+		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
+		Expect(err).NotTo(HaveOccurred())
+
 		if expandedPool == nil {
 			return nil, false, fmt.Errorf("expanded pool value is nil")
 		}
@@ -267,6 +422,19 @@ func isJournalEnabled() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func getRandomPoolID(pools map[string]*api.StoragePool) string {
+	// pick a random pool from a pools list and resize it
+	randomIndex := rand.Intn(len(pools))
+	for _, pool := range pools {
+		if randomIndex == 0 {
+			return pool.Uuid
+
+		}
+		randomIndex--
+	}
+	return ""
 }
 
 var _ = AfterSuite(func() {

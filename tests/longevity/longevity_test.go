@@ -107,6 +107,8 @@ var _ = Describe("{Longevity}", func() {
 		AsyncDR:              TriggerAsyncDR,
 		RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
 		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:     TriggerPoolAddDiskAndReboot,
+		ResizeDiskAndReboot:  TriggerPoolResizeDiskAndReboot,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -332,6 +334,8 @@ func populateDisruptiveTriggers() {
 		CsiSnapRestore:                  false,
 		KVDBFailover:                    true,
 		HAIncreaseAndReboot:             true,
+		AddDiskAndReboot:                true,
+		ResizeDiskAndReboot:             true,
 	}
 }
 
@@ -574,6 +578,8 @@ func populateIntervals() {
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
+	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
+	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1012,6 +1018,28 @@ func populateIntervals() {
 	triggerInterval[HAIncreaseAndReboot][2] = 24 * baseInterval
 	triggerInterval[HAIncreaseAndReboot][1] = 27 * baseInterval
 
+	triggerInterval[AddDiskAndReboot][10] = 1 * baseInterval
+	triggerInterval[AddDiskAndReboot][9] = 3 * baseInterval
+	triggerInterval[AddDiskAndReboot][8] = 6 * baseInterval
+	triggerInterval[AddDiskAndReboot][7] = 9 * baseInterval
+	triggerInterval[AddDiskAndReboot][6] = 12 * baseInterval
+	triggerInterval[AddDiskAndReboot][5] = 15 * baseInterval
+	triggerInterval[AddDiskAndReboot][4] = 18 * baseInterval
+	triggerInterval[AddDiskAndReboot][3] = 21 * baseInterval
+	triggerInterval[AddDiskAndReboot][2] = 24 * baseInterval
+	triggerInterval[AddDiskAndReboot][1] = 30 * baseInterval
+
+	triggerInterval[ResizeDiskAndReboot][10] = 1 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][9] = 3 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][8] = 6 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][7] = 9 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][6] = 12 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][5] = 15 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][4] = 18 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][3] = 21 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][2] = 24 * baseInterval
+	triggerInterval[ResizeDiskAndReboot][1] = 30 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1143,6 +1171,8 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
+	triggerInterval[AddDiskAndReboot][0] = 0
+	triggerInterval[ResizeDiskAndReboot][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

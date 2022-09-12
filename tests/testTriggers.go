@@ -352,6 +352,10 @@ const (
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
 	// AddDrive performs drive add for on-prem cluster
 	AddDrive = "addDrive"
+	// AddDiskAndReboot performs add-disk and reboots node
+	AddDiskAndReboot = "addDiskAndReboot"
+	// ResizeDiskAndReboot performs  resize-disk and reboots node
+	ResizeDiskAndReboot = "resizeDiskAndReboot"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3506,8 +3510,11 @@ func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
 
 }
 
-func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.StoragePool, chaosLevel uint64, resizeOperationType opsapi.SdkStoragePool_ResizeOperationType) {
-	defer wg.Done()
+func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.StoragePool, chaosLevel uint64, resizeOperationType opsapi.SdkStoragePool_ResizeOperationType, doNodeReboot bool) {
+
+	if wg != nil {
+		defer wg.Done()
+	}
 	poolValidity, err := isPoolResizePossible(pool)
 	if err != nil {
 		logrus.Error(err)
@@ -3529,6 +3536,20 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			logrus.Error(err.Error())
 			UpdateOutcome(event, err)
 		} else {
+			if doNodeReboot {
+				err = WaitForExpansionToStart(pool.Uuid)
+				logrus.Error(err.Error())
+				UpdateOutcome(event, err)
+				if err == nil {
+					storageNode, err := GetNodeWithGivenPoolID(pool.Uuid)
+					logrus.Error(err.Error())
+					UpdateOutcome(event, err)
+					err = RebootNodeAndWait(*storageNode)
+					logrus.Error(err.Error())
+					UpdateOutcome(event, err)
+				}
+
+			}
 			err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
 			if err != nil {
 				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, expansionType, err)
@@ -3570,11 +3591,53 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 
 		for _, pool := range poolsToBeResized {
 			//Initiating multiple pool expansions by resize-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2)
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
 			wg.Add(1)
 
 		}
 		wg.Wait()
+
+	})
+
+	Step("validate all apps after pool resize using resize-disk operation", func() {
+		for _, ctx := range *contexts {
+			ValidateContext(ctx)
+		}
+	})
+
+}
+
+// TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
+func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ResizeDiskAndReboot,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+
+	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
+
+		poolsToBeResized, err := getStoragePoolsToExpand()
+
+		if err != nil {
+			logrus.Error(err)
+			UpdateOutcome(event, err)
+		}
+		if len(poolsToBeResized) > 0 {
+			poolToBeResized := poolsToBeResized[0]
+			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
+			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
+		}
 
 	})
 
@@ -3616,11 +3679,51 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 		for _, pool := range poolsToBeResized {
 			//Initiating multiple pool expansions by add-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1)
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
 			wg.Add(1)
 
 		}
 		wg.Wait()
+
+	})
+
+	Step("validate all apps after pool resize using add-disk operation", func() {
+		for _, ctx := range *contexts {
+			ValidateContext(ctx)
+		}
+	})
+
+}
+
+// TriggerPoolAddDiskAndReboot performs add-disk and reboots the node
+func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolResizeDisk,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
+		poolsToBeResized, err := getStoragePoolsToExpand()
+
+		if err != nil {
+			logrus.Error(err)
+			UpdateOutcome(event, err)
+		}
+		if len(poolsToBeResized) > 0 {
+			poolToBeResized := poolsToBeResized[0]
+			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
+			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
+		}
 
 	})
 
