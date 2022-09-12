@@ -15,6 +15,8 @@ const (
 	KopiaRestore     = "kopiarestore"
 	KopiaDelete      = "kopiadelete"
 	KopiaMaintenance = "kopiamaintenance"
+	NFSBackup        = "nfsbackup"
+	NFSRestore       = "nfsrestore"
 )
 
 // Docker images.
