@@ -45,6 +45,13 @@ const (
 	ResourceExportStatusSuccessful ResourceExportStatus = "Successful"
 )
 
+const (
+	// ResourceExportBackup backup op for resource upload
+	ResourceExportBackup ResourceExportType = "backup"
+	// ResourceExportRestore restore op for resource download
+	ResourceExportRestore ResourceExportType = "restore"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
