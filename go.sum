@@ -1441,6 +1441,7 @@ github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149 h1:KaRMV5hWbl7raiT
 github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149/go.mod h1:nb5AupP/63ByyqAYfZ+E32LDEnP0PjgH6w+yKXxWIgE=
 github.com/portworx/kdmp v0.4.1-0.20220902105026-dc14791e1508 h1:a8n3A0CRPaBe7+95sPK7q90yrkfIPN2ryK+8tNt4Vlo=
 github.com/portworx/kdmp v0.4.1-0.20220902105026-dc14791e1508/go.mod h1:sTO9LkPkExEVE6BqowIzkrQsyBtGdaC4Vh1AcKQ4xZA=
+github.com/portworx/kdmp v0.4.1-0.20220905153748-e0bb69e59f38/go.mod h1:NI2UgLITtggRvvaRA7lE4+Np4htDp+06Jf1LWksKyGA=
 github.com/portworx/kdmp v0.4.1-0.20220908094923-3e9b5bfbc1b4 h1:7P6p9nuCT+F1ik9QDaDvicOvlBIuTiyObI+wzoHmygQ=
 github.com/portworx/kdmp v0.4.1-0.20220908094923-3e9b5bfbc1b4/go.mod h1:vM3W94Sf5TxiHokVMv/lf3ew0J4jD4S38R7bi8dgk4I=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
@@ -1457,8 +1458,8 @@ github.com/portworx/sched-ops v1.20.4-rc1.0.20220714042759-8f183fe386ca h1:jrjwi
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220714042759-8f183fe386ca/go.mod h1:0IQvado0rnmbRMORaCqCDrrzjBrX5sU+Sz2+vQwEsjM=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496 h1:4VuOzgXy6EU6zrVTEP4wlAaBUwdGA2jY1ckyjthTvb8=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496/go.mod h1:/xDBMzUV30kbdQYaPdAFcAYqEada6ZnWi4zt4KzFzAI=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a h1:qzoPM67cqkX6qJKzd1Wmbt9hZkY5kFYlqnbZMfG8qU0=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a/go.mod h1:/xDBMzUV30kbdQYaPdAFcAYqEada6ZnWi4zt4KzFzAI=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220906082910-13c2ce746e50 h1:xTSb9vhDoksYZrJpqM2mVfqL2ek7MWDDKhyVHfLzkrY=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220906082910-13c2ce746e50/go.mod h1:8XBwmcbDuhW0TWFKCaHH4oS5xsfGFU5miSyqb0fvl3U=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c h1:vTjozKeb8DcF7qRqJWCMBxuUDpht5/TGMHkntwBBohA=
 github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c/go.mod h1:MggFBtnLHdUpaP9HKxZhVCinOYl5sMDNtrJb6YyrPyQ=
