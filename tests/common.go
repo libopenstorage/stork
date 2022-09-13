@@ -7,11 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
-	storageapi "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/url"
 	"os"
 	"os/exec"
@@ -22,7 +18,13 @@ import (
 	"sync"
 	"time"
 
+	storageapi "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -594,8 +596,22 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				logrus.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				processError(err, errChan...)
+			}
+			volScaleFactor := 1
+			if len(vols) > 10 {
+				// Take into account the number of volumes in the app. More volumes will
+				// take longer to format if the backend storage has limited bandwidth. Even if the
+				// GlobalScaleFactor is 1, high number of volumes in a single app instance
+				// may slow things down.
+				volScaleFactor = len(vols) / 10
+				logrus.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+			}
+			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
 			if err != nil {
 				processError(err, errChan...)
 			}
@@ -2920,7 +2936,7 @@ func GetSourceClusterConfigPath() (string, error) {
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
-		return "", fmt.Errorf(`Failed to get source config path. 
+		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
@@ -2937,7 +2953,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
-		return "", fmt.Errorf(`Failed to get source config path. 
+		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
