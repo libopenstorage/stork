@@ -1705,6 +1705,7 @@ func (a *ApplicationBackupController) backupResources(
 				resourceExport.Annotations[skipResourceAnnotation] = "true"
 				resourceExport.Name = getResourceExportCRName(prefixBackup, string(backup.UID), backup.Namespace)
 				resourceExport.Namespace = backup.Namespace
+				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
 				source := &kdmpapi.ResourceExportObjectReference{
 					APIVersion: backup.APIVersion,
 					Kind:       backup.Kind,
