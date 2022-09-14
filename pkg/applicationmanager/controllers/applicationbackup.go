@@ -1362,6 +1362,7 @@ func (a *ApplicationBackupController) backupResources(
 				resourceExport.Annotations[skipResourceAnnotation] = "true"
 				resourceExport.Name = getResourceExportCRName(prefixBackup, string(backup.UID), backup.Namespace)
 				resourceExport.Namespace = backup.Namespace
+				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
 				source := &kdmpapi.ResourceExportObjectReference{
 					APIVersion: backup.APIVersion,
 					Kind:       backup.Kind,
@@ -1397,7 +1398,7 @@ func (a *ApplicationBackupController) backupResources(
 		} else {
 			var message string
 			// Check the status of the resourceExport CR and update it to the applicationBackup CR
-			switch resourceExport.Status {
+			switch resourceExport.Status.Status {
 			case kdmpapi.ResourceExportStatusFailed:
 				message = fmt.Sprintf("Error uploading resources: %v", err)
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
