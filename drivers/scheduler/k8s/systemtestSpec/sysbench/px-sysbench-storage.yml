@@ -1,0 +1,11 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: sysbench-mysql-data
+spec:
+  storageClassName: sysbench-sc-secure
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ if .VolumeSize }}{{ .VolumeSize }}{{ else }}256Gi{{ end }}
