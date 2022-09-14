@@ -257,10 +257,31 @@ func jobFor(
 			},
 		},
 	}
-
 	var volumeMount corev1.VolumeMount
 	var volume corev1.Volume
 	var env []corev1.EnvVar
+
+	if len(jobOption.NfsServer) != 0 {
+		volumeMount = corev1.VolumeMount{
+			Name:      utils.NfsVolumeName,
+			MountPath: drivers.NfsMount,
+		}
+		jobSpec.Containers[0].VolumeMounts = append(
+			jobSpec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		volume = corev1.Volume{
+			Name: utils.NfsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				NFS: &corev1.NFSVolumeSource{
+					Server: jobOption.NfsServer,
+					Path:   jobOption.NfsExportDir,
+				},
+			},
+		}
+		jobSpec.Volumes = append(jobSpec.Volumes, volume)
+	}
+
 	if drivers.CertFilePath != "" {
 		volumeMount = corev1.VolumeMount{
 			Name:      utils.TLSCertMountVol,
