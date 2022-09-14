@@ -52,6 +52,22 @@ type JobOpts struct {
 	AppCRNamespace             string
 }
 
+// WithAppCRName is job parameter
+func WithAppCRName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.AppCRName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithAppCRNamespace is job parameter
+func WithAppCRNamespace(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.AppCRNamespace = strings.TrimSpace(namespace)
+		return nil
+	}
+}
+
 // WithRestoreExport is job parameter
 func WithRestoreExport(name string) JobOption {
 	return func(opts *JobOpts) error {

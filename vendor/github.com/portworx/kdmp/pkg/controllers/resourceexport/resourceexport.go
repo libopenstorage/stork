@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/libopenstorage/stork/pkg/controllers"
+	// "github.com/libopenstorage/stork/pkg/controllers"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/utils"
@@ -71,11 +71,11 @@ func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (
 		// Error reading the object - requeue the request.
 		return reconcile.Result{RequeueAfter: kdmpcontroller.RequeuePeriod}, nil
 	}
-
+	/* TODO - Temp disabling till clean up is in place
 	if !controllers.ContainsFinalizer(restoreExport, kdmpcontroller.CleanupFinalizer) {
 		controllers.SetFinalizer(restoreExport, kdmpcontroller.CleanupFinalizer)
 		return reconcile.Result{Requeue: true}, c.client.Update(context.TODO(), restoreExport)
-	}
+	}*/
 
 	requeue, err := c.process(context.TODO(), restoreExport)
 	if err != nil {
