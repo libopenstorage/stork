@@ -69,6 +69,10 @@ if [ -z "${IS_PURE_VOLUMES}" ]; then
     IS_PURE_VOLUMES=false
 fi
 
+if [ -z "${PURE_FA_CLONE_MANY_TEST}" ]; then
+    PURE_FA_CLONE_MANY_TEST=false
+fi
+
 if [ -z "${PURE_SAN_TYPE}" ]; then
     PURE_SAN_TYPE=ISCSI
 fi
@@ -428,6 +432,7 @@ spec:
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",
+            "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
             "--pure-san-type=$PURE_SAN_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",

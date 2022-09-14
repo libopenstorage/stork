@@ -4473,7 +4473,7 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		if !isCsiVolumeSnapshotClassExist {
 			logrus.Info("Creating csi volume snapshot class")
 			snapShotClassName := PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
-			if volSnapshotClass, err = Inst().S.CreateCsiSanpshotClass(snapShotClassName, "Delete"); err != nil {
+			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
 				logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
 				UpdateOutcome(event, err)
 			}

@@ -287,17 +287,18 @@ func InitInstance() {
 
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:                 Inst().SpecDir,
-		VolDriverName:           Inst().V.String(),
-		NodeDriverName:          Inst().N.String(),
-		SecretConfigMapName:     Inst().ConfigMap,
-		CustomAppConfig:         Inst().CustomAppConfig,
-		StorageProvisioner:      Inst().Provisioner,
-		SecretType:              Inst().SecretType,
-		VaultAddress:            Inst().VaultAddress,
-		VaultToken:              Inst().VaultToken,
-		PureVolumes:             Inst().PureVolumes,
-		PureSANType:             Inst().PureSANType,
-		HelmValuesConfigMapName: Inst().HelmValuesConfigMap,
+		VolDriverName:                    Inst().V.String(),
+		NodeDriverName:                   Inst().N.String(),
+		SecretConfigMapName:              Inst().ConfigMap,
+		CustomAppConfig:                  Inst().CustomAppConfig,
+		StorageProvisioner:               Inst().Provisioner,
+		SecretType:                       Inst().SecretType,
+		VaultAddress:                     Inst().VaultAddress,
+		VaultToken:                       Inst().VaultToken,
+		PureVolumes:                      Inst().PureVolumes,
+		PureSANType:                      Inst().PureSANType,
+		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
+		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -492,6 +493,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
+		Step(fmt.Sprintf("validate %s app's pure volume snapshot and restoring to many volumes", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
+			}
+		})
+
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
 				return
@@ -570,6 +577,12 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateCSISnapshotAndRestore(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's pure volume snapshot and restoring to many volumes", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
 			}
 		})
 
@@ -847,7 +860,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "-" + timestamp
-		if _, err := Inst().S.CreateCsiSanpshotClass(snapShotClassName, "Delete"); err != nil {
+		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
 			logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
 		}
@@ -901,6 +914,41 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 	})
 }
+
+// ValidatePureVolumeLargeNumOfClones is the ginkgo spec for restoring a snapshot to many volumes
+func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an restoring large number of volumes from a snapshot", func() {
+		var err error
+		timestamp := strconv.Itoa(int(time.Now().Unix()))
+		snapShotClassName := PureSnapShotClass + "." + timestamp
+		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
+			logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
+			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
+		}
+
+		var vols []*volume.Volume
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx, "pure_block")
+			processError(err, errChan...)
+		})
+		if len(vols) == 0 {
+			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
+			processError(err, errChan...)
+		} else {
+			request := scheduler.CSISnapshotRequest {
+				Namespace: vols[0].Namespace,
+				Timestamp: timestamp,
+				OriginalPVCName: vols[0].Name,
+				SnapName: "basic-csi-snapshot-many" + timestamp,
+				RestoredPVCName: "csi-restored-many" + timestamp,
+				SnapshotclassName: snapShotClassName,
+			}
+			err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
+			processError(err, errChan...)
+		}
+	})
+}
+
 
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
@@ -3503,8 +3551,9 @@ type Torpedo struct {
 	Backup                              backup.Driver
 	SecretType                          string
 	PureVolumes                         bool
-	PureSANType                         string
-	VaultAddress                        string
+	PureSANType                      string
+	RunCSISnapshotAndRestoreManyTest bool
+	VaultAddress                     string
 	VaultToken                          string
 	SchedUpgradeHops                    string
 	AutopilotUpgradeImage               string
@@ -3545,6 +3594,7 @@ func ParseFlags() {
 	var secretType string
 	var pureVolumes bool
 	var pureSANType string
+	var runCSISnapshotAndRestoreManyTest bool
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
@@ -3581,6 +3631,7 @@ func ParseFlags() {
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
 	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
 	flag.StringVar(&pureSANType, "pure-san-type", "ISCSI", "If using Pure volumes, which SAN type is being used. ISCSI, FC, and NVMEOF-RDMA are all valid values.")
+	flag.BoolVar(&runCSISnapshotAndRestoreManyTest, "pure-fa-snapshot-restore-to-many-test", false, "If using Pure volumes, to enable Pure clone many tests")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
@@ -3656,24 +3707,25 @@ func ParseFlags() {
 				AppList:                             appList,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
-				DestroyAppTimeout:                   destroyAppTimeout,
-				DriverStartTimeout:                  driverStartTimeout,
-				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
-				ConfigMap:                           configMapName,
-				BundleLocation:                      bundleLocation,
-				CustomAppConfig:                     customAppConfig,
-				Backup:                              backupDriver,
-				SecretType:                          secretType,
-				PureVolumes:                         pureVolumes,
-				PureSANType:                         pureSANType,
-				VaultAddress:                        vaultAddress,
-				VaultToken:                          vaultToken,
-				SchedUpgradeHops:                    schedUpgradeHops,
-				AutopilotUpgradeImage:               autopilotUpgradeImage,
-				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
-				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
-				MeteringIntervalMins:                meteringIntervalMins,
-				IsHyperConverged:                    hyperConverged,
+				DestroyAppTimeout:                destroyAppTimeout,
+				DriverStartTimeout:               driverStartTimeout,
+				AutoStorageNodeRecoveryTimeout:   autoStorageNodeRecoveryTimeout,
+				ConfigMap:                        configMapName,
+				BundleLocation:                   bundleLocation,
+				CustomAppConfig:                  customAppConfig,
+				Backup:                           backupDriver,
+				SecretType:                       secretType,
+				PureVolumes:                      pureVolumes,
+				PureSANType:                      pureSANType,
+				RunCSISnapshotAndRestoreManyTest: runCSISnapshotAndRestoreManyTest,
+				VaultAddress:                     vaultAddress,
+				VaultToken:                       vaultToken,
+				SchedUpgradeHops:                 schedUpgradeHops,
+				AutopilotUpgradeImage:            autopilotUpgradeImage,
+				CsiGenericDriverConfigMap:        csiGenericDriverConfigMapName,
+				LicenseExpiryTimeoutHours:        licenseExpiryTimeoutHours,
+				MeteringIntervalMins:             meteringIntervalMins,
+				IsHyperConverged:                 hyperConverged,
 			}
 		})
 	}
