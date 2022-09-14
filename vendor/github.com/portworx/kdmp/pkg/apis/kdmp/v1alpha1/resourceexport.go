@@ -9,6 +9,8 @@ const (
 	ResourceExportResourceName = "resourceexport"
 	// ResourceExportResourcePlural is the name for list of ResourceExport resources.
 	ResourceExportResourcePlural = "resourceexports"
+	// ResourceExportNFS resource export provided by nfs path
+	ResourceExportNFS ResourceExportType = "nfs"
 )
 
 // ResourceExportType defines a method of achieving Resource transfer.
@@ -47,9 +49,7 @@ const (
 
 const (
 	// ResourceExportBackup backup op for resource upload
-	ResourceExportBackup ResourceExportType = "backup"
-	// ResourceExportRestore restore op for resource download
-	ResourceExportRestore ResourceExportType = "restore"
+	ResourceExportBackup ResourceExportType = "nfs"
 )
 
 // +genclient
@@ -60,20 +60,28 @@ type ResourceExport struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              ResourceExportSpec `json:"spec"`
-	// Type - Backup or Restore
-	Type ResourceExportType `json:"type,omitempty"`
 	// Status Overall status
-	Status ResourceExportStatus `json:"status,omitempty"`
+	Status ResourceStatus `json:"status,omitempty"`
 }
 
 // ResourceExportSpec configuration parameters for ResourceExport
 type ResourceExportSpec struct {
+	// Type - Backup or Restore
+	Type ResourceExportType `json:"type,omitempty"`
 	// Resources status of each resource being restore
 	Resources []*ResourceRestoreResourceInfo `json:"resources"`
 	// Source here is applicationBackup CR for backup
 	Source ResourceExportObjectReference `json:"source,omitempty"`
 	// Destination is the ref to BL CR
 	Destination ResourceExportObjectReference `json:"destination,omitempty"`
+}
+
+// ResourceStatus overall resource backup/restore progress
+type ResourceStatus struct {
+	// Status status of resource export
+	Status ResourceExportStatus `json:"status,omitempty"`
+	// Reason status reason
+	Reason string `json:"reason,omitempty"`
 }
 
 // ResourceExportObjectReference contains enough information to let you inspect the referred object.
