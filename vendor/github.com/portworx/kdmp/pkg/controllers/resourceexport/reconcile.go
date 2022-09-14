@@ -20,29 +20,41 @@ import (
 // user can choose which filed to be updated and pass the same to updateStatus()
 type updateResourceExportFields struct {
 	status kdmpapi.ResourceExportStatus
+	reason string
 	// TODO: Enable for restore
 	//resources []*kdmpapi.ResourceInfo
 }
 
 func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (bool, error) {
+	logrus.Infof("entering reconciler process")
 	if in == nil {
 		return false, nil
 	}
 	resourceExport := in.DeepCopy()
 
 	// Set to initial status to start with
-	if resourceExport.Status == "" {
+	if resourceExport.Status.Status == "" {
 		updateData := updateResourceExportFields{
 			status: kdmpapi.ResourceExportStatusInitial,
+			reason: "",
 		}
 		return true, c.updateStatus(resourceExport, updateData)
 	}
 	// Get the driver type
-	opType := getOpType(resourceExport)
+	opType, err := getDriverType(resourceExport)
+	if err != nil {
+		updateData := updateResourceExportFields{
+			status: kdmpapi.ResourceExportStatusFailed,
+			reason: "fetching driver type failed",
+		}
+		return false, c.updateStatus(resourceExport, updateData)
+	}
+
 	driver, err := driversinstance.Get(opType)
 	if err != nil {
 		updateData := updateResourceExportFields{
 			status: kdmpapi.ResourceExportStatusFailed,
+			reason: "fetching driver instance failed",
 		}
 		return false, c.updateStatus(resourceExport, updateData)
 	}
@@ -55,11 +67,12 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		logrus.Errorf(msg)
 		updateData := updateResourceExportFields{
 			status: kdmpapi.ResourceExportStatusFailed,
+			reason: fmt.Sprintf("failed reading bl [%v/%v]: %v", blNamespace, blName, err),
 		}
 		return false, c.updateStatus(resourceExport, updateData)
 	}
 	var serr error
-	switch resourceExport.Status {
+	switch resourceExport.Status.Status {
 	case kdmpapi.ResourceExportStatusInitial:
 		// start data transfer
 		_, serr = startNfsResourceJob(
@@ -70,7 +83,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			backupLocation,
 		)
 		if serr != nil {
-			logrus.Errorf("line 73 err: %v", serr)
+			logrus.Errorf("err: %v", serr)
 		}
 	}
 
@@ -92,7 +105,8 @@ func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourc
 		// TODO: In the restore path iterate over ResourceInfo{} list and only update the
 		// resource whose status as changed
 		if data.status != "" {
-			re.Status = data.status
+			re.Status.Status = data.status
+			re.Status.Reason = data.reason
 		}
 
 		updErr = c.client.Update(context.TODO(), re)
@@ -114,9 +128,28 @@ func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourc
 
 }
 
-func getOpType(re *kdmpapi.ResourceExport) string {
+func getDriverType(re *kdmpapi.ResourceExport) (string, error) {
+	src := re.Spec.Source
+	doBackup := false
 
-	return string(re.Type)
+	if isApplicationBackupRef(src) {
+		doBackup = true
+	} else {
+		return "", fmt.Errorf("invalid kind for nfs backup destination: expected BackupLocation")
+	}
+
+	switch re.Spec.Type {
+	case kdmpapi.ResourceExportNFS:
+		if doBackup {
+			return drivers.NFSBackup, nil
+		}
+		return "", fmt.Errorf("invalid kind for nfs source: expected nfs type")
+	}
+	return string(re.Spec.Type), nil
+}
+
+func isApplicationBackupRef(ref kdmpapi.ResourceExportObjectReference) bool {
+	return ref.Kind == "ApplicationBackup" && ref.APIVersion == "stork.libopenstorage.org/v1alpha1"
 }
 
 func startNfsResourceJob(
@@ -130,8 +163,13 @@ func startNfsResourceJob(
 	switch drv.Name() {
 	case drivers.NFSBackup:
 		return drv.StartJob(
+			drivers.WithRestoreExport(re.Name),
+			drivers.WithJobNamespace(re.Namespace),
 			drivers.WithNfsServer(bl.Location.NfsConfig.NfsServerAddr),
 			drivers.WithNfsExportDir(bl.Location.Path),
+			drivers.WithAppCRName(re.Spec.Source.Name),
+			drivers.WithAppCRNamespace(re.Spec.Source.Namespace),
+			drivers.WithNamespace(re.Namespace),
 		)
 	}
 	return "", fmt.Errorf("unknown data transfer driver: %s", drv.Name())
