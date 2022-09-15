@@ -1,4 +1,4 @@
-FROM golang:1.15.1
+FROM golang:1.17.11
 
 # Install dependancies
 RUN apt-get update && \ 
