@@ -27,7 +27,7 @@ require (
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
-	github.com/portworx/kdmp v0.4.1-0.20220914095159-be01885a43e0
+	github.com/portworx/kdmp v0.4.1-0.20220915192118-4cfa0cc83695
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220914095824-f7bf26285e26
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
@@ -43,7 +43,6 @@ require (
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
 	google.golang.org/api v0.30.0
 	google.golang.org/grpc v1.48.0
-	google.golang.org/grpc/examples v0.0.0-20220715232852-f601dfac73c9 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.24.0
 	k8s.io/apiextensions-apiserver v0.21.4

@@ -27,8 +27,8 @@ func (d Driver) Name() string {
 // StartJob creates a job for data transfer between volumes.
 func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	// FOr every ns to be backed up a new job should be created
-	funct := "StartJob"
-	logrus.Infof("line 31 %s", funct)
+	funct := "NfsStartJob"
+	logrus.Infof("Inside function %s", funct)
 	o := drivers.JobOpts{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -66,8 +66,9 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 func buildJob(
 	jobOptions drivers.JobOpts,
 ) (*batchv1.Job, error) {
-	funct := "buildJob"
+	funct := "NfsbuildJob"
 	// Setup service account using same role permission as stork role
+	logrus.Infof("Inside %s function", funct)
 	if err := utils.SetupNFSServiceAccount(jobOptions.RestoreExportName, jobOptions.Namespace, roleFor()); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", jobOptions.Namespace, jobOptions.RestoreExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
@@ -81,7 +82,7 @@ func buildJob(
 
 	job, err := jobForBackupResource(jobOptions, resources)
 	if err != nil {
-		errMsg := fmt.Sprintf("building restore job %s failed: %v", jobOptions.RestoreExportName, err)
+		errMsg := fmt.Sprintf("building resource backup job %s failed: %v", jobOptions.RestoreExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
@@ -93,7 +94,6 @@ func buildJob(
 	}
 
 	return job, nil
-
 }
 
 func roleFor() *rbacv1.ClusterRole {
@@ -134,6 +134,17 @@ func jobForBackupResource(
 
 	labels := addJobLabels(jobOption.Labels)
 
+	nfsExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
+		// TODO: We need to make this a generic call and pass it from RE CR accordingly. Till that time we will use this variable name.
+		jobOption.KopiaImageExecutorSource,
+		jobOption.KopiaImageExecutorSourceNs,
+		jobOption.JobName,
+		jobOption)
+	if err != nil {
+		logrus.Errorf("failed to get the executor image details")
+		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobOption.JobName)
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobOption.RestoreExportName,
@@ -156,8 +167,8 @@ func jobForBackupResource(
 					//NodeName:           mountPod.Spec.NodeName,
 					Containers: []corev1.Container{
 						{
-							Name:            "nfsexecutor",
-							Image:           "pkumarn/nfsexecutor:latest",
+							Name:            drivers.NfsExecutorImage,
+							Image:           nfsExecutorImage,
 							ImagePullPolicy: corev1.PullAlways,
 							Command: []string{
 								"/bin/sh",
