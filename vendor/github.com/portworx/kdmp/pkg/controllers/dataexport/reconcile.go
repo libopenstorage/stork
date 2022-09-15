@@ -1966,7 +1966,7 @@ func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string, 
 	case storkapi.BackupLocationAzure:
 		return createAzureSecret(secretName, backupLocation, namespace, labels)
 	case storkapi.BackupLocationNFS:
-		return createNfsSecret(secretName, backupLocation, namespace, labels)
+		return utils.CreateNfsSecret(secretName, backupLocation, namespace, labels)
 	}
 
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
@@ -2004,7 +2004,7 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, 
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["disablessl"] = []byte(strconv.FormatBool(backupLocation.Location.S3Config.DisableSSL))
-	err := createJobSecret(secretName, namespace, credentialData, labels)
+	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
@@ -2016,7 +2016,7 @@ func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocati
 	credentialData["accountkey"] = []byte(backupLocation.Location.GoogleConfig.AccountKey)
 	credentialData["projectid"] = []byte(backupLocation.Location.GoogleConfig.ProjectID)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
-	err := createJobSecret(secretName, namespace, credentialData, labels)
+	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
@@ -2028,18 +2028,7 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
-	err := createJobSecret(secretName, namespace, credentialData, labels)
-
-	return err
-}
-
-func createNfsSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
-	credentialData := make(map[string][]byte)
-	credentialData["type"] = []byte(backupLocation.Location.Type)
-	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.NfsServerAddr)
-	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
-	credentialData["path"] = []byte(backupLocation.Location.Path)
-	err := createJobSecret(secretName, namespace, credentialData, labels)
+	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
@@ -2056,38 +2045,12 @@ func createCertificateSecret(secretName, namespace string, labels map[string]str
 
 		certData := make(map[string][]byte)
 		certData[drivers.CertFileName] = certificateData
-		err = createJobSecret(secretName, namespace, certData, labels)
+		err = utils.CreateJobSecret(secretName, namespace, certData, labels)
 
 		return err
 	}
 
 	return nil
-}
-
-func createJobSecret(
-	secretName string,
-	namespace string,
-	credentialData map[string][]byte,
-	labels map[string]string,
-) error {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: namespace,
-			Labels:    labels,
-			Annotations: map[string]string{
-				utils.SkipResourceAnnotation: "true",
-			},
-		},
-		Data: credentialData,
-		Type: corev1.SecretTypeOpaque,
-	}
-	_, err := core.Instance().CreateSecret(secret)
-	if err != nil && k8sErrors.IsAlreadyExists(err) {
-		return nil
-	}
-
-	return err
 }
 
 func toSnapName(pvcName, dataExportUID string) string {

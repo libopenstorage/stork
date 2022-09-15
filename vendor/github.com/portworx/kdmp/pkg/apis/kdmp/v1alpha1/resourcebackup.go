@@ -6,9 +6,9 @@ import (
 
 const (
 	// ResourceBackupResourceName is name for the ResourceBackup resource.
-	ResourceBackupResourceName = "resourceBackup"
+	ResourceBackupResourceName = "resourcebackup"
 	// ResourceBackupResourcePlural is the name for list of ResourceBackup resources.
-	ResourceBackupResourcePlural = "resourceBackups"
+	ResourceBackupResourcePlural = "resourcebackups"
 )
 
 // ResourceBackupType defines a method of achieving Resource transfer.
@@ -38,6 +38,14 @@ const (
 	ResourceBackupStatusSuccessful ResourceBackupStatus = "Successful"
 )
 
+// ResourceBackupProgressStatus overall resource backup/restore progress
+type ResourceBackupProgressStatus struct {
+	// Status status of resource export
+	Status ResourceBackupStatus `json:"status,omitempty"`
+	// Reason status reason
+	Reason string `json:"reason,omitempty"`
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -49,7 +57,7 @@ type ResourceBackup struct {
 	// Type - Backup or Restore
 	Type ResourceBackupType `json:"type,omitempty"`
 	// Status Overall status
-	Status ResourceBackupStatus `json:"status,omitempty"`
+	Status ResourceBackupProgressStatus `json:"status,omitempty"`
 }
 
 // ResourceBackupSpec configuration parameters for ResourceBackup

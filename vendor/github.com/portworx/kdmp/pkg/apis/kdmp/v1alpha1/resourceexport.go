@@ -19,6 +19,9 @@ type ResourceExportType string
 // ResourceExportStatus defines a status of ResourceExport.
 type ResourceExportStatus string
 
+// ResourceExportStage is the stage of the ResourceExport
+type ResourceExportStage string
+
 // ObjectInfo contains info about an object being backed up or restored
 type ObjectInfo struct {
 	Name                    string `json:"name"`
@@ -52,6 +55,19 @@ const (
 	ResourceExportBackup ResourceExportType = "nfs"
 )
 
+const (
+	// ResourceExportStageInitial is the initial stage for ResourceExport
+	ResourceExportStageInitial ResourceExportStage = "Initial"
+	// ResourceExportStageInProgress is the InProgress stage for ResourceExport
+	ResourceExportStageInProgress ResourceExportStage = "InProgress"
+	// ResourceExportStageFailed is the Failed stage for ResourceExport
+	ResourceExportStageFailed ResourceExportStage = "Failed"
+	// ResourceExportStageSuccessful is the Successful stage for ResourceExport
+	ResourceExportStageSuccessful ResourceExportStage = "Successful"
+	// ResourceExportStageFinal is the Final stage for ResourceExport
+	ResourceExportStageFinal ResourceExportStage = "Final"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -82,6 +98,10 @@ type ResourceStatus struct {
 	Status ResourceExportStatus `json:"status,omitempty"`
 	// Reason status reason
 	Reason string `json:"reason,omitempty"`
+	// TransferID job transfer ID
+	TransferID string `json:"transferID,omitempty"`
+	// Stage resource export stage
+	Stage ResourceExportStage `json:"stage,omitempty"`
 }
 
 // ResourceExportObjectReference contains enough information to let you inspect the referred object.

@@ -94,31 +94,42 @@ func (c *Controller) createCRD() error {
 	if err != nil {
 		return err
 	}
-	// resourceexport is used by this controller - ensure it's registered
-	re := apiextensions.CustomResource{
-		Name:    kdmpapi.ResourceExportResourceName,
-		Plural:  kdmpapi.ResourceExportResourcePlural,
-		Group:   kdmpapi.SchemeGroupVersion.Group,
-		Version: kdmpapi.SchemeGroupVersion.Version,
-		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(kdmpapi.ResourceExport{}).Name(),
+	resources := []apiextensions.CustomResource{
+		{
+			Name:    kdmpapi.ResourceExportResourceName,
+			Plural:  kdmpapi.ResourceExportResourcePlural,
+			Group:   kdmpapi.SchemeGroupVersion.Group,
+			Version: kdmpapi.SchemeGroupVersion.Version,
+			Scope:   apiextensionsv1beta1.NamespaceScoped,
+			Kind:    reflect.TypeOf(kdmpapi.ResourceExport{}).Name(),
+		},
+		{
+			Name:    kdmpapi.ResourceBackupResourceName,
+			Plural:  kdmpapi.ResourceBackupResourcePlural,
+			Group:   kdmpapi.SchemeGroupVersion.Group,
+			Version: kdmpapi.SchemeGroupVersion.Version,
+			Scope:   apiextensionsv1beta1.NamespaceScoped,
+			Kind:    reflect.TypeOf(kdmpapi.ResourceBackup{}).Name(),
+		},
 	}
 
-	if requiresV1 {
-		err := utils.CreateCRD(re)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			return err
-		}
-		if err := apiextensions.Instance().ValidateCRD(re.Plural+"."+re.Group, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
-			return err
-		}
-	} else {
-		err = apiextensions.Instance().CreateCRDV1beta1(re)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			return err
-		}
-		if err := apiextensions.Instance().ValidateCRDV1beta1(re, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
-			return err
+	for _, res := range resources {
+		if requiresV1 {
+			err := utils.CreateCRD(res)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+			if err := apiextensions.Instance().ValidateCRD(res.Plural+"."+res.Group, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
+				return err
+			}
+		} else {
+			err = apiextensions.Instance().CreateCRDV1beta1(res)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+			if err := apiextensions.Instance().ValidateCRDV1beta1(res, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
+				return err
+			}
 		}
 	}
 
