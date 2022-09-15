@@ -7,8 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -20,37 +18,43 @@ import (
 	"sync"
 	"time"
 
+	storageapi "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/Azure/azure-storage-blob-go/azblob"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	storageapi "k8s.io/api/storage/v1"
-
-	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
@@ -496,6 +500,13 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
+		Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
+			}
+		})
+
+
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
 				return
@@ -580,6 +591,12 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 		Step(fmt.Sprintf("validate %s app's pure volume snapshot and restoring to many volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
 			}
 		})
 
@@ -932,6 +949,37 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 	})
 }
 
+// ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
+func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		if err != nil {
+			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
+			logrus.Error(err.Error())
+			processError(err, errChan...)
+		}
+
+		if len(pools) == 0 {
+			err = fmt.Errorf("length of pools should be greater than 0")
+			processError(err, errChan...)
+		}
+		for _, pool := range pools {
+			initialPoolSize := pool.TotalSize / units.GiB
+			err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
+			if err != nil {
+				err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+				logrus.Error(err.Error())
+			} else {
+				err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+				if err != nil {
+					err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
+					logrus.Error(err)
+				}
+			}
+		}
+	})
+
+}
 
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
