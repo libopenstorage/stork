@@ -498,6 +498,8 @@ spec:
       value: "${S3_REGION}"
     - name: S3_DISABLE_SSL
       value: "${S3_DISABLE_SSL}"
+    - name: DIAGS_BUCKET
+      value: "${DIAGS_BUCKET}"
     - name: PROVIDERS
       value: "${PROVIDERS}"
     - name: INTERNAL_DOCKER_REGISTRY

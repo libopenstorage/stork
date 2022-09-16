@@ -1,0 +1,4 @@
+kube_version: v1.23.0
+docker_dns_servers_strict: false
+etcd_deployment_type: host
+container_manager: docker

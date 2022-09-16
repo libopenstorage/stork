@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/s3utils"
+
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -90,6 +92,7 @@ const (
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
+	clusterIDFile                             = "/etc/pwx/cluster_uuid"
 )
 
 const (
@@ -121,9 +124,13 @@ const (
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 	asyncTimeout                      = 15 * time.Minute
+	timeToTryPreviousFolder = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 )
-
+const (
+	telemetryNotEnabled = "15"
+	telemetryEnabled    = "100"
+)
 const (
 	secretName      = "openstorage.io/auth-secret-name"
 	secretNamespace = "openstorage.io/auth-secret-namespace"
@@ -188,6 +195,8 @@ type portworx struct {
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
+	DiagsFile             string
+
 }
 
 type statusJSON struct {
@@ -3181,13 +3190,82 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return collectDiags(n, config, diagOps, d)
 }
 
-func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
-	var err error
-
-	pxNode, err := d.GetPxNode(&n)
+func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+	logrus.Info("Validating diags uploaded on S3")
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	clusterUUID, err := d.GetClusterID(n, opts)
 	if err != nil {
 		return err
 	}
+
+	//// Check S3 bucket for diags
+	logrus.Debugf("Node name %s", n.Name)
+	if diagsFile != "" {
+		d.DiagsFile = diagsFile
+	}
+	start := time.Now()
+	for {
+		if time.Since(start) >= asyncTimeout {
+			return fmt.Errorf("waiting for async diags job timed out")
+		}
+		var objects []s3utils.Object
+		var err error
+		if time.Since(start) >= timeToTryPreviousFolder{
+			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
+			if err != nil {
+				return err
+			}
+		} else {
+			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
+			if err != nil {
+				return err
+			}
+		}
+		for _, obj := range objects {
+			if strings.Contains(obj.Key, d.DiagsFile) {
+				logrus.Debugf("File validated on S3")
+				logrus.Debugf("Object Name is %s", obj.Key)
+				logrus.Debugf("Object Created on %s", obj.LastModified.String())
+				logrus.Debugf("Object Size %d", obj.Size)
+				return nil
+
+			}
+		}
+		logrus.Debugf("File %s not found in S3 yet, re-trying in 30s", d.DiagsFile)
+		time.Sleep(30 * time.Second)
+	}
+}
+
+func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, error) {
+
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterIDFile), opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+	return out, nil
+}
+
+func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
+	var hostname string
+	var status api.Status
+
+	if !diagOps.PxStopped {
+		pxNode, err := d.GetPxNode(&n)
+		if err != nil {
+			return err
+		}
+		hostname = pxNode.Hostname
+		status = pxNode.Status
+	} else {
+		hostname = n.Name
+		status = api.Status_STATUS_OFFLINE
+	}
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3196,57 +3274,55 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-		logrus.Infof("Collecting diags on node %v. Will skip validation", pxNode.Hostname)
+		logrus.Infof("Collecting diags on node %v. Will skip validation", hostname)
 	}
 
-	if pxNode.Status == api.Status_STATUS_OFFLINE {
-		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
+	if status == api.Status_STATUS_OFFLINE {
+		logrus.Debugf("Node %v is offline, collecting diags using pxctl", hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f", d.getPxctlPath(n)), opts)
+		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f --output %s", d.getPxctlPath(n), config.OutputFile), opts)
 		if err != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
 		}
+	} else {
+		url := netutil.MakeURL("http://", n.Addresses[0], 9014)
 
-		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
-		return nil
-	}
+		c, err := client.NewClient(url, "", "")
+		if err != nil {
+			return err
+		}
+		req := c.Post().Resource(pxDiagPath).Body(config)
 
-	url := netutil.MakeURL("http://", n.Addresses[0], 9014)
-
-	c, err := client.NewClient(url, "", "")
-	if err != nil {
-		return err
-	}
-	req := c.Post().Resource(pxDiagPath).Body(config)
-
-	resp := req.Do()
-	if resp.Error() != nil {
-		return fmt.Errorf("failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+		resp := req.Do()
+		if resp.Error() != nil {
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v", hostname, resp.Error())
+		}
 	}
 
 	if diagOps.Validate {
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", hostname, err, out)
 		}
 
-		logrus.Debug("Validating CCM health")
-		// Change to config package.
-		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-		resp, err := http.Get(url)
+		pxctlPath := d.getPxctlPath(n)
+		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status -j | jq .telemetrystatus.connection_status.error_code", pxctlPath), opts)
 		if err != nil {
-			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
 		}
-		defer resp.Body.Close()
+		logrus.Debugf("Status returned by pxctl %s", out)
+		if strings.TrimSpace(out) == telemetryNotEnabled {
+			logrus.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
+			return nil
+		}
 
-		// Check S3 bucket for diags
-
-		// TODO: Waiting for S3 credentials.
+		logrus.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
+		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
 	}
 
-	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	logrus.Debugf("Successfully collected diags on node %v", hostname)
 	return nil
 }
 
@@ -3317,19 +3393,21 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate async diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 
-		logrus.Debug("Validating CCM health")
-		// Change to config package.
-		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-		ccmresp, err := http.Get(url)
-		if err != nil {
-			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-		}
+		logrus.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
+		/*
+			logrus.Debug("Validating CCM health")
+			// Change to config package.
+			url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
+			ccmresp, err := http.Get(url)
+			if err != nil {
+				return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+			}
 
-		defer ccmresp.Body.Close()
-
+			defer ccmresp.Body.Close()
+		*/
 		// Check S3 bucket for diags
 		// TODO: Waiting for S3 credentials.
 

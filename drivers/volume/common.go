@@ -61,6 +61,8 @@ type DiagOps struct {
 	Validate bool
 	// Async toggle to indicate that we want to use async diags
 	Async bool
+	// PxIsStopped
+	PxStopped bool
 }
 
 // MetadataNode TODO temporary solution until sdk supports metadataNode response
@@ -513,6 +515,14 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CollectDiags()",
+	}
+}
+
+// ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
+func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDiagsOnS3()",
 	}
 }
 

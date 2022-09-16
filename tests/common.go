@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -2781,6 +2782,9 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 	})
 }
 
+
+
+
 // CreateS3BackupLocation creates backuplocation for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
 	time.Sleep(60 * time.Second)
@@ -2788,7 +2792,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	//inspReq := &api.CloudCredentialInspectRequest{Name: cloudCred, Uid: cloudCredUID, OrgId: orgID, IncludeSecrets: true}
 	//credCtx, err := backup.GetAdminCtxFromSecret()
 	//obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
-	_, _, endpoint, region, disableSSLBool := GetAWSDetailsFromEnv()
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -3107,7 +3111,7 @@ func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
 
 // DeleteS3Bucket deletes bucket in S3
 func DeleteS3Bucket(bucketName string) {
-	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -3438,7 +3442,7 @@ func CreateBucket(provider string, bucketName string) {
 
 // CreateS3Bucket creates bucket in S3
 func CreateS3Bucket(bucketName string) {
-	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -3517,38 +3521,6 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 		}
 	}
 	return nil
-}
-
-// GetAWSDetailsFromEnv returns AWS details
-func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
-	s3Region string, disableSSLBool bool) {
-
-	// TODO: add separate function to return cred object based on type
-	id = os.Getenv("AWS_ACCESS_KEY_ID")
-	expect(id).NotTo(equal(""),
-		"AWS_ACCESS_KEY_ID Environment variable should not be empty")
-
-	secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
-	expect(secret).NotTo(equal(""),
-		"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
-
-	endpoint = os.Getenv("S3_ENDPOINT")
-	expect(endpoint).NotTo(equal(""),
-		"S3_ENDPOINT Environment variable should not be empty")
-
-	s3Region = os.Getenv("S3_REGION")
-	expect(s3Region).NotTo(equal(""),
-		"S3_REGION Environment variable should not be empty")
-
-	disableSSL := os.Getenv("S3_DISABLE_SSL")
-	expect(disableSSL).NotTo(equal(""),
-		"S3_DISABLE_SSL Environment variable should not be empty")
-
-	disableSSLBool, err := strconv.ParseBool(disableSSL)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
-
-	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
 // DumpKubeconfigs gets kubeconfigs from configmap
