@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aquilax/truncate"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/version"
@@ -33,6 +34,10 @@ const (
 	TriggeredFromPxBackup                  = "px-backup"
 	kopiaExecutorImageRegistryEnvVar       = "KOPIA-EXECUTOR-IMAGE-REGISTRY"
 	kopiaExecutorImageRegistrySecretEnvVar = "KOPIA-EXECUTOR-IMAGE-REGISTRY-SECRET"
+	// NfsExecutorImageRegistryEnvVar is the os environment variable for nfs executor image
+	NfsExecutorImageRegistryEnvVar = "NFS-EXECUTOR-IMAGE-REGISTRY"
+	// NfsExecutorImageRegistrySecretEnvVar is the os environ varibale for nfs executor image
+	NfsExecutorImageRegistrySecretEnvVar = "NFS-EXECUTOR-IMAGE-REGISTRY-SECRET"
 	// AdminNamespace - kube-system namespace, where privilige pods will be deployed for live kopiabackup.
 	AdminNamespace    = "kube-system"
 	imageSecretPrefix = "image-secret"
@@ -279,7 +284,60 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 	return registry, "", nil
 }
 
+//GetExecutorImageAndSecret returns the image name and secret to to use in the job pod
+func GetExecutorImageAndSecret(executorImageType, deploymentName, deploymentNs,
+	jobName string, jobOption drivers.JobOpts) (string, string, error) {
+	var imageRegistry, imageRegistrySecret string
+	var err error
+	if executorImageType == drivers.KopiaExecutorImage {
+		if len(os.Getenv(kopiaExecutorImageRegistryEnvVar)) != 0 {
+			imageRegistry = os.Getenv(kopiaExecutorImageRegistryEnvVar)
+			imageRegistrySecret = os.Getenv(kopiaExecutorImageRegistrySecretEnvVar)
+		}
+	} else if executorImageType == drivers.NfsExecutorImage {
+		if len(os.Getenv(NfsExecutorImageRegistryEnvVar)) != 0 {
+			imageRegistry = os.Getenv(NfsExecutorImageRegistryEnvVar)
+			imageRegistrySecret = os.Getenv(NfsExecutorImageRegistrySecretEnvVar)
+		}
+	}
+	// Still we didn't get image registry from environment variable
+	if imageRegistry == "" {
+		imageRegistry, imageRegistrySecret, err = GetImageRegistryFromDeployment(deploymentName, deploymentNs)
+		if err != nil {
+			logrus.Errorf("GetExecutorImageRegistryAndSecret: error in getting image registory from %v:%v deployment", deploymentNs, deploymentName)
+			return "", "", err
+		}
+	}
+	if len(imageRegistrySecret) != 0 {
+		err = CreateImageRegistrySecret(imageRegistrySecret, jobName, jobOption.KopiaImageExecutorSourceNs, jobOption.Namespace)
+		if err != nil {
+			return "", "", err
+		}
+	}
+	// TODO Need to be optimized.. too many if else .. :-)
+	var ExecutorImage string
+	if len(imageRegistry) != 0 {
+		if executorImageType == drivers.KopiaExecutorImage {
+			ExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, GetKopiaExecutorImageName())
+		} else if executorImageType == drivers.NfsExecutorImage {
+			ExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, GetNfsExecutorImageName())
+		}
+	} else {
+		if executorImageType == drivers.KopiaExecutorImage {
+			ExecutorImage = GetKopiaExecutorImageName()
+		} else if executorImageType == drivers.NfsExecutorImage {
+			ExecutorImage = GetNfsExecutorImageName()
+		}
+	}
+	logrus.Infof("The returned image and secret is %v %v", ExecutorImage, imageRegistrySecret)
+	return ExecutorImage, imageRegistrySecret, nil
+}
+
 // GetKopiaExecutorImageRegistryAndSecret - will return the kopia image registry and image secret
+// TODO: This is a duplicate method of GetExecutorImage(),
+// but in CSI_snapshotter code we don't have jobOption passed, hence we are keeping this intact for now
+// because anyway we are deferring changes to CSI to later point in time. At that time we will remove this function.
+// by passing "nil" to jobOption from csi snapshotter path.
 func GetKopiaExecutorImageRegistryAndSecret(source, sourceNs string) (string, string, error) {
 	var registry, registrySecret string
 	var err error
@@ -297,9 +355,53 @@ func GetKopiaExecutorImageRegistryAndSecret(source, sourceNs string) (string, st
 
 }
 
+// CreateNfsSecret creates the NFS secret which will be mounted by job pod and accessed accordingly
+func CreateNfsSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
+	credentialData := make(map[string][]byte)
+	credentialData["type"] = []byte(backupLocation.Location.Type)
+	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.NfsServerAddr)
+	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
+	credentialData["path"] = []byte(backupLocation.Location.Path)
+	err := CreateJobSecret(secretName, namespace, credentialData, labels)
+
+	return err
+}
+
+// CreateJobSecret creates a job secret resource in k8s
+func CreateJobSecret(
+	secretName string,
+	namespace string,
+	credentialData map[string][]byte,
+	labels map[string]string,
+) error {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: namespace,
+			Labels:    labels,
+			Annotations: map[string]string{
+				SkipResourceAnnotation: "true",
+			},
+		},
+		Data: credentialData,
+		Type: corev1.SecretTypeOpaque,
+	}
+	_, err := core.Instance().CreateSecret(secret)
+	if err != nil && apierrors.IsAlreadyExists(err) {
+		return nil
+	}
+
+	return err
+}
+
 // GetKopiaExecutorImageName - will return the default kopia executor image
 func GetKopiaExecutorImageName() string {
 	return strings.Join([]string{drivers.KopiaExecutorImage, version.Get().GitVersion}, ":")
+}
+
+//GetNfsExecutorImageName - will return the default nfs executor image
+func GetNfsExecutorImageName() string {
+	return strings.Join([]string{drivers.NfsExecutorImage, version.Get().GitVersion}, ":")
 }
 
 // RsyncImage returns a docker image that contains rsync binary.
