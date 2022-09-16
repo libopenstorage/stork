@@ -134,9 +134,11 @@ func SetupNFSServiceAccount(name, namespace string, role *rbacv1.ClusterRole) er
 		if err != nil {
 			errMsg := fmt.Sprintf("failed fetching sa [%v/%v]: %v", name, namespace, err)
 			logrus.Tracef("%v", errMsg)
+			logrus.Infof("failed whiel fetching sa-secret %v", err)
 			return "", true, fmt.Errorf("%v", errMsg)
 		}
 		if sa.Secrets == nil {
+			logrus.Infof("Returned sa-secret null")
 			errMsg := fmt.Sprintf("secret token is missing in sa [%v/%v]", name, namespace)
 			return "", true, fmt.Errorf("%v", errMsg)
 		}
@@ -152,6 +154,7 @@ func SetupNFSServiceAccount(name, namespace string, role *rbacv1.ClusterRole) er
 	tokenName := sa.Secrets[0].Name
 	secretToken, err := coreops.Instance().GetSecret(tokenName, namespace)
 	if err != nil {
+		logrus.Infof("Returned sa-secret token name null")
 		return fmt.Errorf("failed in getting secretToken [%v] of service account [%v/%v]: %v", tokenName, name, namespace, err)
 	}
 	secretToken.Annotations[SkipResourceAnnotation] = "true"
