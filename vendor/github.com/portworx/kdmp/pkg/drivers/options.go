@@ -50,6 +50,24 @@ type JobOpts struct {
 	RestoreExportName          string
 	AppCRName                  string
 	AppCRNamespace             string
+	ResoureBackupName          string
+	ResoureBackupNamespace     string
+}
+
+// WithResoureBackupName is job parameter
+func WithResoureBackupName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.ResoureBackupName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithResoureBackupNamespace is job parameter
+func WithResoureBackupNamespace(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.ResoureBackupNamespace = strings.TrimSpace(namespace)
+		return nil
+	}
 }
 
 // WithAppCRName is job parameter

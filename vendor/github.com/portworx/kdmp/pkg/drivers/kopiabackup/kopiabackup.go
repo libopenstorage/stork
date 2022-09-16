@@ -274,26 +274,15 @@ func jobFor(
 		splitCmd = append(splitCmd, "--compression", jobOption.Compression)
 		cmd = strings.Join(splitCmd, " ")
 	}
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+
+	kopiaExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during backup: %v", err)
-		return nil, err
-	}
-	if len(imageRegistrySecret) != 0 {
-		err = utils.CreateImageRegistrySecret(imageRegistrySecret, jobName, jobOption.KopiaImageExecutorSourceNs, jobOption.Namespace)
-		if err != nil {
-			return nil, err
-		}
-
-	}
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+		logrus.Errorf("failed to get the executor image details")
+		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobName)
 	}
 
 	job := &batchv1.Job{
