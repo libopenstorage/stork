@@ -1111,8 +1111,12 @@ github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114/go.
 github.com/libopenstorage/cloudops v0.0.0-20190815012442-6e0d676b6c3e/go.mod h1:quSDXGC3Fhc+pBwMRIi1Gk+kaSfBDZo5rRsftapTzGE=
 github.com/libopenstorage/cloudops v0.0.0-20200604165016-9cc0977d745e/go.mod h1:5Qie78eVLLXqLkLCq1+0HyJzjpdRCHyeg9LWlU0WPfU=
 github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41/go.mod h1:zigCEUGrJZbK/1FN6+SHMuMjS6vjeSKxuo0G4Ars4Cg=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10 h1:q21CLGSi9DhNBBuJuitquA/T6FwLV3KNZxaJpxQbOLc=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10/go.mod h1:nffpoeodwwp+wwngmBGbLBCd7TZ9GxHLtxKoaLRW6K4=
 github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7 h1:mHp7bfGyHwG4P8dhHEMJ775KLmcjv3tcA2Uc+5nGpXg=
 github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7/go.mod h1:nffpoeodwwp+wwngmBGbLBCd7TZ9GxHLtxKoaLRW6K4=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc9 h1:Vg72X7TJsba3hBpytgxZH0Ip5MDVhZlusqBtkg6MWzE=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc9/go.mod h1:nffpoeodwwp+wwngmBGbLBCd7TZ9GxHLtxKoaLRW6K4=
 github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/gossip v0.0.0-20200808224301-d5287c7c8b24/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e h1:4l9N2Sw8VGGUqe50yC2BnTFMRJuHJGpIGZcCUZ2S6gg=
