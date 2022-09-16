@@ -130,6 +130,7 @@ github.com/Azure/go-autorest/logger v0.2.0/go.mod h1:T9E3cAhj2VqvPOtCYAvby9aBXkZ
 github.com/Azure/go-autorest/tracing v0.5.0/go.mod h1:r/s2XiOKccPW3HrqB+W0TQzfbtp2fGCgRFtBroKn4Dk=
 github.com/Azure/go-autorest/tracing v0.6.0 h1:TYi4+3m5t6K48TGI9AUdb+IzbnSxvnvUMfuitfgcfuo=
 github.com/Azure/go-autorest/tracing v0.6.0/go.mod h1:+vhtPC754Xsa23ID7GlGsrdKBpUA79WCAKPPZVC2DeU=
+github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/toml v1.1.0 h1:ksErzDEI1khOiGPgpwuI7x2ebx/uXQNw7xJpn9Eq1+I=
 github.com/BurntSushi/toml v1.1.0/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
@@ -1089,6 +1090,8 @@ github.com/libopenstorage/operator v0.0.0-20220824204524-83eb5c1e8e71 h1:gbDXay0
 github.com/libopenstorage/operator v0.0.0-20220824204524-83eb5c1e8e71/go.mod h1:BVcRy+p0kYhG7YYMxMM3ba48oifYQ4ZmhdXpbK/C2HU=
 github.com/libopenstorage/operator v0.0.0-20220902021548-739a5302030d h1:99i90MPvTIyd58HvXCbrr+r04sTn0yJ4PXPQPw/8tu4=
 github.com/libopenstorage/operator v0.0.0-20220902021548-739a5302030d/go.mod h1:BVcRy+p0kYhG7YYMxMM3ba48oifYQ4ZmhdXpbK/C2HU=
+github.com/libopenstorage/operator v0.0.0-20220914214053-b7951f0cd10a h1:sTh+3iS71kBoX933HQUNKffarfqEhdlAn/+PGUVpEoY=
+github.com/libopenstorage/operator v0.0.0-20220914214053-b7951f0cd10a/go.mod h1:3/4dcNZxQCVcNyf02lyXM0U6lU2HMGjPocx6wn5j1dY=
 github.com/libopenstorage/secrets v0.0.0-20190403224602-c282e8dc17bf/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
@@ -2352,6 +2355,8 @@ k8s.io/utils v0.0.0-20201110183641-67b214c5f920/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 k8s.io/utils v0.0.0-20210111153108-fddb29f9d009/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20210527160623-6fdb442a123b h1:MSqsVQ3pZvPGTqCjptfimO2WjG7A9un2zcpiHkA6M/s=
 k8s.io/utils v0.0.0-20210527160623-6fdb442a123b/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
+k8s.io/utils v0.0.0-20210802155522-efc7438f0176 h1:Mx0aa+SUAcNRQbs5jUzV8lkDlGFU8laZsY9jrcVX5SY=
+k8s.io/utils v0.0.0-20210802155522-efc7438f0176/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 knative.dev/pkg v0.0.0-20191101194912-56c2594e4f11/go.mod h1:pgODObA1dTyhNoFxPZTTjNWfx6F0aKsKzn+vaT9XO/Q=
 layeh.com/radius v0.0.0-20190322222518-890bc1058917/go.mod h1:fywZKyu//X7iRzaxLgPWsvc0L26IUpVvE/aeIL2JtIQ=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=

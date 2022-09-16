@@ -41,9 +41,8 @@ github.com/Azure/go-autorest/autorest/validation
 github.com/Azure/go-autorest/logger
 # github.com/Azure/go-autorest/tracing v0.6.0
 github.com/Azure/go-autorest/tracing
-# github.com/BurntSushi/toml v1.1.0
+# github.com/BurntSushi/toml v0.3.1
 github.com/BurntSushi/toml
-github.com/BurntSushi/toml/internal
 # github.com/GoogleCloudPlatform/k8s-cloud-provider v0.0.0-20200415212048-7901bc822317
 github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/meta
 # github.com/IBM-Cloud/bluemix-go v0.0.0-20220329045155-d2a8118ac5c7
@@ -514,7 +513,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20220902021548-739a5302030d
+# github.com/libopenstorage/operator v0.0.0-20220914214053-b7951f0cd10a
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/pkg/apis/core/v1
 github.com/libopenstorage/operator/pkg/client/clientset/versioned
@@ -675,7 +674,7 @@ github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
 # github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220711165201-be5e8919faf9
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220711165201-be5e8919faf9
 github.com/portworx/sched-ops/k8s/apiextensions
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
@@ -1553,10 +1552,11 @@ k8s.io/kubernetes/pkg/volume/util/types
 k8s.io/kubernetes/pkg/volume/util/volumepathhandler
 # k8s.io/mount-utils v0.0.0 => k8s.io/mount-utils v0.21.5-rc.0
 k8s.io/mount-utils
-# k8s.io/utils v0.0.0-20210527160623-6fdb442a123b
+# k8s.io/utils v0.0.0-20210802155522-efc7438f0176
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
+k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/io
 k8s.io/utils/keymutex
 k8s.io/utils/net
@@ -1568,7 +1568,7 @@ k8s.io/utils/trace
 # sigs.k8s.io/cluster-api v0.2.11
 sigs.k8s.io/cluster-api/errors
 sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1
-# sigs.k8s.io/controller-runtime v0.8.0 => sigs.k8s.io/controller-runtime v0.9.0
+# sigs.k8s.io/controller-runtime v0.9.7 => sigs.k8s.io/controller-runtime v0.9.0
 sigs.k8s.io/controller-runtime/pkg/cache
 sigs.k8s.io/controller-runtime/pkg/cache/internal
 sigs.k8s.io/controller-runtime/pkg/certwatcher

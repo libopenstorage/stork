@@ -24,7 +24,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
 	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
-	github.com/libopenstorage/operator v0.0.0-20220902021548-739a5302030d
+	github.com/libopenstorage/operator v0.0.0-20220914214053-b7951f0cd10a
 	github.com/libopenstorage/stork v1.4.1-0.20220323180113-0ea773109d05
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
@@ -32,7 +32,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1

@@ -104,9 +104,8 @@ const (
 
 	pxAnnotationPrefix = "portworx.io"
 
-	masterLabelKey           = "node-role.kubernetes.io/master"
-	controlplaneLabelKey     = "node-role.kubernetes.io/controlplane"
-	controlDashPlaneLabelKey = "node-role.kubernetes.io/control-plane"
+	defaultTelemetrySecretValidationTimeout  = 30 * time.Second
+	defaultTelemetrySecretValidationInterval = time.Second
 )
 
 // TestSpecPath is the path for all test specs. Due to currently functional test and
@@ -115,7 +114,7 @@ var TestSpecPath = "testspec"
 
 var (
 	pxVer2_12, _  = version.NewVersion("2.12.0")
-	opVer1_10, _  = version.NewVersion("1.10.0")
+	opVer1_10, _  = version.NewVersion("1.10.0-")
 	opVer1_9_1, _ = version.NewVersion("1.9.1-")
 )
 
@@ -410,12 +409,60 @@ func UninstallStorageCluster(cluster *corev1.StorageCluster, kubeconfig ...strin
 		cluster.Spec.DeleteStrategy = &corev1.StorageClusterDeleteStrategy{
 			Type: corev1.UninstallAndWipeStorageClusterStrategyType,
 		}
-		if _, err = operatorops.Instance().UpdateStorageCluster(cluster); err != nil {
+		if _, err := operatorops.Instance().UpdateStorageCluster(cluster); err != nil {
+			return err
+		}
+
+		if err := validateTelemetrySecret(cluster, defaultTelemetrySecretValidationTimeout, defaultTelemetrySecretValidationInterval, false); err != nil {
 			return err
 		}
 	}
 
 	return operatorops.Instance().DeleteStorageCluster(cluster.Name, cluster.Namespace)
+}
+
+func validateTelemetrySecret(cluster *corev1.StorageCluster, timeout, interval time.Duration, force bool) error {
+	t := func() (interface{}, bool, error) {
+		secret, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace)
+		if err != nil {
+			if errors.IsNotFound(err) && !force {
+				// skip secret existence validation
+				return nil, false, nil
+			}
+			return nil, true, fmt.Errorf("failed to get secret pure-telemetry-certs: %v", err)
+		}
+		logrus.Debugf("Found secret %s", secret.Name)
+
+		// validate secret owner reference if telemetry enabled
+		if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil && cluster.Spec.Monitoring.Telemetry.Enabled {
+			ownerRef := metav1.NewControllerRef(cluster, corev1.SchemeGroupVersion.WithKind("StorageCluster"))
+			if cluster.Spec.DeleteStrategy != nil && cluster.Spec.DeleteStrategy.Type == corev1.UninstallAndWipeStorageClusterStrategyType {
+				// validate secret should have owner reference
+				for _, reference := range secret.OwnerReferences {
+					if reference.UID == ownerRef.UID {
+						logrus.Debugf("Found ownerReference for StorageCluster %s in secret %s", ownerRef.Name, secret.Name)
+						return nil, false, nil
+					}
+				}
+				return nil, true, fmt.Errorf("waiting for ownerReference to be set to StorageCluster %s in secret %s", cluster.Name, secret.Name)
+			}
+			// validate secret owner should not have owner reference
+			for _, reference := range secret.OwnerReferences {
+				if reference.UID == ownerRef.UID {
+					return nil, true, fmt.Errorf("secret %s should not have ownerReference to StorageCluster %s", secret.Name, cluster.Name)
+				}
+			}
+			return nil, false, nil
+		}
+		logrus.Debugf("telemetry is not enabled, skipping secret validation")
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // FindAndCopyVsphereSecretToCustomNamespace attempt to find and copy PX vSphere secret to a given namespace
@@ -786,12 +833,27 @@ func ValidateUninstallStorageCluster(
 		return err
 	}
 
-	// Verify telemetry secret is deleted on UninstallAndWipe
-	// Only do the validation when telemetry is enabled, since if it's disabled, there's a chance secret owner is not set yet
-	telemetryEnabled := cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil && cluster.Spec.Monitoring.Telemetry.Enabled
-	_, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace)
-	if !errors.IsNotFound(err) && telemetryEnabled {
-		return fmt.Errorf("telemetry secret pure-telemetry-certs was found when shouldn't have been")
+	// Verify telemetry secret is deleted on UninstallAndWipe when telemetry is enabled
+	if cluster.Spec.DeleteStrategy != nil && cluster.Spec.DeleteStrategy.Type == corev1.UninstallAndWipeStorageClusterStrategyType {
+		secret, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace)
+		if err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to get secret pure-telemetry-certs: %v", err)
+		} else if err == nil {
+			// Secret found, only do the validation when telemetry is enabled, since if it's disabled, there's a chance secret owner is not set yet
+			if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil && cluster.Spec.Monitoring.Telemetry.Enabled {
+				return fmt.Errorf("telemetry secret pure-telemetry-certs was found when shouldn't have been")
+			}
+			// Delete stale telemetry secret
+			if err := coreops.Instance().DeleteSecret(secret.Name, cluster.Namespace); err != nil {
+				return fmt.Errorf("failed to delete secret %s: %v", secret.Name, err)
+			}
+		}
+	}
+
+	// Delete AlertManager secret, if found
+	err := coreops.Instance().DeleteSecret("alertmanager-portworx", cluster.Namespace)
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete alertmanager-portworx secret, err: %v", err)
 	}
 
 	return nil
@@ -1038,7 +1100,7 @@ func GetExpectedPxNodeNameList(cluster *corev1.StorageCluster) ([]string, error)
 	}
 
 	for _, node := range nodeList.Items {
-		if isNodeMaster(node) && !IsK3sCluster() {
+		if coreops.Instance().IsNodeMaster(node) && !IsK3sCluster() {
 			continue
 		}
 
@@ -1048,17 +1110,6 @@ func GetExpectedPxNodeNameList(cluster *corev1.StorageCluster) ([]string, error)
 	}
 
 	return nodeNameListWithPxPods, nil
-}
-
-func isNodeMaster(node v1.Node) bool {
-	// for newer k8s these fields exist but they are empty
-	_, hasMasterLabel := node.Labels[masterLabelKey]
-	_, hasControlPlaneLabel := node.Labels[controlplaneLabelKey]
-	_, hasControlDashPlaneLabel := node.Labels[controlDashPlaneLabelKey]
-	if hasMasterLabel || hasControlPlaneLabel || hasControlDashPlaneLabel {
-		return true
-	}
-	return false
 }
 
 // GetFullVersion returns the full kubernetes server version
@@ -2647,9 +2698,16 @@ func ValidateTelemetry(pxImageList map[string]string, cluster *corev1.StorageClu
 		cluster.Spec.Monitoring.Telemetry.Enabled {
 		logrus.Info("Telemetry is enabled in StorageCluster")
 		if pxVersion.GreaterThanOrEqual(pxVer2_12) && opVersion.GreaterThanOrEqual(opVer1_10) {
-			return ValidateTelemetryV2Enabled(pxImageList, cluster, timeout, interval)
+			if err := ValidateTelemetryV2Enabled(pxImageList, cluster, timeout, interval); err != nil {
+				return err
+			}
+		} else if err := ValidateTelemetryV1Enabled(pxImageList, cluster, timeout, interval); err != nil {
+			return err
 		}
-		return ValidateTelemetryV1Enabled(pxImageList, cluster, timeout, interval)
+		if err := validateTelemetrySecret(cluster, defaultTelemetrySecretValidationTimeout, defaultTelemetrySecretValidationInterval, true); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	logrus.Info("Telemetry is disabled in StorageCluster")
@@ -2903,11 +2961,6 @@ func ValidateTelemetryV2Enabled(pxImageList map[string]string, cluster *corev1.S
 
 		// Validate px-telemetry-phonehome daemonset, pods and container images
 		if err := validatePxTelemetryPhonehomeV2(pxImageList, cluster, timeout, interval); err != nil {
-			return nil, true, err
-		}
-
-		// Verify telemetry secrets
-		if _, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace); err != nil {
 			return nil, true, err
 		}
 
