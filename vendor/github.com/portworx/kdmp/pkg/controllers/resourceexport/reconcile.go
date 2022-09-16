@@ -160,9 +160,18 @@ func startNfsResourceJob(
 	bl *storkapi.BackupLocation,
 ) (string, error) {
 
+	err := utils.CreateNfsSecret(utils.GetCredSecretName(re.Name), bl, re.Namespace, nil)
+	if err != nil {
+		logrus.Errorf("failed to create NFS cred secret: %v", err)
+		return "", fmt.Errorf("failed to create NFS cred secret: %v", err)
+	}
 	switch drv.Name() {
 	case drivers.NFSBackup:
 		return drv.StartJob(
+			// TODO: below two calls need to be generalized and chnaged in all the startJob Calls
+			// For NFS it need to be populated in ResourceExport CR and passed to Job via its reconciler.
+			drivers.WithKopiaImageExecutorSource("stork"),
+			drivers.WithKopiaImageExecutorSourceNs("kube-system"),
 			drivers.WithRestoreExport(re.Name),
 			drivers.WithJobNamespace(re.Namespace),
 			drivers.WithNfsServer(bl.Location.NfsConfig.NfsServerAddr),

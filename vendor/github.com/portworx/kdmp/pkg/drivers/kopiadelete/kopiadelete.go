@@ -184,19 +184,14 @@ func jobFor(
 		jobOption.VolumeBackupDeleteNamespace,
 	}, " ")
 
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during delete: %v", err)
-		return nil, err
-	}
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+		logrus.Errorf("failed to get the executor image details")
+		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobName)
 	}
 
 	job := &batchv1.Job{
