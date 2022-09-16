@@ -24,6 +24,7 @@ const (
 	ResticExecutorImage = "portworx/resticexecutor"
 	KopiaExecutorImage  = "kopiaexecutor"
 	RsyncImage          = "eeacms/rsync"
+	NfsExecutorImage    = "nfsexecutor"
 )
 
 // Driver labels.
