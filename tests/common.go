@@ -49,6 +49,7 @@ import (
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -499,6 +500,13 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
+		Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
+			}
+		})
+
+
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
 				return
@@ -583,6 +591,12 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 		Step(fmt.Sprintf("validate %s app's pure volume snapshot and restoring to many volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
 			}
 		})
 
@@ -949,6 +963,37 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 	})
 }
 
+// ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
+func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		if err != nil {
+			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
+			logrus.Error(err.Error())
+			processError(err, errChan...)
+		}
+
+		if len(pools) == 0 {
+			err = fmt.Errorf("length of pools should be greater than 0")
+			processError(err, errChan...)
+		}
+		for _, pool := range pools {
+			initialPoolSize := pool.TotalSize / units.GiB
+			err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
+			if err != nil {
+				err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+				logrus.Error(err.Error())
+			} else {
+				err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+				if err != nil {
+					err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
+					logrus.Error(err)
+				}
+			}
+		}
+	})
+
+}
 
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
