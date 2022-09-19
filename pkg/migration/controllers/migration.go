@@ -1182,6 +1182,12 @@ func (m *MigrationController) checkAndUpdateService(
 	object runtime.Unstructured,
 	objHash uint64,
 ) (bool, error) {
+	// if transformation spec is provided, always update service with
+	// transform spec rules
+	if len(migration.Spec.TransformSpecs) != 0 {
+		return false, nil
+	}
+
 	var svc v1.Service
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &svc); err != nil {
 		return false, fmt.Errorf("error converting unstructured obj to service resource: %v", err)
@@ -2008,7 +2014,7 @@ func (m *MigrationController) applyResources(
 					case "Service":
 						var skipUpdate bool
 						skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
-						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
+						if err == nil && skipUpdate {
 							break
 						}
 						fallthrough
