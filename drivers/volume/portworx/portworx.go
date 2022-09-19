@@ -1982,9 +1982,31 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 	return &snapConditions, true, err
 }
 
-// TODO: Implement FindSnapshot
+// FindSnapshot return snapshotdata source for created portworx snapshot
+// Note: we wait for underlying driver snapshot creation in SnapshotCreate() only,
+// This will be called by snapshotter every time new snapshot is created
 func (p *portworx) FindSnapshot(tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
-	return nil, nil, &errors.ErrNotImplemented{}
+	if tags == nil || len(*tags) == 0 {
+		return nil, nil, fmt.Errorf("empty tags received for snapshots")
+	}
+	name := (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNameTag]
+	namespace := (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNamespaceTag]
+	logrus.Infof("Find snapshotdata for snapshot: %s/%s", namespace, name)
+	if name == "" || namespace == "" {
+		return nil, nil, fmt.Errorf("empty snapshot metadata %s/%s", namespace, name)
+	}
+	snap, err := k8sextops.Instance().GetSnapshot(name, namespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to retrieve snapshot %s/%s, err: %v", namespace, name, err)
+	}
+	snapData, err := k8sextops.Instance().GetSnapshotData(snap.Spec.SnapshotDataName)
+	if err != nil {
+		// this means that snapshotdata object by external snapshotter is not created
+		// lets return nil so that reconciler call findsnapshot() again
+		return nil, nil, fmt.Errorf("unable to retrieve snapshotdata object %s/%s, err: %v", namespace, name, err)
+	}
+	logrus.Debugf("Found snapshotdata for snapshot: %s/%s", namespace, name)
+	return &snapData.Spec.VolumeSnapshotDataSource, &snap.Status.Conditions, nil
 }
 
 func (p *portworx) GetSnapshotType(snap *crdv1.VolumeSnapshot) (string, error) {
