@@ -42,6 +42,7 @@ const (
 	storkRuleAnnotationPrefix            = "stork.libopenstorage.org"
 	preSnapRuleAnnotationKey             = storkRuleAnnotationPrefix + "/pre-snapshot-rule"
 	postSnapRuleAnnotationKey            = storkRuleAnnotationPrefix + "/post-snapshot-rule"
+	StorkSnapshotNameLabel               = "stork.libopenstorage.org/snapshotName"
 )
 
 // NewSnapshotScheduleController creates a new instance of SnapshotScheduleController.
@@ -317,6 +318,10 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	}
 	snapshot.Metadata.Annotations[SnapshotScheduleNameAnnotation] = snapshotSchedule.Name
 	snapshot.Metadata.Annotations[SnapshotSchedulePolicyTypeAnnotation] = string(policyType)
+	if snapshot.Metadata.Labels == nil {
+		snapshot.Metadata.Labels = make(map[string]string)
+	}
+	snapshot.Metadata.Labels[StorkSnapshotNameLabel] = snapshotName
 	if snapshotSchedule.Spec.PreExecRule != "" {
 		_, err := storkops.Instance().GetRule(snapshotSchedule.Spec.PreExecRule, snapshotSchedule.Namespace)
 		if err != nil {

@@ -69,20 +69,15 @@ func (s *Snapshotter) Start(stopChannel <-chan struct{}) error {
 		return err
 	}
 	if ok {
-		err = client.CreateCRDV1(aeclientset)
+		err = client.CreateCRDV1(aeclientset, validateCRDTimeout, validateCRDInterval)
 		if err != nil {
 			return err
 		}
 	} else {
-		err = client.CreateCRD(aeclientset)
+		err = client.CreateCRD(aeclientset, validateCRDTimeout, validateCRDInterval)
 		if err != nil {
 			return err
 		}
-	}
-
-	err = client.WaitForSnapshotResource(snapshotClient)
-	if err != nil {
-		return err
 	}
 
 	plugins := make(map[string]snapshotvolume.Plugin)
