@@ -19,15 +19,17 @@ import (
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/version"
+	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
+	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -149,7 +151,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 			})
 			log.ApplicationRestoreLog(restore).Tracef("Creating dest namespace %v", ns.Name)
 			if err != nil {
-				if errors.IsAlreadyExists(err) {
+				if k8s_errors.IsAlreadyExists(err) {
 					oldNS, err := core.Instance().GetNamespace(ns.GetName())
 					if err != nil {
 						return err
@@ -201,7 +203,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 	}
 	for _, namespace := range restore.Spec.NamespaceMapping {
 		if ns, err := core.Instance().GetNamespace(namespace); err != nil {
-			if errors.IsNotFound(err) {
+			if k8s_errors.IsNotFound(err) {
 				if _, err := core.Instance().CreateNamespace(&v1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:        ns.Name,
@@ -226,7 +228,7 @@ func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request re
 	restore := &storkapi.ApplicationRestore{}
 	err := a.client.Get(context.TODO(), request.NamespacedName, restore)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -796,7 +798,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 	for _, crd := range crds {
 		crd.ResourceVersion = ""
 		regCrd[crd.GetName()] = false
-		if _, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+		if _, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err != nil && !k8s_errors.IsAlreadyExists(err) {
 			regCrd[crd.GetName()] = true
 			logrus.Warnf("error registering crds v1beta1 %v,%v", crd.GetName(), err)
 			continue
@@ -813,7 +815,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 			var updatedVersions []apiextensionsv1.CustomResourceDefinitionVersion
 			// try to apply as v1 crd
 			var err error
-			if _, err = client.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err == nil || errors.IsAlreadyExists(err) {
+			if _, err = client.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err == nil || k8s_errors.IsAlreadyExists(err) {
 				logrus.Infof("registered v1 crds %v,", crd.GetName())
 				continue
 			}
@@ -833,7 +835,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 			}
 			crd.Spec.Versions = updatedVersions
 
-			if _, err := client.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+			if _, err := client.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err != nil && !k8s_errors.IsAlreadyExists(err) {
 				logrus.Warnf("error registering crdsv1 %v,%v", crd.GetName(), err)
 				continue
 			}
@@ -899,6 +901,26 @@ func (a *ApplicationRestoreController) updateResourceStatus(
 		reason)
 	a.recorder.Event(restore, eventType, string(status), eventMessage)
 	return nil
+}
+
+func (a *ApplicationRestoreController) updateResourceStatusFromRestoreCR(
+	restore *storkapi.ApplicationRestore,
+	resource *kdmpapi.ResourceRestoreResourceInfo,
+	status storkapi.ApplicationRestoreStatusType,
+	reason string,
+) {
+	updatedResource := &storkapi.ApplicationRestoreResourceInfo{
+		ObjectInfo: storkapi.ObjectInfo{
+			Name:      resource.Name,
+			Namespace: resource.Namespace,
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   resource.Group,
+				Version: resource.Version,
+				Kind:    resource.Kind,
+			},
+		},
+	}
+	restore.Status.Resources = append(restore.Status.Resources, updatedResource)
 }
 
 func (a *ApplicationRestoreController) getPVNameMappings(
@@ -1022,7 +1044,7 @@ func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
 		ns := val
 		pvc, err := core.Instance().GetPersistentVolumeClaim(pvcObject.Name, ns)
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if k8s_errors.IsNotFound(err) {
 				newVolInfos = append(newVolInfos, bkupVolInfo)
 				continue
 			}
@@ -1188,7 +1210,7 @@ func (a *ApplicationRestoreController) applyResources(
 		err = a.resourceCollector.ApplyResource(
 			a.dynamicInterface,
 			o)
-		if err != nil && errors.IsAlreadyExists(err) {
+		if err != nil && k8s_errors.IsAlreadyExists(err) {
 			switch restore.Spec.ReplacePolicy {
 			case storkapi.ApplicationRestoreReplacePolicyDelete:
 				log.ApplicationRestoreLog(restore).Errorf("Error deleting %v %v during restore: %v", objectType.GetKind(), metadata.GetName(), err)
@@ -1237,14 +1259,119 @@ func (a *ApplicationRestoreController) restoreResources(
 		return err
 	}
 
-	objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
+	nfs, err := IsNFSBackuplocationType(backup)
 	if err != nil {
-		log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
-		return err
+		logrus.Errorf("error in checking backuplocation type")
 	}
 
-	if err := a.applyResources(restore, objects); err != nil {
-		return err
+	if !nfs {
+		objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
+		if err != nil {
+			log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
+			return err
+		}
+
+		if err := a.applyResources(restore, objects); err != nil {
+			return err
+		}
+	} else {
+		// Check whether ResourceExport is preset or not
+		crName := getResourceExportCRName(prefixRestore, string(restore.UID), restore.Namespace)
+		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
+		if err != nil {
+			if k8s_errors.IsNotFound(err) {
+				// create resource export CR
+				resourceExport := &kdmpapi.ResourceExport{}
+				// Adding required label for debugging
+				labels := make(map[string]string)
+				labels[applicationRestoreCRNameKey] = getValidLabel(restore.Name)
+				labels[applicationRestoreCRUIDKey] = getValidLabel(getShortUID(string(restore.UID)))
+				// If restore from px-backup, update the restore object details in the label
+				if val, ok := backup.Annotations[pxbackupAnnotationCreateByKey]; ok {
+					if val == pxbackupAnnotationCreateByValue {
+						labels[restoreObjectNameKey] = getValidLabel(backup.Annotations[pxbackupObjectNameKey])
+						labels[restoreObjectUIDKey] = getValidLabel(backup.Annotations[pxbackupObjectUIDKey])
+					}
+				}
+				resourceExport.Labels = labels
+				resourceExport.Annotations = make(map[string]string)
+				resourceExport.Annotations[skipResourceAnnotation] = "true"
+				resourceExport.Name = crName
+				resourceExport.Namespace = restore.Namespace
+				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
+				source := &kdmpapi.ResourceExportObjectReference{
+					APIVersion: restore.APIVersion,
+					Kind:       restore.Kind,
+					Namespace:  restore.Namespace,
+					Name:       restore.Name,
+				}
+				backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+				if err != nil {
+					return fmt.Errorf("error getting backup location path: %v", err)
+				}
+				destination := &kdmpapi.ResourceExportObjectReference{
+					// TODO: .GetBackupLocation is not returning APIVersion and kind.
+					// Hardcoding for now.
+					// APIVersion: backupLocation.APIVersion,
+					// Kind:       backupLocation.Kind,
+					APIVersion: "stork.libopenstorage.org/v1alpha1",
+					Kind:       "BackupLocation",
+					Namespace:  backupLocation.Namespace,
+					Name:       backupLocation.Name,
+				}
+				resourceExport.Spec.Source = *source
+				resourceExport.Spec.Destination = *destination
+				_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
+				if err != nil {
+					logrus.Errorf("failed to create DataExport CR: %v", err)
+					return err
+				}
+				return nil
+			}
+			logrus.Errorf("failed to get restore resourceExport CR: %v", err)
+			// Will retry in the next cycle of reconciler.
+			return nil
+		} else {
+			var message string
+			// Check the status of the resourceExport CR and update it to the applicationBackup CR
+			switch resourceExport.Status.Status {
+			case kdmpapi.ResourceExportStatusFailed:
+				message = fmt.Sprintf("Error applying resources: %v", err)
+				restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
+				restore.Status.Reason = message
+				restore.Status.LastUpdateTimestamp = metav1.Now()
+				err = a.client.Update(context.TODO(), restore)
+				if err != nil {
+					return err
+				}
+				a.recorder.Event(restore,
+					v1.EventTypeWarning,
+					string(storkapi.ApplicationRestoreStatusFailed),
+					message)
+				log.ApplicationRestoreLog(restore).Errorf(message)
+				return err
+			case kdmpapi.ResourceExportStatusSuccessful:
+				// Modify to have subresource level updating
+				for _, resource := range resourceExport.Spec.Resources {
+					a.updateResourceStatusFromRestoreCR(
+						restore,
+						resource,
+						storkapi.ApplicationRestoreStatusType(resource.Status),
+						resource.Reason)
+				}
+
+			case kdmpapi.ResourceExportStatusInitial:
+			case kdmpapi.ResourceExportStatusPending:
+			case kdmpapi.ResourceExportStatusInProgress:
+				restore.Status.LastUpdateTimestamp = metav1.Now()
+			}
+			err = a.client.Update(context.TODO(), restore)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
 	}
 	// Before  updating to final stage, cleanup generic backup CRs, if any.
 	err = a.cleanupResources(restore)
@@ -1371,13 +1498,13 @@ func (a *ApplicationRestoreController) createCRD() error {
 	}
 	if ok {
 		err := k8sutils.CreateCRD(resource)
-		if err != nil && !errors.IsAlreadyExists(err) {
+		if err != nil && !k8s_errors.IsAlreadyExists(err) {
 			return err
 		}
 		return apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval)
 	}
 	err = apiextensions.Instance().CreateCRDV1beta1(resource)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
@@ -1394,6 +1521,15 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 		if err := driver.CleanupRestoreResources(restore); err != nil {
 			logrus.Errorf("unable to cleanup post restore resources, err: %v", err)
 		}
+	}
+	// Directly calling DeleteResourceExport with out checking backuplocation type.
+	// For other backuplocation type, expecting Notfound
+	crName := getResourceExportCRName(prefixBackup, string(restore.UID), restore.Namespace)
+	err := kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
+		log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
+		return err
 	}
 	return nil
 }
