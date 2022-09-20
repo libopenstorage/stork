@@ -45,6 +45,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/jobratelimit"
 	kdmpversion "github.com/portworx/kdmp/pkg/version"
+	"github.com/portworx/sched-ops/k8s/common"
 	schedops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -185,12 +186,12 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:  "k8s-api-qps",
-			Value: 100,
+			Value: 1000,
 			Usage: "Restrict number of k8s api requests from stork (default: 100 QPS)",
 		},
 		cli.IntFlag{
 			Name:  "k8s-api-burst",
-			Value: 100,
+			Value: 2000,
 			Usage: "Restrict number of k8s api requests from stork (default: 100 Burst)",
 		},
 		cli.BoolTFlag{
@@ -419,6 +420,12 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 	}
 	if err := resourceCollector.Init(nil); err != nil {
 		log.Fatalf("Error initializing ResourceCollector: %v", err)
+	}
+	if err := os.Setenv(common.BurstRate, strconv.Itoa(burst)); err != nil {
+		log.Fatalf("Error setting Burst Rate: %v", err)
+	}
+	if err := os.Setenv(common.QPSRate, strconv.Itoa(qps)); err != nil {
+		log.Fatalf("Error setting Burst Rate: %v", err)
 	}
 	adminNamespace := c.String("admin-namespace")
 	if adminNamespace == "" {

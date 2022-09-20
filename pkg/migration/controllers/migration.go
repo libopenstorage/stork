@@ -804,6 +804,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 				return err
 			}
 		} else {
+			logrus.Infof("Migrating pv and pvcs for volume only migration")
 			err := m.migrateResources(migration, true)
 			if err != nil {
 				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
@@ -1660,6 +1661,7 @@ func (m *MigrationController) applyResources(
 			updatedObjects = append(updatedObjects, o)
 		}
 	}
+	logrus.Infof("Recreating pv and pvc object")
 	// create/update pv object with updated policy
 	for _, obj := range pvObjects {
 		var pv v1.PersistentVolume
@@ -2224,6 +2226,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		return resources, err
 	}
 	resources = append(resources, objects.Items...)
+
 	// add pvcs to resource list
 	resource = metav1.APIResource{
 		Name:       "persistentvolumeclaims",
