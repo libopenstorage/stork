@@ -3,12 +3,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/utils"
 
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -753,6 +754,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 				return err
 			}
 		} else {
+			logrus.Infof("Migrating pv and pvcs for volume only migration")
 			err := m.migrateResources(migration, true)
 			if err != nil {
 				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
@@ -1576,6 +1578,7 @@ func (m *MigrationController) applyResources(
 			updatedObjects = append(updatedObjects, o)
 		}
 	}
+	logrus.Infof("Recreating pv and pvc object")
 	// create/update pv object with updated policy
 	for _, obj := range pvObjects {
 		var pv v1.PersistentVolume
@@ -2114,6 +2117,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	migration *stork_api.Migration,
 	resourceCollectorOpts resourcecollector.Options,
 ) ([]runtime.Unstructured, error) {
+	logrus.Infof("Collecting pv for volume only migration")
 	var resources []runtime.Unstructured
 	// add pv objects
 	resource := metav1.APIResource{
@@ -2140,6 +2144,9 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		return resources, err
 	}
 	resources = append(resources, objects.Items...)
+	logrus.Infof("Collected pv for volume only migration")
+	logrus.Infof("Collecting pvc for volume only migration")
+
 	// add pvcs to resource list
 	resource = metav1.APIResource{
 		Name:       "persistentvolumeclaims",
@@ -2165,5 +2172,6 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		return resources, err
 	}
 	resources = append(resources, objects.Items...)
+	logrus.Infof("Collected pvc for volume only migration")
 	return resources, nil
 }
