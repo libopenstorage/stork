@@ -28,10 +28,11 @@ var (
 type BackupPoliciesApiService service
 
 type ApiApiBackupPoliciesIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupPoliciesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupPoliciesIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiBackupPoliciesIdDeleteExecute(r)
@@ -49,17 +50,17 @@ Removes a single BackupPolicy
 func (a *BackupPoliciesApiService) ApiBackupPoliciesIdDelete(ctx context.Context, id string) ApiApiBackupPoliciesIdDeleteRequest {
 	return ApiApiBackupPoliciesIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *BackupPoliciesApiService) ApiBackupPoliciesIdDeleteExecute(r ApiApiBackupPoliciesIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupPoliciesApiService.ApiBackupPoliciesIdDelete")
@@ -134,10 +135,11 @@ func (a *BackupPoliciesApiService) ApiBackupPoliciesIdDeleteExecute(r ApiApiBack
 }
 
 type ApiApiBackupPoliciesIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupPoliciesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupPoliciesIdGetRequest) Execute() (*ModelsBackupPolicy, *http.Response, error) {
 	return r.ApiService.ApiBackupPoliciesIdGetExecute(r)
@@ -155,8 +157,8 @@ Fetches a single BackupPolicy
 func (a *BackupPoliciesApiService) ApiBackupPoliciesIdGet(ctx context.Context, id string) ApiApiBackupPoliciesIdGetRequest {
 	return ApiApiBackupPoliciesIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -164,10 +166,10 @@ func (a *BackupPoliciesApiService) ApiBackupPoliciesIdGet(ctx context.Context, i
 //  @return ModelsBackupPolicy
 func (a *BackupPoliciesApiService) ApiBackupPoliciesIdGetExecute(r ApiApiBackupPoliciesIdGetRequest) (*ModelsBackupPolicy, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupPolicy
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupPolicy
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupPoliciesApiService.ApiBackupPoliciesIdGet")
@@ -251,10 +253,10 @@ func (a *BackupPoliciesApiService) ApiBackupPoliciesIdGetExecute(r ApiApiBackupP
 }
 
 type ApiApiBackupPoliciesIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupPoliciesApiService
-	id         string
-	body       *ControllersUpdateBackupPolicyRequest
+	id string
+	body *ControllersUpdateBackupPolicyRequest
 }
 
 // Request body containing updated backup policy
@@ -279,8 +281,8 @@ Updates existing BackupPolicy
 func (a *BackupPoliciesApiService) ApiBackupPoliciesIdPut(ctx context.Context, id string) ApiApiBackupPoliciesIdPutRequest {
 	return ApiApiBackupPoliciesIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -288,10 +290,10 @@ func (a *BackupPoliciesApiService) ApiBackupPoliciesIdPut(ctx context.Context, i
 //  @return ModelsBackupPolicy
 func (a *BackupPoliciesApiService) ApiBackupPoliciesIdPutExecute(r ApiApiBackupPoliciesIdPutRequest) (*ModelsBackupPolicy, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupPolicy
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupPolicy
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupPoliciesApiService.ApiBackupPoliciesIdPut")
@@ -380,14 +382,14 @@ func (a *BackupPoliciesApiService) ApiBackupPoliciesIdPutExecute(r ApiApiBackupP
 }
 
 type ApiApiTenantsIdBackupPoliciesGetRequest struct {
-	ctx          context.Context
-	ApiService   *BackupPoliciesApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *BackupPoliciesApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
+	id2 *string
+	name *string
 }
 
 // A given BackupPolicy attribute to sort results by (one of: id, name, created_at)
@@ -395,25 +397,21 @@ func (r ApiApiTenantsIdBackupPoliciesGetRequest) SortBy(sortBy string) ApiApiTen
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdBackupPoliciesGetRequest) Limit(limit string) ApiApiTenantsIdBackupPoliciesGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdBackupPoliciesGetRequest) Continuation(continuation string) ApiApiTenantsIdBackupPoliciesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by BackupPolicy id
 func (r ApiApiTenantsIdBackupPoliciesGetRequest) Id2(id2 string) ApiApiTenantsIdBackupPoliciesGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by BackupPolicy name
 func (r ApiApiTenantsIdBackupPoliciesGetRequest) Name(name string) ApiApiTenantsIdBackupPoliciesGetRequest {
 	r.name = &name
@@ -436,8 +434,8 @@ Lists BackupPolicies
 func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesGet(ctx context.Context, id string) ApiApiTenantsIdBackupPoliciesGetRequest {
 	return ApiApiTenantsIdBackupPoliciesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -445,10 +443,10 @@ func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesGet(ctx context.Con
 //  @return ControllersPaginatedBackupPolicies
 func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesGetExecute(r ApiApiTenantsIdBackupPoliciesGetRequest) (*ControllersPaginatedBackupPolicies, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedBackupPolicies
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedBackupPolicies
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupPoliciesApiService.ApiTenantsIdBackupPoliciesGet")
@@ -547,10 +545,10 @@ func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesGetExecute(r ApiApi
 }
 
 type ApiApiTenantsIdBackupPoliciesPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupPoliciesApiService
-	id         string
-	body       *ControllersCreateBackupPolicyRequest
+	id string
+	body *ControllersCreateBackupPolicyRequest
 }
 
 // Request body containing the backup policy
@@ -575,8 +573,8 @@ Creates a new BackupPolicy
 func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesPost(ctx context.Context, id string) ApiApiTenantsIdBackupPoliciesPostRequest {
 	return ApiApiTenantsIdBackupPoliciesPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -584,10 +582,10 @@ func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesPost(ctx context.Co
 //  @return ModelsBackupPolicy
 func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesPostExecute(r ApiApiTenantsIdBackupPoliciesPostRequest) (*ModelsBackupPolicy, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupPolicy
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupPolicy
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupPoliciesApiService.ApiTenantsIdBackupPoliciesPost")

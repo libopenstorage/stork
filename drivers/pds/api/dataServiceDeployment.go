@@ -112,12 +112,12 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 }
 
 // GetDeploymentSatus return deployment status.
-func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.ControllersStatusResponse, error) {
+func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.ControllersStatusResponse, *status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, nil, err
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdStatusGet(ctx, deploymentID).Execute()
 
@@ -125,7 +125,7 @@ func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.C
 		log.Errorf("Error when calling `ApiDeploymentsIdStatusGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
-	return dsModel, err
+	return dsModel, res, err
 }
 
 // GetDeploymentEvents return events on the given deployment.
@@ -188,7 +188,7 @@ func (ds *DataServiceDeployment) DeleteDeployment(deploymentID string) (*status.
 		return nil, err
 	}
 	res, err := dsClient.ApiDeploymentsIdDelete(ctx, deploymentID).Execute()
-	if res.StatusCode != status.StatusOK {
+	if res.StatusCode != status.StatusAccepted {
 		log.Errorf("Error when calling `ApiDeploymentsIdDelete``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}

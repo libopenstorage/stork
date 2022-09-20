@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedImages struct for ControllersPaginatedImages
 type ControllersPaginatedImages struct {
-	Data       []ModelsImage         `json:"data,omitempty"`
+	Data []ModelsImage `json:"data,omitempty"`
 	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedImages) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

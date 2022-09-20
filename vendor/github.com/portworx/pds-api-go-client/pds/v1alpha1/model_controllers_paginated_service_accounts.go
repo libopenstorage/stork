@@ -16,8 +16,8 @@ import (
 
 // ControllersPaginatedServiceAccounts struct for ControllersPaginatedServiceAccounts
 type ControllersPaginatedServiceAccounts struct {
-	Data       []ModelsServiceAccount `json:"data,omitempty"`
-	Pagination *ConstraintPagination  `json:"pagination,omitempty"`
+	Data []ModelsServiceAccount `json:"data,omitempty"`
+	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
 // NewControllersPaginatedServiceAccounts instantiates a new ControllersPaginatedServiceAccounts object
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedServiceAccounts) UnmarshalJSON(src []byte) 
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

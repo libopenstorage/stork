@@ -2,11 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/openstorage/pkg/mount"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -29,8 +27,8 @@ var _ = Describe("{Sharedv4Functional}", func() {
 	var workers []node.Node
 	var numPods int
 	var namespacePrefix string
-	var volumeMountRW = regexp.MustCompile(`,rw,|,rw|rw,|rw`)
-	var volumeMountRO = regexp.MustCompile(`,ro,|,ro|ro,|ro`)
+	// var volumeMountRW = regexp.MustCompile(`,rw,|,rw|rw,|rw`)
+	// var volumeMountRO = regexp.MustCompile(`,ro,|,ro|ro,|ro`)
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -117,15 +115,15 @@ var _ = Describe("{Sharedv4Functional}", func() {
 					setPathToROMode(devicePath, attachedNode)
 
 					// check only mnt.VfsOpts (fs state) is RO
-					mntList, err := mount.GetMounts()
-					Expect(err).NotTo(HaveOccurred())
-					for _, mnt := range mntList {
-						if mnt.Mountpoint != devicePath {
-							continue
-						}
-						Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
-						Expect(volumeMountRO.MatchString(mnt.VfsOpts)).To(BeTrue())
-					}
+					// mntList, err := mount.GetMounts()
+					// Expect(err).NotTo(HaveOccurred())
+					// for _, mnt := range mntList {
+					// 	if mnt.Mountpoint != devicePath {
+					// 		continue
+					// 	}
+					// 	Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
+					// 	Expect(volumeMountRO.MatchString(mnt.VfsOpts)).To(BeTrue())
+					// }
 				})
 
 				Step(fmt.Sprintf("validate the counters are inactive %s", ctx.App.Key), func() {
@@ -158,16 +156,16 @@ var _ = Describe("{Sharedv4Functional}", func() {
 				})
 
 				Step(fmt.Sprintf("validate device path is set as RW for %s", ctx.App.Key), func() {
-					mntList, err := mount.GetMounts()
-					Expect(err).NotTo(HaveOccurred())
+					// mntList, err := mount.GetMounts()
+					// Expect(err).NotTo(HaveOccurred())
 
-					for _, mnt := range mntList {
-						if mnt.Mountpoint != devicePath {
-							continue
-						}
-						Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
-						Expect(volumeMountRW.MatchString(mnt.VfsOpts)).To(BeTrue())
-					}
+					// for _, mnt := range mntList {
+					// 	if mnt.Mountpoint != devicePath {
+					// 		continue
+					// 	}
+					// 	Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
+					// 	Expect(volumeMountRW.MatchString(mnt.VfsOpts)).To(BeTrue())
+					// }
 				})
 			}
 		})

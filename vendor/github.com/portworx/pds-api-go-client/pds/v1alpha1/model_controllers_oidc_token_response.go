@@ -16,10 +16,10 @@ import (
 
 // ControllersOIDCTokenResponse struct for ControllersOIDCTokenResponse
 type ControllersOIDCTokenResponse struct {
-	Claims       *AuthClaims `json:"claims,omitempty"`
-	ExpiresIn    *string     `json:"expiresIn,omitempty"`
-	IdToken      *string     `json:"idToken,omitempty"`
-	RefreshToken *string     `json:"refreshToken,omitempty"`
+	Claims *AuthClaims `json:"claims,omitempty"`
+	ExpiresIn *string `json:"expiresIn,omitempty"`
+	IdToken *string `json:"idToken,omitempty"`
+	RefreshToken *string `json:"refreshToken,omitempty"`
 }
 
 // NewControllersOIDCTokenResponse instantiates a new ControllersOIDCTokenResponse object
@@ -219,3 +219,5 @@ func (v *NullableControllersOIDCTokenResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

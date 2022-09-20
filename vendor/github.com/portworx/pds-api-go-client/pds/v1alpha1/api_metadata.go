@@ -27,9 +27,10 @@ var (
 type MetadataApiService service
 
 type ApiApiMetadataGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *MetadataApiService
 }
+
 
 func (r ApiApiMetadataGetRequest) Execute() (*ControllersAPIMetadataResponse, *http.Response, error) {
 	return r.ApiService.ApiMetadataGetExecute(r)
@@ -46,7 +47,7 @@ Get metadata about this server
 func (a *MetadataApiService) ApiMetadataGet(ctx context.Context) ApiApiMetadataGetRequest {
 	return ApiApiMetadataGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -54,10 +55,10 @@ func (a *MetadataApiService) ApiMetadataGet(ctx context.Context) ApiApiMetadataG
 //  @return ControllersAPIMetadataResponse
 func (a *MetadataApiService) ApiMetadataGetExecute(r ApiApiMetadataGetRequest) (*ControllersAPIMetadataResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersAPIMetadataResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersAPIMetadataResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MetadataApiService.ApiMetadataGet")

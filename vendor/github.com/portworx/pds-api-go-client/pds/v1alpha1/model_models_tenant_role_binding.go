@@ -16,10 +16,10 @@ import (
 
 // ModelsTenantRoleBinding struct for ModelsTenantRoleBinding
 type ModelsTenantRoleBinding struct {
-	ActorId   *string `json:"actor_id,omitempty"`
+	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
-	RoleName  *string `json:"role_name,omitempty"`
-	TenantId  *string `json:"tenant_id,omitempty"`
+	RoleName *string `json:"role_name,omitempty"`
+	TenantId *string `json:"tenant_id,omitempty"`
 }
 
 // NewModelsTenantRoleBinding instantiates a new ModelsTenantRoleBinding object
@@ -219,3 +219,5 @@ func (v *NullableModelsTenantRoleBinding) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

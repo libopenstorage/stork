@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedAccountTenants struct for ControllersPaginatedAccountTenants
 type ControllersPaginatedAccountTenants struct {
-	Data       []ModelsTenant        `json:"data,omitempty"`
+	Data []ModelsTenant `json:"data,omitempty"`
 	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedAccountTenants) UnmarshalJSON(src []byte) e
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

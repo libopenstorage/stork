@@ -16,10 +16,10 @@ import (
 
 // ModelsProjectRoleBinding struct for ModelsProjectRoleBinding
 type ModelsProjectRoleBinding struct {
-	ActorId   *string `json:"actor_id,omitempty"`
+	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
 	ProjectId *string `json:"project_id,omitempty"`
-	RoleName  *string `json:"role_name,omitempty"`
+	RoleName *string `json:"role_name,omitempty"`
 }
 
 // NewModelsProjectRoleBinding instantiates a new ModelsProjectRoleBinding object
@@ -219,3 +219,5 @@ func (v *NullableModelsProjectRoleBinding) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

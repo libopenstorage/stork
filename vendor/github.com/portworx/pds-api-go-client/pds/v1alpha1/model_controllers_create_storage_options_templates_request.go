@@ -16,12 +16,12 @@ import (
 
 // ControllersCreateStorageOptionsTemplatesRequest struct for ControllersCreateStorageOptionsTemplatesRequest
 type ControllersCreateStorageOptionsTemplatesRequest struct {
-	Fg *bool   `json:"fg,omitempty"`
+	Fg *bool `json:"fg,omitempty"`
 	Fs *string `json:"fs,omitempty"`
 	// See models.StorageOptionsTemplate for more information.
-	Name   *string `json:"name,omitempty"`
-	Repl   *int32  `json:"repl,omitempty"`
-	Secure *bool   `json:"secure,omitempty"`
+	Name *string `json:"name,omitempty"`
+	Repl *int32 `json:"repl,omitempty"`
+	Secure *bool `json:"secure,omitempty"`
 }
 
 // NewControllersCreateStorageOptionsTemplatesRequest instantiates a new ControllersCreateStorageOptionsTemplatesRequest object
@@ -256,3 +256,5 @@ func (v *NullableControllersCreateStorageOptionsTemplatesRequest) UnmarshalJSON(
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

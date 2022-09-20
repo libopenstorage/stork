@@ -28,10 +28,11 @@ var (
 type BackupJobsApiService service
 
 type ApiApiBackupJobsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupJobsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupJobsIdGetRequest) Execute() (*ModelsBackupJob, *http.Response, error) {
 	return r.ApiService.ApiBackupJobsIdGetExecute(r)
@@ -49,8 +50,8 @@ Fetches a BackupJob
 func (a *BackupJobsApiService) ApiBackupJobsIdGet(ctx context.Context, id string) ApiApiBackupJobsIdGetRequest {
 	return ApiApiBackupJobsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *BackupJobsApiService) ApiBackupJobsIdGet(ctx context.Context, id string
 //  @return ModelsBackupJob
 func (a *BackupJobsApiService) ApiBackupJobsIdGetExecute(r ApiApiBackupJobsIdGetRequest) (*ModelsBackupJob, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupJob
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupJob
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupJobsApiService.ApiBackupJobsIdGet")
@@ -145,10 +146,11 @@ func (a *BackupJobsApiService) ApiBackupJobsIdGetExecute(r ApiApiBackupJobsIdGet
 }
 
 type ApiApiBackupsIdJobsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupJobsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupsIdJobsGetRequest) Execute() (*ControllersBackupJobsResponse, *http.Response, error) {
 	return r.ApiService.ApiBackupsIdJobsGetExecute(r)
@@ -166,8 +168,8 @@ Retrieves a list of BackupJobs associated to this Backup
 func (a *BackupJobsApiService) ApiBackupsIdJobsGet(ctx context.Context, id string) ApiApiBackupsIdJobsGetRequest {
 	return ApiApiBackupsIdJobsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -175,10 +177,10 @@ func (a *BackupJobsApiService) ApiBackupsIdJobsGet(ctx context.Context, id strin
 //  @return ControllersBackupJobsResponse
 func (a *BackupJobsApiService) ApiBackupsIdJobsGetExecute(r ApiApiBackupsIdJobsGetRequest) (*ControllersBackupJobsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersBackupJobsResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersBackupJobsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupJobsApiService.ApiBackupsIdJobsGet")

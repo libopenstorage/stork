@@ -16,9 +16,9 @@ import (
 
 // ControllersPartialCredentials struct for ControllersPartialCredentials
 type ControllersPartialCredentials struct {
-	Azure        *ControllersPartialAzureCredentials        `json:"azure,omitempty"`
-	Google       *ControllersPartialGoogleCredentials       `json:"google,omitempty"`
-	S3           *ControllersPartialS3Credentials           `json:"s3,omitempty"`
+	Azure *ControllersPartialAzureCredentials `json:"azure,omitempty"`
+	Google *ControllersPartialGoogleCredentials `json:"google,omitempty"`
+	S3 *ControllersPartialS3Credentials `json:"s3,omitempty"`
 	S3Compatible *ControllersPartialS3CompatibleCredentials `json:"s3_compatible,omitempty"`
 }
 
@@ -219,3 +219,5 @@ func (v *NullableControllersPartialCredentials) UnmarshalJSON(src []byte) error 
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -16,7 +16,7 @@ import (
 
 // ModelsBackupTarget struct for ModelsBackupTarget
 type ModelsBackupTarget struct {
-	AccountId           *string `json:"account_id,omitempty"`
+	AccountId *string `json:"account_id,omitempty"`
 	BackupCredentialsId *string `json:"backup_credentials_id,omitempty"`
 	// Bucket name for S3 or S3 compatible. Container name for Azure.
 	Bucket *string `json:"bucket,omitempty"`
@@ -27,7 +27,7 @@ type ModelsBackupTarget struct {
 	// Name of the backup target. Must be unique for the given tenant.
 	Name *string `json:"name,omitempty"`
 	// Region of the bucket. Required for S3. Otherwise must be empty.
-	Region   *string `json:"region,omitempty"`
+	Region *string `json:"region,omitempty"`
 	TenantId *string `json:"tenant_id,omitempty"`
 	// Type of the backup target. Must match the used backup credentials.
 	Type *string `json:"type,omitempty"`
@@ -442,3 +442,5 @@ func (v *NullableModelsBackupTarget) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -8,7 +8,7 @@
 //
 // See also http://ghodss.com/2014/the-right-way-to-handle-yaml-in-golang
 //
-package yaml // import "github.com/ghodss/yaml"
+package yaml  // import "github.com/ghodss/yaml"
 
 import (
 	"bytes"

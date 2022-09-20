@@ -96,13 +96,13 @@ package module
 // Changes to the semantics in this file require approval from rsc.
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+	"errors"
 
 	"golang.org/x/mod/semver"
 )

@@ -16,8 +16,8 @@ import (
 
 // ControllersPaginatedDeploymentTargets struct for ControllersPaginatedDeploymentTargets
 type ControllersPaginatedDeploymentTargets struct {
-	Data       []ModelsDeploymentTarget `json:"data,omitempty"`
-	Pagination *ConstraintPagination    `json:"pagination,omitempty"`
+	Data []ModelsDeploymentTarget `json:"data,omitempty"`
+	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
 // NewControllersPaginatedDeploymentTargets instantiates a new ControllersPaginatedDeploymentTargets object
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedDeploymentTargets) UnmarshalJSON(src []byte
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

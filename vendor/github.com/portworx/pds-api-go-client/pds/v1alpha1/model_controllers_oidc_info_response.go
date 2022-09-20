@@ -16,9 +16,9 @@ import (
 
 // ControllersOIDCInfoResponse struct for ControllersOIDCInfoResponse
 type ControllersOIDCInfoResponse struct {
-	AuthUrl     *string `json:"authUrl,omitempty"`
-	ClientId    *string `json:"clientId,omitempty"`
-	Issuer      *string `json:"issuer,omitempty"`
+	AuthUrl *string `json:"authUrl,omitempty"`
+	ClientId *string `json:"clientId,omitempty"`
+	Issuer *string `json:"issuer,omitempty"`
 	RedirectUrl *string `json:"redirectUrl,omitempty"`
 }
 
@@ -219,3 +219,5 @@ func (v *NullableControllersOIDCInfoResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

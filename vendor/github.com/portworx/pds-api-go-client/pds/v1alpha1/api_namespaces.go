@@ -28,15 +28,15 @@ var (
 type NamespacesApiService service
 
 type ApiApiDeploymentTargetsIdNamespacesGetRequest struct {
-	ctx          context.Context
-	ApiService   *NamespacesApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *NamespacesApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
-	status       *string
+	id2 *string
+	name *string
+	status *string
 }
 
 // A given Namespace attribute to sort results by (one of: id, name, created_at)
@@ -44,31 +44,26 @@ func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) SortBy(sortBy string) Api
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Limit(limit string) ApiApiDeploymentTargetsIdNamespacesGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Continuation(continuation string) ApiApiDeploymentTargetsIdNamespacesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Namespace ID
 func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Id2(id2 string) ApiApiDeploymentTargetsIdNamespacesGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Namespace name
 func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Name(name string) ApiApiDeploymentTargetsIdNamespacesGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by Namespace status
 func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Status(status string) ApiApiDeploymentTargetsIdNamespacesGetRequest {
 	r.status = &status
@@ -91,8 +86,8 @@ List DeploymentTarget's Namespaces
 func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesGet(ctx context.Context, id string) ApiApiDeploymentTargetsIdNamespacesGetRequest {
 	return ApiApiDeploymentTargetsIdNamespacesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -100,10 +95,10 @@ func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesGet(ctx context.C
 //  @return ControllersPaginatedNamespaces
 func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesGetExecute(r ApiApiDeploymentTargetsIdNamespacesGetRequest) (*ControllersPaginatedNamespaces, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedNamespaces
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedNamespaces
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "NamespacesApiService.ApiDeploymentTargetsIdNamespacesGet")
@@ -205,10 +200,10 @@ func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesGetExecute(r ApiA
 }
 
 type ApiApiDeploymentTargetsIdNamespacesPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *NamespacesApiService
-	id         string
-	body       *ControllersCreateNamespace
+	id string
+	body *ControllersCreateNamespace
 }
 
 // Request body containing the new namespace
@@ -233,8 +228,8 @@ Creates a new Namespace
 func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesPost(ctx context.Context, id string) ApiApiDeploymentTargetsIdNamespacesPostRequest {
 	return ApiApiDeploymentTargetsIdNamespacesPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -242,10 +237,10 @@ func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesPost(ctx context.
 //  @return ModelsNamespace
 func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesPostExecute(r ApiApiDeploymentTargetsIdNamespacesPostRequest) (*ModelsNamespace, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsNamespace
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsNamespace
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "NamespacesApiService.ApiDeploymentTargetsIdNamespacesPost")
@@ -334,10 +329,11 @@ func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesPostExecute(r Api
 }
 
 type ApiApiNamespacesIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *NamespacesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiNamespacesIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiNamespacesIdDeleteExecute(r)
@@ -355,17 +351,17 @@ Deletes a single Namespace.
 func (a *NamespacesApiService) ApiNamespacesIdDelete(ctx context.Context, id string) ApiApiNamespacesIdDeleteRequest {
 	return ApiApiNamespacesIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *NamespacesApiService) ApiNamespacesIdDeleteExecute(r ApiApiNamespacesIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "NamespacesApiService.ApiNamespacesIdDelete")
@@ -440,10 +436,11 @@ func (a *NamespacesApiService) ApiNamespacesIdDeleteExecute(r ApiApiNamespacesId
 }
 
 type ApiApiNamespacesIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *NamespacesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiNamespacesIdGetRequest) Execute() (*ModelsNamespace, *http.Response, error) {
 	return r.ApiService.ApiNamespacesIdGetExecute(r)
@@ -461,8 +458,8 @@ Fetches a single Namespace
 func (a *NamespacesApiService) ApiNamespacesIdGet(ctx context.Context, id string) ApiApiNamespacesIdGetRequest {
 	return ApiApiNamespacesIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -470,10 +467,10 @@ func (a *NamespacesApiService) ApiNamespacesIdGet(ctx context.Context, id string
 //  @return ModelsNamespace
 func (a *NamespacesApiService) ApiNamespacesIdGetExecute(r ApiApiNamespacesIdGetRequest) (*ModelsNamespace, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsNamespace
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsNamespace
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "NamespacesApiService.ApiNamespacesIdGet")
@@ -557,10 +554,10 @@ func (a *NamespacesApiService) ApiNamespacesIdGetExecute(r ApiApiNamespacesIdGet
 }
 
 type ApiApiNamespacesIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *NamespacesApiService
-	id         string
-	body       *ControllersUpdateNamespaceRequest
+	id string
+	body *ControllersUpdateNamespaceRequest
 }
 
 // Object with partial update of fields (status)
@@ -585,8 +582,8 @@ Update namespace
 func (a *NamespacesApiService) ApiNamespacesIdPut(ctx context.Context, id string) ApiApiNamespacesIdPutRequest {
 	return ApiApiNamespacesIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -594,10 +591,10 @@ func (a *NamespacesApiService) ApiNamespacesIdPut(ctx context.Context, id string
 //  @return ModelsNamespace
 func (a *NamespacesApiService) ApiNamespacesIdPutExecute(r ApiApiNamespacesIdPutRequest) (*ModelsNamespace, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsNamespace
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsNamespace
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "NamespacesApiService.ApiNamespacesIdPut")

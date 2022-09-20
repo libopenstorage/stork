@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedNamespaces struct for ControllersPaginatedNamespaces
 type ControllersPaginatedNamespaces struct {
-	Data       []ModelsNamespace     `json:"data,omitempty"`
+	Data []ModelsNamespace `json:"data,omitempty"`
 	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedNamespaces) UnmarshalJSON(src []byte) error
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

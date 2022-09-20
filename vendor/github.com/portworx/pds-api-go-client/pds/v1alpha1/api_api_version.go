@@ -27,9 +27,10 @@ var (
 type APIVersionApiService service
 
 type ApiApiVersionGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *APIVersionApiService
 }
+
 
 func (r ApiApiVersionGetRequest) Execute() (*ControllersAPIVersionResponse, *http.Response, error) {
 	return r.ApiService.ApiVersionGetExecute(r)
@@ -48,7 +49,7 @@ Deprecated
 func (a *APIVersionApiService) ApiVersionGet(ctx context.Context) ApiApiVersionGetRequest {
 	return ApiApiVersionGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -57,10 +58,10 @@ func (a *APIVersionApiService) ApiVersionGet(ctx context.Context) ApiApiVersionG
 // Deprecated
 func (a *APIVersionApiService) ApiVersionGetExecute(r ApiApiVersionGetRequest) (*ControllersAPIVersionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersAPIVersionResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersAPIVersionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "APIVersionApiService.ApiVersionGet")

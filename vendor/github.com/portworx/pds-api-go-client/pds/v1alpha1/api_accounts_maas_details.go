@@ -28,10 +28,11 @@ var (
 type AccountsMAASDetailsApiService service
 
 type ApiApiAccountsIdMaasDetailsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountsMAASDetailsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiAccountsIdMaasDetailsGetRequest) Execute() (*ModelsMAASDetails, *http.Response, error) {
 	return r.ApiService.ApiAccountsIdMaasDetailsGetExecute(r)
@@ -49,8 +50,8 @@ Returns MAAS details for desired account
 func (a *AccountsMAASDetailsApiService) ApiAccountsIdMaasDetailsGet(ctx context.Context, id string) ApiApiAccountsIdMaasDetailsGetRequest {
 	return ApiApiAccountsIdMaasDetailsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *AccountsMAASDetailsApiService) ApiAccountsIdMaasDetailsGet(ctx context.
 //  @return ModelsMAASDetails
 func (a *AccountsMAASDetailsApiService) ApiAccountsIdMaasDetailsGetExecute(r ApiApiAccountsIdMaasDetailsGetRequest) (*ModelsMAASDetails, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsMAASDetails
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsMAASDetails
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsMAASDetailsApiService.ApiAccountsIdMaasDetailsGet")
@@ -145,10 +146,11 @@ func (a *AccountsMAASDetailsApiService) ApiAccountsIdMaasDetailsGetExecute(r Api
 }
 
 type ApiApiAccountsIdMaasDetailsPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountsMAASDetailsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiAccountsIdMaasDetailsPutRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiAccountsIdMaasDetailsPutExecute(r)
@@ -166,17 +168,17 @@ Updates MAAS details for desired account
 func (a *AccountsMAASDetailsApiService) ApiAccountsIdMaasDetailsPut(ctx context.Context, id string) ApiApiAccountsIdMaasDetailsPutRequest {
 	return ApiApiAccountsIdMaasDetailsPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *AccountsMAASDetailsApiService) ApiAccountsIdMaasDetailsPutExecute(r ApiApiAccountsIdMaasDetailsPutRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodPut
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsMAASDetailsApiService.ApiAccountsIdMaasDetailsPut")

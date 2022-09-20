@@ -16,7 +16,7 @@ import (
 
 // DeploymentsResourceEvents struct for DeploymentsResourceEvents
 type DeploymentsResourceEvents struct {
-	Events   []DeploymentsResourceEvent   `json:"events,omitempty"`
+	Events []DeploymentsResourceEvent `json:"events,omitempty"`
 	Resource *V1TypedLocalObjectReference `json:"resource,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableDeploymentsResourceEvents) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

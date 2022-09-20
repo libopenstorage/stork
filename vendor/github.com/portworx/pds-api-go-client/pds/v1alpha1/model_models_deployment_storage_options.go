@@ -16,10 +16,10 @@ import (
 
 // ModelsDeploymentStorageOptions struct for ModelsDeploymentStorageOptions
 type ModelsDeploymentStorageOptions struct {
-	Fg     *bool   `json:"fg,omitempty"`
-	Fs     *string `json:"fs,omitempty"`
-	Repl   *int32  `json:"repl,omitempty"`
-	Secure *bool   `json:"secure,omitempty"`
+	Fg *bool `json:"fg,omitempty"`
+	Fs *string `json:"fs,omitempty"`
+	Repl *int32 `json:"repl,omitempty"`
+	Secure *bool `json:"secure,omitempty"`
 }
 
 // NewModelsDeploymentStorageOptions instantiates a new ModelsDeploymentStorageOptions object
@@ -219,3 +219,5 @@ func (v *NullableModelsDeploymentStorageOptions) UnmarshalJSON(src []byte) error
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

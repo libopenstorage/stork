@@ -17,7 +17,7 @@ import (
 // ControllersWhoAmIResponse struct for ControllersWhoAmIResponse
 type ControllersWhoAmIResponse struct {
 	ServiceAccount *ControllersWhoAmIServiceAccount `json:"service_account,omitempty"`
-	User           *ControllersWhoAmIUser           `json:"user,omitempty"`
+	User *ControllersWhoAmIUser `json:"user,omitempty"`
 }
 
 // NewControllersWhoAmIResponse instantiates a new ControllersWhoAmIResponse object
@@ -147,3 +147,5 @@ func (v *NullableControllersWhoAmIResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

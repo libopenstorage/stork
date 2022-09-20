@@ -28,10 +28,11 @@ var (
 type ResourceSettingsTemplatesApiService service
 
 type ApiApiResourceSettingsTemplatesIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ResourceSettingsTemplatesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiResourceSettingsTemplatesIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiResourceSettingsTemplatesIdDeleteExecute(r)
@@ -49,17 +50,17 @@ Removes a single ResourceSettingsTemplate
 func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdDelete(ctx context.Context, id string) ApiApiResourceSettingsTemplatesIdDeleteRequest {
 	return ApiApiResourceSettingsTemplatesIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdDeleteExecute(r ApiApiResourceSettingsTemplatesIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ResourceSettingsTemplatesApiService.ApiResourceSettingsTemplatesIdDelete")
@@ -134,10 +135,11 @@ func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdDele
 }
 
 type ApiApiResourceSettingsTemplatesIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ResourceSettingsTemplatesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiResourceSettingsTemplatesIdGetRequest) Execute() (*ModelsResourceSettingsTemplate, *http.Response, error) {
 	return r.ApiService.ApiResourceSettingsTemplatesIdGetExecute(r)
@@ -155,8 +157,8 @@ Fetches a single ResourceSettingsTemplate
 func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdGet(ctx context.Context, id string) ApiApiResourceSettingsTemplatesIdGetRequest {
 	return ApiApiResourceSettingsTemplatesIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -164,10 +166,10 @@ func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdGet(
 //  @return ModelsResourceSettingsTemplate
 func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdGetExecute(r ApiApiResourceSettingsTemplatesIdGetRequest) (*ModelsResourceSettingsTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsResourceSettingsTemplate
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsResourceSettingsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ResourceSettingsTemplatesApiService.ApiResourceSettingsTemplatesIdGet")
@@ -251,10 +253,10 @@ func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdGetE
 }
 
 type ApiApiResourceSettingsTemplatesIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ResourceSettingsTemplatesApiService
-	id         string
-	body       *ControllersUpdateResourceSettingsTemplateRequest
+	id string
+	body *ControllersUpdateResourceSettingsTemplateRequest
 }
 
 // Request body containing updated template
@@ -279,8 +281,8 @@ Updates existing ResourceSettingsTemplate
 func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdPut(ctx context.Context, id string) ApiApiResourceSettingsTemplatesIdPutRequest {
 	return ApiApiResourceSettingsTemplatesIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -288,10 +290,10 @@ func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdPut(
 //  @return ModelsResourceSettingsTemplate
 func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdPutExecute(r ApiApiResourceSettingsTemplatesIdPutRequest) (*ModelsResourceSettingsTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsResourceSettingsTemplate
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsResourceSettingsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ResourceSettingsTemplatesApiService.ApiResourceSettingsTemplatesIdPut")
@@ -380,14 +382,14 @@ func (a *ResourceSettingsTemplatesApiService) ApiResourceSettingsTemplatesIdPutE
 }
 
 type ApiApiTenantsIdResourceSettingsTemplatesGetRequest struct {
-	ctx           context.Context
-	ApiService    *ResourceSettingsTemplatesApiService
-	id            string
-	sortBy        *string
-	limit         *string
-	continuation  *string
-	id2           *string
-	name          *string
+	ctx context.Context
+	ApiService *ResourceSettingsTemplatesApiService
+	id string
+	sortBy *string
+	limit *string
+	continuation *string
+	id2 *string
+	name *string
 	dataServiceId *string
 }
 
@@ -396,31 +398,26 @@ func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) SortBy(sortBy string
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) Limit(limit string) ApiApiTenantsIdResourceSettingsTemplatesGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) Continuation(continuation string) ApiApiTenantsIdResourceSettingsTemplatesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by ResourceSettingsTemplates id
 func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) Id2(id2 string) ApiApiTenantsIdResourceSettingsTemplatesGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by ResourceSettingsTemplates name
 func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) Name(name string) ApiApiTenantsIdResourceSettingsTemplatesGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by DataService ID
 func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) DataServiceId(dataServiceId string) ApiApiTenantsIdResourceSettingsTemplatesGetRequest {
 	r.dataServiceId = &dataServiceId
@@ -443,8 +440,8 @@ Lists ResourceSettingsTemplates
 func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTemplatesGet(ctx context.Context, id string) ApiApiTenantsIdResourceSettingsTemplatesGetRequest {
 	return ApiApiTenantsIdResourceSettingsTemplatesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -452,10 +449,10 @@ func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTempla
 //  @return ControllersPaginatedResourceSettingsTemplates
 func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTemplatesGetExecute(r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) (*ControllersPaginatedResourceSettingsTemplates, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedResourceSettingsTemplates
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedResourceSettingsTemplates
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ResourceSettingsTemplatesApiService.ApiTenantsIdResourceSettingsTemplatesGet")
@@ -557,10 +554,10 @@ func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTempla
 }
 
 type ApiApiTenantsIdResourceSettingsTemplatesPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ResourceSettingsTemplatesApiService
-	id         string
-	body       *ControllersCreateResourceSettingsTemplatesRequest
+	id string
+	body *ControllersCreateResourceSettingsTemplatesRequest
 }
 
 // Request body containing the resource settings template
@@ -585,8 +582,8 @@ Creates a new ResourceSettingsTemplates
 func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTemplatesPost(ctx context.Context, id string) ApiApiTenantsIdResourceSettingsTemplatesPostRequest {
 	return ApiApiTenantsIdResourceSettingsTemplatesPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -594,10 +591,10 @@ func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTempla
 //  @return ModelsResourceSettingsTemplate
 func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTemplatesPostExecute(r ApiApiTenantsIdResourceSettingsTemplatesPostRequest) (*ModelsResourceSettingsTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsResourceSettingsTemplate
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsResourceSettingsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ResourceSettingsTemplatesApiService.ApiTenantsIdResourceSettingsTemplatesPost")

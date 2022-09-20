@@ -16,13 +16,13 @@ import (
 
 // ControllersCreateResourceSettingsTemplatesRequest struct for ControllersCreateResourceSettingsTemplatesRequest
 type ControllersCreateResourceSettingsTemplatesRequest struct {
-	CpuLimit      *string `json:"cpu_limit,omitempty"`
-	CpuRequest    *string `json:"cpu_request,omitempty"`
+	CpuLimit *string `json:"cpu_limit,omitempty"`
+	CpuRequest *string `json:"cpu_request,omitempty"`
 	DataServiceId *string `json:"data_service_id,omitempty"`
-	MemoryLimit   *string `json:"memory_limit,omitempty"`
+	MemoryLimit *string `json:"memory_limit,omitempty"`
 	MemoryRequest *string `json:"memory_request,omitempty"`
 	// See models.ResourceSettingsTemplate for more information.
-	Name           *string `json:"name,omitempty"`
+	Name *string `json:"name,omitempty"`
 	StorageRequest *string `json:"storage_request,omitempty"`
 }
 
@@ -328,3 +328,5 @@ func (v *NullableControllersCreateResourceSettingsTemplatesRequest) UnmarshalJSO
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

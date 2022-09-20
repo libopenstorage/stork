@@ -16,20 +16,20 @@ import (
 
 // ControllersCreateProjectDeployment struct for ControllersCreateProjectDeployment
 type ControllersCreateProjectDeployment struct {
-	ApplicationConfigurationOverrides  *map[string]string `json:"application_configuration_overrides,omitempty"`
-	ApplicationConfigurationTemplateId *string            `json:"application_configuration_template_id,omitempty"`
-	DeploymentTargetId                 *string            `json:"deployment_target_id,omitempty"`
-	DnsZone                            *string            `json:"dns_zone,omitempty"`
-	ImageId                            *string            `json:"image_id,omitempty"`
-	LoadBalancerSourceRanges           []string           `json:"load_balancer_source_ranges,omitempty"`
-	Name                               *string            `json:"name,omitempty"`
-	NamespaceId                        *string            `json:"namespace_id,omitempty"`
+	ApplicationConfigurationOverrides *map[string]string `json:"application_configuration_overrides,omitempty"`
+	ApplicationConfigurationTemplateId *string `json:"application_configuration_template_id,omitempty"`
+	DeploymentTargetId *string `json:"deployment_target_id,omitempty"`
+	DnsZone *string `json:"dns_zone,omitempty"`
+	ImageId *string `json:"image_id,omitempty"`
+	LoadBalancerSourceRanges []string `json:"load_balancer_source_ranges,omitempty"`
+	Name *string `json:"name,omitempty"`
+	NamespaceId *string `json:"namespace_id,omitempty"`
 	// See models.Deployment for more information.
-	NodeCount                  *int32                                      `json:"node_count,omitempty"`
-	ResourceSettingsTemplateId *string                                     `json:"resource_settings_template_id,omitempty"`
-	ScheduledBackup            *ControllersCreateDeploymentScheduledBackup `json:"scheduled_backup,omitempty"`
-	ServiceType                *string                                     `json:"service_type,omitempty"`
-	StorageOptionsTemplateId   *string                                     `json:"storage_options_template_id,omitempty"`
+	NodeCount *int32 `json:"node_count,omitempty"`
+	ResourceSettingsTemplateId *string `json:"resource_settings_template_id,omitempty"`
+	ScheduledBackup *ControllersCreateDeploymentScheduledBackup `json:"scheduled_backup,omitempty"`
+	ServiceType *string `json:"service_type,omitempty"`
+	StorageOptionsTemplateId *string `json:"storage_options_template_id,omitempty"`
 }
 
 // NewControllersCreateProjectDeployment instantiates a new ControllersCreateProjectDeployment object
@@ -544,3 +544,5 @@ func (v *NullableControllersCreateProjectDeployment) UnmarshalJSON(src []byte) e
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -78,8 +78,8 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			Version: crdv1.SchemeGroupVersion.Version,
 			Scope:   apiextensionsv1beta1.ClusterScoped,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural:     crdv1.VolumeSnapshotDataResourcePlural,
-				Kind:       reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
+				Plural: crdv1.VolumeSnapshotDataResourcePlural,
+				Kind:   reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
 				ShortNames: storkVolumeSnapshotDataShortNames,
 			},
 		},
@@ -100,8 +100,8 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			Version: crdv1.SchemeGroupVersion.Version,
 			Scope:   apiextensionsv1beta1.NamespaceScoped,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural:     crdv1.VolumeSnapshotResourcePlural,
-				Kind:       reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
+				Plural: crdv1.VolumeSnapshotResourcePlural,
+				Kind:   reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
 				ShortNames: storkVolumeSnapshotShortNames,
 			},
 		},
@@ -139,8 +139,8 @@ func CreateCRDV1(clientset apiextensionsclient.Interface) error {
 			},
 			Scope: apiextensionsv1.ClusterScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Plural:     crdv1.VolumeSnapshotDataResourcePlural,
-				Kind:       reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
+				Plural: crdv1.VolumeSnapshotDataResourcePlural,
+				Kind:   reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
 				ShortNames: storkVolumeSnapshotDataShortNames,
 			},
 		},
@@ -172,8 +172,8 @@ func CreateCRDV1(clientset apiextensionsclient.Interface) error {
 			},
 			Scope: apiextensionsv1.NamespaceScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Plural:     crdv1.VolumeSnapshotResourcePlural,
-				Kind:       reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
+				Plural: crdv1.VolumeSnapshotResourcePlural,
+				Kind:   reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
 				ShortNames: storkVolumeSnapshotShortNames,
 			},
 		},

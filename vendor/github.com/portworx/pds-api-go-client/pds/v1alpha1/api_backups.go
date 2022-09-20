@@ -28,18 +28,18 @@ var (
 type BackupsApiService service
 
 type ApiApiBackupTargetsIdBackupsGetRequest struct {
-	ctx                 context.Context
-	ApiService          *BackupsApiService
-	id                  string
-	sortBy              *string
-	limit               *string
-	continuation        *string
-	id2                 *string
+	ctx context.Context
+	ApiService *BackupsApiService
+	id string
+	sortBy *string
+	limit *string
+	continuation *string
+	id2 *string
 	clusterResourceName *string
-	state               *string
-	suspend             *string
-	backupType          *string
-	backupLevel         *string
+	state *string
+	suspend *string
+	backupType *string
+	backupLevel *string
 }
 
 // A given Backup attribute to sort results by (one of: id, cluster_resource_name, created_at, backup_type, backup_level)
@@ -47,49 +47,41 @@ func (r ApiApiBackupTargetsIdBackupsGetRequest) SortBy(sortBy string) ApiApiBack
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiBackupTargetsIdBackupsGetRequest) Limit(limit string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiBackupTargetsIdBackupsGetRequest) Continuation(continuation string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Backup id
 func (r ApiApiBackupTargetsIdBackupsGetRequest) Id2(id2 string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Backup cluster_resource_name
 func (r ApiApiBackupTargetsIdBackupsGetRequest) ClusterResourceName(clusterResourceName string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.clusterResourceName = &clusterResourceName
 	return r
 }
-
 // Filter results by Backup state
 func (r ApiApiBackupTargetsIdBackupsGetRequest) State(state string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.state = &state
 	return r
 }
-
 // Filter results by Backup suspend flag
 func (r ApiApiBackupTargetsIdBackupsGetRequest) Suspend(suspend string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.suspend = &suspend
 	return r
 }
-
 // Filter results by Backup type (one of: adhoc,scheduled)
 func (r ApiApiBackupTargetsIdBackupsGetRequest) BackupType(backupType string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.backupType = &backupType
 	return r
 }
-
 // Filter results by Backup type (one of: snapshot,incremental)
 func (r ApiApiBackupTargetsIdBackupsGetRequest) BackupLevel(backupLevel string) ApiApiBackupTargetsIdBackupsGetRequest {
 	r.backupLevel = &backupLevel
@@ -112,8 +104,8 @@ Lists Backups belonging to the BackupTarget.
 func (a *BackupsApiService) ApiBackupTargetsIdBackupsGet(ctx context.Context, id string) ApiApiBackupTargetsIdBackupsGetRequest {
 	return ApiApiBackupTargetsIdBackupsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -121,10 +113,10 @@ func (a *BackupsApiService) ApiBackupTargetsIdBackupsGet(ctx context.Context, id
 //  @return ControllersPaginatedBackups
 func (a *BackupsApiService) ApiBackupTargetsIdBackupsGetExecute(r ApiApiBackupTargetsIdBackupsGetRequest) (*ControllersPaginatedBackups, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedBackups
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedBackups
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiBackupTargetsIdBackupsGet")
@@ -235,10 +227,10 @@ func (a *BackupsApiService) ApiBackupTargetsIdBackupsGetExecute(r ApiApiBackupTa
 }
 
 type ApiApiBackupsIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupsApiService
-	id         string
-	localOnly  *bool
+	id string
+	localOnly *bool
 }
 
 // Set to true to only delete the Backup object in the database (does not delete any actual resources)
@@ -263,17 +255,17 @@ Deletes an existing database deployment Backup
 func (a *BackupsApiService) ApiBackupsIdDelete(ctx context.Context, id string) ApiApiBackupsIdDeleteRequest {
 	return ApiApiBackupsIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *BackupsApiService) ApiBackupsIdDeleteExecute(r ApiApiBackupsIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiBackupsIdDelete")
@@ -351,10 +343,11 @@ func (a *BackupsApiService) ApiBackupsIdDeleteExecute(r ApiApiBackupsIdDeleteReq
 }
 
 type ApiApiBackupsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupsIdGetRequest) Execute() (*ModelsBackup, *http.Response, error) {
 	return r.ApiService.ApiBackupsIdGetExecute(r)
@@ -372,8 +365,8 @@ Fetches a single Backup
 func (a *BackupsApiService) ApiBackupsIdGet(ctx context.Context, id string) ApiApiBackupsIdGetRequest {
 	return ApiApiBackupsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -381,10 +374,10 @@ func (a *BackupsApiService) ApiBackupsIdGet(ctx context.Context, id string) ApiA
 //  @return ModelsBackup
 func (a *BackupsApiService) ApiBackupsIdGetExecute(r ApiApiBackupsIdGetRequest) (*ModelsBackup, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackup
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackup
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiBackupsIdGet")
@@ -468,11 +461,12 @@ func (a *BackupsApiService) ApiBackupsIdGetExecute(r ApiApiBackupsIdGetRequest) 
 }
 
 type ApiApiBackupsIdJobsNameDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupsApiService
-	id         string
-	name       string
+	id string
+	name string
 }
+
 
 func (r ApiApiBackupsIdJobsNameDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiBackupsIdJobsNameDeleteExecute(r)
@@ -491,18 +485,18 @@ Deletes an existing job for scheduled backups
 func (a *BackupsApiService) ApiBackupsIdJobsNameDelete(ctx context.Context, id string, name string) ApiApiBackupsIdJobsNameDeleteRequest {
 	return ApiApiBackupsIdJobsNameDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
-		name:       name,
+		ctx: ctx,
+		id: id,
+		name: name,
 	}
 }
 
 // Execute executes the request
 func (a *BackupsApiService) ApiBackupsIdJobsNameDeleteExecute(r ApiApiBackupsIdJobsNameDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiBackupsIdJobsNameDelete")
@@ -578,11 +572,11 @@ func (a *BackupsApiService) ApiBackupsIdJobsNameDeleteExecute(r ApiApiBackupsIdJ
 }
 
 type ApiApiBackupsIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupsApiService
-	id         string
-	body       *ControllersUpdateBackupRequest
-	localOnly  *bool
+	id string
+	body *ControllersUpdateBackupRequest
+	localOnly *bool
 }
 
 // Request body containing updated backup
@@ -590,7 +584,6 @@ func (r ApiApiBackupsIdPutRequest) Body(body ControllersUpdateBackupRequest) Api
 	r.body = &body
 	return r
 }
-
 // Set to true to only update the Backup object in the database (does not create any actual resources)
 func (r ApiApiBackupsIdPutRequest) LocalOnly(localOnly bool) ApiApiBackupsIdPutRequest {
 	r.localOnly = &localOnly
@@ -613,8 +606,8 @@ Updates an existing database Backup
 func (a *BackupsApiService) ApiBackupsIdPut(ctx context.Context, id string) ApiApiBackupsIdPutRequest {
 	return ApiApiBackupsIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -622,10 +615,10 @@ func (a *BackupsApiService) ApiBackupsIdPut(ctx context.Context, id string) ApiA
 //  @return ModelsBackup
 func (a *BackupsApiService) ApiBackupsIdPutExecute(r ApiApiBackupsIdPutRequest) (*ModelsBackup, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackup
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackup
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiBackupsIdPut")
@@ -717,18 +710,18 @@ func (a *BackupsApiService) ApiBackupsIdPutExecute(r ApiApiBackupsIdPutRequest) 
 }
 
 type ApiApiDeploymentsIdBackupsGetRequest struct {
-	ctx                 context.Context
-	ApiService          *BackupsApiService
-	id                  string
-	sortBy              *string
-	limit               *string
-	continuation        *string
-	id2                 *string
+	ctx context.Context
+	ApiService *BackupsApiService
+	id string
+	sortBy *string
+	limit *string
+	continuation *string
+	id2 *string
 	clusterResourceName *string
-	state               *string
-	suspend             *string
-	backupType          *string
-	backupLevel         *string
+	state *string
+	suspend *string
+	backupType *string
+	backupLevel *string
 }
 
 // A given Backup attribute to sort results by (one of: id, cluster_resource_name, created_at, backup_type, backup_level)
@@ -736,49 +729,41 @@ func (r ApiApiDeploymentsIdBackupsGetRequest) SortBy(sortBy string) ApiApiDeploy
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiDeploymentsIdBackupsGetRequest) Limit(limit string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiDeploymentsIdBackupsGetRequest) Continuation(continuation string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Backup id
 func (r ApiApiDeploymentsIdBackupsGetRequest) Id2(id2 string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Backup cluster_resource_name
 func (r ApiApiDeploymentsIdBackupsGetRequest) ClusterResourceName(clusterResourceName string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.clusterResourceName = &clusterResourceName
 	return r
 }
-
 // Filter results by Backup state
 func (r ApiApiDeploymentsIdBackupsGetRequest) State(state string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.state = &state
 	return r
 }
-
 // Filter results by Backup suspend flag
 func (r ApiApiDeploymentsIdBackupsGetRequest) Suspend(suspend string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.suspend = &suspend
 	return r
 }
-
 // Filter results by Backup type (one of: adhoc,scheduled)
 func (r ApiApiDeploymentsIdBackupsGetRequest) BackupType(backupType string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.backupType = &backupType
 	return r
 }
-
 // Filter results by Backup type (one of: snapshot,incremental)
 func (r ApiApiDeploymentsIdBackupsGetRequest) BackupLevel(backupLevel string) ApiApiDeploymentsIdBackupsGetRequest {
 	r.backupLevel = &backupLevel
@@ -801,8 +786,8 @@ Lists Backups belonging to the Deployment.
 func (a *BackupsApiService) ApiDeploymentsIdBackupsGet(ctx context.Context, id string) ApiApiDeploymentsIdBackupsGetRequest {
 	return ApiApiDeploymentsIdBackupsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -810,10 +795,10 @@ func (a *BackupsApiService) ApiDeploymentsIdBackupsGet(ctx context.Context, id s
 //  @return ControllersPaginatedBackups
 func (a *BackupsApiService) ApiDeploymentsIdBackupsGetExecute(r ApiApiDeploymentsIdBackupsGetRequest) (*ControllersPaginatedBackups, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedBackups
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedBackups
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiDeploymentsIdBackupsGet")
@@ -924,11 +909,11 @@ func (a *BackupsApiService) ApiDeploymentsIdBackupsGetExecute(r ApiApiDeployment
 }
 
 type ApiApiDeploymentsIdBackupsPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupsApiService
-	id         string
-	body       *ControllersCreateDeploymentBackup
-	localOnly  *bool
+	id string
+	body *ControllersCreateDeploymentBackup
+	localOnly *bool
 }
 
 // Request body containing the backup config
@@ -936,7 +921,6 @@ func (r ApiApiDeploymentsIdBackupsPostRequest) Body(body ControllersCreateDeploy
 	r.body = &body
 	return r
 }
-
 // Set to true to only create the Backup object in the database (does not create any actual resources)
 func (r ApiApiDeploymentsIdBackupsPostRequest) LocalOnly(localOnly bool) ApiApiDeploymentsIdBackupsPostRequest {
 	r.localOnly = &localOnly
@@ -959,8 +943,8 @@ Creates a new database Backup
 func (a *BackupsApiService) ApiDeploymentsIdBackupsPost(ctx context.Context, id string) ApiApiDeploymentsIdBackupsPostRequest {
 	return ApiApiDeploymentsIdBackupsPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -968,10 +952,10 @@ func (a *BackupsApiService) ApiDeploymentsIdBackupsPost(ctx context.Context, id 
 //  @return ModelsBackup
 func (a *BackupsApiService) ApiDeploymentsIdBackupsPostExecute(r ApiApiDeploymentsIdBackupsPostRequest) (*ModelsBackup, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackup
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackup
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiDeploymentsIdBackupsPost")

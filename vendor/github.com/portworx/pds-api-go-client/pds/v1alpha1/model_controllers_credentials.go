@@ -16,9 +16,9 @@ import (
 
 // ControllersCredentials struct for ControllersCredentials
 type ControllersCredentials struct {
-	Azure        *ModelsAzureCredentials        `json:"azure,omitempty"`
-	Google       *ModelsGoogleCredentials       `json:"google,omitempty"`
-	S3           *ModelsS3Credentials           `json:"s3,omitempty"`
+	Azure *ModelsAzureCredentials `json:"azure,omitempty"`
+	Google *ModelsGoogleCredentials `json:"google,omitempty"`
+	S3 *ModelsS3Credentials `json:"s3,omitempty"`
 	S3Compatible *ModelsS3CompatibleCredentials `json:"s3_compatible,omitempty"`
 }
 
@@ -219,3 +219,5 @@ func (v *NullableControllersCredentials) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

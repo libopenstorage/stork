@@ -28,10 +28,10 @@ var (
 type BackupTargetsApiService service
 
 type ApiApiBackupTargetsIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupTargetsApiService
-	id         string
-	force      *string
+	id string
+	force *string
 }
 
 // Delete backup target even if the deletion job fails on any deployment targets
@@ -56,17 +56,17 @@ Removes a single BackupTarget
 func (a *BackupTargetsApiService) ApiBackupTargetsIdDelete(ctx context.Context, id string) ApiApiBackupTargetsIdDeleteRequest {
 	return ApiApiBackupTargetsIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *BackupTargetsApiService) ApiBackupTargetsIdDeleteExecute(r ApiApiBackupTargetsIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiBackupTargetsIdDelete")
@@ -144,10 +144,11 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdDeleteExecute(r ApiApiBackup
 }
 
 type ApiApiBackupTargetsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupTargetsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupTargetsIdGetRequest) Execute() (*ModelsBackupTarget, *http.Response, error) {
 	return r.ApiService.ApiBackupTargetsIdGetExecute(r)
@@ -165,8 +166,8 @@ Fetches a single BackupTarget
 func (a *BackupTargetsApiService) ApiBackupTargetsIdGet(ctx context.Context, id string) ApiApiBackupTargetsIdGetRequest {
 	return ApiApiBackupTargetsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -174,10 +175,10 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdGet(ctx context.Context, id 
 //  @return ModelsBackupTarget
 func (a *BackupTargetsApiService) ApiBackupTargetsIdGetExecute(r ApiApiBackupTargetsIdGetRequest) (*ModelsBackupTarget, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupTarget
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiBackupTargetsIdGet")
@@ -261,10 +262,10 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdGetExecute(r ApiApiBackupTar
 }
 
 type ApiApiBackupTargetsIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupTargetsApiService
-	id         string
-	body       *ControllersUpdateBackupTargetRequest
+	id string
+	body *ControllersUpdateBackupTargetRequest
 }
 
 // Object with partial update fields
@@ -289,8 +290,8 @@ Updates existing BackupTarget
 func (a *BackupTargetsApiService) ApiBackupTargetsIdPut(ctx context.Context, id string) ApiApiBackupTargetsIdPutRequest {
 	return ApiApiBackupTargetsIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -298,10 +299,10 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdPut(ctx context.Context, id 
 //  @return ModelsBackupTarget
 func (a *BackupTargetsApiService) ApiBackupTargetsIdPutExecute(r ApiApiBackupTargetsIdPutRequest) (*ModelsBackupTarget, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupTarget
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiBackupTargetsIdPut")
@@ -390,10 +391,11 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdPutExecute(r ApiApiBackupTar
 }
 
 type ApiApiBackupTargetsIdRetryPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupTargetsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupTargetsIdRetryPostRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiBackupTargetsIdRetryPostExecute(r)
@@ -411,17 +413,17 @@ Retries to sync failed BackupTargetState
 func (a *BackupTargetsApiService) ApiBackupTargetsIdRetryPost(ctx context.Context, id string) ApiApiBackupTargetsIdRetryPostRequest {
 	return ApiApiBackupTargetsIdRetryPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *BackupTargetsApiService) ApiBackupTargetsIdRetryPostExecute(r ApiApiBackupTargetsIdRetryPostRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodPost
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiBackupTargetsIdRetryPost")
@@ -496,15 +498,15 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdRetryPostExecute(r ApiApiBac
 }
 
 type ApiApiBackupTargetsIdStatesGetRequest struct {
-	ctx                context.Context
-	ApiService         *BackupTargetsApiService
-	id                 string
-	limit              *string
-	continuation       *string
-	sortBy             *string
-	backupTargetId     *string
+	ctx context.Context
+	ApiService *BackupTargetsApiService
+	id string
+	limit *string
+	continuation *string
+	sortBy *string
+	backupTargetId *string
 	deploymentTargetId *string
-	state              *string
+	state *string
 }
 
 // Maximum number of rows to return (could be less)
@@ -512,31 +514,26 @@ func (r ApiApiBackupTargetsIdStatesGetRequest) Limit(limit string) ApiApiBackupT
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiBackupTargetsIdStatesGetRequest) Continuation(continuation string) ApiApiBackupTargetsIdStatesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // A given BackupTargetState attribute to sort results by (one of: state, deployment_target_id, backup_target_id)
 func (r ApiApiBackupTargetsIdStatesGetRequest) SortBy(sortBy string) ApiApiBackupTargetsIdStatesGetRequest {
 	r.sortBy = &sortBy
 	return r
 }
-
 // Filter results by BackupTarget ID
 func (r ApiApiBackupTargetsIdStatesGetRequest) BackupTargetId(backupTargetId string) ApiApiBackupTargetsIdStatesGetRequest {
 	r.backupTargetId = &backupTargetId
 	return r
 }
-
 // Filter results by DeploymentTarget ID
 func (r ApiApiBackupTargetsIdStatesGetRequest) DeploymentTargetId(deploymentTargetId string) ApiApiBackupTargetsIdStatesGetRequest {
 	r.deploymentTargetId = &deploymentTargetId
 	return r
 }
-
 // Filter results by state
 func (r ApiApiBackupTargetsIdStatesGetRequest) State(state string) ApiApiBackupTargetsIdStatesGetRequest {
 	r.state = &state
@@ -559,8 +556,8 @@ Lists BackupTarget's BackupTargetStates
 func (a *BackupTargetsApiService) ApiBackupTargetsIdStatesGet(ctx context.Context, id string) ApiApiBackupTargetsIdStatesGetRequest {
 	return ApiApiBackupTargetsIdStatesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -568,10 +565,10 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdStatesGet(ctx context.Contex
 //  @return ControllersPaginatedBackupTargetStates
 func (a *BackupTargetsApiService) ApiBackupTargetsIdStatesGetExecute(r ApiApiBackupTargetsIdStatesGetRequest) (*ControllersPaginatedBackupTargetStates, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedBackupTargetStates
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedBackupTargetStates
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiBackupTargetsIdStatesGet")
@@ -673,18 +670,18 @@ func (a *BackupTargetsApiService) ApiBackupTargetsIdStatesGetExecute(r ApiApiBac
 }
 
 type ApiApiProjectsIdBackupTargetsGetRequest struct {
-	ctx                 context.Context
-	ApiService          *BackupTargetsApiService
-	id                  string
-	sortBy              *string
-	limit               *string
-	continuation        *string
-	id2                 *string
-	name                *string
-	type_               *string
-	bucket              *string
-	region              *string
-	deploymentTargetId  *string
+	ctx context.Context
+	ApiService *BackupTargetsApiService
+	id string
+	sortBy *string
+	limit *string
+	continuation *string
+	id2 *string
+	name *string
+	type_ *string
+	bucket *string
+	region *string
+	deploymentTargetId *string
 	backupCredentialsId *string
 }
 
@@ -693,55 +690,46 @@ func (r ApiApiProjectsIdBackupTargetsGetRequest) SortBy(sortBy string) ApiApiPro
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiProjectsIdBackupTargetsGetRequest) Limit(limit string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiProjectsIdBackupTargetsGetRequest) Continuation(continuation string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by BackupTarget ID
 func (r ApiApiProjectsIdBackupTargetsGetRequest) Id2(id2 string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by BackupTarget name
 func (r ApiApiProjectsIdBackupTargetsGetRequest) Name(name string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by BackupTarget type
 func (r ApiApiProjectsIdBackupTargetsGetRequest) Type_(type_ string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.type_ = &type_
 	return r
 }
-
 // Filter results by bucket
 func (r ApiApiProjectsIdBackupTargetsGetRequest) Bucket(bucket string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.bucket = &bucket
 	return r
 }
-
 // Filter results by region
 func (r ApiApiProjectsIdBackupTargetsGetRequest) Region(region string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.region = &region
 	return r
 }
-
 // Filter results by deployment ID where the backup target is available.
 func (r ApiApiProjectsIdBackupTargetsGetRequest) DeploymentTargetId(deploymentTargetId string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.deploymentTargetId = &deploymentTargetId
 	return r
 }
-
 // Filter results by BackupCredentials ID
 func (r ApiApiProjectsIdBackupTargetsGetRequest) BackupCredentialsId(backupCredentialsId string) ApiApiProjectsIdBackupTargetsGetRequest {
 	r.backupCredentialsId = &backupCredentialsId
@@ -764,8 +752,8 @@ Lists BackupTargets belonging to the Project
 func (a *BackupTargetsApiService) ApiProjectsIdBackupTargetsGet(ctx context.Context, id string) ApiApiProjectsIdBackupTargetsGetRequest {
 	return ApiApiProjectsIdBackupTargetsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -773,10 +761,10 @@ func (a *BackupTargetsApiService) ApiProjectsIdBackupTargetsGet(ctx context.Cont
 //  @return ControllersPaginatedBackupTargets
 func (a *BackupTargetsApiService) ApiProjectsIdBackupTargetsGetExecute(r ApiApiProjectsIdBackupTargetsGetRequest) (*ControllersPaginatedBackupTargets, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedBackupTargets
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedBackupTargets
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiProjectsIdBackupTargetsGet")
@@ -890,17 +878,17 @@ func (a *BackupTargetsApiService) ApiProjectsIdBackupTargetsGetExecute(r ApiApiP
 }
 
 type ApiApiTenantsIdBackupTargetsGetRequest struct {
-	ctx                 context.Context
-	ApiService          *BackupTargetsApiService
-	id                  string
-	limit               *string
-	continuation        *string
-	sortBy              *string
-	id2                 *string
-	name                *string
-	type_               *string
-	bucket              *string
-	region              *string
+	ctx context.Context
+	ApiService *BackupTargetsApiService
+	id string
+	limit *string
+	continuation *string
+	sortBy *string
+	id2 *string
+	name *string
+	type_ *string
+	bucket *string
+	region *string
 	backupCredentialsId *string
 }
 
@@ -909,49 +897,41 @@ func (r ApiApiTenantsIdBackupTargetsGetRequest) Limit(limit string) ApiApiTenant
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdBackupTargetsGetRequest) Continuation(continuation string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // A given BackupTarget attribute to sort results by (one of: id, name, type, created_at)
 func (r ApiApiTenantsIdBackupTargetsGetRequest) SortBy(sortBy string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.sortBy = &sortBy
 	return r
 }
-
 // Filter results by BackupTarget ID
 func (r ApiApiTenantsIdBackupTargetsGetRequest) Id2(id2 string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by BackupTarget name
 func (r ApiApiTenantsIdBackupTargetsGetRequest) Name(name string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by BackupTarget type
 func (r ApiApiTenantsIdBackupTargetsGetRequest) Type_(type_ string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.type_ = &type_
 	return r
 }
-
 // Filter results by bucket
 func (r ApiApiTenantsIdBackupTargetsGetRequest) Bucket(bucket string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.bucket = &bucket
 	return r
 }
-
 // Filter results by region
 func (r ApiApiTenantsIdBackupTargetsGetRequest) Region(region string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.region = &region
 	return r
 }
-
 // Filter results by BackupCredentials ID
 func (r ApiApiTenantsIdBackupTargetsGetRequest) BackupCredentialsId(backupCredentialsId string) ApiApiTenantsIdBackupTargetsGetRequest {
 	r.backupCredentialsId = &backupCredentialsId
@@ -974,8 +954,8 @@ Lists Tenant's BackupTargets
 func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsGet(ctx context.Context, id string) ApiApiTenantsIdBackupTargetsGetRequest {
 	return ApiApiTenantsIdBackupTargetsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -983,10 +963,10 @@ func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsGet(ctx context.Conte
 //  @return ControllersPaginatedBackupTargets
 func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsGetExecute(r ApiApiTenantsIdBackupTargetsGetRequest) (*ControllersPaginatedBackupTargets, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedBackupTargets
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedBackupTargets
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiTenantsIdBackupTargetsGet")
@@ -1097,10 +1077,10 @@ func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsGetExecute(r ApiApiTe
 }
 
 type ApiApiTenantsIdBackupTargetsPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupTargetsApiService
-	id         string
-	body       *ControllersCreateTenantBackupTarget
+	id string
+	body *ControllersCreateTenantBackupTarget
 }
 
 // Request body containing the backup target config
@@ -1125,8 +1105,8 @@ Creates a new BackupTarget
 func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsPost(ctx context.Context, id string) ApiApiTenantsIdBackupTargetsPostRequest {
 	return ApiApiTenantsIdBackupTargetsPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -1134,10 +1114,10 @@ func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsPost(ctx context.Cont
 //  @return ModelsBackupTarget
 func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsPostExecute(r ApiApiTenantsIdBackupTargetsPostRequest) (*ModelsBackupTarget, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupTarget
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiTenantsIdBackupTargetsPost")

@@ -128,7 +128,7 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 3 * time.Minute
 	// SnapshotReadyTimeout timeout for snapshot to be ready
-	SnapshotReadyTimeout = 5 * time.Minute
+	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
 
 	autopilotServiceName          = "autopilot"
@@ -201,16 +201,16 @@ var (
 
 // K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory             *spec.Factory
-	NodeDriverName          string
-	VolDriverName           string
-	secretConfigMapName     string
-	customConfig            map[string]scheduler.AppConfig
-	eventsStorage           map[string][]scheduler.Event
-	SecretType              string
-	VaultAddress            string
-	VaultToken              string
-	PureVolumes             bool
+	SpecFactory                      *spec.Factory
+	NodeDriverName                   string
+	VolDriverName                    string
+	secretConfigMapName              string
+	customConfig                     map[string]scheduler.AppConfig
+	eventsStorage                    map[string][]scheduler.Event
+	SecretType                       string
+	VaultAddress                     string
+	VaultToken                       string
+	PureVolumes                      bool
 	PureSANType                      string
 	RunCSISnapshotAndRestoreManyTest bool
 	helmValuesConfigMapName          string
@@ -5279,7 +5279,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 		}
 		_, err = k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 		if err != nil {
-			logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err )
+			logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
 			return err
 		}
 
@@ -5287,15 +5287,12 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	logrus.Info("Finished issueing PVC creation request, proceed to validate")
 
 	if err = k.waitForRestoredPVCsToBound(request.RestoredPVCName, pvcObj.Namespace); err != nil {
-		logrus.Errorf("failed to wait %d pvcs go into bound", numOfRestoredPVCForCloneManyTest )
+		logrus.Errorf("failed to wait %d pvcs go into bound", numOfRestoredPVCForCloneManyTest)
 		return fmt.Errorf("%d PVCs did not go into bound after 30 mins", numOfRestoredPVCForCloneManyTest)
 	}
 
-
-
 	return nil
 }
-
 
 func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) error {
 	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  %s/aaaa.txt", data, mountPath)}
@@ -5868,7 +5865,7 @@ func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string)
 		return "", false, nil
 
 	}
-	if _, err := task.DoRetryWithTimeout(t, 30 * time.Minute, 30 * time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second); err != nil {
 		return err
 	}
 	logrus.Infof("PVC is in bound: %s", pvc.Name)

@@ -1,4 +1,3 @@
-//go:build (!linux && !freebsd) || (freebsd && !cgo)
 // +build !linux,!freebsd freebsd,!cgo
 
 package mount // import "github.com/docker/docker/pkg/mount"

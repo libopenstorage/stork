@@ -16,8 +16,8 @@ import (
 
 // ControllersPaginatedResourceSettingsTemplates struct for ControllersPaginatedResourceSettingsTemplates
 type ControllersPaginatedResourceSettingsTemplates struct {
-	Data       []ModelsResourceSettingsTemplate `json:"data,omitempty"`
-	Pagination *ConstraintPagination            `json:"pagination,omitempty"`
+	Data []ModelsResourceSettingsTemplate `json:"data,omitempty"`
+	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
 // NewControllersPaginatedResourceSettingsTemplates instantiates a new ControllersPaginatedResourceSettingsTemplates object
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedResourceSettingsTemplates) UnmarshalJSON(sr
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

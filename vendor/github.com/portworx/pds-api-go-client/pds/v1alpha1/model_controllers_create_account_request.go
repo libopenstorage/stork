@@ -16,7 +16,7 @@ import (
 
 // ControllersCreateAccountRequest struct for ControllersCreateAccountRequest
 type ControllersCreateAccountRequest struct {
-	DnsDetails  *ModelsDNSDetails  `json:"dns_details,omitempty"`
+	DnsDetails *ModelsDNSDetails `json:"dns_details,omitempty"`
 	MaasDetails *ModelsMAASDetails `json:"maas_details,omitempty"`
 	// Name of the account.
 	Name *string `json:"name,omitempty"`
@@ -184,3 +184,5 @@ func (v *NullableControllersCreateAccountRequest) UnmarshalJSON(src []byte) erro
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

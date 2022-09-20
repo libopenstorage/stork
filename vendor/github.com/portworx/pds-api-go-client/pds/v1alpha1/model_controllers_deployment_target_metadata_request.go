@@ -16,10 +16,10 @@ import (
 
 // ControllersDeploymentTargetMetadataRequest struct for ControllersDeploymentTargetMetadataRequest
 type ControllersDeploymentTargetMetadataRequest struct {
-	ClusterId          *string `json:"cluster_id,omitempty"`
-	KubeApiVersion     *string `json:"kube_api_version,omitempty"`
-	KubePlatform       *string `json:"kube_platform,omitempty"`
-	PdsChartVersion    *string `json:"pds_chart_version,omitempty"`
+	ClusterId *string `json:"cluster_id,omitempty"`
+	KubeApiVersion *string `json:"kube_api_version,omitempty"`
+	KubePlatform *string `json:"kube_platform,omitempty"`
+	PdsChartVersion *string `json:"pds_chart_version,omitempty"`
 	PxServiceNamespace *string `json:"px_service_namespace,omitempty"`
 }
 
@@ -255,3 +255,5 @@ func (v *NullableControllersDeploymentTargetMetadataRequest) UnmarshalJSON(src [
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

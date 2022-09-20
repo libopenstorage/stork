@@ -16,7 +16,7 @@ import (
 
 // ControllersInvitationRequest struct for ControllersInvitationRequest
 type ControllersInvitationRequest struct {
-	Email    *string `json:"email,omitempty"`
+	Email *string `json:"email,omitempty"`
 	RoleName *string `json:"role_name,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableControllersInvitationRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

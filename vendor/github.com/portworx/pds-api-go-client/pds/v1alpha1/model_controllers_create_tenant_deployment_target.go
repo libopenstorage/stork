@@ -17,7 +17,7 @@ import (
 // ControllersCreateTenantDeploymentTarget struct for ControllersCreateTenantDeploymentTarget
 type ControllersCreateTenantDeploymentTarget struct {
 	ClusterId *string `json:"cluster_id,omitempty"`
-	Name      *string `json:"name,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 // NewControllersCreateTenantDeploymentTarget instantiates a new ControllersCreateTenantDeploymentTarget object
@@ -147,3 +147,5 @@ func (v *NullableControllersCreateTenantDeploymentTarget) UnmarshalJSON(src []by
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

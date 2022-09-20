@@ -16,10 +16,10 @@ import (
 
 // DeploymentsConnectionInfo struct for DeploymentsConnectionInfo
 type DeploymentsConnectionInfo struct {
-	ClusterDetails    map[string]interface{}        `json:"clusterDetails,omitempty"`
+	ClusterDetails map[string]interface{} `json:"clusterDetails,omitempty"`
 	ConnectionDetails *DeploymentsConnectionDetails `json:"connectionDetails,omitempty"`
-	NotReadyPods      []DeploymentsPodInfo          `json:"notReadyPods,omitempty"`
-	Pods              []DeploymentsPodInfo          `json:"pods,omitempty"`
+	NotReadyPods []DeploymentsPodInfo `json:"notReadyPods,omitempty"`
+	Pods []DeploymentsPodInfo `json:"pods,omitempty"`
 }
 
 // NewDeploymentsConnectionInfo instantiates a new DeploymentsConnectionInfo object
@@ -219,3 +219,5 @@ func (v *NullableDeploymentsConnectionInfo) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

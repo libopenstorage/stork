@@ -16,9 +16,9 @@ import (
 
 // ModelsAWSDetails struct for ModelsAWSDetails
 type ModelsAWSDetails struct {
-	AccessKey    *string `json:"access_key,omitempty"`
+	AccessKey *string `json:"access_key,omitempty"`
 	HostedZoneId *string `json:"hosted_zone_id,omitempty"`
-	SecretKey    *string `json:"secret_key,omitempty"`
+	SecretKey *string `json:"secret_key,omitempty"`
 }
 
 // NewModelsAWSDetails instantiates a new ModelsAWSDetails object
@@ -183,3 +183,5 @@ func (v *NullableModelsAWSDetails) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

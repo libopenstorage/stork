@@ -27,8 +27,8 @@ var (
 type DefaultTemplatesApiService service
 
 type ApiApiDefaultTemplatesApplicationConfigurationGetRequest struct {
-	ctx           context.Context
-	ApiService    *DefaultTemplatesApiService
+	ctx context.Context
+	ApiService *DefaultTemplatesApiService
 	dataServiceId *string
 }
 
@@ -53,7 +53,7 @@ Lists Default ApplicationConfigurationTemplates
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesApplicationConfigurationGet(ctx context.Context) ApiApiDefaultTemplatesApplicationConfigurationGetRequest {
 	return ApiApiDefaultTemplatesApplicationConfigurationGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -61,10 +61,10 @@ func (a *DefaultTemplatesApiService) ApiDefaultTemplatesApplicationConfiguration
 //  @return ControllersApplicationConfigurationTemplates
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesApplicationConfigurationGetExecute(r ApiApiDefaultTemplatesApplicationConfigurationGetRequest) (*ControllersApplicationConfigurationTemplates, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersApplicationConfigurationTemplates
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersApplicationConfigurationTemplates
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultTemplatesApiService.ApiDefaultTemplatesApplicationConfigurationGet")
@@ -150,9 +150,10 @@ func (a *DefaultTemplatesApiService) ApiDefaultTemplatesApplicationConfiguration
 }
 
 type ApiApiDefaultTemplatesBackupPoliciesGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DefaultTemplatesApiService
 }
+
 
 func (r ApiApiDefaultTemplatesBackupPoliciesGetRequest) Execute() (*ControllersBackupPolicies, *http.Response, error) {
 	return r.ApiService.ApiDefaultTemplatesBackupPoliciesGetExecute(r)
@@ -169,7 +170,7 @@ Lists Default BackupPolicies
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesBackupPoliciesGet(ctx context.Context) ApiApiDefaultTemplatesBackupPoliciesGetRequest {
 	return ApiApiDefaultTemplatesBackupPoliciesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -177,10 +178,10 @@ func (a *DefaultTemplatesApiService) ApiDefaultTemplatesBackupPoliciesGet(ctx co
 //  @return ControllersBackupPolicies
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesBackupPoliciesGetExecute(r ApiApiDefaultTemplatesBackupPoliciesGetRequest) (*ControllersBackupPolicies, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersBackupPolicies
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersBackupPolicies
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultTemplatesApiService.ApiDefaultTemplatesBackupPoliciesGet")
@@ -263,8 +264,8 @@ func (a *DefaultTemplatesApiService) ApiDefaultTemplatesBackupPoliciesGetExecute
 }
 
 type ApiApiDefaultTemplatesResourceSettingsGetRequest struct {
-	ctx           context.Context
-	ApiService    *DefaultTemplatesApiService
+	ctx context.Context
+	ApiService *DefaultTemplatesApiService
 	dataServiceId *string
 }
 
@@ -289,7 +290,7 @@ Lists Default ResourceSettingsTemplates
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesResourceSettingsGet(ctx context.Context) ApiApiDefaultTemplatesResourceSettingsGetRequest {
 	return ApiApiDefaultTemplatesResourceSettingsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -297,10 +298,10 @@ func (a *DefaultTemplatesApiService) ApiDefaultTemplatesResourceSettingsGet(ctx 
 //  @return ControllersResourceSettingsTemplates
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesResourceSettingsGetExecute(r ApiApiDefaultTemplatesResourceSettingsGetRequest) (*ControllersResourceSettingsTemplates, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersResourceSettingsTemplates
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersResourceSettingsTemplates
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultTemplatesApiService.ApiDefaultTemplatesResourceSettingsGet")
@@ -386,9 +387,10 @@ func (a *DefaultTemplatesApiService) ApiDefaultTemplatesResourceSettingsGetExecu
 }
 
 type ApiApiDefaultTemplatesStorageOptionsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DefaultTemplatesApiService
 }
+
 
 func (r ApiApiDefaultTemplatesStorageOptionsGetRequest) Execute() (*ControllersStorageOptionsTemplates, *http.Response, error) {
 	return r.ApiService.ApiDefaultTemplatesStorageOptionsGetExecute(r)
@@ -405,7 +407,7 @@ Lists Default StorageOptionsTemplates
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesStorageOptionsGet(ctx context.Context) ApiApiDefaultTemplatesStorageOptionsGetRequest {
 	return ApiApiDefaultTemplatesStorageOptionsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -413,10 +415,10 @@ func (a *DefaultTemplatesApiService) ApiDefaultTemplatesStorageOptionsGet(ctx co
 //  @return ControllersStorageOptionsTemplates
 func (a *DefaultTemplatesApiService) ApiDefaultTemplatesStorageOptionsGetExecute(r ApiApiDefaultTemplatesStorageOptionsGetRequest) (*ControllersStorageOptionsTemplates, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersStorageOptionsTemplates
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersStorageOptionsTemplates
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultTemplatesApiService.ApiDefaultTemplatesStorageOptionsGet")

@@ -28,10 +28,10 @@ var (
 type TenantRoleBindingsApiService service
 
 type ApiApiTenantsIdRoleBindingsDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *TenantRoleBindingsApiService
-	id         string
-	actorType  *string
+	id string
+	actorType *string
 }
 
 // TenantRoleBinding actor type
@@ -56,17 +56,17 @@ Removes a single TenantRoleBinding
 func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsDelete(ctx context.Context, id string) ApiApiTenantsIdRoleBindingsDeleteRequest {
 	return ApiApiTenantsIdRoleBindingsDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsDeleteExecute(r ApiApiTenantsIdRoleBindingsDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantRoleBindingsApiService.ApiTenantsIdRoleBindingsDelete")
@@ -143,13 +143,13 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsDeleteExecute(r A
 }
 
 type ApiApiTenantsIdRoleBindingsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *TenantRoleBindingsApiService
-	id         string
-	sortBy     *string
-	roleName   *string
-	actorId    *string
-	actorType  *string
+	id string
+	sortBy *string
+	roleName *string
+	actorId *string
+	actorType *string
 }
 
 // A given TenantRoleBinding attribute to sort results by (one of: role_name, actor_id)
@@ -157,19 +157,16 @@ func (r ApiApiTenantsIdRoleBindingsGetRequest) SortBy(sortBy string) ApiApiTenan
 	r.sortBy = &sortBy
 	return r
 }
-
 // Filter results by TenantRoleBinding assigned role name
 func (r ApiApiTenantsIdRoleBindingsGetRequest) RoleName(roleName string) ApiApiTenantsIdRoleBindingsGetRequest {
 	r.roleName = &roleName
 	return r
 }
-
 // Filter results by TenantRoleBinding actor id
 func (r ApiApiTenantsIdRoleBindingsGetRequest) ActorId(actorId string) ApiApiTenantsIdRoleBindingsGetRequest {
 	r.actorId = &actorId
 	return r
 }
-
 // Filter results by TenantRoleBinding actor type
 func (r ApiApiTenantsIdRoleBindingsGetRequest) ActorType(actorType string) ApiApiTenantsIdRoleBindingsGetRequest {
 	r.actorType = &actorType
@@ -192,8 +189,8 @@ Lists TenantRoleBindings
 func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGet(ctx context.Context, id string) ApiApiTenantsIdRoleBindingsGetRequest {
 	return ApiApiTenantsIdRoleBindingsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -201,10 +198,10 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGet(ctx context.C
 //  @return ControllersPaginatedTenantRoleBindings
 func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGetExecute(r ApiApiTenantsIdRoleBindingsGetRequest) (*ControllersPaginatedTenantRoleBindings, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedTenantRoleBindings
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedTenantRoleBindings
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantRoleBindingsApiService.ApiTenantsIdRoleBindingsGet")
@@ -300,10 +297,10 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGetExecute(r ApiA
 }
 
 type ApiApiTenantsIdRoleBindingsPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *TenantRoleBindingsApiService
-	id         string
-	body       *ControllersUpsertTenantRoleBindingRequest
+	id string
+	body *ControllersUpsertTenantRoleBindingRequest
 }
 
 // Request body containing the tenant role binding
@@ -328,8 +325,8 @@ Creates a new TenantRoleBinding
 func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPut(ctx context.Context, id string) ApiApiTenantsIdRoleBindingsPutRequest {
 	return ApiApiTenantsIdRoleBindingsPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -337,10 +334,10 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPut(ctx context.C
 //  @return ModelsTenantRoleBinding
 func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPutExecute(r ApiApiTenantsIdRoleBindingsPutRequest) (*ModelsTenantRoleBinding, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsTenantRoleBinding
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsTenantRoleBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantRoleBindingsApiService.ApiTenantsIdRoleBindingsPut")

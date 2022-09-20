@@ -28,10 +28,10 @@ var (
 type ProjectRoleBindingsApiService service
 
 type ApiApiProjectsIdRoleBindingsDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ProjectRoleBindingsApiService
-	id         string
-	actorType  *string
+	id string
+	actorType *string
 }
 
 // ProjectRoleBinding actor type
@@ -56,17 +56,17 @@ Removes a single ProjectRoleBinding
 func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsDelete(ctx context.Context, id string) ApiApiProjectsIdRoleBindingsDeleteRequest {
 	return ApiApiProjectsIdRoleBindingsDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsDeleteExecute(r ApiApiProjectsIdRoleBindingsDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ProjectRoleBindingsApiService.ApiProjectsIdRoleBindingsDelete")
@@ -143,13 +143,13 @@ func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsDeleteExecute(r
 }
 
 type ApiApiProjectsIdRoleBindingsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ProjectRoleBindingsApiService
-	id         string
-	sortBy     *string
-	roleName   *string
-	actorId    *string
-	actorType  *string
+	id string
+	sortBy *string
+	roleName *string
+	actorId *string
+	actorType *string
 }
 
 // A given ProjectRoleBinding attribute to sort results by (one of: role_name, actor_id)
@@ -157,19 +157,16 @@ func (r ApiApiProjectsIdRoleBindingsGetRequest) SortBy(sortBy string) ApiApiProj
 	r.sortBy = &sortBy
 	return r
 }
-
 // Filter results by ProjectRoleBinding assigned role name
 func (r ApiApiProjectsIdRoleBindingsGetRequest) RoleName(roleName string) ApiApiProjectsIdRoleBindingsGetRequest {
 	r.roleName = &roleName
 	return r
 }
-
 // Filter results by ProjectRoleBinding actor id
 func (r ApiApiProjectsIdRoleBindingsGetRequest) ActorId(actorId string) ApiApiProjectsIdRoleBindingsGetRequest {
 	r.actorId = &actorId
 	return r
 }
-
 // Filter results by ProjectRoleBinding actor type
 func (r ApiApiProjectsIdRoleBindingsGetRequest) ActorType(actorType string) ApiApiProjectsIdRoleBindingsGetRequest {
 	r.actorType = &actorType
@@ -192,8 +189,8 @@ Lists ProjectRoleBindings
 func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsGet(ctx context.Context, id string) ApiApiProjectsIdRoleBindingsGetRequest {
 	return ApiApiProjectsIdRoleBindingsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -201,10 +198,10 @@ func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsGet(ctx context
 //  @return ControllersPaginatedProjectRoleBindings
 func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsGetExecute(r ApiApiProjectsIdRoleBindingsGetRequest) (*ControllersPaginatedProjectRoleBindings, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedProjectRoleBindings
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedProjectRoleBindings
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ProjectRoleBindingsApiService.ApiProjectsIdRoleBindingsGet")
@@ -300,10 +297,10 @@ func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsGetExecute(r Ap
 }
 
 type ApiApiProjectsIdRoleBindingsPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ProjectRoleBindingsApiService
-	id         string
-	body       *ControllersUpsertProjectRoleBindingRequest
+	id string
+	body *ControllersUpsertProjectRoleBindingRequest
 }
 
 // Request body containing the project role binding
@@ -328,8 +325,8 @@ Creates a new ProjectRoleBinding
 func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsPut(ctx context.Context, id string) ApiApiProjectsIdRoleBindingsPutRequest {
 	return ApiApiProjectsIdRoleBindingsPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -337,10 +334,10 @@ func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsPut(ctx context
 //  @return ModelsProjectRoleBinding
 func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsPutExecute(r ApiApiProjectsIdRoleBindingsPutRequest) (*ModelsProjectRoleBinding, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsProjectRoleBinding
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsProjectRoleBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ProjectRoleBindingsApiService.ApiProjectsIdRoleBindingsPut")

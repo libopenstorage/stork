@@ -16,10 +16,10 @@ import (
 
 // ControllersAPIVersionResponse struct for ControllersAPIVersionResponse
 type ControllersAPIVersionResponse struct {
-	ApiVersion       *string            `json:"api_version,omitempty"`
-	Features         *map[string]string `json:"features,omitempty"`
-	HelmChartVersion *string            `json:"helm_chart_version,omitempty"`
-	PdsBuildNumber   *int32             `json:"pds_build_number,omitempty"`
+	ApiVersion *string `json:"api_version,omitempty"`
+	Features *map[string]string `json:"features,omitempty"`
+	HelmChartVersion *string `json:"helm_chart_version,omitempty"`
+	PdsBuildNumber *int32 `json:"pds_build_number,omitempty"`
 }
 
 // NewControllersAPIVersionResponse instantiates a new ControllersAPIVersionResponse object
@@ -219,3 +219,5 @@ func (v *NullableControllersAPIVersionResponse) UnmarshalJSON(src []byte) error 
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedDeployments struct for ControllersPaginatedDeployments
 type ControllersPaginatedDeployments struct {
-	Data       []ModelsDeployment    `json:"data,omitempty"`
+	Data []ModelsDeployment `json:"data,omitempty"`
 	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedDeployments) UnmarshalJSON(src []byte) erro
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

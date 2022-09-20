@@ -27,9 +27,9 @@ var (
 type GlobalRoleBindingsApiService service
 
 type ApiApiGlobalRoleBindingsDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *GlobalRoleBindingsApiService
-	actorType  *string
+	actorType *string
 }
 
 // GlobalRoleBinding actor type
@@ -53,16 +53,16 @@ Removes a single GlobalRoleBindings
 func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsDelete(ctx context.Context) ApiApiGlobalRoleBindingsDeleteRequest {
 	return ApiApiGlobalRoleBindingsDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
 // Execute executes the request
 func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsDeleteExecute(r ApiApiGlobalRoleBindingsDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GlobalRoleBindingsApiService.ApiGlobalRoleBindingsDelete")
@@ -138,12 +138,12 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsDeleteExecute(r ApiA
 }
 
 type ApiApiGlobalRoleBindingsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *GlobalRoleBindingsApiService
-	sortBy     *string
-	roleName   *string
-	actorId    *string
-	actorType  *string
+	sortBy *string
+	roleName *string
+	actorId *string
+	actorType *string
 }
 
 // A given GlobalRoleBinding attribute to sort results by (one of: role_name, actor_id)
@@ -151,19 +151,16 @@ func (r ApiApiGlobalRoleBindingsGetRequest) SortBy(sortBy string) ApiApiGlobalRo
 	r.sortBy = &sortBy
 	return r
 }
-
 // Filter results by GlobalRoleBinding assigned role name
 func (r ApiApiGlobalRoleBindingsGetRequest) RoleName(roleName string) ApiApiGlobalRoleBindingsGetRequest {
 	r.roleName = &roleName
 	return r
 }
-
 // Filter results by GlobalRoleBinding actor id
 func (r ApiApiGlobalRoleBindingsGetRequest) ActorId(actorId string) ApiApiGlobalRoleBindingsGetRequest {
 	r.actorId = &actorId
 	return r
 }
-
 // Filter results by GlobalRoleBinding actor type
 func (r ApiApiGlobalRoleBindingsGetRequest) ActorType(actorType string) ApiApiGlobalRoleBindingsGetRequest {
 	r.actorType = &actorType
@@ -185,7 +182,7 @@ Lists GlobalRoleBindings
 func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsGet(ctx context.Context) ApiApiGlobalRoleBindingsGetRequest {
 	return ApiApiGlobalRoleBindingsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -193,10 +190,10 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsGet(ctx context.Cont
 //  @return ControllersPaginatedGlobalRoleBindings
 func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsGetExecute(r ApiApiGlobalRoleBindingsGetRequest) (*ControllersPaginatedGlobalRoleBindings, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedGlobalRoleBindings
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedGlobalRoleBindings
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GlobalRoleBindingsApiService.ApiGlobalRoleBindingsGet")
@@ -291,9 +288,9 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsGetExecute(r ApiApiG
 }
 
 type ApiApiGlobalRoleBindingsPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *GlobalRoleBindingsApiService
-	body       *ModelsGlobalRoleBinding
+	body *ModelsGlobalRoleBinding
 }
 
 // Request body containing the global role binding
@@ -317,7 +314,7 @@ Creates a new GlobalRoleBinding
 func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsPut(ctx context.Context) ApiApiGlobalRoleBindingsPutRequest {
 	return ApiApiGlobalRoleBindingsPutRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -325,10 +322,10 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsPut(ctx context.Cont
 //  @return ModelsGlobalRoleBinding
 func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsPutExecute(r ApiApiGlobalRoleBindingsPutRequest) (*ModelsGlobalRoleBinding, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsGlobalRoleBinding
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsGlobalRoleBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GlobalRoleBindingsApiService.ApiGlobalRoleBindingsPut")

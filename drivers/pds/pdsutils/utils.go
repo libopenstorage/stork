@@ -49,11 +49,11 @@ func GetContext() (context.Context, error) {
 
 // getBearerToken fetches the token.
 func getBearerToken() (string, error) {
-	username := os.Getenv("PDSUsername")
-	password := os.Getenv("PDSPassword")
-	clientID := os.Getenv("PDSClientID")
-	clientSecret := os.Getenv("PDSClientSecret")
-	issuerURL := os.Getenv("PDSIssuerURL")
+	username := os.Getenv(envUsername)
+	password := os.Getenv(envPassword)
+	clientID := os.Getenv(envPDSClientID)
+	clientSecret := os.Getenv(envPDSClientSecret)
+	issuerURL := os.Getenv(envPDSISSUERURL)
 	url := fmt.Sprintf("%s/protocol/openid-connect/token", issuerURL)
 	grantType := "password"
 

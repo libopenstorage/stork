@@ -17,7 +17,7 @@ import (
 // ModelsDNSDetails struct for ModelsDNSDetails
 type ModelsDNSDetails struct {
 	AwsDetails *ModelsAWSDetails `json:"aws_details,omitempty"`
-	DnsZone    *string           `json:"dns_zone,omitempty"`
+	DnsZone *string `json:"dns_zone,omitempty"`
 }
 
 // NewModelsDNSDetails instantiates a new ModelsDNSDetails object
@@ -147,3 +147,5 @@ func (v *NullableModelsDNSDetails) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+
