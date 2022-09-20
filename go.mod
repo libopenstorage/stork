@@ -32,7 +32,7 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
-	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
+	github.com/libopenstorage/openstorage v9.4.20+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
@@ -46,7 +46,7 @@ require (
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.2-0.20220317124727-77977386932a
 	github.com/urfave/cli v1.22.2
 	github.com/yvasiyarov/go-metrics v0.0.0-20150112132944-c25f46c4b940 // indirect
 	github.com/yvasiyarov/gorelic v0.0.7 // indirect
@@ -56,9 +56,9 @@ require (
 	google.golang.org/api v0.30.0
 	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.21.5
+	k8s.io/api v0.24.0
 	k8s.io/apiextensions-apiserver v0.21.5
-	k8s.io/apimachinery v0.21.5
+	k8s.io/apimachinery v0.24.3
 	k8s.io/apiserver v0.21.5
 	k8s.io/cli-runtime v0.21.5
 	k8s.io/client-go v12.0.0+incompatible
@@ -88,7 +88,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220426191846-06ff1e09348f
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220920124538-ee88bc102fe2
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220413175518-a912f1a6faa2
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.0

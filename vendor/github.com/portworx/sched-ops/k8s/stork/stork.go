@@ -174,7 +174,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = task.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.kube, err = kubernetes.NewForConfig(c.config)
 	if err != nil {
 		return err

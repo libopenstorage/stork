@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portworx/sched-ops/task"
 	networkingv1betaclient "k8s.io/client-go/kubernetes/typed/networking/v1beta1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -135,7 +136,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = task.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.networking, err = networkingv1betaclient.NewForConfig(c.config)
 	if err != nil {
 		return err
