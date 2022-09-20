@@ -290,6 +290,18 @@ func run(c *cli.Context) {
 	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: k8sClient.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: eventComponentName})
 
+	// Create operator-sdk manager that will manage all controllers.
+	// Setup the controller manager before starting any watches / other controllers
+	mgr, err := manager.New(config, manager.Options{})
+	if err != nil {
+		log.Fatalf("Setup controller manager: %v", err)
+	}
+
+	// Setup scheme for all stork resources
+	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
+		log.Fatalf("Setup scheme failed for stork resources: %v", err)
+	}
+
 	var d volume.Driver
 	if driverName != "" {
 		log.Infof("Using driver %v", driverName)
@@ -337,16 +349,6 @@ func run(c *cli.Context) {
 				log.Fatalf("error starting webhook controller: %v", err)
 			}
 		}
-	}
-	// Create operator-sdk manager that will manage all controllers.
-	mgr, err := manager.New(config, manager.Options{})
-	if err != nil {
-		log.Fatalf("Setup controller manager: %v", err)
-	}
-
-	// Setup scheme for all stork resources
-	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		log.Fatalf("Setup scheme failed for stork resources: %v", err)
 	}
 
 	runFunc := func(context.Context) {
