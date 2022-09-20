@@ -921,7 +921,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			return fmt.Errorf("scheduler in Admin Cluster pair is not ready. Status: %v", schedulerStatus)
 		}
 	}
-	resKinds := make(map[string]string)
+	resGroups := make(map[string]string)
 	var updateObjects, allObjects []runtime.Unstructured
 	// Don't modify resources if mentioned explicitly in specs
 	resourceCollectorOpts := resourcecollector.Options{}
@@ -991,7 +991,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			resourceInfo.Group = "core"
 		}
 		resourceInfo.Version = gvk.Version
-		resKinds[gvk.Kind] = gvk.Version
+		resGroups[gvk.Group] = gvk.Version
 		resourceInfos = append(resourceInfos, resourceInfo)
 		updateObjects = append(updateObjects, obj)
 	}
@@ -1002,7 +1002,16 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	err = m.prepareResources(migration, updateObjects, clusterPair)
+	crdList, err := m.getCRDList()
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error collecting CRDs: %v", err))
+		log.MigrationLog(migration).Errorf("Error collecting CRDs: %v", err)
+		return err
+	}
+	err = m.prepareResources(migration, updateObjects, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1011,7 +1020,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, updateObjects, resKinds, clusterPair)
+	err = m.applyResources(migration, updateObjects, resGroups, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1051,15 +1060,20 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 	return nil
 }
 
+func (m *MigrationController) getCRDList() (*stork_api.ApplicationRegistrationList, error) {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		logrus.Warnf("unable to list crd registrations: %v", err)
+	}
+	return crdList,err
+}
+
 func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 	clusterPair *stork_api.ClusterPair,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
-	if err != nil {
-		return err
-	}
 	transformName := ""
 	// this is already handled in pre-checks, we dont support multiple resource transformation
 	// rules specified in migration specs
@@ -1068,6 +1082,7 @@ func (m *MigrationController) prepareResources(
 	}
 
 	resPatch := make(map[string]stork_api.KindResourceTransform)
+	var err error
 	if transformName != "" {
 		resPatch, err = resourcecollector.GetResourcePatch(transformName, migration.Spec.Namespaces)
 		if err != nil {
@@ -1480,6 +1495,7 @@ func (m *MigrationController) getParsedMap(
 	return a
 }
 
+
 func (m *MigrationController) getParsedAnnotations(
 	annotations map[string]string,
 	clusterPair *stork_api.ClusterPair,
@@ -1497,8 +1513,9 @@ func (m *MigrationController) getParsedLabels(
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
-	resKinds map[string]string,
+	resGroups map[string]string,
 	clusterPair *stork_api.ClusterPair,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -1524,15 +1541,10 @@ func (m *MigrationController) applyResources(
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	// create CRD on destination cluster
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
-	if err != nil {
-		logrus.Warnf("unable to list crd registrations: %v", err)
-		return err
-	}
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
 			// only create relevant crds on dest cluster
-			if _, ok := resKinds[v.Kind]; !ok {
+			if _, ok := resGroups[v.Group]; !ok {
 				continue
 			}
 			config, err := rest.InClusterConfig()
