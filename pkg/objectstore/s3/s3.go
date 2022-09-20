@@ -101,9 +101,11 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 			// Similarly in case of AWS, we need to ignore "NoSuchBucket" so that
 			// px-backup/stork can create the bucket on behalf user when validation flag is not set.
 			// With cloudian objectstore, we saw the error as "ObjectLockConfigurationNotFound"
+			// With Netapp Trident, we saw the error as "NotImplemented"
 			if awsErr.Code() == "ObjectLockConfigurationNotFoundError" ||
 				awsErr.Code() == "MethodNotAllowed" ||
 				awsErr.Code() == "ObjectLockConfigurationNotFound" ||
+				awsErr.Code() == "NotImplemented" ||
 				awsErr.Code() == "NoSuchBucket" {
 				// for a non-objectlocked bucket we needn't throw error
 				return objLockInfo, nil
