@@ -78,16 +78,21 @@ const (
 	nonKdmpDriverOnly               = "nonkdmp"
 	mixedDriver                     = "mixed"
 	prefixBackup                    = "backup"
+	prefixRestore                   = "restore"
 	applicationBackupCRNameKey      = kdmpAnnotationPrefix + "applicationbackup-cr-name"
+	applicationRestoreCRNameKey     = kdmpAnnotationPrefix + "applicationrestore-cr-name"
 	applicationBackupCRUIDKey       = kdmpAnnotationPrefix + "applicationbackup-cr-uid"
+	applicationRestoreCRUIDKey      = kdmpAnnotationPrefix + "applicationrestore-cr-uid"
 	kdmpAnnotationPrefix            = "kdmp.portworx.com/"
 	pxbackupAnnotationCreateByKey   = pxbackupAnnotationPrefix + "created-by"
 	pxbackupAnnotationCreateByValue = "px-backup"
 	backupObjectNameKey             = kdmpAnnotationPrefix + "backupobject-name"
+	restoreObjectNameKey            = kdmpAnnotationPrefix + "restoreobject-name"
 	pxbackupObjectUIDKey            = pxbackupAnnotationPrefix + "backup-uid"
 	pxbackupAnnotationPrefix        = "portworx.io/"
 	pxbackupObjectNameKey           = pxbackupAnnotationPrefix + "backup-name"
 	backupObjectUIDKey              = kdmpAnnotationPrefix + "backupobject-uid"
+	restoreObjectUIDKey             = kdmpAnnotationPrefix + "restoreobject-uid"
 	skipResourceAnnotation          = "stork.libopenstorage.org/skip-resource"
 )
 
@@ -1460,7 +1465,7 @@ func (a *ApplicationBackupController) uploadMetadata(
 	return a.uploadObject(backup, metadataObjectName, jsonBytes)
 }
 
-func (a *ApplicationBackupController) isNFSBackuplocationType(
+func IsNFSBackuplocationType(
 	backup *stork_api.ApplicationBackup,
 ) (bool, error) {
 	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
@@ -1505,7 +1510,7 @@ func (a *ApplicationBackupController) backupResources(
 ) error {
 	var err error
 	var resourceTypes []metav1.APIResource
-	nfs, err := a.isNFSBackuplocationType(backup)
+	nfs, err := IsNFSBackuplocationType(backup)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type")
 	}
