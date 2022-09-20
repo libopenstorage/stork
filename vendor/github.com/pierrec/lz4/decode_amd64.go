@@ -1,6 +1,5 @@
-// +build !appengine
-// +build gc
-// +build !noasm
+//go:build !appengine && gc && !noasm
+// +build !appengine,gc,!noasm
 
 package lz4
 

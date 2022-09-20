@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://developers.google.com/open-source/licenses/bsd.
 
+//go:build go1.12
 // +build go1.12
 
 // Require use of the correct import path only for Go 1.12+ users, so

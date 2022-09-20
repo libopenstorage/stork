@@ -447,18 +447,18 @@ func Get(name string) (Driver, error) {
 
 // CSISnapshotRequest contains the necessary info to create a CSI snapshot for validation purpose
 type CSISnapshotRequest struct {
-	Namespace                string
-	Timestamp                string
-	OriginalPVCName          string
-	SnapName                 string
-	RestoredPVCName          string
-	SnapshotclassName        string
+	Namespace         string
+	Timestamp         string
+	OriginalPVCName   string
+	SnapName          string
+	RestoredPVCName   string
+	SnapshotclassName string
 }
 
 // CSICloneRequest contains the necessary info to clone from an existing CSI volume
 type CSICloneRequest struct {
-	Namespace                string
-	Timestamp                string
-	OriginalPVCName          string
-	RestoredPVCName          string
+	Namespace       string
+	Timestamp       string
+	OriginalPVCName string
+	RestoredPVCName string
 }

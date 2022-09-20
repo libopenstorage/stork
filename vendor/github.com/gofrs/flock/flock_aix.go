@@ -13,7 +13,8 @@
 // This code is adapted from the Go package:
 // cmd/go/internal/lockedfile/internal/filelock
 
-//+build aix
+//go:build aix
+// +build aix
 
 package flock
 

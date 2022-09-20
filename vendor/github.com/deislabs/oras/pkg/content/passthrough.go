@@ -175,10 +175,10 @@ func NewPassthroughMultiWriter(writers func(name string) (content.Writer, error)
 		startedAt: time.Now(),
 		updatedAt: time.Now(),
 		done:      make(chan error, 1),
-		digester: digest.Canonical.Digester(),
-		hash:     wOpts.InputHash,
-		pipew: w,
-		reader: r,
+		digester:  digest.Canonical.Digester(),
+		hash:      wOpts.InputHash,
+		pipew:     w,
+		reader:    r,
 	}
 
 	// get our output writers
@@ -195,7 +195,7 @@ func NewPassthroughMultiWriter(writers func(name string) (content.Writer, error)
 				digester: digest.Canonical.Digester(),
 				hash:     wOpts.OutputHash,
 			},
-			done:   make(chan error, 1),
+			done: make(chan error, 1),
 		}
 		pmw.writers = append(pmw.writers, pw)
 		return pw.underlyingWriter

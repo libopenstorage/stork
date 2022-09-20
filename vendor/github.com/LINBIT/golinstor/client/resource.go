@@ -368,11 +368,14 @@ type OneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume
 }
 
 // Functions which are used if type is a correct VolumeLayer
-func (d *DrbdVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {}
-func (d *LuksVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {}
+func (d *DrbdVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {
+}
+func (d *LuksVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {
+}
 func (d *StorageVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {
 }
-func (d *NvmeVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {}
+func (d *NvmeVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {
+}
 func (d *WritecacheVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {
 }
 func (d *CacheVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolumeWritecacheVolumeCacheVolume() {
