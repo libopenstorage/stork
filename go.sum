@@ -1368,6 +1368,7 @@ github.com/portworx/kdmp v0.4.1-0.20220426034740-53f16b1cdbb8 h1:aUKrX2mg5mXtwdK
 github.com/portworx/kdmp v0.4.1-0.20220426034740-53f16b1cdbb8/go.mod h1:nb5AupP/63ByyqAYfZ+E32LDEnP0PjgH6w+yKXxWIgE=
 github.com/portworx/kdmp v0.4.1-0.20220616050131-f3484f92e34a h1:qMZZLrYLLVMRDIpJIdQZDsWNJiQHSvAjbH0Fsa7nMsw=
 github.com/portworx/kdmp v0.4.1-0.20220616050131-f3484f92e34a/go.mod h1:nb5AupP/63ByyqAYfZ+E32LDEnP0PjgH6w+yKXxWIgE=
+github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149/go.mod h1:nb5AupP/63ByyqAYfZ+E32LDEnP0PjgH6w+yKXxWIgE=
 github.com/portworx/kdmp v0.4.1-0.20220711080430-8c7ca1dcb74b h1:jmE1HAECCwTYnPHWUnRfZBO96BehHOLlpuZ34dktxKA=
 github.com/portworx/kdmp v0.4.1-0.20220711080430-8c7ca1dcb74b/go.mod h1:nb5AupP/63ByyqAYfZ+E32LDEnP0PjgH6w+yKXxWIgE=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
@@ -1379,6 +1380,8 @@ github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af/go.mod h1
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65 h1:BJoyW5YUZmxSpOfbmqWxBKmAtsJFyDOM0P09jvLYYoY=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65/go.mod h1:0IQvado0rnmbRMORaCqCDrrzjBrX5sU+Sz2+vQwEsjM=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220920124538-ee88bc102fe2 h1:LWE+HtHM6oI+NmWrh0XqJxMnP5WIN6nB2lVa+MPUAzI=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220920124538-ee88bc102fe2/go.mod h1:/xDBMzUV30kbdQYaPdAFcAYqEada6ZnWi4zt4KzFzAI=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.0.0-20220413175518-a912f1a6faa2 h1:v7yr2oKo4i19PXNVY4yD/tPbwuQXwZTgDsfTcBduMxk=
 github.com/portworx/torpedo v0.0.0-20220413175518-a912f1a6faa2/go.mod h1:mub2JuxXM565N7cDpe8rWF1E1JHXCMATVFYOIYU5eXo=
@@ -1564,6 +1567,8 @@ github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+github.com/stretchr/testify v1.7.2-0.20220317124727-77977386932a h1:ECCIfW/Nya/vXoexZg+2OQPEY2McQW/LZCafF5V8HdY=
+github.com/stretchr/testify v1.7.2-0.20220317124727-77977386932a/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
 github.com/tektoncd/pipeline v0.8.0/go.mod h1:IZzJdiX9EqEMuUcgdnElozdYYRh0/ZRC+NKMLj1K3Yw=

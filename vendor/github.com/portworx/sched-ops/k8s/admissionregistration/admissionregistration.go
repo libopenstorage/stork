@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portworx/sched-ops/task"
 	apiadmissionsclientv1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1"
 	apiadmissionsclient "k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1"
 
@@ -146,7 +147,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = task.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.admission, err = apiadmissionsclient.NewForConfig(c.config)
 	if err != nil {
 		return err

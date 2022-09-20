@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	kdmpclientset "github.com/portworx/kdmp/pkg/client/clientset/versioned"
+	"github.com/portworx/sched-ops/task"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -152,7 +153,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = task.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.kube, err = kubernetes.NewForConfig(c.config)
 	if err != nil {
 		return err
