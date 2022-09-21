@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/mount"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
-	"sigs.k8s.io/sig-storage-lib-external-provisioner/v6/mount"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
