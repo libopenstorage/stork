@@ -2,6 +2,7 @@ package tests
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"testing"
 
@@ -121,8 +122,6 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
 			})
-		} else {
-			Expect(DeployAllDataService).To(Equal(true))
 		}
 	})
 
@@ -274,8 +273,8 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-// func TestMain(m *testing.M) {
-// 	// call flag.Parse() here if TestMain uses flags
-// 	ParseFlags()
-// 	os.Exit(m.Run())
-// }
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	ParseFlags()
+	os.Exit(m.Run())
+}
