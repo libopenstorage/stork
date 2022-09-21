@@ -450,7 +450,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) error {
 	}
 
 	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
-		status, res, err := components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
+		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		logrus.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
 			logrus.Errorf("Error occured while getting deployment status %v", err)
