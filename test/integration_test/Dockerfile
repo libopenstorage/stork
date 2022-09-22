@@ -1,8 +1,8 @@
-FROM golang:1.15.1
+FROM golang:1.16.1
 
 # Install dependancies
 RUN apt-get update && \ 
-    /usr/local/go/bin/go get -u gotest.tools/gotestsum
+    /usr/local/go/bin/go install gotest.tools/gotestsum@latest
 
 RUN apt-get update && apt-get install -y python3-pip
 
