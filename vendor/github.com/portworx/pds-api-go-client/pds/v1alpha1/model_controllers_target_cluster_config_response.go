@@ -16,8 +16,8 @@ import (
 
 // ControllersTargetClusterConfigResponse struct for ControllersTargetClusterConfigResponse
 type ControllersTargetClusterConfigResponse struct {
-	ObservabilityUrl  *string `json:"observability_url,omitempty"`
-	TeleportCaPin     *string `json:"teleport_ca_pin,omitempty"`
+	ObservabilityUrl *string `json:"observability_url,omitempty"`
+	TeleportCaPin *string `json:"teleport_ca_pin,omitempty"`
 	TeleportJoinToken *string `json:"teleport_join_token,omitempty"`
 	TeleportProxyAddr *string `json:"teleport_proxy_addr,omitempty"`
 }
@@ -219,3 +219,5 @@ func (v *NullableControllersTargetClusterConfigResponse) UnmarshalJSON(src []byt
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

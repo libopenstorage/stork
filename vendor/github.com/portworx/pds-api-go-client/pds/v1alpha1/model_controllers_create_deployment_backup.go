@@ -16,11 +16,11 @@ import (
 
 // ControllersCreateDeploymentBackup struct for ControllersCreateDeploymentBackup
 type ControllersCreateDeploymentBackup struct {
-	BackupLevel     *string `json:"backup_level,omitempty"`
-	BackupTargetId  *string `json:"backup_target_id,omitempty"`
-	BackupType      *string `json:"backup_type,omitempty"`
-	JobHistoryLimit *int32  `json:"job_history_limit,omitempty"`
-	Schedule        *string `json:"schedule,omitempty"`
+	BackupLevel *string `json:"backup_level,omitempty"`
+	BackupTargetId *string `json:"backup_target_id,omitempty"`
+	BackupType *string `json:"backup_type,omitempty"`
+	JobHistoryLimit *int32 `json:"job_history_limit,omitempty"`
+	Schedule *string `json:"schedule,omitempty"`
 }
 
 // NewControllersCreateDeploymentBackup instantiates a new ControllersCreateDeploymentBackup object
@@ -255,3 +255,5 @@ func (v *NullableControllersCreateDeploymentBackup) UnmarshalJSON(src []byte) er
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

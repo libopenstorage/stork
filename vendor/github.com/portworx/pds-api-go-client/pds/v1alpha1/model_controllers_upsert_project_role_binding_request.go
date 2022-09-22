@@ -16,9 +16,9 @@ import (
 
 // ControllersUpsertProjectRoleBindingRequest struct for ControllersUpsertProjectRoleBindingRequest
 type ControllersUpsertProjectRoleBindingRequest struct {
-	ActorId   *string `json:"actor_id,omitempty"`
+	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
-	RoleName  *string `json:"role_name,omitempty"`
+	RoleName *string `json:"role_name,omitempty"`
 }
 
 // NewControllersUpsertProjectRoleBindingRequest instantiates a new ControllersUpsertProjectRoleBindingRequest object
@@ -183,3 +183,5 @@ func (v *NullableControllersUpsertProjectRoleBindingRequest) UnmarshalJSON(src [
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

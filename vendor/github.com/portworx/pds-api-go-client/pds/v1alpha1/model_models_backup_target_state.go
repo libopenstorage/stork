@@ -16,7 +16,7 @@ import (
 
 // ModelsBackupTargetState struct for ModelsBackupTargetState
 type ModelsBackupTargetState struct {
-	BackupTargetId     *string `json:"backup_target_id,omitempty"`
+	BackupTargetId *string `json:"backup_target_id,omitempty"`
 	DeploymentTargetId *string `json:"deployment_target_id,omitempty"`
 	// More detailed specification of the error when the 'state' is in one of the failed states.
 	ErrorCode *string `json:"error_code,omitempty"`
@@ -369,3 +369,5 @@ func (v *NullableModelsBackupTargetState) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -16,9 +16,9 @@ import (
 
 // ModelsGlobalRoleBinding struct for ModelsGlobalRoleBinding
 type ModelsGlobalRoleBinding struct {
-	ActorId   *string `json:"actor_id,omitempty"`
+	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
-	RoleName  *string `json:"role_name,omitempty"`
+	RoleName *string `json:"role_name,omitempty"`
 }
 
 // NewModelsGlobalRoleBinding instantiates a new ModelsGlobalRoleBinding object
@@ -183,3 +183,5 @@ func (v *NullableModelsGlobalRoleBinding) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

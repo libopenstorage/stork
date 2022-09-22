@@ -28,10 +28,11 @@ var (
 type ProjectsApiService service
 
 type ApiApiProjectsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ProjectsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiProjectsIdGetRequest) Execute() (*ModelsProject, *http.Response, error) {
 	return r.ApiService.ApiProjectsIdGetExecute(r)
@@ -49,8 +50,8 @@ Fetches a single Project
 func (a *ProjectsApiService) ApiProjectsIdGet(ctx context.Context, id string) ApiApiProjectsIdGetRequest {
 	return ApiApiProjectsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *ProjectsApiService) ApiProjectsIdGet(ctx context.Context, id string) Ap
 //  @return ModelsProject
 func (a *ProjectsApiService) ApiProjectsIdGetExecute(r ApiApiProjectsIdGetRequest) (*ModelsProject, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsProject
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsProject
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ProjectsApiService.ApiProjectsIdGet")
@@ -145,14 +146,14 @@ func (a *ProjectsApiService) ApiProjectsIdGetExecute(r ApiApiProjectsIdGetReques
 }
 
 type ApiApiTenantsIdProjectsGetRequest struct {
-	ctx          context.Context
-	ApiService   *ProjectsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *ProjectsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
+	id2 *string
+	name *string
 }
 
 // A given Project attribute to sort results by (one of: id, name, created_at)
@@ -160,25 +161,21 @@ func (r ApiApiTenantsIdProjectsGetRequest) SortBy(sortBy string) ApiApiTenantsId
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdProjectsGetRequest) Limit(limit string) ApiApiTenantsIdProjectsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdProjectsGetRequest) Continuation(continuation string) ApiApiTenantsIdProjectsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Project id
 func (r ApiApiTenantsIdProjectsGetRequest) Id2(id2 string) ApiApiTenantsIdProjectsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Project name
 func (r ApiApiTenantsIdProjectsGetRequest) Name(name string) ApiApiTenantsIdProjectsGetRequest {
 	r.name = &name
@@ -201,8 +198,8 @@ Lists Projects visible to the caller and belonging to the Tenant.
 func (a *ProjectsApiService) ApiTenantsIdProjectsGet(ctx context.Context, id string) ApiApiTenantsIdProjectsGetRequest {
 	return ApiApiTenantsIdProjectsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -210,10 +207,10 @@ func (a *ProjectsApiService) ApiTenantsIdProjectsGet(ctx context.Context, id str
 //  @return ControllersPaginatedTenantProjects
 func (a *ProjectsApiService) ApiTenantsIdProjectsGetExecute(r ApiApiTenantsIdProjectsGetRequest) (*ControllersPaginatedTenantProjects, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedTenantProjects
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedTenantProjects
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ProjectsApiService.ApiTenantsIdProjectsGet")

@@ -28,10 +28,11 @@ var (
 type StorageOptionsTemplatesApiService service
 
 type ApiApiStorageOptionsTemplatesIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *StorageOptionsTemplatesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiStorageOptionsTemplatesIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiStorageOptionsTemplatesIdDeleteExecute(r)
@@ -49,17 +50,17 @@ Removes a single StorageOptionsTemplate
 func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdDelete(ctx context.Context, id string) ApiApiStorageOptionsTemplatesIdDeleteRequest {
 	return ApiApiStorageOptionsTemplatesIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdDeleteExecute(r ApiApiStorageOptionsTemplatesIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "StorageOptionsTemplatesApiService.ApiStorageOptionsTemplatesIdDelete")
@@ -134,10 +135,11 @@ func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdDeleteEx
 }
 
 type ApiApiStorageOptionsTemplatesIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *StorageOptionsTemplatesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiStorageOptionsTemplatesIdGetRequest) Execute() (*ModelsStorageOptionsTemplate, *http.Response, error) {
 	return r.ApiService.ApiStorageOptionsTemplatesIdGetExecute(r)
@@ -155,8 +157,8 @@ Fetches a single StorageOptionsTemplate
 func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdGet(ctx context.Context, id string) ApiApiStorageOptionsTemplatesIdGetRequest {
 	return ApiApiStorageOptionsTemplatesIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -164,10 +166,10 @@ func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdGet(ctx 
 //  @return ModelsStorageOptionsTemplate
 func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdGetExecute(r ApiApiStorageOptionsTemplatesIdGetRequest) (*ModelsStorageOptionsTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsStorageOptionsTemplate
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsStorageOptionsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "StorageOptionsTemplatesApiService.ApiStorageOptionsTemplatesIdGet")
@@ -251,10 +253,10 @@ func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdGetExecu
 }
 
 type ApiApiStorageOptionsTemplatesIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *StorageOptionsTemplatesApiService
-	id         string
-	body       *ControllersUpdateStorageOptionsTemplateRequest
+	id string
+	body *ControllersUpdateStorageOptionsTemplateRequest
 }
 
 // Request body containing updated template
@@ -279,8 +281,8 @@ Updates existing StorageOptionsTemplate
 func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdPut(ctx context.Context, id string) ApiApiStorageOptionsTemplatesIdPutRequest {
 	return ApiApiStorageOptionsTemplatesIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -288,10 +290,10 @@ func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdPut(ctx 
 //  @return ModelsStorageOptionsTemplate
 func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdPutExecute(r ApiApiStorageOptionsTemplatesIdPutRequest) (*ModelsStorageOptionsTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsStorageOptionsTemplate
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsStorageOptionsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "StorageOptionsTemplatesApiService.ApiStorageOptionsTemplatesIdPut")
@@ -380,14 +382,14 @@ func (a *StorageOptionsTemplatesApiService) ApiStorageOptionsTemplatesIdPutExecu
 }
 
 type ApiApiTenantsIdStorageOptionsTemplatesGetRequest struct {
-	ctx          context.Context
-	ApiService   *StorageOptionsTemplatesApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *StorageOptionsTemplatesApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
+	id2 *string
+	name *string
 }
 
 // A given StorageOptionsTemplates attribute to sort results by (one of: id, name, created_at)
@@ -395,25 +397,21 @@ func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) SortBy(sortBy string) 
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Limit(limit string) ApiApiTenantsIdStorageOptionsTemplatesGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Continuation(continuation string) ApiApiTenantsIdStorageOptionsTemplatesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by StorageOptionsTemplates id
 func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Id2(id2 string) ApiApiTenantsIdStorageOptionsTemplatesGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by StorageOptionsTemplates name
 func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Name(name string) ApiApiTenantsIdStorageOptionsTemplatesGetRequest {
 	r.name = &name
@@ -436,8 +434,8 @@ Lists StorageOptionsTemplates
 func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesGet(ctx context.Context, id string) ApiApiTenantsIdStorageOptionsTemplatesGetRequest {
 	return ApiApiTenantsIdStorageOptionsTemplatesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -445,10 +443,10 @@ func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesG
 //  @return ControllersPaginatedStorageOptionsTemplates
 func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesGetExecute(r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) (*ControllersPaginatedStorageOptionsTemplates, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedStorageOptionsTemplates
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedStorageOptionsTemplates
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "StorageOptionsTemplatesApiService.ApiTenantsIdStorageOptionsTemplatesGet")
@@ -547,10 +545,10 @@ func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesG
 }
 
 type ApiApiTenantsIdStorageOptionsTemplatesPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *StorageOptionsTemplatesApiService
-	id         string
-	body       *ControllersCreateStorageOptionsTemplatesRequest
+	id string
+	body *ControllersCreateStorageOptionsTemplatesRequest
 }
 
 // Request body containing the storage options template
@@ -575,8 +573,8 @@ Creates a new StorageOptionsTemplates
 func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesPost(ctx context.Context, id string) ApiApiTenantsIdStorageOptionsTemplatesPostRequest {
 	return ApiApiTenantsIdStorageOptionsTemplatesPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -584,10 +582,10 @@ func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesP
 //  @return ModelsStorageOptionsTemplate
 func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesPostExecute(r ApiApiTenantsIdStorageOptionsTemplatesPostRequest) (*ModelsStorageOptionsTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsStorageOptionsTemplate
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsStorageOptionsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "StorageOptionsTemplatesApiService.ApiTenantsIdStorageOptionsTemplatesPost")

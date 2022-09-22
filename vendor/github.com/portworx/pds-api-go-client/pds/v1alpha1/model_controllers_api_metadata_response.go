@@ -16,9 +16,9 @@ import (
 
 // ControllersAPIMetadataResponse struct for ControllersAPIMetadataResponse
 type ControllersAPIMetadataResponse struct {
-	Features         *map[string]string `json:"features,omitempty"`
-	HelmChartVersion *string            `json:"helm_chart_version,omitempty"`
-	PdsBuildNumber   *int32             `json:"pds_build_number,omitempty"`
+	Features *map[string]string `json:"features,omitempty"`
+	HelmChartVersion *string `json:"helm_chart_version,omitempty"`
+	PdsBuildNumber *int32 `json:"pds_build_number,omitempty"`
 }
 
 // NewControllersAPIMetadataResponse instantiates a new ControllersAPIMetadataResponse object
@@ -183,3 +183,5 @@ func (v *NullableControllersAPIMetadataResponse) UnmarshalJSON(src []byte) error
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

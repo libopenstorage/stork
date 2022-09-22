@@ -7,15 +7,15 @@ import (
 )
 
 const (
-	envControlPlaneURL    = "PDSControlPlaneURL"
-	envPDSTestAccountName = "PDSTestAccountName"
-	envTargetKubeconfig   = "PDSTargetKUBECONFIG"
-	envUsername           = "PDSUsername"
-	envPassword           = "PDSPassword"
-	envPDSClientSecret    = "PDSClientSecret"
-	envPDSClientID        = "PDSClientID"
-	envPDSISSUERURL       = "PDSIssuerURL"
-	envClusterType        = "PDSTargetClusterType"
+	envControlPlaneURL    = "CONTROL_PLANE_URL"
+	envPDSTestAccountName = "TEST_ACCOUNT_NAME"
+	envTargetKubeconfig   = "TARGET_KUBECONFIG"
+	envUsername           = "PDS_USERNAME"
+	envPassword           = "PDS_PASSWORD"
+	envPDSClientSecret    = "PDS_CLIENT_SECRET"
+	envPDSClientID        = "PDS_CLIENT_ID"
+	envPDSISSUERURL       = "PDS_ISSUER_URL"
+	envClusterType        = "CLUSTER_TYPE"
 )
 
 // Environment lhasha
@@ -51,7 +51,6 @@ func mustGetEnvVariable(key string) string {
 	value, isExist := os.LookupEnv(key)
 	if !isExist {
 		log.Panicf("Key: %v doesn't exist", key)
-
 	}
 	return value
 }

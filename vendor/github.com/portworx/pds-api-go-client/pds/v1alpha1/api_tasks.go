@@ -28,10 +28,11 @@ var (
 type TasksApiService service
 
 type ApiApiDbTasksIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *TasksApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiDbTasksIdGetRequest) Execute() (*ModelsTask, *http.Response, error) {
 	return r.ApiService.ApiDbTasksIdGetExecute(r)
@@ -49,8 +50,8 @@ Fetches a database Task
 func (a *TasksApiService) ApiDbTasksIdGet(ctx context.Context, id string) ApiApiDbTasksIdGetRequest {
 	return ApiApiDbTasksIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *TasksApiService) ApiDbTasksIdGet(ctx context.Context, id string) ApiApi
 //  @return ModelsTask
 func (a *TasksApiService) ApiDbTasksIdGetExecute(r ApiApiDbTasksIdGetRequest) (*ModelsTask, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsTask
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsTask
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TasksApiService.ApiDbTasksIdGet")

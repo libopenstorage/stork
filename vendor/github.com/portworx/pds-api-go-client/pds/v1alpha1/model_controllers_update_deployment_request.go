@@ -16,13 +16,13 @@ import (
 
 // ControllersUpdateDeploymentRequest struct for ControllersUpdateDeploymentRequest
 type ControllersUpdateDeploymentRequest struct {
-	ApplicationConfigurationOverrides  *map[string]string `json:"application_configuration_overrides,omitempty"`
-	ApplicationConfigurationTemplateId *string            `json:"application_configuration_template_id,omitempty"`
-	ImageId                            *string            `json:"image_id,omitempty"`
+	ApplicationConfigurationOverrides *map[string]string `json:"application_configuration_overrides,omitempty"`
+	ApplicationConfigurationTemplateId *string `json:"application_configuration_template_id,omitempty"`
+	ImageId *string `json:"image_id,omitempty"`
 	// See models.Deployment for more information.
-	NodeCount                  *int32                                      `json:"node_count,omitempty"`
-	ResourceSettingsTemplateId *string                                     `json:"resource_settings_template_id,omitempty"`
-	ScheduledBackup            *ControllersUpdateDeploymentScheduledBackup `json:"scheduled_backup,omitempty"`
+	NodeCount *int32 `json:"node_count,omitempty"`
+	ResourceSettingsTemplateId *string `json:"resource_settings_template_id,omitempty"`
+	ScheduledBackup *ControllersUpdateDeploymentScheduledBackup `json:"scheduled_backup,omitempty"`
 }
 
 // NewControllersUpdateDeploymentRequest instantiates a new ControllersUpdateDeploymentRequest object
@@ -292,3 +292,5 @@ func (v *NullableControllersUpdateDeploymentRequest) UnmarshalJSON(src []byte) e
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

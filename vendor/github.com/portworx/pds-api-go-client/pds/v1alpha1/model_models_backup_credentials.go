@@ -22,7 +22,7 @@ type ModelsBackupCredentials struct {
 	// ID is auto generated on creation
 	Id *string `json:"id,omitempty"`
 	// Name of the backup credentials. Must be unique for the given tenant.
-	Name     *string `json:"name,omitempty"`
+	Name *string `json:"name,omitempty"`
 	TenantId *string `json:"tenant_id,omitempty"`
 	// Type of the credentials.
 	Type *string `json:"type,omitempty"`
@@ -332,3 +332,5 @@ func (v *NullableModelsBackupCredentials) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

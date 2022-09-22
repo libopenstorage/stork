@@ -16,9 +16,9 @@ import (
 
 // ModelsDeploymentTargetMetadata struct for ModelsDeploymentTargetMetadata
 type ModelsDeploymentTargetMetadata struct {
-	KubeApiVersion     *string `json:"kube_api_version,omitempty"`
-	KubePlatform       *string `json:"kube_platform,omitempty"`
-	PdsChartVersion    *string `json:"pds_chart_version,omitempty"`
+	KubeApiVersion *string `json:"kube_api_version,omitempty"`
+	KubePlatform *string `json:"kube_platform,omitempty"`
+	PdsChartVersion *string `json:"pds_chart_version,omitempty"`
 	PxServiceNamespace *string `json:"px_service_namespace,omitempty"`
 }
 
@@ -219,3 +219,5 @@ func (v *NullableModelsDeploymentTargetMetadata) UnmarshalJSON(src []byte) error
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

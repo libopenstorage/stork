@@ -28,10 +28,11 @@ var (
 type DeploymentTargetsApiService service
 
 type ApiApiDeploymentTargetsIdConfigGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiDeploymentTargetsIdConfigGetRequest) Execute() (*ControllersTargetClusterConfigResponse, *http.Response, error) {
 	return r.ApiService.ApiDeploymentTargetsIdConfigGetExecute(r)
@@ -49,8 +50,8 @@ Fetches the config values for a DeploymentTarget
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdConfigGet(ctx context.Context, id string) ApiApiDeploymentTargetsIdConfigGetRequest {
 	return ApiApiDeploymentTargetsIdConfigGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdConfigGet(ctx contex
 //  @return ControllersTargetClusterConfigResponse
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdConfigGetExecute(r ApiApiDeploymentTargetsIdConfigGetRequest) (*ControllersTargetClusterConfigResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersTargetClusterConfigResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersTargetClusterConfigResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiDeploymentTargetsIdConfigGet")
@@ -145,10 +146,11 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdConfigGetExecute(r A
 }
 
 type ApiApiDeploymentTargetsIdCredentialsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiDeploymentTargetsIdCredentialsGetRequest) Execute() (*ControllersDeploymentTargetCredentialsResponse, *http.Response, error) {
 	return r.ApiService.ApiDeploymentTargetsIdCredentialsGetExecute(r)
@@ -168,8 +170,8 @@ Deprecated
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdCredentialsGet(ctx context.Context, id string) ApiApiDeploymentTargetsIdCredentialsGetRequest {
 	return ApiApiDeploymentTargetsIdCredentialsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -178,10 +180,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdCredentialsGet(ctx c
 // Deprecated
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdCredentialsGetExecute(r ApiApiDeploymentTargetsIdCredentialsGetRequest) (*ControllersDeploymentTargetCredentialsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersDeploymentTargetCredentialsResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersDeploymentTargetCredentialsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiDeploymentTargetsIdCredentialsGet")
@@ -265,10 +267,11 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdCredentialsGetExecut
 }
 
 type ApiApiDeploymentTargetsIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiDeploymentTargetsIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiDeploymentTargetsIdDeleteExecute(r)
@@ -286,17 +289,17 @@ Deletes a single DeploymentTarget.
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdDelete(ctx context.Context, id string) ApiApiDeploymentTargetsIdDeleteRequest {
 	return ApiApiDeploymentTargetsIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdDeleteExecute(r ApiApiDeploymentTargetsIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiDeploymentTargetsIdDelete")
@@ -371,10 +374,11 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdDeleteExecute(r ApiA
 }
 
 type ApiApiDeploymentTargetsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiDeploymentTargetsIdGetRequest) Execute() (*ModelsDeploymentTarget, *http.Response, error) {
 	return r.ApiService.ApiDeploymentTargetsIdGetExecute(r)
@@ -392,8 +396,8 @@ Fetches a single DeploymentTarget
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdGet(ctx context.Context, id string) ApiApiDeploymentTargetsIdGetRequest {
 	return ApiApiDeploymentTargetsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -401,10 +405,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdGet(ctx context.Cont
 //  @return ModelsDeploymentTarget
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdGetExecute(r ApiApiDeploymentTargetsIdGetRequest) (*ModelsDeploymentTarget, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsDeploymentTarget
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsDeploymentTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiDeploymentTargetsIdGet")
@@ -488,10 +492,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdGetExecute(r ApiApiD
 }
 
 type ApiApiDeploymentTargetsIdHeartbeatPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
-	body       *ControllersDeploymentTargetHeartbeatRequest
+	id string
+	body *ControllersDeploymentTargetHeartbeatRequest
 }
 
 // Object with target cluster ID
@@ -516,8 +520,8 @@ Makes control plane aware that DeploymentTarget is still alive
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdHeartbeatPost(ctx context.Context, id string) ApiApiDeploymentTargetsIdHeartbeatPostRequest {
 	return ApiApiDeploymentTargetsIdHeartbeatPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -525,10 +529,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdHeartbeatPost(ctx co
 //  @return ControllersDeploymentTargetHeartbeatResponse
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdHeartbeatPostExecute(r ApiApiDeploymentTargetsIdHeartbeatPostRequest) (*ControllersDeploymentTargetHeartbeatResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersDeploymentTargetHeartbeatResponse
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersDeploymentTargetHeartbeatResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiDeploymentTargetsIdHeartbeatPost")
@@ -617,10 +621,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdHeartbeatPostExecute
 }
 
 type ApiApiDeploymentTargetsIdMetadataPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
-	body       *ControllersDeploymentTargetMetadataRequest
+	id string
+	body *ControllersDeploymentTargetMetadataRequest
 }
 
 // Object with target cluster ID
@@ -645,17 +649,17 @@ Handles DeploymentTarget metadata by updating relevant tables in DB
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdMetadataPost(ctx context.Context, id string) ApiApiDeploymentTargetsIdMetadataPostRequest {
 	return ApiApiDeploymentTargetsIdMetadataPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdMetadataPostExecute(r ApiApiDeploymentTargetsIdMetadataPostRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodPost
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiDeploymentTargetsIdMetadataPost")
@@ -735,10 +739,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdMetadataPostExecute(
 }
 
 type ApiApiDeploymentTargetsIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
-	body       *ControllersUpdateDeploymentTargetRequest
+	id string
+	body *ControllersUpdateDeploymentTargetRequest
 }
 
 // Object with partial update fields (name)
@@ -763,8 +767,8 @@ Updates existing DeploymentTarget
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdPut(ctx context.Context, id string) ApiApiDeploymentTargetsIdPutRequest {
 	return ApiApiDeploymentTargetsIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -772,10 +776,10 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdPut(ctx context.Cont
 //  @return ModelsDeploymentTarget
 func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdPutExecute(r ApiApiDeploymentTargetsIdPutRequest) (*ModelsDeploymentTarget, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsDeploymentTarget
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsDeploymentTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiDeploymentTargetsIdPut")
@@ -864,15 +868,15 @@ func (a *DeploymentTargetsApiService) ApiDeploymentTargetsIdPutExecute(r ApiApiD
 }
 
 type ApiApiProjectsIdDeploymentTargetsGetRequest struct {
-	ctx          context.Context
-	ApiService   *DeploymentTargetsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *DeploymentTargetsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	clusterId    *string
-	name         *string
+	id2 *string
+	clusterId *string
+	name *string
 }
 
 // A given DeploymentTarget attribute to sort results by (one of: id, name)
@@ -880,31 +884,26 @@ func (r ApiApiProjectsIdDeploymentTargetsGetRequest) SortBy(sortBy string) ApiAp
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiProjectsIdDeploymentTargetsGetRequest) Limit(limit string) ApiApiProjectsIdDeploymentTargetsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiProjectsIdDeploymentTargetsGetRequest) Continuation(continuation string) ApiApiProjectsIdDeploymentTargetsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by DeploymentTarget ID
 func (r ApiApiProjectsIdDeploymentTargetsGetRequest) Id2(id2 string) ApiApiProjectsIdDeploymentTargetsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Cluster ID
 func (r ApiApiProjectsIdDeploymentTargetsGetRequest) ClusterId(clusterId string) ApiApiProjectsIdDeploymentTargetsGetRequest {
 	r.clusterId = &clusterId
 	return r
 }
-
 // Filter results by DeploymentTarget name
 func (r ApiApiProjectsIdDeploymentTargetsGetRequest) Name(name string) ApiApiProjectsIdDeploymentTargetsGetRequest {
 	r.name = &name
@@ -927,8 +926,8 @@ Lists DeploymentTargets belonging to the Project
 func (a *DeploymentTargetsApiService) ApiProjectsIdDeploymentTargetsGet(ctx context.Context, id string) ApiApiProjectsIdDeploymentTargetsGetRequest {
 	return ApiApiProjectsIdDeploymentTargetsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -936,10 +935,10 @@ func (a *DeploymentTargetsApiService) ApiProjectsIdDeploymentTargetsGet(ctx cont
 //  @return ControllersPaginatedDeploymentTargets
 func (a *DeploymentTargetsApiService) ApiProjectsIdDeploymentTargetsGetExecute(r ApiApiProjectsIdDeploymentTargetsGetRequest) (*ControllersPaginatedDeploymentTargets, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedDeploymentTargets
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedDeploymentTargets
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiProjectsIdDeploymentTargetsGet")
@@ -1041,15 +1040,15 @@ func (a *DeploymentTargetsApiService) ApiProjectsIdDeploymentTargetsGetExecute(r
 }
 
 type ApiApiTenantsIdDeploymentTargetsGetRequest struct {
-	ctx          context.Context
-	ApiService   *DeploymentTargetsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *DeploymentTargetsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	clusterId    *string
-	name         *string
+	id2 *string
+	clusterId *string
+	name *string
 }
 
 // A given DeploymentTarget attribute to sort results by (one of: id, name, created_at)
@@ -1057,31 +1056,26 @@ func (r ApiApiTenantsIdDeploymentTargetsGetRequest) SortBy(sortBy string) ApiApi
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdDeploymentTargetsGetRequest) Limit(limit string) ApiApiTenantsIdDeploymentTargetsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdDeploymentTargetsGetRequest) Continuation(continuation string) ApiApiTenantsIdDeploymentTargetsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by DeploymentTarget ID
 func (r ApiApiTenantsIdDeploymentTargetsGetRequest) Id2(id2 string) ApiApiTenantsIdDeploymentTargetsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Cluster ID
 func (r ApiApiTenantsIdDeploymentTargetsGetRequest) ClusterId(clusterId string) ApiApiTenantsIdDeploymentTargetsGetRequest {
 	r.clusterId = &clusterId
 	return r
 }
-
 // Filter results by DeploymentTarget name
 func (r ApiApiTenantsIdDeploymentTargetsGetRequest) Name(name string) ApiApiTenantsIdDeploymentTargetsGetRequest {
 	r.name = &name
@@ -1104,8 +1098,8 @@ Lists Tenant's DeploymentTargets
 func (a *DeploymentTargetsApiService) ApiTenantsIdDeploymentTargetsGet(ctx context.Context, id string) ApiApiTenantsIdDeploymentTargetsGetRequest {
 	return ApiApiTenantsIdDeploymentTargetsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -1113,10 +1107,10 @@ func (a *DeploymentTargetsApiService) ApiTenantsIdDeploymentTargetsGet(ctx conte
 //  @return ControllersPaginatedDeploymentTargets
 func (a *DeploymentTargetsApiService) ApiTenantsIdDeploymentTargetsGetExecute(r ApiApiTenantsIdDeploymentTargetsGetRequest) (*ControllersPaginatedDeploymentTargets, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedDeploymentTargets
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedDeploymentTargets
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiTenantsIdDeploymentTargetsGet")
@@ -1218,10 +1212,10 @@ func (a *DeploymentTargetsApiService) ApiTenantsIdDeploymentTargetsGetExecute(r 
 }
 
 type ApiApiTenantsIdDeploymentTargetsPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DeploymentTargetsApiService
-	id         string
-	body       *ControllersCreateTenantDeploymentTarget
+	id string
+	body *ControllersCreateTenantDeploymentTarget
 }
 
 // Request body containing the deployment target config
@@ -1246,8 +1240,8 @@ Creates a new DeploymentTarget
 func (a *DeploymentTargetsApiService) ApiTenantsIdDeploymentTargetsPost(ctx context.Context, id string) ApiApiTenantsIdDeploymentTargetsPostRequest {
 	return ApiApiTenantsIdDeploymentTargetsPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -1255,10 +1249,10 @@ func (a *DeploymentTargetsApiService) ApiTenantsIdDeploymentTargetsPost(ctx cont
 //  @return ModelsDeploymentTarget
 func (a *DeploymentTargetsApiService) ApiTenantsIdDeploymentTargetsPostExecute(r ApiApiTenantsIdDeploymentTargetsPostRequest) (*ModelsDeploymentTarget, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsDeploymentTarget
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsDeploymentTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentTargetsApiService.ApiTenantsIdDeploymentTargetsPost")

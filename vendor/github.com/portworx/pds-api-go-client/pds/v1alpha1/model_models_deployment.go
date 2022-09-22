@@ -31,8 +31,8 @@ type ModelsDeployment struct {
 	// DeploymentTargetID on which target the data service is deployed (models.DeploymentTarget).
 	DeploymentTargetId *string `json:"deployment_target_id,omitempty"`
 	// DNSZone domain which this deployment should be a part of (eg pds-dns.io).
-	DnsZone *string          `json:"dns_zone,omitempty"`
-	Error   *ModelsErrorData `json:"error,omitempty"`
+	DnsZone *string `json:"dns_zone,omitempty"`
+	Error *ModelsErrorData `json:"error,omitempty"`
 	// ID is auto generated on creation
 	Id *string `json:"id,omitempty"`
 	// ImageID image of data service (models.Image).
@@ -48,12 +48,12 @@ type ModelsDeployment struct {
 	// NodeCount total nodes in the deployment.
 	NodeCount *int32 `json:"node_count,omitempty"`
 	// ProjectID which project the deployment belongs to (models.Project).
-	ProjectId *string                    `json:"project_id,omitempty"`
+	ProjectId *string `json:"project_id,omitempty"`
 	Resources *ModelsDeploymentResources `json:"resources,omitempty"`
 	// ServiceType k8s service type.
 	ServiceType *string `json:"service_type,omitempty"`
 	// State of deployment.
-	State          *string                         `json:"state,omitempty"`
+	State *string `json:"state,omitempty"`
 	StorageOptions *ModelsDeploymentStorageOptions `json:"storage_options,omitempty"`
 	// TenantID which tenant the deployment belongs to (models.Tenant).
 	TenantId *string `json:"tenant_id,omitempty"`
@@ -960,3 +960,5 @@ func (v *NullableModelsDeployment) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -28,15 +28,15 @@ var (
 type VersionsApiService service
 
 type ApiApiDataServicesIdVersionsGetRequest struct {
-	ctx          context.Context
-	ApiService   *VersionsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *VersionsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
-	enabled      *bool
+	id2 *string
+	name *string
+	enabled *bool
 }
 
 // A given Version attribute to sort results by (one of: id, name, created_at)
@@ -44,31 +44,26 @@ func (r ApiApiDataServicesIdVersionsGetRequest) SortBy(sortBy string) ApiApiData
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiDataServicesIdVersionsGetRequest) Limit(limit string) ApiApiDataServicesIdVersionsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiDataServicesIdVersionsGetRequest) Continuation(continuation string) ApiApiDataServicesIdVersionsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Version id
 func (r ApiApiDataServicesIdVersionsGetRequest) Id2(id2 string) ApiApiDataServicesIdVersionsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Version&#39;s name
 func (r ApiApiDataServicesIdVersionsGetRequest) Name(name string) ApiApiDataServicesIdVersionsGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by Version&#39;s enabled parameter
 func (r ApiApiDataServicesIdVersionsGetRequest) Enabled(enabled bool) ApiApiDataServicesIdVersionsGetRequest {
 	r.enabled = &enabled
@@ -91,8 +86,8 @@ Lists Versions belonging to the Data Service.
 func (a *VersionsApiService) ApiDataServicesIdVersionsGet(ctx context.Context, id string) ApiApiDataServicesIdVersionsGetRequest {
 	return ApiApiDataServicesIdVersionsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -100,10 +95,10 @@ func (a *VersionsApiService) ApiDataServicesIdVersionsGet(ctx context.Context, i
 //  @return ControllersPaginatedVersions
 func (a *VersionsApiService) ApiDataServicesIdVersionsGetExecute(r ApiApiDataServicesIdVersionsGetRequest) (*ControllersPaginatedVersions, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedVersions
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedVersions
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "VersionsApiService.ApiDataServicesIdVersionsGet")
@@ -205,10 +200,11 @@ func (a *VersionsApiService) ApiDataServicesIdVersionsGetExecute(r ApiApiDataSer
 }
 
 type ApiApiVersionsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *VersionsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiVersionsIdGetRequest) Execute() (*ModelsVersion, *http.Response, error) {
 	return r.ApiService.ApiVersionsIdGetExecute(r)
@@ -226,8 +222,8 @@ Fetches a single Version
 func (a *VersionsApiService) ApiVersionsIdGet(ctx context.Context, id string) ApiApiVersionsIdGetRequest {
 	return ApiApiVersionsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -235,10 +231,10 @@ func (a *VersionsApiService) ApiVersionsIdGet(ctx context.Context, id string) Ap
 //  @return ModelsVersion
 func (a *VersionsApiService) ApiVersionsIdGetExecute(r ApiApiVersionsIdGetRequest) (*ModelsVersion, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsVersion
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsVersion
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "VersionsApiService.ApiVersionsIdGet")

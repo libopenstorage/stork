@@ -1,4 +1,3 @@
-//go:build tools
 // +build tools
 
 // Copyright 2018 Google LLC

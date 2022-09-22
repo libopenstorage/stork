@@ -28,14 +28,14 @@ var (
 type TenantsApiService service
 
 type ApiApiAccountsIdTenantsGetRequest struct {
-	ctx          context.Context
-	ApiService   *TenantsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *TenantsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
+	id2 *string
+	name *string
 }
 
 // A given Tenant attribute to sort results by (one of: id, name, created_at)
@@ -43,25 +43,21 @@ func (r ApiApiAccountsIdTenantsGetRequest) SortBy(sortBy string) ApiApiAccountsI
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiAccountsIdTenantsGetRequest) Limit(limit string) ApiApiAccountsIdTenantsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiAccountsIdTenantsGetRequest) Continuation(continuation string) ApiApiAccountsIdTenantsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Tenant id
 func (r ApiApiAccountsIdTenantsGetRequest) Id2(id2 string) ApiApiAccountsIdTenantsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Tenant name
 func (r ApiApiAccountsIdTenantsGetRequest) Name(name string) ApiApiAccountsIdTenantsGetRequest {
 	r.name = &name
@@ -84,8 +80,8 @@ Lists Tenants visible to the caller and belonging to the Account.
 func (a *TenantsApiService) ApiAccountsIdTenantsGet(ctx context.Context, id string) ApiApiAccountsIdTenantsGetRequest {
 	return ApiApiAccountsIdTenantsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -93,10 +89,10 @@ func (a *TenantsApiService) ApiAccountsIdTenantsGet(ctx context.Context, id stri
 //  @return ControllersPaginatedAccountTenants
 func (a *TenantsApiService) ApiAccountsIdTenantsGetExecute(r ApiApiAccountsIdTenantsGetRequest) (*ControllersPaginatedAccountTenants, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedAccountTenants
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedAccountTenants
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantsApiService.ApiAccountsIdTenantsGet")
@@ -195,10 +191,11 @@ func (a *TenantsApiService) ApiAccountsIdTenantsGetExecute(r ApiApiAccountsIdTen
 }
 
 type ApiApiTenantsIdDnsDetailsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *TenantsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiTenantsIdDnsDetailsGetRequest) Execute() (*ModelsDNSDetails, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdDnsDetailsGetExecute(r)
@@ -216,8 +213,8 @@ Get DNS details/credentials for Tenant
 func (a *TenantsApiService) ApiTenantsIdDnsDetailsGet(ctx context.Context, id string) ApiApiTenantsIdDnsDetailsGetRequest {
 	return ApiApiTenantsIdDnsDetailsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -225,10 +222,10 @@ func (a *TenantsApiService) ApiTenantsIdDnsDetailsGet(ctx context.Context, id st
 //  @return ModelsDNSDetails
 func (a *TenantsApiService) ApiTenantsIdDnsDetailsGetExecute(r ApiApiTenantsIdDnsDetailsGetRequest) (*ModelsDNSDetails, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsDNSDetails
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsDNSDetails
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantsApiService.ApiTenantsIdDnsDetailsGet")
@@ -312,10 +309,11 @@ func (a *TenantsApiService) ApiTenantsIdDnsDetailsGetExecute(r ApiApiTenantsIdDn
 }
 
 type ApiApiTenantsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *TenantsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiTenantsIdGetRequest) Execute() (*ModelsTenant, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdGetExecute(r)
@@ -333,8 +331,8 @@ Fetches a single Tenant
 func (a *TenantsApiService) ApiTenantsIdGet(ctx context.Context, id string) ApiApiTenantsIdGetRequest {
 	return ApiApiTenantsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -342,10 +340,10 @@ func (a *TenantsApiService) ApiTenantsIdGet(ctx context.Context, id string) ApiA
 //  @return ModelsTenant
 func (a *TenantsApiService) ApiTenantsIdGetExecute(r ApiApiTenantsIdGetRequest) (*ModelsTenant, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsTenant
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsTenant
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantsApiService.ApiTenantsIdGet")

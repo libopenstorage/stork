@@ -16,7 +16,7 @@ import (
 
 // ModelsEULADetails struct for ModelsEULADetails
 type ModelsEULADetails struct {
-	Accepted        *bool   `json:"accepted,omitempty"`
+	Accepted *bool `json:"accepted,omitempty"`
 	AcceptedVersion *string `json:"accepted_version,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableModelsEULADetails) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

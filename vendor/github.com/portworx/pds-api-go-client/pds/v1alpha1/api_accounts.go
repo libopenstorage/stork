@@ -28,13 +28,13 @@ var (
 type AccountsApiService service
 
 type ApiApiAccountsGetRequest struct {
-	ctx          context.Context
-	ApiService   *AccountsApiService
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *AccountsApiService
+	sortBy *string
+	limit *string
 	continuation *string
-	id           *string
-	name         *string
+	id *string
+	name *string
 }
 
 // A given Accounts attribute to sort results by (one of: id, name, created_at)
@@ -42,25 +42,21 @@ func (r ApiApiAccountsGetRequest) SortBy(sortBy string) ApiApiAccountsGetRequest
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiAccountsGetRequest) Limit(limit string) ApiApiAccountsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiAccountsGetRequest) Continuation(continuation string) ApiApiAccountsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Accounts id
 func (r ApiApiAccountsGetRequest) Id(id string) ApiApiAccountsGetRequest {
 	r.id = &id
 	return r
 }
-
 // Filter results by Accounts name
 func (r ApiApiAccountsGetRequest) Name(name string) ApiApiAccountsGetRequest {
 	r.name = &name
@@ -82,7 +78,7 @@ Lists Accounts visible to the caller.
 func (a *AccountsApiService) ApiAccountsGet(ctx context.Context) ApiApiAccountsGetRequest {
 	return ApiApiAccountsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -90,10 +86,10 @@ func (a *AccountsApiService) ApiAccountsGet(ctx context.Context) ApiApiAccountsG
 //  @return ControllersPaginatedAccounts
 func (a *AccountsApiService) ApiAccountsGetExecute(r ApiApiAccountsGetRequest) (*ControllersPaginatedAccounts, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedAccounts
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedAccounts
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsApiService.ApiAccountsGet")
@@ -191,10 +187,10 @@ func (a *AccountsApiService) ApiAccountsGetExecute(r ApiApiAccountsGetRequest) (
 }
 
 type ApiApiAccountsIdEulaPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountsApiService
-	id         string
-	body       *ControllersAcceptEULARequest
+	id string
+	body *ControllersAcceptEULARequest
 }
 
 // Request body containing the version of the EULA.
@@ -219,17 +215,17 @@ Accept a specific EULA version
 func (a *AccountsApiService) ApiAccountsIdEulaPut(ctx context.Context, id string) ApiApiAccountsIdEulaPutRequest {
 	return ApiApiAccountsIdEulaPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *AccountsApiService) ApiAccountsIdEulaPutExecute(r ApiApiAccountsIdEulaPutRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodPut
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsApiService.ApiAccountsIdEulaPut")
@@ -309,10 +305,11 @@ func (a *AccountsApiService) ApiAccountsIdEulaPutExecute(r ApiApiAccountsIdEulaP
 }
 
 type ApiApiAccountsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiAccountsIdGetRequest) Execute() (*ModelsAccount, *http.Response, error) {
 	return r.ApiService.ApiAccountsIdGetExecute(r)
@@ -330,8 +327,8 @@ Fetches a single Account
 func (a *AccountsApiService) ApiAccountsIdGet(ctx context.Context, id string) ApiApiAccountsIdGetRequest {
 	return ApiApiAccountsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -339,10 +336,10 @@ func (a *AccountsApiService) ApiAccountsIdGet(ctx context.Context, id string) Ap
 //  @return ModelsAccount
 func (a *AccountsApiService) ApiAccountsIdGetExecute(r ApiApiAccountsIdGetRequest) (*ModelsAccount, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsAccount
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsAccount
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsApiService.ApiAccountsIdGet")
@@ -426,14 +423,14 @@ func (a *AccountsApiService) ApiAccountsIdGetExecute(r ApiApiAccountsIdGetReques
 }
 
 type ApiApiAccountsIdUsersGetRequest struct {
-	ctx          context.Context
-	ApiService   *AccountsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *AccountsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	email        *string
+	id2 *string
+	email *string
 }
 
 // A given User attribute to sort results by (one of: id, email, created_at)
@@ -441,25 +438,21 @@ func (r ApiApiAccountsIdUsersGetRequest) SortBy(sortBy string) ApiApiAccountsIdU
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiAccountsIdUsersGetRequest) Limit(limit string) ApiApiAccountsIdUsersGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiAccountsIdUsersGetRequest) Continuation(continuation string) ApiApiAccountsIdUsersGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by User id
 func (r ApiApiAccountsIdUsersGetRequest) Id2(id2 string) ApiApiAccountsIdUsersGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by User email
 func (r ApiApiAccountsIdUsersGetRequest) Email(email string) ApiApiAccountsIdUsersGetRequest {
 	r.email = &email
@@ -482,8 +475,8 @@ Lists Account Users
 func (a *AccountsApiService) ApiAccountsIdUsersGet(ctx context.Context, id string) ApiApiAccountsIdUsersGetRequest {
 	return ApiApiAccountsIdUsersGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -491,10 +484,10 @@ func (a *AccountsApiService) ApiAccountsIdUsersGet(ctx context.Context, id strin
 //  @return ControllersPaginatedUsers
 func (a *AccountsApiService) ApiAccountsIdUsersGetExecute(r ApiApiAccountsIdUsersGetRequest) (*ControllersPaginatedUsers, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedUsers
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedUsers
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsApiService.ApiAccountsIdUsersGet")
@@ -593,9 +586,9 @@ func (a *AccountsApiService) ApiAccountsIdUsersGetExecute(r ApiApiAccountsIdUser
 }
 
 type ApiApiAccountsPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountsApiService
-	body       *ControllersCreateAccountRequest
+	body *ControllersCreateAccountRequest
 }
 
 // Request body containing name of the account
@@ -619,7 +612,7 @@ Creates a new Account
 func (a *AccountsApiService) ApiAccountsPost(ctx context.Context) ApiApiAccountsPostRequest {
 	return ApiApiAccountsPostRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -627,10 +620,10 @@ func (a *AccountsApiService) ApiAccountsPost(ctx context.Context) ApiApiAccounts
 //  @return ModelsAccount
 func (a *AccountsApiService) ApiAccountsPostExecute(r ApiApiAccountsPostRequest) (*ModelsAccount, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsAccount
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsAccount
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsApiService.ApiAccountsPost")

@@ -28,10 +28,10 @@ var (
 type AccountsDNSApiService service
 
 type ApiApiAccountsIdDnsDetailsPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountsDNSApiService
-	id         string
-	body       *ModelsDNSDetails
+	id string
+	body *ModelsDNSDetails
 }
 
 // Request body containing a new DNS details
@@ -56,17 +56,17 @@ Update DNS details for desired account
 func (a *AccountsDNSApiService) ApiAccountsIdDnsDetailsPut(ctx context.Context, id string) ApiApiAccountsIdDnsDetailsPutRequest {
 	return ApiApiAccountsIdDnsDetailsPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *AccountsDNSApiService) ApiAccountsIdDnsDetailsPutExecute(r ApiApiAccountsIdDnsDetailsPutRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodPut
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountsDNSApiService.ApiAccountsIdDnsDetailsPut")

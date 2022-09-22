@@ -27,9 +27,9 @@ var (
 type AuthenticationApiService service
 
 type ApiAuthAuthorizationCodePostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AuthenticationApiService
-	body       *ControllersAuthorizationCodeRequest
+	body *ControllersAuthorizationCodeRequest
 }
 
 // Request body containing the received authorization code.
@@ -56,7 +56,7 @@ Exchanges the Authorization Code from the OAuth2 server for an ID Token which is
 func (a *AuthenticationApiService) AuthAuthorizationCodePost(ctx context.Context) ApiAuthAuthorizationCodePostRequest {
 	return ApiAuthAuthorizationCodePostRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -64,10 +64,10 @@ func (a *AuthenticationApiService) AuthAuthorizationCodePost(ctx context.Context
 //  @return ControllersOIDCTokenResponse
 func (a *AuthenticationApiService) AuthAuthorizationCodePostExecute(r ApiAuthAuthorizationCodePostRequest) (*ControllersOIDCTokenResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersOIDCTokenResponse
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersOIDCTokenResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AuthenticationApiService.AuthAuthorizationCodePost")
@@ -141,9 +141,10 @@ func (a *AuthenticationApiService) AuthAuthorizationCodePostExecute(r ApiAuthAut
 }
 
 type ApiAuthOidcInfoGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AuthenticationApiService
 }
+
 
 func (r ApiAuthOidcInfoGetRequest) Execute() (*ControllersOIDCInfoResponse, *http.Response, error) {
 	return r.ApiService.AuthOidcInfoGetExecute(r)
@@ -160,7 +161,7 @@ Returns OIDC configuration for the frontend.
 func (a *AuthenticationApiService) AuthOidcInfoGet(ctx context.Context) ApiAuthOidcInfoGetRequest {
 	return ApiAuthOidcInfoGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -168,10 +169,10 @@ func (a *AuthenticationApiService) AuthOidcInfoGet(ctx context.Context) ApiAuthO
 //  @return ControllersOIDCInfoResponse
 func (a *AuthenticationApiService) AuthOidcInfoGetExecute(r ApiAuthOidcInfoGetRequest) (*ControllersOIDCInfoResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersOIDCInfoResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersOIDCInfoResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AuthenticationApiService.AuthOidcInfoGet")
@@ -240,9 +241,9 @@ func (a *AuthenticationApiService) AuthOidcInfoGetExecute(r ApiAuthOidcInfoGetRe
 }
 
 type ApiAuthRefreshTokenPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AuthenticationApiService
-	body       *ControllersRefreshTokenRequest
+	body *ControllersRefreshTokenRequest
 }
 
 // Request body containing the refresh token.
@@ -264,7 +265,7 @@ AuthRefreshTokenPost Use refresh token to generate new tokens.
 func (a *AuthenticationApiService) AuthRefreshTokenPost(ctx context.Context) ApiAuthRefreshTokenPostRequest {
 	return ApiAuthRefreshTokenPostRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -272,10 +273,10 @@ func (a *AuthenticationApiService) AuthRefreshTokenPost(ctx context.Context) Api
 //  @return ControllersOIDCTokenResponse
 func (a *AuthenticationApiService) AuthRefreshTokenPostExecute(r ApiAuthRefreshTokenPostRequest) (*ControllersOIDCTokenResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersOIDCTokenResponse
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersOIDCTokenResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AuthenticationApiService.AuthRefreshTokenPost")

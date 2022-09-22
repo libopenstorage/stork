@@ -28,10 +28,11 @@ var (
 type ServiceAccountsApiService service
 
 type ApiApiServiceAccountsIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ServiceAccountsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiServiceAccountsIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiServiceAccountsIdDeleteExecute(r)
@@ -49,17 +50,17 @@ Removes a single ServiceAccount
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdDelete(ctx context.Context, id string) ApiApiServiceAccountsIdDeleteRequest {
 	return ApiApiServiceAccountsIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdDeleteExecute(r ApiApiServiceAccountsIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ServiceAccountsApiService.ApiServiceAccountsIdDelete")
@@ -134,10 +135,11 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdDeleteExecute(r ApiApiSe
 }
 
 type ApiApiServiceAccountsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ServiceAccountsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiServiceAccountsIdGetRequest) Execute() (*ControllersServiceAccountResponse, *http.Response, error) {
 	return r.ApiService.ApiServiceAccountsIdGetExecute(r)
@@ -155,8 +157,8 @@ Fetches a single ServiceAccount
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdGet(ctx context.Context, id string) ApiApiServiceAccountsIdGetRequest {
 	return ApiApiServiceAccountsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -164,10 +166,10 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdGet(ctx context.Context,
 //  @return ControllersServiceAccountResponse
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdGetExecute(r ApiApiServiceAccountsIdGetRequest) (*ControllersServiceAccountResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersServiceAccountResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersServiceAccountResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ServiceAccountsApiService.ApiServiceAccountsIdGet")
@@ -251,10 +253,11 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdGetExecute(r ApiApiServi
 }
 
 type ApiApiServiceAccountsIdTokenGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ServiceAccountsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiServiceAccountsIdTokenGetRequest) Execute() (*ControllersServiceAccountTokenResponse, *http.Response, error) {
 	return r.ApiService.ApiServiceAccountsIdTokenGetExecute(r)
@@ -272,8 +275,8 @@ Fetches the token of a ServiceAccount
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdTokenGet(ctx context.Context, id string) ApiApiServiceAccountsIdTokenGetRequest {
 	return ApiApiServiceAccountsIdTokenGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -281,10 +284,10 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdTokenGet(ctx context.Con
 //  @return ControllersServiceAccountTokenResponse
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdTokenGetExecute(r ApiApiServiceAccountsIdTokenGetRequest) (*ControllersServiceAccountTokenResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersServiceAccountTokenResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersServiceAccountTokenResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ServiceAccountsApiService.ApiServiceAccountsIdTokenGet")
@@ -368,15 +371,15 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdTokenGetExecute(r ApiApi
 }
 
 type ApiApiTenantsIdServiceAccountsGetRequest struct {
-	ctx          context.Context
-	ApiService   *ServiceAccountsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *ServiceAccountsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	name         *string
-	id2          *string
-	token        *string
+	name *string
+	id2 *string
+	token *string
 }
 
 // A given ServiceAccount attribute to sort results by (one of: name, id, created_at)
@@ -384,31 +387,26 @@ func (r ApiApiTenantsIdServiceAccountsGetRequest) SortBy(sortBy string) ApiApiTe
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdServiceAccountsGetRequest) Limit(limit string) ApiApiTenantsIdServiceAccountsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdServiceAccountsGetRequest) Continuation(continuation string) ApiApiTenantsIdServiceAccountsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by ServiceAccount name
 func (r ApiApiTenantsIdServiceAccountsGetRequest) Name(name string) ApiApiTenantsIdServiceAccountsGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by ServiceAccount id
 func (r ApiApiTenantsIdServiceAccountsGetRequest) Id2(id2 string) ApiApiTenantsIdServiceAccountsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by ServiceAccount token
 func (r ApiApiTenantsIdServiceAccountsGetRequest) Token(token string) ApiApiTenantsIdServiceAccountsGetRequest {
 	r.token = &token
@@ -431,8 +429,8 @@ List Tenant's ServiceAccounts
 func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGet(ctx context.Context, id string) ApiApiTenantsIdServiceAccountsGetRequest {
 	return ApiApiTenantsIdServiceAccountsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -440,10 +438,10 @@ func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGet(ctx context.C
 //  @return ControllersPaginatedServiceAccounts
 func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGetExecute(r ApiApiTenantsIdServiceAccountsGetRequest) (*ControllersPaginatedServiceAccounts, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedServiceAccounts
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedServiceAccounts
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ServiceAccountsApiService.ApiTenantsIdServiceAccountsGet")
@@ -545,10 +543,10 @@ func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGetExecute(r ApiA
 }
 
 type ApiApiTenantsIdServiceAccountsPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ServiceAccountsApiService
-	id         string
-	body       *ControllersCreateServiceAccountRequest
+	id string
+	body *ControllersCreateServiceAccountRequest
 }
 
 // Request body containing name of the service account
@@ -573,8 +571,8 @@ Creates a new ServiceAccount
 func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsPost(ctx context.Context, id string) ApiApiTenantsIdServiceAccountsPostRequest {
 	return ApiApiTenantsIdServiceAccountsPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -582,10 +580,10 @@ func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsPost(ctx context.
 //  @return ModelsServiceAccount
 func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsPostExecute(r ApiApiTenantsIdServiceAccountsPostRequest) (*ModelsServiceAccount, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsServiceAccount
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsServiceAccount
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ServiceAccountsApiService.ApiTenantsIdServiceAccountsPost")

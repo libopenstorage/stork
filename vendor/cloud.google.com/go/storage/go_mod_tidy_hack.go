@@ -14,7 +14,6 @@
 
 // This file, and the cloud.google.com/go import, won't actually become part of
 // the resultant binary.
-//go:build modhack
 // +build modhack
 
 package storage

@@ -124,7 +124,7 @@ const (
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 	asyncTimeout                      = 15 * time.Minute
-	timeToTryPreviousFolder = 10 * time.Minute
+	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 )
 const (
@@ -196,7 +196,6 @@ type portworx struct {
 	token                 string
 	skipPXSvcEndpoint     bool
 	DiagsFile             string
-
 }
 
 type statusJSON struct {
@@ -3215,7 +3214,7 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 		}
 		var objects []s3utils.Object
 		var err error
-		if time.Since(start) >= timeToTryPreviousFolder{
+		if time.Since(start) >= timeToTryPreviousFolder {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
 			if err != nil {
 				return err

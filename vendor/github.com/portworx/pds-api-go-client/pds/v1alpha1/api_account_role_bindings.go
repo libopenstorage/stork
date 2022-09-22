@@ -28,10 +28,10 @@ var (
 type AccountRoleBindingsApiService service
 
 type ApiApiAccountsIdInvitationsPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
-	id         string
-	body       *ControllersInvitationRequest
+	id string
+	body *ControllersInvitationRequest
 }
 
 // Request body containing the invitation details.
@@ -56,17 +56,17 @@ Adds role binding to existing user. The plan is to send invites to non-existing 
 func (a *AccountRoleBindingsApiService) ApiAccountsIdInvitationsPost(ctx context.Context, id string) ApiApiAccountsIdInvitationsPostRequest {
 	return ApiApiAccountsIdInvitationsPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *AccountRoleBindingsApiService) ApiAccountsIdInvitationsPostExecute(r ApiApiAccountsIdInvitationsPostRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodPost
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountRoleBindingsApiService.ApiAccountsIdInvitationsPost")
@@ -146,10 +146,10 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdInvitationsPostExecute(r Ap
 }
 
 type ApiApiAccountsIdRoleBindingsDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
-	id         string
-	actorType  *string
+	id string
+	actorType *string
 }
 
 // AccountRoleBinding actor type
@@ -174,17 +174,17 @@ Removes a single AccountRoleBinding
 func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsDelete(ctx context.Context, id string) ApiApiAccountsIdRoleBindingsDeleteRequest {
 	return ApiApiAccountsIdRoleBindingsDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsDeleteExecute(r ApiApiAccountsIdRoleBindingsDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountRoleBindingsApiService.ApiAccountsIdRoleBindingsDelete")
@@ -261,13 +261,13 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsDeleteExecute(r
 }
 
 type ApiApiAccountsIdRoleBindingsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
-	id         string
-	sortBy     *string
-	roleName   *string
-	actorId    *string
-	actorType  *string
+	id string
+	sortBy *string
+	roleName *string
+	actorId *string
+	actorType *string
 }
 
 // A given AccountRoleBinding attribute to sort results by (one of: role_name, actor_id)
@@ -275,19 +275,16 @@ func (r ApiApiAccountsIdRoleBindingsGetRequest) SortBy(sortBy string) ApiApiAcco
 	r.sortBy = &sortBy
 	return r
 }
-
 // Filter results by AccountRoleBinding assigned role name
 func (r ApiApiAccountsIdRoleBindingsGetRequest) RoleName(roleName string) ApiApiAccountsIdRoleBindingsGetRequest {
 	r.roleName = &roleName
 	return r
 }
-
 // Filter results by AccountRoleBinding actor id
 func (r ApiApiAccountsIdRoleBindingsGetRequest) ActorId(actorId string) ApiApiAccountsIdRoleBindingsGetRequest {
 	r.actorId = &actorId
 	return r
 }
-
 // Filter results by AccountRoleBinding actor type
 func (r ApiApiAccountsIdRoleBindingsGetRequest) ActorType(actorType string) ApiApiAccountsIdRoleBindingsGetRequest {
 	r.actorType = &actorType
@@ -310,8 +307,8 @@ Lists AccountRoleBinding
 func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsGet(ctx context.Context, id string) ApiApiAccountsIdRoleBindingsGetRequest {
 	return ApiApiAccountsIdRoleBindingsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -319,10 +316,10 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsGet(ctx context
 //  @return ControllersPaginatedAccountRoleBindings
 func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsGetExecute(r ApiApiAccountsIdRoleBindingsGetRequest) (*ControllersPaginatedAccountRoleBindings, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedAccountRoleBindings
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedAccountRoleBindings
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountRoleBindingsApiService.ApiAccountsIdRoleBindingsGet")
@@ -418,10 +415,10 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsGetExecute(r Ap
 }
 
 type ApiApiAccountsIdRoleBindingsPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
-	id         string
-	body       *ControllersUpsertAccountRoleBindingRequest
+	id string
+	body *ControllersUpsertAccountRoleBindingRequest
 }
 
 // Request body containing the account role binding
@@ -446,8 +443,8 @@ Creates a new AccountRoleBinding, or updates role_name if binding for (actor_id,
 func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsPut(ctx context.Context, id string) ApiApiAccountsIdRoleBindingsPutRequest {
 	return ApiApiAccountsIdRoleBindingsPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -455,10 +452,10 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsPut(ctx context
 //  @return ModelsAccountRoleBinding
 func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsPutExecute(r ApiApiAccountsIdRoleBindingsPutRequest) (*ModelsAccountRoleBinding, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsAccountRoleBinding
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsAccountRoleBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountRoleBindingsApiService.ApiAccountsIdRoleBindingsPut")
@@ -547,11 +544,11 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsPutExecute(r Ap
 }
 
 type ApiApiUsersIdAccountRoleBindingsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
-	id         string
-	sortBy     *string
-	roleName   *string
+	id string
+	sortBy *string
+	roleName *string
 }
 
 // A given AccountRoleBinding attribute to sort results by (allowed: role_name)
@@ -559,7 +556,6 @@ func (r ApiApiUsersIdAccountRoleBindingsGetRequest) SortBy(sortBy string) ApiApi
 	r.sortBy = &sortBy
 	return r
 }
-
 // Filter results by AccountRoleBinding assigned role_name
 func (r ApiApiUsersIdAccountRoleBindingsGetRequest) RoleName(roleName string) ApiApiUsersIdAccountRoleBindingsGetRequest {
 	r.roleName = &roleName
@@ -582,8 +578,8 @@ Every user can read its own bindings. Only pds-admin can read bindings of other 
 func (a *AccountRoleBindingsApiService) ApiUsersIdAccountRoleBindingsGet(ctx context.Context, id string) ApiApiUsersIdAccountRoleBindingsGetRequest {
 	return ApiApiUsersIdAccountRoleBindingsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -591,10 +587,10 @@ func (a *AccountRoleBindingsApiService) ApiUsersIdAccountRoleBindingsGet(ctx con
 //  @return ControllersPaginatedAccountRoleBindings
 func (a *AccountRoleBindingsApiService) ApiUsersIdAccountRoleBindingsGetExecute(r ApiApiUsersIdAccountRoleBindingsGetRequest) (*ControllersPaginatedAccountRoleBindings, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedAccountRoleBindings
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedAccountRoleBindings
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountRoleBindingsApiService.ApiUsersIdAccountRoleBindingsGet")

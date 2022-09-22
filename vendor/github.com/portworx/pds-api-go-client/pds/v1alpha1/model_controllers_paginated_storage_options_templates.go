@@ -16,8 +16,8 @@ import (
 
 // ControllersPaginatedStorageOptionsTemplates struct for ControllersPaginatedStorageOptionsTemplates
 type ControllersPaginatedStorageOptionsTemplates struct {
-	Data       []ModelsStorageOptionsTemplate `json:"data,omitempty"`
-	Pagination *ConstraintPagination          `json:"pagination,omitempty"`
+	Data []ModelsStorageOptionsTemplate `json:"data,omitempty"`
+	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
 // NewControllersPaginatedStorageOptionsTemplates instantiates a new ControllersPaginatedStorageOptionsTemplates object
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedStorageOptionsTemplates) UnmarshalJSON(src 
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

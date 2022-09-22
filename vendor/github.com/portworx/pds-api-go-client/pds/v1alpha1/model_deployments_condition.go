@@ -17,9 +17,9 @@ import (
 // DeploymentsCondition struct for DeploymentsCondition
 type DeploymentsCondition struct {
 	Message *string `json:"message,omitempty"`
-	Reason  *string `json:"reason,omitempty"`
-	Status  *string `json:"status,omitempty"`
-	Type    *string `json:"type,omitempty"`
+	Reason *string `json:"reason,omitempty"`
+	Status *string `json:"status,omitempty"`
+	Type *string `json:"type,omitempty"`
 }
 
 // NewDeploymentsCondition instantiates a new DeploymentsCondition object
@@ -219,3 +219,5 @@ func (v *NullableDeploymentsCondition) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

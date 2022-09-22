@@ -16,8 +16,8 @@ import (
 
 // ControllersCreateApplicationConfigurationTemplatesRequest struct for ControllersCreateApplicationConfigurationTemplatesRequest
 type ControllersCreateApplicationConfigurationTemplatesRequest struct {
-	ConfigItems   []ModelsConfigItem `json:"config_items,omitempty"`
-	DataServiceId *string            `json:"data_service_id,omitempty"`
+	ConfigItems []ModelsConfigItem `json:"config_items,omitempty"`
+	DataServiceId *string `json:"data_service_id,omitempty"`
 	// See models.ApplicationConfigurationTemplate for more information.
 	Name *string `json:"name,omitempty"`
 }
@@ -184,3 +184,5 @@ func (v *NullableControllersCreateApplicationConfigurationTemplatesRequest) Unma
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

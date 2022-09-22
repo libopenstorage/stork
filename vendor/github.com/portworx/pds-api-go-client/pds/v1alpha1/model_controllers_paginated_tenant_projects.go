@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedTenantProjects struct for ControllersPaginatedTenantProjects
 type ControllersPaginatedTenantProjects struct {
-	Data       []ModelsProject       `json:"data,omitempty"`
+	Data []ModelsProject `json:"data,omitempty"`
 	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedTenantProjects) UnmarshalJSON(src []byte) e
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

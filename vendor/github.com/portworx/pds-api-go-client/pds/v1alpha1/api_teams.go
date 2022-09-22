@@ -28,10 +28,11 @@ var (
 type TeamsApiService service
 
 type ApiApiTeamsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *TeamsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiTeamsIdGetRequest) Execute() (*ModelsTeam, *http.Response, error) {
 	return r.ApiService.ApiTeamsIdGetExecute(r)
@@ -49,8 +50,8 @@ Fetches a single Team
 func (a *TeamsApiService) ApiTeamsIdGet(ctx context.Context, id string) ApiApiTeamsIdGetRequest {
 	return ApiApiTeamsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *TeamsApiService) ApiTeamsIdGet(ctx context.Context, id string) ApiApiTe
 //  @return ModelsTeam
 func (a *TeamsApiService) ApiTeamsIdGetExecute(r ApiApiTeamsIdGetRequest) (*ModelsTeam, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsTeam
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsTeam
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TeamsApiService.ApiTeamsIdGet")

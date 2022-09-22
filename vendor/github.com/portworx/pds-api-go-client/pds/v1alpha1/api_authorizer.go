@@ -27,9 +27,9 @@ var (
 type AuthorizerApiService service
 
 type ApiApiAuthorizerPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *AuthorizerApiService
-	body       *ModelsAuthorizerRequest
+	body *ModelsAuthorizerRequest
 }
 
 // Request body containing the authorizer request
@@ -53,7 +53,7 @@ Check if the provided operation is allowed
 func (a *AuthorizerApiService) ApiAuthorizerPost(ctx context.Context) ApiApiAuthorizerPostRequest {
 	return ApiApiAuthorizerPostRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -61,10 +61,10 @@ func (a *AuthorizerApiService) ApiAuthorizerPost(ctx context.Context) ApiApiAuth
 //  @return ModelsAuthorizerResponse
 func (a *AuthorizerApiService) ApiAuthorizerPostExecute(r ApiApiAuthorizerPostRequest) (*ModelsAuthorizerResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsAuthorizerResponse
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsAuthorizerResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AuthorizerApiService.ApiAuthorizerPost")

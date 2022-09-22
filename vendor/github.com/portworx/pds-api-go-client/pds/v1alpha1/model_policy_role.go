@@ -16,9 +16,9 @@ import (
 
 // PolicyRole struct for PolicyRole
 type PolicyRole struct {
-	Extends     []string `json:"extends,omitempty"`
-	Level       *string  `json:"level,omitempty"`
-	Name        *string  `json:"name,omitempty"`
+	Extends []string `json:"extends,omitempty"`
+	Level *string `json:"level,omitempty"`
+	Name *string `json:"name,omitempty"`
 	Permissions []string `json:"permissions,omitempty"`
 }
 
@@ -219,3 +219,5 @@ func (v *NullablePolicyRole) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

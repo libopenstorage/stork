@@ -17,7 +17,7 @@ import (
 // ControllersDeploymentTargetHeartbeatResponse struct for ControllersDeploymentTargetHeartbeatResponse
 type ControllersDeploymentTargetHeartbeatResponse struct {
 	ClusterId *string `json:"cluster_id,omitempty"`
-	Name      *string `json:"name,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 // NewControllersDeploymentTargetHeartbeatResponse instantiates a new ControllersDeploymentTargetHeartbeatResponse object
@@ -147,3 +147,5 @@ func (v *NullableControllersDeploymentTargetHeartbeatResponse) UnmarshalJSON(src
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

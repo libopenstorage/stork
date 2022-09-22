@@ -17,9 +17,9 @@ import (
 // ModelsAccountRoleBinding struct for ModelsAccountRoleBinding
 type ModelsAccountRoleBinding struct {
 	AccountId *string `json:"account_id,omitempty"`
-	ActorId   *string `json:"actor_id,omitempty"`
+	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
-	RoleName  *string `json:"role_name,omitempty"`
+	RoleName *string `json:"role_name,omitempty"`
 }
 
 // NewModelsAccountRoleBinding instantiates a new ModelsAccountRoleBinding object
@@ -219,3 +219,5 @@ func (v *NullableModelsAccountRoleBinding) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -111,3 +111,5 @@ func (v *NullableControllersResourceSettingsTemplates) UnmarshalJSON(src []byte)
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

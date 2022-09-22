@@ -28,10 +28,11 @@ var (
 type UsersApiService service
 
 type ApiApiUsersIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *UsersApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiUsersIdGetRequest) Execute() (*ModelsUser, *http.Response, error) {
 	return r.ApiService.ApiUsersIdGetExecute(r)
@@ -49,8 +50,8 @@ Fetches a single User
 func (a *UsersApiService) ApiUsersIdGet(ctx context.Context, id string) ApiApiUsersIdGetRequest {
 	return ApiApiUsersIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *UsersApiService) ApiUsersIdGet(ctx context.Context, id string) ApiApiUs
 //  @return ModelsUser
 func (a *UsersApiService) ApiUsersIdGetExecute(r ApiApiUsersIdGetRequest) (*ModelsUser, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsUser
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsUser
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "UsersApiService.ApiUsersIdGet")

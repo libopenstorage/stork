@@ -27,9 +27,10 @@ var (
 type WhoAmIApiService service
 
 type ApiApiWhoamiGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *WhoAmIApiService
 }
+
 
 func (r ApiApiWhoamiGetRequest) Execute() (*ControllersWhoAmIResponse, *http.Response, error) {
 	return r.ApiService.ApiWhoamiGetExecute(r)
@@ -46,7 +47,7 @@ Fetches a details of the current calling actor (user or service account)
 func (a *WhoAmIApiService) ApiWhoamiGet(ctx context.Context) ApiApiWhoamiGetRequest {
 	return ApiApiWhoamiGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -54,10 +55,10 @@ func (a *WhoAmIApiService) ApiWhoamiGet(ctx context.Context) ApiApiWhoamiGetRequ
 //  @return ControllersWhoAmIResponse
 func (a *WhoAmIApiService) ApiWhoamiGetExecute(r ApiApiWhoamiGetRequest) (*ControllersWhoAmIResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersWhoAmIResponse
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersWhoAmIResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "WhoAmIApiService.ApiWhoamiGet")

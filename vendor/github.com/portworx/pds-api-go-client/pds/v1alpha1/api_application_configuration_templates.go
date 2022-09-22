@@ -28,10 +28,11 @@ var (
 type ApplicationConfigurationTemplatesApiService service
 
 type ApiApiApplicationConfigurationTemplatesIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ApplicationConfigurationTemplatesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiApplicationConfigurationTemplatesIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiApplicationConfigurationTemplatesIdDeleteExecute(r)
@@ -49,17 +50,17 @@ Removes a single ApplicationConfigurationTemplate
 func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfigurationTemplatesIdDelete(ctx context.Context, id string) ApiApiApplicationConfigurationTemplatesIdDeleteRequest {
 	return ApiApiApplicationConfigurationTemplatesIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfigurationTemplatesIdDeleteExecute(r ApiApiApplicationConfigurationTemplatesIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ApplicationConfigurationTemplatesApiService.ApiApplicationConfigurationTemplatesIdDelete")
@@ -134,10 +135,11 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfiguratio
 }
 
 type ApiApiApplicationConfigurationTemplatesIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ApplicationConfigurationTemplatesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiApplicationConfigurationTemplatesIdGetRequest) Execute() (*ModelsApplicationConfigurationTemplate, *http.Response, error) {
 	return r.ApiService.ApiApplicationConfigurationTemplatesIdGetExecute(r)
@@ -155,8 +157,8 @@ Fetches a single ApplicationConfigurationTemplate
 func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfigurationTemplatesIdGet(ctx context.Context, id string) ApiApiApplicationConfigurationTemplatesIdGetRequest {
 	return ApiApiApplicationConfigurationTemplatesIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -164,10 +166,10 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfiguratio
 //  @return ModelsApplicationConfigurationTemplate
 func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfigurationTemplatesIdGetExecute(r ApiApiApplicationConfigurationTemplatesIdGetRequest) (*ModelsApplicationConfigurationTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsApplicationConfigurationTemplate
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsApplicationConfigurationTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ApplicationConfigurationTemplatesApiService.ApiApplicationConfigurationTemplatesIdGet")
@@ -251,10 +253,10 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfiguratio
 }
 
 type ApiApiApplicationConfigurationTemplatesIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ApplicationConfigurationTemplatesApiService
-	id         string
-	body       *ControllersUpdateApplicationConfigurationTemplateRequest
+	id string
+	body *ControllersUpdateApplicationConfigurationTemplateRequest
 }
 
 // Request body containing updated template
@@ -279,8 +281,8 @@ Updates existing ApplicationConfigurationTemplate
 func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfigurationTemplatesIdPut(ctx context.Context, id string) ApiApiApplicationConfigurationTemplatesIdPutRequest {
 	return ApiApiApplicationConfigurationTemplatesIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -288,10 +290,10 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfiguratio
 //  @return ModelsApplicationConfigurationTemplate
 func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfigurationTemplatesIdPutExecute(r ApiApiApplicationConfigurationTemplatesIdPutRequest) (*ModelsApplicationConfigurationTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsApplicationConfigurationTemplate
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsApplicationConfigurationTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ApplicationConfigurationTemplatesApiService.ApiApplicationConfigurationTemplatesIdPut")
@@ -380,14 +382,14 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiApplicationConfiguratio
 }
 
 type ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest struct {
-	ctx           context.Context
-	ApiService    *ApplicationConfigurationTemplatesApiService
-	id            string
-	sortBy        *string
-	limit         *string
-	continuation  *string
-	id2           *string
-	name          *string
+	ctx context.Context
+	ApiService *ApplicationConfigurationTemplatesApiService
+	id string
+	sortBy *string
+	limit *string
+	continuation *string
+	id2 *string
+	name *string
 	dataServiceId *string
 }
 
@@ -396,31 +398,26 @@ func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) SortBy(sortB
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) Limit(limit string) ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) Continuation(continuation string) ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by ApplicationConfigurationTemplates id
 func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) Id2(id2 string) ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by ApplicationConfigurationTemplates name
 func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) Name(name string) ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by DataService ID
 func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) DataServiceId(dataServiceId string) ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest {
 	r.dataServiceId = &dataServiceId
@@ -443,8 +440,8 @@ Lists ApplicationConfigurationTemplates
 func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationConfigurationTemplatesGet(ctx context.Context, id string) ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest {
 	return ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -452,10 +449,10 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationCon
 //  @return ControllersPaginatedApplicationConfigurationTemplates
 func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationConfigurationTemplatesGetExecute(r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) (*ControllersPaginatedApplicationConfigurationTemplates, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedApplicationConfigurationTemplates
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedApplicationConfigurationTemplates
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ApplicationConfigurationTemplatesApiService.ApiTenantsIdApplicationConfigurationTemplatesGet")
@@ -557,10 +554,10 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationCon
 }
 
 type ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ApplicationConfigurationTemplatesApiService
-	id         string
-	body       *ControllersCreateApplicationConfigurationTemplatesRequest
+	id string
+	body *ControllersCreateApplicationConfigurationTemplatesRequest
 }
 
 // Request body containing the application configuration template
@@ -585,8 +582,8 @@ Creates a new ApplicationConfigurationTemplates
 func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationConfigurationTemplatesPost(ctx context.Context, id string) ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest {
 	return ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -594,10 +591,10 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationCon
 //  @return ModelsApplicationConfigurationTemplate
 func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationConfigurationTemplatesPostExecute(r ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest) (*ModelsApplicationConfigurationTemplate, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsApplicationConfigurationTemplate
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsApplicationConfigurationTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ApplicationConfigurationTemplatesApiService.ApiTenantsIdApplicationConfigurationTemplatesPost")

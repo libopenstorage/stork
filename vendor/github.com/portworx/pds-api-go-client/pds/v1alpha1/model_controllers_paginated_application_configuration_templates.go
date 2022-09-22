@@ -16,8 +16,8 @@ import (
 
 // ControllersPaginatedApplicationConfigurationTemplates struct for ControllersPaginatedApplicationConfigurationTemplates
 type ControllersPaginatedApplicationConfigurationTemplates struct {
-	Data       []ModelsApplicationConfigurationTemplate `json:"data,omitempty"`
-	Pagination *ConstraintPagination                    `json:"pagination,omitempty"`
+	Data []ModelsApplicationConfigurationTemplate `json:"data,omitempty"`
+	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
 // NewControllersPaginatedApplicationConfigurationTemplates instantiates a new ControllersPaginatedApplicationConfigurationTemplates object
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedApplicationConfigurationTemplates) Unmarsha
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

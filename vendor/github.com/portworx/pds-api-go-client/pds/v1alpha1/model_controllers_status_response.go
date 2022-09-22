@@ -16,11 +16,11 @@ import (
 
 // ControllersStatusResponse struct for ControllersStatusResponse
 type ControllersStatusResponse struct {
-	Health        *string                         `json:"health,omitempty"`
-	Initialized   *string                         `json:"initialized,omitempty"`
-	ReadyReplicas *int32                          `json:"readyReplicas,omitempty"`
-	Replicas      *int32                          `json:"replicas,omitempty"`
-	Resources     []DeploymentsResourceConditions `json:"resources,omitempty"`
+	Health *string `json:"health,omitempty"`
+	Initialized *string `json:"initialized,omitempty"`
+	ReadyReplicas *int32 `json:"readyReplicas,omitempty"`
+	Replicas *int32 `json:"replicas,omitempty"`
+	Resources []DeploymentsResourceConditions `json:"resources,omitempty"`
 }
 
 // NewControllersStatusResponse instantiates a new ControllersStatusResponse object
@@ -255,3 +255,5 @@ func (v *NullableControllersStatusResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

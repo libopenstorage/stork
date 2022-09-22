@@ -28,10 +28,11 @@ var (
 type ImagesApiService service
 
 type ApiApiImagesIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *ImagesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiImagesIdGetRequest) Execute() (*ModelsImage, *http.Response, error) {
 	return r.ApiService.ApiImagesIdGetExecute(r)
@@ -49,8 +50,8 @@ Fetches a single Image
 func (a *ImagesApiService) ApiImagesIdGet(ctx context.Context, id string) ApiApiImagesIdGetRequest {
 	return ApiApiImagesIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *ImagesApiService) ApiImagesIdGet(ctx context.Context, id string) ApiApi
 //  @return ModelsImage
 func (a *ImagesApiService) ApiImagesIdGetExecute(r ApiApiImagesIdGetRequest) (*ModelsImage, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsImage
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsImage
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ImagesApiService.ApiImagesIdGet")
@@ -145,14 +146,14 @@ func (a *ImagesApiService) ApiImagesIdGetExecute(r ApiApiImagesIdGetRequest) (*M
 }
 
 type ApiApiVersionsIdImagesGetRequest struct {
-	ctx          context.Context
-	ApiService   *ImagesApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *ImagesApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
+	id2 *string
+	name *string
 }
 
 // A given Image attribute to sort results by (one of: id, name, created_at)
@@ -160,25 +161,21 @@ func (r ApiApiVersionsIdImagesGetRequest) SortBy(sortBy string) ApiApiVersionsId
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiVersionsIdImagesGetRequest) Limit(limit string) ApiApiVersionsIdImagesGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiVersionsIdImagesGetRequest) Continuation(continuation string) ApiApiVersionsIdImagesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Image id
 func (r ApiApiVersionsIdImagesGetRequest) Id2(id2 string) ApiApiVersionsIdImagesGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by Image&#39;s name
 func (r ApiApiVersionsIdImagesGetRequest) Name(name string) ApiApiVersionsIdImagesGetRequest {
 	r.name = &name
@@ -201,8 +198,8 @@ Lists Images belonging to a Version.
 func (a *ImagesApiService) ApiVersionsIdImagesGet(ctx context.Context, id string) ApiApiVersionsIdImagesGetRequest {
 	return ApiApiVersionsIdImagesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -210,10 +207,10 @@ func (a *ImagesApiService) ApiVersionsIdImagesGet(ctx context.Context, id string
 //  @return ControllersPaginatedImages
 func (a *ImagesApiService) ApiVersionsIdImagesGetExecute(r ApiApiVersionsIdImagesGetRequest) (*ControllersPaginatedImages, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedImages
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedImages
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ImagesApiService.ApiVersionsIdImagesGet")

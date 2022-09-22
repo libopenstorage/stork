@@ -28,10 +28,11 @@ var (
 type BackupCredentialsApiService service
 
 type ApiApiBackupCredentialsIdCredentialsGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupCredentialsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupCredentialsIdCredentialsGetRequest) Execute() (*ControllersPartialCredentials, *http.Response, error) {
 	return r.ApiService.ApiBackupCredentialsIdCredentialsGetExecute(r)
@@ -49,8 +50,8 @@ Get cloud configuration for BackupCredentials
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdCredentialsGet(ctx context.Context, id string) ApiApiBackupCredentialsIdCredentialsGetRequest {
 	return ApiApiBackupCredentialsIdCredentialsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *BackupCredentialsApiService) ApiBackupCredentialsIdCredentialsGet(ctx c
 //  @return ControllersPartialCredentials
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdCredentialsGetExecute(r ApiApiBackupCredentialsIdCredentialsGetRequest) (*ControllersPartialCredentials, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPartialCredentials
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPartialCredentials
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiBackupCredentialsIdCredentialsGet")
@@ -145,10 +146,11 @@ func (a *BackupCredentialsApiService) ApiBackupCredentialsIdCredentialsGetExecut
 }
 
 type ApiApiBackupCredentialsIdDeleteRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupCredentialsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupCredentialsIdDeleteRequest) Execute() (*http.Response, error) {
 	return r.ApiService.ApiBackupCredentialsIdDeleteExecute(r)
@@ -166,17 +168,17 @@ Removes a single BackupCredential
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdDelete(ctx context.Context, id string) ApiApiBackupCredentialsIdDeleteRequest {
 	return ApiApiBackupCredentialsIdDeleteRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
 // Execute executes the request
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdDeleteExecute(r ApiApiBackupCredentialsIdDeleteRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
+		localVarHTTPMethod   = http.MethodDelete
+		localVarPostBody     interface{}
+		formFiles            []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiBackupCredentialsIdDelete")
@@ -251,10 +253,11 @@ func (a *BackupCredentialsApiService) ApiBackupCredentialsIdDeleteExecute(r ApiA
 }
 
 type ApiApiBackupCredentialsIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupCredentialsApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiBackupCredentialsIdGetRequest) Execute() (*ModelsBackupCredentials, *http.Response, error) {
 	return r.ApiService.ApiBackupCredentialsIdGetExecute(r)
@@ -272,8 +275,8 @@ Fetches a single BackupCredentials
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdGet(ctx context.Context, id string) ApiApiBackupCredentialsIdGetRequest {
 	return ApiApiBackupCredentialsIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -281,10 +284,10 @@ func (a *BackupCredentialsApiService) ApiBackupCredentialsIdGet(ctx context.Cont
 //  @return ModelsBackupCredentials
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdGetExecute(r ApiApiBackupCredentialsIdGetRequest) (*ModelsBackupCredentials, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupCredentials
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupCredentials
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiBackupCredentialsIdGet")
@@ -368,10 +371,10 @@ func (a *BackupCredentialsApiService) ApiBackupCredentialsIdGetExecute(r ApiApiB
 }
 
 type ApiApiBackupCredentialsIdPutRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupCredentialsApiService
-	id         string
-	body       *ControllersUpdateBackupCredentialsRequest
+	id string
+	body *ControllersUpdateBackupCredentialsRequest
 }
 
 // Request body containing the backup credentials config
@@ -396,8 +399,8 @@ Updates an existing instance of BackupCredentials
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdPut(ctx context.Context, id string) ApiApiBackupCredentialsIdPutRequest {
 	return ApiApiBackupCredentialsIdPutRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -405,10 +408,10 @@ func (a *BackupCredentialsApiService) ApiBackupCredentialsIdPut(ctx context.Cont
 //  @return ModelsBackupCredentials
 func (a *BackupCredentialsApiService) ApiBackupCredentialsIdPutExecute(r ApiApiBackupCredentialsIdPutRequest) (*ModelsBackupCredentials, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPut
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupCredentials
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupCredentials
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiBackupCredentialsIdPut")
@@ -497,15 +500,15 @@ func (a *BackupCredentialsApiService) ApiBackupCredentialsIdPutExecute(r ApiApiB
 }
 
 type ApiApiTenantsIdBackupCredentialsGetRequest struct {
-	ctx          context.Context
-	ApiService   *BackupCredentialsApiService
-	id           string
-	sortBy       *string
-	limit        *string
+	ctx context.Context
+	ApiService *BackupCredentialsApiService
+	id string
+	sortBy *string
+	limit *string
 	continuation *string
-	id2          *string
-	name         *string
-	type_        *string
+	id2 *string
+	name *string
+	type_ *string
 }
 
 // A given BackupCredentials attribute to sort results by (one of: id, name, created_at)
@@ -513,31 +516,26 @@ func (r ApiApiTenantsIdBackupCredentialsGetRequest) SortBy(sortBy string) ApiApi
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiTenantsIdBackupCredentialsGetRequest) Limit(limit string) ApiApiTenantsIdBackupCredentialsGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiTenantsIdBackupCredentialsGetRequest) Continuation(continuation string) ApiApiTenantsIdBackupCredentialsGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by BackupCredentials id
 func (r ApiApiTenantsIdBackupCredentialsGetRequest) Id2(id2 string) ApiApiTenantsIdBackupCredentialsGetRequest {
 	r.id2 = &id2
 	return r
 }
-
 // Filter results by BackupCredentials name
 func (r ApiApiTenantsIdBackupCredentialsGetRequest) Name(name string) ApiApiTenantsIdBackupCredentialsGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by BackupCredentials type
 func (r ApiApiTenantsIdBackupCredentialsGetRequest) Type_(type_ string) ApiApiTenantsIdBackupCredentialsGetRequest {
 	r.type_ = &type_
@@ -560,8 +558,8 @@ Lists BackupCredentials visible to the caller
 func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsGet(ctx context.Context, id string) ApiApiTenantsIdBackupCredentialsGetRequest {
 	return ApiApiTenantsIdBackupCredentialsGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -569,10 +567,10 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsGet(ctx conte
 //  @return ControllersPaginatedBackupCredentials
 func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsGetExecute(r ApiApiTenantsIdBackupCredentialsGetRequest) (*ControllersPaginatedBackupCredentials, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedBackupCredentials
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedBackupCredentials
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiTenantsIdBackupCredentialsGet")
@@ -674,10 +672,10 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsGetExecute(r 
 }
 
 type ApiApiTenantsIdBackupCredentialsPostRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *BackupCredentialsApiService
-	id         string
-	body       *ControllersCreateBackupCredentialsRequest
+	id string
+	body *ControllersCreateBackupCredentialsRequest
 }
 
 // Request body containing the backup credentials config
@@ -702,8 +700,8 @@ Creates a new BackupCredentials
 func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPost(ctx context.Context, id string) ApiApiTenantsIdBackupCredentialsPostRequest {
 	return ApiApiTenantsIdBackupCredentialsPostRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -711,10 +709,10 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPost(ctx cont
 //  @return ModelsBackupCredentials
 func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPostExecute(r ApiApiTenantsIdBackupCredentialsPostRequest) (*ModelsBackupCredentials, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsBackupCredentials
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsBackupCredentials
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiTenantsIdBackupCredentialsPost")

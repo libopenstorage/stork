@@ -17,9 +17,9 @@ import (
 // ControllersBackupJobStatus struct for ControllersBackupJobStatus
 type ControllersBackupJobStatus struct {
 	CompletionTime *string `json:"completion_time,omitempty"`
-	Name           *string `json:"name,omitempty"`
-	StartTime      *string `json:"start_time,omitempty"`
-	Status         *string `json:"status,omitempty"`
+	Name *string `json:"name,omitempty"`
+	StartTime *string `json:"start_time,omitempty"`
+	Status *string `json:"status,omitempty"`
 }
 
 // NewControllersBackupJobStatus instantiates a new ControllersBackupJobStatus object
@@ -219,3 +219,5 @@ func (v *NullableControllersBackupJobStatus) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

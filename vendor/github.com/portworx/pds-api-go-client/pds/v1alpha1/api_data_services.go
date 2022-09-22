@@ -28,17 +28,17 @@ var (
 type DataServicesApiService service
 
 type ApiApiDataServicesGetRequest struct {
-	ctx                  context.Context
-	ApiService           *DataServicesApiService
-	sortBy               *string
-	limit                *string
-	continuation         *string
-	id                   *string
-	name                 *string
-	shortName            *string
+	ctx context.Context
+	ApiService *DataServicesApiService
+	sortBy *string
+	limit *string
+	continuation *string
+	id *string
+	name *string
+	shortName *string
 	hasIncrementalBackup *bool
-	hasFullBackup        *bool
-	comingSoon           *bool
+	hasFullBackup *bool
+	comingSoon *bool
 }
 
 // A given Data Service attribute to sort results by (one of: id, name, short_name, created_at)
@@ -46,49 +46,41 @@ func (r ApiApiDataServicesGetRequest) SortBy(sortBy string) ApiApiDataServicesGe
 	r.sortBy = &sortBy
 	return r
 }
-
 // Maximum number of rows to return (could be less)
 func (r ApiApiDataServicesGetRequest) Limit(limit string) ApiApiDataServicesGetRequest {
 	r.limit = &limit
 	return r
 }
-
 // Use a token returned by a previous query to continue listing with the next batch of rows
 func (r ApiApiDataServicesGetRequest) Continuation(continuation string) ApiApiDataServicesGetRequest {
 	r.continuation = &continuation
 	return r
 }
-
 // Filter results by Data Service ID
 func (r ApiApiDataServicesGetRequest) Id(id string) ApiApiDataServicesGetRequest {
 	r.id = &id
 	return r
 }
-
 // Filter results by Data Service name
 func (r ApiApiDataServicesGetRequest) Name(name string) ApiApiDataServicesGetRequest {
 	r.name = &name
 	return r
 }
-
 // Filter results by Data Service short name
 func (r ApiApiDataServicesGetRequest) ShortName(shortName string) ApiApiDataServicesGetRequest {
 	r.shortName = &shortName
 	return r
 }
-
 // Filter results based on incremental backup eligibility
 func (r ApiApiDataServicesGetRequest) HasIncrementalBackup(hasIncrementalBackup bool) ApiApiDataServicesGetRequest {
 	r.hasIncrementalBackup = &hasIncrementalBackup
 	return r
 }
-
 // Filter results based on vault full backup eligibility
 func (r ApiApiDataServicesGetRequest) HasFullBackup(hasFullBackup bool) ApiApiDataServicesGetRequest {
 	r.hasFullBackup = &hasFullBackup
 	return r
 }
-
 // Filter results based on &#39;Coming soon&#39; flag
 func (r ApiApiDataServicesGetRequest) ComingSoon(comingSoon bool) ApiApiDataServicesGetRequest {
 	r.comingSoon = &comingSoon
@@ -110,7 +102,7 @@ Lists Data Services
 func (a *DataServicesApiService) ApiDataServicesGet(ctx context.Context) ApiApiDataServicesGetRequest {
 	return ApiApiDataServicesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -118,10 +110,10 @@ func (a *DataServicesApiService) ApiDataServicesGet(ctx context.Context) ApiApiD
 //  @return ControllersPaginatedDataServices
 func (a *DataServicesApiService) ApiDataServicesGetExecute(r ApiApiDataServicesGetRequest) (*ControllersPaginatedDataServices, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedDataServices
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedDataServices
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DataServicesApiService.ApiDataServicesGet")
@@ -231,10 +223,11 @@ func (a *DataServicesApiService) ApiDataServicesGetExecute(r ApiApiDataServicesG
 }
 
 type ApiApiDataServicesIdGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *DataServicesApiService
-	id         string
+	id string
 }
+
 
 func (r ApiApiDataServicesIdGetRequest) Execute() (*ModelsDataService, *http.Response, error) {
 	return r.ApiService.ApiDataServicesIdGetExecute(r)
@@ -252,8 +245,8 @@ Fetches a single Data Service
 func (a *DataServicesApiService) ApiDataServicesIdGet(ctx context.Context, id string) ApiApiDataServicesIdGetRequest {
 	return ApiApiDataServicesIdGetRequest{
 		ApiService: a,
-		ctx:        ctx,
-		id:         id,
+		ctx: ctx,
+		id: id,
 	}
 }
 
@@ -261,10 +254,10 @@ func (a *DataServicesApiService) ApiDataServicesIdGet(ctx context.Context, id st
 //  @return ModelsDataService
 func (a *DataServicesApiService) ApiDataServicesIdGetExecute(r ApiApiDataServicesIdGetRequest) (*ModelsDataService, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ModelsDataService
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsDataService
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DataServicesApiService.ApiDataServicesIdGet")

@@ -16,9 +16,9 @@ import (
 
 // ModelsAuthorizerRequest struct for ModelsAuthorizerRequest
 type ModelsAuthorizerRequest struct {
-	EntityId   *string `json:"entity_id,omitempty"`
+	EntityId *string `json:"entity_id,omitempty"`
 	EntityType *string `json:"entity_type,omitempty"`
-	Operation  *string `json:"operation,omitempty"`
+	Operation *string `json:"operation,omitempty"`
 }
 
 // NewModelsAuthorizerRequest instantiates a new ModelsAuthorizerRequest object
@@ -183,3 +183,5 @@ func (v *NullableModelsAuthorizerRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

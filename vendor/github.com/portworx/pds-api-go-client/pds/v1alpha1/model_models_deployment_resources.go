@@ -16,10 +16,10 @@ import (
 
 // ModelsDeploymentResources struct for ModelsDeploymentResources
 type ModelsDeploymentResources struct {
-	CpuLimit       *string `json:"cpu_limit,omitempty"`
-	CpuRequest     *string `json:"cpu_request,omitempty"`
-	MemoryLimit    *string `json:"memory_limit,omitempty"`
-	MemoryRequest  *string `json:"memory_request,omitempty"`
+	CpuLimit *string `json:"cpu_limit,omitempty"`
+	CpuRequest *string `json:"cpu_request,omitempty"`
+	MemoryLimit *string `json:"memory_limit,omitempty"`
+	MemoryRequest *string `json:"memory_request,omitempty"`
 	StorageRequest *string `json:"storage_request,omitempty"`
 }
 
@@ -255,3 +255,5 @@ func (v *NullableModelsDeploymentResources) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

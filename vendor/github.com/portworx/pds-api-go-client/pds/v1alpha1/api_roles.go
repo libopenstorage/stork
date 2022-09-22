@@ -27,9 +27,10 @@ var (
 type RolesApiService service
 
 type ApiApiRolesGetRequest struct {
-	ctx        context.Context
+	ctx context.Context
 	ApiService *RolesApiService
 }
+
 
 func (r ApiApiRolesGetRequest) Execute() (*ControllersPaginatedRoles, *http.Response, error) {
 	return r.ApiService.ApiRolesGetExecute(r)
@@ -46,7 +47,7 @@ Fetches list of supported Roles
 func (a *RolesApiService) ApiRolesGet(ctx context.Context) ApiApiRolesGetRequest {
 	return ApiApiRolesGetRequest{
 		ApiService: a,
-		ctx:        ctx,
+		ctx: ctx,
 	}
 }
 
@@ -54,10 +55,10 @@ func (a *RolesApiService) ApiRolesGet(ctx context.Context) ApiApiRolesGetRequest
 //  @return ControllersPaginatedRoles
 func (a *RolesApiService) ApiRolesGetExecute(r ApiApiRolesGetRequest) (*ControllersPaginatedRoles, *http.Response, error) {
 	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *ControllersPaginatedRoles
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ControllersPaginatedRoles
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "RolesApiService.ApiRolesGet")

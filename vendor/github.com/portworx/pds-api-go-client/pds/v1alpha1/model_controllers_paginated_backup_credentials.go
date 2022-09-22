@@ -16,8 +16,8 @@ import (
 
 // ControllersPaginatedBackupCredentials struct for ControllersPaginatedBackupCredentials
 type ControllersPaginatedBackupCredentials struct {
-	Data       []ModelsBackupCredentials `json:"data,omitempty"`
-	Pagination *ConstraintPagination     `json:"pagination,omitempty"`
+	Data []ModelsBackupCredentials `json:"data,omitempty"`
+	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
 // NewControllersPaginatedBackupCredentials instantiates a new ControllersPaginatedBackupCredentials object
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedBackupCredentials) UnmarshalJSON(src []byte
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

@@ -16,8 +16,8 @@ import (
 
 // DeploymentsResourceConditions struct for DeploymentsResourceConditions
 type DeploymentsResourceConditions struct {
-	Conditions []DeploymentsCondition       `json:"conditions,omitempty"`
-	Resource   *V1TypedLocalObjectReference `json:"resource,omitempty"`
+	Conditions []DeploymentsCondition `json:"conditions,omitempty"`
+	Resource *V1TypedLocalObjectReference `json:"resource,omitempty"`
 }
 
 // NewDeploymentsResourceConditions instantiates a new DeploymentsResourceConditions object
@@ -147,3 +147,5 @@ func (v *NullableDeploymentsResourceConditions) UnmarshalJSON(src []byte) error 
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

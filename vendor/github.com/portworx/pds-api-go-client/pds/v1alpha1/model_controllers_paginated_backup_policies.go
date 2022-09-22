@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedBackupPolicies struct for ControllersPaginatedBackupPolicies
 type ControllersPaginatedBackupPolicies struct {
-	Data       []ModelsBackupPolicy  `json:"data,omitempty"`
+	Data []ModelsBackupPolicy `json:"data,omitempty"`
 	Pagination *ConstraintPagination `json:"pagination,omitempty"`
 }
 
@@ -147,3 +147,5 @@ func (v *NullableControllersPaginatedBackupPolicies) UnmarshalJSON(src []byte) e
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

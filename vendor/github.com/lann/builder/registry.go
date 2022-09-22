@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	registry    = make(map[reflect.Type]reflect.Type)
+	registry = make(map[reflect.Type]reflect.Type)
 	registryMux sync.RWMutex
 )
 
