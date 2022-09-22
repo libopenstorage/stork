@@ -1065,7 +1065,7 @@ func (m *MigrationController) getCRDList() (*stork_api.ApplicationRegistrationLi
 	if err != nil {
 		logrus.Warnf("unable to list crd registrations: %v", err)
 	}
-	return crdList,err
+	return crdList, err
 }
 
 func (m *MigrationController) prepareResources(
@@ -1494,7 +1494,6 @@ func (m *MigrationController) getParsedMap(
 	}
 	return a
 }
-
 
 func (m *MigrationController) getParsedAnnotations(
 	annotations map[string]string,
