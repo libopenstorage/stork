@@ -198,6 +198,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 		defaultBool := false
 		spec.IncludeNetworkPolicyWithCIDR = &defaultBool
 	}
+	if spec.SkipDeletedNamespaces == nil {
+		defaultBool := true
+		spec.SkipDeletedNamespaces = &defaultBool
+	}
 	return spec
 }
 
