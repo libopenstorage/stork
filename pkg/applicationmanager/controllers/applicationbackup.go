@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aquilax/truncate"
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -27,6 +26,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -43,7 +43,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -74,23 +73,6 @@ const (
 	kdmpDriverOnly                = "kdmp"
 	nonKdmpDriverOnly             = "nonkdmp"
 	mixedDriver                   = "mixed"
-	prefixBackup                    = "backup"
-	prefixRestore                   = "restore"
-	applicationBackupCRNameKey      = kdmpAnnotationPrefix + "applicationbackup-cr-name"
-	applicationRestoreCRNameKey     = kdmpAnnotationPrefix + "applicationrestore-cr-name"
-	applicationBackupCRUIDKey       = kdmpAnnotationPrefix + "applicationbackup-cr-uid"
-	applicationRestoreCRUIDKey      = kdmpAnnotationPrefix + "applicationrestore-cr-uid"
-	kdmpAnnotationPrefix            = "kdmp.portworx.com/"
-	pxbackupAnnotationCreateByKey   = pxbackupAnnotationPrefix + "created-by"
-	pxbackupAnnotationCreateByValue = "px-backup"
-	backupObjectNameKey             = kdmpAnnotationPrefix + "backupobject-name"
-	restoreObjectNameKey            = kdmpAnnotationPrefix + "restoreobject-name"
-	pxbackupObjectUIDKey            = pxbackupAnnotationPrefix + "backup-uid"
-	pxbackupAnnotationPrefix        = "portworx.io/"
-	pxbackupObjectNameKey           = pxbackupAnnotationPrefix + "backup-name"
-	backupObjectUIDKey              = kdmpAnnotationPrefix + "backupobject-uid"
-	restoreObjectUIDKey             = kdmpAnnotationPrefix + "restoreobject-uid"
-	skipResourceAnnotation          = "stork.libopenstorage.org/skip-resource"
 )
 
 var (
@@ -1188,30 +1170,9 @@ func IsNFSBackuplocationType(
 	return false, nil
 }
 
-// getShortUID returns the first part of the UID
-func getShortUID(uid string) string {
-	if len(uid) < 8 {
-		return ""
-	}
-	return uid[0:7]
-}
-
-// getValidLabel - will validate the label to make sure the length is less 63 and contains valid label format.
-// If the length is greater then 63, it will truncate to 63 character.
-func getValidLabel(labelVal string) string {
-	if len(labelVal) > validation.LabelValueMaxLength {
-		labelVal = truncate.Truncate(labelVal, validation.LabelValueMaxLength, "", truncate.PositionEnd)
-		// make sure the truncated value does not end with the hyphen.
-		labelVal = strings.Trim(labelVal, "-")
-		// make sure the truncated value does not end with the dot.
-		labelVal = strings.Trim(labelVal, ".")
-	}
-	return labelVal
-}
-
 func getResourceExportCRName(opsPrefix, crUID, ns string) string {
-	name := fmt.Sprintf("%s-%s-%s", opsPrefix, getShortUID(crUID), ns)
-	name = getValidLabel(name)
+	name := fmt.Sprintf("%s-%s-%s", opsPrefix, utils.GetShortUID(crUID), ns)
+	name = utils.GetValidLabel(name)
 	return name
 }
 
@@ -1377,7 +1338,7 @@ func (a *ApplicationBackupController) backupResources(
 
 	if nfs {
 		// Check whether ResourceExport is preset or not
-		crName := getResourceExportCRName(prefixBackup, string(backup.UID), backup.Namespace)
+		crName := getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
 		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, backup.Namespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
@@ -1385,19 +1346,19 @@ func (a *ApplicationBackupController) backupResources(
 				resourceExport := &kdmpapi.ResourceExport{}
 				// Adding required label for debugging
 				labels := make(map[string]string)
-				labels[applicationBackupCRNameKey] = getValidLabel(backup.Name)
-				labels[applicationBackupCRUIDKey] = getValidLabel(getShortUID(string(backup.UID)))
+				labels[utils.ApplicationBackupCRNameKey] = utils.GetValidLabel(backup.Name)
+				labels[utils.ApplicationBackupCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(backup.UID)))
 				// If backup from px-backup, update the backup object details in the label
-				if val, ok := backup.Annotations[pxbackupAnnotationCreateByKey]; ok {
-					if val == pxbackupAnnotationCreateByValue {
-						labels[backupObjectNameKey] = getValidLabel(backup.Annotations[pxbackupObjectNameKey])
-						labels[backupObjectUIDKey] = getValidLabel(backup.Annotations[pxbackupObjectUIDKey])
+				if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+					if val == utils.PxbackupAnnotationCreateByValue {
+						labels[utils.BackupObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
+						labels[utils.BackupObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
 					}
 				}
 				resourceExport.Labels = labels
 				resourceExport.Annotations = make(map[string]string)
-				resourceExport.Annotations[skipResourceAnnotation] = "true"
-				resourceExport.Name = getResourceExportCRName(prefixBackup, string(backup.UID), backup.Namespace)
+				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
+				resourceExport.Name = getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
 				resourceExport.Namespace = backup.Namespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
 				source := &kdmpapi.ResourceExportObjectReference{
@@ -1671,7 +1632,7 @@ func (a *ApplicationBackupController) cleanupResources(
 	}
 	// Directly calling DeleteResourceExport with out checking backuplocation type.
 	// For other backuplocation type, expecting Notfound
-	crName := getResourceExportCRName(prefixBackup, string(backup.UID), backup.Namespace)
+	crName := getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
 	err := kdmpShedOps.Instance().DeleteResourceExport(crName, backup.Namespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
