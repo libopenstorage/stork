@@ -18,6 +18,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -1276,7 +1277,7 @@ func (a *ApplicationRestoreController) restoreResources(
 		}
 	} else {
 		// Check whether ResourceExport is preset or not
-		crName := getResourceExportCRName(prefixRestore, string(restore.UID), restore.Namespace)
+		crName := getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace)
 		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
@@ -1284,18 +1285,18 @@ func (a *ApplicationRestoreController) restoreResources(
 				resourceExport := &kdmpapi.ResourceExport{}
 				// Adding required label for debugging
 				labels := make(map[string]string)
-				labels[applicationRestoreCRNameKey] = getValidLabel(restore.Name)
-				labels[applicationRestoreCRUIDKey] = getValidLabel(getShortUID(string(restore.UID)))
+				labels[utils.ApplicationRestoreCRNameKey] = utils.GetValidLabel(restore.Name)
+				labels[utils.ApplicationRestoreCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(restore.UID)))
 				// If restore from px-backup, update the restore object details in the label
-				if val, ok := backup.Annotations[pxbackupAnnotationCreateByKey]; ok {
-					if val == pxbackupAnnotationCreateByValue {
-						labels[restoreObjectNameKey] = getValidLabel(backup.Annotations[pxbackupObjectNameKey])
-						labels[restoreObjectUIDKey] = getValidLabel(backup.Annotations[pxbackupObjectUIDKey])
+				if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+					if val == utils.PxbackupAnnotationCreateByValue {
+						labels[utils.RestoreObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
+						labels[utils.RestoreObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
 					}
 				}
 				resourceExport.Labels = labels
 				resourceExport.Annotations = make(map[string]string)
-				resourceExport.Annotations[skipResourceAnnotation] = "true"
+				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
 				resourceExport.Name = crName
 				resourceExport.Namespace = restore.Namespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
@@ -1524,7 +1525,7 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 	}
 	// Directly calling DeleteResourceExport with out checking backuplocation type.
 	// For other backuplocation type, expecting Notfound
-	crName := getResourceExportCRName(prefixBackup, string(restore.UID), restore.Namespace)
+	crName := getResourceExportCRName(utils.PrefixBackup, string(restore.UID), restore.Namespace)
 	err := kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
