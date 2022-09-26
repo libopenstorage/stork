@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-openapi/inflect"
@@ -27,7 +29,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
-	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	// kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
@@ -940,10 +942,10 @@ func (a *ApplicationBackupController) uploadObject(
 	if err != nil {
 		return err
 	}
-	bucket, err := objectstore.GetBucket(backupLocation)
+	/*bucket, err := objectstore.GetBucket(backupLocation)
 	if err != nil {
 		return err
-	}
+	}*/
 	if backupLocation.Location.EncryptionKey != "" {
 		return fmt.Errorf("EncryptionKey is deprecated, use EncryptionKeyV2 instead")
 	}
@@ -954,10 +956,39 @@ func (a *ApplicationBackupController) uploadObject(
 	}
 
 	objectPath := GetObjectPath(backup)
-	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
+	bkpDir := filepath.Join("/tmp/nfs-target", objectPath)
+	if err := os.MkdirAll(bkpDir, 0777); err != nil {
+		logrus.Errorf("%v", err)
+	}
+	//time.Sleep(2 * time.Minute)
+	logrus.Infof("line 974 nfs mount")
+	nfsPath := "/root/prashanth/nfsshare"
+	nerr := syscall.Mount(":"+nfsPath, "/tmp/nfs-target", "nfs", 0, "nolock,addr=10.13.179.152")
+	if nerr != nil {
+		fmt.Println("line 978: %v", nerr)
+	}
+	//time.Sleep(1 * time.Minute)
+
+	if err := os.MkdirAll(bkpDir, 0777); err != nil {
+		logrus.Errorf("%v", err)
+	}
+	fName := filepath.Join(bkpDir, objectName)
+	err = ioutil.WriteFile(fName, data, 0777)
 	if err != nil {
+		logrus.Errorf("line 986 err: %v", err)
 		return err
 	}
+	/*writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
+	if err != nil {
+		return err
+	}g1
+	logrus.Infof("line 974 nfs mount")
+	nfsPath := "/root/prashanth/nfsshare"
+	nerr := syscall.Mount(":"+nfsPath, "/tmp", "nfs", 0, "nolock,addr=10.13.179.152")
+	if nerr != nil {
+		fmt.Println("line 978: %v",nerr)
+	}
+	time.Sleep(1 * time.Minute)
 
 	_, err = writer.Write(data)
 	if err != nil {
@@ -971,6 +1002,10 @@ func (a *ApplicationBackupController) uploadObject(
 	if err != nil {
 		log.ApplicationBackupLog(backup).Errorf("Error closing writer for objectstore: %v", err)
 		return err
+	}*/
+	nerr = syscall.Unmount("/tmp/nfs-target", 0)
+	if nerr != nil {
+		fmt.Println("line 1016: %v", nerr)
 	}
 	return nil
 }
@@ -1304,7 +1339,7 @@ func (a *ApplicationBackupController) backupResources(
 		return err
 	}
 
-	if nfs {
+	/*if nfs {
 		// Check whether ResourceExport is preset or not
 		crName := getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
 		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, backup.Namespace)
@@ -1398,7 +1433,7 @@ func (a *ApplicationBackupController) backupResources(
 			}
 			return nil
 		}
-	}
+	}*/
 	// Upload the resources to the backup location
 	if err = a.uploadResources(backup, allObjects); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v", err)

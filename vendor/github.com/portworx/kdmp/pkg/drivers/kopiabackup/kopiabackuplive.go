@@ -150,7 +150,7 @@ func jobForLiveBackup(
 		},
 	}
 
-	if len(jobOption.NfsServer) != 0 {
+	/*if len(jobOption.NfsServer) != 0 {
 		volumeMount := corev1.VolumeMount{
 			Name:      utils.NfsVolumeName,
 			MountPath: drivers.NfsMount,
@@ -170,7 +170,7 @@ func jobForLiveBackup(
 		}
 
 		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
-	}
+	}*/
 
 	if drivers.CertFilePath != "" {
 		volumeMount := corev1.VolumeMount{

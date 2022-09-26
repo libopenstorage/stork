@@ -223,7 +223,8 @@ func run(c *cli.Context) {
 	cm.Name = cmName
 	cm.Namespace = defaultAdminNamespace
 	cm.Data = make(map[string]string)
-	cm.Data[storkVersion] = version.Version
+	cm.Data[storkVersion] = "2.10.0-de2432"
+	//cm.Data[storkVersion] = version.Version
 	// ConfigMap create/update op should not be blocking operation
 	_, err := schedops.Instance().CreateConfigMap(cm)
 	if k8s_errors.IsAlreadyExists(err) {

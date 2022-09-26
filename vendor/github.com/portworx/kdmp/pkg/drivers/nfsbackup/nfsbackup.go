@@ -203,7 +203,7 @@ func jobForBackupResource(
 			},
 		},
 	}
-	if len(jobOption.NfsServer) != 0 {
+	/*if len(jobOption.NfsServer) != 0 {
 		volumeMount := corev1.VolumeMount{
 			Name:      utils.NfsVolumeName,
 			MountPath: drivers.NfsMount,
@@ -223,7 +223,7 @@ func jobForBackupResource(
 		}
 
 		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
-	}
+	}*/
 
 	return job, nil
 }
