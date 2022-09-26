@@ -274,7 +274,6 @@ func jobFor(
 		splitCmd = append(splitCmd, "--compression", jobOption.Compression)
 		cmd = strings.Join(splitCmd, " ")
 	}
-
 	kopiaExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,

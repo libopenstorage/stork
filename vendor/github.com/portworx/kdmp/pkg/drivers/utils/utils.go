@@ -219,6 +219,29 @@ func ToJobStatus(progress float64, errMsg string, jobStatus batchv1.JobCondition
 	}
 }
 
+// ToNFSJobStatus returns a job status for provided parameters.
+func ToNFSJobStatus(errMsg string, jobStatus batchv1.JobConditionType) *drivers.JobStatus {
+	if errMsg == "upload resource Successfully" {
+		return &drivers.JobStatus{
+			State:  drivers.JobStateCompleted,
+			Reason: errMsg,
+			Status: jobStatus,
+		}
+	}
+	if len(errMsg) > 0 {
+		return &drivers.JobStatus{
+			State:  drivers.JobStateFailed,
+			Reason: errMsg,
+			Status: jobStatus,
+		}
+	}
+
+	return &drivers.JobStatus{
+		State:  drivers.JobStateInProgress,
+		Status: jobStatus,
+	}
+}
+
 // GetConfigValue read configmap and return the value of the requested parameter
 // If error in reading from configmap, we try reading from env variable
 func GetConfigValue(cm, ns, key string) string {
@@ -460,6 +483,31 @@ func KopiaResourceRequirements(configMap, ns string) (corev1.ResourceRequirement
 	limitMem := strings.TrimSpace(GetConfigValue(configMap, ns, drivers.KopiaExecutorLimitMemory))
 	if limitMem == "" {
 		limitMem = drivers.DefaultKopiaExecutorLimitMemory
+	}
+
+	return toResourceRequirements(requestCPU, requestMem, limitCPU, limitMem)
+}
+
+// NFSResourceRequirements returns ResourceRequirements for the kopiaexecutor container.
+func NFSResourceRequirements(configMap, ns string) (corev1.ResourceRequirements, error) {
+	requestCPU := strings.TrimSpace(GetConfigValue(configMap, ns, drivers.NFSExecutorRequestCPU))
+	if requestCPU == "" {
+		requestCPU = drivers.DefaultNFSExecutorRequestCPU
+	}
+
+	requestMem := strings.TrimSpace(GetConfigValue(configMap, ns, drivers.NFSExecutorRequestMemory))
+	if requestMem == "" {
+		requestMem = drivers.DefaultNFSExecutorRequestMemory
+	}
+
+	limitCPU := strings.TrimSpace(GetConfigValue(configMap, ns, drivers.NFSExecutorLimitCPU))
+	if limitCPU == "" {
+		limitCPU = drivers.DefaultNFSExecutorLimitCPU
+	}
+
+	limitMem := strings.TrimSpace(GetConfigValue(configMap, ns, drivers.NFSExecutorLimitMemory))
+	if limitMem == "" {
+		limitMem = drivers.DefaultNFSExecutorLimitMemory
 	}
 
 	return toResourceRequirements(requestCPU, requestMem, limitCPU, limitMem)

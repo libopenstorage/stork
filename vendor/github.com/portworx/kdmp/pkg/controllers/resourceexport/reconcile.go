@@ -3,26 +3,33 @@ package resourceexport
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/controllers"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
+	batchv1 "k8s.io/api/batch/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 // updateResourceExportFields when and update needs to be done to ResourceExport
 // user can choose which filed to be updated and pass the same to updateStatus()
 type updateResourceExportFields struct {
-	status kdmpapi.ResourceExportStatus
-	reason string
-	// TODO: Enable for restore
-	//resources []*kdmpapi.ResourceInfo
+	stage     kdmpapi.ResourceExportStage
+	status    kdmpapi.ResourceExportStatus
+	reason    string
+	id        string
+	resources []*kdmpapi.ResourceRestoreResourceInfo
 }
 
 func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (bool, error) {
@@ -31,10 +38,32 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		return false, nil
 	}
 	resourceExport := in.DeepCopy()
+	if resourceExport.DeletionTimestamp != nil {
+		if controllers.ContainsFinalizer(resourceExport, kdmpcontroller.CleanupFinalizer) {
+			err := c.cleanupResources(resourceExport)
+			if err != nil {
+				return false, nil
+			}
+		}
+		if resourceExport.GetFinalizers() != nil {
+			controllers.RemoveFinalizer(resourceExport, kdmpcontroller.CleanupFinalizer)
+			err := c.client.Update(context.TODO(), resourceExport)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed updating resourceExport CR %s: %v", resourceExport.Name, err)
+				logrus.Errorf("%v", errMsg)
+				return false, fmt.Errorf("%v", errMsg)
+			}
+		}
+		return true, nil
+	}
+	if resourceExport.Status.Stage == kdmpapi.ResourceExportStageFinal {
+		return true, nil
+	}
 
 	// Set to initial status to start with
 	if resourceExport.Status.Status == "" {
 		updateData := updateResourceExportFields{
+			stage:  kdmpapi.ResourceExportStageInitial,
 			status: kdmpapi.ResourceExportStatusInitial,
 			reason: "",
 		}
@@ -71,11 +100,22 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		}
 		return false, c.updateStatus(resourceExport, updateData)
 	}
-	var serr error
-	switch resourceExport.Status.Status {
-	case kdmpapi.ResourceExportStatusInitial:
+
+	//var serr error
+	switch resourceExport.Status.Stage {
+	case kdmpapi.ResourceExportStageInitial:
+		// Create ResourceBackup CR
+		err = createResourceBackup(resourceExport.Name, resourceExport.Namespace)
+		if err != nil {
+			updateData := updateResourceExportFields{
+				stage:  kdmpapi.ResourceExportStageFinal,
+				status: kdmpapi.ResourceExportStatusFailed,
+				reason: fmt.Sprintf("failed to create ResourceBackup CR [%v/%v]", resourceExport.Namespace, resourceExport.Name),
+			}
+			return false, c.updateStatus(resourceExport, updateData)
+		}
 		// start data transfer
-		_, serr = startNfsResourceJob(
+		id, serr := startNfsResourceJob(
 			driver,
 			utils.KdmpConfigmapName,
 			utils.KdmpConfigmapNamespace,
@@ -84,10 +124,114 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		)
 		if serr != nil {
 			logrus.Errorf("err: %v", serr)
+			updateData := updateResourceExportFields{
+				stage:  kdmpapi.ResourceExportStageFinal,
+				status: kdmpapi.ResourceExportStatusFailed,
+				reason: fmt.Sprintf("failed to create startNfsResourceJob job [%v/%v]", resourceExport.Namespace, resourceExport.Name),
+			}
+			return false, c.updateStatus(resourceExport, updateData)
 		}
+		updateData := updateResourceExportFields{
+			stage:  kdmpapi.ResourceExportStageInProgress,
+			status: kdmpapi.ResourceExportStatusInProgress,
+			id:     id,
+			reason: "",
+		}
+		return false, c.updateStatus(resourceExport, updateData)
+	case kdmpapi.ResourceExportStageInProgress:
+		// Read the job status and move the reconciler to next state
+		progress, err := driver.JobStatus(resourceExport.Status.TransferID)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to get %s job status: %s", resourceExport.Status.TransferID, err)
+			updateData := updateResourceExportFields{
+				status: kdmpapi.ResourceExportStatusFailed,
+				reason: errMsg,
+			}
+			return false, c.updateStatus(resourceExport, updateData)
+		}
+		if progress.Status == batchv1.JobFailed {
+			updateData := updateResourceExportFields{
+				stage:  kdmpapi.ResourceExportStageFinal,
+				status: kdmpapi.ResourceExportStatusFailed,
+				reason: fmt.Sprintf("failed to create ResourceBackup CR [%v/%v]", resourceExport.Namespace, resourceExport.Name),
+			}
+			if len(progress.Reason) == 0 {
+				// As we couldn't get actual reason from executor
+				// marking it as internal error
+				updateData.reason = "internal error from executor"
+				return true, c.updateStatus(resourceExport, updateData)
+			}
+			return true, c.updateStatus(resourceExport, updateData)
+		} else if progress.Status == batchv1.JobConditionType("") {
+			// TODO: We can avoid these update but this event will eventually catch up after
+			// resync time
+			updateData := updateResourceExportFields{
+				stage:  kdmpapi.ResourceExportStageInProgress,
+				status: kdmpapi.ResourceExportStatusInProgress,
+				reason: "RestoreExport job in progress",
+			}
+			return true, c.updateStatus(resourceExport, updateData)
+		}
+		var rb *kdmpapi.ResourceBackup
+		// Get the resourcebackup
+		rb, err = kdmp.Instance().GetResourceBackup(resourceExport.Name, resourceExport.Namespace)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to get resourcebackup CR [%s/%s]: %s", resourceExport.Namespace, resourceExport.Name, err)
+			updateData := updateResourceExportFields{
+				status: kdmpapi.ResourceExportStatusFailed,
+				reason: errMsg,
+			}
+			return false, c.updateStatus(resourceExport, updateData)
+		}
+		switch progress.State {
+		case drivers.JobStateFailed:
+			errMsg := fmt.Sprintf("%s transfer job failed: %s", resourceExport.Status.TransferID, progress.Reason)
+			// If a job has failed it means it has tried all possible retires and given up.
+			// In such a scenario we need to fail DE CR and move to clean up stage
+			updateData := updateResourceExportFields{
+				stage:     kdmpapi.ResourceExportStageFinal,
+				status:    kdmpapi.ResourceExportStatusFailed,
+				reason:    errMsg,
+				resources: rb.Status.Resources,
+			}
+			return true, c.updateStatus(resourceExport, updateData)
+		case drivers.JobStateCompleted:
+			// Go for clean up with success state
+			updateData := updateResourceExportFields{
+				stage:     kdmpapi.ResourceExportStageFinal,
+				status:    kdmpapi.ResourceExportStatusSuccessful,
+				reason:    "Job successful",
+				resources: rb.Status.Resources,
+			}
+			return true, c.updateStatus(resourceExport, updateData)
+		}
+	case kdmpapi.ResourceExportStageFinal:
+		// Do nothing
 	}
 
 	return true, nil
+}
+
+func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) error {
+	// clean up resources
+	// Delete ResourceBackup CR
+	rbNamespace, rbName, err := utils.ParseJobID(resourceExport.Status.TransferID)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to parse job ID %v from ResourceeExport CR: %v: %v",
+			resourceExport.Status.TransferID, resourceExport.Name, err)
+		logrus.Errorf("%v", errMsg)
+		return err
+	}
+	err = kdmp.Instance().DeleteResourceBackup(rbName, rbNamespace)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to delete ResourceExport CR[%v/%v]: %v", rbNamespace, rbName, err)
+		logrus.Errorf("%v", errMsg)
+		return err
+	}
+	if err = batch.Instance().DeleteJob(resourceExport.Name, resourceExport.Namespace); err != nil && !k8sErrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourceExportFields) error {
@@ -102,11 +246,22 @@ func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourc
 			logrus.Infof("%v", errMsg)
 			return "", true, fmt.Errorf("%v", errMsg)
 		}
-		// TODO: In the restore path iterate over ResourceInfo{} list and only update the
-		// resource whose status as changed
+
 		if data.status != "" {
 			re.Status.Status = data.status
 			re.Status.Reason = data.reason
+		}
+
+		if data.id != "" {
+			re.Status.TransferID = data.id
+		}
+
+		if data.stage != "" {
+			re.Status.Stage = data.stage
+		}
+
+		if len(data.resources) != 0 {
+			re.Status.Resources = data.resources
 		}
 
 		updErr = c.client.Update(context.TODO(), re)
@@ -179,7 +334,52 @@ func startNfsResourceJob(
 			drivers.WithAppCRName(re.Spec.Source.Name),
 			drivers.WithAppCRNamespace(re.Spec.Source.Namespace),
 			drivers.WithNamespace(re.Namespace),
+			drivers.WithResoureBackupName(re.Name),
+			drivers.WithResoureBackupNamespace(re.Namespace),
+		)
+	case drivers.NFSRestore:
+		return drv.StartJob(
+			drivers.WithKopiaImageExecutorSource("stork"),
+			drivers.WithKopiaImageExecutorSourceNs("kube-system"),
+			drivers.WithRestoreExport(re.Name),
+			drivers.WithJobNamespace(re.Namespace),
+			drivers.WithNfsServer(bl.Location.NfsConfig.NfsServerAddr),
+			drivers.WithNfsExportDir(bl.Location.Path),
+			drivers.WithAppCRName(re.Spec.Source.Name),
+			drivers.WithAppCRNamespace(re.Spec.Source.Namespace),
+			drivers.WithNamespace(re.Namespace),
+			drivers.WithResoureBackupName(re.Name),
+			drivers.WithResoureBackupNamespace(re.Namespace),
 		)
 	}
 	return "", fmt.Errorf("unknown data transfer driver: %s", drv.Name())
+}
+
+func createResourceBackup(name, namespace string) error {
+	funct := "createResourceBackup"
+
+	rbCR := &kdmpapi.ResourceBackup{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       reflect.TypeOf(kdmpapi.ResourceBackup{}).Name(),
+			APIVersion: "kdmp.portworx.com/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				utils.SkipResourceAnnotation: "true",
+			},
+		},
+		// TODO: As part of restore resources, prefill resources info
+		// so that job can update the same
+		Spec: kdmpapi.ResourceBackupSpec{},
+	}
+
+	_, err := kdmp.Instance().CreateResourceBackup(rbCR)
+	if err != nil {
+		logrus.Errorf("%s: %v", funct, err)
+		return err
+	}
+
+	return nil
 }
