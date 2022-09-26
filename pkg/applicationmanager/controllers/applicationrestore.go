@@ -1450,7 +1450,7 @@ func (a *ApplicationRestoreController) restoreResources(
 				return err
 			case kdmpapi.ResourceExportStatusSuccessful:
 				// Modify to have subresource level updating
-				for _, resource := range resourceExport.Spec.Resources {
+				for _, resource := range resourceExport.Status.Resources {
 					a.updateResourceStatusFromRestoreCR(
 						restore,
 						resource,
