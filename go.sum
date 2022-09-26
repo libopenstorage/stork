@@ -1427,6 +1427,8 @@ github.com/portworx/kdmp v0.4.1-0.20220902105026-dc14791e1508/go.mod h1:sTO9LkPk
 github.com/portworx/kdmp v0.4.1-0.20220905153748-e0bb69e59f38/go.mod h1:NI2UgLITtggRvvaRA7lE4+Np4htDp+06Jf1LWksKyGA=
 github.com/portworx/kdmp v0.4.1-0.20220915141144-fcdcc3339119 h1:uUzjkvGchlq4YFPIQ9YvC8EA13xazglxQz8K6Mh0nDA=
 github.com/portworx/kdmp v0.4.1-0.20220915141144-fcdcc3339119/go.mod h1:vM3W94Sf5TxiHokVMv/lf3ew0J4jD4S38R7bi8dgk4I=
+github.com/portworx/kdmp v0.4.1-0.20220926080639-dc2aa24d648e h1:a77KsWL8oeG/M/iflw04SofSu1/43cRY2UU+JuT8XOc=
+github.com/portworx/kdmp v0.4.1-0.20220926080639-dc2aa24d648e/go.mod h1:l9qIpk6irCHxiyup3meoM9wjnn1eRKtEdZw9bIVoY+4=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467 h1:jkqzdbOnejgSN5HG/FLt4enNrozWT/K+nlmaRm3P1II=
@@ -1437,6 +1439,8 @@ github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987/go.m
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220914095824-f7bf26285e26 h1:JXMvcaSoYvtE9ZEfrpbhD1EnFP5HlfEgyYCNo0swuOI=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20220914095824-f7bf26285e26/go.mod h1:8XBwmcbDuhW0TWFKCaHH4oS5xsfGFU5miSyqb0fvl3U=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220915143205-3fe6e54a2a4d h1:URM3aoN9cIoe8nSbOFoBWE/e+X2UmRi38kO/LqZd7dM=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20220915143205-3fe6e54a2a4d/go.mod h1:8XBwmcbDuhW0TWFKCaHH4oS5xsfGFU5miSyqb0fvl3U=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c h1:vTjozKeb8DcF7qRqJWCMBxuUDpht5/TGMHkntwBBohA=
 github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c/go.mod h1:MggFBtnLHdUpaP9HKxZhVCinOYl5sMDNtrJb6YyrPyQ=

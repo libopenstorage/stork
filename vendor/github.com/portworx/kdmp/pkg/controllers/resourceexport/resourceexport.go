@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	// "github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/controllers"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/utils"
@@ -71,11 +71,10 @@ func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (
 		// Error reading the object - requeue the request.
 		return reconcile.Result{RequeueAfter: kdmpcontroller.RequeuePeriod}, nil
 	}
-	/* TODO - Temp disabling till clean up is in place
 	if !controllers.ContainsFinalizer(restoreExport, kdmpcontroller.CleanupFinalizer) {
 		controllers.SetFinalizer(restoreExport, kdmpcontroller.CleanupFinalizer)
 		return reconcile.Result{Requeue: true}, c.client.Update(context.TODO(), restoreExport)
-	}*/
+	}
 
 	requeue, err := c.process(context.TODO(), restoreExport)
 	if err != nil {
@@ -94,31 +93,42 @@ func (c *Controller) createCRD() error {
 	if err != nil {
 		return err
 	}
-	// resourceexport is used by this controller - ensure it's registered
-	re := apiextensions.CustomResource{
-		Name:    kdmpapi.ResourceExportResourceName,
-		Plural:  kdmpapi.ResourceExportResourcePlural,
-		Group:   kdmpapi.SchemeGroupVersion.Group,
-		Version: kdmpapi.SchemeGroupVersion.Version,
-		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(kdmpapi.ResourceExport{}).Name(),
+	resources := []apiextensions.CustomResource{
+		{
+			Name:    kdmpapi.ResourceExportResourceName,
+			Plural:  kdmpapi.ResourceExportResourcePlural,
+			Group:   kdmpapi.SchemeGroupVersion.Group,
+			Version: kdmpapi.SchemeGroupVersion.Version,
+			Scope:   apiextensionsv1beta1.NamespaceScoped,
+			Kind:    reflect.TypeOf(kdmpapi.ResourceExport{}).Name(),
+		},
+		{
+			Name:    kdmpapi.ResourceBackupResourceName,
+			Plural:  kdmpapi.ResourceBackupResourcePlural,
+			Group:   kdmpapi.SchemeGroupVersion.Group,
+			Version: kdmpapi.SchemeGroupVersion.Version,
+			Scope:   apiextensionsv1beta1.NamespaceScoped,
+			Kind:    reflect.TypeOf(kdmpapi.ResourceBackup{}).Name(),
+		},
 	}
 
-	if requiresV1 {
-		err := utils.CreateCRD(re)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			return err
-		}
-		if err := apiextensions.Instance().ValidateCRD(re.Plural+"."+re.Group, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
-			return err
-		}
-	} else {
-		err = apiextensions.Instance().CreateCRDV1beta1(re)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			return err
-		}
-		if err := apiextensions.Instance().ValidateCRDV1beta1(re, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
-			return err
+	for _, res := range resources {
+		if requiresV1 {
+			err := utils.CreateCRD(res)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+			if err := apiextensions.Instance().ValidateCRD(res.Plural+"."+res.Group, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
+				return err
+			}
+		} else {
+			err = apiextensions.Instance().CreateCRDV1beta1(res)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+			if err := apiextensions.Instance().ValidateCRDV1beta1(res, kdmpcontroller.ValidateCRDTimeout, kdmpcontroller.ValidateCRDInterval); err != nil {
+				return err
+			}
 		}
 	}
 

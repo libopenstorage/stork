@@ -1687,6 +1687,8 @@ func startTransferJob(
 			drivers.WithCertSecretNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
+			drivers.WithNfsServer(nfsServerAddr),
+			drivers.WithNfsExportDir(nfsExportPath),
 		)
 	}
 

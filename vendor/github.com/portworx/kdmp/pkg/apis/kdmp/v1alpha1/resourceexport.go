@@ -19,6 +19,12 @@ type ResourceExportType string
 // ResourceExportStatus defines a status of ResourceExport.
 type ResourceExportStatus string
 
+// ResourceExportStage is the stage of the ResourceExport
+type ResourceExportStage string
+
+// ResourceRestoreStatus defines the status of Resource after applying the spec during restore.
+type ResourceRestoreStatus string
+
 // ObjectInfo contains info about an object being backed up or restored
 type ObjectInfo struct {
 	Name                    string `json:"name"`
@@ -29,9 +35,18 @@ type ObjectInfo struct {
 // ResourceRestoreResourceInfo is the info for the restore of a resource
 type ResourceRestoreResourceInfo struct {
 	ObjectInfo `json:",inline"`
-	Status     ResourceExportStatus `json:"status"`
-	Reason     string               `json:"reason"`
+	Status     ResourceRestoreStatus `json:"status"`
+	Reason     string                `json:"reason"`
 }
+
+const (
+	// ResourceRestoreStatusFailed Restore Failed
+	ResourceRestoreStatusFailed ResourceRestoreStatus = "Failed"
+	// ResourceRestoreStatusRetained Restore Retained
+	ResourceRestoreStatusRetained ResourceRestoreStatus = "Retained"
+	// ResourceRestoreStatusSuccessful Restore Successful
+	ResourceRestoreStatusSuccessful ResourceRestoreStatus = "Successful"
+)
 
 const (
 	// ResourceExportStatusInitial is the initial status of ResourceExport. It indicates
@@ -52,6 +67,19 @@ const (
 	ResourceExportBackup ResourceExportType = "nfs"
 )
 
+const (
+	// ResourceExportStageInitial is the initial stage for ResourceExport
+	ResourceExportStageInitial ResourceExportStage = "Initial"
+	// ResourceExportStageInProgress is the InProgress stage for ResourceExport
+	ResourceExportStageInProgress ResourceExportStage = "InProgress"
+	// ResourceExportStageFailed is the Failed stage for ResourceExport
+	ResourceExportStageFailed ResourceExportStage = "Failed"
+	// ResourceExportStageSuccessful is the Successful stage for ResourceExport
+	ResourceExportStageSuccessful ResourceExportStage = "Successful"
+	// ResourceExportStageFinal is the Final stage for ResourceExport
+	ResourceExportStageFinal ResourceExportStage = "Final"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -68,8 +96,6 @@ type ResourceExport struct {
 type ResourceExportSpec struct {
 	// Type - Backup or Restore
 	Type ResourceExportType `json:"type,omitempty"`
-	// Resources status of each resource being restore
-	Resources []*ResourceRestoreResourceInfo `json:"resources"`
 	// Source here is applicationBackup CR for backup
 	Source ResourceExportObjectReference `json:"source,omitempty"`
 	// Destination is the ref to BL CR
@@ -82,6 +108,12 @@ type ResourceStatus struct {
 	Status ResourceExportStatus `json:"status,omitempty"`
 	// Reason status reason
 	Reason string `json:"reason,omitempty"`
+	// TransferID job transfer ID
+	TransferID string `json:"transferID,omitempty"`
+	// Stage resource export stage
+	Stage ResourceExportStage `json:"stage,omitempty"`
+	// Resources status of each resource being restore
+	Resources []*ResourceRestoreResourceInfo `json:"resources"`
 }
 
 // ResourceExportObjectReference contains enough information to let you inspect the referred object.

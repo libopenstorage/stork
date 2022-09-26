@@ -6,9 +6,9 @@ import (
 
 const (
 	// ResourceBackupResourceName is name for the ResourceBackup resource.
-	ResourceBackupResourceName = "resourceBackup"
+	ResourceBackupResourceName = "resourcebackup"
 	// ResourceBackupResourcePlural is the name for list of ResourceBackup resources.
-	ResourceBackupResourcePlural = "resourceBackups"
+	ResourceBackupResourcePlural = "resourcebackups"
 )
 
 // ResourceBackupType defines a method of achieving Resource transfer.
@@ -16,13 +16,6 @@ type ResourceBackupType string
 
 // ResourceBackupStatus defines a status of ResourceBackup.
 type ResourceBackupStatus string
-
-// ResourceInfo is the info for the restore of a resource
-type ResourceInfo struct {
-	ObjectInfo `json:",inline"`
-	Status     ResourceBackupStatus `json:"status"`
-	Reason     string               `json:"reason"`
-}
 
 const (
 	// ResourceBackupStatusInitial is the initial status of ResourceBackup. It indicates
@@ -38,6 +31,16 @@ const (
 	ResourceBackupStatusSuccessful ResourceBackupStatus = "Successful"
 )
 
+// ResourceBackupProgressStatus overall resource backup/restore progress
+type ResourceBackupProgressStatus struct {
+	// Status status of resource export
+	Status ResourceBackupStatus `json:"status,omitempty"`
+	// Reason status reason
+	Reason string `json:"reason,omitempty"`
+	// Resources status of each resource being restore
+	Resources []*ResourceRestoreResourceInfo `json:"resources"`
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -49,13 +52,11 @@ type ResourceBackup struct {
 	// Type - Backup or Restore
 	Type ResourceBackupType `json:"type,omitempty"`
 	// Status Overall status
-	Status ResourceBackupStatus `json:"status,omitempty"`
+	Status ResourceBackupProgressStatus `json:"status,omitempty"`
 }
 
 // ResourceBackupSpec configuration parameters for ResourceBackup
 type ResourceBackupSpec struct {
-	// Resources status of each resource being restore
-	Resources []*ResourceInfo `json:"resources"`
 	// ObjRef here is backuplocation CR
 	ObjRef ResourceBackupObjectReference `json:"source,omitempty"`
 }
