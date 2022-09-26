@@ -330,6 +330,9 @@ type Driver interface {
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
+	// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+	GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error)
+
 	// GetPxctlCmdOutput returns the command output run on the given node and any error
 	GetPxctlCmdOutput(n node.Node, command string) (string, error)
 

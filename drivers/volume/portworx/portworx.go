@@ -3919,14 +3919,8 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 	return api.Status_STATUS_NONE.String(), nil
 }
 
-// GetPxctlCmdOutput returns the command output run on the given node and any error
-func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
-	opts := node.ConnectionOpts{
-		IgnoreError:     false,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-	}
-
+// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
 	pxctlPath := d.getPxctlPath(n)
 
 	// create context
@@ -3937,8 +3931,17 @@ func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error
 		}
 	}
 
+	var (
+		out string
+		err error
+	)
+
 	cmd := fmt.Sprintf("%s %s", pxctlPath, command)
-	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if retry {
+		out, err = d.nodeDriver.RunCommand(n, cmd, opts)
+	} else {
+		out, err = d.nodeDriver.RunCommandWithNoRetry(n, cmd, opts)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
@@ -3952,7 +3955,17 @@ func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error
 	}
 
 	return out, nil
+}
 
+// GetPxctlCmdOutput returns the command output run on the given node and any error
+func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	return d.GetPxctlCmdOutputConnectionOpts(n, command, opts, true)
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
