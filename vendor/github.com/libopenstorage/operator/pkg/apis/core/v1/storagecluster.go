@@ -92,7 +92,7 @@ type StorageClusterSpec struct {
 	// CommonConfig contains specifications for storage, network, environment
 	// variables, etc for all the nodes in the cluster. These config options
 	// can be overriden using the CommonConfig in NodeSpec.
-	CommonConfig
+	CommonConfig `json:",inline"`
 	// UserInterface contains details of a user interface for the storage driver
 	UserInterface *UserInterfaceSpec `json:"userInterface,omitempty"`
 	// PxRepo contains configuration for apt repository. Portworx uses it to install dependency modules.
@@ -181,7 +181,7 @@ type NodeSpec struct {
 	CloudStorage *CloudStorageNodeSpec `json:"cloudStorage,omitempty"`
 	// CommonConfig contains storage, network and other configuration specific
 	// to the group of nodes. This will override the cluster-level configuration.
-	CommonConfig
+	CommonConfig `json:",inline"`
 }
 
 // CSISpec is used to define the CSI configurations
@@ -397,7 +397,7 @@ type CloudStorageSpec struct {
 	// Provider spec for the cloud provider, such as GKE, AWS etc
 	Provider *string `json:"provider,omitempty"`
 	// CloudStorageCommon common cloud storage configuration
-	CloudStorageCommon
+	CloudStorageCommon `json:",inline"`
 	// CapacitySpecs list of cluster wide storage types and their capacities.
 	// A single capacity spec identifies a storage pool with a set of minimum
 	// requested IOPS and size. Based on the cloud provider, the total storage
@@ -418,7 +418,7 @@ type CloudStorageSpec struct {
 // CloudStorageNodeSpec details of storage in cloud environment for node groups
 type CloudStorageNodeSpec struct {
 	// CloudStorageCommon common cloud storage configuration
-	CloudStorageCommon
+	CloudStorageCommon `json:",inline"`
 }
 
 // CloudStorageCommon details of storage in cloud environment
