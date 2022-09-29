@@ -54,7 +54,7 @@ func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTa
 	}
 	dsModel, res, err := dsClient.ApiProjectsIdDeploymentsPost(ctx, projectID).Body(createRequest).Execute()
 
-	if res.StatusCode != status.StatusOK {
+	if res.StatusCode != status.StatusCreated {
 		log.Errorf("Error when calling `ApiProjectsIdDeploymentsPost``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
@@ -111,7 +111,7 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 	return dsModel, err
 }
 
-// GetDeploymentSatus return deployment status.
+// GetDeploymentStatus return deployment status.
 func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.ControllersStatusResponse, *status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
@@ -162,13 +162,37 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 	return dsModel, err
 }
 
-// GetConnectionDetails return connection details for the given deployment.
-func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.DeploymentsConnectionDetails, error) {
+//UpdateDeployment func
+func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID string,
+	appConfigOverride map[string]string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
-		return pds.DeploymentsConnectionDetails{}, err
+		return nil, err
+	}
+	createRequest := pds.ControllersUpdateDeploymentRequest{
+		ApplicationConfigurationOverrides:  &appConfigOverride,
+		ApplicationConfigurationTemplateId: &appConfigID,
+		ImageId:                            &imageID,
+		NodeCount:                          &nodeCount,
+		ResourceSettingsTemplateId:         &resourceTemplateID,
+	}
+	dsModel, res, err := dsClient.ApiDeploymentsIdPut(ctx, deploymentID).Body(createRequest).Execute()
+	if res.StatusCode != status.StatusOK {
+		log.Errorf("Error when calling `ApiDeploymentsIdGet``: %v\n", err)
+		log.Errorf("Full HTTP response: %v\n", res)
+	}
+	return dsModel, err
+}
+
+// GetConnectionDetails return connection details for the given deployment.
+func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.DeploymentsConnectionDetails, map[string]interface{}, error) {
+	dsClient := ds.apiClient.DeploymentsApi
+	ctx, err := pdsutils.GetContext()
+	if err != nil {
+		log.Errorf("Error in getting context for api call: %v\n", err)
+		return pds.DeploymentsConnectionDetails{}, nil, err
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdConnectionInfoGet(ctx, deploymentID).Execute()
 
@@ -176,7 +200,7 @@ func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.
 		log.Errorf("Error when calling `ApiDeploymentsIdConnectionInfoGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
-	return dsModel.GetConnectionDetails(), err
+	return dsModel.GetConnectionDetails(), dsModel.GetClusterDetails(), err
 }
 
 // DeleteDeployment delete deployment and return status.

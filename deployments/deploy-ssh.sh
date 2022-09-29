@@ -518,6 +518,41 @@ spec:
       value: "${VSPHERE_HOST_IP}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
+    - name: CONTROL_PLANE_URL
+      value: "${CONTROL_PLANE_URL}"
+    - name: DS_VERSION
+      value: "${DS_VERSION}"
+    - name: DS_BUILD
+      value: "${DS_BUILD}"
+    - name: NAMESPACE
+      value: "${NAMESPACE}"
+    - name: NO_OF_NODES
+      value: "${NO_OF_NODES}"
+    - name: DATA_SERVICE
+      value: "${DATA_SERVICE}"
+    - name: DEPLOY_ALL_VERSIONS
+      value: "${DEPLOY_ALL_VERSIONS}"
+    - name: DEPLOY_ALL_IMAGES
+      value: "${DEPLOY_ALL_IMAGES}"
+    - name: DEPLOY_ALL_DATASERVICE
+      value: "${DEPLOY_ALL_DATASERVICE}"
+    - name: PDS_USERNAME
+      value: "${PDS_USERNAME}"
+    - name: PDS_PASSWORD
+      value: "${PDS_PASSWORD}"
+    - name: PDS_CLIENT_SECRET
+      value: "${PDS_CLIENT_SECRET}"
+    - name: PDS_CLIENT_ID
+      value: "${PDS_CLIENT_ID}"
+    - name: PDS_ISSUER_URL
+      value: "${PDS_ISSUER_URL}"
+    - name: CLUSTER_TYPE
+      value: "${CLUSTER_TYPE}"
+    - name: TARGET_KUBECONFIG
+      value: "${TARGET_KUBECONFIG}"
+    - name: TARGET_CLUSTER_NAME
+      value: "${TARGET_CLUSTER_NAME}"
+    
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
