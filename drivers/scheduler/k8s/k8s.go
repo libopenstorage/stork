@@ -5302,7 +5302,7 @@ func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) erro
 		logrus.Errorf("Failed to write data to pod: %s", err)
 		return err
 	}
-	// Sync the data, wait 10 secs and then proceed to snapshot the volume
+	// Sync the data, wait 20 secs and then proceed to snapshot the volume
 	cmdArgs2 := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sync"}
 	command2 := exec.Command("kubectl", cmdArgs2...)
 	_, err = command2.Output()
@@ -5310,8 +5310,8 @@ func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) erro
 		logrus.Errorf("Failed to sync: %s", err)
 		return err
 	}
-	fmt.Println("Sleep for 10 secs to let data write through")
-	time.Sleep(time.Second * 10)
+	fmt.Println("Sleep for 20 secs to let data write through")
+	time.Sleep(time.Second * 20)
 	return nil
 }
 
