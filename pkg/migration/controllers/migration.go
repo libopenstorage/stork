@@ -380,7 +380,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),
-						err.Error())
+						errMsg)
 					err = m.updateMigrationCR(context.Background(), migration)
 					if err != nil {
 						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
@@ -402,26 +402,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 					}
 					return nil
 				}
-				// ensure to re-run dry-run for newly introduced object before
-				// starting migration
-				resp.Status.Resources = []*stork_api.TransformResourceInfo{}
-				resp.Status.Status = stork_api.ResourceTransformationStatusInitial
-				transform, err := storkops.Instance().UpdateResourceTransformation(resp)
-				if err != nil && !errors.IsNotFound(err) {
-					errMsg := fmt.Sprintf("Error updating transformation CR: %v", err)
-					log.MigrationLog(migration).Errorf(errMsg)
-					m.recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(stork_api.MigrationStatusFailed),
-						err.Error())
-					err = m.updateMigrationCR(context.Background(), migration)
-					if err != nil {
-						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
-					}
-					return nil
-				}
-				// wait for re-run of dry-run resources
-				if err := storkops.Instance().ValidateResourceTransformation(transform.Name, ns, 1*time.Minute, 5*time.Second); err != nil {
+				if err := storkops.Instance().ValidateResourceTransformation(resp.Name, ns, 1*time.Minute, 5*time.Second); err != nil {
 					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.TransformSpecs, resp.Status.Status)
 					log.MigrationLog(migration).Errorf(errMsg)
 					m.recorder.Event(migration,
@@ -1147,6 +1128,11 @@ func (m *MigrationController) updateResourceStatus(
 			(resource.Group == gkv.Group || (resource.Group == "core" && gkv.Group == "")) &&
 			resource.Version == gkv.Version &&
 			resource.Kind == gkv.Kind {
+			if _, ok := metadata.GetAnnotations()[resourcecollector.TransformedResourceName]; ok {
+				if len(migration.Spec.TransformSpecs) != 0 && len(migration.Spec.TransformSpecs) == 1 {
+					resource.TransformedBy = migration.Spec.TransformSpecs[0]
+				}
+			}
 			resource.Status = status
 			resource.Reason = reason
 			eventType := v1.EventTypeNormal
@@ -2015,7 +2001,7 @@ func (m *MigrationController) applyResources(
 					case "Service":
 						var skipUpdate bool
 						skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
-						if err == nil && skipUpdate {
+						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
 							break
 						}
 						fallthrough
