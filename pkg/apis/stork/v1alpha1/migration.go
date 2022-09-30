@@ -50,6 +50,7 @@ type MigrationResourceInfo struct {
 	meta.GroupVersionKind `json:",inline"`
 	Status                MigrationStatusType `json:"status"`
 	Reason                string              `json:"reason"`
+	TransformedBy         string              `json:"transformedBy"`
 }
 
 // MigrationSummary provides a short summary on the migration
