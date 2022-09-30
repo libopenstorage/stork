@@ -898,6 +898,23 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			}
 			err = Inst().S.CSISnapshotTest(ctx, request)
 			processError(err, errChan...)
+			// the snap name shown in pxctl isn't the CSI snapshot name, it's original PV name + "-snap"
+			var volMap map[string]map[string]string
+			Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+				volMap, err = Inst().S.GetVolumeParameters(ctx)
+				processError(err, errChan...)
+			})
+			for k, v := range volMap {
+				if v["pvc_name"] == vols[0].Name && v["pvc_namespace"] == vols[0].Namespace {
+					Step(fmt.Sprintf("get %s app's snapshot: %s then check that it appears in pxctl", ctx.App.Key, k), func() {
+						err = Inst().V.ValidateVolumeInPxctlList(fmt.Sprint(k, "-snap"))
+						expect(err).To(beNil(), "unexpected error validating snapshot appears in pxctl list")
+					})
+					break
+				}
+
+			}
+
 		}
 	})
 }
