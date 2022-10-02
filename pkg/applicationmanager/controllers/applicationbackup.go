@@ -66,6 +66,9 @@ const (
 	maxRetry                      = 10
 	retrySleep                    = 10 * time.Second
 	genericBackupKey              = "BACKUP_TYPE"
+	kdmpDriverOnly                = "kdmp"
+	nonKdmpDriverOnly             = "nonkdmp"
+	mixedDriver                   = "mixed"
 )
 
 var (
@@ -662,7 +665,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			terminationChannels = nil
 
 			// Run any post exec rules once backup is triggered
-			if backup.Spec.PostExecRule != "" {
+			driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
+			// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
+			if driverCombo == nonKdmpDriverOnly && backup.Spec.PostExecRule != "" {
 				err = a.runPostExecRule(backup)
 				if err != nil {
 					message := fmt.Sprintf("Error running PostExecRule: %v", err)
@@ -767,6 +772,32 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		}
 	}
 
+	// Run any post exec rules once backup is triggered
+	driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
+	// If the driver combination of volumes onlykdmp or mixed of both kdmp and non-kdmp, call post exec rule
+	// backup of volume is success.
+	if (driverCombo == kdmpDriverOnly || driverCombo == mixedDriver) && backup.Spec.PostExecRule != "" {
+		err = a.runPostExecRule(backup)
+		if err != nil {
+			message := fmt.Sprintf("Error running PostExecRule: %v", err)
+			log.ApplicationBackupLog(backup).Errorf(message)
+			a.recorder.Event(backup,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationBackupStatusFailed),
+				message)
+
+			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+			backup.Status.FinishTimestamp = metav1.Now()
+			backup.Status.LastUpdateTimestamp = metav1.Now()
+			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+			backup.Status.Reason = message
+			err = a.client.Update(context.TODO(), backup)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("%v", message)
+		}
+	}
 	// If the backup hasn't failed move on to the next stage.
 	if backup.Status.Status != stork_api.ApplicationBackupStatusFailed {
 		backup.Status.Stage = stork_api.ApplicationBackupStageApplications
@@ -1467,4 +1498,23 @@ func (a *ApplicationBackupController) cleanupResources(
 		}
 	}
 	return nil
+}
+
+func (a *ApplicationBackupController) checkVolumeDriverCombination(volumes []*stork_api.ApplicationBackupVolumeInfo) string {
+	var kdmpCount, totalCount, nonKdmpCount int
+	totalCount = len(volumes)
+	for _, vInfo := range volumes {
+		if vInfo.DriverName == volume.KDMPDriverName {
+			kdmpCount++
+		} else {
+			nonKdmpCount++
+		}
+	}
+
+	if totalCount == kdmpCount {
+		return kdmpDriverOnly
+	} else if totalCount == nonKdmpCount {
+		return nonKdmpDriverOnly
+	}
+	return mixedDriver
 }
