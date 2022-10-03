@@ -23,24 +23,35 @@ import (
 )
 
 const (
-	cmdRetry   = 5 * time.Second
-	cmdTimeout = 15 * time.Second
+	cmdRetry               = 5 * time.Second
+	cmdTimeout             = 15 * time.Second
+	TelemetryEnabledStatus = "100"
 )
 
-const (
-	TelemetryEnabledStatus = "100"
+var (
+	telemetryCmdConnectionOpts = node.ConnectionOpts{
+		Timeout:         cmdTimeout,
+		TimeBeforeRetry: cmdRetry,
+		Sudo:            false,
+	}
+	isTelemetryOperatorEnabled = false
 )
 
 // Taken from SharedV4 tests...
 func runCmd(cmd string, n node.Node, cmdConnectionOpts *node.ConnectionOpts) (string, error) {
 	if cmdConnectionOpts == nil {
-		cmdConnectionOpts = &node.ConnectionOpts{
-			Timeout:         cmdTimeout,
-			TimeBeforeRetry: cmdRetry,
-			Sudo:            false,
-		}
+		cmdConnectionOpts = &telemetryCmdConnectionOpts
 	}
 	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, *cmdConnectionOpts)
+	return output, err
+}
+
+func runPxctlCommand(pxctlCmd string, n node.Node, cmdConnectionOpts *node.ConnectionOpts) (string, error) {
+	if cmdConnectionOpts == nil {
+		cmdConnectionOpts = &telemetryCmdConnectionOpts
+	}
+
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, pxctlCmd, *cmdConnectionOpts, false)
 	return output, err
 }
 
@@ -55,13 +66,26 @@ func TestTelemetryBasic(t *testing.T) {
 
 func TelemetryEnabled(currNode node.Node) bool {
 	// This returns true if telemetry is enabled
-	out, err := runCmd("/opt/pwx/bin/pxctl status -j | jq .telemetrystatus.connection_status.error_code", currNode, nil)
+	out, err := runPxctlCommand("status -j | jq .telemetrystatus.connection_status.error_code", currNode, nil)
 	Expect(err).NotTo(HaveOccurred(), "Error getting telemetry status for %s", currNode.Name)
 	return strings.TrimSpace(out) == TelemetryEnabledStatus
 }
 
 var _ = BeforeSuite(func() {
 	InitInstance()
+	logrus.Infof("Checking telemetry status...")
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	if isOpBased {
+		spec, err := Inst().V.GetStorageCluster()
+		Expect(err).ToNot(HaveOccurred())
+		if spec.Spec.Monitoring != nil && spec.Spec.Monitoring.Telemetry != nil && spec.Spec.Monitoring.Telemetry.Enabled {
+			logrus.Infof("Telemetry is operator enabled.")
+			isTelemetryOperatorEnabled = true
+		}
+	}
+	if !isTelemetryOperatorEnabled {
+		logrus.Infof("Telemetry is not enabled.")
+	}
 })
 
 // This test telemetry health via pxctl
@@ -72,6 +96,9 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 	testrailID := 54907
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
+		}
 	})
 
 	It("Validate, pxctl displays telemetry status", func() {
@@ -80,7 +107,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("run pxctl status to check telemetry status on node %v", currNode.Name), func() {
-				output, err := runCmd("/opt/pwx/bin/pxctl status | egrep ^Telemetry:", currNode, nil)
+				output, err := runPxctlCommand("status | egrep ^Telemetry:", currNode, nil)
 				Expect(err).NotTo(HaveOccurred(), "Failed to get status for nodee %v", currNode.Name)
 				logrus.Infof("node %s: %s", currNode.Name, output)
 				telemetryNodeStatus[currNode.Name], _ = regexp.MatchString(`Telemetry:.*Healthy`, output)
@@ -99,6 +126,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{DiagsBasic}", func() {
 	var contexts []*scheduler.Context
+
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -136,6 +164,9 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 	JustBeforeEach(func() {
 		for _, testRailID := range testrailIDs {
 			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailID))
+		}
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
 		}
 	})
 	var contexts []*scheduler.Context
@@ -181,8 +212,12 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 	var testrailID = 54911
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
 	var runID int
+
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
+		}
 	})
 	var contexts []*scheduler.Context
 	var diagsFiles []string
@@ -275,8 +310,12 @@ var _ = Describe("{DiagsClusterWide}", func() {
 	var testrailID = 54916
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54916
 	var runID int
+
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
+		}
 	})
 	var contexts []*scheduler.Context
 	var diagFile string
@@ -286,7 +325,7 @@ var _ = Describe("{DiagsClusterWide}", func() {
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("run pxctl sv diags to collect cluster wide diags  %v", currNode.Name), func() {
-				_, err := runCmd("/opt/pwx/bin/pxctl sv diags -a -c", currNode, nil)
+				_, err := runPxctlCommand("sv diags -a -c", currNode, nil)
 				Expect(err).NotTo(HaveOccurred(), "Error running diags on Node: %s", currNode.Name)
 			})
 			Step(fmt.Sprintf("Get the svc diags collected above %s", currNode.Name), func() {
@@ -320,6 +359,7 @@ var _ = Describe("{DiagsClusterWide}", func() {
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{DiagsAsyncBasic}", func() {
 	var contexts []*scheduler.Context
+
 	It("has to setup, validate, try to get a-sync diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -372,6 +412,9 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 		for _, testRailID := range testProcNmsTestRailIDs {
 			runIDs[testRailID] = testrailuttils.AddRunsToMilestone(testRailID)
 		}
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
+		}
 	})
 
 	It("has to setup, validate, try to collect auto diags on nodes after px-storage/px crash", func() {
@@ -413,7 +456,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 				Step(fmt.Sprintf("'%s': run pxctl status to check when the server has gone down on %v",
 					pxProcessNm, currNode.Name), func() {
 					Eventually(func() (string, error) {
-						output, err := runCmd("/opt/pwx/bin/pxctl status | egrep ^PX", currNode, nil)
+						output, err := runPxctlCommand("status | egrep ^PX", currNode, nil)
 						return output, err
 					}, 45*time.Second, 1*time.Second).Should(ContainSubstring("PX is not running on this host"),
 						"'%s': failed to forcefully stop driver on node %s", pxProcessNm, currNode.Name)
@@ -474,6 +517,9 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 	testrailID := 54918
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
+		}
 	})
 
 	It("Validate, pxctl displays telemetry status", func() {
@@ -535,8 +581,12 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 	var testrailID = 54915
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54916
 	var runID int
+
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
+		}
 	})
 	var contexts []*scheduler.Context
 	var diagFile string
@@ -560,7 +610,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 		})
 
 		Step(fmt.Sprintf("run pxctl sv diags on node %s to collect diags on specific node %v", currNode.Name, diagNode.Name), func() {
-			_, err := runCmd(fmt.Sprintf("/opt/pwx/bin/pxctl sv diags -a -n %s", diagNode.VolDriverNodeID), currNode, nil)
+			_, err := runPxctlCommand(fmt.Sprintf("sv diags -a -n %s", diagNode.VolDriverNodeID), currNode, nil)
 			Expect(err).NotTo(HaveOccurred(), "Error running diags on Node %s to %s", currNode.Name, diagNode.Name)
 		})
 

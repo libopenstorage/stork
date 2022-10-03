@@ -786,6 +786,14 @@ func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	}
 }
 
+// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+func (d *DefaultDriver) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlCmdOutputConnectionOpts()",
+	}
+}
+
 // GetPxctlCmdOutput returns the command output run on the given node and any error
 func (d *DefaultDriver) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
 	return "", &errors.ErrNotSupported{
