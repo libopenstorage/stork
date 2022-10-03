@@ -40,7 +40,7 @@ const (
 	// environment variable for command executor image registry and image registry secret.
 	cmdExecutorImageRegistryEnvVar       = "CMD-EXECUTOR-IMAGE-REGISTRY"
 	cmdExecutorImageRegistrySecretEnvVar = "CMD-EXECUTOR-IMAGE-REGISTRY-SECRET"
-	defaultCmdExecutorImage              = "openstorage/cmdexecutor:0.1"
+	defaultCmdExecutorImage              = "cmdexecutor:0.1"
 	// annotation key value for command executor image registry and image registry secret.
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
 	cmdExecutorImageOverrideSecretKey    = "stork.libopenstorage.org/cmdexecutor-image-secret"
@@ -338,10 +338,15 @@ func executeCommandAction(
 	// The order of priority for image location value is Job annotation, environmental variable
 	// and then if both of them are missing, default to stork image repo
 	if len(os.Getenv(cmdExecutorImageRegistryEnvVar)) == 0 {
+		storkPodNs, err := k8sutils.GetStorkPodNamespace()
+		if err != nil {
+			logrus.Errorf("error in getting stork pod namespace: %v", err)
+			return err
+		}
 		// If env is not set get the values from stork deployment spec.
 		registry, registrySecret, err := k8sutils.GetImageRegistryFromDeployment(
 			k8sutils.StorkDeploymentName,
-			k8sutils.DefaultAdminNamespace,
+			storkPodNs,
 		)
 		if err != nil {
 			return err

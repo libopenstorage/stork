@@ -42,7 +42,7 @@ PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
 ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
 
-all: vet lint build fmt
+all: vet build fmt
 
 deps:
 	go get -d -v $(PKGS)
@@ -99,7 +99,7 @@ errcheck:
 	(mkdir -p tools && GO111MODULE=off && go get -v github.com/kisielk/errcheck)
 	errcheck -tags "$(TAGS)" $(PKGS)
 
-pretest: lint vet errcheck
+pretest: vet errcheck
 
 test:
 	go test -tags "$(TAGS)" $(TESTFLAGS) $(PKGS)

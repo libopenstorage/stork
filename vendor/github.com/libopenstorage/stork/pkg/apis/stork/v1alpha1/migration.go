@@ -21,10 +21,13 @@ type MigrationSpec struct {
 	StartApplications            *bool             `json:"startApplications"`
 	PurgeDeletedResources        *bool             `json:"purgeDeletedResources"`
 	SkipServiceUpdate            *bool             `json:"skipServiceUpdate"`
+	IncludeNetworkPolicyWithCIDR *bool             `json:"includeNetworkPolicyWithCIDR"`
 	Selectors                    map[string]string `json:"selectors"`
 	PreExecRule                  string            `json:"preExecRule"`
 	PostExecRule                 string            `json:"postExecRule"`
 	IncludeOptionalResourceTypes []string          `json:"includeOptionalResourceTypes"`
+	SkipDeletedNamespaces        *bool             `json:"skipDeletedNamespaces"`
+	TransformSpecs               []string          `json:"transformSpecs"`
 }
 
 // MigrationStatus is the status of a migration operation

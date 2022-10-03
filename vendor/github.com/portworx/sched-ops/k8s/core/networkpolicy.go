@@ -20,7 +20,7 @@ type NetworkPolicyOps interface {
 	PatchNetworkPolicy(name, namespace string, pt types.PatchType, jsonPatch []byte, subresources ...string) (*v1.NetworkPolicy, error)
 	// DeleteNetworkPolicy removes NetworkPolicy for a given namespace/name.
 	DeleteNetworkPolicy(name, namespace string) error
-	// UpdateNetworkPolicy updates the given endpoint
+	// UpdateNetworkPolicy updates the given networkpolicy
 	UpdateNetworkPolicy(NetworkPolicy *v1.NetworkPolicy) (*v1.NetworkPolicy, error)
 }
 
@@ -64,7 +64,7 @@ func (c *Client) DeleteNetworkPolicy(name, ns string) error {
 	return c.kubernetes.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
-// UpdateNetworkPolicy updates the given endpoint.
+// UpdateNetworkPolicy updates the given network policy.
 func (c *Client) UpdateNetworkPolicy(NetworkPolicy *v1.NetworkPolicy) (*v1.NetworkPolicy, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err

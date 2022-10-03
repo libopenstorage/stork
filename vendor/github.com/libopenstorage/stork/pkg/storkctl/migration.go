@@ -155,6 +155,12 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				util.CheckErr(err)
 				return
 			}
+			if qps := cmdFactory.GetQPS(); qps > 1 {
+				config.QPS = float32(qps)
+			}
+			if burst := cmdFactory.GetBurst(); burst > 1 {
+				config.Burst = burst
+			}
 			if allNamespaces {
 				namespaces, err := core.Instance().ListNamespaces(nil)
 				if err != nil {
@@ -192,6 +198,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				updateIBPObjects("IBPCA", ns, true, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
 				updateIBPObjects("IBPConsole", ns, true, ioStreams)
+				updateVMObjects("VirtualMachine", ns, true, ioStreams)
 				updateCRDObjects(ns, true, ioStreams, config)
 				updateCronJobObjects(ns, true, ioStreams)
 			}
@@ -239,6 +246,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateIBPObjects("IBPCA", ns, false, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
 				updateIBPObjects("IBPConsole", ns, false, ioStreams)
+				updateVMObjects("VirtualMachine", ns, true, ioStreams)
 				updateCRDObjects(ns, false, ioStreams, config)
 				updateCronJobObjects(ns, false, ioStreams)
 			}
@@ -448,6 +456,26 @@ func updateIBPObjects(kind string, namespace string, activate bool, ioStreams ge
 			}
 			printMsg(fmt.Sprintf("Updated replicas for %v %v/%v to %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), replicas), ioStreams.Out)
 		}
+	}
+}
+func updateVMObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+	objects, err := dynamic.Instance().ListObjects(
+		&metav1.ListOptions{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       kind,
+				APIVersion: "kubevirt.io/v1"},
+		},
+		namespace)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			util.CheckErr(err)
+		}
+		return
+	}
+	for _, o := range objects.Items {
+		path := []string{"spec", "running"}
+		unstructured.RemoveNestedField(o.Object, path...)
+		printMsg(fmt.Sprintf("Removed field for %v %v/%v", strings.ToLower(kind), o.GetNamespace(), o.GetName()), ioStreams.Out)
 	}
 }
 

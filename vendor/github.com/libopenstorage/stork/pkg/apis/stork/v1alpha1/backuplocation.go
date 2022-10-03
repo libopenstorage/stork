@@ -35,7 +35,8 @@ type BackupLocation struct {
 type BackupLocationItem struct {
 	Type BackupLocationType `json:"type"`
 	// Path is either the bucket or any other path for the backup location
-	Path               string        `json:"path"`
+	Path string `json:"path"`
+	// EncryptionKey is deprecated. Instead use EncryptionV2Key field to pass the encryption key.
 	EncryptionKey      string        `json:"encryptionKey"`
 	S3Config           *S3Config     `json:"s3Config,omitempty"`
 	AzureConfig        *AzureConfig  `json:"azureConfig,omitempty"`
@@ -43,6 +44,8 @@ type BackupLocationItem struct {
 	SecretConfig       string        `json:"secretConfig"`
 	Sync               bool          `json:"sync"`
 	RepositoryPassword string        `json:"repositoryPassword"`
+	// EncryptionV2Key will be used to pass encryption key.
+	EncryptionV2Key string `json:"encryptionV2Key"`
 }
 
 // ClusterItem is the spec used to store a the credentials associated with the cluster
@@ -52,12 +55,12 @@ type BackupLocationItem struct {
 type ClusterItem struct {
 	Type ClusterType `json:"type"`
 	// Path is either the bucket or any other path for the backup location
-	EncryptionKey      string              `json:"encryptionKey"`
-	AWSClusterConfig   *AWSClusterConfig   `json:"awsClusterConfig,omitempty"`
-	AzureClusterConfig *AzureClusterConfig `json:"azureClusterConfig,omitempty"`
-	GCPClusterConfig   *GCPClusterConfig   `json:"gcpClusterConfig,omitempty"`
-	SecretConfig       string              `json:"secretConfig"`
-	Sync               bool                `json:"sync"`
+	EncryptionKey      string        `json:"encryptionKey"`
+	AWSClusterConfig   *S3Config     `json:"awsClusterConfig,omitempty"`
+	AzureClusterConfig *AzureConfig  `json:"azureClusterConfig,omitempty"`
+	GCPClusterConfig   *GoogleConfig `json:"gcpClusterConfig,omitempty"`
+	SecretConfig       string        `json:"secretConfig"`
+	Sync               bool          `json:"sync"`
 }
 
 // BackupLocationType is the type of the backup location
@@ -84,7 +87,7 @@ const (
 	AzureCluster ClusterType = "azure"
 )
 
-// S3Config speficies the config required to connect to an S3-compliant
+// S3Config specifies the config required to connect to an S3-compliant
 // objectstore
 type S3Config struct {
 	// Endpoint will be defaulted to s3.amazonaws.com by the controller if not provided
@@ -99,38 +102,25 @@ type S3Config struct {
 	// The S3 Storage Class to use when uploading objects. Glacier storage
 	// classes are not supported
 	StorageClass string `json:"storageClass"`
+	// UseIam when set stork will use the instance IAM role associated with the nodes
+	// on which stork pods run
+	UseIam bool `json:"useIam"`
 }
 
 // AzureConfig specifies the config required to connect to Azure Blob Storage
 type AzureConfig struct {
 	StorageAccountName string `json:"storageAccountName"`
 	StorageAccountKey  string `json:"storageAccountKey"`
+	TenantID           string `json:"tenantID"`
+	SubscriptionID     string `json:"subscriptionID"`
+	ClientID           string `json:"clientID"`
+	ClientSecret       string `json:"clientSecret"`
 }
 
 // GoogleConfig specifies the config required to connect to Google Cloud Storage
 type GoogleConfig struct {
 	ProjectID  string `json:"projectID"`
 	AccountKey string `json:"accountKey"`
-}
-
-// AWSClusterConfig speficies the config required to do aws apis for snapshot and restore
-type AWSClusterConfig struct {
-	AccessKeyID     string `json:"accessKeyID"`
-	SecretAccessKey string `json:"secretAccessKey"`
-}
-
-// GCPClusterConfig speficies the config required to do google apis for snapshot and restore
-type GCPClusterConfig struct {
-	ProjectID  string `json:"projectID"`
-	AccountKey string `json:"accountKey"`
-}
-
-// AzureClusterConfig speficies the config required to do azure apis for snapshot and restore
-type AzureClusterConfig struct {
-	TenantID       string `json:"tenantID"`
-	SubscriptionID string `json:"subscriptionID"`
-	ClientID       string `json:"clientID"`
-	ClientSecret   string `json:"clientSecret"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -151,7 +141,7 @@ func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
 		if val, ok := secretConfig.Data["encryptionKey"]; ok && val != nil {
-			bl.Location.EncryptionKey = strings.TrimSuffix(string(val), "\n")
+			bl.Location.EncryptionV2Key = strings.TrimSuffix(string(val), "\n")
 		}
 		if val, ok := secretConfig.Data["path"]; ok && val != nil {
 			bl.Location.Path = strings.TrimSuffix(string(val), "\n")
@@ -300,16 +290,16 @@ func (bl *BackupLocation) getMergedAzureClusterCred(client kubernetes.Interface)
 		if err != nil {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
-		if val, ok := secretConfig.Data["tenantId"]; ok && val != nil {
+		if val, ok := secretConfig.Data["tenantID"]; ok && val != nil {
 			bl.Cluster.AzureClusterConfig.TenantID = strings.TrimSuffix(string(val), "\n")
 		}
-		if val, ok := secretConfig.Data["ClientId"]; ok && val != nil {
+		if val, ok := secretConfig.Data["clientID"]; ok && val != nil {
 			bl.Cluster.AzureClusterConfig.ClientID = strings.TrimSuffix(string(val), "\n")
 		}
-		if val, ok := secretConfig.Data["ClientSecret"]; ok && val != nil {
+		if val, ok := secretConfig.Data["clientSecret"]; ok && val != nil {
 			bl.Cluster.AzureClusterConfig.ClientSecret = strings.TrimSuffix(string(val), "\n")
 		}
-		if val, ok := secretConfig.Data["SubscriptionID"]; ok && val != nil {
+		if val, ok := secretConfig.Data["subscriptionID"]; ok && val != nil {
 			bl.Cluster.AzureClusterConfig.SubscriptionID = strings.TrimSuffix(string(val), "\n")
 		}
 	}
