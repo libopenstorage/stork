@@ -678,6 +678,10 @@ func (p *portworx) GetClusterID() (string, error) {
 }
 
 func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+	if cmBackupType == storkapi.ApplicationBackupGeneric {
+		// If user has forced the backupType in config map, default to generic always
+		return false
+	}
 	return p.IsSupportedPVC(coreOps, pvc, true)
 }
 
