@@ -7,3 +7,9 @@ func (r *ResourceCollector) virtualMachineInstanceToBeCollected(
 ) (bool, error) {
 	return false, nil
 }
+
+func (r *ResourceCollector) virtualMachineInstanceMigrationToBeCollected(
+	object runtime.Unstructured,
+) (bool, error) {
+	return false, nil
+}
