@@ -174,32 +174,13 @@ case $i in
 esac
 done
 
-if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
-    TEST_SUITE='
-            "bin/asg.test",
-            "bin/autopilot.test",
-            "bin/basic.test",
-            "bin/backup.test",
-            "bin/reboot.test",
-            "bin/upgrade.test",
-            "bin/drive_failure.test",
-            "bin/volume_ops.test",
-            "bin/sched.test",
-            "bin/scheduler_upgrade.test",
-            "bin/node_decommission.test",
-            "bin/license.test",
-            "bin/upgrade_cluster.test",
-            "bin/sharedv4.test",
-            "bin/telemetry.test",
-            "bin/upgrade_cluster.test",
-            "bin/pxcentral.test",
-            "bin/storage_pool.test",
-            "bin/openshift.test",
-'
-else
-  TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
+echo "checking if we need to override test suite: ${TEST_SUITE}"
+
+if [[ "$TEST_SUITE" != *"pds.test"* ]]; then
+    TEST_SUITE='"bin/basic.test"'
 fi
-echo "Using list of test suite(s): ${TEST_SUITE}"
+
+echo "Using test suite: ${TEST_SUITE}"
 
 if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
     AUTOPILOT_UPGRADE_VERSION=""
@@ -409,7 +390,7 @@ spec:
             "$VERBOSE",
             "$FOCUS_ARG",
             "$SKIP_ARG",
-            $TEST_SUITE
+            $TEST_SUITE,
             "--",
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",

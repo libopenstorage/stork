@@ -454,6 +454,30 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	var workers []node.Node
 	var numPods int
 	var namespacePrefix string
+	var tcpDumpInstalled bool
+
+	BeforeEach(func() {
+		if !tcpDumpInstalled {
+			// package installation hangs when using nsenter to run command on nodes, so do it only when using ssh
+			if Inst().N.IsUsingSSH() {
+				for _, anode := range node.GetWorkerNodes() {
+					// TODO: support other OS'es
+					logrus.Infof("installing tcpdump on node %s", anode.Name)
+					cmd := "yum install -y tcpdump"
+					_, err := Inst().N.RunCommandWithNoRetry(anode, cmd, node.ConnectionOpts{
+						Timeout:         cmdTimeout,
+						TimeBeforeRetry: cmdRetry,
+						Sudo:            true,
+					})
+					if err != nil {
+						logrus.Warnf("failed to install tcpdump on node %s: %v", anode.Name, err)
+						break
+					}
+				}
+			}
+			tcpDumpInstalled = true
+		}
+	})
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
