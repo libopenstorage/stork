@@ -41,7 +41,7 @@ require (
 	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	google.golang.org/genproto v0.0.0-20220819174105-e9f053255caa
 	google.golang.org/grpc v1.48.0
