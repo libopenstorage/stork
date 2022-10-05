@@ -276,6 +276,12 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		blName := dataExport.Spec.Destination.Name
 		blNamespace := dataExport.Spec.Destination.Namespace
+
+		if driverName == drivers.KopiaRestore {
+			blName = vb.Spec.BackupLocation.Name
+			blNamespace = vb.Spec.BackupLocation.Namespace
+		}
+
 		backupLocation, err := readBackupLocation(blName, blNamespace, "")
 		if err != nil {
 			msg := fmt.Sprintf("reading of backuplocation [%v/%v] failed: %v", blNamespace, blName, err)
