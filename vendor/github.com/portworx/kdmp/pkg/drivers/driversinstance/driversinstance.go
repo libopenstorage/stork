@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/kopiamaintenance"
 	"github.com/portworx/kdmp/pkg/drivers/kopiarestore"
 	"github.com/portworx/kdmp/pkg/drivers/nfsbackup"
+	"github.com/portworx/kdmp/pkg/drivers/nfsrestore"
 	"github.com/portworx/kdmp/pkg/drivers/nfsdelete"
 	"github.com/portworx/kdmp/pkg/drivers/resticbackup"
 	"github.com/portworx/kdmp/pkg/drivers/resticrestore"
@@ -27,6 +28,7 @@ var (
 		drivers.KopiaDelete:      kopiadelete.Driver{},
 		drivers.KopiaMaintenance: kopiamaintenance.Driver{},
 		drivers.NFSBackup:        nfsbackup.Driver{},
+		drivers.NFSRestore:       nfsrestore.Driver{},
 		drivers.NFSDelete:        nfsdelete.Driver{},
 	}
 )

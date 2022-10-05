@@ -1429,6 +1429,12 @@ github.com/portworx/kdmp v0.4.1-0.20220915141144-fcdcc3339119 h1:uUzjkvGchlq4YFP
 github.com/portworx/kdmp v0.4.1-0.20220915141144-fcdcc3339119/go.mod h1:vM3W94Sf5TxiHokVMv/lf3ew0J4jD4S38R7bi8dgk4I=
 github.com/portworx/kdmp v0.4.1-0.20220926080639-dc2aa24d648e h1:a77KsWL8oeG/M/iflw04SofSu1/43cRY2UU+JuT8XOc=
 github.com/portworx/kdmp v0.4.1-0.20220926080639-dc2aa24d648e/go.mod h1:l9qIpk6irCHxiyup3meoM9wjnn1eRKtEdZw9bIVoY+4=
+github.com/portworx/kdmp v0.4.1-0.20221004034610-983f0d4c2980 h1:vZ7pDS7QrVRMFQ/NEC8crHg9IT+UeztibtzLDDTmkHM=
+github.com/portworx/kdmp v0.4.1-0.20221004034610-983f0d4c2980/go.mod h1:l9qIpk6irCHxiyup3meoM9wjnn1eRKtEdZw9bIVoY+4=
+github.com/portworx/kdmp v0.4.1-0.20221005172134-e97e06ee322d h1:noBIITH1lT9XcZSCGbWsU7tKuccFhbWCxhr3rE5i1fM=
+github.com/portworx/kdmp v0.4.1-0.20221005172134-e97e06ee322d/go.mod h1:l9qIpk6irCHxiyup3meoM9wjnn1eRKtEdZw9bIVoY+4=
+github.com/portworx/kdmp v0.4.1-0.20221006022703-ed9604037765 h1:n12O3upF0RgTtBvHQUO5QH5pKjMyIzj6WMX3ax6vmnM=
+github.com/portworx/kdmp v0.4.1-0.20221006022703-ed9604037765/go.mod h1:l9qIpk6irCHxiyup3meoM9wjnn1eRKtEdZw9bIVoY+4=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467 h1:jkqzdbOnejgSN5HG/FLt4enNrozWT/K+nlmaRm3P1II=

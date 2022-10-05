@@ -58,8 +58,6 @@ func (c *Controller) Init(mgr manager.Manager) error {
 // Reconcile reads that state of the cluster for an object and makes changes based on the state read
 // and what is in the Spec.
 func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	logrus.Debugf("Reconciling ResourceExport %s/%s", request.Namespace, request.Name)
-
 	restoreExport, err := kdmp.Instance().GetResourceExport(request.Name, request.Namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {

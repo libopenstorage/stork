@@ -33,7 +33,6 @@ type updateResourceExportFields struct {
 }
 
 func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (bool, error) {
-	logrus.Infof("entering reconciler process")
 	if in == nil {
 		return false, nil
 	}
@@ -286,9 +285,12 @@ func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourc
 func getDriverType(re *kdmpapi.ResourceExport) (string, error) {
 	src := re.Spec.Source
 	doBackup := false
+	doRestore := false
 
 	if isApplicationBackupRef(src) {
 		doBackup = true
+	} else if isApplicationRestoreRef(src) {
+		doRestore = true
 	} else {
 		return "", fmt.Errorf("invalid kind for nfs backup destination: expected BackupLocation")
 	}
@@ -298,6 +300,9 @@ func getDriverType(re *kdmpapi.ResourceExport) (string, error) {
 		if doBackup {
 			return drivers.NFSBackup, nil
 		}
+		if doRestore {
+			return drivers.NFSRestore, nil
+		}
 		return "", fmt.Errorf("invalid kind for nfs source: expected nfs type")
 	}
 	return string(re.Spec.Type), nil
@@ -305,6 +310,10 @@ func getDriverType(re *kdmpapi.ResourceExport) (string, error) {
 
 func isApplicationBackupRef(ref kdmpapi.ResourceExportObjectReference) bool {
 	return ref.Kind == "ApplicationBackup" && ref.APIVersion == "stork.libopenstorage.org/v1alpha1"
+}
+
+func isApplicationRestoreRef(ref kdmpapi.ResourceExportObjectReference) bool {
+	return ref.Kind == "ApplicationRestore" && ref.APIVersion == "stork.libopenstorage.org/v1alpha1"
 }
 
 func startNfsResourceJob(
