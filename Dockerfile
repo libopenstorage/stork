@@ -1,35 +1,40 @@
 FROM golang:1.16.7-alpine AS build
 LABEL maintainer="harsh@portworx.com"
+ARG ginkgo_build_one
 
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install setup dependencies
-RUN apk update && apk add --no-cache git gcc  musl-dev make curl openssh-client
+RUN apk update && apk add --no-cache git gcc musl-dev make curl openssh-client
+
+RUN GOFLAGS= GO111MODULE=on go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+
+# Install aws-iam-authenticator
+# This is needed by test running inside EKS cluster and creating aws entities like bucket etc.
+RUN mkdir bin && \
+    curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.16.8/2020-04-16/bin/linux/amd64/aws-iam-authenticator && \
+    chmod a+x aws-iam-authenticator && \
+    mv aws-iam-authenticator bin
 
 # No need to copy *everything*. This keeps the cache useful
-COPY deployments deployments
-COPY drivers drivers
-COPY pkg pkg
-COPY porx porx
-COPY scripts scripts
-COPY tests tests
 COPY vendor vendor
 COPY Makefile Makefile
 COPY go.mod go.mod
 COPY go.sum go.sum
+COPY pkg pkg
+COPY porx porx
+COPY scripts scripts
+COPY drivers drivers
+COPY deployments deployments
 
 # Why? Errors if this is removed
 COPY .git .git
 
-# Compile
-RUN mkdir bin && \
-    make build
+# copy tests last to allow caching of the previous docker image layers
+COPY tests tests
 
-# Install aws-iam-authenticator
-# This is needed by test running inside EKS cluster and creating aws entities like bucket etc.
-RUN curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.16.8/2020-04-16/bin/linux/amd64/aws-iam-authenticator && \
-    chmod a+x aws-iam-authenticator && \
-    mv aws-iam-authenticator bin
+# Compile
+RUN --mount=type=cache,target=/root/.cache/go-build GINKGO_BUILD_ONE=$ginkgo_build_one make build
 
 # Build a fresh container with just the binaries
 FROM alpine

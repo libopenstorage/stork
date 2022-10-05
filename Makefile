@@ -19,7 +19,7 @@ PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/por
 endif
 
 # To build just one test binary, use GINKGO_BUILD_ONE=<name> e.g. GINKGO_BUILD_ONE=basic make build
-GINKGO_BUILD_DIR=.
+GINKGO_BUILD_DIR=./tests/
 ifdef GINKGO_BUILD_ONE
 	GINKGO_BUILD_DIR=./tests/$(GINKGO_BUILD_ONE)
 endif
@@ -60,12 +60,14 @@ fmt:
 	@echo -e "Performing gofmt on following: $(PKGS)"
 	@./scripts/do-gofmt.sh $(PKGS)
 
-build:
+# Tools
+$(GOPATH)/bin/ginkgo:
+	GOFLAGS= GO111MODULE=on go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+
+build: $(GOPATH)/bin/ginkgo
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
 
-	(mkdir -p tools && cd tools && GO111MODULE=on go get github.com/onsi/ginkgo/ginkgo@v1.16.5)
-	(mkdir -p tools && cd tools && GO111MODULE=off go get github.com/onsi/gomega)
 	ginkgo build -r $(GINKGO_BUILD_DIR)
 
 	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
@@ -105,8 +107,8 @@ test:
 	go test -tags "$(TAGS)" $(TESTFLAGS) $(PKGS)
 
 container:
-	@echo "Building container: docker build --tag $(TORPEDO_IMG) -f Dockerfile ."
-	sudo docker build --tag $(TORPEDO_IMG) -f Dockerfile .
+	@echo "Building container: docker build --tag $(TORPEDO_IMG) --build-arg ginkgo_build_one=$(GINKGO_BUILD_ONE) -f Dockerfile ."
+	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg ginkgo_build_one=$(GINKGO_BUILD_ONE) -f Dockerfile .
 
 deploy: container
 	sudo docker push $(TORPEDO_IMG)
