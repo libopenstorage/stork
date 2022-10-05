@@ -828,6 +828,8 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.prepareValidatingWebHookForApply(object, namespaceMappings)
 	case "MutatingWebhookConfiguration":
 		return false, r.prepareMutatingWebHookForApply(object, namespaceMappings)
+	case "Secret":
+		return false, r.prepareSecretForApply(object)
 	}
 	return false, nil
 }
