@@ -1006,6 +1006,15 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
+	migration.Status.Stage = stork_api.MigrationStageFinal
+	migration.Status.Status = stork_api.MigrationStatusSuccessful
+	for _, resource := range migration.Status.Resources {
+		if resource.Status != stork_api.MigrationStatusSuccessful {
+			migration.Status.Status = stork_api.MigrationStatusPartialSuccess
+			break
+		}
+	}
+
 	if *migration.Spec.PurgeDeletedResources {
 		if err := m.purgeMigratedResources(migration, resourceCollectorOpts); err != nil {
 			message := fmt.Sprintf("Error cleaning up resources: %v", err)
@@ -1019,15 +1028,6 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 	}
 
 	migration.Status.ResourceMigrationFinishTimestamp = metav1.Now()
-	migration.Status.Stage = stork_api.MigrationStageFinal
-	migration.Status.Status = stork_api.MigrationStatusSuccessful
-	for _, resource := range migration.Status.Resources {
-		if resource.Status != stork_api.MigrationStatusSuccessful {
-			migration.Status.Status = stork_api.MigrationStatusPartialSuccess
-			break
-		}
-	}
-
 	migration.Status.FinishTimestamp = metav1.Now()
 	err = m.updateMigrationCR(context.TODO(), migration)
 	if err != nil {
