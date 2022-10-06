@@ -198,6 +198,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 		defaultBool := false
 		spec.IncludeNetworkPolicyWithCIDR = &defaultBool
 	}
+	if spec.SkipDeletedNamespaces == nil {
+		defaultBool := true
+		spec.SkipDeletedNamespaces = &defaultBool
+	}
 	return spec
 }
 
@@ -1002,15 +1006,6 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	migration.Status.ResourceMigrationFinishTimestamp = metav1.Now()
-	migration.Status.Stage = stork_api.MigrationStageFinal
-	migration.Status.Status = stork_api.MigrationStatusSuccessful
-	for _, resource := range migration.Status.Resources {
-		if resource.Status != stork_api.MigrationStatusSuccessful {
-			migration.Status.Status = stork_api.MigrationStatusPartialSuccess
-			break
-		}
-	}
 	if *migration.Spec.PurgeDeletedResources {
 		if err := m.purgeMigratedResources(migration, resourceCollectorOpts); err != nil {
 			message := fmt.Sprintf("Error cleaning up resources: %v", err)
@@ -1020,6 +1015,16 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 				string(stork_api.MigrationStatusPartialSuccess),
 				message)
 			return nil
+		}
+	}
+
+	migration.Status.ResourceMigrationFinishTimestamp = metav1.Now()
+	migration.Status.Stage = stork_api.MigrationStageFinal
+	migration.Status.Status = stork_api.MigrationStatusSuccessful
+	for _, resource := range migration.Status.Resources {
+		if resource.Status != stork_api.MigrationStatusSuccessful {
+			migration.Status.Status = stork_api.MigrationStatusPartialSuccess
+			break
 		}
 	}
 
@@ -1558,11 +1563,11 @@ func (m *MigrationController) applyResources(
 
 			res.ResourceVersion = ""
 			// if crds is applied as v1beta on k8s version 1.16+ it will have
-			// preservedUnkownField set and api version converted to v1 ,
+			// preservedUnknownField set and api version converted to v1 ,
 			// which cause issue while applying it on dest cluster,
 			// since we will be applying v1 crds with non-valid schema
 
-			// this converts `preserveUnknownFiels`(deprecated) to spec.Versions[*].xPreservedUnknown
+			// this converts `preserveUnknownFields`(deprecated) to spec.Versions[*].xPreservedUnknown
 			// equivalent
 			var updatedVersions []apiextensionsv1.CustomResourceDefinitionVersion
 			if res.Spec.PreserveUnknownFields {

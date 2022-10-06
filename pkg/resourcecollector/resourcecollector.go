@@ -560,6 +560,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.dataVolumesToBeCollected(object)
 	case "VirtualMachineInstance":
 		return r.virtualMachineInstanceToBeCollected(object)
+	case "VirtualMachineInstanceMigration":
+		return r.virtualMachineInstanceMigrationToBeCollected(object)
 	case "Endpoints":
 		return r.endpointsToBeCollected(object)
 	case "MutatingWebhookConfiguration":
