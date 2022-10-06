@@ -13,6 +13,10 @@ const (
 	// PXIncrementalCountAnnotation is the annotation used to set cloud backup incremental count
 	// for volume
 	PXIncrementalCountAnnotation = "portworx.io/cloudsnap-incremental-count"
+	// StorageClassAnnotationKey - Annotation key for storageClass
+	StorageClassAnnotationKey = "volume.beta.kubernetes.io/storage-class"
+	// StorageProvisionerAnnotationKey - Annotation key for storage provisioner
+	StorageProvisionerAnnotationKey = "volume.beta.kubernetes.io/storage-provisioner"
 )
 
 // ParseKeyValueList parses a list of key=values string into a map

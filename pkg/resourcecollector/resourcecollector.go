@@ -13,6 +13,7 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -68,6 +69,7 @@ type ResourceCollector struct {
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
 	storkOps         storkops.Ops
+	storageOps       storage.Ops
 }
 
 // Options are the options passed to the ResourceCollector APIs that dictate how k8s
@@ -135,6 +137,11 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	if err != nil {
 		return err
 	}
+	r.storageOps, err = storage.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
