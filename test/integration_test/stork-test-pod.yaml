@@ -90,6 +90,8 @@ spec:
       value: aws_secret_access_key
     - name: EXTERNAL_TEST_CLUSTER 
       value: external_test_cluster
+    - name: CLOUD_DELETION_VALIDATION
+      value: cloud_deletion_validation
   hostNetwork: false
   hostPID: false
   volumes:
