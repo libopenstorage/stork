@@ -113,6 +113,20 @@ func TransformResources(
 					}
 				}
 			}
+			// lets add annotation saying this resource has been transformed by migration/restore
+			// controller before applying
+			// set migration annotations
+			annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+			if err != nil {
+				return err
+			}
+			if !found {
+				annotations = make(map[string]string)
+			}
+			annotations[TransformedResourceName] = "true"
+			if err := unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations"); err != nil {
+				return err
+			}
 			object.SetUnstructuredContent(content)
 			logrus.Infof("Updated resource of kind %v with patch , resource: %v", patch.Kind, object)
 		}

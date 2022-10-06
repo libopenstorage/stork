@@ -46,6 +46,9 @@ const (
 	ProjectMappingsOption = "ProjectMappings"
 	// IncludeResources to not skip resources of specific type
 	IncludeResources = "stork.libopenstorage.org/include-resource"
+	// TransformedResourceName is the annotation used to check if resource has been updated
+	// as per transformation rules
+	TransformedResourceName = "stork.libopenstorage.org/resourcetransformation-name"
 
 	// ServiceKind for k8s service resources
 	ServiceKind = "Service"
