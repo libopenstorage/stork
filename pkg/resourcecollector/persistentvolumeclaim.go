@@ -5,6 +5,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -95,6 +96,26 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 			}
 		}
 
+	}
+	if len(storageClassMappings) > 0 {
+		// In the case of storageClassMappings, we need to reset the
+		// storage class annotation and the provisioner annotation
+		var newSc string
+		var exists bool
+		if val, ok := pvc.Annotations[utils.StorageClassAnnotationKey]; ok {
+			if newSc, exists = storageClassMappings[val]; exists && len(newSc) > 0 {
+				pvc.Annotations[utils.StorageClassAnnotationKey] = newSc
+			}
+		}
+		if _, ok := pvc.Annotations[utils.StorageProvisionerAnnotationKey]; ok {
+			if len(newSc) > 0 {
+				storageClass, err := r.storageOps.GetStorageClass(newSc)
+				if err != nil {
+					return false, fmt.Errorf("failed in getting the storage class [%v]: %v", newSc, err)
+				}
+				pvc.Annotations[utils.StorageProvisionerAnnotationKey] = storageClass.Provisioner
+			}
+		}
 	}
 
 	if len(storageClassMappings) > 0 && pvc.Spec.StorageClassName != nil {
