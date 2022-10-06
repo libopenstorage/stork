@@ -95,6 +95,7 @@ const (
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
 	backupPathVar            = "BACKUP_LOCATION_PATH"
 	externalTestCluster      = "EXTERNAL_TEST_CLUSTER"
+	cloudDeletionValidation  = "CLOUD_DELETION_VALIDATION"
 
 	tokenKey    = "token"
 	clusterIP   = "ip"
@@ -119,6 +120,7 @@ var backupLocationPath string
 var genericCsiConfigMap string
 var externalTest bool
 var storkVersionCheck bool
+var cloudDeletionValidate bool
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -187,6 +189,10 @@ func setup() error {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
+	cloudDeletionValidate, err = strconv.ParseBool(os.Getenv(cloudDeletionValidation))
+	if err == nil {
+		logrus.Infof("Three cluster config mode has been activated for test: %t", externalTest)
+	}
 	if objectStoreDriver, err = objectstore.Get(); err != nil {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
