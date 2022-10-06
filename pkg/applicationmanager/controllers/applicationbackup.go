@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"math"
 	"os"
 	"path/filepath"
@@ -1063,14 +1064,14 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 				if _, ok := resKinds[v.Kind]; !ok {
 					continue
 				}
-				crdsGroups[v.Group] = true
+				crdsGroups[utils.GetTrimmedGroupName(v.Group)] = true
 			}
 
 		}
 		// pick up all the CRDs that belongs to the group in the crdsGroups map
 		for _, crd := range crdList.Items {
 			for _, v := range crd.Resources {
-				if _, ok := crdsGroups[v.Group]; !ok {
+				if _, ok := crdsGroups[utils.GetTrimmedGroupName(v.Group)]; !ok {
 					continue
 				}
 				crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
@@ -1103,13 +1104,13 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 			if _, ok := resKinds[v.Kind]; !ok {
 				continue
 			}
-			crdsGroups[v.Group] = true
+			crdsGroups[utils.GetTrimmedGroupName(v.Group)] = true
 		}
 	}
 	// pick up all the CRDs that belongs to the group in the crdsGroups map
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
-			if _, ok := crdsGroups[v.Group]; !ok {
+			if _, ok := crdsGroups[utils.GetTrimmedGroupName(v.Group)]; !ok {
 				continue
 			}
 			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
