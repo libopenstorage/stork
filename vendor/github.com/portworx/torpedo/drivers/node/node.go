@@ -98,6 +98,16 @@ type SystemctlOpts struct {
 	ConnectionOpts
 }
 
+// BlockDrive provide block drive properties
+type BlockDrive struct {
+	Path       string
+	MountPoint string
+	FSType     string
+	Size       string
+	Online     bool
+	Type       string
+}
+
 // TestConnectionOpts provide additional options for test connection operation
 type TestConnectionOpts struct {
 	ConnectionOpts
@@ -205,6 +215,9 @@ type Driver interface {
 
 	// GetDeviceMapperCount return devicemapper count
 	GetDeviceMapperCount(Node, time.Duration) (int, error)
+
+	//GetBlockDrives returns the block drives on the node
+	GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error)
 }
 
 // Register registers the given node driver
@@ -291,6 +304,13 @@ func (d *notSupportedDriver) Systemctl(node Node, service string, options System
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Systemctl()",
+	}
+}
+
+func (d *notSupportedDriver) GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetBlockDrives()",
 	}
 }
 

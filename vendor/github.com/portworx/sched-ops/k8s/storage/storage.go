@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portworx/sched-ops/k8s/common"
 	storagev1client "k8s.io/client-go/kubernetes/typed/storage/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -136,6 +137,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.storage, err = storagev1client.NewForConfig(c.config)
 	if err != nil {
 		return err

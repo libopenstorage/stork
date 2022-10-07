@@ -70,8 +70,8 @@ func typeFields(t reflect.Type) []field {
 	next := []field{{typ: t}}
 
 	// Count of queued names for current level and the next.
-	var count map[reflect.Type]int
-	var nextCount map[reflect.Type]int
+	count := map[reflect.Type]int{}
+	nextCount := map[reflect.Type]int{}
 
 	// Types already visited at an earlier level.
 	visited := map[reflect.Type]bool{}
