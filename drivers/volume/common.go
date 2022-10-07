@@ -170,6 +170,14 @@ func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 
 }
 
+//IsPxInstalled checks for Px to be installed on a node
+func (d *DefaultDriver) IsPxInstalled(n node.Node) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPxInstalled()",
+	}
+}
+
 // RecoverDriver will recover a volume driver from a failure/storage down state.
 // This could be used by a volume driver to recover itself from any underlying storage
 // failure.

@@ -183,6 +183,9 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
+	//IsPxInstalled checks for Px to be installed on a node
+	IsPxInstalled(n node.Node) (bool, error)
+
 	//GetPxVersionOnNode get PXVersion on the given node
 	GetPxVersionOnNode(n node.Node) (string, error)
 

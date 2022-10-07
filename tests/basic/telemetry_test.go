@@ -224,86 +224,99 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		if !isTelemetryOperatorEnabled {
-			Skip("Skip test because telemetry is not enabled...")
-		}
 	})
 	var contexts []*scheduler.Context
 	var diagsFiles []string
 	var existingDiags string
 	var newDiags string
 	var err error
+	var pxInstalled bool
+	var skipTest = false
 
 	It("has to collect, validate profile diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
-			// Get the most recent profile diags for comparison
-			Step(fmt.Sprintf("Check latest profile diags on node %v", currNode.Name), func() {
-				logrus.Infof(" Getting latest profile  diags on %v", currNode.Name)
-				existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name),
-					currNode, nil)
-				if err == nil {
-					logrus.Infof("Found latest profiles diags on node %s:\n%s ", currNode.Name, existingDiags)
-				} else {
-					existingDiags = ""
-				}
-			})
-			// Issue a profile diags to generate new files.
-			Step(fmt.Sprintf("collect profile diags on node: %s | %s", currNode.Name, currNode.Type), func() {
-				config := &torpedovolume.DiagRequestConfig{
-					DockerHost: "unix:///var/run/docker.sock",
-					Profile:    true,
-				}
-				if !TelemetryEnabled(currNode) { // Not sure why this is done?
-					logrus.Debugf("Telemetry not enabled, sleeping for 5 mins")
-					time.Sleep(5 * time.Minute)
-				}
-				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
-				if err != nil {
-					logrus.Errorf("Failed to collect diags: %v", err)
-				}
-				Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
-			})
-			// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
-			Step(fmt.Sprintf("Get the new profile diags on node %v", currNode.Name), func() {
-				logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
-				Eventually(func() bool {
-					newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name),
+			pxInstalled, err = Inst().V.IsPxInstalled(currNode)
+			if err != nil {
+				logrus.Debugf("Could not get PX status on %s", currNode.Name)
+			}
+			if pxInstalled {
+				// Get the most recent profile diags for comparison
+				Step(fmt.Sprintf("Check latest profile diags on node %v", currNode.Name), func() {
+					logrus.Infof(" Getting latest profile  diags on %v", currNode.Name)
+					existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name),
 						currNode, nil)
 					if err == nil {
-						if existingDiags != "" && existingDiags == newDiags {
-							logrus.Infof("No new profile diags found...")
-							newDiags = ""
+						logrus.Infof("Found latest profiles diags on node %s:\n%s ", currNode.Name, existingDiags)
+					} else {
+						existingDiags = ""
+					}
+				})
+				// Issue a profile diags to generate new files.
+				Step(fmt.Sprintf("collect profile diags on node: %s | %s", currNode.Name, currNode.Type), func() {
+					config := &torpedovolume.DiagRequestConfig{
+						DockerHost: "unix:///var/run/docker.sock",
+						Profile:    true,
+					}
+					if TelemetryEnabled(currNode) {
+						err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
+						if err != nil {
+							logrus.Errorf("Failed to collect diags on Node: %s Err: %v", currNode.Name, err)
 						}
-						if len(newDiags) > 0 {
-							logrus.Infof("Found new profile diags:\n%s", newDiags)
-							// Needs to contain both stack/heap
-							if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
-								diagsFiles = strings.Split(newDiags, "\n")
-								return true
+						Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
+					} else {
+						logrus.Infof("Telemetry not enabled on the node %s", currNode.Name)
+						skipTest = true
+						return
+					}
+				})
+				// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
+				Step(fmt.Sprintf("Get the new profile diags on node %v", currNode.Name), func() {
+					if skipTest {
+						logrus.Infof("Skipping getting new filename for node %s", currNode.Name)
+						return
+					}
+					logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
+					Eventually(func() bool {
+						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name),
+							currNode, nil)
+						if err == nil {
+							if existingDiags != "" && existingDiags == newDiags {
+								logrus.Infof("No new profile diags found...")
+								newDiags = ""
+							}
+							if len(newDiags) > 0 {
+								logrus.Infof("Found new profile diags:\n%s", newDiags)
+								// Needs to contain both stack/heap
+								if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
+									diagsFiles = strings.Split(newDiags, "\n")
+									return true
+								}
 							}
 						}
-					}
-					return false
-				}, 5*time.Minute, 15*time.Second).Should(BeTrue(), "failed to generate profile diags on node %s", currNode.Name)
-			})
-			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
-				for _, file := range diagsFiles {
-					fileNameToCheck := path.Base(file)
-					logrus.Debugf("Validating file %s", fileNameToCheck)
-					if TelemetryEnabled(currNode) { // This is done in case the system is run without telemetry.
-						err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
-						if err != nil {
-							logrus.Errorf("Failed to validate diags: %v", err)
-						}
-						Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-					} else {
-						logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
-					}
+						return false
+					}, 5*time.Minute, 15*time.Second).Should(BeTrue(), "failed to generate profile diags on node %s", currNode.Name)
 
-				}
-			})
+				})
+				Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
+					for _, file := range diagsFiles {
+						fileNameToCheck := path.Base(file)
+						logrus.Debugf("Validating file %s", fileNameToCheck)
+						if skipTest { // This is done in case the system is run without telemetry.
+							err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
+							if err != nil {
+								logrus.Errorf("Failed to validate diags: %v", err)
+							}
+							Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
+						} else {
+							logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+						}
+					}
+				})
+			} else {
+				logrus.Debugf("Px not enabled on node %s", currNode.Name)
+			}
 		}
 		for _, ctx := range contexts {
 			TearDownContext(ctx, nil)
