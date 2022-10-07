@@ -1,6 +1,6 @@
 FROM golang:1.16.7-alpine AS build
 LABEL maintainer="harsh@portworx.com"
-ARG ginkgo_build_one
+ARG MAKE_TARGET
 
 WORKDIR /go/src/github.com/portworx/torpedo
 
@@ -34,7 +34,7 @@ COPY .git .git
 COPY tests tests
 
 # Compile
-RUN --mount=type=cache,target=/root/.cache/go-build GINKGO_BUILD_ONE=$ginkgo_build_one make build
+RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 
 # Build a fresh container with just the binaries
 FROM alpine
