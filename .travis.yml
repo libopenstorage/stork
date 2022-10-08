@@ -17,12 +17,10 @@ script:
 after_success:
   - if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       echo "${DOCKER_PASS}" | docker login -u="${DOCKER_USER}" --password-stdin;
-      # build basic.test container
       make container;
       sudo docker tag "${DOCKER_HUB_REPO}/torpedo:${DOCKER_HUB_TAG}" "${DOCKER_HUB_REPO}/torpedo:${TRAVIS_BRANCH}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo:${DOCKER_HUB_TAG}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo:${TRAVIS_BRANCH}";
-      # build pds.test container
       make container-pds;
       sudo docker tag "${DOCKER_HUB_REPO}/torpedo-pds:${DOCKER_HUB_TAG}" "${DOCKER_HUB_REPO}/torpedo-pds:${TRAVIS_BRANCH}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo-pds:${DOCKER_HUB_TAG}";
