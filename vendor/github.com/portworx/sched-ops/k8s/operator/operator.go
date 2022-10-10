@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	ostclientset "github.com/libopenstorage/operator/pkg/client/clientset/versioned"
+	"github.com/portworx/sched-ops/k8s/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -139,7 +140,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.ost, err = ostclientset.NewForConfig(c.config)
 	if err != nil {
 		return err
