@@ -279,6 +279,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		return nil
 	}
 
+	/* TODO: Temp disabling it, would move to nfs path with restore vol changes
 	err = a.verifyNamespaces(restore)
 	if err != nil {
 		log.ApplicationRestoreLog(restore).Errorf(err.Error())
@@ -287,7 +288,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 			string(storkapi.ApplicationRestoreStatusFailed),
 			err.Error())
 		return nil
-	}
+	}*/
 
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
