@@ -22,6 +22,7 @@ generic_csi_configmap_name=""
 external_test_pod=false
 stork_test_version_check=false
 kube_scheduler_version="v1.21.0"
+cloud_deletion_validation=true
 for i in "$@"
 do
 case $i in
@@ -157,6 +158,12 @@ case $i in
         shift
         shift
         ;;
+    --cloud_deletion_validation)
+        echo "Validate deletion of backups from cloud: $2"
+        cloud_deletion_validation=$2
+        shift
+        shift
+        ;;		
 esac
 done
 
@@ -277,6 +284,12 @@ if [ "$stork_test_version_check" == "true" ] ; then
 	sed -i 's/- -stork-version-check=false/- -stork-version-check='"$stork_test_version_check"'/g' /testspecs/stork-test-pod.yaml
 else 
 	sed -i 's/'stork_test_version_check'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$cloud_deletion_validation" == "true" ] ; then
+       sed -i 's/'cloud_deletion_validation'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
+else
+       sed -i 's/'cloud_deletion_validation'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 kubectl delete -f /testspecs/stork-test-pod.yaml
