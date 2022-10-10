@@ -43,6 +43,7 @@ import (
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/controllers/dataexport"
 	"github.com/portworx/kdmp/pkg/drivers"
+	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/kdmp/pkg/jobratelimit"
 	kdmpversion "github.com/portworx/kdmp/pkg/version"
 	schedops "github.com/portworx/sched-ops/k8s/core"
@@ -253,6 +254,7 @@ func run(c *cli.Context) {
 	kdmpConfig.Data[jobratelimit.RestoreJobLimitKey] = strconv.Itoa(jobratelimit.DefaultRestoreJobLimit)
 	kdmpConfig.Data[jobratelimit.DeleteJobLimitKey] = strconv.Itoa(jobratelimit.DefaultDeleteJobLimit)
 	kdmpConfig.Data[jobratelimit.MaintenanceJobLimitKey] = strconv.Itoa(jobratelimit.DefaultMaintenanceJobLimit)
+	kdmpConfig.Data[kdmputils.ResourceCleanupKey] = kdmputils.ResourceCleanupDefaultValue
 	// ConfigMap create failure should not fail the bring up
 	_, err = schedops.Instance().CreateConfigMap(kdmpConfig)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
@@ -266,7 +268,7 @@ func run(c *cli.Context) {
 	// ConfigMap create failure should not fail the bring up
 	_, err = schedops.Instance().CreateConfigMap(storkConfig)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
-		log.Warnf("Unable to create stork config configmap: %v", err)
+		log.Warnf("Unable to create stork object lock configmap: %v", err)
 	}
 
 	driverName := c.String("driver")
