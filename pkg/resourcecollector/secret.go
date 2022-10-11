@@ -41,10 +41,6 @@ func (r *ResourceCollector) prepareSecretForApply(
 	}
 	// Reset the " kubernetes.io/service-account.uid" annotation,
 	// so that it will update the uid of the newly created SA after restoring
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &secret)
-	if err != nil {
-		return err
-	}
 	if secret.Annotations != nil {
 		if _, ok := secret.Annotations[serviceAccountUIDKey]; ok {
 			secret.Annotations[serviceAccountUIDKey] = ""
