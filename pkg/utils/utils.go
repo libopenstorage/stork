@@ -16,10 +16,6 @@ const (
 	// PXIncrementalCountAnnotation is the annotation used to set cloud backup incremental count
 	// for volume
 	PXIncrementalCountAnnotation = "portworx.io/cloudsnap-incremental-count"
-	// StorageClassAnnotationKey - Annotation key for storageClass
-	StorageClassAnnotationKey = "volume.beta.kubernetes.io/storage-class"
-	// StorageProvisionerAnnotationKey - Annotation key for storage provisioner
-	StorageProvisionerAnnotationKey = "volume.beta.kubernetes.io/storage-provisioner"
 	// trimCRDGroupNameKey - groups name containing the string from this configmap field will be trimmed
 	trimCRDGroupNameKey = "TRIM_CRD_GROUP_NAME"
 )

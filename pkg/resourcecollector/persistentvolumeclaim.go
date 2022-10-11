@@ -5,11 +5,11 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 	pvutil "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
 )
 
@@ -102,18 +102,27 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		// storage class annotation and the provisioner annotation
 		var newSc string
 		var exists bool
-		if val, ok := pvc.Annotations[utils.StorageClassAnnotationKey]; ok {
+		var provisioner string
+		if val, ok := pvc.Annotations[v1.BetaStorageClassAnnotation]; ok {
 			if newSc, exists = storageClassMappings[val]; exists && len(newSc) > 0 {
-				pvc.Annotations[utils.StorageClassAnnotationKey] = newSc
+				pvc.Annotations[v1.BetaStorageClassAnnotation] = newSc
 			}
 		}
-		if _, ok := pvc.Annotations[utils.StorageProvisionerAnnotationKey]; ok {
-			if len(newSc) > 0 {
-				storageClass, err := r.storageOps.GetStorageClass(newSc)
-				if err != nil {
-					return false, fmt.Errorf("failed in getting the storage class [%v]: %v", newSc, err)
-				}
-				pvc.Annotations[utils.StorageProvisionerAnnotationKey] = storageClass.Provisioner
+		if len(newSc) > 0 {
+			storageClass, err := r.storageOps.GetStorageClass(newSc)
+			if err != nil {
+				return false, fmt.Errorf("failed in getting the storage class [%v]: %v", newSc, err)
+			}
+			provisioner = storageClass.Provisioner
+		}
+		if _, ok := pvc.Annotations[k8shelper.AnnBetaStorageProvisioner]; ok {
+			if len(provisioner) > 0 {
+				pvc.Annotations[k8shelper.AnnBetaStorageProvisioner] = provisioner
+			}
+		}
+		if _, ok := pvc.Annotations[k8shelper.AnnStorageProvisioner]; ok {
+			if len(provisioner) > 0 {
+				pvc.Annotations[k8shelper.AnnStorageProvisioner] = provisioner
 			}
 		}
 	}
