@@ -42,6 +42,7 @@ const (
 	snapshotMetadataPVName           = "SnapshotMetadata-PVName"
 	snapshotDataNamePrefix           = "k8s-volume-snapshot"
 	pvNameLabel                      = "pvName"
+	StorkSnapshotNameLabel           = "stork.libopenstorage.org/snapshotName"
 	defaultExponentialBackOffOnError = true
 
 	// volumeSnapshot* is configuration of exponential backoff for
@@ -376,6 +377,14 @@ func (vs *volumeSnapshotter) updateSnapshotIfExists(uniqueSnapshotName string, s
 		glog.Infof("No tag can be found in snapshot metadata %s", uniqueSnapshotName)
 		return statusNew, snapshot, nil
 	}
+
+	// Find snapshot through cloud provider by existing tags, and create VolumeSnapshotData if such snapshot is found
+	snapshotDataSource, conditions, err = vs.findSnapshotByTags(snapshotName, snapshot)
+	if err != nil {
+		glog.Infof("unable to find snapshot by looking at tags %s, err: %v", uniqueSnapshotName, err)
+		return statusNew, snapshot, nil
+	}
+
 	// Check whether snapshotData object is already created or not. If yes, snapshot is already
 	// triggered through cloud provider, bind it and return pending state
 	if snapshotDataObj = vs.getSnapshotDataFromSnapshotName(uniqueSnapshotName); snapshotDataObj != nil {
@@ -385,11 +394,6 @@ func (vs *volumeSnapshotter) updateSnapshotIfExists(uniqueSnapshotName string, s
 			return statusError, snapshot, err
 		}
 		return statusPending, snapshotObj, nil
-	}
-	// Find snapshot through cloud provider by existing tags, and create VolumeSnapshotData if such snapshot is found
-	snapshotDataSource, conditions, err = vs.findSnapshotByTags(snapshotName, snapshot)
-	if err != nil {
-		return statusNew, snapshot, nil
 	}
 	// Snapshot is found. Create VolumeSnapshotData, bind VolumeSnapshotData to VolumeSnapshot, and update VolumeSnapshot status
 	glog.Infof("updateSnapshotIfExists: create VolumeSnapshotData object for VolumeSnapshot %s.", uniqueSnapshotName)
