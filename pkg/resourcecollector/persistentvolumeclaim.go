@@ -9,6 +9,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 	pvutil "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
 )
 
@@ -95,6 +96,35 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 			}
 		}
 
+	}
+	if len(storageClassMappings) > 0 {
+		// In the case of storageClassMappings, we need to reset the
+		// storage class annotation and the provisioner annotation
+		var newSc string
+		var exists bool
+		var provisioner string
+		if val, ok := pvc.Annotations[v1.BetaStorageClassAnnotation]; ok {
+			if newSc, exists = storageClassMappings[val]; exists && len(newSc) > 0 {
+				pvc.Annotations[v1.BetaStorageClassAnnotation] = newSc
+			}
+		}
+		if len(newSc) > 0 {
+			storageClass, err := r.storageOps.GetStorageClass(newSc)
+			if err != nil {
+				return false, fmt.Errorf("failed in getting the storage class [%v]: %v", newSc, err)
+			}
+			provisioner = storageClass.Provisioner
+		}
+		if _, ok := pvc.Annotations[k8shelper.AnnBetaStorageProvisioner]; ok {
+			if len(provisioner) > 0 {
+				pvc.Annotations[k8shelper.AnnBetaStorageProvisioner] = provisioner
+			}
+		}
+		if _, ok := pvc.Annotations[k8shelper.AnnStorageProvisioner]; ok {
+			if len(provisioner) > 0 {
+				pvc.Annotations[k8shelper.AnnStorageProvisioner] = provisioner
+			}
+		}
 	}
 
 	if len(storageClassMappings) > 0 && pvc.Spec.StorageClassName != nil {

@@ -654,8 +654,6 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*corev1.Endpoints); ok {
 		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.ResourceTransformation); ok {
-		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))

@@ -230,6 +230,10 @@ func prepareVerifyApp(t *testing.T, ctxs []*scheduler.Context, appKey, action st
 }
 
 func validateBackupDeletionFromObjectstore(t *testing.T, backupLocation *storkv1.BackupLocation, backupPath string) {
+	if !cloudDeletionValidate {
+		// validation of deletion of app backups from cloud not requested so returning
+		return
+	}
 	err := objectStoreDriver.ValidateBackupsDeletedFromCloud(backupLocation, backupPath)
 	require.NoError(t, err, "Failed to validate deletion of backups in bucket for backup location %s in path %s", backupLocation.Name, backupPath)
 

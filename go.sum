@@ -2454,6 +2454,8 @@ k8s.io/component-helpers v0.21.4 h1:Q6L3sQ+L5uaaUcsJkhlzU5UchcIYBZ56Y2Bq5k4qOtk=
 k8s.io/component-helpers v0.21.4/go.mod h1:/5TBNWmxaAymZweO1JWv3Pt5rcYJV1LbWWY0x1rDdVU=
 k8s.io/component-helpers v0.21.5 h1:NzRIDAmDk0tJw2OSvDIlkXQ/j96MUKW0PF/htVH6S1g=
 k8s.io/component-helpers v0.21.5/go.mod h1:sjHa2QESu4iHcL20eSKyIvCYEKdxQyS3LthUe10tt0k=
+k8s.io/component-helpers v0.24.0 h1:hZIHGfdd55thhqd9oxjDTw68OAPauDMJ+8hC69aNw1I=
+k8s.io/component-helpers v0.24.0/go.mod h1:Q2SlLm4h6g6lPTC9GMMfzdywfLSvJT2f1hOnnjaWD8c=
 k8s.io/controller-manager v0.21.4/go.mod h1:a/iL7W19zkyirHDaupk9cyC11nejVznGwZI6I8tbyQY=
 k8s.io/controller-manager v0.21.5/go.mod h1:65guJmOoIEklTPwwYOmiHOsbEoAnQ7xKSZ9v+RdJC6g=
 k8s.io/cri-api v0.21.4/go.mod h1:ukzeKnOkrG9/+ghKZA57WeZbQfRtqlGLF5GcF3RtHZ8=
@@ -2523,6 +2525,8 @@ k8s.io/utils v0.0.0-20210722164352-7f3ee0f31471 h1:DnzUXII7sVg1FJ/4JX6YDRJfLNAC7
 k8s.io/utils v0.0.0-20210722164352-7f3ee0f31471/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20210802155522-efc7438f0176 h1:Mx0aa+SUAcNRQbs5jUzV8lkDlGFU8laZsY9jrcVX5SY=
 k8s.io/utils v0.0.0-20210802155522-efc7438f0176/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
+k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 h1:HNSDgDCrr/6Ly3WEGKZftiE7IY19Vz2GdbOCyI4qqhc=
+k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 knative.dev/pkg v0.0.0-20191101194912-56c2594e4f11/go.mod h1:pgODObA1dTyhNoFxPZTTjNWfx6F0aKsKzn+vaT9XO/Q=
 layeh.com/radius v0.0.0-20190322222518-890bc1058917/go.mod h1:fywZKyu//X7iRzaxLgPWsvc0L26IUpVvE/aeIL2JtIQ=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=
