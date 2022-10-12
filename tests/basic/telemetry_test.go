@@ -303,7 +303,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 					for _, file := range diagsFiles {
 						fileNameToCheck := path.Base(file)
 						logrus.Debugf("Validating file %s", fileNameToCheck)
-						if skipTest { // This is done in case the system is run without telemetry.
+						if !skipTest { // This is done in case the system is run without telemetry.
 							err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 							if err != nil {
 								logrus.Errorf("Failed to validate diags: %v", err)
