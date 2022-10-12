@@ -1362,6 +1362,7 @@ func (a *ApplicationRestoreController) restoreResources(
 		logrus.Errorf("error in checking backuplocation type")
 	}
 
+	doCleanup := true
 	if !nfs {
 		objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
 		if err != nil {
@@ -1432,6 +1433,7 @@ func (a *ApplicationRestoreController) restoreResources(
 		} else {
 			var message string
 			// Check the status of the resourceExport CR and update it to the applicationBackup CR
+			logrus.Debugf("resource export: %s, status: %s", resourceExport.Name, resourceExport.Status.Status)
 			switch resourceExport.Status.Status {
 			case kdmpapi.ResourceExportStatusFailed:
 				message = fmt.Sprintf("Error applying resources: %v", err)
@@ -1458,18 +1460,28 @@ func (a *ApplicationRestoreController) restoreResources(
 						storkapi.ApplicationRestoreStatusType(resource.Status),
 						resource.Reason)
 				}
+				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
+				restore.Status.FinishTimestamp = metav1.Now()
+				restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
+				restore.Status.Reason = "Volumes and resources were restored up successfully"
 
 			case kdmpapi.ResourceExportStatusInitial:
+				doCleanup = false
 			case kdmpapi.ResourceExportStatusPending:
+				doCleanup = false
 			case kdmpapi.ResourceExportStatusInProgress:
 				restore.Status.LastUpdateTimestamp = metav1.Now()
+				doCleanup = false
 			}
 			err = a.client.Update(context.TODO(), restore)
 			if err != nil {
 				return err
 			}
-			return nil
 		}
+	}
+
+	if !doCleanup {
+		return nil
 	}
 	// Before  updating to final stage, cleanup generic backup CRs, if any.
 	err = a.cleanupResources(restore)
@@ -1622,7 +1634,7 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 	}
 	// Directly calling DeleteResourceExport with out checking backuplocation type.
 	// For other backuplocation type, expecting Notfound
-	crName := getResourceExportCRName(utils.PrefixBackup, string(restore.UID), restore.Namespace)
+	crName := getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace)
 	err := kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
