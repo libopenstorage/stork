@@ -592,6 +592,16 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 	return result.(*api.StorageNode), nil
 }
 
+//IsPxInstalled returns if Px is installed on a node
+func (d *portworx) IsPxInstalled(n node.Node) (bool, error) {
+	logrus.Infof("Checking if px is installed on %s", n.Name)
+	pxInstalled, err := d.schedOps.IsPXEnabled(n)
+	if err != nil {
+		return false, fmt.Errorf("Error in checking for portworx installed on %s", n.Name)
+	}
+	return pxInstalled, nil
+}
+
 func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 	logrus.Infof("Updating node: %+v", *n)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
@@ -3333,7 +3343,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 		logrus.Debugf("Status returned by pxctl %s", out)
 		if strings.TrimSpace(out) == telemetryNotEnabled {
-			logrus.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
+			logrus.Debugf("Telemetry not enabled in PX Status on node %s. Skipping validation on s3", n.Name)
 			return nil
 		}
 
@@ -3919,14 +3929,8 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 	return api.Status_STATUS_NONE.String(), nil
 }
 
-// GetPxctlCmdOutput returns the command output run on the given node and any error
-func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
-	opts := node.ConnectionOpts{
-		IgnoreError:     false,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-	}
-
+// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
 	pxctlPath := d.getPxctlPath(n)
 
 	// create context
@@ -3937,8 +3941,17 @@ func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error
 		}
 	}
 
+	var (
+		out string
+		err error
+	)
+
 	cmd := fmt.Sprintf("%s %s", pxctlPath, command)
-	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if retry {
+		out, err = d.nodeDriver.RunCommand(n, cmd, opts)
+	} else {
+		out, err = d.nodeDriver.RunCommandWithNoRetry(n, cmd, opts)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
@@ -3952,7 +3965,17 @@ func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error
 	}
 
 	return out, nil
+}
 
+// GetPxctlCmdOutput returns the command output run on the given node and any error
+func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	return d.GetPxctlCmdOutputConnectionOpts(n, command, opts, true)
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
