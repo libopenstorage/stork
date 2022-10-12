@@ -764,7 +764,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20221003064431-02c4d9163abb
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
 ## explicit
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
@@ -920,7 +920,7 @@ gocloud.dev/internal/oc
 gocloud.dev/internal/openurl
 gocloud.dev/internal/retry
 gocloud.dev/internal/useragent
-# golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+# golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/cast5
@@ -928,9 +928,8 @@ golang.org/x/crypto/chacha20
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/curve25519/internal/field
 golang.org/x/crypto/ed25519
-golang.org/x/crypto/ed25519/internal/edwards25519
+golang.org/x/crypto/internal/alias
 golang.org/x/crypto/internal/poly1305
-golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/openpgp
 golang.org/x/crypto/openpgp/armor
 golang.org/x/crypto/openpgp/clearsign
@@ -1937,7 +1936,7 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221003064431-02c4d9163abb
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.1
 # k8s.io/api => k8s.io/api v0.21.5

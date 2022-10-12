@@ -689,6 +689,8 @@ func (s *SSH) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.
 }
 
 func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
+	var sshErr error
+	var cli interface{}
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
 			// check if address is responding on port 22
@@ -696,13 +698,13 @@ func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts
 			conn, err := ssh_pkg.Dial("tcp", endpoint, s.sshConfig)
 			return conn, true, err
 		}
-		if cli, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
+		if cli, sshErr = task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); sshErr == nil {
 			n.UsableAddr = addr
 			return cli.(*ssh_pkg.Client), nil
 		}
 	}
-	return nil, fmt.Errorf("no usable address found. Tried: %v. "+
-		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
+	return nil, fmt.Errorf("no usable address found. Tried: %v. Error: %v"+
+		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses, sshErr)
 }
 
 // SystemCheck check if any cores are generated on given node
