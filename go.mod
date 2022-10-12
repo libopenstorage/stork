@@ -53,7 +53,7 @@ require (
 	k8s.io/cli-runtime v0.21.5
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/code-generator v0.21.5
-	k8s.io/component-helpers v0.21.5
+	k8s.io/component-helpers v0.24.0
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.21.5
 	k8s.io/kubernetes v1.21.5
@@ -93,7 +93,7 @@ replace (
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.21.5
 	k8s.io/code-generator => k8s.io/code-generator v0.21.5
 	k8s.io/component-base => k8s.io/component-base v0.21.5
-	k8s.io/component-helpers => k8s.io/component-helpers v0.21.5
+	k8s.io/component-helpers => k8s.io/component-helpers v0.24.0
 	k8s.io/controller-manager => k8s.io/controller-manager v0.21.5
 	k8s.io/cri-api => k8s.io/cri-api v0.21.5
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.21.5

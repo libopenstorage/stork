@@ -1670,7 +1670,7 @@ k8s.io/component-base/featuregate
 k8s.io/component-base/metrics
 k8s.io/component-base/metrics/legacyregistry
 k8s.io/component-base/version
-# k8s.io/component-helpers v0.21.5 => k8s.io/component-helpers v0.21.5
+# k8s.io/component-helpers v0.24.0 => k8s.io/component-helpers v0.24.0
 ## explicit
 k8s.io/component-helpers/scheduling/corev1
 k8s.io/component-helpers/scheduling/corev1/nodeaffinity
@@ -1754,7 +1754,7 @@ k8s.io/kubernetes/pkg/volume/util/types
 k8s.io/kubernetes/pkg/volume/util/volumepathhandler
 # k8s.io/mount-utils v0.0.0 => k8s.io/mount-utils v0.21.5
 k8s.io/mount-utils
-# k8s.io/utils v0.0.0-20210722164352-7f3ee0f31471
+# k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
@@ -1920,7 +1920,7 @@ sigs.k8s.io/yaml
 # k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.21.5
 # k8s.io/code-generator => k8s.io/code-generator v0.21.5
 # k8s.io/component-base => k8s.io/component-base v0.21.5
-# k8s.io/component-helpers => k8s.io/component-helpers v0.21.5
+# k8s.io/component-helpers => k8s.io/component-helpers v0.24.0
 # k8s.io/controller-manager => k8s.io/controller-manager v0.21.5
 # k8s.io/cri-api => k8s.io/cri-api v0.21.5
 # k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.21.5
