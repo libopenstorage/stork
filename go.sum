@@ -1111,8 +1111,12 @@ github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114/go.
 github.com/libopenstorage/cloudops v0.0.0-20190815012442-6e0d676b6c3e/go.mod h1:quSDXGC3Fhc+pBwMRIi1Gk+kaSfBDZo5rRsftapTzGE=
 github.com/libopenstorage/cloudops v0.0.0-20200604165016-9cc0977d745e/go.mod h1:5Qie78eVLLXqLkLCq1+0HyJzjpdRCHyeg9LWlU0WPfU=
 github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41/go.mod h1:zigCEUGrJZbK/1FN6+SHMuMjS6vjeSKxuo0G4Ars4Cg=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10 h1:q21CLGSi9DhNBBuJuitquA/T6FwLV3KNZxaJpxQbOLc=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10/go.mod h1:nffpoeodwwp+wwngmBGbLBCd7TZ9GxHLtxKoaLRW6K4=
 github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7 h1:mHp7bfGyHwG4P8dhHEMJ775KLmcjv3tcA2Uc+5nGpXg=
 github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7/go.mod h1:nffpoeodwwp+wwngmBGbLBCd7TZ9GxHLtxKoaLRW6K4=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc9 h1:Vg72X7TJsba3hBpytgxZH0Ip5MDVhZlusqBtkg6MWzE=
+github.com/libopenstorage/external-storage v0.20.4-openstorage-rc9/go.mod h1:nffpoeodwwp+wwngmBGbLBCd7TZ9GxHLtxKoaLRW6K4=
 github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/gossip v0.0.0-20200808224301-d5287c7c8b24/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e h1:4l9N2Sw8VGGUqe50yC2BnTFMRJuHJGpIGZcCUZ2S6gg=
@@ -1454,6 +1458,8 @@ github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c h1:vTjozKeb8DcF7q
 github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c/go.mod h1:MggFBtnLHdUpaP9HKxZhVCinOYl5sMDNtrJb6YyrPyQ=
 github.com/portworx/torpedo v0.0.0-20221003064431-02c4d9163abb h1:4ddbInRgHZNuyjzn4GmL8KLOOmc7KwqJ3FYAjSzfEnE=
 github.com/portworx/torpedo v0.0.0-20221003064431-02c4d9163abb/go.mod h1:ADDwm0EZoxOXBq+JAtqMEQOrqLffyVE9G/Fv+OxM1xg=
+github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972 h1:XekHf98EBjgRKzpP14rDRD5AC58asM1So82LTOlj2a4=
+github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972/go.mod h1:sIr/OE0KqV1WnK2yhMoXKDFytCZPMP/tBD0fwye69hI=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/posener/complete v1.2.1/go.mod h1:6gapUrK/U1TAN7ciCoNRIdVC5sbdBTUh1DKN0g6uH7E=
 github.com/posener/complete v1.2.3/go.mod h1:WZIdtGGp+qx0sLrYKtIRAruyNpv6hFCicSgv7Sy7s/s=
@@ -1794,6 +1800,8 @@ golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad/go.mod h1:jdWPYTVW3xRLrWP
 golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
 golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 h1:7I4JAnoQBe7ZtJcBaYHi5UtiO8tQHbUSXxL+pnGRANg=
 golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
+golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be h1:fmw3UbQh+nxngCAHrDCCztao/kbYFnWjoqop8dHx05A=
+golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
 golang.org/x/exp v0.0.0-20180321215751-8460e604b9de/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/exp v0.0.0-20180807140117-3d87b88a115f/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
@@ -1909,6 +1917,7 @@ golang.org/x/net v0.0.0-20210428140749-89ef3d95e781/go.mod h1:OJAsFXCWl8Ukc7SiCT
 golang.org/x/net v0.0.0-20210520170846-37e1c6afe023/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20210614182718-04defd469f4e/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
+golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20211216030914-fe4d6282115f/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd/go.mod h1:CfG3xpIq0wQ8r1q4Su4UZFWDARRcnwPjda9FqA0JpMk=
 golang.org/x/net v0.0.0-20220225172249-27dd8689420f/go.mod h1:CfG3xpIq0wQ8r1q4Su4UZFWDARRcnwPjda9FqA0JpMk=
@@ -2450,6 +2459,8 @@ k8s.io/component-helpers v0.21.4 h1:Q6L3sQ+L5uaaUcsJkhlzU5UchcIYBZ56Y2Bq5k4qOtk=
 k8s.io/component-helpers v0.21.4/go.mod h1:/5TBNWmxaAymZweO1JWv3Pt5rcYJV1LbWWY0x1rDdVU=
 k8s.io/component-helpers v0.21.5 h1:NzRIDAmDk0tJw2OSvDIlkXQ/j96MUKW0PF/htVH6S1g=
 k8s.io/component-helpers v0.21.5/go.mod h1:sjHa2QESu4iHcL20eSKyIvCYEKdxQyS3LthUe10tt0k=
+k8s.io/component-helpers v0.24.0 h1:hZIHGfdd55thhqd9oxjDTw68OAPauDMJ+8hC69aNw1I=
+k8s.io/component-helpers v0.24.0/go.mod h1:Q2SlLm4h6g6lPTC9GMMfzdywfLSvJT2f1hOnnjaWD8c=
 k8s.io/controller-manager v0.21.4/go.mod h1:a/iL7W19zkyirHDaupk9cyC11nejVznGwZI6I8tbyQY=
 k8s.io/controller-manager v0.21.5/go.mod h1:65guJmOoIEklTPwwYOmiHOsbEoAnQ7xKSZ9v+RdJC6g=
 k8s.io/cri-api v0.21.4/go.mod h1:ukzeKnOkrG9/+ghKZA57WeZbQfRtqlGLF5GcF3RtHZ8=
@@ -2519,6 +2530,8 @@ k8s.io/utils v0.0.0-20210722164352-7f3ee0f31471 h1:DnzUXII7sVg1FJ/4JX6YDRJfLNAC7
 k8s.io/utils v0.0.0-20210722164352-7f3ee0f31471/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20210802155522-efc7438f0176 h1:Mx0aa+SUAcNRQbs5jUzV8lkDlGFU8laZsY9jrcVX5SY=
 k8s.io/utils v0.0.0-20210802155522-efc7438f0176/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
+k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 h1:HNSDgDCrr/6Ly3WEGKZftiE7IY19Vz2GdbOCyI4qqhc=
+k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 knative.dev/pkg v0.0.0-20191101194912-56c2594e4f11/go.mod h1:pgODObA1dTyhNoFxPZTTjNWfx6F0aKsKzn+vaT9XO/Q=
 layeh.com/radius v0.0.0-20190322222518-890bc1058917/go.mod h1:fywZKyu//X7iRzaxLgPWsvc0L26IUpVvE/aeIL2JtIQ=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=

@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -68,7 +69,7 @@ func NewClient(cfg *rest.Config) (*rest.RESTClient, *runtime.Scheme, error) {
 }
 
 // CreateCRD creates CustomResourceDefinition
-func CreateCRD(clientset apiextensionsclient.Interface) error {
+func CreateCRD(clientset apiextensionsclient.Interface, retryInterval, timeout time.Duration) error {
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crdv1.VolumeSnapshotDataResourcePlural + "." + crdv1.GroupName,
@@ -78,8 +79,8 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			Version: crdv1.SchemeGroupVersion.Version,
 			Scope:   apiextensionsv1beta1.ClusterScoped,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural: crdv1.VolumeSnapshotDataResourcePlural,
-				Kind:   reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
+				Plural:     crdv1.VolumeSnapshotDataResourcePlural,
+				Kind:       reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
 				ShortNames: storkVolumeSnapshotDataShortNames,
 			},
 		},
@@ -100,8 +101,8 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			Version: crdv1.SchemeGroupVersion.Version,
 			Scope:   apiextensionsv1beta1.NamespaceScoped,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural: crdv1.VolumeSnapshotResourcePlural,
-				Kind:   reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
+				Plural:     crdv1.VolumeSnapshotResourcePlural,
+				Kind:       reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
 				ShortNames: storkVolumeSnapshotShortNames,
 			},
 		},
@@ -111,11 +112,31 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 		glog.Fatalf("failed to create VolumeSnapshotResource: %#v, err: %#v",
 			res, err)
 	}
-	return nil
+	return wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+		crd, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crd.Name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+		for _, cond := range crd.Status.Conditions {
+			switch cond.Type {
+			case apiextensionsv1beta1.Established:
+				if cond.Status == apiextensionsv1beta1.ConditionTrue {
+					return true, nil
+				}
+			case apiextensionsv1beta1.NamesAccepted:
+				if cond.Status == apiextensionsv1beta1.ConditionFalse {
+					return false, fmt.Errorf("name conflict: %v", cond.Reason)
+				}
+			}
+		}
+		return false, nil
+	})
 }
 
 // CreateCRDV1 creates CustomResourceDefinition for v1 apiVersion
-func CreateCRDV1(clientset apiextensionsclient.Interface) error {
+func CreateCRDV1(clientset apiextensionsclient.Interface, retryInterval, timeout time.Duration) error {
 	setSchema := true
 	annot := make(map[string]string)
 	annot["api-approved.kubernetes.io"] = "https://github.com/kubernetes-csi/external-snapshotter/pull/419"
@@ -139,8 +160,8 @@ func CreateCRDV1(clientset apiextensionsclient.Interface) error {
 			},
 			Scope: apiextensionsv1.ClusterScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Plural: crdv1.VolumeSnapshotDataResourcePlural,
-				Kind:   reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
+				Plural:     crdv1.VolumeSnapshotDataResourcePlural,
+				Kind:       reflect.TypeOf(crdv1.VolumeSnapshotData{}).Name(),
 				ShortNames: storkVolumeSnapshotDataShortNames,
 			},
 		},
@@ -172,8 +193,8 @@ func CreateCRDV1(clientset apiextensionsclient.Interface) error {
 			},
 			Scope: apiextensionsv1.NamespaceScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Plural: crdv1.VolumeSnapshotResourcePlural,
-				Kind:   reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
+				Plural:     crdv1.VolumeSnapshotResourcePlural,
+				Kind:       reflect.TypeOf(crdv1.VolumeSnapshot{}).Name(),
 				ShortNames: storkVolumeSnapshotShortNames,
 			},
 		},
@@ -183,7 +204,27 @@ func CreateCRDV1(clientset apiextensionsclient.Interface) error {
 		glog.Fatalf("failed to create VolumeSnapshotResource: %#v, err: %#v",
 			res, err)
 	}
-	return nil
+	return wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+		crd, err := clientset.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crd.Name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+		for _, cond := range crd.Status.Conditions {
+			switch cond.Type {
+			case apiextensionsv1.Established:
+				if cond.Status == apiextensionsv1.ConditionTrue {
+					return true, nil
+				}
+			case apiextensionsv1.NamesAccepted:
+				if cond.Status == apiextensionsv1.ConditionFalse {
+					return false, fmt.Errorf("name conflict: %v", cond.Reason)
+				}
+			}
+		}
+		return false, nil
+	})
 }
 
 // WaitForSnapshotResource waits for the snapshot resource

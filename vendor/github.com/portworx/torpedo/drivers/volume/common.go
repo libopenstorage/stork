@@ -170,6 +170,14 @@ func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 
 }
 
+//IsPxInstalled checks for Px to be installed on a node
+func (d *DefaultDriver) IsPxInstalled(n node.Node) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPxInstalled()",
+	}
+}
+
 // RecoverDriver will recover a volume driver from a failure/storage down state.
 // This could be used by a volume driver to recover itself from any underlying storage
 // failure.
@@ -783,6 +791,14 @@ func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPxVersionOnNode()",
+	}
+}
+
+// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+func (d *DefaultDriver) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlCmdOutputConnectionOpts()",
 	}
 }
 

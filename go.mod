@@ -53,7 +53,7 @@ require (
 	k8s.io/cli-runtime v0.21.5
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/code-generator v0.22.1
-	k8s.io/component-helpers v0.21.5
+	k8s.io/component-helpers v0.24.0
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.21.5
 	k8s.io/kubernetes v1.21.5
@@ -73,12 +73,12 @@ replace (
 	//github.com/heptio/ark => github.com/heptio/ark v1.0.0
 	github.com/heptio/velero => github.com/heptio/velero v1.0.0
 	github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
-	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
-	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
+	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
+	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221003064431-02c4d9163abb
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.1
 
@@ -92,7 +92,7 @@ replace (
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.21.5
 	k8s.io/code-generator => k8s.io/code-generator v0.21.5
 	k8s.io/component-base => k8s.io/component-base v0.21.5
-	k8s.io/component-helpers => k8s.io/component-helpers v0.21.5
+	k8s.io/component-helpers => k8s.io/component-helpers v0.24.0
 	k8s.io/controller-manager => k8s.io/controller-manager v0.21.5
 	k8s.io/cri-api => k8s.io/cri-api v0.21.5
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.21.5
