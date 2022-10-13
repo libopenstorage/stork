@@ -87,6 +87,8 @@ type InitOptions struct {
 	VolDriverName string
 	// NodeDriverName node driver name
 	NodeDriverName string
+	// MonitorDriverName monitor driver name
+	MonitorDriverName string
 	// ConfigMap  identifies what config map should be used to
 	SecretConfigMapName string
 	// HelmValuesConfigMapName custom values for helm charts

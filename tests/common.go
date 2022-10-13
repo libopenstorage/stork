@@ -7,16 +7,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	logInstance "github.com/portworx/torpedo/pkg/log"
 	"net"
+
+	logInstance "github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 
-	"github.com/portworx/torpedo/pkg/s3utils"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"io/ioutil"
 	"net/url"
@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/s3utils"
 
 	storageapi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,6 +54,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
@@ -98,10 +101,15 @@ import (
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
 	// import azure driver to invoke it's init
-	context1 "context"
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
+
 	// import generic csi driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
+
+	// import driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+
+	context1 "context"
 
 	"github.com/pborman/uuid"
 	yaml "gopkg.in/yaml.v2"
@@ -117,6 +125,7 @@ const (
 	defaultSpecsRoot                     = "/specs"
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
+	monitorDriverCliFlag                 = "monitor-driver"
 	storageDriverCliFlag                 = "storage-driver"
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
@@ -173,6 +182,9 @@ const (
 	defaultClusterPairDir  = "cluster-pair"
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
+
+	torpedoJobNameFlag = "torpedo-job-name"
+	torpedoJobTypeFlag = "torpedo-job-type"
 )
 
 //Dashboard params
@@ -204,6 +216,7 @@ const (
 	oneMegabytes                          = 1024 * 1024
 	defaultScheduler                      = "k8s"
 	defaultNodeDriver                     = "ssh"
+	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
 	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
@@ -220,6 +233,8 @@ const (
 	defaultLicenseExpiryTimeoutHours      = 1 * time.Hour
 	defaultMeteringIntervalMins           = 10 * time.Minute
 	authTokenParam                        = "auth-token"
+	defaultTorpedoJob                     = "torpedo-job"
+	defaultTorpedoJobType                 = "functional"
 )
 
 const (
@@ -316,6 +331,7 @@ func InitInstance() {
 		SpecDir:                          Inst().SpecDir,
 		VolDriverName:                    Inst().V.String(),
 		NodeDriverName:                   Inst().N.String(),
+		MonitorDriverName:                Inst().M.String(),
 		SecretConfigMapName:              Inst().ConfigMap,
 		CustomAppConfig:                  Inst().CustomAppConfig,
 		StorageProvisioner:               Inst().Provisioner,
@@ -346,6 +362,9 @@ func InitInstance() {
 	if err != nil {
 		log.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
 	}
+	expect(err).NotTo(haveOccurred())
+
+	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
@@ -1279,7 +1298,10 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
-		processError(err, errChan...)
+		// Need to check err != nil before calling processError
+		if err != nil {
+			processError(err, errChan...)
+		}
 		if len(contexts) == 0 {
 			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
 		}
@@ -3615,6 +3637,7 @@ type Torpedo struct {
 	S                                   scheduler.Driver
 	V                                   volume.Driver
 	N                                   node.Driver
+	M                                   monitor.Driver
 	SpecDir                             string
 	AppList                             []string
 	LogLoc                              string
@@ -3650,15 +3673,18 @@ type Torpedo struct {
 	HelmValuesConfigMap                 string
 	IsHyperConverged                    bool
 	Dash                                *aetosutil.Dashboard
+	JobName                             string
+	JobType                             string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
+	var monitorDriver monitor.Driver
 	var backupDriver backup.Driver
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
@@ -3694,10 +3720,15 @@ func ParseFlags() {
 	//dashboard fields
 	var user, testBranch, testProduct, testType, testDescription, testTags string
 	var testsetID int
+	var torpedoJobName string
+	var torpedoJobType string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
+	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
+	flag.StringVar(&torpedoJobName, torpedoJobNameFlag, defaultTorpedoJob, "Name of the torpedo job")
+	flag.StringVar(&torpedoJobType, torpedoJobTypeFlag, defaultTorpedoJobType, "Type of torpedo job")
 	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
@@ -3774,6 +3805,8 @@ func ParseFlags() {
 		log.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
 		log.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+	} else if monitorDriver, err = monitor.Get(m); err != nil {
+		log.Fatalf("Cannot find monitor driver for %v. Err: %v\n", m, err)
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
 		log.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
@@ -3841,6 +3874,7 @@ func ParseFlags() {
 				S:                                   schedulerDriver,
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
+				M:                                   monitorDriver,
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
@@ -3874,6 +3908,8 @@ func ParseFlags() {
 				MeteringIntervalMins:                meteringIntervalMins,
 				IsHyperConverged:                    hyperConverged,
 				Dash:                                dash,
+				JobName:                             torpedoJobName,
+				JobType:                             torpedoJobType,
 			}
 		})
 	}
