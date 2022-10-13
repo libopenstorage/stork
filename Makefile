@@ -7,6 +7,9 @@
 # make {build-pds|container-pds}:
 #	 create pds.test binary/container (<repo>/torpedo-pds:<tag>)
 #
+# make {build-backup|container-backup}:
+#	 create backup.test binary/container (<repo>/torpedo-backup:<tag>)
+#
 # make all:
 #	 verify that all test binaries build successfully
 #
@@ -51,7 +54,7 @@ PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
 ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
 
-all: vet build build-pds fmt
+all: vet build build-pds build-backup fmt
 
 deps:
 	go get -d -v $(PKGS)
@@ -86,6 +89,16 @@ build: $(GOPATH)/bin/ginkgo
 # this target builds the pds.test binary only.
 build-pds: GINKGO_BUILD_DIR=./tests/pds
 build-pds: $(GOPATH)/bin/ginkgo
+	mkdir -p $(BIN)
+	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
+
+	ginkgo build -r $(GINKGO_BUILD_DIR)
+	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	chmod -R 755 bin/*
+
+# this target builds the backup.test binary only.
+build-backup: GINKGO_BUILD_DIR=./tests/backup
+build-backup: $(GOPATH)/bin/ginkgo
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
 
@@ -132,11 +145,17 @@ container:
 	@echo "Building basic.test container "$(TORPEDO_IMG)
 	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build -f Dockerfile .
 
-# this target builds a container with test.pds binary only. Repo is hardcoded to ".../torpedo-pds".
+# this target builds a container with pds.test binary only. Repo is hardcoded to ".../torpedo-pds".
 container-pds: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-pds:$(DOCKER_HUB_TAG)
 container-pds:
 	@echo "Building pds.test container "$(TORPEDO_IMG)
 	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-pds -f Dockerfile .
+
+# this target builds a container with backup.test binary only. Repo is hardcoded to ".../torpedo-backup".
+container-backup: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
+container-backup:
+	@echo "Building backup.test container "$(TORPEDO_IMG)
+	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-backup -f Dockerfile .
 
 deploy: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo:$(DOCKER_HUB_TAG)
 deploy: container
@@ -146,6 +165,10 @@ deploy-pds: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-pds:$(DOCKER_HUB_TAG)
 deploy-pds: container-pds
 	sudo docker push $(TORPEDO_IMG)
 
+deploy-backup: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
+deploy-backup: container-backup
+	sudo docker push $(TORPEDO_IMG)
+
 clean:
 	-sudo rm -rf bin
 	-sudo find . -type f -name "*.test" -delete
@@ -153,6 +176,8 @@ clean:
 	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo:$(DOCKER_HUB_TAG)
 	@echo "Deleting pds image"
 	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-pds:$(DOCKER_HUB_TAG)
+	@echo "Deleting backup image"
+	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
 	go clean -i $(PKGS)
 
 sidecar: sidecar-wp-cli

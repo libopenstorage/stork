@@ -25,6 +25,10 @@ after_success:
       sudo docker tag "${DOCKER_HUB_REPO}/torpedo-pds:${DOCKER_HUB_TAG}" "${DOCKER_HUB_REPO}/torpedo-pds:${TRAVIS_BRANCH}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo-pds:${DOCKER_HUB_TAG}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo-pds:${TRAVIS_BRANCH}";
+      make container-backup;
+      sudo docker tag "${DOCKER_HUB_REPO}/torpedo-backup:${DOCKER_HUB_TAG}" "${DOCKER_HUB_REPO}/torpedo-backup:${TRAVIS_BRANCH}";
+      sudo docker push "${DOCKER_HUB_REPO}/torpedo-backup:${DOCKER_HUB_TAG}";
+      sudo docker push "${DOCKER_HUB_REPO}/torpedo-backup:${TRAVIS_BRANCH}";
     fi
 notifications:
   email:
