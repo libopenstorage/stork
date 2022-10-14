@@ -27,6 +27,7 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 type genericCsi struct {
 	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
+	log *logrus.Logger
 }
 
 func (d *genericCsi) String() string {
@@ -49,8 +50,9 @@ func (d *genericCsi) ValidateStorageCluster(endpointURL, endpointVersion string)
 	}
 }
 
-func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	logrus.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
+	d.log = logger
+	d.log.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo, from
 	if storageProvisioner == string(CsiStorage) {

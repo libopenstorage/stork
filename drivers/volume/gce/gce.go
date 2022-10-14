@@ -24,14 +24,16 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 type gce struct {
 	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
+	log *logrus.Logger
 }
 
 func (d *gce) String() string {
 	return string(GceStorage)
 }
 
-func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	logrus.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
+	d.log = logger
+	d.log.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {

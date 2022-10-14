@@ -47,6 +47,7 @@ type vsphere struct {
 	vsphereHostIP   string
 	ctx             context.Context
 	cancel          context.CancelFunc
+	log             *logrus.Logger
 }
 
 var (
@@ -59,7 +60,8 @@ func (v *vsphere) String() string {
 
 // InitVsphere initializes the vsphere driver for ssh
 func (v *vsphere) Init(nodeOpts node.InitOptions) error {
-	logrus.Infof("Using the vsphere node driver")
+	v.log = nodeOpts.Logger
+	v.log.Infof("Using the vsphere node driver")
 
 	v.vsphereUsername = DefaultUsername
 	username := os.Getenv(vsphereUname)
@@ -90,7 +92,7 @@ func (v *vsphere) Init(nodeOpts node.InitOptions) error {
 // TestConnection tests the connection to the given node
 func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
-	logrus.Infof("Testing vsphere driver connection by checking state of the VMs in the vsphere")
+	v.log.Infof("Testing vsphere driver connection by checking state of the VMs in the vsphere")
 	if _, ok := vmMap[n.Name]; !ok {
 		return fmt.Errorf("Failed to get VM: %s", n.Name)
 	}
@@ -98,7 +100,7 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 	cmd := "hostname"
 	t := func() (interface{}, bool, error) {
 		powerState, err := vm.PowerState(v.ctx)
-		logrus.Infof("Power state of VM : %s state %v ", vm.Name(), powerState)
+		v.log.Infof("Power state of VM : %s state %v ", vm.Name(), powerState)
 		if err != nil || powerState != types.VirtualMachinePowerStatePoweredOn {
 			return nil, true, &node.ErrFailedToTestConnection{
 				Node:  n,
@@ -122,7 +124,7 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 // getVMFinder return find.Finder instance
 func (v *vsphere) getVMFinder() (*find.Finder, error) {
 	login := fmt.Sprintf("%s%s:%s@%s/sdk", Protocol, v.vsphereUsername, v.vspherePassword, v.vsphereHostIP)
-	logrus.Infof("Logging in to Virtual Center using: %s", login)
+	v.log.Infof("Logging in to Virtual Center using: %s", login)
 	u, err := url.Parse(login)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing url %s", login)
@@ -135,7 +137,7 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("logging in error: %s", err.Error())
 	}
-	logrus.Infof("Log in successful to vsphere:  %s:\n", v.vsphereHostIP)
+	v.log.Infof("Log in successful to vsphere:  %s:\n", v.vsphereHostIP)
 
 	f := find.NewFinder(c.Client, true)
 
@@ -185,7 +187,7 @@ func (v *vsphere) connect() error {
 func (v *vsphere) AddMachine(vmName string) error {
 	var f *find.Finder
 
-	logrus.Infof("Adding VM: %s into vmMap  ", vmName)
+	v.log.Infof("Adding VM: %s into vmMap  ", vmName)
 
 	f, err := v.getVMFinder()
 	if err != nil {
@@ -209,7 +211,7 @@ func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	//Reestblish connection to avoid session timeout.
 	v.connect()
 	vm := vmMap[n.Name]
-	logrus.Infof("Rebooting VM: %s  ", vm.Name())
+	v.log.Infof("Rebooting VM: %s  ", vm.Name())
 	err := vm.RebootGuest(v.ctx)
 	if err != nil {
 		return &node.ErrFailedToRebootNode{
@@ -229,7 +231,7 @@ func (v *vsphere) powerOnVM(vm *object.VirtualMachine) error {
 	}
 
 	if powerState == types.VirtualMachinePowerStatePoweredOn {
-		logrus.Warn("VM is already in powered-on state: ", vm.Name())
+		v.log.Warn("VM is already in powered-on state: ", vm.Name())
 		return nil
 	}
 
@@ -248,7 +250,7 @@ func (v *vsphere) PowerOnVM(n node.Node) error {
 	var err error
 	vm := vmMap[n.Name]
 
-	logrus.Infof("Powering on VM: %s  ", vm.Name())
+	v.log.Infof("Powering on VM: %s  ", vm.Name())
 	if err = v.powerOnVM(vm); err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
@@ -265,7 +267,7 @@ func (v *vsphere) PowerOnVMByName(vmName string) error {
 	var err error
 	vm := vmMap[vmName]
 
-	logrus.Infof("Powering on VM: %s  ", vm.Name())
+	v.log.Infof("Powering on VM: %s  ", vm.Name())
 	if err = v.powerOnVM(vm); err != nil {
 		return err
 	}
@@ -277,7 +279,7 @@ func (v *vsphere) PowerOffVM(n node.Node) error {
 	var err error
 	vm := vmMap[n.Name]
 
-	logrus.Infof("\nPowering off VM: %s  ", vm.Name())
+	v.log.Infof("\nPowering off VM: %s  ", vm.Name())
 	tsk, err := vm.PowerOff(v.ctx)
 	if err != nil {
 		return fmt.Errorf("Failed to power off %s: %v", vm.Name(), err)
@@ -300,7 +302,7 @@ func (v *vsphere) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error
 
 	vm := vmMap[n.Name]
 
-	logrus.Infof("Shutting down VM: %s  ", vm.Name())
+	v.log.Infof("Shutting down VM: %s  ", vm.Name())
 	err := vm.ShutdownGuest(v.ctx)
 	if err != nil {
 		return &node.ErrFailedToShutdownNode{

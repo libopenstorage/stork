@@ -1384,8 +1384,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 				if isPureFileVol {
 					logrus.Warningf(
-						"Clone is not supported for FB volumes: [%s]. " +
-						"Skipping clone create for FB volume.", vol.Name,
+						"Clone is not supported for FB volumes: [%s]. "+
+							"Skipping clone create for FB volume.", vol.Name,
 					)
 					continue
 				}
@@ -3788,7 +3788,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 func getOperatorLatestVersion() (string, error) {
 	url := fmt.Sprintf("%s/%s/version", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-	logrus.Infof("URL is : %v", url)
+	log.Infof("URL is : %v", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to send GET request to %s, Err: %v", url, err)
@@ -3979,8 +3979,8 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 			}
 			if isPureVol {
 				logrus.Warningf(
-					"Autofs Trim is not supported for Pure DA volume: [%s]. " +
-					"Skipping autofs trim status on pure volumes", v.Name,
+					"Autofs Trim is not supported for Pure DA volume: [%s]. "+
+						"Skipping autofs trim status on pure volumes", v.Name,
 				)
 				continue
 			}
@@ -4044,8 +4044,8 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				}
 				if isPureVol {
 					logrus.Warningf(
-						"Autofs Trim is not supported for Pure DA volume: [%s]. " +
-						"Skipping autofs trim status on pure volumes", v.Name,
+						"Autofs Trim is not supported for Pure DA volume: [%s]. "+
+							"Skipping autofs trim status on pure volumes", v.Name,
 					)
 					continue
 				}

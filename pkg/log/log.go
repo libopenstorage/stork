@@ -1,7 +1,13 @@
 package log
 
 import (
+	"io"
+	"os"
+	"path"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
@@ -18,6 +24,9 @@ var (
 	heading  colorizer
 	plain    colorizer
 )
+
+var log *logrus.Logger
+var lock = &sync.Mutex{}
 
 // We are logging to file, strip colors to make the output more readable
 var txtFormatter = &logrus.TextFormatter{DisableColors: true}
@@ -118,4 +127,28 @@ func init() {
 	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
 	logrus.SetFormatter(customFormatter)
 	customFormatter.FullTimestamp = true
+}
+
+//GetLogInstance returns the logrus instance
+func GetLogInstance() *logrus.Logger {
+
+	//To-DO: add rolling file appender
+	//max: 50MB and 10 files
+
+	if log == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if log == nil {
+			log = logrus.New()
+			log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, TimestampFormat: "2006-01-02 15:04:05",
+				CallerPrettyfier: func(frame *runtime.Frame) (function string, file string) {
+					fileName := path.Base(frame.File) + ":" + strconv.Itoa(frame.Line)
+					//return frame.Function, fileName
+					return "", fileName
+				}})
+			log.ReportCaller = true
+			log.Out = io.MultiWriter(os.Stdout)
+		}
+	}
+	return log
 }

@@ -118,7 +118,9 @@ func (e *errLabelAbsent) Error() string {
 	return fmt.Sprintf("label %s is absent on node %s", e.label, e.node)
 }
 
-type k8sSchedOps struct{}
+type k8sSchedOps struct {
+	log *logrus.Logger
+}
 
 func (k *k8sSchedOps) GetKubernetesVersion() (*version.Info, error) {
 	return k8sCore.GetVersion()
@@ -235,13 +237,13 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 
 	t := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPodsUsingPV(pvName)
-		printStatus(pods...)
+		printStatus(k, pods...)
 		if err != nil {
 			return nil, true, err
 		}
 		resp, err := k.validateMountsInPods(vol, pvName, pods, d)
 		if err != nil {
-			logrus.Errorf("failed to validate mount in pod. Cause: %v", err)
+			k.log.Errorf("failed to validate mount in pod. Cause: %v", err)
 			return nil, true, err
 		}
 		lenValidatedPods := len(resp)
@@ -254,14 +256,14 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 				case "ReplicaSet":
 					rs, err := k8sApps.GetReplicaSet(ownerref.Name, pods[0].Namespace)
 					if err != nil {
-						logrus.Errorf("failed to get replicaset %s. cause: %v", ownerref.Name, err)
+						k.log.Errorf("failed to get replicaset %s. cause: %v", ownerref.Name, err)
 						return nil, true, err
 					}
 					lenExpectedPods = int(*rs.Spec.Replicas)
 				case "StatefulSet":
 					st, err := k8sApps.GetStatefulSet(ownerref.Name, pods[0].Namespace)
 					if err != nil {
-						logrus.Errorf("failed to get statefulset %s. cause: %v", ownerref.Name, err)
+						k.log.Errorf("failed to get statefulset %s. cause: %v", ownerref.Name, err)
 						return nil, true, err
 					}
 					lenExpectedPods = int(*st.Spec.Replicas)
@@ -298,28 +300,28 @@ PodLoop:
 	for _, p := range pods {
 		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8serrors.ErrPodsNotFound {
-			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
+			k.log.Warnf("pod %s not found. probably it got rescheduled", p.Name)
 			continue
 		} else if !pod.DeletionTimestamp.IsZero() {
 			// pod is being terminated, skip
-			logrus.Warnf("pod %s/%s is being terminated, not validating the mounts...", p.Namespace, p.Name)
+			k.log.Warnf("pod %s/%s is being terminated, not validating the mounts...", p.Namespace, p.Name)
 			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
-			printStatus(*pod)
+			printStatus(k, *pod)
 			continue
 		} else if err != nil {
 			return validatedMountPods, err
 		}
 
-		logrus.Debugf("validating the mounts in pod %s/%s", p.Namespace, p.Name)
+		k.log.Debugf("validating the mounts in pod %s/%s", p.Namespace, p.Name)
 		containerPaths := getContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
 			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
-				logrus.Warnf("Failed to execute command in pod. Cause %v", err)
+				k.log.Warnf("Failed to execute command in pod. Cause %v", err)
 				continue PodLoop
 			} else if err != nil {
 				return validatedMountPods, err
@@ -332,7 +334,7 @@ PodLoop:
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
 
 					if len(pxMounts) > 0 {
-						logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
+						k.log.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
 						pxMountFound = true
 
 						// If we encounter a Pure volume, we should skip the host mount check as we can't get the
@@ -391,13 +393,13 @@ func isMountReadOnly(mount string) bool {
 
 func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Volume) error {
 	if parentPVCAnnotation, ok := params[snapshotAnnotation]; ok {
-		logrus.Debugf("Validating annotation based snapshot/clone")
+		k.log.Debugf("Validating annotation based snapshot/clone")
 		return k.validateVolumeClone(parent, parentPVCAnnotation)
 	} else if snapshotName, ok := params[storkSnapshotAnnotation]; ok {
-		logrus.Debugf("Validating Stork clone")
+		k.log.Debugf("Validating Stork clone")
 		return k.validateStorkClone(parent, snapshotName)
 	}
-	logrus.Debugf("Validating Stork snapshot")
+	k.log.Debugf("Validating Stork snapshot")
 	return k.validateStorkSnapshot(parent, params)
 }
 
@@ -596,7 +598,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 		args = append(args, "-pximage", pxImage, "-pxtag", pxTag)
 	}
 
-	logrus.Infof("args: %v", args)
+	k.log.Infof("args: %v", args)
 
 	// create a talisman job
 	var valOne int32 = 1
@@ -664,7 +666,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	var isPxPodPresent bool = false
 	pxPods, err := k8sCore.GetPodsByNode(n.Name, PXNamespace)
 	if err != nil {
-		logrus.Errorf("Failed to get apps on node %s", n.Name)
+		k.log.Errorf("Failed to get apps on node %s", n.Name)
 		return false
 	}
 	// Need to make sure if px pod is present or not
@@ -674,7 +676,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 		}
 
 		if pod.Labels["name"] == PXDaemonSet && !k8sCore.IsPodReady(pod) {
-			printStatus(pod)
+			printStatus(k, pod)
 			return false
 		}
 	}
@@ -686,7 +688,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	t := func() (interface{}, bool, error) {
 		node, err := k8sCore.GetNodeByName(n.Name)
 		if err != nil {
-			logrus.Errorf("Failed to get node %v", err)
+			k.log.Errorf("Failed to get node %v", err)
 			return nil, true, err
 		}
 		return node, false, nil
@@ -694,7 +696,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 
 	node, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
 	if err != nil {
-		logrus.Errorf("Failed to get node %v", err)
+		k.log.Errorf("Failed to get node %v", err)
 		return false, err
 	}
 
@@ -702,7 +704,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	// if node has px/enabled label set to false or node-type public or
 	// has any taints then px is disabled on node
 	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
-		logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+		k.log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 		return false, nil
 	}
 
@@ -711,14 +713,14 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	if nodeLabelValue, hasKey := kubeNode.Labels[k8sRoleNodeInfraLabelKey]; hasKey {
 		if nodeLabelValue == "true" {
 			if _, hasKey := kubeNode.Labels[k8sRoleNodeComputeLabelKey]; !hasKey {
-				logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+				k.log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 				return false, nil
 			}
 		}
 
 	}
 
-	logrus.Infof("PX is enabled on node %v.", n.Name)
+	k.log.Infof("PX is enabled on node %v.", n.Name)
 	return true, nil
 }
 
@@ -728,14 +730,14 @@ func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, erro
 	var addrs []string
 	var remoteNodeList []node.Node
 
-	pxNodes, err := getPXNodes(destKubeConfig)
+	pxNodes, err := getPXNodes(k, destKubeConfig)
 	if err != nil {
-		logrus.Errorf("Error getting PX Nodes %v : %v", pxNodes, err)
+		k.log.Errorf("Error getting PX Nodes %v : %v", pxNodes, err)
 		return nil, err
 	}
 
 	for _, pxNode := range pxNodes {
-		logrus.Info("px node on remote :", pxNode.Name)
+		k.log.Info("px node on remote :", pxNode.Name)
 		for _, addr := range pxNode.Status.Addresses {
 			if addr.Type == corev1.NodeExternalIP || addr.Type == corev1.NodeInternalIP {
 				addrs = append(addrs, addr.Address)
@@ -803,12 +805,12 @@ func extractPodUID(volDirPath string) string {
 }
 
 // return PX nodes on k8s cluster provided by kubeconfig file
-func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
+func getPXNodes(k *k8sSchedOps, destKubeConfig string) ([]corev1.Node, error) {
 	var pxNodes []corev1.Node
 	// get schd-ops/k8s instance of destination cluster
 	destClient, err := core.NewInstanceFromConfigFile(destKubeConfig)
 	if err != nil {
-		logrus.Errorf("Unable to get k8s instance: %v", err)
+		k.log.Errorf("Unable to get k8s instance: %v", err)
 		return nil, err
 	}
 
@@ -844,14 +846,14 @@ func (k *k8sSchedOps) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.Au
 	autopilotRule, err := k8sOps.CreateAutopilotRule(&apRule)
 	if k8s_errors.IsAlreadyExists(err) {
 		if autopilotRule, err := k8sOps.GetAutopilotRule(apRule.Name); err == nil {
-			logrus.Infof("Using existing autopilot rule: %v", apRule.ObjectMeta.Name)
+			k.log.Infof("Using existing autopilot rule: %v", apRule.ObjectMeta.Name)
 			return autopilotRule, nil
 		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
 	}
-	logrus.Infof("Created Autopilot Rule: %v", autopilotRule.ObjectMeta.Name)
+	k.log.Infof("Created Autopilot Rule: %v", autopilotRule.ObjectMeta.Name)
 	return autopilotRule, nil
 }
 
@@ -864,7 +866,7 @@ func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	return listAutopilotRules, nil
 }
 
-func printStatus(pods ...corev1.Pod) {
+func printStatus(k *k8sSchedOps, pods ...corev1.Pod) {
 	for _, pod := range pods {
 		status := ""
 		ready := false
@@ -883,10 +885,10 @@ func printStatus(pods ...corev1.Pod) {
 			status += fmt.Sprintf("Phase: %v Reason: %s", pod.Status.Phase, pod.Status.Reason)
 		}
 		if ready {
-			logrus.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Spec.NodeName,
+			k.log.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Spec.NodeName,
 				status)
 		} else {
-			logrus.Infof("Pod [%s] %s not ready on node %s - %s", pod.Namespace, pod.Name,
+			k.log.Infof("Pod [%s] %s not ready on node %s - %s", pod.Namespace, pod.Name,
 				pod.Spec.NodeName, status)
 		}
 	}
@@ -895,4 +897,8 @@ func printStatus(pods ...corev1.Pod) {
 func init() {
 	k := &k8sSchedOps{}
 	Register("k8s", k)
+}
+
+func (k *k8sSchedOps) Init(logger *logrus.Logger) {
+	k.log = logger
 }

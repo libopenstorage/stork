@@ -18,8 +18,8 @@ type pure struct {
 	portworx
 }
 
-func (p *pure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	return p.portworx.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, PureDriverName)
+func (p *pure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
+	return p.portworx.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, PureDriverName, logger)
 }
 
 func (p *pure) String() string {

@@ -4,6 +4,14 @@ if [ -n "${VERBOSE}" ]; then
     VERBOSE="--v"
 fi
 
+if [ -z "${ENABLE_DASH}" ]; then
+    ENABLE_DASH=true
+fi
+
+if [ -z "${TESTSET_ID}" ]; then
+    TESTSET_ID="0"
+fi
+
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
@@ -31,6 +39,7 @@ fi
 if [ -z "${CHAOS_LEVEL}" ]; then
     CHAOS_LEVEL="5"
 fi
+
 if [ -z "${MIN_RUN_TIME}" ]; then
     MIN_RUN_TIME="0"
 fi
@@ -91,6 +100,10 @@ fi
 
 if [ -z "${PROVISIONER}" ]; then
     PROVISIONER="portworx"
+fi
+
+if [ -z "${IS_HYPER_CONVERGED}" ]; then
+    IS_HYPER_CONVERGED=true
 fi
 
 CONFIGMAP=""
@@ -400,6 +413,7 @@ spec:
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
+            "--hyper-converged=$IS_HYPER_CONVERGED",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
@@ -432,6 +446,14 @@ spec:
             "--jira-username=$JIRA_USERNAME",
             "--jira-token=$JIRA_TOKEN",
             "--jira-account-id=$JIRA_ACCOUNT_ID",
+            "--user=$USER",
+            "--enable-dash=$ENABLE_DASH",
+            "--test-desc=$TEST_DESCRIPTION",
+            "--test-type=$TEST_TYPE",
+            "--test-tags=$TEST_TAGS",
+            "--testset-id=$TESTSET_ID",
+            "--branch=$BRANCH",
+            "--product=$PRODUCT",
             "$APP_DESTROY_TIMEOUT_ARG",
     ]
     tty: true

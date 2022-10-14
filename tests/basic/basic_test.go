@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"os"
 	"testing"
 	"time"
@@ -35,6 +36,10 @@ var (
 	wantAfterSuiteValidateCleanup bool = false
 )
 
+var log *logrus.Logger
+var dash *aetosutil.Dashboard
+var f *os.File
+
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -45,11 +50,23 @@ func TestBasic(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logrus.Infof("Init instance")
+	log = Inst().Logger
+	dash = Inst().Dash
+	log.Infof("Init instance")
 	InitInstance()
+	dash.TestSetBegin(dash.TestSet)
 })
 
 var _ = AfterSuite(func() {
+	f = CreateLogFile("SystemCheck.log")
+	defer dash.TestCaseEnd()
+	defer CloseLogFile(f)
+	defer dash.TestSetEnd()
+	if f != nil {
+		SetTorpedoFileOutput(log, f)
+	}
+
+	dash.TestCaseBegin("System check", "validating system check and clean up", "", nil)
 	if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
 		PerformSystemCheck()
 	}

@@ -36,14 +36,16 @@ type linstor struct {
 	schedOps schedops.Driver
 	cli      *lclient.Client
 	torpedovolume.DefaultDriver
+	log *logrus.Logger
 }
 
 func (d *linstor) String() string {
 	return string(LinstorStorage)
 }
 
-func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	logrus.Infof("Using the LINSTOR volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
+	d.log = logger
+	d.log.Infof("Using the LINSTOR volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 
 	// Configuration of linstor client happens via environment variables:
 	// * LS_CONTROLLERS

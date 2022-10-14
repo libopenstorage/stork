@@ -6,10 +6,13 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/version"
 )
 
-type dcosSchedOps struct{}
+type dcosSchedOps struct {
+	log *logrus.Logger
+}
 
 func (d *dcosSchedOps) GetKubernetesVersion() (*version.Info, error) {
 	return nil, nil
@@ -107,4 +110,8 @@ func (d *dcosSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 func init() {
 	d := &dcosSchedOps{}
 	Register("dcos", d)
+}
+
+func (d *dcosSchedOps) Init(tpLog *logrus.Logger) {
+	d.log = tpLog
 }
