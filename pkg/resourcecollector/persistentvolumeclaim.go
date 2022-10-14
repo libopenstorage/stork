@@ -5,6 +5,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -101,11 +102,25 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		// In the case of storageClassMappings, we need to reset the
 		// storage class annotation and the provisioner annotation
 		var newSc string
+		var currentSc string
 		var exists bool
 		var provisioner string
-		if val, ok := pvc.Annotations[v1.BetaStorageClassAnnotation]; ok {
-			if newSc, exists = storageClassMappings[val]; exists && len(newSc) > 0 {
-				pvc.Annotations[v1.BetaStorageClassAnnotation] = newSc
+		// Get the existing storage class from the pvc spec
+		// It can be in BetaStorageClassAnnotation annotation or in the spec.
+		currentSc, err := utils.GetStorageClassNameForPVC(&pvc)
+		if err != nil {
+			// If the storageclassMapping is present, then we can assume that storage class should be present in the PVC spec.
+			// So handling the error and returning it to caller.
+			return false, err
+		}
+		if len(currentSc) != 0 {
+			if newSc, exists = storageClassMappings[currentSc]; exists && len(newSc) > 0 {
+				if _, ok := pvc.Annotations[v1.BetaStorageClassAnnotation]; ok {
+					pvc.Annotations[v1.BetaStorageClassAnnotation] = newSc
+				}
+				if pvc.Spec.StorageClassName != nil && len(*pvc.Spec.StorageClassName) > 0 {
+					*pvc.Spec.StorageClassName = newSc
+				}
 			}
 		}
 		if len(newSc) > 0 {
@@ -127,11 +142,6 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		}
 	}
 
-	if len(storageClassMappings) > 0 && pvc.Spec.StorageClassName != nil {
-		if newSc, exists := storageClassMappings[*pvc.Spec.StorageClassName]; exists && len(newSc) > 0 {
-			pvc.Spec.StorageClassName = &newSc
-		}
-	}
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
 	if err != nil {
 		return false, err

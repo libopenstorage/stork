@@ -5,6 +5,7 @@ import (
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"strings"
 )
 
@@ -65,4 +66,19 @@ func GetTrimmedGroupName(group string) string {
 		}
 	}
 	return group
+}
+
+// GetStorageClassNameForPVC - Get the storageClass name from the PVC spec
+func GetStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
+	var scName string
+	if pvc.Spec.StorageClassName != nil && len(*pvc.Spec.StorageClassName) > 0 {
+		scName = *pvc.Spec.StorageClassName
+	} else {
+		scName = pvc.Annotations[v1.BetaStorageClassAnnotation]
+	}
+
+	if len(scName) == 0 {
+		return "", fmt.Errorf("PVC: %s does not have a storage class", pvc.Name)
+	}
+	return scName, nil
 }
