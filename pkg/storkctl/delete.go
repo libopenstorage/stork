@@ -2,7 +2,7 @@ package storkctl
 
 import (
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func newDeleteCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
@@ -17,6 +17,11 @@ func newDeleteCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 		newDeleteMigrationScheduleCommand(cmdFactory, ioStreams),
 		newDeleteSnapshotScheduleCommand(cmdFactory, ioStreams),
 		newDeleteGroupVolumeSnapshotCommand(cmdFactory, ioStreams),
+		newDeleteVolumeSnapshotRestoreCommand(cmdFactory, ioStreams),
+		newDeleteApplicationBackupCommand(cmdFactory, ioStreams),
+		newDeleteApplicationBackupScheduleCommand(cmdFactory, ioStreams),
+		newDeleteApplicationRestoreCommand(cmdFactory, ioStreams),
+		newDeleteApplicationCloneCommand(cmdFactory, ioStreams),
 	)
 	return deleteCommands
 }

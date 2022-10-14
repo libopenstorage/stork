@@ -3,9 +3,10 @@ package snapshot
 import (
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/pkg/rule"
-	"github.com/portworx/sched-ops/k8s"
+	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -36,7 +37,7 @@ func validateSnapRules(snap *crdv1.VolumeSnapshot) error {
 		for _, annotation := range ruleAnnotations {
 			ruleName, present := snap.Metadata.Annotations[annotation]
 			if present && len(ruleName) > 0 {
-				r, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
+				r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 				if err != nil {
 					return err
 				}
@@ -60,6 +61,9 @@ func setKind(snap *crdv1.VolumeSnapshot) {
 // with the snapshot. It returns a channel which the caller can trigger to delete the termination of background commands
 func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeClaim) (chan bool, error) {
 	setKind(snap)
+	if err := validateSnapRules(snap); err != nil {
+		return nil, err
+	}
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[preSnapRuleAnnotationKey]
 		if !present {
@@ -68,7 +72,10 @@ func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeCl
 				return nil, nil
 			}
 		}
-		r, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
+		if ruleName == "" {
+			return nil, nil
+		}
+		r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -81,6 +88,9 @@ func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeCl
 // that are associated with the snapshot
 func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) error {
 	setKind(snap)
+	if err := validateSnapRules(snap); err != nil {
+		return err
+	}
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[postSnapRuleAnnotationKey]
 		if !present {
@@ -89,7 +99,10 @@ func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnap
 				return nil
 			}
 		}
-		r, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
+		if ruleName == "" {
+			return nil
+		}
+		r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 		if err != nil {
 			return err
 		}
@@ -102,7 +115,7 @@ func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnap
 // performRuleRecovery terminates potential background commands running pods for
 // the given snapshot
 func performRuleRecovery() error {
-	allSnaps, err := k8s.Instance().ListSnapshots(v1.NamespaceAll)
+	allSnaps, err := k8sextops.Instance().ListSnapshots(v1.NamespaceAll)
 	if err != nil {
 		logrus.Errorf("Failed to list all snapshots due to: %v. Will retry.", err)
 		return err

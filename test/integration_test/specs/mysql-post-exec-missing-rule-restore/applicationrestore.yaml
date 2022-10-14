@@ -1,0 +1,10 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationRestore
+metadata:
+  name: mysql-post-exec-missing-rule-restore
+spec:
+  backupName: mysql-1-pvc-post-exec-missing-rule-backup
+  backupLocation: mysql-1-pvc-post-exec-missing-rule-backup-location 
+  namespaceMapping:
+    mysql-1-pvc-mysql-1-pvc-post-exec-missing-rule-backup: mysql-1-pvc-mysql-1-pvc-post-exec-missing-rule-backup
+  replacePolicy: Delete   

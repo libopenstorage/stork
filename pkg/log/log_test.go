@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package log
@@ -10,7 +11,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	appv1beta1 "k8s.io/api/apps/v1beta1"
 	appv1beta2 "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,6 +25,14 @@ func TestLog(t *testing.T) {
 	t.Run("migrationScheduleLogTest", migrationScheduleLogTest)
 	t.Run("ruleLogTest", ruleLogTest)
 	t.Run("pvcLogTest", pvcLogTest)
+	t.Run("pvLogTest", pvLogTest)
+	t.Run("clusterDomainUpdateLogTest", clusterDomainUpdateLogTest)
+	t.Run("applicationBackupLogTest", applicationBackupLogTest)
+	t.Run("applicationRestoreLogTest", applicationRestoreLogTest)
+	t.Run("applicationCloneLogTest", applicationCloneLogTest)
+	t.Run("applicationBackupScheduleLogTest", applicationBackupScheduleLogTest)
+	t.Run("volumeSnapshotRestoreLogTest", volumeSnapshotRestoreLogTest)
+	t.Run("backupLocationLogTest", backupLocationLogTest)
 }
 
 func podLogTest(t *testing.T) {
@@ -167,6 +176,7 @@ func ruleLogTest(t *testing.T) {
 	RuleLog(rule, migration).Infof("rule with migration log")
 	RuleLog(rule, nil).Infof("rule with nil object log")
 }
+
 func pvcLogTest(t *testing.T) {
 	metadata := metav1.ObjectMeta{
 		Name:      "testpvc",
@@ -177,4 +187,100 @@ func pvcLogTest(t *testing.T) {
 	}
 	PVCLog(pvc).Infof("pvc log")
 	PVCLog(nil).Infof("pvc nil log")
+}
+
+func pvLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testpv",
+		Namespace: "testnamespace",
+	}
+	pv := &v1.PersistentVolume{
+		ObjectMeta: metadata,
+	}
+	PVLog(pv).Infof("pv log")
+	PVLog(nil).Infof("pv nil log")
+}
+
+func clusterDomainUpdateLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name: "testclusterdomainupdate",
+	}
+	clusterDomainUpdate := &storkv1.ClusterDomainUpdate{
+		ObjectMeta: metadata,
+	}
+
+	ClusterDomainUpdateLog(clusterDomainUpdate).Infof("clusterdomainupdate log")
+	ClusterDomainUpdateLog(nil).Infof("clusterdomainupdate nil log")
+}
+
+func applicationBackupLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationbackup",
+		Namespace: "testnamespace",
+	}
+	applicationBackup := &storkv1.ApplicationBackup{
+		ObjectMeta: metadata,
+	}
+	ApplicationBackupLog(applicationBackup).Infof("applicationbackup log")
+	ApplicationBackupLog(nil).Infof("applicationbackup nil log")
+}
+
+func applicationRestoreLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationrestore",
+		Namespace: "testnamespace",
+	}
+	applicationRestore := &storkv1.ApplicationRestore{
+		ObjectMeta: metadata,
+	}
+	ApplicationRestoreLog(applicationRestore).Infof("applicationrestore log")
+	ApplicationRestoreLog(nil).Infof("applicationrestore nil log")
+}
+
+func applicationCloneLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationrestore",
+		Namespace: "testnamespace",
+	}
+	applicationClone := &storkv1.ApplicationClone{
+		ObjectMeta: metadata,
+	}
+	ApplicationCloneLog(applicationClone).Infof("applicationclone log")
+	ApplicationCloneLog(nil).Infof("applicationclone nil log")
+}
+
+func volumeSnapshotRestoreLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testvolrestore",
+		Namespace: "testvolresorenamespace",
+	}
+	snapRestore := &storkv1.VolumeSnapshotRestore{
+		ObjectMeta: metadata,
+	}
+	VolumeSnapshotRestoreLog(snapRestore).Infof("restore log")
+	VolumeSnapshotRestoreLog(nil).Info("restore nil log")
+}
+
+func applicationBackupScheduleLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationbackupschedule",
+		Namespace: "testnamespace",
+	}
+	applicationBackupSchedule := &storkv1.ApplicationBackupSchedule{
+		ObjectMeta: metadata,
+	}
+	ApplicationBackupScheduleLog(applicationBackupSchedule).Infof("applicationbackupschedule log")
+	ApplicationBackupScheduleLog(nil).Infof("applicationbackupschedule nil log")
+}
+
+func backupLocationLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testbackuplocation",
+		Namespace: "testnamespace",
+	}
+	backupLocation := &storkv1.BackupLocation{
+		ObjectMeta: metadata,
+	}
+	BackupLocationLog(backupLocation).Infof("backuplocation log")
+	BackupLocationLog(nil).Infof("backuplocation nil log")
 }

@@ -17,6 +17,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -33,6 +35,74 @@ import (
 )
 
 func NewSimpleDynamicClient(scheme *runtime.Scheme, objects ...runtime.Object) *FakeDynamicClient {
+	unstructuredScheme := runtime.NewScheme()
+	for gvk := range scheme.AllKnownTypes() {
+		if unstructuredScheme.Recognizes(gvk) {
+			continue
+		}
+		if strings.HasSuffix(gvk.Kind, "List") {
+			unstructuredScheme.AddKnownTypeWithName(gvk, &unstructured.UnstructuredList{})
+			continue
+		}
+		unstructuredScheme.AddKnownTypeWithName(gvk, &unstructured.Unstructured{})
+	}
+
+	objects, err := convertObjectsToUnstructured(scheme, objects)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, obj := range objects {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if !unstructuredScheme.Recognizes(gvk) {
+			unstructuredScheme.AddKnownTypeWithName(gvk, &unstructured.Unstructured{})
+		}
+		gvk.Kind += "List"
+		if !unstructuredScheme.Recognizes(gvk) {
+			unstructuredScheme.AddKnownTypeWithName(gvk, &unstructured.UnstructuredList{})
+		}
+	}
+
+	return NewSimpleDynamicClientWithCustomListKinds(unstructuredScheme, nil, objects...)
+}
+
+// NewSimpleDynamicClientWithCustomListKinds try not to use this.  In general you want to have the scheme have the List types registered
+// and allow the default guessing for resources match.  Sometimes that doesn't work, so you can specify a custom mapping here.
+func NewSimpleDynamicClientWithCustomListKinds(scheme *runtime.Scheme, gvrToListKind map[schema.GroupVersionResource]string, objects ...runtime.Object) *FakeDynamicClient {
+	// In order to use List with this client, you have to have your lists registered so that the object tracker will find them
+	// in the scheme to support the t.scheme.New(listGVK) call when it's building the return value.
+	// Since the base fake client needs the listGVK passed through the action (in cases where there are no instances, it
+	// cannot look up the actual hits), we need to know a mapping of GVR to listGVK here.  For GETs and other types of calls,
+	// there is no return value that contains a GVK, so it doesn't have to know the mapping in advance.
+
+	// first we attempt to invert known List types from the scheme to auto guess the resource with unsafe guesses
+	// this covers common usage of registering types in scheme and passing them
+	completeGVRToListKind := map[schema.GroupVersionResource]string{}
+	for listGVK := range scheme.AllKnownTypes() {
+		if !strings.HasSuffix(listGVK.Kind, "List") {
+			continue
+		}
+		nonListGVK := listGVK.GroupVersion().WithKind(listGVK.Kind[:len(listGVK.Kind)-4])
+		plural, _ := meta.UnsafeGuessKindToResource(nonListGVK)
+		completeGVRToListKind[plural] = listGVK.Kind
+	}
+
+	for gvr, listKind := range gvrToListKind {
+		if !strings.HasSuffix(listKind, "List") {
+			panic("coding error, listGVK must end in List or this fake client doesn't work right")
+		}
+		listGVK := gvr.GroupVersion().WithKind(listKind)
+
+		// if we already have this type registered, just skip it
+		if _, err := scheme.New(listGVK); err == nil {
+			completeGVRToListKind[gvr] = listKind
+			continue
+		}
+
+		scheme.AddKnownTypeWithName(listGVK, &unstructured.UnstructuredList{})
+		completeGVRToListKind[gvr] = listKind
+	}
+
 	codecs := serializer.NewCodecFactory(scheme)
 	o := testing.NewObjectTracker(scheme, codecs.UniversalDecoder())
 	for _, obj := range objects {
@@ -41,7 +111,7 @@ func NewSimpleDynamicClient(scheme *runtime.Scheme, objects ...runtime.Object) *
 		}
 	}
 
-	cs := &FakeDynamicClient{}
+	cs := &FakeDynamicClient{scheme: scheme, gvrToListKind: completeGVRToListKind}
 	cs.AddReactor("*", "*", testing.ObjectReaction(o))
 	cs.AddWatchReactor("*", func(action testing.Action) (handled bool, ret watch.Interface, err error) {
 		gvr := action.GetResource()
@@ -61,19 +131,21 @@ func NewSimpleDynamicClient(scheme *runtime.Scheme, objects ...runtime.Object) *
 // you want to test easier.
 type FakeDynamicClient struct {
 	testing.Fake
-	scheme *runtime.Scheme
+	scheme        *runtime.Scheme
+	gvrToListKind map[schema.GroupVersionResource]string
 }
 
 type dynamicResourceClient struct {
 	client    *FakeDynamicClient
 	namespace string
 	resource  schema.GroupVersionResource
+	listKind  string
 }
 
 var _ dynamic.Interface = &FakeDynamicClient{}
 
 func (c *FakeDynamicClient) Resource(resource schema.GroupVersionResource) dynamic.NamespaceableResourceInterface {
-	return &dynamicResourceClient{client: c, resource: resource}
+	return &dynamicResourceClient{client: c, resource: resource, listKind: c.gvrToListKind[resource]}
 }
 
 func (c *dynamicResourceClient) Namespace(ns string) dynamic.ResourceInterface {
@@ -82,7 +154,7 @@ func (c *dynamicResourceClient) Namespace(ns string) dynamic.ResourceInterface {
 	return &ret
 }
 
-func (c *dynamicResourceClient) Create(obj *unstructured.Unstructured, subresources ...string) (*unstructured.Unstructured, error) {
+func (c *dynamicResourceClient) Create(ctx context.Context, obj *unstructured.Unstructured, opts metav1.CreateOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	var uncastRet runtime.Object
 	var err error
 	switch {
@@ -91,7 +163,8 @@ func (c *dynamicResourceClient) Create(obj *unstructured.Unstructured, subresour
 			Invokes(testing.NewRootCreateAction(c.resource, obj), obj)
 
 	case len(c.namespace) == 0 && len(subresources) > 0:
-		accessor, err := meta.Accessor(obj)
+		var accessor metav1.Object // avoid shadowing err
+		accessor, err = meta.Accessor(obj)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +177,8 @@ func (c *dynamicResourceClient) Create(obj *unstructured.Unstructured, subresour
 			Invokes(testing.NewCreateAction(c.resource, c.namespace, obj), obj)
 
 	case len(c.namespace) > 0 && len(subresources) > 0:
-		accessor, err := meta.Accessor(obj)
+		var accessor metav1.Object // avoid shadowing err
+		accessor, err = meta.Accessor(obj)
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +202,7 @@ func (c *dynamicResourceClient) Create(obj *unstructured.Unstructured, subresour
 	return ret, err
 }
 
-func (c *dynamicResourceClient) Update(obj *unstructured.Unstructured, subresources ...string) (*unstructured.Unstructured, error) {
+func (c *dynamicResourceClient) Update(ctx context.Context, obj *unstructured.Unstructured, opts metav1.UpdateOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	var uncastRet runtime.Object
 	var err error
 	switch {
@@ -164,7 +238,7 @@ func (c *dynamicResourceClient) Update(obj *unstructured.Unstructured, subresour
 	return ret, err
 }
 
-func (c *dynamicResourceClient) UpdateStatus(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func (c *dynamicResourceClient) UpdateStatus(ctx context.Context, obj *unstructured.Unstructured, opts metav1.UpdateOptions) (*unstructured.Unstructured, error) {
 	var uncastRet runtime.Object
 	var err error
 	switch {
@@ -192,7 +266,7 @@ func (c *dynamicResourceClient) UpdateStatus(obj *unstructured.Unstructured) (*u
 	return ret, err
 }
 
-func (c *dynamicResourceClient) Delete(name string, opts *metav1.DeleteOptions, subresources ...string) error {
+func (c *dynamicResourceClient) Delete(ctx context.Context, name string, opts metav1.DeleteOptions, subresources ...string) error {
 	var err error
 	switch {
 	case len(c.namespace) == 0 && len(subresources) == 0:
@@ -215,7 +289,7 @@ func (c *dynamicResourceClient) Delete(name string, opts *metav1.DeleteOptions, 
 	return err
 }
 
-func (c *dynamicResourceClient) DeleteCollection(opts *metav1.DeleteOptions, listOptions metav1.ListOptions) error {
+func (c *dynamicResourceClient) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOptions metav1.ListOptions) error {
 	var err error
 	switch {
 	case len(c.namespace) == 0:
@@ -231,7 +305,7 @@ func (c *dynamicResourceClient) DeleteCollection(opts *metav1.DeleteOptions, lis
 	return err
 }
 
-func (c *dynamicResourceClient) Get(name string, opts metav1.GetOptions, subresources ...string) (*unstructured.Unstructured, error) {
+func (c *dynamicResourceClient) Get(ctx context.Context, name string, opts metav1.GetOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	var uncastRet runtime.Object
 	var err error
 	switch {
@@ -266,17 +340,23 @@ func (c *dynamicResourceClient) Get(name string, opts metav1.GetOptions, subreso
 	return ret, err
 }
 
-func (c *dynamicResourceClient) List(opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
+func (c *dynamicResourceClient) List(ctx context.Context, opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
+	if len(c.listKind) == 0 {
+		panic(fmt.Sprintf("coding error: you must register resource to list kind for every resource you're going to LIST when creating the client.  See NewSimpleDynamicClientWithCustomListKinds or register the list into the scheme: %v out of %v", c.resource, c.client.gvrToListKind))
+	}
+	listGVK := c.resource.GroupVersion().WithKind(c.listKind)
+	listForFakeClientGVK := c.resource.GroupVersion().WithKind(c.listKind[:len(c.listKind)-4]) /*base library appends List*/
+
 	var obj runtime.Object
 	var err error
 	switch {
 	case len(c.namespace) == 0:
 		obj, err = c.client.Fake.
-			Invokes(testing.NewRootListAction(c.resource, schema.GroupVersionKind{Version: "v1", Kind: "List"}, opts), &metav1.Status{Status: "dynamic list fail"})
+			Invokes(testing.NewRootListAction(c.resource, listForFakeClientGVK, opts), &metav1.Status{Status: "dynamic list fail"})
 
 	case len(c.namespace) > 0:
 		obj, err = c.client.Fake.
-			Invokes(testing.NewListAction(c.resource, schema.GroupVersionKind{Version: "v1", Kind: "List"}, c.namespace, opts), &metav1.Status{Status: "dynamic list fail"})
+			Invokes(testing.NewListAction(c.resource, listForFakeClientGVK, c.namespace, opts), &metav1.Status{Status: "dynamic list fail"})
 
 	}
 
@@ -299,19 +379,22 @@ func (c *dynamicResourceClient) List(opts metav1.ListOptions) (*unstructured.Uns
 	}
 
 	list := &unstructured.UnstructuredList{}
-	for _, item := range entireList.Items {
+	list.SetResourceVersion(entireList.GetResourceVersion())
+	list.GetObjectKind().SetGroupVersionKind(listGVK)
+	for i := range entireList.Items {
+		item := &entireList.Items[i]
 		metadata, err := meta.Accessor(item)
 		if err != nil {
 			return nil, err
 		}
 		if label.Matches(labels.Set(metadata.GetLabels())) {
-			list.Items = append(list.Items, item)
+			list.Items = append(list.Items, *item)
 		}
 	}
 	return list, nil
 }
 
-func (c *dynamicResourceClient) Watch(opts metav1.ListOptions) (watch.Interface, error) {
+func (c *dynamicResourceClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	switch {
 	case len(c.namespace) == 0:
 		return c.client.Fake.
@@ -326,25 +409,26 @@ func (c *dynamicResourceClient) Watch(opts metav1.ListOptions) (watch.Interface,
 	panic("math broke")
 }
 
-func (c *dynamicResourceClient) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error) {
+// TODO: opts are currently ignored.
+func (c *dynamicResourceClient) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	var uncastRet runtime.Object
 	var err error
 	switch {
 	case len(c.namespace) == 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootPatchAction(c.resource, name, data), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewRootPatchAction(c.resource, name, pt, data), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) == 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewRootPatchSubresourceAction(c.resource, name, data, subresources...), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewRootPatchSubresourceAction(c.resource, name, pt, data, subresources...), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) > 0 && len(subresources) == 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewPatchAction(c.resource, c.namespace, name, data), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewPatchAction(c.resource, c.namespace, name, pt, data), &metav1.Status{Status: "dynamic patch fail"})
 
 	case len(c.namespace) > 0 && len(subresources) > 0:
 		uncastRet, err = c.client.Fake.
-			Invokes(testing.NewPatchSubresourceAction(c.resource, c.namespace, name, data, subresources...), &metav1.Status{Status: "dynamic patch fail"})
+			Invokes(testing.NewPatchSubresourceAction(c.resource, c.namespace, name, pt, data, subresources...), &metav1.Status{Status: "dynamic patch fail"})
 
 	}
 
@@ -360,4 +444,42 @@ func (c *dynamicResourceClient) Patch(name string, pt types.PatchType, data []by
 		return nil, err
 	}
 	return ret, err
+}
+
+func convertObjectsToUnstructured(s *runtime.Scheme, objs []runtime.Object) ([]runtime.Object, error) {
+	ul := make([]runtime.Object, 0, len(objs))
+
+	for _, obj := range objs {
+		u, err := convertToUnstructured(s, obj)
+		if err != nil {
+			return nil, err
+		}
+
+		ul = append(ul, u)
+	}
+	return ul, nil
+}
+
+func convertToUnstructured(s *runtime.Scheme, obj runtime.Object) (runtime.Object, error) {
+	var (
+		err error
+		u   unstructured.Unstructured
+	)
+
+	u.Object, err = runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert to unstructured: %w", err)
+	}
+
+	gvk := u.GroupVersionKind()
+	if gvk.Group == "" || gvk.Kind == "" {
+		gvks, _, err := s.ObjectKinds(obj)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert to unstructured - unable to get GVK %w", err)
+		}
+		apiv, k := gvks[0].ToAPIVersionAndKind()
+		u.SetAPIVersion(apiv)
+		u.SetKind(k)
+	}
+	return &u, nil
 }

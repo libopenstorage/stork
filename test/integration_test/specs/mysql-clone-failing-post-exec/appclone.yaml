@@ -1,0 +1,10 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationClone
+metadata:
+  name: clonemysql-post-exec-failing
+  namespace: kube-system
+spec:
+  sourceNamespace: mysql-1-pvc-applicationclone-failing-post-exec-rule
+  destinationNamespace: mysql-1-pvc-applicationclone-failing-post-exec-rule-dest
+  postExecRule: failing-rule
+

@@ -37,6 +37,8 @@ type UserInfo struct {
 	Username string
 	// Claims holds the claims required by the storage system
 	Claims Claims
+	// Guest marks whether the user is unauthenticated
+	Guest bool
 }
 
 // ContextSaveUserInfo saves user information in the context for other functions to consume
@@ -49,4 +51,19 @@ func ContextSaveUserInfo(ctx context.Context, u *UserInfo) context.Context {
 func NewUserInfoFromContext(ctx context.Context) (*UserInfo, bool) {
 	u, ok := ctx.Value(InterceptorContextTokenKey).(*UserInfo)
 	return u, ok
+}
+
+// NewGuestUser creates UserInfo for the system guest user
+func NewGuestUser() *UserInfo {
+	return &UserInfo{
+		Claims: Claims{
+			Roles: []string{systemGuestRoleName},
+		},
+		Guest: true,
+	}
+}
+
+// IsGuest returns whether or not the UserInfo is for a guest user
+func (ui *UserInfo) IsGuest() bool {
+	return ui.Guest
 }

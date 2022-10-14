@@ -19,13 +19,14 @@ package v1
 import (
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/kubernetes/pkg/util/parsers"
+	utilpointer "k8s.io/utils/pointer"
+
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/pkg/util/parsers"
-	utilpointer "k8s.io/kubernetes/pkg/util/pointer"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -69,11 +70,6 @@ func SetDefaults_Volume(obj *v1.Volume) {
 		}
 	}
 }
-func SetDefaults_ContainerPort(obj *v1.ContainerPort) {
-	if obj.Protocol == "" {
-		obj.Protocol = v1.ProtocolTCP
-	}
-}
 func SetDefaults_Container(obj *v1.Container) {
 	if obj.ImagePullPolicy == "" {
 		// Ignore error and assume it has been validated elsewhere
@@ -93,6 +89,11 @@ func SetDefaults_Container(obj *v1.Container) {
 		obj.TerminationMessagePolicy = v1.TerminationMessageReadFile
 	}
 }
+
+func SetDefaults_EphemeralContainer(obj *v1.EphemeralContainer) {
+	SetDefaults_Container((*v1.Container)(&obj.EphemeralContainerCommon))
+}
+
 func SetDefaults_Service(obj *v1.Service) {
 	if obj.Spec.SessionAffinity == "" {
 		obj.Spec.SessionAffinity = v1.ServiceAffinityNone
@@ -129,6 +130,19 @@ func SetDefaults_Service(obj *v1.Service) {
 		obj.Spec.ExternalTrafficPolicy == "" {
 		obj.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeCluster
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.ServiceInternalTrafficPolicy) && obj.Spec.InternalTrafficPolicy == nil {
+		serviceInternalTrafficPolicyCluster := v1.ServiceInternalTrafficPolicyCluster
+		obj.Spec.InternalTrafficPolicy = &serviceInternalTrafficPolicyCluster
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.ServiceLBNodePortControl) {
+		if obj.Spec.Type == v1.ServiceTypeLoadBalancer {
+			if obj.Spec.AllocateLoadBalancerNodePorts == nil {
+				obj.Spec.AllocateLoadBalancerNodePorts = utilpointer.BoolPtr(true)
+			}
+		}
+	}
 }
 func SetDefaults_Pod(obj *v1.Pod) {
 	// If limits are specified, but requests are not, default requests to limits
@@ -142,7 +156,7 @@ func SetDefaults_Pod(obj *v1.Pod) {
 			}
 			for key, value := range obj.Spec.Containers[i].Resources.Limits {
 				if _, exists := obj.Spec.Containers[i].Resources.Requests[key]; !exists {
-					obj.Spec.Containers[i].Resources.Requests[key] = *(value.Copy())
+					obj.Spec.Containers[i].Resources.Requests[key] = value.DeepCopy()
 				}
 			}
 		}
@@ -154,13 +168,21 @@ func SetDefaults_Pod(obj *v1.Pod) {
 			}
 			for key, value := range obj.Spec.InitContainers[i].Resources.Limits {
 				if _, exists := obj.Spec.InitContainers[i].Resources.Requests[key]; !exists {
-					obj.Spec.InitContainers[i].Resources.Requests[key] = *(value.Copy())
+					obj.Spec.InitContainers[i].Resources.Requests[key] = value.DeepCopy()
 				}
 			}
 		}
 	}
+	if obj.Spec.EnableServiceLinks == nil {
+		enableServiceLinks := v1.DefaultEnableServiceLinks
+		obj.Spec.EnableServiceLinks = &enableServiceLinks
+	}
 }
 func SetDefaults_PodSpec(obj *v1.PodSpec) {
+	// New fields added here will break upgrade tests:
+	// https://github.com/kubernetes/kubernetes/issues/69445
+	// In most cases the new defaulted field can added to SetDefaults_Pod instead of here, so
+	// that it only materializes in the Pod object and not all objects with a PodSpec field.
 	if obj.DNSPolicy == "" {
 		obj.DNSPolicy = v1.DNSClusterFirst
 	}
@@ -238,7 +260,7 @@ func SetDefaults_PersistentVolume(obj *v1.PersistentVolume) {
 	if obj.Spec.PersistentVolumeReclaimPolicy == "" {
 		obj.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
 	}
-	if obj.Spec.VolumeMode == nil && utilfeature.DefaultFeatureGate.Enabled(features.BlockVolume) {
+	if obj.Spec.VolumeMode == nil {
 		obj.Spec.VolumeMode = new(v1.PersistentVolumeMode)
 		*obj.Spec.VolumeMode = v1.PersistentVolumeFilesystem
 	}
@@ -247,9 +269,11 @@ func SetDefaults_PersistentVolumeClaim(obj *v1.PersistentVolumeClaim) {
 	if obj.Status.Phase == "" {
 		obj.Status.Phase = v1.ClaimPending
 	}
-	if obj.Spec.VolumeMode == nil && utilfeature.DefaultFeatureGate.Enabled(features.BlockVolume) {
-		obj.Spec.VolumeMode = new(v1.PersistentVolumeMode)
-		*obj.Spec.VolumeMode = v1.PersistentVolumeFilesystem
+}
+func SetDefaults_PersistentVolumeClaimSpec(obj *v1.PersistentVolumeClaimSpec) {
+	if obj.VolumeMode == nil {
+		obj.VolumeMode = new(v1.PersistentVolumeMode)
+		*obj.VolumeMode = v1.PersistentVolumeFilesystem
 	}
 }
 func SetDefaults_ISCSIVolumeSource(obj *v1.ISCSIVolumeSource) {
@@ -299,6 +323,26 @@ func SetDefaults_HTTPGetAction(obj *v1.HTTPGetAction) {
 		obj.Scheme = v1.URISchemeHTTP
 	}
 }
+
+// SetDefaults_Namespace adds a default label for all namespaces
+func SetDefaults_Namespace(obj *v1.Namespace) {
+	// TODO, remove the feature gate in 1.22
+	// we can't SetDefaults for nameless namespaces (generateName).
+	// This code needs to be kept in sync with the implementation that exists
+	// in Namespace Canonicalize strategy (pkg/registry/core/namespace)
+
+	// note that this can result in many calls to feature enablement in some cases, but
+	// we assume that there's no real cost there.
+	if utilfeature.DefaultFeatureGate.Enabled(features.NamespaceDefaultLabelName) {
+		if len(obj.Name) > 0 {
+			if obj.Labels == nil {
+				obj.Labels = map[string]string{}
+			}
+			obj.Labels[v1.LabelMetadataName] = obj.Name
+		}
+	}
+}
+
 func SetDefaults_NamespaceStatus(obj *v1.NamespaceStatus) {
 	if obj.Phase == "" {
 		obj.Phase = v1.NamespaceActive
@@ -308,7 +352,7 @@ func SetDefaults_NodeStatus(obj *v1.NodeStatus) {
 	if obj.Allocatable == nil && obj.Capacity != nil {
 		obj.Allocatable = make(v1.ResourceList, len(obj.Capacity))
 		for key, value := range obj.Capacity {
-			obj.Allocatable[key] = *(value.Copy())
+			obj.Allocatable[key] = value.DeepCopy()
 		}
 		obj.Allocatable = obj.Capacity
 	}
@@ -332,19 +376,19 @@ func SetDefaults_LimitRangeItem(obj *v1.LimitRangeItem) {
 		// If a default limit is unspecified, but the max is specified, default the limit to the max
 		for key, value := range obj.Max {
 			if _, exists := obj.Default[key]; !exists {
-				obj.Default[key] = *(value.Copy())
+				obj.Default[key] = value.DeepCopy()
 			}
 		}
 		// If a default limit is specified, but the default request is not, default request to limit
 		for key, value := range obj.Default {
 			if _, exists := obj.DefaultRequest[key]; !exists {
-				obj.DefaultRequest[key] = *(value.Copy())
+				obj.DefaultRequest[key] = value.DeepCopy()
 			}
 		}
 		// If a default request is not specified, but the min is provided, default request to the min
 		for key, value := range obj.Min {
 			if _, exists := obj.DefaultRequest[key]; !exists {
-				obj.DefaultRequest[key] = *(value.Copy())
+				obj.DefaultRequest[key] = value.DeepCopy()
 			}
 		}
 	}

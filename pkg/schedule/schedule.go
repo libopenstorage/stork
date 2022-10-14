@@ -6,11 +6,15 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/utils"
+	"github.com/libopenstorage/stork/pkg/version"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,10 +53,11 @@ func GetCurrentTime() time.Time {
 // trigger time
 func TriggerRequired(
 	policyName string,
+	namespace string,
 	policyType stork_api.SchedulePolicyType,
 	lastTrigger meta.Time,
 ) (bool, error) {
-	schedulePolicy, err := k8s.Instance().GetSchedulePolicy(policyName)
+	schedulePolicy, err := getSchedulePolicy(policyName, namespace)
 	if err != nil {
 		return false, err
 	}
@@ -135,9 +140,9 @@ func checkTrigger(
 		return false, nil
 	}
 
-	// If we are within one hour after the next trigger time, trigger a new
+	// If we are within one hour after/at the next trigger time, trigger a new
 	// schedule
-	if now.After(nextTrigger) && now.Sub(nextTrigger).Hours() < 1 {
+	if now.Equal(nextTrigger) || (now.After(nextTrigger) && now.Sub(nextTrigger).Hours() < 1) {
 		return true, nil
 	}
 	return false, nil
@@ -174,8 +179,8 @@ func ValidateSchedulePolicy(policy *stork_api.SchedulePolicy) error {
 
 // GetRetain Returns the retain value for the specified policy. Returns the
 // default for the policy if none is specified
-func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stork_api.Retain, error) {
-	schedulePolicy, err := k8s.Instance().GetSchedulePolicy(policyName)
+func GetRetain(policyName string, namespace string, policyType stork_api.SchedulePolicyType) (stork_api.Retain, error) {
+	schedulePolicy, err := getSchedulePolicy(policyName, namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -209,10 +214,40 @@ func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stor
 			return schedulePolicy.Policy.Monthly.Retain, nil
 		}
 	default:
-		return 0, fmt.Errorf("Invalid policy type: %v", policyType)
+		return 0, fmt.Errorf("invalid policy type: %v", policyType)
 	}
 
 	return 1, nil
+}
+
+// GetOptions Returns the options set for a policy type
+func GetOptions(policyName string, namespace string, policyType stork_api.SchedulePolicyType) (map[string]string, error) {
+	schedulePolicy, err := getSchedulePolicy(policyName, namespace)
+	if err != nil {
+		return nil, err
+	}
+	switch policyType {
+	case stork_api.SchedulePolicyTypeInterval:
+		return schedulePolicy.Policy.Interval.Options, nil
+	case stork_api.SchedulePolicyTypeDaily:
+		options := schedulePolicy.Policy.Daily.Options
+		scheduledDay, ok := stork_api.Days[schedulePolicy.Policy.Daily.ForceFullSnapshotDay]
+		if ok {
+			currentDay := GetCurrentTime().Weekday()
+			// force full backup on specified day
+			if currentDay == scheduledDay {
+				options[utils.PXIncrementalCountAnnotation] = "0"
+			}
+			logrus.Infof("Forcing full-snapshot for daily snapshotschedule policy on the day %s", schedulePolicy.Policy.Daily.ForceFullSnapshotDay)
+		}
+		return options, nil
+	case stork_api.SchedulePolicyTypeWeekly:
+		return schedulePolicy.Policy.Weekly.Options, nil
+	case stork_api.SchedulePolicyTypeMonthly:
+		return schedulePolicy.Policy.Monthly.Options, nil
+	default:
+		return nil, fmt.Errorf("invalid policy type: %v", policyType)
+	}
 }
 
 // Init initializes the schedule module
@@ -254,7 +289,7 @@ func Init() error {
 		}
 
 		logrus.Infof("Stork test mode enabled. Watching for config map: %s for mock times", MockTimeConfigMapName)
-		cm, err := k8s.Instance().GetConfigMap(MockTimeConfigMapName, MockTimeConfigMapNamespace)
+		cm, err := core.Instance().GetConfigMap(MockTimeConfigMapName, MockTimeConfigMapNamespace)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				logrus.Infof("Stork in test mode, however no config map present to mock time. Creating it.")
@@ -263,7 +298,7 @@ func Init() error {
 					MockTimeConfigMapKey: "",
 				}
 
-				cm := &v1.ConfigMap{
+				cm = &v1.ConfigMap{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      MockTimeConfigMapName,
 						Namespace: MockTimeConfigMapNamespace,
@@ -271,7 +306,7 @@ func Init() error {
 					Data: data,
 				}
 
-				cm, err = k8s.Instance().CreateConfigMap(cm)
+				cm, err = core.Instance().CreateConfigMap(cm)
 				if err != nil {
 					return err
 				}
@@ -283,29 +318,136 @@ func Init() error {
 
 		cm = cm.DeepCopy()
 
-		err = k8s.Instance().WatchConfigMap(cm, fn)
+		err = core.Instance().WatchConfigMap(cm, fn)
 		if err != nil {
 			logrus.Errorf("Failed to watch on config map: %s due to: %v", MockTimeConfigMapName, err)
 			return err
 		}
 	}
 
-	return nil
+	if err := startSchedulePolicyCache(); err != nil {
+		return err
+	}
+	return createDefaultPolicy()
 }
 
-func createCRD() error {
-	resource := k8s.CustomResource{
-		Name:    stork_api.SchedulePolicyResourceName,
-		Plural:  stork_api.SchedulePolicyResourcePlural,
-		Group:   stork.GroupName,
-		Version: stork_api.SchemeGroupVersion.Version,
-		Scope:   apiextensionsv1beta1.ClusterScoped,
-		Kind:    reflect.TypeOf(stork_api.SchedulePolicy{}).Name(),
+func createDefaultPolicy() error {
+	_, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-migration-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{
+				IntervalMinutes: 1,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-interval-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{
+				IntervalMinutes: 15,
+				Retain:          10,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-daily-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Daily: &stork_api.DailyPolicy{
+				Time:   "12:00am",
+				Retain: 7,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-weekly-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Weekly: &stork_api.WeeklyPolicy{
+				Day:    "Sunday",
+				Time:   "12:00am",
+				Retain: 4,
+			}},
+	})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-monthly-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Monthly: &stork_api.MonthlyPolicy{
+				Date:   15,
+				Time:   "12:00am",
+				Retain: 12,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
+func createCRD() error {
+	resource := apiextensions.CustomResource{
+		Name:    stork_api.SchedulePolicyResourceName,
+		Plural:  stork_api.SchedulePolicyResourcePlural,
+		Group:   stork_api.SchemeGroupVersion.Group,
+		Version: stork_api.SchemeGroupVersion.Version,
+		Scope:   apiextensionsv1beta1.ClusterScoped,
+		Kind:    reflect.TypeOf(stork_api.SchedulePolicy{}).Name(),
+	}
+	policy := apiextensions.CustomResource{
+		Name:    stork_api.NamespacedSchedulePolicyResourceName,
+		Plural:  stork_api.NamespacedSchedulePolicyResourcePlural,
+		Group:   stork_api.SchemeGroupVersion.Group,
+		Version: stork_api.SchemeGroupVersion.Version,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Kind:    reflect.TypeOf(stork_api.NamespacedSchedulePolicy{}).Name(),
+	}
+
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		err := k8sutils.CreateCRD(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+		err = k8sutils.CreateCRD(policy)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		return apiextensions.Instance().ValidateCRD(policy.Plural+"."+policy.Group, validateCRDTimeout, validateCRDInterval)
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(resource)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	if err := apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval); err != nil {
+		return err
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(policy)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return apiextensions.Instance().ValidateCRDV1beta1(policy, validateCRDTimeout, validateCRDInterval)
 }

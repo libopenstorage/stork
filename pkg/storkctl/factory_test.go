@@ -1,10 +1,11 @@
+//go:build unittest
 // +build unittest
 
 package storkctl
 
 import (
 	"k8s.io/client-go/rest"
-	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
+	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 )
 
 type TestFactory struct {

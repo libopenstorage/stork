@@ -2,23 +2,29 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/portworx/sched-ops/k8s"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
 var snapshotColumns = []string{"NAME", "PVC", "STATUS", "CREATED", "COMPLETED", "TYPE"}
 var snapSubcommand = "volumesnapshots"
 var snapAliases = []string{"volumesnapshot", "snapshots", "snapshot", "snap"}
+
+var snapRestoreSubCommand = "volumesnapshotrestore"
+var snapRestoreAliases = []string{"volumesnapshotrestores", "snapshotrestore", "snapshotrestore", "snaprestore", "snapsrestores"}
+var snapRestoreColumns = []string{"NAME", "SOURCE-SNAPSHOT", "SOURCE-SNAPSHOT-NAMESPACE", "STATUS", "VOLUMES", "CREATED"}
 
 func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var snapName string
@@ -29,7 +35,7 @@ func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 		Short:   "Create snapshot resources",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one argument needs to be provided for snapshot name"))
+				util.CheckErr(fmt.Errorf("exactly one argument needs to be provided for snapshot name"))
 				return
 			}
 			snapName = args[0]
@@ -49,7 +55,7 @@ func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 					PersistentVolumeClaimName: pvcName,
 				},
 			}
-			_, err := k8s.Instance().CreateSnapshot(snapshot)
+			_, err := k8sextops.Instance().CreateSnapshot(snapshot)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -82,7 +88,7 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 				snapshots = new(snapv1.VolumeSnapshotList)
 				for _, snapName := range args {
 					for _, ns := range namespaces {
-						snapshot, err := k8s.Instance().GetSnapshot(snapName, ns)
+						snapshot, err := k8sextops.Instance().GetSnapshot(snapName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -93,7 +99,7 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 			} else {
 				var tempSnapshots snapv1.VolumeSnapshotList
 				for _, ns := range namespaces {
-					snapshots, err = k8s.Instance().ListSnapshots(ns)
+					snapshots, err = k8sextops.Instance().ListSnapshots(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -144,12 +150,12 @@ func newDeleteSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 
 			if len(pvcName) == 0 {
 				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for snapshot name"))
+					util.CheckErr(fmt.Errorf("at least one argument needs to be provided for snapshot name"))
 					return
 				}
 				snaps = args
 			} else {
-				snapshots, err := k8s.Instance().ListSnapshots(namespace)
+				snapshots, err := k8sextops.Instance().ListSnapshots(namespace)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -176,7 +182,7 @@ func newDeleteSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 
 func deleteSnapshots(snaps []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, snap := range snaps {
-		err := k8s.Instance().DeleteSnapshot(snap, namespace)
+		err := k8sextops.Instance().DeleteSnapshot(snap, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -186,27 +192,30 @@ func deleteSnapshots(snaps []string, namespace string, ioStreams genericclioptio
 	}
 }
 
-func snapshotPrinter(snapList *snapv1.VolumeSnapshotList, writer io.Writer, options printers.PrintOptions) error {
+func snapshotPrinter(
+	snapList *snapv1.VolumeSnapshotList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if snapList == nil {
-		return nil
+		return nil, nil
 	}
+
+	rows := make([]metav1beta1.TableRow, 0)
 	for _, snap := range snapList.Items {
-		name := printers.FormatResourceName(options.Kind, snap.Metadata.Name, options.WithKind)
-
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", snap.Metadata.Namespace); err != nil {
-				return err
-			}
-		}
-
 		status, completedTime := getSnapshotStatusAndTime(&snap)
 		snapType := volume.GetSnapshotType(&snap)
 		creationTime := toTimeString(snap.Metadata.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\n", name, snap.Spec.PersistentVolumeClaimName, status, creationTime, completedTime, snapType); err != nil {
-			return err
-		}
+		row := getRow(&snap,
+			[]interface{}{snap.Metadata.Name,
+				snap.Spec.PersistentVolumeClaimName,
+				status,
+				creationTime,
+				completedTime,
+				snapType},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }
 
 func getSnapshotStatusAndTime(snap *snapv1.VolumeSnapshot) (string, string) {
@@ -215,8 +224,162 @@ func getSnapshotStatusAndTime(snap *snapv1.VolumeSnapshot) (string, string) {
 			if condition.Status == v1.ConditionTrue {
 				return string(snapv1.VolumeSnapshotConditionReady), toTimeString(condition.LastTransitionTime.Time)
 			}
-			return string(snapv1.VolumeSnapshotConditionPending), toTimeString(time.Time{})
+		} else if condition.Type == snapv1.VolumeSnapshotConditionError {
+			if condition.Status == v1.ConditionTrue {
+				return string(snapv1.VolumeSnapshotConditionError), toTimeString(condition.LastTransitionTime.Time)
+			}
 		}
 	}
 	return string(snapv1.VolumeSnapshotConditionPending), toTimeString(time.Time{})
+}
+
+func newCreateVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	var snapName string
+	var snapNamespace string
+	var snapGroup bool
+
+	restoreSnapshotCommand := &cobra.Command{
+		Use:     snapRestoreSubCommand,
+		Aliases: snapRestoreAliases,
+		Short:   "Restore snapshot to source PVC",
+		Run: func(c *cobra.Command, args []string) {
+			if len(args) != 1 {
+				util.CheckErr(fmt.Errorf("exactly one argument needs to be provided for volumesnapshotrestore name"))
+				return
+			}
+			restoreCRDName := args[0]
+			snapRestore := &storkv1.VolumeSnapshotRestore{
+				Spec: storkv1.VolumeSnapshotRestoreSpec{
+					SourceName:      snapName,
+					SourceNamespace: snapNamespace,
+					GroupSnapshot:   snapGroup,
+				},
+			}
+			snapRestore.Name = restoreCRDName
+			snapRestore.Namespace = cmdFactory.GetNamespace()
+			_, err := storkops.Instance().CreateVolumeSnapshotRestore(snapRestore)
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			msg := fmt.Sprintf("Snapshot restore %v started successfully", restoreCRDName)
+			printMsg(msg, ioStreams.Out)
+		},
+	}
+	restoreSnapshotCommand.Flags().StringVarP(&snapName, "snapname", "", "", "Snapshot name to be restored")
+	restoreSnapshotCommand.Flags().StringVarP(&snapNamespace, "sourcenamepace", "", "default", "Namespace of snapshot")
+	restoreSnapshotCommand.Flags().BoolVarP(&snapGroup, "groupsnapshot", "g", false, "True if snapshot is group, default false")
+	return restoreSnapshotCommand
+}
+
+func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	restoreSnapshotCommand := &cobra.Command{
+		Use:     snapRestoreSubCommand,
+		Aliases: snapRestoreAliases,
+		Short:   "Get snapshot restore status",
+		Run: func(c *cobra.Command, args []string) {
+			var snapRestoreList *storkv1.VolumeSnapshotRestoreList
+			var err error
+
+			namespaces, err := cmdFactory.GetAllNamespaces()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			if len(args) > 0 {
+				snapRestoreList = new(storkv1.VolumeSnapshotRestoreList)
+				for _, restoreName := range args {
+					for _, ns := range namespaces {
+						snapRestore, err := storkops.Instance().GetVolumeSnapshotRestore(restoreName, ns)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
+						snapRestoreList.Items = append(snapRestoreList.Items, *snapRestore)
+					}
+				}
+			} else {
+				var tempRestoreList storkv1.VolumeSnapshotRestoreList
+				for _, ns := range namespaces {
+					snapRestoreList, err = storkops.Instance().ListVolumeSnapshotRestore(ns)
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+					tempRestoreList.Items = append(tempRestoreList.Items, snapRestoreList.Items...)
+				}
+				snapRestoreList = &tempRestoreList
+			}
+
+			if len(snapRestoreList.Items) == 0 {
+				handleEmptyList(ioStreams.Out)
+				return
+			}
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, snapRestoreList, cmdFactory, snapRestoreColumns, snapshotRestorePrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
+			if err := printObjects(c, snapRestoreList, cmdFactory, snapRestoreColumns, snapshotRestorePrinter, ioStreams.Out); err != nil {
+				util.CheckErr(err)
+				return
+			}
+		},
+	}
+
+	cmdFactory.BindGetFlags(restoreSnapshotCommand.Flags())
+	return restoreSnapshotCommand
+}
+
+func newDeleteVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	restoreSnapshotCommand := &cobra.Command{
+		Use:     snapRestoreSubCommand,
+		Aliases: snapRestoreAliases,
+		Short:   "Delete Volume snapshot restore",
+		Run: func(c *cobra.Command, args []string) {
+			if len(args) == 0 {
+				util.CheckErr(fmt.Errorf("at least one argument needs to be provided for volumesnapshotrestore name"))
+				return
+			}
+			name := args[0]
+			err := storkops.Instance().DeleteVolumeSnapshotRestore(name, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			msg := fmt.Sprintf("Volume snapshot restore %v deleted successfully", name)
+			printMsg(msg, ioStreams.Out)
+		},
+	}
+
+	return restoreSnapshotCommand
+}
+
+func snapshotRestorePrinter(
+	snapRestoreList *storkv1.VolumeSnapshotRestoreList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
+	if snapRestoreList == nil {
+		return nil, nil
+	}
+
+	rows := make([]metav1beta1.TableRow, 0)
+	for _, snapRestore := range snapRestoreList.Items {
+		creationTime := toTimeString(snapRestore.CreationTimestamp.Time)
+		row := getRow(&snapRestore,
+			[]interface{}{snapRestore.Name,
+				snapRestore.Spec.SourceName,
+				snapRestore.Spec.SourceNamespace,
+				snapRestore.Status.Status,
+				len(snapRestore.Status.Volumes),
+				creationTime},
+		)
+		rows = append(rows, row)
+	}
+	return rows, nil
 }

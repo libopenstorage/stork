@@ -1,6 +1,8 @@
 package volume
 
 import (
+	"context"
+
 	"github.com/libopenstorage/openstorage/api"
 )
 
@@ -28,15 +30,21 @@ var (
 	// CloudMigrateNotSupported implements cloudMigrateDriver by returning
 	// Not supported error
 	CloudMigrateNotSupported = &cloudMigrateNotSupported{}
+	// FilesystemTrimNotSupported implements FilesystemTrimDriver by returning
+	// Not supported error
+	FilesystemTrimNotSupported = &filesystemTrimNotSupported{}
+	// FilesystemCheckNotSupported implements FilesystemCheckDriver by returning
+	// Not supported error
+	FilesystemCheckNotSupported = &filesystemCheckNotSupported{}
 )
 
 type blockNotSupported struct{}
 
-func (b *blockNotSupported) Attach(volumeID string, attachOptions map[string]string) (string, error) {
+func (b *blockNotSupported) Attach(ctx context.Context, volumeID string, attachOptions map[string]string) (string, error) {
 	return "", ErrNotSupported
 }
 
-func (b *blockNotSupported) Detach(volumeID string, options map[string]string) error {
+func (b *blockNotSupported) Detach(ctx context.Context, volumeID string, options map[string]string) error {
 	return ErrNotSupported
 }
 
@@ -50,7 +58,7 @@ func (s *snapshotNotSupported) Restore(volumeID, snapshotID string) error {
 	return ErrNotSupported
 }
 
-func (s *snapshotNotSupported) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string) (*api.GroupSnapCreateResponse, error) {
+func (s *snapshotNotSupported) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string, deleteOnFailure bool) (*api.GroupSnapCreateResponse, error) {
 	return nil, ErrNotSupported
 }
 
@@ -96,6 +104,20 @@ func (s *statsNotSupported) CapacityUsage(
 	return nil, ErrNotSupported
 }
 
+// VolumeUsageByNode returns capacity usage of all volumes/snaps belonging to
+// a node
+func (s *statsNotSupported) VolumeUsageByNode(
+	nodeID string,
+) (*api.VolumeUsageByNode, error) {
+	return nil, ErrNotSupported
+}
+
+func (v *statsNotSupported) RelaxedReclaimPurge(
+	nodeID string,
+) (*api.RelaxedReclaimPurge, error) {
+	return nil, ErrNotSupported
+}
+
 type quiesceNotSupported struct{}
 
 func (s *quiesceNotSupported) Quiesce(
@@ -118,6 +140,13 @@ func (c *credsNotSupported) CredsCreate(
 	return "", ErrNotSupported
 }
 
+func (c *credsNotSupported) CredsUpdate(
+	name string,
+	params map[string]string,
+) error {
+	return ErrNotSupported
+}
+
 func (c *credsNotSupported) CredsDelete(
 	uuid string,
 ) error {
@@ -130,6 +159,12 @@ func (c *credsNotSupported) CredsEnumerate() (map[string]interface{}, error) {
 }
 
 func (c *credsNotSupported) CredsValidate(
+	uuid string,
+) error {
+	return ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsDeleteReferences(
 	uuid string,
 ) error {
 	return ErrNotSupported
@@ -203,6 +238,18 @@ func (cl *cloudBackupNotSupported) CloudBackupSchedCreate(
 	return nil, ErrNotSupported
 }
 
+func (cl *cloudBackupNotSupported) CloudBackupSchedUpdate(
+	input *api.CloudBackupSchedUpdateRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupGroupSchedUpdate(
+	input *api.CloudBackupGroupSchedUpdateRequest,
+) error {
+	return ErrNotSupported
+}
+
 func (cl *cloudBackupNotSupported) CloudBackupGroupSchedCreate(
 	input *api.CloudBackupGroupSchedCreateRequest,
 ) (*api.CloudBackupSchedCreateResponse, error) {
@@ -219,6 +266,12 @@ func (cl *cloudBackupNotSupported) CloudBackupSchedEnumerate() (*api.CloudBackup
 	return nil, ErrNotSupported
 }
 
+func (cl *cloudBackupNotSupported) CloudBackupSize(
+	input *api.SdkCloudBackupSizeRequest,
+) (*api.SdkCloudBackupSizeResponse, error) {
+	return nil, ErrNotSupported
+}
+
 type cloudMigrateNotSupported struct{}
 
 func (cl *cloudMigrateNotSupported) CloudMigrateStart(request *api.CloudMigrateStartRequest) (*api.CloudMigrateStartResponse, error) {
@@ -229,5 +282,35 @@ func (cl *cloudMigrateNotSupported) CloudMigrateCancel(request *api.CloudMigrate
 	return ErrNotSupported
 }
 func (cl *cloudMigrateNotSupported) CloudMigrateStatus(request *api.CloudMigrateStatusRequest) (*api.CloudMigrateStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+
+type filesystemTrimNotSupported struct{}
+
+func (cl *filesystemTrimNotSupported) FilesystemTrimStart(request *api.SdkFilesystemTrimStartRequest) (*api.SdkFilesystemTrimStartResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemTrimNotSupported) FilesystemTrimStatus(request *api.SdkFilesystemTrimStatusRequest) (*api.SdkFilesystemTrimStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemTrimNotSupported) AutoFilesystemTrimStatus(request *api.SdkAutoFSTrimStatusRequest) (*api.SdkAutoFSTrimStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemTrimNotSupported) AutoFilesystemTrimUsage(request *api.SdkAutoFSTrimUsageRequest) (*api.SdkAutoFSTrimUsageResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemTrimNotSupported) FilesystemTrimStop(request *api.SdkFilesystemTrimStopRequest) (*api.SdkFilesystemTrimStopResponse, error) {
+	return nil, ErrNotSupported
+}
+
+type filesystemCheckNotSupported struct{}
+
+func (cl *filesystemCheckNotSupported) FilesystemCheckStart(request *api.SdkFilesystemCheckStartRequest) (*api.SdkFilesystemCheckStartResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemCheckNotSupported) FilesystemCheckStatus(request *api.SdkFilesystemCheckStatusRequest) (*api.SdkFilesystemCheckStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemCheckNotSupported) FilesystemCheckStop(request *api.SdkFilesystemCheckStopRequest) (*api.SdkFilesystemCheckStopResponse, error) {
 	return nil, ErrNotSupported
 }

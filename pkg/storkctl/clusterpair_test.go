@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package storkctl
@@ -6,9 +7,10 @@ import (
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -18,7 +20,7 @@ func createClusterPairAndVerify(t *testing.T, name string, namespace string) {
 		"option2": "value2",
 	}
 	clusterPair := &storkv1.ClusterPair{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
@@ -28,10 +30,10 @@ func createClusterPairAndVerify(t *testing.T, name string, namespace string) {
 		},
 	}
 
-	_, err := k8s.Instance().CreateClusterPair(clusterPair)
+	_, err := storkops.Instance().CreateClusterPair(clusterPair)
 	require.NoError(t, err, "Error creating Clusterpair")
 	// Make sure it was created correctly
-	clusterPair, err = k8s.Instance().GetClusterPair(name, namespace)
+	clusterPair, err = storkops.Instance().GetClusterPair(name, namespace)
 	require.NoError(t, err, "Error getting Clusterpair")
 	require.Equal(t, name, clusterPair.Name, "Clusterpair name mismatch")
 	require.Equal(t, namespace, clusterPair.Namespace, "Clusterpair namespace mismatch")
@@ -57,9 +59,9 @@ func TestGetClusterPairNotFound(t *testing.T) {
 func TestGetClusterPair(t *testing.T) {
 	defer resetTest()
 
-	_, err := k8s.Instance().CreateNamespace("test", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test"}})
 	require.NoError(t, err, "Error creating test namespace")
-	_, err = k8s.Instance().CreateNamespace("test1", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test1"}})
 	require.NoError(t, err, "Error creating test1 namespace")
 
 	createClusterPairAndVerify(t, "getclusterpairtest", "test")
@@ -98,12 +100,12 @@ func TestGetClusterPair(t *testing.T) {
 func TestGetClusterPairsWithStatus(t *testing.T) {
 	defer resetTest()
 	createClusterPairAndVerify(t, "clusterpairstatustest", "default")
-	clusterPair, err := k8s.Instance().GetClusterPair("clusterpairstatustest", "default")
+	clusterPair, err := storkops.Instance().GetClusterPair("clusterpairstatustest", "default")
 	require.NoError(t, err, "Error getting Clusterpair")
 	clusterPair.CreationTimestamp = metav1.Now()
 	clusterPair.Status.StorageStatus = storkv1.ClusterPairStatusReady
 	clusterPair.Status.SchedulerStatus = storkv1.ClusterPairStatusReady
-	_, err = k8s.Instance().UpdateClusterPair(clusterPair)
+	_, err = storkops.Instance().UpdateClusterPair(clusterPair)
 	require.NoError(t, err, "Error updating Clusterpair")
 	cmdArgs := []string{"get", "clusterpair", "clusterpairstatustest"}
 	expected := "NAME                    STORAGE-STATUS   SCHEDULER-STATUS   CREATED\n" +
@@ -111,28 +113,16 @@ func TestGetClusterPairsWithStatus(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
-/*
-func TestGenerateClusterPair(t *testing.T) {
-	cmdArgs := []string{"clusterpair", "pair1"}
+func TestGenerateClusterPairInvalidName(t *testing.T) {
+	cmdArgs := []string{"generate", "clusterpair", "pair_test", "-n", "test"}
 
-	var clusterPairs storkv1.ClusterPairList
-	clusterPair := &storkv1.ClusterPair{
-		TypeMeta: meta.TypeMeta{
-			Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
-			APIVersion: storkv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: meta.ObjectMeta{
-			Name: "pair1",
-		},
-
-		Spec: storkv1.ClusterPairSpec{
-			Options: map[string]string{},
-		},
-	}
-
-	clusterPairs.Items = append(clusterPairs.Items, *clusterPair)
-
-	expected := ""
-	testCommon(t, newGenerateCommand, cmdArgs, &clusterPairs, expected, false)
+	expected := "error: the Name \"pair_test\" is not valid: [a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')]"
+	testCommon(t, cmdArgs, nil, expected, true)
 }
-*/
+
+func TestGenerateClusterPairInvalidNamespace(t *testing.T) {
+	cmdArgs := []string{"generate", "clusterpair", "pair1", "-n", "test_namespace"}
+
+	expected := "error: the Namespace \"test_namespace\" is not valid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"
+	testCommon(t, cmdArgs, nil, expected, true)
+}

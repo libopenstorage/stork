@@ -26,8 +26,10 @@ import (
 )
 
 // RuleLister helps list Rules.
+// All objects returned here must be treated as read-only.
 type RuleLister interface {
 	// List lists all Rules in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Rule, err error)
 	// Rules returns an object that can list and get Rules.
 	Rules(namespace string) RuleNamespaceLister
@@ -58,10 +60,13 @@ func (s *ruleLister) Rules(namespace string) RuleNamespaceLister {
 }
 
 // RuleNamespaceLister helps list and get Rules.
+// All objects returned here must be treated as read-only.
 type RuleNamespaceLister interface {
 	// List lists all Rules in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Rule, err error)
 	// Get retrieves the Rule from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.Rule, error)
 	RuleNamespaceListerExpansion
 }

@@ -3,9 +3,9 @@ package status
 import (
 	"fmt"
 
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,7 +22,7 @@ func Persist(key, statusToPersist string) error {
 		return fmt.Errorf("no key provided to persist status")
 	}
 
-	cm, err := k8s.Instance().GetConfigMap(statusConfigMapName, meta_v1.NamespaceSystem)
+	cm, err := core.Instance().GetConfigMap(statusConfigMapName, meta_v1.NamespaceSystem)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create one
@@ -36,7 +36,7 @@ func Persist(key, statusToPersist string) error {
 				},
 				Data: defaultData,
 			}
-			cm, err = k8s.Instance().CreateConfigMap(cm)
+			cm, err = core.Instance().CreateConfigMap(cm)
 			if err != nil {
 				return err
 			}
@@ -45,12 +45,8 @@ func Persist(key, statusToPersist string) error {
 		}
 	}
 
-	cmCopy := cm.DeepCopy()
-	if cmCopy.Data == nil {
-		cmCopy.Data = make(map[string]string)
-	}
-	cmCopy.Data[key] = statusToPersist
-	cm, err = k8s.Instance().UpdateConfigMap(cmCopy)
+	cm.Data[key] = statusToPersist
+	_, err = core.Instance().UpdateConfigMap(cm)
 	if err != nil {
 		return err
 	}
@@ -64,7 +60,7 @@ func Get(key string) (string, error) {
 		return "", fmt.Errorf("no key provided to get status")
 	}
 
-	cm, err := k8s.Instance().GetConfigMap(statusConfigMapName, meta_v1.NamespaceSystem)
+	cm, err := core.Instance().GetConfigMap(statusConfigMapName, meta_v1.NamespaceSystem)
 	if err != nil {
 		return "", err
 	}
@@ -76,9 +72,8 @@ func Get(key string) (string, error) {
 
 	logrus.Errorf("%v cmd executor failed because: %s", key, status)
 
-	cmCopy := cm.DeepCopy()
-	delete(cmCopy.Data, key)
-	cm, cmUpdateErr := k8s.Instance().UpdateConfigMap(cmCopy)
+	delete(cm.Data, key)
+	_, cmUpdateErr := core.Instance().UpdateConfigMap(cm)
 	if cmUpdateErr != nil {
 		logrus.Warnf("failed to cleanup command executor status config map due to: %v", cmUpdateErr)
 	}

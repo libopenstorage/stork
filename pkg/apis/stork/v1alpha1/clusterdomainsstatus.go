@@ -13,11 +13,43 @@ const (
 	ClusterDomainsStatusShortName = "cds"
 )
 
+// ClusterDomainState defines the state of the cluster domain
+type ClusterDomainState string
+
+const (
+	// ClusterDomainActive indicates that the cluster domain is active
+	ClusterDomainActive ClusterDomainState = "Active"
+
+	// ClusterDomainInactive indicates that the cluster domain is inactive
+	ClusterDomainInactive ClusterDomainState = "Inactive"
+)
+
+// ClusterDomainSyncStatus defines the current sync progress status of a cluster domain
+type ClusterDomainSyncStatus string
+
+const (
+	// ClusterDomainSyncStatusInSync indicates the cluster domain is in sync
+	ClusterDomainSyncStatusInSync ClusterDomainSyncStatus = "InSync"
+	// ClusterDomainSyncStatusInProgress indicates the cluster domain sync is in progress
+	ClusterDomainSyncStatusInProgress ClusterDomainSyncStatus = "SyncInProgress"
+	// ClusterDomainSyncStatusNotInSync indicates the cluster domain is not in sync
+	ClusterDomainSyncStatusNotInSync ClusterDomainSyncStatus = "NotInSync"
+	// ClusterDomainSyncStatusUnknown indicates the cluster domain sync status is currently not known
+	ClusterDomainSyncStatusUnknown ClusterDomainSyncStatus = "SyncStatusUnknown"
+)
+
 // ClusterDomains provides a list of activated cluster domains and a list
 // of inactive cluster domains
 type ClusterDomains struct {
-	Active   []string `json:"active"`
-	Inactive []string `json:"inactive"`
+	LocalDomain        string              `json:"localDomain"`
+	ClusterDomainInfos []ClusterDomainInfo `json:"clusterDomainInfos"`
+}
+
+// ClusterDomainInfo provides more information about a cluster domain
+type ClusterDomainInfo struct {
+	Name       string                  `json:"name"`
+	State      ClusterDomainState      `json:"state"`
+	SyncStatus ClusterDomainSyncStatus `json:"syncStatus"`
 }
 
 // +genclient

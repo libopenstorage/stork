@@ -26,8 +26,10 @@ import (
 )
 
 // MigrationScheduleLister helps list MigrationSchedules.
+// All objects returned here must be treated as read-only.
 type MigrationScheduleLister interface {
 	// List lists all MigrationSchedules in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.MigrationSchedule, err error)
 	// MigrationSchedules returns an object that can list and get MigrationSchedules.
 	MigrationSchedules(namespace string) MigrationScheduleNamespaceLister
@@ -58,10 +60,13 @@ func (s *migrationScheduleLister) MigrationSchedules(namespace string) Migration
 }
 
 // MigrationScheduleNamespaceLister helps list and get MigrationSchedules.
+// All objects returned here must be treated as read-only.
 type MigrationScheduleNamespaceLister interface {
 	// List lists all MigrationSchedules in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.MigrationSchedule, err error)
 	// Get retrieves the MigrationSchedule from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.MigrationSchedule, error)
 	MigrationScheduleNamespaceListerExpansion
 }

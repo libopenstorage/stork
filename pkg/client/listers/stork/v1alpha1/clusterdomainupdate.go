@@ -26,10 +26,13 @@ import (
 )
 
 // ClusterDomainUpdateLister helps list ClusterDomainUpdates.
+// All objects returned here must be treated as read-only.
 type ClusterDomainUpdateLister interface {
 	// List lists all ClusterDomainUpdates in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainUpdate, err error)
 	// Get retrieves the ClusterDomainUpdate from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ClusterDomainUpdate, error)
 	ClusterDomainUpdateListerExpansion
 }

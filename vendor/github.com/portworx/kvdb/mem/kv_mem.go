@@ -275,7 +275,7 @@ func (kv *memKV) Get(key string) (*kvdb.KVPair, error) {
 	return v.copy(), nil
 }
 
-func (kv *memKV) Snapshot(prefixes []string) (kvdb.Kvdb, uint64, error) {
+func (kv *memKV) Snapshot(prefixes []string, consistent bool) (kvdb.Kvdb, uint64, error) {
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
 	_, err := kv.put(bootstrapKey, time.Now().UnixNano(), 0)
@@ -703,6 +703,32 @@ func (kv *memKV) EnumerateWithSelect(
 		if strings.HasPrefix(k, prefix) && !strings.Contains(k, "/_") {
 			if enumerateSelect(v.ivalue) {
 				cpy := copySelect(v.ivalue)
+				if cpy == nil {
+					return nil, ErrIllegalSelect
+				}
+				kvi = append(kvi, cpy)
+			}
+		}
+	}
+	return kvi, nil
+}
+
+func (kv *memKV) EnumerateKVPWithSelect(
+	prefix string,
+	enumerateSelect kvdb.EnumerateKVPSelect,
+	copySelect kvdb.CopyKVPSelect,
+) (kvdb.KVPairs, error) {
+	if enumerateSelect == nil || copySelect == nil {
+		return nil, ErrIllegalSelect
+	}
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+	var kvi kvdb.KVPairs
+	prefix = kv.domain + prefix
+	for k, v := range kv.m {
+		if strings.HasPrefix(k, prefix) && !strings.Contains(k, "/_") {
+			if enumerateSelect(&v.KVPair, v.ivalue) {
+				cpy := copySelect(&v.KVPair, v.ivalue)
 				if cpy == nil {
 					return nil, ErrIllegalSelect
 				}

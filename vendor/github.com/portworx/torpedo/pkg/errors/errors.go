@@ -35,3 +35,13 @@ type ErrNotSupported struct {
 func (e *ErrNotSupported) Error() string {
 	return fmt.Sprintf("%v %v is not supported", e.Type, e.Operation)
 }
+
+// ErrOperationNotPerformed is error type when an operation is not performed
+type ErrOperationNotPerformed struct {
+	Operation string
+	Reason    string
+}
+
+func (e *ErrOperationNotPerformed) Error() string {
+	return fmt.Sprintf("%s was not performed due to: %s", e.Operation, e.Reason)
+}

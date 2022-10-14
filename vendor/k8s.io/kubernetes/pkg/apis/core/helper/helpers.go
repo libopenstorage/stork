@@ -19,6 +19,7 @@ package helper
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -36,6 +37,21 @@ import (
 // resource prefix.
 func IsHugePageResourceName(name core.ResourceName) bool {
 	return strings.HasPrefix(string(name), core.ResourceHugePagesPrefix)
+}
+
+// IsHugePageResourceValueDivisible returns true if the resource value of storage is
+// integer multiple of page size.
+func IsHugePageResourceValueDivisible(name core.ResourceName, quantity resource.Quantity) bool {
+	pageSize, err := HugePageSizeFromResourceName(name)
+	if err != nil {
+		return false
+	}
+
+	if pageSize.Sign() <= 0 || pageSize.MilliValue()%int64(1000) != int64(0) {
+		return false
+	}
+
+	return quantity.Value()%pageSize.Value() == 0
 }
 
 // IsQuotaHugePageResourceName returns true if the resource name has the quota
@@ -56,7 +72,7 @@ func HugePageResourceName(pageSize resource.Quantity) core.ResourceName {
 // an error is returned.
 func HugePageSizeFromResourceName(name core.ResourceName) (resource.Quantity, error) {
 	if !IsHugePageResourceName(name) {
-		return resource.Quantity{}, fmt.Errorf("resource name: %s is not valid hugepage name", name)
+		return resource.Quantity{}, fmt.Errorf("resource name: %s is an invalid hugepage name", name)
 	}
 	pageSize := strings.TrimPrefix(string(name), core.ResourceHugePagesPrefix)
 	return resource.ParseQuantity(pageSize)
@@ -107,8 +123,9 @@ var standardResourceQuotaScopes = sets.NewString(
 )
 
 // IsStandardResourceQuotaScope returns true if the scope is a standard value
-func IsStandardResourceQuotaScope(str string) bool {
-	return standardResourceQuotaScopes.Has(str)
+func IsStandardResourceQuotaScope(str string, allowNamespaceAffinityScope bool) bool {
+	return standardResourceQuotaScopes.Has(str) ||
+		(allowNamespaceAffinityScope && str == string(core.ResourceQuotaScopeCrossNamespacePodAffinity))
 }
 
 var podObjectCountQuotaResources = sets.NewString(
@@ -127,7 +144,8 @@ var podComputeQuotaResources = sets.NewString(
 // IsResourceQuotaScopeValidForResource returns true if the resource applies to the specified scope
 func IsResourceQuotaScopeValidForResource(scope core.ResourceQuotaScope, resource string) bool {
 	switch scope {
-	case core.ResourceQuotaScopeTerminating, core.ResourceQuotaScopeNotTerminating, core.ResourceQuotaScopeNotBestEffort, core.ResourceQuotaScopePriorityClass:
+	case core.ResourceQuotaScopeTerminating, core.ResourceQuotaScopeNotTerminating, core.ResourceQuotaScopeNotBestEffort,
+		core.ResourceQuotaScopePriorityClass, core.ResourceQuotaScopeCrossNamespacePodAffinity:
 		return podObjectCountQuotaResources.Has(resource) || podComputeQuotaResources.Has(resource)
 	case core.ResourceQuotaScopeBestEffort:
 		return podObjectCountQuotaResources.Has(resource)
@@ -264,10 +282,13 @@ func IsIntegerResourceName(str string) bool {
 	return integerResources.Has(str) || IsExtendedResourceName(core.ResourceName(str))
 }
 
-// this function aims to check if the service's ClusterIP is set or not
+// IsServiceIPSet aims to check if the service's ClusterIP is set or not
 // the objective is not to perform validation here
 func IsServiceIPSet(service *core.Service) bool {
-	return service.Spec.ClusterIP != core.ClusterIPNone && service.Spec.ClusterIP != ""
+	// This function assumes that the service is semantically validated
+	// it does not test if the IP is valid, just makes sure that it is set.
+	return len(service.Spec.ClusterIP) > 0 &&
+		service.Spec.ClusterIP != core.ClusterIPNone
 }
 
 var standardFinalizers = sets.NewString(
@@ -276,52 +297,9 @@ var standardFinalizers = sets.NewString(
 	metav1.FinalizerDeleteDependents,
 )
 
+// IsStandardFinalizerName checks if the input string is a standard finalizer name
 func IsStandardFinalizerName(str string) bool {
 	return standardFinalizers.Has(str)
-}
-
-// AddToNodeAddresses appends the NodeAddresses to the passed-by-pointer slice,
-// only if they do not already exist
-func AddToNodeAddresses(addresses *[]core.NodeAddress, addAddresses ...core.NodeAddress) {
-	for _, add := range addAddresses {
-		exists := false
-		for _, existing := range *addresses {
-			if existing.Address == add.Address && existing.Type == add.Type {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			*addresses = append(*addresses, add)
-		}
-	}
-}
-
-// TODO: make method on LoadBalancerStatus?
-func LoadBalancerStatusEqual(l, r *core.LoadBalancerStatus) bool {
-	return ingressSliceEqual(l.Ingress, r.Ingress)
-}
-
-func ingressSliceEqual(lhs, rhs []core.LoadBalancerIngress) bool {
-	if len(lhs) != len(rhs) {
-		return false
-	}
-	for i := range lhs {
-		if !ingressEqual(&lhs[i], &rhs[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func ingressEqual(lhs, rhs *core.LoadBalancerIngress) bool {
-	if lhs.IP != rhs.IP {
-		return false
-	}
-	if lhs.Hostname != rhs.Hostname {
-		return false
-	}
-	return true
 }
 
 // GetAccessModesAsString returns a string representation of an array of access modes.
@@ -341,7 +319,7 @@ func GetAccessModesAsString(modes []core.PersistentVolumeAccessMode) string {
 	return strings.Join(modesStr, ",")
 }
 
-// GetAccessModesAsString returns an array of AccessModes from a string created by GetAccessModesAsString
+// GetAccessModesFromString returns an array of AccessModes from a string created by GetAccessModesAsString
 func GetAccessModesFromString(modes string) []core.PersistentVolumeAccessMode {
 	strmodes := strings.Split(modes, ",")
 	accessModes := []core.PersistentVolumeAccessMode{}
@@ -538,27 +516,63 @@ func PersistentVolumeClaimHasClass(claim *core.PersistentVolumeClaim) bool {
 	return false
 }
 
-// ScopedResourceSelectorRequirementsAsSelector converts the ScopedResourceSelectorRequirement api type into a struct that implements
-// labels.Selector.
-func ScopedResourceSelectorRequirementsAsSelector(ssr core.ScopedResourceSelectorRequirement) (labels.Selector, error) {
-	selector := labels.NewSelector()
-	var op selection.Operator
-	switch ssr.Operator {
-	case core.ScopeSelectorOpIn:
-		op = selection.In
-	case core.ScopeSelectorOpNotIn:
-		op = selection.NotIn
-	case core.ScopeSelectorOpExists:
-		op = selection.Exists
-	case core.ScopeSelectorOpDoesNotExist:
-		op = selection.DoesNotExist
-	default:
-		return nil, fmt.Errorf("%q is not a valid scope selector operator", ssr.Operator)
+func toResourceNames(resources core.ResourceList) []core.ResourceName {
+	result := []core.ResourceName{}
+	for resourceName := range resources {
+		result = append(result, resourceName)
 	}
-	r, err := labels.NewRequirement(string(ssr.ScopeName), op, ssr.Values)
-	if err != nil {
-		return nil, err
+	return result
+}
+
+func toSet(resourceNames []core.ResourceName) sets.String {
+	result := sets.NewString()
+	for _, resourceName := range resourceNames {
+		result.Insert(string(resourceName))
 	}
-	selector = selector.Add(*r)
-	return selector, nil
+	return result
+}
+
+// toContainerResourcesSet returns a set of resources names in container resource requirements
+func toContainerResourcesSet(ctr *core.Container) sets.String {
+	resourceNames := toResourceNames(ctr.Resources.Requests)
+	resourceNames = append(resourceNames, toResourceNames(ctr.Resources.Limits)...)
+	return toSet(resourceNames)
+}
+
+// ToPodResourcesSet returns a set of resource names in all containers in a pod.
+func ToPodResourcesSet(podSpec *core.PodSpec) sets.String {
+	result := sets.NewString()
+	for i := range podSpec.InitContainers {
+		result = result.Union(toContainerResourcesSet(&podSpec.InitContainers[i]))
+	}
+	for i := range podSpec.Containers {
+		result = result.Union(toContainerResourcesSet(&podSpec.Containers[i]))
+	}
+	return result
+}
+
+// GetDeletionCostFromPodAnnotations returns the integer value of pod-deletion-cost. Returns 0
+// if not set or the value is invalid.
+func GetDeletionCostFromPodAnnotations(annotations map[string]string) (int32, error) {
+	if value, exist := annotations[core.PodDeletionCost]; exist {
+		// values that start with plus sign (e.g, "+10") or leading zeros (e.g., "008") are not valid.
+		if !validFirstDigit(value) {
+			return 0, fmt.Errorf("invalid value %q", value)
+		}
+
+		i, err := strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			// make sure we default to 0 on error.
+			return 0, err
+		}
+		return int32(i), nil
+	}
+	return 0, nil
+}
+
+func validFirstDigit(str string) bool {
+	if len(str) == 0 {
+		return false
+	}
+	return str[0] == '-' || (str[0] == '0' && str == "0") || (str[0] >= '1' && str[0] <= '9')
 }

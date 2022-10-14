@@ -4,37 +4,46 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/libopenstorage/stork/pkg/version"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/dynamic"
+	errors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/apis/core"
+	coreapi "k8s.io/kubernetes/pkg/apis/core"
 )
 
 const (
 	validateCRDInterval time.Duration = 5 * time.Second
 	validateCRDTimeout  time.Duration = 1 * time.Minute
-
-	defaultCmdExecutorImage              = "openstorage/cmdexecutor:0.1"
+	// environment variable for command executor image registry and image registry secret.
+	cmdExecutorImageRegistryEnvVar       = "CMD-EXECUTOR-IMAGE-REGISTRY"
+	cmdExecutorImageRegistrySecretEnvVar = "CMD-EXECUTOR-IMAGE-REGISTRY-SECRET"
+	defaultCmdExecutorImage              = "cmdexecutor:0.1"
+	// annotation key value for command executor image registry and image registry secret.
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
+	cmdExecutorImageOverrideSecretKey    = "stork.libopenstorage.org/cmdexecutor-image-secret"
 	storkServiceAccount                  = "stork-account"
 	podsWithRunningCommandsKeyDeprecated = "stork/pods-with-running-cmds"
 	podsWithRunningCommandsKey           = "stork.libopenstorage.org/pods-with-running-cmds"
@@ -47,6 +56,8 @@ const (
 	execPodStepLow          = 12
 	execPodStepMed          = 36
 	execPodStepsHigh        = math.MaxInt32
+	maxRetry                = 10
+	retrySleep              = 30 * time.Second
 )
 
 // Type The type of rule to be executed
@@ -70,10 +81,11 @@ type podErrorResponse struct {
 	err error
 }
 
-// CommandTask tracks pods where commands for a taskID might still be running
-type CommandTask struct {
-	TaskID string `json:"taskID"`
-	Pods   []Pod  `json:"pods"`
+// commandTask tracks pods where commands for a taskID might still be running
+type commandTask struct {
+	TaskID    string `json:"taskID"`
+	Pods      []Pod  `json:"pods"`
+	Container string `json:"container"`
 }
 
 var execCmdBackoff = wait.Backoff{
@@ -90,28 +102,31 @@ var ownerAPICallBackoff = wait.Backoff{
 
 // Init initializes the rule executor
 func Init() error {
-	storkRuleResource := k8s.CustomResource{
+	storkRuleResource := apiextensions.CustomResource{
 		Name:    "rule",
 		Plural:  "rules",
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.Rule{}).Name(),
 	}
 
-	err := k8s.Instance().CreateCRD(storkRuleResource)
+	ok, err := version.RequiresV1Registration()
 	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("Failed to create CRD due to: %v", err)
+		return err
+	}
+	if ok {
+		err := k8sutils.CreateCRD(storkRuleResource)
+		if err != nil && !k8s_errors.IsAlreadyExists(err) {
+			return err
 		}
+		return apiextensions.Instance().ValidateCRD(storkRuleResource.Plural+"."+storkRuleResource.Group, validateCRDTimeout, validateCRDInterval)
 	}
-
-	err = k8s.Instance().ValidateCRD(storkRuleResource, validateCRDTimeout, validateCRDInterval)
-	if err != nil {
-		return fmt.Errorf("Failed to validate stork rules CRD due to: %v", err)
+	err = apiextensions.Instance().CreateCRDV1beta1(storkRuleResource)
+	if err != nil && !k8s_errors.IsAlreadyExists(err) {
+		return err
 	}
-
-	return nil
+	return apiextensions.Instance().ValidateCRDV1beta1(storkRuleResource, validateCRDTimeout, validateCRDInterval)
 }
 
 // ValidateRule validates a rule
@@ -133,11 +148,11 @@ func ValidateRule(rule *stork_api.Rule, ruleType Type) error {
 }
 
 // terminateCommandInPods terminates a previously running background command on given pods for given task ID
-func terminateCommandInPods(owner runtime.Object, pods []v1.Pod, taskID string) error {
+func terminateCommandInPods(owner runtime.Object, pods []v1.Pod, container, taskID string) error {
 	killFile := fmt.Sprintf(cmdexecutor.KillFileFormat, taskID)
-	failedPods, err := runCommandOnPods(pods, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
+	failedPods, err := runCommandOnPods(pods, container, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
 
-	updateErr := updateRunningCommandPodListInOwner(owner, failedPods, taskID)
+	updateErr := updateRunningCommandPodListInOwner(owner, failedPods, container, taskID)
 	if updateErr != nil {
 		log.RuleLog(nil, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 	}
@@ -159,9 +174,9 @@ func PerformRuleRecovery(
 		backgroundPodList := make([]v1.Pod, 0)
 		log.RuleLog(nil, owner).Infof("Performing recovery to terminate commands tracker: %v", taskTracker)
 		for _, pod := range taskTracker.Pods {
-			p, err := k8s.Instance().GetPodByUID(types.UID(pod.UID), pod.Namespace)
+			p, err := core.Instance().GetPodByUID(types.UID(pod.UID), pod.Namespace)
 			if err != nil {
-				if err == k8s.ErrPodsNotFound {
+				if err == errors.ErrPodsNotFound {
 					continue
 				}
 
@@ -171,7 +186,7 @@ func PerformRuleRecovery(
 					continue
 				}
 
-				err = fmt.Errorf("Failed to get pod with uid: %s due to: %v", pod.UID, err)
+				err = fmt.Errorf("failed to get pod with uid: %s due to: %v", pod.UID, err)
 				log.RuleLog(nil, owner).Warnf(err.Error())
 
 				ev := &v1.Event{
@@ -192,7 +207,7 @@ func PerformRuleRecovery(
 						Component: "stork",
 					},
 				}
-				if _, err = k8s.Instance().CreateEvent(ev); err != nil {
+				if _, err = core.Instance().CreateEvent(ev); err != nil {
 					log.RuleLog(nil, owner).Warnf("failed to create event for missing pod err: %v", err)
 				}
 
@@ -202,7 +217,7 @@ func PerformRuleRecovery(
 			backgroundPodList = append(backgroundPodList, *p)
 		}
 
-		err = terminateCommandInPods(owner, backgroundPodList, taskTracker.TaskID)
+		err = terminateCommandInPods(owner, backgroundPodList, taskTracker.Container, taskTracker.TaskID)
 		if err != nil {
 			return fmt.Errorf("failed to terminate running commands in pods due to: %v", err)
 		}
@@ -233,7 +248,7 @@ func ExecuteRule(
 
 	pods := make([]v1.Pod, 0)
 	for _, item := range rule.Rules {
-		p, err := k8s.Instance().GetPods(podNamespace, item.PodSelector)
+		p, err := core.Instance().GetPods(podNamespace, item.PodSelector)
 		if err != nil {
 			return nil, err
 		}
@@ -246,11 +261,13 @@ func ExecuteRule(
 		// terminate and also watch a signal channel that indicates when to terminate them
 		backgroundCommandTermChan := make(chan bool, 1)
 		backgroundPodListChan := make(chan v1.Pod)
-		go cmdTerminationWatcher(backgroundPodListChan, backgroundCommandTermChan, owner, taskID.String())
+		var container string
+		go cmdTerminationWatcher(backgroundPodListChan, &container, backgroundCommandTermChan, owner, taskID.String())
 
 		// backgroundActionPresent is used to track if there is atleast one background action
 		backgroundActionPresent := false
 		for _, item := range rule.Rules {
+			container = item.Container
 			filteredPods := make([]v1.Pod, 0)
 			// filter pods and only uses the ones that match this selector
 			for _, pod := range pods {
@@ -270,7 +287,7 @@ func ExecuteRule(
 				}
 
 				if action.Type == stork_api.RuleActionCommand {
-					err := executeCommandAction(filteredPods, rule, owner, action, backgroundPodListChan, rType, taskID)
+					err := executeCommandAction(filteredPods, item.Container, rule, owner, action, backgroundPodListChan, rType, taskID)
 					if err != nil {
 						// if any action fails, terminate all background jobs and don't depend on caller
 						// to clean them up
@@ -300,6 +317,7 @@ func ExecuteRule(
 // executeCommandAction executes the command type action on given pods:
 func executeCommandAction(
 	pods []v1.Pod,
+	container string,
 	rule *stork_api.Rule,
 	owner runtime.Object,
 	action stork_api.RuleAction,
@@ -315,12 +333,44 @@ func executeCommandAction(
 	} else {
 		podsForAction = append(podsForAction, pods...)
 	}
-
-	cmdExecutorImage := defaultCmdExecutorImage
+	var cmdExecutorImage string
+	var cmdExecutorImageSecret string
+	// The order of priority for image location value is Job annotation, environmental variable
+	// and then if both of them are missing, default to stork image repo
+	if len(os.Getenv(cmdExecutorImageRegistryEnvVar)) == 0 {
+		storkPodNs, err := k8sutils.GetStorkPodNamespace()
+		if err != nil {
+			logrus.Errorf("error in getting stork pod namespace: %v", err)
+			return err
+		}
+		// If env is not set get the values from stork deployment spec.
+		registry, registrySecret, err := k8sutils.GetImageRegistryFromDeployment(
+			k8sutils.StorkDeploymentName,
+			storkPodNs,
+		)
+		if err != nil {
+			return err
+		}
+		if len(registry) != 0 {
+			cmdExecutorImage = registry + "/" + defaultCmdExecutorImage
+		} else {
+			cmdExecutorImage = defaultCmdExecutorImage
+		}
+		cmdExecutorImageSecret = registrySecret
+	} else {
+		// if env is set get it from env variable.
+		cmdExecutorImage = os.Getenv(cmdExecutorImageRegistryEnvVar) + "/" + defaultCmdExecutorImage
+		cmdExecutorImageSecret = os.Getenv(cmdExecutorImageRegistrySecretEnvVar)
+	}
 	ruleAnnotations := rule.GetAnnotations()
 	if ruleAnnotations != nil {
+		// get the image registry name, if the annotation is present.
 		if imageOverride, ok := ruleAnnotations[cmdExecutorImageOverrideKey]; ok && len(imageOverride) > 0 {
 			cmdExecutorImage = imageOverride
+		}
+		// get the image registry secret, if the annotation is present.
+		if imageOverrideSecret, ok := ruleAnnotations[cmdExecutorImageOverrideSecretKey]; ok && len(imageOverrideSecret) > 0 {
+			cmdExecutorImageSecret = imageOverrideSecret
 		}
 	}
 
@@ -345,9 +395,9 @@ func executeCommandAction(
 		if existingTracker != nil && len(existingTracker.Pods) > 0 {
 			for _, existingPod := range existingTracker.Pods {
 				// Check if pod exists in cluster
-				existingPodObject, err := k8s.Instance().GetPodByUID(types.UID(existingPod.UID), existingPod.Namespace)
+				existingPodObject, err := core.Instance().GetPodByUID(types.UID(existingPod.UID), existingPod.Namespace)
 				if err != nil {
-					if err == k8s.ErrPodsNotFound {
+					if err == errors.ErrPodsNotFound {
 						continue
 					}
 
@@ -363,17 +413,17 @@ func executeCommandAction(
 			podsForTrackerList = append(podsForTrackerList, pod)
 		}
 
-		updateErr := updateRunningCommandPodListInOwner(owner, podsForTrackerList, taskID.String())
+		updateErr := updateRunningCommandPodListInOwner(owner, podsForTrackerList, container, taskID.String())
 		if updateErr != nil {
 			log.RuleLog(rule, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 		}
 
-		err = runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
+		err = runBackgroundCommandOnPods(podsForAction, container, action.Value, taskID.String(), cmdExecutorImage, cmdExecutorImageSecret)
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err := runCommandOnPods(podsForAction, action.Value, execPodStepLow, true)
+		_, err := runCommandOnPods(podsForAction, container, action.Value, execPodStepLow, true)
 		if err != nil {
 			return err
 		}
@@ -397,6 +447,7 @@ func podsToString(pods []v1.Pod) string {
 func updateRunningCommandPodListInOwner(
 	owner runtime.Object,
 	pods []v1.Pod,
+	container string,
 	taskID string,
 ) error {
 	podsWithNs := make([]Pod, 0)
@@ -406,9 +457,10 @@ func updateRunningCommandPodListInOwner(
 			UID:       string(p.GetUID())})
 	}
 
-	tracker := &CommandTask{
-		TaskID: taskID,
-		Pods:   podsWithNs,
+	tracker := &commandTask{
+		TaskID:    taskID,
+		Pods:      podsWithNs,
+		Container: container,
 	}
 
 	trackerBytes, err := json.Marshal(tracker)
@@ -417,7 +469,7 @@ func updateRunningCommandPodListInOwner(
 	}
 
 	err = wait.ExponentialBackoff(ownerAPICallBackoff, func() (bool, error) {
-		ownerCopy, err := k8s.Instance().GetObject(owner)
+		ownerCopy, err := dynamic.Instance().GetObject(owner)
 		if err != nil {
 			log.RuleLog(nil, owner).Warnf("Failed to get latest owner due to: %v. Will retry.", err)
 			return false, nil
@@ -440,7 +492,7 @@ func updateRunningCommandPodListInOwner(
 		}
 
 		metadata.SetAnnotations(annotations)
-		if _, err := k8s.Instance().UpdateObject(ownerCopy); err != nil {
+		if _, err := dynamic.Instance().UpdateObject(ownerCopy); err != nil {
 			log.RuleLog(nil, owner).Warnf("Failed to update owner due to: %v. Will retry.", err)
 			return false, nil
 		}
@@ -452,7 +504,7 @@ func updateRunningCommandPodListInOwner(
 
 // runCommandOnPods runs cmd on given pods. If failFast is true, it will return on the first failure. It will
 // return a list of pods that failed.
-func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) ([]v1.Pod, error) {
+func runCommandOnPods(pods []v1.Pod, container string, cmd string, numRetries int, failFast bool) ([]v1.Pod, error) {
 	var wg sync.WaitGroup
 	backOff := wait.Backoff{
 		Duration: execPodCmdRetryInterval,
@@ -468,14 +520,14 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 			defer wg.Done()
 			err := wait.ExponentialBackoff(backOff, func() (bool, error) {
 				ns, name := pod.GetNamespace(), pod.GetName()
-				_, err := k8s.Instance().GetPodByUID(pod.GetUID(), ns)
+				_, err := core.Instance().GetPodByUID(pod.GetUID(), ns)
 				if err != nil {
-					if err == k8s.ErrPodsNotFound {
+					if err == errors.ErrPodsNotFound {
 						logrus.Infof("Pod with uuid: %s in namespace: %s is no longer present", string(pod.GetUID()), ns)
 						return true, nil
 					}
 
-					err = fmt.Errorf("Failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()), err)
+					err = fmt.Errorf("failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()), err)
 
 					ev := &v1.Event{
 						ObjectMeta: metav1.ObjectMeta{
@@ -495,14 +547,14 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 							Component: "stork",
 						},
 					}
-					if _, err = k8s.Instance().CreateEvent(ev); err != nil {
+					if _, err = core.Instance().CreateEvent(ev); err != nil {
 						logrus.Warnf("failed to create event for missing pod err: %v", err)
 					}
 
 					return false, nil
 				}
 
-				_, err = k8s.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, "", ns)
+				_, err = core.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, container, ns)
 				if err != nil {
 					logrus.Warnf("Failed to run command: %s on pod: [%s] %s due to: %v", cmd, ns, name, err)
 					return false, nil
@@ -552,9 +604,22 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 	return nil, nil
 }
 
+// ToImagePullSecret converts a secret name to the ImagePullSecret struct.
+func ToImagePullSecret(name string) []v1.LocalObjectReference {
+	if name == "" {
+		return nil
+	}
+	return []v1.LocalObjectReference{
+		{
+			Name: name,
+		},
+	}
+
+}
+
 // runBackgroundCommandOnPods will start the given "cmd" on all the given "pods". The taskID is given to
 // the executor pod so it can have unique status files in the target pods where it runs the actual commands
-func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage string) error {
+func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecutorImage, cmdExecutorImageSecret string) error {
 	executorArgs := []string{
 		"/cmdexecutor",
 		"-timeout", strconv.FormatInt(perPodCommandExecTimeout, 10),
@@ -573,10 +638,11 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 	executorPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("pod-cmd-executor-%s", taskID),
-			Namespace: core.NamespaceSystem,
+			Namespace: coreapi.NamespaceSystem,
 			Labels:    labels,
 		},
 		Spec: v1.PodSpec{
+			ImagePullSecrets: ToImagePullSecret(cmdExecutorImageSecret),
 			Containers: []v1.Container{
 				{
 					Name:            "cmdexecutor",
@@ -600,14 +666,14 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 		},
 	}
 
-	createdPod, err := k8s.Instance().CreatePod(executorPod)
+	createdPod, err := core.Instance().CreatePod(executorPod)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
 		if createdPod != nil {
-			err := k8s.Instance().DeletePods([]v1.Pod{*createdPod}, false)
+			err := core.Instance().DeletePods([]v1.Pod{*createdPod}, false)
 			if err != nil {
 				logrus.Warnf("Failed to delete command executor pod: [%s] %s due to: %v",
 					createdPod.GetNamespace(), createdPod.GetName(), err)
@@ -616,6 +682,29 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 	}()
 
 	logrus.Infof("Created pod command executor: [%s] %s", createdPod.GetNamespace(), createdPod.GetName())
+	// Check whether the cmd executor pod is struck in pending state for more than five mintues
+	// If struck, delete the pod and return error.
+	for i := 0; i < maxRetry; i++ {
+		p, err := core.Instance().GetPodByUID(createdPod.GetUID(), createdPod.GetNamespace())
+		if err != nil {
+			return err
+		}
+		if p.Status.Phase == v1.PodPending {
+			if i == (maxRetry - 1) {
+				var err error
+				if len(p.Status.ContainerStatuses) != 0 {
+					err = fmt.Errorf("rule command executor is struck in pending state, reason: %v", p.Status.ContainerStatuses[0].State.Waiting.Reason)
+				} else {
+					err = fmt.Errorf("rule command executor is struck in pending state")
+				}
+				logrus.Errorf("%v", err)
+				return err
+			}
+			time.Sleep(retrySleep)
+			continue
+		}
+	}
+
 	err = waitForExecPodCompletion(createdPod)
 	if err != nil {
 		// Since the command executor failed, fetch it's status using the pod's name as the key. The fetched status
@@ -637,7 +726,7 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 func waitForExecPodCompletion(pod *v1.Pod) error {
 	logrus.Infof("Waiting for pod: [%s] %s readiness with backoff: %v", pod.GetNamespace(), pod.GetName(), execCmdBackoff)
 	return wait.ExponentialBackoff(execCmdBackoff, func() (bool, error) {
-		p, err := k8s.Instance().GetPodByUID(pod.GetUID(), pod.GetNamespace())
+		p, err := core.Instance().GetPodByUID(pod.GetUID(), pod.GetNamespace())
 		if err != nil {
 			return false, nil
 		}
@@ -662,6 +751,7 @@ func waitForExecPodCompletion(pod *v1.Pod) error {
 // pods
 func cmdTerminationWatcher(
 	podListChan chan v1.Pod,
+	container *string,
 	terminationSignalChan chan bool,
 	owner runtime.Object,
 	id string) {
@@ -678,11 +768,11 @@ func cmdTerminationWatcher(
 					podList = append(podList, pod)
 				}
 
-				if err := terminateCommandInPods(owner, podList, id); err != nil {
+				if err := terminateCommandInPods(owner, podList, *container, id); err != nil {
 					log.RuleLog(nil, owner).Warnf("failed to terminate background command in pods due to: %v", err)
 				}
 			}
-			break
+			return
 		}
 	}
 }
@@ -697,12 +787,12 @@ func hasSubset(set map[string]string, subset map[string]string) bool {
 	return true
 }
 
-func getPodsTrackerForOwner(owner runtime.Object) (*CommandTask, error) {
+func getPodsTrackerForOwner(owner runtime.Object) (*commandTask, error) {
 	metadata, err := meta.Accessor(owner)
 	if err != nil {
 		return nil, err
 	}
-	taskTracker := CommandTask{}
+	var taskTracker commandTask
 
 	annotations := metadata.GetAnnotations()
 	if annotations != nil {

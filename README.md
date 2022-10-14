@@ -4,7 +4,7 @@
 [![Code Coverage](https://codecov.io/gh/libopenstorage/stork/branch/master/graph/badge.svg)](https://codecov.io/gh/libopenstorage/stork)
 
 # Stork - Storage Operator Runtime for Kubernetes
-Stork is a Cloud Native storage operator runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage provider, it's capabilities and state.
+Stork is a Cloud Native storage operator runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage provider, its capabilities and state.
 
 <div style="text-align:center"><img src="images/stork.png" alt="Drawing" style="width: 50px;"/></div>
 
@@ -40,7 +40,7 @@ relocate  pods on to other nodes so that they can continue running.
 
 ## Volume Snapshots
 
-Stork uses the external-storage project from [kubernetes-incuabator](https://github.com/kubernetes-incubator/external-storage)
+Stork uses the external-storage project from [kubernetes-incubator](https://github.com/kubernetes-incubator/external-storage)
 to add support for snapshots.
 
 Refer to [Snapshots with Stork](doc/snaps.md) for instructions on creating and using snapshots with Stork.
@@ -60,7 +60,11 @@ Stork is written in Golang. To build Stork:
 # export DOCKER_HUB_REPO=myrepo
 # export DOCKER_HUB_STORK_IMAGE=stork
 # export DOCKER_HUB_STORK_TAG=latest
+# export DOCKER_HUB_CMD_EXECUTOR_IMAGE=cmdexecutor
+# export DOCKER_HUB_CMD_EXECUTOR_TAG=latest
 # make
+# make container
+# make deploy
 ```
 
 This will create the Docker image `$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_TAG)`.
@@ -194,7 +198,7 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
    repl: "2"
 ---
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
@@ -205,6 +209,9 @@ spec:
       maxUnavailable: 1
     type: RollingUpdate
   replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
   template:
     metadata:
       labels:

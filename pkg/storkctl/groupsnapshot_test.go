@@ -1,15 +1,20 @@
+//go:build unittest
 // +build unittest
 
 package storkctl
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"strings"
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestOneGroupSnapshot(t *testing.T) {
@@ -24,8 +29,8 @@ func TestOneGroupSnapshot(t *testing.T) {
 	createGroupSnapshotAndVerify(t, name, namespace,
 		selectors, preRuleName, postRuleName, restoreNamespaces, nil, 99)
 
-	expected := fmt.Sprintf("NAME              STATUS    STAGE     SNAPSHOTS   CREATED\n"+
-		"%s                       0           \n", name)
+	expected := fmt.Sprintf("NAME              STATUS   STAGE   SNAPSHOTS   CREATED\n"+
+		"%s                    0           \n", name)
 	cmdArgs := []string{"get", "groupsnapshots", "-n", namespace, name}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -39,7 +44,7 @@ func TestGroupSnapshotWithStatus(t *testing.T) {
 
 	createGroupSnapshotAndVerify(t, name, namespace, selectors, "", "", nil, nil, 0)
 
-	groupSnap, err := k8s.Instance().GetGroupSnapshot(name, namespace)
+	groupSnap, err := storkops.Instance().GetGroupSnapshot(name, namespace)
 	require.NoError(t, err, "failed to get group snapshot")
 	require.NotNil(t, groupSnap, "got nil group snapshot after get call")
 
@@ -60,11 +65,11 @@ func TestGroupSnapshotWithStatus(t *testing.T) {
 		},
 	}
 
-	_, err = k8s.Instance().UpdateGroupSnapshot(groupSnap)
+	_, err = storkops.Instance().UpdateGroupSnapshot(groupSnap)
 	require.NoError(t, err, "failed to update group snapshot")
 
-	expected := fmt.Sprintf("NAME                     STATUS       STAGE     SNAPSHOTS   CREATED\n"+
-		"%s   Successful   Final     2           \n", name)
+	expected := fmt.Sprintf("NAME                     STATUS       STAGE   SNAPSHOTS   CREATED\n"+
+		"%v   Successful   Final   2           \n", name)
 	cmdArgs := []string{"get", "groupsnapshots", "-n", namespace, name}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -77,7 +82,7 @@ func TestGroupSnapshotWithNoSelector(t *testing.T) {
 }
 
 func TestGroupSnapshotWithNoName(t *testing.T) {
-	expected := "error: Exactly one name needs to be provided for groupsnapshot name"
+	expected := "error: exactly one name needs to be provided for groupsnapshot name"
 	cmdArgs := []string{"create", "groupsnapshots"}
 	testCommon(t, cmdArgs, nil, expected, true)
 }
@@ -87,7 +92,7 @@ func TestDuplicateGroupSnapshots(t *testing.T) {
 
 	name := "test-group-snap-duplicate"
 	namespace := "default"
-	selectors, err := parseKeyValueList([]string{"app=mysql"})
+	selectors, err := utils.ParseKeyValueList([]string{"app=mysql"})
 	require.NoError(t, err, "failed to parse selectors")
 
 	createGroupSnapshotAndVerify(t, name, namespace, selectors, "", "", nil, nil, 0)
@@ -106,15 +111,15 @@ func TestMultipleGroupSnapshots(t *testing.T) {
 	namespace := "default"
 	selectors := map[string]string{"app": "mysql"}
 
-	_, err := k8s.Instance().CreateNamespace(namespace, nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
 	require.NoError(t, err, "Error creating namespace")
 
 	createGroupSnapshotAndVerify(t, name1, namespace, selectors, "", "", nil, nil, 0)
 	createGroupSnapshotAndVerify(t, name2, namespace, selectors, "", "", nil, nil, 0)
 
-	expected := fmt.Sprintf("NAME                STATUS    STAGE     SNAPSHOTS   CREATED\n"+
-		"%s                       0           \n%s                       0           \n",
-		name1, name2)
+	expected := fmt.Sprintf("NAME                STATUS   STAGE   SNAPSHOTS   CREATED\n"+
+		"%v                    0           \n"+
+		"%v                    0           \n", name1, name2)
 	cmdArgs := []string{"get", "groupsnapshots", "-n", namespace, name1, name2}
 	testCommon(t, cmdArgs, nil, expected, false)
 
@@ -124,15 +129,16 @@ func TestMultipleGroupSnapshots(t *testing.T) {
 
 	name3 := "test-group-snap-3"
 	customNamespace := "ns1"
-	_, err = k8s.Instance().CreateNamespace(customNamespace, nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: customNamespace}})
 	require.NoError(t, err, "Error creating namespace")
 
 	createGroupSnapshotAndVerify(t, name3, customNamespace, selectors, "", "", nil, nil, 0)
 
 	// get from all namespaces
-	expected = fmt.Sprintf("NAMESPACE   NAME                STATUS    STAGE     SNAPSHOTS   CREATED\n"+
-		"%s     %s                       0           \n%s     %s                       0           \n"+
-		"%s         %s                       0           \n",
+	expected = fmt.Sprintf("NAMESPACE   NAME                STATUS   STAGE   SNAPSHOTS   CREATED\n"+
+		"%v     %v                    0           \n"+
+		"%v     %v                    0           \n"+
+		"%v         %v                    0           \n",
 		namespace, name1, namespace, name2, customNamespace, name3)
 	cmdArgs = []string{"get", "groupsnapshots", "--all-namespaces"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -168,7 +174,7 @@ func TestDeleteGroupSnapshots(t *testing.T) {
 
 func TestDeleteNoName(t *testing.T) {
 	cmdArgs := []string{"delete", "groupsnapshots"}
-	expected := "error: At least one argument needs to be provided for groupsnapshot name"
+	expected := "error: at least one argument needs to be provided for groupsnapshot name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -217,7 +223,7 @@ func createGroupSnapshotAndVerify(
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it's created correctly
-	groupSnap, err := k8s.Instance().GetGroupSnapshot(name, namespace)
+	groupSnap, err := storkops.Instance().GetGroupSnapshot(name, namespace)
 	require.NoError(t, err, "failed to get group snapshot")
 	require.NotNil(t, groupSnap, "got nil group snapshot after get call")
 

@@ -16,6 +16,7 @@ type MigrationScheduleSpec struct {
 	Template           MigrationTemplateSpec `json:"template"`
 	SchedulePolicyName string                `json:"schedulePolicyName"`
 	Suspend            *bool                 `json:"suspend"`
+	AutoSuspend        bool                  `json:"autoSuspend"`
 }
 
 // MigrationTemplateSpec describes the data a Migration should have when created
@@ -26,7 +27,8 @@ type MigrationTemplateSpec struct {
 
 // MigrationScheduleStatus is the status of a migration schedule
 type MigrationScheduleStatus struct {
-	Items map[SchedulePolicyType][]*ScheduledMigrationStatus `json:"items"`
+	Items                map[SchedulePolicyType][]*ScheduledMigrationStatus `json:"items"`
+	ApplicationActivated bool                                               `json:"applicationActivated"`
 }
 
 // ScheduledMigrationStatus keeps track of the migration that was triggered by a

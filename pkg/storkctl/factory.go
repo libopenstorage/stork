@@ -3,7 +3,13 @@ package storkctl
 import (
 	"fmt"
 
-	"github.com/portworx/sched-ops/k8s"
+	appsops "github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/core"
+	dynamicops "github.com/portworx/sched-ops/k8s/dynamic"
+	externalstorageops "github.com/portworx/sched-ops/k8s/externalstorage"
+	ocpops "github.com/portworx/sched-ops/k8s/openshift"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,6 +28,9 @@ type factory struct {
 	kubeconfig    string
 	context       string
 	outputFormat  string
+	watch         bool
+	qps           int
+	burst         int
 }
 
 // Factory to be used for command line
@@ -49,6 +58,12 @@ type Factory interface {
 	setOutputFormat(string)
 	// setNamespace Set the namespace
 	setNamespace(string)
+	// IsWatchSet return true if -w/watch is passed
+	IsWatchSet() bool
+	// GetQPS return qps number for k8s api request
+	GetQPS() int
+	// GetBurst return qps number for k8s api request
+	GetBurst() int
 }
 
 // NewFactory Return a new factory interface that can be used by commands
@@ -61,6 +76,9 @@ func (f *factory) BindFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&f.kubeconfig, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests")
 	flags.StringVar(&f.context, "context", "", "The name of the kubeconfig context to use")
 	flags.StringVarP(&f.outputFormat, "output", "o", outputFormatTable, "Output format. One of: table|json|yaml")
+	flags.BoolVarP(&f.watch, "watch", "w", false, "watch stork resourrces")
+	flags.IntVarP(&f.qps, "qps", "", 100, "Restrict number of k8s api requests from stork")
+	flags.IntVarP(&f.burst, "burst", "", 100, "Restrict number of k8s api requests from stork")
 }
 
 func (f *factory) BindGetFlags(flags *pflag.FlagSet) {
@@ -72,6 +90,13 @@ func (f *factory) AllNamespaces() bool {
 	return f.allNamespaces
 }
 
+func (f *factory) GetQPS() int {
+	return f.qps
+
+}
+func (f *factory) GetBurst() int {
+	return f.burst
+}
 func (f *factory) GetNamespace() string {
 	return f.namespace
 }
@@ -79,7 +104,7 @@ func (f *factory) GetNamespace() string {
 func (f *factory) GetAllNamespaces() ([]string, error) {
 	allNamespaces := make([]string, 0)
 	if f.allNamespaces {
-		namespaces, err := k8s.Instance().ListNamespaces()
+		namespaces, err := core.Instance().ListNamespaces(nil)
 		if err != nil {
 			return nil, err
 		}
@@ -106,12 +131,22 @@ func (f *factory) GetConfig() (*rest.Config, error) {
 	return f.getKubeconfig().ClientConfig()
 }
 
+func (f *factory) IsWatchSet() bool {
+	return f.watch
+}
+
 func (f *factory) UpdateConfig() error {
 	config, err := f.GetConfig()
 	if err != nil {
 		return err
 	}
-	k8s.Instance().SetConfig(config)
+	core.Instance().SetConfig(config)
+	storkops.Instance().SetConfig(config)
+	batch.Instance().SetConfig(config)
+	ocpops.Instance().SetConfig(config)
+	appsops.Instance().SetConfig(config)
+	dynamicops.Instance().SetConfig(config)
+	externalstorageops.Instance().SetConfig(config)
 	return nil
 }
 
@@ -132,7 +167,7 @@ func (f *factory) GetOutputFormat() (string, error) {
 	case outputFormatTable, outputFormatYaml, outputFormatJSON:
 		return f.outputFormat, nil
 	default:
-		return "", fmt.Errorf("Unsupported output type %v", f.outputFormat)
+		return "", fmt.Errorf("unsupported output type %v", f.outputFormat)
 	}
 }
 

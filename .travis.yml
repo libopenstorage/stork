@@ -1,12 +1,15 @@
 sudo: required
-dist: trusty
+dist: xenial
 language: go
 go:
-  - 1.11.2
+  - 1.17.3
 before_install:
-  - sudo apt-get update -yq
+  - sudo apt-get update -yq || true
   - sudo apt-get install go-md2man -y
   - sudo apt-get install -y awscli
+cache:
+  directories:
+    - $HOME/.cache/go-build
 script:
   - |
     if [ "${TRAVIS_BRANCH}" == "master" ]; then
@@ -18,16 +21,11 @@ script:
       export DOCKER_HUB_STORK_TEST_TAG=`git rev-parse --short HEAD`
       export DOCKER_HUB_CMD_EXECUTOR_TAG=`git rev-parse --short HEAD`
     fi
-    make && make pretest && make test && make container && make integration-test && make integration-test-container &&
+    make -j 2 && make test && make container && make integration-test && make integration-test-container &&
     if [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       docker login -u "${DOCKER_USER}" -p "${DOCKER_PASSWORD}";
       make deploy;
       make integration-test-deploy;
-    fi &&
-    if [ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]; then
-      aws s3 cp --acl public-read bin/linux/storkctl s3://${BUCKET_NAME}/storkctl/latest/linux/;
-      aws s3 cp --acl public-read bin/windows/storkctl.exe s3://${BUCKET_NAME}/storkctl/latest/windows/;
-      aws s3 cp --acl public-read bin/darwin/storkctl s3://${BUCKET_NAME}/storkctl/latest/darwin/;
     fi
 notifications:
   email:

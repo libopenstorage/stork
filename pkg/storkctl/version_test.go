@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package storkctl
@@ -7,7 +8,7 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/stretchr/testify/require"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestVersion(t *testing.T) {
@@ -18,5 +19,5 @@ func TestVersion(t *testing.T) {
 	cmd.SetArgs([]string{"version"})
 	err := cmd.Execute()
 	require.NoError(t, err, "Error executing command: %v", cmd)
-	require.Equal(t, "Version: "+version.Version+"\n", buf.String())
+	require.Equal(t, "storkctl Version: "+version.Version+"\n", buf.String())
 }

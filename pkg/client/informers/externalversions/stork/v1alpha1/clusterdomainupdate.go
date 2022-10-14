@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	time "time"
 
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -60,13 +61,13 @@ func NewFilteredClusterDomainUpdateInformer(client versioned.Interface, resyncPe
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().ClusterDomainUpdates().List(options)
+				return client.StorkV1alpha1().ClusterDomainUpdates().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().ClusterDomainUpdates().Watch(options)
+				return client.StorkV1alpha1().ClusterDomainUpdates().Watch(context.TODO(), options)
 			},
 		},
 		&storkv1alpha1.ClusterDomainUpdate{},

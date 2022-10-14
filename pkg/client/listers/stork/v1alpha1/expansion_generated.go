@@ -18,6 +18,50 @@ limitations under the License.
 
 package v1alpha1
 
+// ApplicationBackupListerExpansion allows custom methods to be added to
+// ApplicationBackupLister.
+type ApplicationBackupListerExpansion interface{}
+
+// ApplicationBackupNamespaceListerExpansion allows custom methods to be added to
+// ApplicationBackupNamespaceLister.
+type ApplicationBackupNamespaceListerExpansion interface{}
+
+// ApplicationBackupScheduleListerExpansion allows custom methods to be added to
+// ApplicationBackupScheduleLister.
+type ApplicationBackupScheduleListerExpansion interface{}
+
+// ApplicationBackupScheduleNamespaceListerExpansion allows custom methods to be added to
+// ApplicationBackupScheduleNamespaceLister.
+type ApplicationBackupScheduleNamespaceListerExpansion interface{}
+
+// ApplicationCloneListerExpansion allows custom methods to be added to
+// ApplicationCloneLister.
+type ApplicationCloneListerExpansion interface{}
+
+// ApplicationCloneNamespaceListerExpansion allows custom methods to be added to
+// ApplicationCloneNamespaceLister.
+type ApplicationCloneNamespaceListerExpansion interface{}
+
+// ApplicationRegistrationListerExpansion allows custom methods to be added to
+// ApplicationRegistrationLister.
+type ApplicationRegistrationListerExpansion interface{}
+
+// ApplicationRestoreListerExpansion allows custom methods to be added to
+// ApplicationRestoreLister.
+type ApplicationRestoreListerExpansion interface{}
+
+// ApplicationRestoreNamespaceListerExpansion allows custom methods to be added to
+// ApplicationRestoreNamespaceLister.
+type ApplicationRestoreNamespaceListerExpansion interface{}
+
+// BackupLocationListerExpansion allows custom methods to be added to
+// BackupLocationLister.
+type BackupLocationListerExpansion interface{}
+
+// BackupLocationNamespaceListerExpansion allows custom methods to be added to
+// BackupLocationNamespaceLister.
+type BackupLocationNamespaceListerExpansion interface{}
+
 // ClusterDomainUpdateListerExpansion allows custom methods to be added to
 // ClusterDomainUpdateLister.
 type ClusterDomainUpdateListerExpansion interface{}
@@ -33,6 +77,14 @@ type ClusterPairListerExpansion interface{}
 // ClusterPairNamespaceListerExpansion allows custom methods to be added to
 // ClusterPairNamespaceLister.
 type ClusterPairNamespaceListerExpansion interface{}
+
+// DataExportListerExpansion allows custom methods to be added to
+// DataExportLister.
+type DataExportListerExpansion interface{}
+
+// DataExportNamespaceListerExpansion allows custom methods to be added to
+// DataExportNamespaceLister.
+type DataExportNamespaceListerExpansion interface{}
 
 // GroupVolumeSnapshotListerExpansion allows custom methods to be added to
 // GroupVolumeSnapshotLister.
@@ -58,6 +110,22 @@ type MigrationScheduleListerExpansion interface{}
 // MigrationScheduleNamespaceLister.
 type MigrationScheduleNamespaceListerExpansion interface{}
 
+// NamespacedSchedulePolicyListerExpansion allows custom methods to be added to
+// NamespacedSchedulePolicyLister.
+type NamespacedSchedulePolicyListerExpansion interface{}
+
+// NamespacedSchedulePolicyNamespaceListerExpansion allows custom methods to be added to
+// NamespacedSchedulePolicyNamespaceLister.
+type NamespacedSchedulePolicyNamespaceListerExpansion interface{}
+
+// ResourceTransformationListerExpansion allows custom methods to be added to
+// ResourceTransformationLister.
+type ResourceTransformationListerExpansion interface{}
+
+// ResourceTransformationNamespaceListerExpansion allows custom methods to be added to
+// ResourceTransformationNamespaceLister.
+type ResourceTransformationNamespaceListerExpansion interface{}
+
 // RuleListerExpansion allows custom methods to be added to
 // RuleLister.
 type RuleListerExpansion interface{}
@@ -70,13 +138,13 @@ type RuleNamespaceListerExpansion interface{}
 // SchedulePolicyLister.
 type SchedulePolicyListerExpansion interface{}
 
-// StorageClusterListerExpansion allows custom methods to be added to
-// StorageClusterLister.
-type StorageClusterListerExpansion interface{}
+// VolumeSnapshotRestoreListerExpansion allows custom methods to be added to
+// VolumeSnapshotRestoreLister.
+type VolumeSnapshotRestoreListerExpansion interface{}
 
-// StorageClusterNamespaceListerExpansion allows custom methods to be added to
-// StorageClusterNamespaceLister.
-type StorageClusterNamespaceListerExpansion interface{}
+// VolumeSnapshotRestoreNamespaceListerExpansion allows custom methods to be added to
+// VolumeSnapshotRestoreNamespaceLister.
+type VolumeSnapshotRestoreNamespaceListerExpansion interface{}
 
 // VolumeSnapshotScheduleListerExpansion allows custom methods to be added to
 // VolumeSnapshotScheduleLister.

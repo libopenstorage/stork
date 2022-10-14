@@ -1,19 +1,21 @@
 package snapshot
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
-	"github.com/kubernetes-incubator/external-storage/lib/controller"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/snapshot/controllers"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/sig-storage-lib-external-provisioner/v6/controller"
 )
 
 const (
@@ -25,10 +27,12 @@ const (
 type Snapshot struct {
 	lock                       sync.Mutex
 	stopChannel                chan struct{}
+	stopContext                context.Context
 	started                    bool
 	snapshotController         *controllers.Snapshotter
 	snapshotScheduleController *controllers.SnapshotScheduleController
-	provisioner                *controller.Provisioner
+	snapshotRestoreController  *controllers.SnapshotRestoreController
+	provisioner                *controller.ProvisionController
 	Driver                     volume.Driver
 	Recorder                   record.EventRecorder
 }
@@ -39,7 +43,7 @@ func GetProvisionerName() string {
 }
 
 // Start initialize the snapshot components
-func (s *Snapshot) Start() error {
+func (s *Snapshot) Start(mgr manager.Manager) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -47,6 +51,7 @@ func (s *Snapshot) Start() error {
 		return fmt.Errorf("Snapshot controllers have already been started")
 	}
 	s.stopChannel = make(chan struct{})
+	s.stopContext = context.Background()
 
 	// Start the snapshot controller first so that the CRD gets registered
 	s.snapshotController = &controllers.Snapshotter{
@@ -72,13 +77,13 @@ func (s *Snapshot) Start() error {
 	}
 
 	if clientset == nil {
-		return k8s.ErrK8SApiAccountNotSet
+		return errors.ErrK8SApiAccountNotSet
 	}
 
 	// Start the provisioner controller
 	serverVersion, err := clientset.Discovery().ServerVersion()
 	if err != nil {
-		return fmt.Errorf("Error getting server version: %v", err)
+		return fmt.Errorf("error getting server version: %v", err)
 	}
 
 	snapshotClient, _, err := client.NewClient(config)
@@ -91,29 +96,32 @@ func (s *Snapshot) Start() error {
 
 	snapProvisioner := controllers.NewSnapshotProvisioner(clientset, snapshotClient, plugins, snapshotProvisionerID)
 
-	provisioner := controller.NewProvisionController(
+	s.provisioner = controller.NewProvisionController(
 		clientset,
 		snapshotProvisionerName,
 		snapProvisioner,
 		serverVersion.GitVersion,
 	)
 	// stork already does leader elction, don't need it for each controller
-	if err := controller.LeaderElection(false)(provisioner); err != nil {
+	if err := controller.LeaderElection(false)(s.provisioner); err != nil {
 		log.Errorf("failed to disable leader election for snapshot controller: %v", err)
 		return err
 	}
 
-	go provisioner.Run(s.stopChannel)
+	go s.provisioner.Run(s.stopContext)
 
 	// Start the snapshot schedule controller
-	s.snapshotScheduleController = &controllers.SnapshotScheduleController{
-		Recorder: s.Recorder,
-	}
-	err = s.snapshotScheduleController.Init()
+	s.snapshotScheduleController = controllers.NewSnapshotScheduleController(mgr, s.Recorder)
+	err = s.snapshotScheduleController.Init(mgr)
 	if err != nil {
 		return fmt.Errorf("error initializing snapshot schedule controller: %v", err)
 	}
 
+	s.snapshotRestoreController = controllers.NewSnapshotRestoreController(mgr, s.Driver, s.Recorder)
+	err = s.snapshotRestoreController.Init(mgr)
+	if err != nil {
+		return fmt.Errorf("error initializing snapshot restore controller: %v", err)
+	}
 	s.started = true
 	return nil
 }
@@ -128,6 +136,7 @@ func (s *Snapshot) Stop() error {
 	}
 
 	close(s.stopChannel)
+	s.stopContext.Done()
 
 	s.started = false
 	return nil

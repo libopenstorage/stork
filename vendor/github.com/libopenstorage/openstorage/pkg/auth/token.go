@@ -16,18 +16,30 @@ limitations under the License.
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
+)
+
+const (
+	authorizationHeader = "authorization"
 )
 
 // Options provide any options to apply to the token
 type Options struct {
 	// Expiration time in Unix format as per JWT standard
 	Expiration int64
+
+	// IATSubtract is the time duration you would like to remove from
+	// the token IAT (Issue At Time). This is useful as a guard against
+	// NTP drift within a cluster. Without this option, your token may
+	// be denied due to the IAT being greater than the current time.
+	IATSubtract time.Duration
 }
 
 // TokenClaims returns the claims for the raw JWT token.
@@ -89,7 +101,7 @@ func Token(
 		"email": claims.Email,
 		"name":  claims.Name,
 		"roles": claims.Roles,
-		"iat":   time.Now().Unix(),
+		"iat":   time.Now().Add(-options.IATSubtract).Unix(),
 		"exp":   options.Expiration,
 	}
 	if claims.Groups != nil {
@@ -102,4 +114,8 @@ func Token(
 	}
 
 	return signedtoken, nil
+}
+
+func IsGuest(ctx context.Context) bool {
+	return metautils.ExtractIncoming(ctx).Get(authorizationHeader) == ""
 }

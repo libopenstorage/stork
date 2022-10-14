@@ -21,27 +21,59 @@ package v1alpha1
 import (
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/client/clientset/versioned/scheme"
-	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
 )
 
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ApplicationBackupsGetter
+	ApplicationBackupSchedulesGetter
+	ApplicationClonesGetter
+	ApplicationRegistrationsGetter
+	ApplicationRestoresGetter
+	BackupLocationsGetter
 	ClusterDomainUpdatesGetter
 	ClusterDomainsStatusesGetter
 	ClusterPairsGetter
+	DataExportsGetter
 	GroupVolumeSnapshotsGetter
 	MigrationsGetter
 	MigrationSchedulesGetter
+	NamespacedSchedulePoliciesGetter
+	ResourceTransformationsGetter
 	RulesGetter
 	SchedulePoliciesGetter
-	StorageClustersGetter
+	VolumeSnapshotRestoresGetter
 	VolumeSnapshotSchedulesGetter
 }
 
 // StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *StorkV1alpha1Client) ApplicationBackups(namespace string) ApplicationBackupInterface {
+	return newApplicationBackups(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) ApplicationBackupSchedules(namespace string) ApplicationBackupScheduleInterface {
+	return newApplicationBackupSchedules(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) ApplicationClones(namespace string) ApplicationCloneInterface {
+	return newApplicationClones(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) ApplicationRegistrations() ApplicationRegistrationInterface {
+	return newApplicationRegistrations(c)
+}
+
+func (c *StorkV1alpha1Client) ApplicationRestores(namespace string) ApplicationRestoreInterface {
+	return newApplicationRestores(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) BackupLocations(namespace string) BackupLocationInterface {
+	return newBackupLocations(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) ClusterDomainUpdates() ClusterDomainUpdateInterface {
@@ -56,6 +88,10 @@ func (c *StorkV1alpha1Client) ClusterPairs(namespace string) ClusterPairInterfac
 	return newClusterPairs(c, namespace)
 }
 
+func (c *StorkV1alpha1Client) DataExports(namespace string) DataExportInterface {
+	return newDataExports(c, namespace)
+}
+
 func (c *StorkV1alpha1Client) GroupVolumeSnapshots(namespace string) GroupVolumeSnapshotInterface {
 	return newGroupVolumeSnapshots(c, namespace)
 }
@@ -68,6 +104,14 @@ func (c *StorkV1alpha1Client) MigrationSchedules(namespace string) MigrationSche
 	return newMigrationSchedules(c, namespace)
 }
 
+func (c *StorkV1alpha1Client) NamespacedSchedulePolicies(namespace string) NamespacedSchedulePolicyInterface {
+	return newNamespacedSchedulePolicies(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) ResourceTransformations(namespace string) ResourceTransformationInterface {
+	return newResourceTransformations(c, namespace)
+}
+
 func (c *StorkV1alpha1Client) Rules(namespace string) RuleInterface {
 	return newRules(c, namespace)
 }
@@ -76,8 +120,8 @@ func (c *StorkV1alpha1Client) SchedulePolicies() SchedulePolicyInterface {
 	return newSchedulePolicies(c)
 }
 
-func (c *StorkV1alpha1Client) StorageClusters(namespace string) StorageClusterInterface {
-	return newStorageClusters(c, namespace)
+func (c *StorkV1alpha1Client) VolumeSnapshotRestores(namespace string) VolumeSnapshotRestoreInterface {
+	return newVolumeSnapshotRestores(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) VolumeSnapshotSchedules(namespace string) VolumeSnapshotScheduleInterface {
@@ -116,7 +160,7 @@ func setConfigDefaults(config *rest.Config) error {
 	gv := v1alpha1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: scheme.Codecs}
+	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

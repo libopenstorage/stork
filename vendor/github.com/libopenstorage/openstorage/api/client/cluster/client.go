@@ -10,6 +10,10 @@ import (
 	"github.com/libopenstorage/openstorage/api/client"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/pkg/clusterdomain"
+	"github.com/libopenstorage/openstorage/pkg/diags"
+	"github.com/libopenstorage/openstorage/pkg/job"
+	"github.com/libopenstorage/openstorage/pkg/nodedrain"
+	"github.com/libopenstorage/openstorage/pkg/storagepool"
 	sched "github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 )
@@ -18,10 +22,8 @@ const (
 	clusterPath      = "/cluster"
 	secretPath       = "/secrets"
 	SchedPath        = "/schedpolicy"
-	loggingurl       = "/loggingurl"
 	managementurl    = "/managementurl"
 	fluentdhost      = "/fluentdconfig"
-	tunnelconfigurl  = "/tunnelconfig"
 	PairPath         = "/pair"
 	PairValidatePath = "/validate"
 	PairTokenPath    = "/pairtoken"
@@ -29,6 +31,10 @@ const (
 
 type clusterClient struct {
 	clusterdomain.NullClusterDomainManager
+	storagepool.UnsupportedPoolProvider
+	job.UnsupportedJobProvider
+	nodedrain.UnsupportedNodeDrainProvider
+	diags.UnsupportedDiagsProvider
 	c *client.Client
 }
 
@@ -273,14 +279,15 @@ func (c *clusterClient) Remove(nodes []api.Node, forceRemove bool) error {
 	return nil
 }
 
-func (c *clusterClient) NodeRemoveDone(nodeID string, result error) {
+func (c *clusterClient) NodeRemoveDone(nodeID string, result error) error {
+	return nil
 }
 
 func (c *clusterClient) Shutdown() error {
 	return nil
 }
 
-func (c *clusterClient) Start(int, bool, string, string) error {
+func (c *clusterClient) Start(bool, string, string) error {
 	return nil
 }
 
@@ -288,7 +295,7 @@ func (c *clusterClient) Uuid() string {
 	return ""
 }
 
-func (c *clusterClient) StartWithConfiguration(int, bool, string, []string, string, *cluster.ClusterServerConfiguration) error {
+func (c *clusterClient) StartWithConfiguration(bool, string, []string, string, *cluster.ClusterServerConfiguration) error {
 	return nil
 }
 
@@ -309,6 +316,11 @@ func (c *clusterClient) GetGossipState() *cluster.ClusterState {
 		return nil
 	}
 	return status
+}
+
+func (c *clusterClient) GetGossipIntervals() types.GossipIntervals {
+	// not implemented
+	return types.GossipIntervals{}
 }
 
 func (c *clusterClient) EnumerateAlerts(ts, te time.Time, resource api.ResourceType) (*api.Alerts, error) {

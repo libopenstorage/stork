@@ -5,13 +5,13 @@ import (
 
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/spf13/cobra"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 )
 
 var defaultStrokSnapshotStorageClass = "stork-snapshot-sc"
@@ -30,21 +30,21 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 		Short:   "Create persistent volume claims (PVCs) from snapshots",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one argument needs to be provided for pvc name"))
+				util.CheckErr(fmt.Errorf("exactly one argument needs to be provided for pvc name"))
 				return
 			}
 			pvcName = args[0]
 			if len(snapName) == 0 {
-				util.CheckErr(fmt.Errorf("Snapshot name needs to be given"))
+				util.CheckErr(fmt.Errorf("snapshot name needs to be given"))
 				return
 			}
 			if len(size) == 0 {
-				util.CheckErr(fmt.Errorf("Size needs to be provided"))
+				util.CheckErr(fmt.Errorf("size needs to be provided"))
 				return
 			}
 			quantity, err := resource.ParseQuantity(size)
 			if err != nil {
-				util.CheckErr(fmt.Errorf("Invalid size: %v", err))
+				util.CheckErr(fmt.Errorf("invalid size: %v", err))
 				return
 			}
 
@@ -71,7 +71,7 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 			if len(sourceNamespace) != 0 {
 				pvc.Annotations[snapshotcontrollers.StorkSnapshotSourceNamespaceAnnotation] = sourceNamespace
 			}
-			_, err = k8s.Instance().CreatePersistentVolumeClaim(pvc)
+			_, err = core.Instance().CreatePersistentVolumeClaim(pvc)
 			if err != nil {
 				util.CheckErr(err)
 				return

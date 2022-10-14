@@ -26,8 +26,10 @@ import (
 )
 
 // GroupVolumeSnapshotLister helps list GroupVolumeSnapshots.
+// All objects returned here must be treated as read-only.
 type GroupVolumeSnapshotLister interface {
 	// List lists all GroupVolumeSnapshots in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.GroupVolumeSnapshot, err error)
 	// GroupVolumeSnapshots returns an object that can list and get GroupVolumeSnapshots.
 	GroupVolumeSnapshots(namespace string) GroupVolumeSnapshotNamespaceLister
@@ -58,10 +60,13 @@ func (s *groupVolumeSnapshotLister) GroupVolumeSnapshots(namespace string) Group
 }
 
 // GroupVolumeSnapshotNamespaceLister helps list and get GroupVolumeSnapshots.
+// All objects returned here must be treated as read-only.
 type GroupVolumeSnapshotNamespaceLister interface {
 	// List lists all GroupVolumeSnapshots in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.GroupVolumeSnapshot, err error)
 	// Get retrieves the GroupVolumeSnapshot from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.GroupVolumeSnapshot, error)
 	GroupVolumeSnapshotNamespaceListerExpansion
 }

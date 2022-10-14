@@ -101,7 +101,7 @@ func (p *streamProtocolV2) copyStdin() {
 			// the executed command will remain running.
 			defer once.Do(func() { p.remoteStdin.Close() })
 
-			if _, err := io.Copy(p.remoteStdin, p.Stdin); err != nil {
+			if _, err := io.Copy(p.remoteStdin, readerWrapper{p.Stdin}); err != nil {
 				runtime.HandleError(err)
 			}
 		}()
@@ -142,6 +142,10 @@ func (p *streamProtocolV2) copyStdout(wg *sync.WaitGroup) {
 	go func() {
 		defer runtime.HandleCrash()
 		defer wg.Done()
+		// make sure, packet in queue can be consumed.
+		// block in queue may lead to deadlock in conn.server
+		// issue: https://github.com/kubernetes/kubernetes/issues/96339
+		defer io.Copy(ioutil.Discard, p.remoteStdout)
 
 		if _, err := io.Copy(p.Stdout, p.remoteStdout); err != nil {
 			runtime.HandleError(err)
@@ -158,6 +162,7 @@ func (p *streamProtocolV2) copyStderr(wg *sync.WaitGroup) {
 	go func() {
 		defer runtime.HandleCrash()
 		defer wg.Done()
+		defer io.Copy(ioutil.Discard, p.remoteStderr)
 
 		if _, err := io.Copy(p.Stderr, p.remoteStderr); err != nil {
 			runtime.HandleError(err)

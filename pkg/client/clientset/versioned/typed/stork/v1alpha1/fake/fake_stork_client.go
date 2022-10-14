@@ -28,6 +28,30 @@ type FakeStorkV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeStorkV1alpha1) ApplicationBackups(namespace string) v1alpha1.ApplicationBackupInterface {
+	return &FakeApplicationBackups{c, namespace}
+}
+
+func (c *FakeStorkV1alpha1) ApplicationBackupSchedules(namespace string) v1alpha1.ApplicationBackupScheduleInterface {
+	return &FakeApplicationBackupSchedules{c, namespace}
+}
+
+func (c *FakeStorkV1alpha1) ApplicationClones(namespace string) v1alpha1.ApplicationCloneInterface {
+	return &FakeApplicationClones{c, namespace}
+}
+
+func (c *FakeStorkV1alpha1) ApplicationRegistrations() v1alpha1.ApplicationRegistrationInterface {
+	return &FakeApplicationRegistrations{c}
+}
+
+func (c *FakeStorkV1alpha1) ApplicationRestores(namespace string) v1alpha1.ApplicationRestoreInterface {
+	return &FakeApplicationRestores{c, namespace}
+}
+
+func (c *FakeStorkV1alpha1) BackupLocations(namespace string) v1alpha1.BackupLocationInterface {
+	return &FakeBackupLocations{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) ClusterDomainUpdates() v1alpha1.ClusterDomainUpdateInterface {
 	return &FakeClusterDomainUpdates{c}
 }
@@ -38,6 +62,10 @@ func (c *FakeStorkV1alpha1) ClusterDomainsStatuses() v1alpha1.ClusterDomainsStat
 
 func (c *FakeStorkV1alpha1) ClusterPairs(namespace string) v1alpha1.ClusterPairInterface {
 	return &FakeClusterPairs{c, namespace}
+}
+
+func (c *FakeStorkV1alpha1) DataExports(namespace string) v1alpha1.DataExportInterface {
+	return &FakeDataExports{c, namespace}
 }
 
 func (c *FakeStorkV1alpha1) GroupVolumeSnapshots(namespace string) v1alpha1.GroupVolumeSnapshotInterface {
@@ -52,6 +80,14 @@ func (c *FakeStorkV1alpha1) MigrationSchedules(namespace string) v1alpha1.Migrat
 	return &FakeMigrationSchedules{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) NamespacedSchedulePolicies(namespace string) v1alpha1.NamespacedSchedulePolicyInterface {
+	return &FakeNamespacedSchedulePolicies{c, namespace}
+}
+
+func (c *FakeStorkV1alpha1) ResourceTransformations(namespace string) v1alpha1.ResourceTransformationInterface {
+	return &FakeResourceTransformations{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) Rules(namespace string) v1alpha1.RuleInterface {
 	return &FakeRules{c, namespace}
 }
@@ -60,8 +96,8 @@ func (c *FakeStorkV1alpha1) SchedulePolicies() v1alpha1.SchedulePolicyInterface 
 	return &FakeSchedulePolicies{c}
 }
 
-func (c *FakeStorkV1alpha1) StorageClusters(namespace string) v1alpha1.StorageClusterInterface {
-	return &FakeStorageClusters{c, namespace}
+func (c *FakeStorkV1alpha1) VolumeSnapshotRestores(namespace string) v1alpha1.VolumeSnapshotRestoreInterface {
+	return &FakeVolumeSnapshotRestores{c, namespace}
 }
 
 func (c *FakeStorkV1alpha1) VolumeSnapshotSchedules(namespace string) v1alpha1.VolumeSnapshotScheduleInterface {

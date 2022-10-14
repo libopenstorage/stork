@@ -26,6 +26,18 @@ func errFailedToInspectVolume(ID, key string, expected, actual interface{}) erro
 	}
 }
 
+// ErrFailedToValidateAttachment error type for failing to validate attachment of a volume
+type ErrFailedToValidateAttachment struct {
+	// ID is the ID/name of the volume that failed to validate attachment
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToValidateAttachment) Error() string {
+	return fmt.Sprintf("Failed to validate volume: %v attachment due to err: %v", e.ID, e.Cause)
+}
+
 // ErrFailedToDeleteVolume error type for failing to delete a volume
 type ErrFailedToDeleteVolume struct {
 	// ID is the ID/name of the volume that failed to delete
@@ -74,6 +86,18 @@ func (e *ErrFailedToRecoverDriver) Error() string {
 	return fmt.Sprintf("Failed to wait for px to be up on: %v due to err: %v", e.Node.Name, e.Cause)
 }
 
+// ErrFailedToEnterMaintenence error type for failing to enter maintenence mode on a node
+type ErrFailedToEnterMaintenence struct {
+	// Node is the node on which PX failed to enter maintenence mode
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToEnterMaintenence) Error() string {
+	return fmt.Sprintf("Failed to enter maintenence mode non node: %v due to err: %v", e.Node.Name, e.Cause)
+}
+
 // ErrFailedToSetReplicationFactor error type for failing to set replication factor to given value
 type ErrFailedToSetReplicationFactor struct {
 	// ID is the ID/name of the volume for which we could not set the replication factor
@@ -108,4 +132,64 @@ type ErrFailedToGetAggregationLevel struct {
 
 func (e *ErrFailedToGetAggregationLevel) Error() string {
 	return fmt.Sprintf("Failed to get aggregation level of the volume: %v due to err: %v", e.ID, e.Cause)
+}
+
+// ErrFailedToDecommissionNode error type for failed to remove from cluster
+type ErrFailedToDecommissionNode struct {
+	// Node is the node on which PX failed to remove from cluster
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDecommissionNode) Error() string {
+	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
+}
+
+// ErrFailedToGetNodeStatus error type when fail to get node status
+type ErrFailedToGetNodeStatus struct {
+	// Node where the service is not starting
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetNodeStatus) Error() string {
+	return fmt.Sprintf("Failed to get status for node: %v due to err: %v", e.Node, e.Cause)
+}
+
+// ErrFailedToRejoinNode error type for failed to remove from cluster
+type ErrFailedToRejoinNode struct {
+	// Node is the node on which PX failed to remove from cluster
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToRejoinNode) Error() string {
+	return fmt.Sprintf("Failed to rejoin node: %v due to err: %v", e.Node, e.Cause)
+}
+
+// ErrFailedToGetVolumeProxySpec error type for failing to get volume Spec
+type ErrFailedToGetVolumeProxySpec struct {
+	// ID is the ID/name of the volume for which we could not get the Volume Proxy Spec
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetVolumeProxySpec) Error() string {
+	return fmt.Sprintf("Failed to get proxy spec for a volume: %v due to err: %v", e.ID, e.Cause)
+}
+
+// ErrCsiTopologyMismatch error type for CSI Topology mismatch
+type ErrCsiTopologyMismatch struct {
+	// Name of the volume where topology not matching
+	VolName string
+	// Cause is the underlying cause of the error
+	Cause error
+}
+
+func (e *ErrCsiTopologyMismatch) Error() string {
+	return fmt.Sprintf("CSI Topology not matching for volume: %v. Err: %v", e.VolName, e.Cause)
 }

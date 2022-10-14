@@ -8,19 +8,24 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (
 	driverName = "MockDriver"
-	// storageClassName is the storage class for mock driver PVCs
-	storageClassName = "mockDriverStorageClass"
-	provisionerName  = "kubernetes.io/mock-volume"
-	clusterID        = "MockClusterID"
+	// mockStorageClassName is the storage class for mock driver PVCs
+	mockStorageClassName = "mockDriverStorageClass"
+	// MockStorageClassNameWFFC is storage class used to mock having WaitForFirstConsumer
+	MockStorageClassNameWFFC = "mockDriverStorageClassWFFC"
+	provisionerName          = "kubernetes.io/mock-volume"
+	clusterID                = "MockClusterID"
 	// RackLabel Label used for the mock driver to set rack information
 	RackLabel = "mock/rack"
 	// ZoneLabel Label used for the mock driver to set zone information
@@ -35,6 +40,9 @@ type Driver struct {
 	storkvolume.MigrationNotSupported
 	storkvolume.GroupSnapshotNotSupported
 	storkvolume.ClusterDomainsNotSupported
+	storkvolume.BackupRestoreNotSupported
+	storkvolume.CloneNotSupported
+	storkvolume.SnapshotRestoreNotSupported
 	nodes          []*storkvolume.NodeInfo
 	volumes        map[string]*storkvolume.Info
 	pvcs           map[string]*v1.PersistentVolumeClaim
@@ -64,14 +72,15 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 	}
 	for i := 0; i < numNodes; i++ {
 		node := &storkvolume.NodeInfo{
-			ID:       "node" + strconv.Itoa(i+1),
-			Hostname: "node" + strconv.Itoa(i+1),
-			Status:   storkvolume.NodeOnline,
+			StorageID:   "node" + strconv.Itoa(i+1),
+			Hostname:    "node" + strconv.Itoa(i+1),
+			SchedulerID: "node" + strconv.Itoa(i+1),
+			Status:      storkvolume.NodeOnline,
 		}
 		node.IPs = append(node.IPs, "192.168.0."+strconv.Itoa(i+1))
 		for _, n := range nodes.Items {
 			found := false
-			if node.ID == n.Name {
+			if node.StorageID == n.Name {
 				found = true
 			} else {
 				for _, address := range n.Status.Addresses {
@@ -104,7 +113,7 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 
 // GetStorageClassName Returns the storageclass name to be used by tests
 func (m *Driver) GetStorageClassName() string {
-	return storageClassName
+	return mockStorageClassName
 }
 
 // GetClusterID returns the clusterID for the driver
@@ -123,28 +132,35 @@ func (m *Driver) NewPVC(volumeName string) *v1.PersistentVolumeClaim {
 	return pvc
 }
 
+// AddPVC adds an already created PVC
+func (m *Driver) AddPVC(pvc *v1.PersistentVolumeClaim) {
+	m.pvcs[pvc.Name] = pvc
+}
+
 // ProvisionVolume Provision a volume in the mock driver
 func (m *Driver) ProvisionVolume(
 	volumeName string,
 	replicaIndexes []int,
 	size uint64,
+	labels map[string]string,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
-		return fmt.Errorf("Volume %v already exists", volumeName)
+		return fmt.Errorf("volume %v already exists", volumeName)
 	}
 
 	volume := &storkvolume.Info{
 		VolumeID:   volumeName,
 		VolumeName: volumeName,
 		Size:       size,
+		Labels:     labels,
 	}
 
 	for i := 0; i < len(replicaIndexes); i++ {
 		nodeIndex := replicaIndexes[i]
 		if len(m.nodes) <= nodeIndex {
-			return fmt.Errorf("Node not found")
+			return fmt.Errorf("node not found")
 		}
-		volume.DataNodes = append(volume.DataNodes, m.nodes[nodeIndex].ID)
+		volume.DataNodes = append(volume.DataNodes, m.nodes[nodeIndex].StorageID)
 	}
 
 	m.volumes[volumeName] = volume
@@ -157,9 +173,21 @@ func (m *Driver) UpdateNodeStatus(
 	nodeStatus storkvolume.NodeStatus,
 ) error {
 	if len(m.nodes) <= nodeIndex {
-		return fmt.Errorf("Node not found")
+		return fmt.Errorf("node %v not found", nodeIndex)
 	}
 	m.nodes[nodeIndex].Status = nodeStatus
+	return nil
+}
+
+// UpdateNodeIP Update IP for a node
+func (m *Driver) UpdateNodeIP(
+	nodeIndex int,
+	ip string,
+) error {
+	if len(m.nodes) <= nodeIndex {
+		return fmt.Errorf("node %v not found", nodeIndex)
+	}
+	m.nodes[nodeIndex].IPs[0] = ip
 	return nil
 }
 
@@ -192,22 +220,25 @@ func (m Driver) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return m.nodes, nil
 }
 
+// InspectNode using ID
+func (m Driver) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
 // GetPodVolumes Get the Volumes in the Pod that use the mock driver
-func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
+func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
 	if m.interfaceError != nil {
-		return nil, m.interfaceError
+		return nil, nil, m.interfaceError
 	}
 	var volumes []*storkvolume.Info
+	var pendingWFFC []*storkvolume.Info
 	for _, volume := range podSpec.Volumes {
-		if volume.PersistentVolumeClaim != nil {
-		}
-	}
-	for _, volume := range podSpec.Volumes {
+		isWFFC := false
 		if volume.PersistentVolumeClaim != nil {
 			pvc, ok := m.pvcs[volume.PersistentVolumeClaim.ClaimName]
 			if !ok {
 				logrus.Debugf("PVCs: %+v", m.pvcs)
-				return nil, &errors.ErrNotFound{
+				return nil, nil, &errors.ErrNotFound{
 					ID:   volume.PersistentVolumeClaim.ClaimName,
 					Type: "PVC",
 				}
@@ -219,26 +250,43 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvo
 				continue
 			}
 
-			// Assume all mock volume have the same
-			// storageclass
-			if storageClassName != storageClassName {
-				continue
+			// Assume all mock volumes have the same storageclass
+			if storageClassName != mockStorageClassName {
+				if storageClassName == MockStorageClassNameWFFC {
+					isWFFC = true
+				} else {
+					continue
+				}
 			}
 
 			volumeInfo, err := m.InspectVolume(pvc.Spec.VolumeName)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			volumes = append(volumes, volumeInfo)
+			if includePendingWFFC && isWFFC {
+				pendingWFFC = append(pendingWFFC, volumeInfo)
+			} else {
+				volumes = append(volumes, volumeInfo)
+			}
 		}
 	}
 
-	return volumes, nil
+	return volumes, pendingWFFC, nil
 }
 
-// OwnsPVC returns false since mock driver doesn't own any PVCs
-func (m *Driver) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
-	return false
+// OwnsPVCForBackup returns true because it owns all PVCs created by tests
+func (m *Driver) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+	return m.OwnsPVC(coreOps, pvc)
+}
+
+// OwnsPVC returns true because it owns all PVCs created by tests
+func (m *Driver) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
+	return true
+}
+
+// OwnsPV returns true because it owns all PVC created by tests
+func (m *Driver) OwnsPV(pv *v1.PersistentVolume) bool {
+	return true
 }
 
 // GetSnapshotPlugin Returns nil since snapshot is not supported in the mock driver
@@ -255,6 +303,21 @@ func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 // GetSnapshotType Not implemented for mock driver
 func (m *Driver) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
 	return "", &errors.ErrNotImplemented{}
+}
+
+// UpdateMigratedPersistentVolumeSpec Not implemented for mock driver
+func (m *Driver) UpdateMigratedPersistentVolumeSpec(
+	pv *v1.PersistentVolume,
+	vInfo *storkapi.ApplicationRestoreVolumeInfo,
+) (*v1.PersistentVolume, error) {
+
+	return pv, nil
+
+}
+
+// GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
+func (m *Driver) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
+	return nil, nil
 }
 
 func init() {

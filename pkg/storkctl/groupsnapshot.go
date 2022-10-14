@@ -2,15 +2,14 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
-	"strings"
-
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/libopenstorage/stork/pkg/utils"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -33,7 +32,7 @@ func newCreateGroupSnapshotCommand(cmdFactory Factory, ioStreams genericclioptio
 		Short:   "Create a group volume snapshot",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for groupsnapshot name"))
+				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for groupsnapshot name"))
 				return
 			}
 			groupSnapshotName = args[0]
@@ -42,7 +41,7 @@ func newCreateGroupSnapshotCommand(cmdFactory Factory, ioStreams genericclioptio
 				return
 			}
 
-			labelSelector, err := parseKeyValueList(pvcSelectors)
+			labelSelector, err := utils.ParseKeyValueList(pvcSelectors)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -56,7 +55,7 @@ func newCreateGroupSnapshotCommand(cmdFactory Factory, ioStreams genericclioptio
 
 			var optsMap map[string]string
 			if len(opts) > 0 {
-				optsMap, err = parseKeyValueList(opts)
+				optsMap, err = utils.ParseKeyValueList(opts)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -75,7 +74,7 @@ func newCreateGroupSnapshotCommand(cmdFactory Factory, ioStreams genericclioptio
 			}
 			groupSnapshot.Name = groupSnapshotName
 			groupSnapshot.Namespace = cmdFactory.GetNamespace()
-			_, err = k8s.Instance().CreateGroupSnapshot(groupSnapshot)
+			_, err = storkops.Instance().CreateGroupSnapshot(groupSnapshot)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -130,7 +129,7 @@ func newGetGroupVolumeSnapshotCommand(cmdFactory Factory, ioStreams genericcliop
 			if len(args) > 0 {
 				for _, groupSnapshotName := range args {
 					for _, ns := range namespaces {
-						groupSnapshot, err := k8s.Instance().GetGroupSnapshot(groupSnapshotName, ns)
+						groupSnapshot, err := storkops.Instance().GetGroupSnapshot(groupSnapshotName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -141,7 +140,7 @@ func newGetGroupVolumeSnapshotCommand(cmdFactory Factory, ioStreams genericcliop
 			} else {
 				// Get all
 				for _, ns := range namespaces {
-					groupSnapshotsInNamespace, err := k8s.Instance().ListGroupSnapshots(ns)
+					groupSnapshotsInNamespace, err := storkops.Instance().ListGroupSnapshots(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -173,7 +172,7 @@ func newDeleteGroupVolumeSnapshotCommand(cmdFactory Factory, ioStreams genericcl
 		Short:   "Delete group volume snapshots",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) == 0 {
-				util.CheckErr(fmt.Errorf("At least one argument needs to be provided for groupsnapshot name"))
+				util.CheckErr(fmt.Errorf("at least one argument needs to be provided for groupsnapshot name"))
 				return
 			}
 
@@ -186,7 +185,7 @@ func newDeleteGroupVolumeSnapshotCommand(cmdFactory Factory, ioStreams genericcl
 
 func deleteGroupVolumeSnapshots(groupSnapshots []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, groupSnapshot := range groupSnapshots {
-		err := k8s.Instance().DeleteGroupSnapshot(groupSnapshot, namespace)
+		err := storkops.Instance().DeleteGroupSnapshot(groupSnapshot, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -196,46 +195,25 @@ func deleteGroupVolumeSnapshots(groupSnapshots []string, namespace string, ioStr
 	}
 }
 
-func groupSnapshotPrinter(groupSnapshotList *storkv1.GroupVolumeSnapshotList, writer io.Writer, options printers.PrintOptions) error {
+func groupSnapshotPrinter(
+	groupSnapshotList *storkv1.GroupVolumeSnapshotList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if groupSnapshotList == nil {
-		return nil
+		return nil, nil
 	}
 
+	rows := make([]metav1beta1.TableRow, 0)
 	for _, groupSnapshot := range groupSnapshotList.Items {
-		name := printers.FormatResourceName(options.Kind, groupSnapshot.Name, options.WithKind)
-
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", groupSnapshot.Namespace); err != nil {
-				return err
-			}
-		}
-
 		creationTime := toTimeString(groupSnapshot.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%d\t%v\n",
-			name,
-			groupSnapshot.Status.Status,
-			groupSnapshot.Status.Stage,
-			len(groupSnapshot.Status.VolumeSnapshots),
-			creationTime,
-		); err != nil {
-			return err
-		}
+		row := getRow(&groupSnapshot,
+			[]interface{}{groupSnapshot.Name,
+				groupSnapshot.Status.Status,
+				groupSnapshot.Status.Stage,
+				len(groupSnapshot.Status.VolumeSnapshots),
+				creationTime},
+		)
+		rows = append(rows, row)
 	}
-	return nil
-}
-
-// parseKeyValueList parses a list of key values into a map
-func parseKeyValueList(expressions []string) (map[string]string, error) {
-	matchLabels := make(map[string]string)
-	for _, e := range expressions {
-		entry := strings.SplitN(e, "=", 2)
-		if len(entry) != 2 {
-			return nil, fmt.Errorf("Invalid key value: %s provided. "+
-				"Example format: app=mysql", e)
-		}
-
-		matchLabels[entry[0]] = entry[1]
-	}
-
-	return matchLabels, nil
+	return rows, nil
 }

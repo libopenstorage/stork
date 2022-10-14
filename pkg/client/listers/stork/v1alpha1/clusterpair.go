@@ -26,8 +26,10 @@ import (
 )
 
 // ClusterPairLister helps list ClusterPairs.
+// All objects returned here must be treated as read-only.
 type ClusterPairLister interface {
 	// List lists all ClusterPairs in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterPair, err error)
 	// ClusterPairs returns an object that can list and get ClusterPairs.
 	ClusterPairs(namespace string) ClusterPairNamespaceLister
@@ -58,10 +60,13 @@ func (s *clusterPairLister) ClusterPairs(namespace string) ClusterPairNamespaceL
 }
 
 // ClusterPairNamespaceLister helps list and get ClusterPairs.
+// All objects returned here must be treated as read-only.
 type ClusterPairNamespaceLister interface {
 	// List lists all ClusterPairs in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterPair, err error)
 	// Get retrieves the ClusterPair from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ClusterPair, error)
 	ClusterPairNamespaceListerExpansion
 }

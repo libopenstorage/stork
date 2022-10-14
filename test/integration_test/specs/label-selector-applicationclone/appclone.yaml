@@ -1,0 +1,11 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationClone
+metadata:
+  name: clone-cassandra-label
+  namespace: kube-system
+spec:
+  sourceNamespace: cassandra-applicationclone-label-selector-test
+  destinationNamespace: cassandra-applicationclone-label-selector-test-dest
+  selectors:
+     app: cassandra
+

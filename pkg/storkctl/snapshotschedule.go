@@ -2,15 +2,15 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -33,12 +33,12 @@ func newCreateSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 		Short:   "Create a snapshot schedule",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for volume snapshot schedule name"))
+				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for volume snapshot schedule name"))
 				return
 			}
 			snapshotScheduleName = args[0]
 			if len(schedulePolicyName) == 0 {
-				util.CheckErr(fmt.Errorf("Need to provide schedulePolicyName"))
+				util.CheckErr(fmt.Errorf("need to provide schedulePolicyName"))
 				return
 			}
 
@@ -58,7 +58,7 @@ func newCreateSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 			}
 			snapshotSchedule.Name = snapshotScheduleName
 			snapshotSchedule.Namespace = cmdFactory.GetNamespace()
-			_, err := k8s.Instance().CreateSnapshotSchedule(snapshotSchedule)
+			_, err := storkops.Instance().CreateSnapshotSchedule(snapshotSchedule)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -96,7 +96,7 @@ func newGetSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericclioptio
 				snapshotSchedules = new(storkv1.VolumeSnapshotScheduleList)
 				for _, snapshotScheduleName := range args {
 					for _, ns := range namespaces {
-						snapshotSchedule, err := k8s.Instance().GetSnapshotSchedule(snapshotScheduleName, ns)
+						snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -107,7 +107,7 @@ func newGetSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericclioptio
 			} else {
 				var tempVolumeSnapshotSchedules storkv1.VolumeSnapshotScheduleList
 				for _, ns := range namespaces {
-					snapshotSchedules, err = k8s.Instance().ListSnapshotSchedules(ns)
+					snapshotSchedules, err = storkops.Instance().ListSnapshotSchedules(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -157,12 +157,12 @@ func newDeleteSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 
 			if len(pvc) == 0 {
 				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for snapshot schedule name if pvc isn't provided"))
+					util.CheckErr(fmt.Errorf("at least one argument needs to be provided for snapshot schedule name if pvc isn't provided"))
 					return
 				}
 				snapshotSchedules = args
 			} else {
-				snapshotScheduleList, err := k8s.Instance().ListSnapshotSchedules(cmdFactory.GetNamespace())
+				snapshotScheduleList, err := storkops.Instance().ListSnapshotSchedules(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -189,7 +189,7 @@ func newDeleteSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 
 func deleteSnapshotSchedules(snapshotSchedules []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, snapshotSchedule := range snapshotSchedules {
-		err := k8s.Instance().DeleteSnapshotSchedule(snapshotSchedule, namespace)
+		err := storkops.Instance().DeleteSnapshotSchedule(snapshotSchedule, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -199,19 +199,94 @@ func deleteSnapshotSchedules(snapshotSchedules []string, namespace string, ioStr
 	}
 }
 
-func snapshotSchedulePrinter(snapshotScheduleList *storkv1.VolumeSnapshotScheduleList, writer io.Writer, options printers.PrintOptions) error {
-	if snapshotScheduleList == nil {
-		return nil
+func getSnapshotSchedules(args []string, namespace string) ([]*storkv1.VolumeSnapshotSchedule, error) {
+	var snapshotSchedules []*storkv1.VolumeSnapshotSchedule
+	if len(args) == 0 {
+		return nil, fmt.Errorf("at least one argument needs to be provided for volumesnapshot schedule name")
 	}
-	for _, snapshotSchedule := range snapshotScheduleList.Items {
-		name := printers.FormatResourceName(options.Kind, snapshotSchedule.Name, options.WithKind)
+	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(args[0], namespace)
+	if err != nil {
+		return nil, err
+	}
+	snapshotSchedules = append(snapshotSchedules, snapshotSchedule)
+	return snapshotSchedules, nil
+}
 
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", snapshotSchedule.Namespace); err != nil {
-				return err
+func newSuspendSnapshotSchedulesCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	suspendSnapshotScheduleCommand := &cobra.Command{
+		Use:     snapshotScheduleSubcommand,
+		Aliases: snapshotScheduleAliases,
+		Short:   "Suspend snapshot schedules",
+		Run: func(c *cobra.Command, args []string) {
+			snapshotSchedules, err := getSnapshotSchedules(args, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(err)
+				return
 			}
-		}
 
+			if len(snapshotSchedules) == 0 {
+				handleEmptyList(ioStreams.Out)
+				return
+			}
+			updateSnapshotSchedules(snapshotSchedules, cmdFactory.GetNamespace(), ioStreams, true)
+		},
+	}
+
+	return suspendSnapshotScheduleCommand
+}
+
+func newResumeSnapshotSchedulesCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	resumeSnapshotScheduleCommand := &cobra.Command{
+		Use:     snapshotScheduleSubcommand,
+		Aliases: snapshotScheduleAliases,
+		Short:   "Resume snapshot schedules",
+		Run: func(c *cobra.Command, args []string) {
+			snapshotSchedules, err := getSnapshotSchedules(args, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			if len(snapshotSchedules) == 0 {
+				handleEmptyList(ioStreams.Out)
+				return
+			}
+			updateSnapshotSchedules(snapshotSchedules, cmdFactory.GetNamespace(), ioStreams, false)
+		},
+	}
+
+	return resumeSnapshotScheduleCommand
+}
+
+func updateSnapshotSchedules(snapshotSchedules []*storkv1.VolumeSnapshotSchedule, namespace string, ioStreams genericclioptions.IOStreams, suspend bool) {
+	var action string
+	if suspend {
+		action = "suspended"
+	} else {
+		action = "resumed"
+	}
+	for _, snapshotSchedule := range snapshotSchedules {
+		snapshotSchedule.Spec.Suspend = &suspend
+		_, err := storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+		if err != nil {
+			util.CheckErr(err)
+			return
+		}
+		msg := fmt.Sprintf("VolumeSnapshotSchedule %v %v successfully", snapshotSchedule.Name, action)
+		printMsg(msg, ioStreams.Out)
+	}
+}
+
+func snapshotSchedulePrinter(
+	snapshotScheduleList *storkv1.VolumeSnapshotScheduleList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
+	if snapshotScheduleList == nil {
+		return nil, nil
+	}
+
+	rows := make([]metav1beta1.TableRow, 0)
+	for _, snapshotSchedule := range snapshotScheduleList.Items {
 		lastSuccessTime := time.Time{}
 		for _, policyType := range storkv1.GetValidSchedulePolicyTypes() {
 			if len(snapshotSchedule.Status.Items[policyType]) == 0 {
@@ -230,18 +305,17 @@ func snapshotSchedulePrinter(snapshotScheduleList *storkv1.VolumeSnapshotSchedul
 		} else {
 			suspend = *snapshotSchedule.Spec.Suspend
 		}
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-			name,
-			snapshotSchedule.Spec.Template.Spec.PersistentVolumeClaimName,
-			snapshotSchedule.Spec.SchedulePolicyName,
-			snapshotSchedule.Spec.PreExecRule,
-			snapshotSchedule.Spec.PostExecRule,
-			snapshotSchedule.Spec.ReclaimPolicy,
-			suspend,
-			toTimeString(lastSuccessTime),
-		); err != nil {
-			return err
-		}
+		row := getRow(&snapshotSchedule,
+			[]interface{}{snapshotSchedule.Name,
+				snapshotSchedule.Spec.Template.Spec.PersistentVolumeClaimName,
+				snapshotSchedule.Spec.SchedulePolicyName,
+				snapshotSchedule.Spec.PreExecRule,
+				snapshotSchedule.Spec.PostExecRule,
+				snapshotSchedule.Spec.ReclaimPolicy,
+				suspend,
+				toTimeString(lastSuccessTime)},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }

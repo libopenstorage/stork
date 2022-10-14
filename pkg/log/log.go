@@ -149,8 +149,20 @@ func RuleLog(
 func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 	if migration != nil {
 		return logrus.WithFields(logrus.Fields{
-			"MigrationName":      migration.Name,
-			"MigrationNamespace": migration.Namespace,
+			"MigrationName": migration.Name,
+			"Namespace":     migration.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// TransformLog formats a log message with resource transformation CR information
+func TransformLog(transform *storkv1.ResourceTransformation) *logrus.Entry {
+	if transform != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ResourceTransformationName":      transform.Name,
+			"ResourceTransformationNamespace": transform.Namespace,
 		})
 	}
 
@@ -161,8 +173,8 @@ func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 func MigrationScheduleLog(migrationSchedule *storkv1.MigrationSchedule) *logrus.Entry {
 	if migrationSchedule != nil {
 		return logrus.WithFields(logrus.Fields{
-			"MigrationScheduleName":      migrationSchedule.Name,
-			"MigrationScheduleNamespace": migrationSchedule.Namespace,
+			"MigrationScheduleName": migrationSchedule.Name,
+			"Namespace":             migrationSchedule.Namespace,
 		})
 	}
 
@@ -173,8 +185,8 @@ func MigrationScheduleLog(migrationSchedule *storkv1.MigrationSchedule) *logrus.
 func GroupSnapshotLog(groupsnapshot *storkv1.GroupVolumeSnapshot) *logrus.Entry {
 	if groupsnapshot != nil {
 		return logrus.WithFields(logrus.Fields{
-			"GroupSnapshotName":      groupsnapshot.Name,
-			"GroupSnapshotNamespace": groupsnapshot.Namespace,
+			"GroupSnapshotName": groupsnapshot.Name,
+			"Namespace":         groupsnapshot.Namespace,
 		})
 	}
 
@@ -199,6 +211,91 @@ func PVCLog(pvc *v1.PersistentVolumeClaim) *logrus.Entry {
 		return logrus.WithFields(logrus.Fields{
 			"PVCName":   pvc.Name,
 			"Namespace": pvc.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// PVLog formats a log message with pv information
+func PVLog(pv *v1.PersistentVolume) *logrus.Entry {
+	if pv != nil {
+		return logrus.WithFields(logrus.Fields{
+			"PVName":    pv.Name,
+			"Namespace": pv.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// ApplicationBackupLog formats a log message with applicationbackup information
+func ApplicationBackupLog(backup *storkv1.ApplicationBackup) *logrus.Entry {
+	if backup != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ApplicationBackupName": backup.Name,
+			"ApplicationBackupUID":  string(backup.UID),
+			"Namespace":             backup.Namespace,
+			"ResourceVersion":       backup.ResourceVersion,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// ApplicationRestoreLog formats a log message with applicationrestore information
+func ApplicationRestoreLog(restore *storkv1.ApplicationRestore) *logrus.Entry {
+	if restore != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ApplicationRestoreName": restore.Name,
+			"ApplicationRestoreUID":  string(restore.UID),
+			"Namespace":              restore.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// ApplicationCloneLog formats a log message with applicationclone information
+func ApplicationCloneLog(clone *storkv1.ApplicationClone) *logrus.Entry {
+	if clone != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ApplicationCloneName": clone.Name,
+			"Namespace":            clone.Namespace,
+		})
+	}
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// VolumeSnapshotRestoreLog formats a log message with volumesnapshotrestore information
+func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logrus.Entry {
+	if snapRestore != nil {
+		return logrus.WithFields(logrus.Fields{
+			"VolumeSnapshotRestoreName": snapRestore.Name,
+			"Namespace":                 snapRestore.Namespace,
+		})
+	}
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// ApplicationBackupScheduleLog formats a log message with applicationbackupschedule information
+func ApplicationBackupScheduleLog(backupSchedule *storkv1.ApplicationBackupSchedule) *logrus.Entry {
+	if backupSchedule != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ApplicationBackupScheduleName": backupSchedule.Name,
+			"Namespace":                     backupSchedule.Namespace,
+		})
+	}
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// BackupLocationLog formats a log message with backuplocation information
+func BackupLocationLog(location *storkv1.BackupLocation) *logrus.Entry {
+	if location != nil {
+		return logrus.WithFields(logrus.Fields{
+			"BackupLocationName": location.Name,
+			"Namespace":          location.Namespace,
+			"Type":               location.Location.Type,
 		})
 	}
 

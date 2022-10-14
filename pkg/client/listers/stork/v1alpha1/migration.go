@@ -26,8 +26,10 @@ import (
 )
 
 // MigrationLister helps list Migrations.
+// All objects returned here must be treated as read-only.
 type MigrationLister interface {
 	// List lists all Migrations in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Migration, err error)
 	// Migrations returns an object that can list and get Migrations.
 	Migrations(namespace string) MigrationNamespaceLister
@@ -58,10 +60,13 @@ func (s *migrationLister) Migrations(namespace string) MigrationNamespaceLister 
 }
 
 // MigrationNamespaceLister helps list and get Migrations.
+// All objects returned here must be treated as read-only.
 type MigrationNamespaceLister interface {
 	// List lists all Migrations in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Migration, err error)
 	// Get retrieves the Migration from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.Migration, error)
 	MigrationNamespaceListerExpansion
 }

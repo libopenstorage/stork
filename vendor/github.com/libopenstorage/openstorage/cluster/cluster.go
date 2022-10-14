@@ -5,12 +5,16 @@ import (
 	"errors"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/diags"
+
 	"github.com/libopenstorage/gossip/types"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/objectstore"
 	"github.com/libopenstorage/openstorage/osdconfig"
 	"github.com/libopenstorage/openstorage/pkg/auth"
 	"github.com/libopenstorage/openstorage/pkg/clusterdomain"
+	"github.com/libopenstorage/openstorage/pkg/job"
+	"github.com/libopenstorage/openstorage/pkg/nodedrain"
 	sched "github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 	"github.com/portworx/kvdb"
@@ -29,7 +33,7 @@ var (
 	ErrNodeRemovePending = errors.New("Node remove is pending")
 	ErrInitNodeNotFound  = errors.New("This node is already initialized but " +
 		"could not be found in the cluster map.")
-	ErrNodeDecommissioned   = errors.New("Node is decomissioned.")
+	ErrNodeDecommissioned   = errors.New("Node is decommissioned.")
 	ErrRemoveCausesDataLoss = errors.New("Cannot remove node without data loss")
 	ErrNotImplemented       = errors.New("Not Implemented")
 )
@@ -47,6 +51,14 @@ type ClusterServerConfiguration struct {
 	ConfigSystemTokenManager auth.TokenGenerator
 	// holds implementation to ClusterDomains interface
 	ConfigClusterDomainProvider clusterdomain.ClusterDomainProvider
+	// holds implementation to the OpenStoragePoolServer interface
+	ConfigStoragePoolProvider api.OpenStoragePoolServer
+	// holds implementation to the JobProvider interface
+	ConfigJobProvider job.Provider
+	// holds implementation to the NodeDrainProvider interface
+	ConfigNodeDrainProvider nodedrain.Provider
+	// holds the actual implementation to the SDK OpenStorageDiags interface
+	ConfigDiagsProvider diags.Provider
 }
 
 // NodeEntry is used to discover other nodes in the cluster
@@ -65,6 +77,10 @@ type NodeEntry struct {
 	NonQuorumMember   bool
 	GossipPort        string
 	ClusterDomain     string
+	HWType            api.HardwareType
+
+	// Determine if the node is secure with authentication and authorization
+	SecurityStatus api.StorageNode_SecurityStatus
 }
 
 // ClusterInfo is the basic info about the cluster and its nodes
@@ -87,7 +103,7 @@ type ClusterInitState struct {
 // FinalizeInitCb is invoked when init is complete and is in the process of
 // updating the cluster database. This callback is invoked under lock and must
 // finish quickly, else it will slow down other node joins.
-type FinalizeInitCb func() error
+type FinalizeInitCb func(*ClusterInfo) error
 
 // ClusterListener is an interface to be implemented by a storage driver
 // if it is participating in a multi host environment.  It exposes events
@@ -107,6 +123,9 @@ type ClusterListener interface {
 
 	// Init is called when this node is joining an existing cluster for the first time.
 	Init(self *api.Node, state *ClusterInfo) (FinalizeInitCb, error)
+
+	// PreJoin is called before the node joins an existing cluster
+	PreJoin(self *api.Node) error
 
 	// Join is called when this node is joining an existing cluster.
 	Join(self *api.Node, state *ClusterInitState) error
@@ -139,6 +158,9 @@ type ClusterListenerPairOps interface {
 
 	// ValidatePair is called when we get a validate pair request
 	ValidatePair(pair *api.ClusterPairInfo) error
+
+	// GetPairMode returns the pairing mode
+	GetPairMode() api.ClusterPairMode_Mode
 }
 
 // ClusterListenerAlertOps is a wrapper over ClusterAlerts interface
@@ -163,7 +185,7 @@ type ClusterListenerGenericOps interface {
 	UpdateCluster(self *api.Node, clusterInfo *ClusterInfo) error
 
 	// Enumerate updates listener specific data in Enumerate.
-	Enumerate(cluster api.Cluster) error
+	Enumerate(cluster *api.Cluster) error
 }
 
 // ClusterListenerStatusOps defines APIs that a listener needs to implement
@@ -185,6 +207,10 @@ type ClusterListenerNodeOps interface {
 	// Remove is called when a node leaves the cluster
 	Remove(node *api.Node, forceRemove bool) error
 
+	// CanNodeJoin checks with the listener if this node can join
+	// the cluster. This check is done under a cluster database lock
+	CanNodeJoin(node *api.Node, clusterInfo *ClusterInfo, nodeInitialized bool) error
+
 	// CanNodeRemove test to see if we can remove this node
 	CanNodeRemove(node *api.Node) (string, error)
 
@@ -202,6 +228,9 @@ type ClusterListenerNodeOps interface {
 
 	// Leave is called when this node leaves the cluster.
 	Leave(node *api.Node) error
+
+	// NodeInspect updates listener specific data like pool and disk information
+	NodeInspect(node *api.Node) error
 }
 
 // ClusterListenerCallbacks defines APIs that a listener can invoke
@@ -272,7 +301,7 @@ type ClusterRemove interface {
 	// Remove node(s) from the cluster permanently.
 	Remove(nodes []api.Node, forceRemove bool) error
 	// NodeRemoveDone notify cluster manager NodeRemove is done.
-	NodeRemoveDone(nodeID string, result error)
+	NodeRemoveDone(nodeID string, result error) error
 }
 
 type ClusterAlerts interface {
@@ -332,11 +361,10 @@ type Cluster interface {
 	// nodeInitialized indicates if the caller of this method expects the node
 	// to have been in an already-initialized state.
 	// All managers will default returning NotSupported.
-	Start(clusterSize int, nodeInitialized bool, gossipPort string, selfClusterDomain string) error
+	Start(nodeInitialized bool, gossipPort string, selfClusterDomain string) error
 
 	// Like Start, but have the ability to pass in managers to the cluster object
 	StartWithConfiguration(
-		clusterMaxSize int,
 		nodeInitialized bool,
 		gossipPort string,
 		snapshotPrefixes []string,
@@ -358,6 +386,9 @@ type Cluster interface {
 	// cluster manager of an update on cluster domains
 	ClusterNotifyClusterDomainsUpdate(types.ClusterDomainsActiveMap) error
 
+	// GetGossipIntervals returns the configured values for the gossip intervals
+	GetGossipIntervals() types.GossipIntervals
+
 	ClusterRemove
 	ClusterData
 	ClusterStatus
@@ -368,6 +399,10 @@ type Cluster interface {
 	secrets.Secrets
 	sched.SchedulePolicyProvider
 	objectstore.ObjectStore
+	api.OpenStoragePoolServer
+	job.Provider
+	nodedrain.Provider
+	diags.Provider
 }
 
 // NullClusterListener is a NULL implementation of ClusterListener functions
@@ -394,13 +429,24 @@ func (nc *NullClusterListener) CleanupInit(
 	return nil
 }
 
-func (nc *NullClusterListener) Enumerate(cluster api.Cluster) error {
+func (nc *NullClusterListener) Enumerate(_ *api.Cluster) error {
+	return nil
+}
+
+func (nc *NullClusterListener) NodeInspect(node *api.Node) error {
 	return nil
 }
 
 func (nc *NullClusterListener) Halt(
 	self *api.Node,
-	clusterInfo *ClusterInfo) error {
+	clusterInfo *ClusterInfo,
+) error {
+	return nil
+}
+
+func (nc *NullClusterListener) PreJoin(
+	self *api.Node,
+) error {
 	return nil
 }
 
@@ -427,6 +473,10 @@ func (nc *NullClusterListener) Remove(node *api.Node, forceRemove bool) error {
 
 func (nc *NullClusterListener) CanNodeRemove(node *api.Node) (string, error) {
 	return "", nil
+}
+
+func (nc *NullClusterListener) CanNodeJoin(node *api.Node, clusterInfo *ClusterInfo, nodeInitialized bool) error {
+	return nil
 }
 
 func (nc *NullClusterListener) MarkNodeDown(node *api.Node) error {
@@ -499,4 +549,12 @@ func (nc *NullClusterListener) ValidatePair(
 	pair *api.ClusterPairInfo,
 ) error {
 	return nil
+}
+
+func (nc *NullClusterListener) GetPairMode() api.ClusterPairMode_Mode {
+	return api.ClusterPairMode_Default
+}
+
+// StoragePoolProvider is the backing provider for openstorage SDK operations on storage pools
+type StoragePoolProvider interface {
 }

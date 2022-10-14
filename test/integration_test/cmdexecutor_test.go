@@ -1,3 +1,4 @@
+//go:build integrationtest
 // +build integrationtest
 
 package integrationtest
@@ -7,16 +8,20 @@ import (
 	"testing"
 
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
-	k8s_ops "github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
-	apps_api "k8s.io/api/apps/v1beta2"
+	apps_api "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 )
 
-func asyncPodCommandTest(t *testing.T) {
+func TestCommandExecutor(t *testing.T) {
+
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	id, err := uuid.New()
 	require.NoError(t, err, "failed to get uuid")
 
@@ -75,6 +80,9 @@ func asyncPodCommandTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, ctxs)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecutor.Executor {
@@ -91,7 +99,7 @@ func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecut
 }
 
 func getContextPods(ctx *scheduler.Context) ([]v1.Pod, error) {
-	k8sOps := k8s_ops.Instance()
+	k8sOps := apps.Instance()
 	var pods []v1.Pod
 
 	for _, spec := range ctx.App.SpecList {

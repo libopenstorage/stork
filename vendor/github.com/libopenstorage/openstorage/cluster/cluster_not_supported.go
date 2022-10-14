@@ -1,14 +1,18 @@
 package cluster
 
 import (
-	time "time"
+	"time"
 
 	"github.com/libopenstorage/gossip/types"
-	api "github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/objectstore"
 	"github.com/libopenstorage/openstorage/osdconfig"
 	"github.com/libopenstorage/openstorage/pkg/clusterdomain"
-	schedpolicy "github.com/libopenstorage/openstorage/schedpolicy"
+	"github.com/libopenstorage/openstorage/pkg/diags"
+	"github.com/libopenstorage/openstorage/pkg/job"
+	"github.com/libopenstorage/openstorage/pkg/nodedrain"
+	"github.com/libopenstorage/openstorage/pkg/storagepool"
+	"github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 )
 
@@ -26,6 +30,10 @@ type NullClusterManager struct {
 	schedpolicy.NullSchedMgr
 	objectstore.NullObjectStoreMgr
 	clusterdomain.NullClusterDomainManager
+	storagepool.UnsupportedPoolProvider
+	job.UnsupportedJobProvider
+	nodedrain.UnsupportedNodeDrainProvider
+	diags.UnsupportedDiagsProvider
 }
 
 func NewDefaultClusterManager() Cluster {
@@ -100,12 +108,12 @@ func (m *NullClusterManager) Shutdown() error {
 }
 
 // Start
-func (m *NullClusterManager) Start(arg0 int, arg1 bool, arg2 string, arg3 string) error {
+func (m *NullClusterManager) Start(arg1 bool, arg2 string, arg3 string) error {
 	return ErrNotImplemented
 }
 
 // StartWithConfiguration
-func (m *NullClusterManager) StartWithConfiguration(arg0 int, arg1 bool, arg2 string, arg3 []string, arg4 string, arg5 *ClusterServerConfiguration) error {
+func (m *NullClusterManager) StartWithConfiguration(arg1 bool, arg2 string, arg3 []string, arg4 string, arg5 *ClusterServerConfiguration) error {
 	return ErrNotImplemented
 }
 
@@ -163,6 +171,11 @@ func (m *NullClusterData) GetGossipState() *ClusterState {
 	return nil
 }
 
+// GetGossipIntervals
+func (c *NullClusterData) GetGossipIntervals() types.GossipIntervals {
+	return types.GossipIntervals{}
+}
+
 // NullClusterRemove implementations
 
 // Remove
@@ -171,8 +184,8 @@ func (m *NullClusterRemove) Remove(arg0 []api.Node, arg1 bool) error {
 }
 
 // NodeRemoveDone
-func (m *NullClusterRemove) NodeRemoveDone(arg0 string, arg1 error) {
-	return
+func (m *NullClusterRemove) NodeRemoveDone(arg0 string, arg1 error) error {
+	return ErrNotImplemented
 }
 
 // NullClusterStatus implementations
@@ -219,6 +232,10 @@ func (m *NullClusterPair) GetPair(arg0 string) (*api.ClusterPairGetResponse, err
 // RefreshPair
 func (m *NullClusterPair) RefreshPair(arg0 string) error {
 	return ErrNotImplemented
+}
+
+func (m *NullClusterPair) GetPairMode() api.ClusterPairMode_Mode {
+	return api.ClusterPairMode_Default
 }
 
 // EnumeratePairs

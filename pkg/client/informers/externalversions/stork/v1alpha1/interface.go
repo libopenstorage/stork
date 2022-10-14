@@ -24,24 +24,42 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ApplicationBackups returns a ApplicationBackupInformer.
+	ApplicationBackups() ApplicationBackupInformer
+	// ApplicationBackupSchedules returns a ApplicationBackupScheduleInformer.
+	ApplicationBackupSchedules() ApplicationBackupScheduleInformer
+	// ApplicationClones returns a ApplicationCloneInformer.
+	ApplicationClones() ApplicationCloneInformer
+	// ApplicationRegistrations returns a ApplicationRegistrationInformer.
+	ApplicationRegistrations() ApplicationRegistrationInformer
+	// ApplicationRestores returns a ApplicationRestoreInformer.
+	ApplicationRestores() ApplicationRestoreInformer
+	// BackupLocations returns a BackupLocationInformer.
+	BackupLocations() BackupLocationInformer
 	// ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
 	ClusterDomainUpdates() ClusterDomainUpdateInformer
 	// ClusterDomainsStatuses returns a ClusterDomainsStatusInformer.
 	ClusterDomainsStatuses() ClusterDomainsStatusInformer
 	// ClusterPairs returns a ClusterPairInformer.
 	ClusterPairs() ClusterPairInformer
+	// DataExports returns a DataExportInformer.
+	DataExports() DataExportInformer
 	// GroupVolumeSnapshots returns a GroupVolumeSnapshotInformer.
 	GroupVolumeSnapshots() GroupVolumeSnapshotInformer
 	// Migrations returns a MigrationInformer.
 	Migrations() MigrationInformer
 	// MigrationSchedules returns a MigrationScheduleInformer.
 	MigrationSchedules() MigrationScheduleInformer
+	// NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.
+	NamespacedSchedulePolicies() NamespacedSchedulePolicyInformer
+	// ResourceTransformations returns a ResourceTransformationInformer.
+	ResourceTransformations() ResourceTransformationInformer
 	// Rules returns a RuleInformer.
 	Rules() RuleInformer
 	// SchedulePolicies returns a SchedulePolicyInformer.
 	SchedulePolicies() SchedulePolicyInformer
-	// StorageClusters returns a StorageClusterInformer.
-	StorageClusters() StorageClusterInformer
+	// VolumeSnapshotRestores returns a VolumeSnapshotRestoreInformer.
+	VolumeSnapshotRestores() VolumeSnapshotRestoreInformer
 	// VolumeSnapshotSchedules returns a VolumeSnapshotScheduleInformer.
 	VolumeSnapshotSchedules() VolumeSnapshotScheduleInformer
 }
@@ -55,6 +73,36 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ApplicationBackups returns a ApplicationBackupInformer.
+func (v *version) ApplicationBackups() ApplicationBackupInformer {
+	return &applicationBackupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ApplicationBackupSchedules returns a ApplicationBackupScheduleInformer.
+func (v *version) ApplicationBackupSchedules() ApplicationBackupScheduleInformer {
+	return &applicationBackupScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ApplicationClones returns a ApplicationCloneInformer.
+func (v *version) ApplicationClones() ApplicationCloneInformer {
+	return &applicationCloneInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ApplicationRegistrations returns a ApplicationRegistrationInformer.
+func (v *version) ApplicationRegistrations() ApplicationRegistrationInformer {
+	return &applicationRegistrationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// ApplicationRestores returns a ApplicationRestoreInformer.
+func (v *version) ApplicationRestores() ApplicationRestoreInformer {
+	return &applicationRestoreInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// BackupLocations returns a BackupLocationInformer.
+func (v *version) BackupLocations() BackupLocationInformer {
+	return &backupLocationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
@@ -72,6 +120,11 @@ func (v *version) ClusterPairs() ClusterPairInformer {
 	return &clusterPairInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// DataExports returns a DataExportInformer.
+func (v *version) DataExports() DataExportInformer {
+	return &dataExportInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // GroupVolumeSnapshots returns a GroupVolumeSnapshotInformer.
 func (v *version) GroupVolumeSnapshots() GroupVolumeSnapshotInformer {
 	return &groupVolumeSnapshotInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -87,6 +140,16 @@ func (v *version) MigrationSchedules() MigrationScheduleInformer {
 	return &migrationScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.
+func (v *version) NamespacedSchedulePolicies() NamespacedSchedulePolicyInformer {
+	return &namespacedSchedulePolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ResourceTransformations returns a ResourceTransformationInformer.
+func (v *version) ResourceTransformations() ResourceTransformationInformer {
+	return &resourceTransformationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // Rules returns a RuleInformer.
 func (v *version) Rules() RuleInformer {
 	return &ruleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -97,9 +160,9 @@ func (v *version) SchedulePolicies() SchedulePolicyInformer {
 	return &schedulePolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
-// StorageClusters returns a StorageClusterInformer.
-func (v *version) StorageClusters() StorageClusterInformer {
-	return &storageClusterInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// VolumeSnapshotRestores returns a VolumeSnapshotRestoreInformer.
+func (v *version) VolumeSnapshotRestores() VolumeSnapshotRestoreInformer {
+	return &volumeSnapshotRestoreInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // VolumeSnapshotSchedules returns a VolumeSnapshotScheduleInformer.

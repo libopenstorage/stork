@@ -30,10 +30,10 @@ func init() {
 	// We only register manually written functions here. The registration of the
 	// generated functions takes place in the generated files. The separation
 	// makes the code compile even when the generated files are missing.
-	localSchemeBuilder.Register(addDefaultingFuncs, addConversionFuncs, addFastPathConversionFuncs)
+	localSchemeBuilder.Register(addDefaultingFuncs, addConversionFuncs)
 }
 
-// TODO: remove these global varialbes
+// TODO: remove these global variables
 // GroupName is the group name use in this package
 const GroupName = ""
 

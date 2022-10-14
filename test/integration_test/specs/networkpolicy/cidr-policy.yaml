@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    labels:
+      app.kubernetes.io/instance: cidr-policy-test
+    name: cidr-policy-test
+spec:
+    egress:
+    - to:
+      - ipBlock:
+          cidr: 10.65.1.0/25
+      - ipBlock:
+          cidr: 172.16.0.0/25
+    policyTypes:
+    - Egress

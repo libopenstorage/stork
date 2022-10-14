@@ -9,7 +9,8 @@ import (
 	snapshotcontroller "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/libopenstorage/stork/pkg/version"
+	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/kubernetes"
@@ -36,7 +37,7 @@ func (s *Snapshotter) Start(stopChannel <-chan struct{}) error {
 	defer s.lock.Unlock()
 
 	if s.started {
-		return fmt.Errorf("Extender has already been started")
+		return fmt.Errorf("Snapshotter has already been started")
 	}
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -49,7 +50,7 @@ func (s *Snapshotter) Start(stopChannel <-chan struct{}) error {
 	}
 
 	if clientset == nil {
-		return k8s.ErrK8SApiAccountNotSet
+		return schederrors.ErrK8SApiAccountNotSet
 	}
 
 	aeclientset, err := apiextensionsclient.NewForConfig(config)
@@ -63,14 +64,20 @@ func (s *Snapshotter) Start(stopChannel <-chan struct{}) error {
 	}
 
 	log.Infof("Registering CRDs")
-	err = client.CreateCRD(aeclientset)
+	ok, err := version.RequiresV1Registration()
 	if err != nil {
 		return err
 	}
-
-	err = client.WaitForSnapshotResource(snapshotClient)
-	if err != nil {
-		return err
+	if ok {
+		err = client.CreateCRDV1(aeclientset, validateCRDTimeout, validateCRDInterval)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = client.CreateCRD(aeclientset, validateCRDTimeout, validateCRDInterval)
+		if err != nil {
+			return err
+		}
 	}
 
 	plugins := make(map[string]snapshotvolume.Plugin)

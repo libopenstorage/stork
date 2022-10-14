@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package storkctl
@@ -9,7 +10,7 @@ import (
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
+	"k8s.io/cli-runtime/pkg/resource"
 )
 
 var unstructuredSerializer = resource.UnstructuredPlusDefaultContentConfig().NegotiatedSerializer

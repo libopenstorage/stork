@@ -2,16 +2,19 @@ package volume
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	ost_errors "github.com/libopenstorage/openstorage/api/errors"
+	"github.com/libopenstorage/openstorage/pkg/correlation"
 	"github.com/libopenstorage/openstorage/volume"
 )
 
@@ -23,11 +26,17 @@ const (
 
 type volumeClient struct {
 	volume.IODriver
+	volume.FilesystemTrimDriver
+	volume.FilesystemCheckDriver
 	c *client.Client
 }
 
 func newVolumeClient(c *client.Client) volume.VolumeDriver {
-	return &volumeClient{volume.IONotSupported, c}
+	return &volumeClient{
+		IODriver:              volume.IONotSupported,
+		FilesystemTrimDriver:  volume.FilesystemTrimNotSupported,
+		FilesystemCheckDriver: volume.FilesystemCheckNotSupported,
+		c:                     c}
 }
 
 // String description of this driver.
@@ -122,7 +131,7 @@ func (v *volumeClient) GraphDriverDiffSize(id string, parent string) (int, error
 
 // Create a new Vol for the specific volume spev.c.
 // It returns a system generated VolumeID that uniquely identifies the volume
-func (v *volumeClient) Create(locator *api.VolumeLocator, source *api.Source,
+func (v *volumeClient) Create(ctx context.Context, locator *api.VolumeLocator, source *api.Source,
 	spec *api.VolumeSpec) (string, error) {
 	response := &api.VolumeCreateResponse{}
 	request := &api.VolumeCreateRequest{
@@ -163,7 +172,7 @@ func (v *volumeClient) Inspect(ids []string) ([]*api.Volume, error) {
 
 // Delete volume.
 // Errors ErrEnoEnt, ErrVolHasSnaps may be returned.
-func (v *volumeClient) Delete(volumeID string) error {
+func (v *volumeClient) Delete(ctx context.Context, volumeID string) error {
 	response := &api.VolumeResponse{}
 	if err := v.c.Delete().Resource(volumePath).Instance(volumeID).Do().Unmarshal(response); err != nil {
 		return err
@@ -283,6 +292,20 @@ func (v *volumeClient) CapacityUsage(
 	return requests, nil
 }
 
+func (v *volumeClient) VolumeUsageByNode(
+	nodeID string,
+) (*api.VolumeUsageByNode, error) {
+
+	return nil, volume.ErrNotSupported
+
+}
+
+func (v *volumeClient) RelaxedReclaimPurge(
+	nodeID string,
+) (*api.RelaxedReclaimPurge, error) {
+	return nil, volume.ErrNotSupported
+}
+
 // Shutdown and cleanup.
 func (v *volumeClient) Shutdown() {}
 
@@ -333,8 +356,9 @@ func (v *volumeClient) SnapEnumerate(ids []string,
 // Attach map device to the host.
 // On success the devicePath specifies location where the device is exported
 // Errors ErrEnoEnt, ErrVolAttached may be returned.
-func (v *volumeClient) Attach(volumeID string, attachOptions map[string]string) (string, error) {
+func (v *volumeClient) Attach(ctx context.Context, volumeID string, attachOptions map[string]string) (string, error) {
 	response, err := v.doVolumeSetGetResponse(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -358,8 +382,9 @@ func (v *volumeClient) Attach(volumeID string, attachOptions map[string]string) 
 
 // Detach device from the host.
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Detach(volumeID string, options map[string]string) error {
+func (v *volumeClient) Detach(ctx context.Context, volumeID string, options map[string]string) error {
 	return v.doVolumeSet(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -370,14 +395,15 @@ func (v *volumeClient) Detach(volumeID string, options map[string]string) error 
 	)
 }
 
-func (v *volumeClient) MountedAt(mountPath string) string {
+func (v *volumeClient) MountedAt(ctx context.Context, mountPath string) string {
 	return ""
 }
 
 // Mount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Mount(volumeID string, mountPath string, options map[string]string) error {
+func (v *volumeClient) Mount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error {
 	return v.doVolumeSet(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -391,8 +417,9 @@ func (v *volumeClient) Mount(volumeID string, mountPath string, options map[stri
 
 // Unmount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Unmount(volumeID string, mountPath string, options map[string]string) error {
+func (v *volumeClient) Unmount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error {
 	return v.doVolumeSet(
+		ctx,
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
@@ -407,7 +434,7 @@ func (v *volumeClient) Unmount(volumeID string, mountPath string, options map[st
 // Update volume
 func (v *volumeClient) Set(volumeID string, locator *api.VolumeLocator,
 	spec *api.VolumeSpec) error {
-	return v.doVolumeSet(
+	return v.doVolumeSet(correlation.TODO(),
 		volumeID,
 		&api.VolumeSetRequest{
 			Locator: locator,
@@ -416,16 +443,23 @@ func (v *volumeClient) Set(volumeID string, locator *api.VolumeLocator,
 	)
 }
 
-func (v *volumeClient) doVolumeSet(volumeID string,
+func (v *volumeClient) doVolumeSet(ctx context.Context, volumeID string,
 	request *api.VolumeSetRequest) error {
-	_, err := v.doVolumeSetGetResponse(volumeID, request)
+	_, err := v.doVolumeSetGetResponse(ctx, volumeID, request)
 	return err
 }
 
-func (v *volumeClient) doVolumeSetGetResponse(volumeID string,
+func (v *volumeClient) doVolumeSetGetResponse(ctx context.Context, volumeID string,
 	request *api.VolumeSetRequest) (*api.VolumeSetResponse, error) {
 	response := &api.VolumeSetResponse{}
-	if err := v.c.Put().Resource(volumePath).Instance(volumeID).Body(request).Do().Unmarshal(response); err != nil {
+	rc := correlation.RequestContextFromContextValue(ctx)
+	if err := v.c.Put().Resource(volumePath).
+		Instance(volumeID).
+		Body(request).
+		SetHeader(correlation.ContextIDKey, rc.ID).
+		SetHeader(correlation.ContextOriginKey, string(rc.Origin)).
+		Do().
+		Unmarshal(response); err != nil {
 		return nil, err
 	}
 	if response.VolumeResponse != nil && response.VolumeResponse.Error != "" {
@@ -490,6 +524,20 @@ func (v *volumeClient) CredsCreate(params map[string]string) (string, error) {
 	return createResponse.UUID, nil
 }
 
+// CredsUpdate updates a previsiously configured credentials
+func (v *volumeClient) CredsUpdate(name string, params map[string]string) error {
+	request := &api.CredUpdateRequest{
+		Name:        name,
+		InputParams: params,
+	}
+	req := v.c.Put().Resource(api.OsdCredsPath).Instance(name).Body(request)
+	response := req.Do()
+	if response.Error() != nil {
+		return response.FormatError()
+	}
+	return nil
+}
+
 // CredsDelete deletes the credential with given UUID
 func (v *volumeClient) CredsDelete(uuid string) error {
 	req := v.c.Delete().Resource(api.OsdCredsPath).Instance(uuid)
@@ -503,7 +551,21 @@ func (v *volumeClient) CredsDelete(uuid string) error {
 // CredsValidate validates the credential by accessuing the cloud
 // provider with the given credential
 func (v *volumeClient) CredsValidate(uuid string) error {
-	req := v.c.Put().Resource(api.OsdCredsPath + "/validate").Instance(uuid)
+	req := v.c.Put().Resource(api.OsdCredsPath + "/validate").Instance(url.QueryEscape(uuid))
+	response := req.Do()
+	if response.Error() != nil {
+		if response.StatusCode() == http.StatusUnprocessableEntity {
+			return volume.NewCredentialError(response.Error().Error())
+		}
+		return response.FormatError()
+	}
+	return nil
+}
+
+// CredsRemoveReferences removes any references the  credential specified
+// by the Name/Uuid
+func (v *volumeClient) CredsDeleteReferences(uuid string) error {
+	req := v.c.Delete().Resource(api.OsdCredsPath + "/references").Instance(uuid)
 	response := req.Do()
 	if response.Error() != nil {
 		if response.StatusCode() == http.StatusUnprocessableEntity {
@@ -671,7 +733,7 @@ func (v *volumeClient) CloudBackupHistory(
 }
 
 // CloudBackupState allows a current backup
-// state transisions(pause/resume/stop)
+// state transitions(pause/resume/stop)
 func (v *volumeClient) CloudBackupStateChange(
 	input *api.CloudBackupStateChangeRequest,
 ) error {
@@ -700,6 +762,18 @@ func (v *volumeClient) CloudBackupSchedCreate(
 	return createResponse, nil
 }
 
+// CloudBackupSchedUpdate for a volume creates a schedule to backup volume to cloud
+func (v *volumeClient) CloudBackupSchedUpdate(
+	input *api.CloudBackupSchedUpdateRequest,
+) error {
+	req := v.c.Put().Resource(api.OsdBackupPath + "/sched").Body(input)
+	response := req.Do()
+	if response.Error() != nil {
+		return response.FormatError()
+	}
+	return nil
+}
+
 // CloudBackupGroupSchedCreate for a volume group creates a schedule to backup
 // volume group to the cloud
 func (v *volumeClient) CloudBackupGroupSchedCreate(
@@ -716,6 +790,20 @@ func (v *volumeClient) CloudBackupGroupSchedCreate(
 		return nil, err
 	}
 	return createResponse, nil
+}
+
+// CloudBackupGroupSchedUpdate for a volume group creates a schedule to backup
+// volume group to the cloud
+func (v *volumeClient) CloudBackupGroupSchedUpdate(
+	input *api.CloudBackupGroupSchedUpdateRequest,
+) error {
+	req := v.c.Put().Resource(api.OsdBackupPath + "/schedgroup").Body(input)
+	response := req.Do()
+	if response.Error() != nil {
+		return response.FormatError()
+	}
+
+	return nil
 }
 
 // CloudBackupSchedDelete delete a volume's cloud backup-schedule
@@ -744,13 +832,21 @@ func (v *volumeClient) CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumera
 	return enumerateResponse, nil
 }
 
-func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string) (*api.GroupSnapCreateResponse, error) {
+func (v *volumeClient) CloudBackupSize(
+	input *api.SdkCloudBackupSizeRequest,
+) (*api.SdkCloudBackupSizeResponse, error) {
+
+	return nil, volume.ErrNotSupported
+}
+
+func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string, deleteOnFailure bool) (*api.GroupSnapCreateResponse, error) {
 
 	response := &api.GroupSnapCreateResponse{}
 	request := &api.GroupSnapCreateRequest{
-		Id:        groupID,
-		Labels:    labels,
-		VolumeIds: volumeIDs,
+		Id:              groupID,
+		Labels:          labels,
+		VolumeIds:       volumeIDs,
+		DeleteOnFailure: deleteOnFailure,
 	}
 
 	req := v.c.Post().Resource(snapPath + "/snapshotgroup").Body(request)
@@ -816,4 +912,13 @@ func (v *volumeClient) Catalog(id, subfolder, maxDepth string) (api.CatalogRespo
 	}
 
 	return catalog, nil
+}
+
+func (v *volumeClient) VolService(volumeID string, vsreq *api.VolumeServiceRequest) (*api.VolumeServiceResponse, error) {
+	vsresp := &api.VolumeServiceResponse{}
+
+	req := v.c.Post().Resource(volumePath + "/volservice").Instance(volumeID).Body(vsreq)
+	err := req.Do().Unmarshal(&vsresp)
+
+	return vsresp, err
 }

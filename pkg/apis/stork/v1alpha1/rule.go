@@ -27,6 +27,9 @@ type Rule struct {
 type RuleItem struct {
 	// PodSelector is a map of key value pairs that are used to select the pods using their labels
 	PodSelector map[string]string `json:"podSelector"`
+	// Container Name of the container in which to run the rule if there are
+	// multiple containers in the pod
+	Container string `json:"container"`
 	// Actions are actions to be performed on the pods selected using the selector
 	Actions []RuleAction `json:"actions"`
 }

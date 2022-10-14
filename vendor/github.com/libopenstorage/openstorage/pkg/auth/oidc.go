@@ -33,6 +33,8 @@ type OIDCAuthConfig struct {
 	// SkipClientIDCheck skips a verification on tokens which are returned
 	// from the OIDC without the client ID set
 	SkipClientIDCheck bool
+	// SkipIssuerCheck skips verification of the issuer URL.
+	SkipIssuerCheck bool
 	// UsernameClaim has the location of the unique id for the user.
 	// If empty, "sub" will be used for the user name unique id.
 	UsernameClaim UsernameClaimType
@@ -53,7 +55,11 @@ type OIDCAuthenticator struct {
 
 // NewOIDC returns a new OIDC authenticator
 func NewOIDC(config *OIDCAuthConfig) (*OIDCAuthenticator, error) {
-	p, err := oidc.NewProvider(context.Background(), config.Issuer)
+	// Reverting the defaultTimeout base context as some of the coreos oidc api
+	// takes this context for subsequent call and end up using expired context.
+	ctx := context.Background()
+
+	p, err := oidc.NewProvider(ctx, config.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to communicate with OIDC provider %s: %v",
 			config.Issuer,
@@ -63,6 +69,7 @@ func NewOIDC(config *OIDCAuthConfig) (*OIDCAuthenticator, error) {
 	v := p.Verifier(&oidc.Config{
 		ClientID:          config.ClientID,
 		SkipClientIDCheck: config.SkipClientIDCheck,
+		SkipIssuerCheck:   config.SkipIssuerCheck,
 	})
 	return &OIDCAuthenticator{
 		url:           config.Issuer,

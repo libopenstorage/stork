@@ -5,8 +5,8 @@ import (
 	"io"
 
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 )
 
 // NewCommand Create a new storkctl command
@@ -34,6 +34,8 @@ func NewCommand(cmdFactory Factory, in io.Reader, out io.Writer, errOut io.Write
 		newActivateCommand(cmdFactory, ioStreams),
 		newDeactivateCommand(cmdFactory, ioStreams),
 		newGenerateCommand(cmdFactory, ioStreams),
+		newSuspendCommand(cmdFactory, ioStreams),
+		newResumeCommand(cmdFactory, ioStreams),
 		newVersionCommand(cmdFactory, ioStreams),
 	)
 

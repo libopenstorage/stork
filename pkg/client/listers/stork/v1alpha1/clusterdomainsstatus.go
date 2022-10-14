@@ -26,10 +26,13 @@ import (
 )
 
 // ClusterDomainsStatusLister helps list ClusterDomainsStatuses.
+// All objects returned here must be treated as read-only.
 type ClusterDomainsStatusLister interface {
 	// List lists all ClusterDomainsStatuses in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainsStatus, err error)
 	// Get retrieves the ClusterDomainsStatus from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ClusterDomainsStatus, error)
 	ClusterDomainsStatusListerExpansion
 }

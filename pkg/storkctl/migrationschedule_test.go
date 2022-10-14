@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package storkctl
@@ -9,8 +10,11 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -40,11 +44,22 @@ func createMigrationScheduleAndVerify(
 		cmdArgs = append(cmdArgs, "--postExecRule", postExecRule)
 	}
 
+	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: schedulePolicyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				IntervalMinutes: 1,
+			}},
+	})
+	require.True(t, err == nil || errors.IsAlreadyExists(err), "Error creating schedulepolicy")
+
 	expected := "MigrationSchedule " + name + " created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
-	migration, err := k8s.Instance().GetMigrationSchedule(name, namespace)
+	migration, err := storkops.Instance().GetMigrationSchedule(name, namespace)
 	require.NoError(t, err, "Error getting migration schedule")
 	require.Equal(t, name, migration.Name, "MigrationSchedule name mismatch")
 	require.Equal(t, namespace, migration.Namespace, "MigrationSchedule namespace mismatch")
@@ -90,9 +105,9 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 
 func TestGetMigrationSchedulesMultipleNamespaces(t *testing.T) {
 	defer resetTest()
-	_, err := k8s.Instance().CreateNamespace("test1", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test1"}})
 	require.NoError(t, err, "Error creating test1 namespace")
-	_, err = k8s.Instance().CreateNamespace("test2", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test2"}})
 	require.NoError(t, err, "Error creating test2 namespace")
 
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "test1", "clusterpair1", []string{"namespace1"}, "", "", true)
@@ -127,8 +142,8 @@ func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, "getmigrationschedulestatustest", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
-	migrationSchedule, err := k8s.Instance().GetMigrationSchedule("getmigrationschedulestatustest", "default")
-	require.NoError(t, err, "Error getting migration")
+	migrationSchedule, err := storkops.Instance().GetMigrationSchedule("getmigrationschedulestatustest", "default")
+	require.NoError(t, err, "Error getting migration schedule")
 
 	// Update the status of the daily migration
 	migrationSchedule.Status.Items = make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledMigrationStatus)
@@ -143,7 +158,8 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
-	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	migrationSchedule, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
+	require.NoError(t, err, "Error updating migration schedule")
 
 	expected := "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
 		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
@@ -160,7 +176,8 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
-	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	migrationSchedule, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
+	require.NoError(t, err, "Error updating migration schedule")
 
 	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
 		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
@@ -177,7 +194,8 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
-	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	_, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
+	require.NoError(t, err, "Error updating migration schedule")
 
 	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
 		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
@@ -188,7 +206,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 func TestCreateMigrationSchedulesNoNamespace(t *testing.T) {
 	cmdArgs := []string{"create", "migrationschedules", "-c", "clusterPair1", "migration1"}
 
-	expected := "error: Need to provide atleast one namespace to migrate"
+	expected := "error: need to provide atleast one namespace to migrate"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -202,7 +220,7 @@ func TestCreateMigrationSchedulesNoClusterPair(t *testing.T) {
 func TestCreateMigrationSchedulesNoName(t *testing.T) {
 	cmdArgs := []string{"create", "migrationschedules"}
 
-	expected := "error: Exactly one name needs to be provided for migration schedule name"
+	expected := "error: exactly one name needs to be provided for migration schedule name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -224,7 +242,7 @@ func TestDeleteMigrationSchedulesNoMigrationName(t *testing.T) {
 	cmdArgs := []string{"delete", "migrationschedules"}
 
 	var migrationList storkv1.MigrationList
-	expected := "error: At least one argument needs to be provided for migration schedule name if cluster pair isn't provided"
+	expected := "error: at least one argument needs to be provided for migration schedule name if cluster pair isn't provided"
 	testCommon(t, cmdArgs, &migrationList, expected, true)
 }
 
@@ -262,4 +280,86 @@ func TestDeleteMigrationSchedules(t *testing.T) {
 	expected = "MigrationSchedule deletemigration1 deleted successfully\n"
 	expected += "MigrationSchedule deletemigration2 deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func TestDefaultMigrationSchedulePolicy(t *testing.T) {
+	defer resetTest()
+	createMigrationScheduleAndVerify(t, "deletemigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", false)
+
+	// Create schedule without the default policy present
+	cmdArgs := []string{"create", "migrationschedules", "defaultpolicy", "-n", "test", "-c", "clusterpair", "--namespaces", "test"}
+	expected := "error: error getting schedulepolicy default-migration-policy: schedulepolicies.stork.libopenstorage.org \"default-migration-policy\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	// Create again adding default policy
+	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default-migration-policy",
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				IntervalMinutes: 1,
+			}},
+	})
+	require.NoError(t, err, "Error creating schedulepolicy")
+	expected = "MigrationSchedule defaultpolicy created successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func TestSuspendResumeMigrationSchedule(t *testing.T) {
+	name := "testmigrationschedule"
+	name1 := "testmigrationschedule-2"
+	namespace := "default"
+	defer resetTest()
+	createMigrationScheduleAndVerify(t, name, "testpolicy", namespace, "clusterpair1", []string{"namespace1"}, "", "", false)
+
+	cmdArgs := []string{"suspend", "migrationschedules", name}
+	expected := "MigrationSchedule " + name + " suspended successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.True(t, *migrationSchedule.Spec.Suspend, "migration schedule not suspended")
+
+	cmdArgs = []string{"resume", "migrationschedules", name}
+	expected = "MigrationSchedule " + name + " resumed successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err = storkops.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.False(t, *migrationSchedule.Spec.Suspend, "migration schedule suspended")
+
+	cmdArgs = []string{"suspend", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " suspended successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err = storkops.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.True(t, *migrationSchedule.Spec.Suspend, "migration schedule not suspended")
+
+	cmdArgs = []string{"resume", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " resumed successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err = storkops.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.False(t, *migrationSchedule.Spec.Suspend, "migration schedule suspended")
+
+	cmdArgs = []string{"suspend", "migrationschedules", "invalidschedule"}
+	expected = "Error from server (NotFound): migrationschedules.stork.libopenstorage.org \"invalidschedule\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	cmdArgs = []string{"resume", "migrationschedules", "invalidschedule"}
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	// test multiple suspend/resume using same clusterpair
+	createMigrationScheduleAndVerify(t, name1, "testpolicy", namespace, "clusterpair1", []string{"namespace1"}, "", "", false)
+	cmdArgs = []string{"suspend", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " suspended successfully\nMigrationSchedule " + name1 + " suspended successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"resume", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " resumed successfully\nMigrationSchedule " + name1 + " resumed successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
 }
