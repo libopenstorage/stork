@@ -32,6 +32,7 @@ import (
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -155,6 +156,21 @@ var pureStorageClassMap map[string]*storageapi.StorageClass
 // DefaultSnapshotRetainCount is default snapshot retain count
 var DefaultSnapshotRetainCount = 10
 
+// TotalTriggerCount is counter metric for test trigger
+var TotalTriggerCount = prometheus.TorpedoTestTotalTriggerCount
+
+// TestRunningState is gauage metric for test method running
+var TestRunningState = prometheus.TorpedoTestRunning
+
+// TestFailedCount is counter metric for test failed
+var TestFailedCount = prometheus.TorpedoTestFailCount
+
+// TestPassedCount is counter metric for test passed
+var TestPassedCount = prometheus.TorpedoTestPassCount
+
+//  FailedTestAlert is a flag to alert test failed
+var FailedTestAlert = prometheus.TorpedoAlertTestFailed
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -234,9 +250,12 @@ func GenerateUUID() string {
 // UpdateOutcome updates outcome based on error
 func UpdateOutcome(event *EventRecord, err error) {
 
+	logrus.Infof("Hit Error: %s in event %v", err.Error(), event)
 	if err != nil && event != nil {
+		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
 		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
 		er := fmt.Errorf(err.Error() + "<br>")
+		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
 		event.Outcome = append(event.Outcome, er)
 		createLongevityJiraIssue(event, er)
 	}
@@ -375,6 +394,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	}()
 	coresMap = nil
 	coresMap = make(map[string]string)
+	setMetrics(*event)
 
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
@@ -422,6 +442,10 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	errorChan := make(chan error, errorChannelSize)
 	labels := Inst().TopologyLabels
 	Step("Deploy applications", func() {
@@ -443,12 +467,15 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			logrus.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
+			// BUG: Execution doesn't resume here after ValidateContext called
+			// Below code is never executed
 			for err := range errorChan {
 				logrus.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
 			}
 		}
 	})
+
 }
 
 // TriggerHAIncreaseAndReboot triggers repl increase and reboots target and source nodes
@@ -467,6 +494,8 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	//Reboot target node and source node while repl increase is in progress
 	Step("get a volume to  increase replication factor and reboot source  and target node", func() {
@@ -533,6 +562,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -552,6 +582,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	setMetrics(*event)
 
 	expReplMap := make(map[*volume.Volume]int64)
 	Step("get volumes for all apps in test and increase replication factor", func() {
@@ -656,6 +687,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -675,6 +707,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	setMetrics(*event)
 
 	expReplMap := make(map[*volume.Volume]int64)
 	Step("get volumes for all apps in test and decrease replication factor", func() {
@@ -757,6 +790,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -776,6 +810,7 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	setMetrics(*event)
 
 	for _, ctx := range *contexts {
 		Step(fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key), func() {
@@ -793,6 +828,7 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 		})
 	}
+	updateMetrics(*event)
 }
 
 // TriggerCrashVolDriver crashes vol driver
@@ -811,6 +847,7 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	setMetrics(*event)
 	Step("crash volume driver in all nodes", func() {
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
@@ -827,6 +864,7 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 					}
 				})
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -846,6 +884,8 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	setMetrics(*event)
+
 	Step("get nodes bounce volume driver", func() {
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
@@ -891,6 +931,7 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				})
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -910,6 +951,9 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver)
 	var wg sync.WaitGroup
 	Step("get nodes bounce volume driver", func() {
@@ -967,6 +1011,7 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				}
 			})
 		}
+		updateMetrics(*event)
 
 	})
 }
@@ -987,6 +1032,9 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	Step("get kvdb nodes bounce volume driver", func() {
 		for _, appNode := range node.GetMetadataNodes() {
 			Step(
@@ -1032,6 +1080,7 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				})
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -1051,6 +1100,8 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("get all nodes and reboot one by one", func() {
 		nodesToReboot := node.GetWorkerNodes()
@@ -1115,6 +1166,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					})
 				}
 			}
+			updateMetrics(*event)
 		})
 	})
 }
@@ -1135,6 +1187,8 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("get all nodes and reboot one by one", func() {
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
@@ -1215,6 +1269,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				}
 			})
 		})
+		updateMetrics(*event)
 	})
 }
 
@@ -1361,6 +1416,9 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	Step("get volumes for all apps in test and clone them", func() {
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -1412,6 +1470,7 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					})
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -1431,6 +1490,10 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+
 	Step("get volumes for all apps in test and update size", func() {
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -1470,6 +1533,7 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 					}
 				})
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -1491,6 +1555,8 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Create and Validate LocalSnapshots", func() {
 
@@ -1596,6 +1662,7 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 
 		}
+		updateMetrics(*event)
 
 	})
 
@@ -1618,6 +1685,8 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Delete Schedule Policy and LocalSnapshots and Validate", func() {
 
@@ -1682,6 +1751,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 				})
 			}
 		}
+		updateMetrics(*event)
 
 	})
 
@@ -1704,6 +1774,8 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	snapshotScheduleRetryInterval := 10 * time.Second
 	snapshotScheduleRetryTimeout := 3 * time.Minute
@@ -1791,6 +1863,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 
 		}
+		updateMetrics(*event)
 
 	})
 
@@ -1814,6 +1887,8 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	Step("Validate Delete Volumes", func() {
 		opts := make(map[string]bool)
 
@@ -1835,6 +1910,7 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 		}
 		*contexts = nil
 		TriggerDeployNewApps(contexts, recordChan)
+		updateMetrics(*event)
 	})
 }
 
@@ -2089,6 +2165,9 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2148,6 +2227,7 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2167,6 +2247,8 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2222,6 +2304,7 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 			ProcessErrorWithMessage(event, err, "Scheduled backup backed up wrong namespaces")
 		}
 	}
+	updateMetrics(*event)
 }
 
 // TriggerBackupSpecificResource backs up a specific resource in a namespace
@@ -2236,6 +2319,9 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+
+	setMetrics(*event)
+
 	namespaceResourceMap := make(map[string][]string)
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2357,6 +2443,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2376,6 +2463,8 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
@@ -2399,6 +2488,7 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 	_, err = Inst().Backup.InspectBackup(ctx, backupInspectRequest)
 	desc := fmt.Sprintf("InspectBackup failed: Inspect backup %s failed", backupToInspect.GetName())
 	ProcessErrorWithMessage(event, err, desc)
+	updateMetrics(*event)
 
 }
 
@@ -2418,6 +2508,8 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	logrus.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
@@ -2440,6 +2532,7 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	_, err = Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 	desc := fmt.Sprintf("InspectRestore failed: Inspect restore %s failed", restoreToInspect.GetName())
 	ProcessErrorWithMessage(event, err, desc)
+	updateMetrics(*event)
 }
 
 // TriggerRestoreNamespace restores a namespace to a new namespace
@@ -2453,6 +2546,8 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+
+	setMetrics(*event)
 
 	defer func() {
 		sourceClusterConfigPath, err := GetSourceClusterConfigPath()
@@ -2545,6 +2640,7 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 		err = fmt.Errorf("namespace %s not found", restoredNs)
 		ProcessErrorWithMessage(event, err, "RestoreNamespace restored incorrect namespaces")
 	}
+	updateMetrics(*event)
 }
 
 // TriggerDeleteBackup deletes a backup
@@ -2564,6 +2660,8 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
@@ -2581,6 +2679,7 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	desc := fmt.Sprintf("DeleteBackup failed: Delete backup %s on cluster %s failed",
 		backupToDelete.GetName(), backupToDelete.GetCluster())
 	ProcessErrorWithMessage(event, err, desc)
+	updateMetrics(*event)
 
 }
 
@@ -2600,6 +2699,9 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
@@ -2679,6 +2781,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2732,6 +2835,9 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
@@ -2855,6 +2961,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 				UpdateOutcome(event, err)
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2874,6 +2981,8 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -3007,6 +3116,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, err)
 		}
 	}
+	updateMetrics(*event)
 }
 
 //TriggerBackupRestartPX backs up an application and restarts Portworx during the backup
@@ -3025,6 +3135,8 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3090,6 +3202,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -3109,6 +3222,9 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -3228,6 +3344,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -3247,6 +3364,8 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3308,6 +3427,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 				UpdateOutcome(event, err)
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -3327,6 +3447,8 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3410,6 +3532,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 				UpdateOutcome(event, err)
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -3576,6 +3699,9 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 
 	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
@@ -3603,6 +3729,7 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
 		}
+		updateMetrics(*event)
 	})
 
 }
@@ -3623,6 +3750,9 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 
 	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
@@ -3646,6 +3776,7 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 			ValidateContext(ctx)
 		}
 	})
+	updateMetrics(*event)
 
 }
 
@@ -3665,6 +3796,9 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
 		poolsToBeResized, err := getStoragePoolsToExpand()
@@ -3692,7 +3826,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			ValidateContext(ctx)
 		}
 	})
-
+	updateMetrics(*event)
 }
 
 // TriggerPoolAddDiskAndReboot performs add-disk and reboots the node
@@ -3711,6 +3845,9 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
 		poolsToBeResized, err := getStoragePoolsToExpand()
@@ -3732,6 +3869,7 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			ValidateContext(ctx)
 		}
 	})
+	updateMetrics(*event)
 
 }
 
@@ -3750,6 +3888,8 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	context("upgrade volume driver to the latest version", func() {
 		Step("start the volume driver upgrade", func() {
@@ -3784,6 +3924,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 			}
 		})
 	})
+	updateMetrics(*event)
 }
 
 func getOperatorLatestVersion() (string, error) {
@@ -3828,6 +3969,9 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	Step("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version ",
 		func() {
 			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
@@ -3835,6 +3979,7 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 			UpdateOutcome(event, err)
 
 		})
+	updateMetrics(*event)
 }
 
 // TriggerAutoFsTrim enables Auto Fstrim in the PX Cluster
@@ -3853,6 +3998,9 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	context("Validate AutoFsTrim of the volumes", func() {
 
 		Step("enable auto fstrim ",
@@ -3934,6 +4082,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 			})
 	})
+	updateMetrics(*event)
 
 }
 
@@ -3952,6 +4101,9 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	context("Validate update of the volumes", func() {
 
 		Step("Update Io priority on volumes ",
@@ -3960,6 +4112,7 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 				logrus.Info("Update IO priority call completed")
 			})
 	})
+	updateMetrics(*event)
 }
 
 // updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
@@ -4138,6 +4291,9 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	context("Validate Trashcan feature of the volumes", func() {
 		if !isTrashcanEnabled {
 
@@ -4201,6 +4357,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 				})
 		}
 	})
+	updateMetrics(*event)
 
 }
 
@@ -4220,6 +4377,9 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	context("Validate Relaxed Reclaim of the volumes", func() {
 		if !isRelaxedReclaimEnabled {
 
@@ -4275,6 +4435,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				})
 		}
 	})
+	updateMetrics(*event)
 
 }
 
@@ -4294,6 +4455,8 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	var workerNodes []node.Node
 	var nodeToDecomm node.Node
@@ -4340,6 +4503,7 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			}
 
 		})
+		updateMetrics(*event)
 
 	})
 
@@ -4373,6 +4537,8 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	var decommissionedNodeName string
 
@@ -4444,6 +4610,7 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			}
 		})
 	}
+	updateMetrics(*event)
 
 }
 
@@ -4467,6 +4634,10 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
+	err = fmt.Errorf("Testing failure alerts")
+	UpdateOutcome(event, err)
 	// Keeping retainSnapCount
 	retainSnapCount := DefaultSnapshotRetainCount
 	Step("Create and Validate snapshots for FA DA volumes", func() {
@@ -4521,6 +4692,7 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			})
 		}
 	})
+	updateMetrics(*event)
 }
 
 // TriggerCsiSnapRestore create pvc from snapshot and validate the restored PVC
@@ -4541,6 +4713,8 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	var err error
 
@@ -4572,6 +4746,7 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			})
 		}
 	})
+	updateMetrics(*event)
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {
@@ -4714,6 +4889,8 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	context("perform kvdb failover in a cyclic manner", func() {
 		Step("Get KVDB nodes and perform failover", func() {
 			nodes := node.GetWorkerNodes()
@@ -4835,6 +5012,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 		})
 	})
+	updateMetrics(*event)
 }
 
 func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
@@ -4882,6 +5060,8 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	chaosLevel := ChaosMap[AppTasksDown]
 	context("deletes all pods from a given app and validate if they recover", func() {
 		for _, ctx := range *contexts {
@@ -4898,6 +5078,7 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 			}
 		}
 	})
+	updateMetrics(*event)
 }
 
 // TriggerValidateDeviceMapperCleanup validate device mapper device cleaned up for FA setup
@@ -4915,6 +5096,9 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	logrus.Infof("Validating the deviceMapper devices cleaned up or not")
 	Step("Match the devicemapper devices in each node if it matches the expected count or not ", func() {
 		pureVolAttachedMap, err := Inst().V.GetNodePureVolumeAttachedCountMap()
@@ -4950,6 +5134,7 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			}
 		}
 	})
+	updateMetrics(*event)
 }
 
 // TriggerAddDrive performs add drive operation
@@ -4968,6 +5153,8 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step(fmt.Sprintf("Perform add drive on all the worker nodes"), func() {
 
@@ -5015,6 +5202,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		}
 
 	})
+	updateMetrics(*event)
 
 }
 
@@ -5034,6 +5222,9 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	chaosLevel := ChaosMap[AsyncDR]
 	var (
 		migrationNamespaces   []string
@@ -5100,6 +5291,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, err)
 		}
 	}
+	updateMetrics(*event)
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
@@ -5166,6 +5358,17 @@ func createPureStorageClass(name string, params map[string]string) (*storageapi.
 		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", name, err)
 	}
 	return sc, err
+}
+
+func setMetrics(event EventRecord) {
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+}
+
+func updateMetrics(event EventRecord) {
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 var htmlTemplate = `<!DOCTYPE html>

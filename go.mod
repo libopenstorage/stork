@@ -51,6 +51,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.21.4
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v12.0.0+incompatible
+	github.com/prometheus/client_golang v1.11.0
 )
 
 replace (
