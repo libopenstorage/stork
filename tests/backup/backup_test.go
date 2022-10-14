@@ -29,6 +29,9 @@ import (
 
 const (
 	enumerateBatchSize = 100
+	post_install_hook_pod = "pxcentral-post-install-hook"
+	quick_maintenance_pod = "quick-maintenance-repo"
+	full_maintenance_pod  = "full-maintenance-repo"
 )
 
 var (
@@ -1983,10 +1986,11 @@ func validateBackupCluster() bool {
 	}
 	bkp_pods, err := core.Instance().GetPods(ns, nil)
 	for _, pod := range bkp_pods.Items {
-		matched, _ := regexp.MatchString("^pxcentral-post-install-hook", pod.GetName())
+		matched, _ := regexp.MatchString(post_install_hook_pod, pod.GetName())
 		if !matched {
-			equal, _ := regexp.MatchString("^full-maintenance-repo || ^quick-maintenance-repo", pod.GetName())
-			if !equal {
+			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
+			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
+			if !(equal || equal1){
 				logrus.Info("Checking if all the containers are up or not")
 				res := core.Instance().IsPodRunning(pod)
 				if !res {
