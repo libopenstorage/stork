@@ -347,6 +347,12 @@ func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 		}
 		_, err := service.Snapshots.Delete(vInfo.Options["projectID"], vInfo.BackupID).Do()
 		if err != nil {
+			if gceErr, ok := err.(*googleapi.Error); ok {
+				if gceErr.Code == http.StatusNotFound {
+					// snapshot is already deleted
+					continue
+				}
+			}
 			return true, err
 		}
 	}
