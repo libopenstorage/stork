@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -52,6 +54,18 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }
+
+//This testcase verifies if the backup pods are in Ready state or not
+var _ = Describe("{BackupClusterVerification}", func() {
+	It("Backup Cluster Verification", func() {
+		Step("Check the status of pxcentral-post-install-hook pods", func() {
+			status := validateBackupCluster()
+			Expect(status).NotTo(Equal(false),
+				fmt.Sprintf("Backup pods are not in expected state"))
+		})
+		//Will add CRD verification here
+	})
+})
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
@@ -1935,4 +1949,58 @@ func getBackupUID(orgID, backupName string) string {
 		fmt.Sprintf("Failed to get backup uid for org %s backup %s ctx: [%v]",
 			orgID, backupName, err))
 	return backupUID
+}
+
+func validateBackupCluster() bool {
+	flag := false
+	labelSelectors := map[string]string{"job-name": "pxcentral-post-install-hook"}
+	ns := backup.GetPxBackupNamespace()
+	pods, err := core.Instance().GetPods(ns, labelSelectors)
+	if err != nil {
+		logrus.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
+			err)
+		return false
+	}
+	for _, pod := range pods.Items {
+		logrus.Info("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
+		bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
+		if err != nil {
+			logrus.Errorf("An Error Occured while getting the pxcentral-post-install-hook pod details")
+			return false
+		}
+		container_list := bkp_pod.Status.ContainerStatuses
+		for i := 0; i < len(container_list); i++ {
+			status := container_list[i].State.Terminated.Reason
+			if status == "Completed" {
+				logrus.Info("pxcentral-post-install-hook pod is in completed state")
+				flag = true
+				break
+			}
+		}
+	}
+	if flag == false {
+		return false
+	}
+	bkp_pods, err := core.Instance().GetPods(ns, nil)
+	for _, pod := range bkp_pods.Items {
+		matched, _ := regexp.MatchString("^pxcentral-post-install-hook", pod.GetName())
+		if !matched {
+			equal, _ := regexp.MatchString("^full-maintenance-repo || ^quick-maintenance-repo", pod.GetName())
+			if !equal {
+				logrus.Info("Checking if all the containers are up or not")
+				res := core.Instance().IsPodRunning(pod)
+				if !res {
+					logrus.Errorf("All the containers are not Up")
+					return false
+				}
+				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
+				logrus.Warnf(" ERR is %s", err)
+				if err != nil {
+					logrus.Errorf("An Error Occured while validating the pod %v", err)
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
