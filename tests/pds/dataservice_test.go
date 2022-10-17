@@ -291,8 +291,6 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
 			})
 
-		} else {
-			Expect(DeployAllDataService).To(Equal(true))
 		}
 	})
 
@@ -321,8 +319,6 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
 			})
 
-		} else {
-			Expect(DeployAllDataService).To(Equal(true))
 		}
 	})
 
