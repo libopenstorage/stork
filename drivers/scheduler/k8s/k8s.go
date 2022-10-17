@@ -5335,17 +5335,17 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) error {
 	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  %s/aaaa.txt", data, mountPath)}
 	command := exec.Command("kubectl", cmdArgs...)
-	_, err := command.Output()
+	out, err := command.CombinedOutput()
 	if err != nil {
-		k.log.Errorf("Failed to write data to pod: %s", err)
+		k.log.Errorf("Failed to write data to pod: %s. Output: %s", err, string(out))
 		return err
 	}
 	// Sync the data, wait 20 secs and then proceed to snapshot the volume
 	cmdArgs2 := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sync"}
 	command2 := exec.Command("kubectl", cmdArgs2...)
-	_, err = command2.Output()
+	out, err = command2.CombinedOutput()
 	if err != nil {
-		k.log.Errorf("Failed to sync: %s", err)
+		k.log.Errorf("Failed to sync: %s. Output: %s", err, string(out))
 		return err
 	}
 	fmt.Println("Sleep for 20 secs to let data write through")
@@ -5397,9 +5397,13 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	// Run a cat command from within the pod to verify the content of dirtydata
 	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
 	command := exec.Command("kubectl", cmdArgs...)
-	fileConent, err := command.Output()
-	if !strings.Contains(string(fileConent), data) {
-		return fmt.Errorf("restored volume does NOT contain data from original volume")
+	fileContent, err := command.CombinedOutput()
+	if err != nil {
+		k.log.Errorf("Error checking content of restored PVC: %s. Output: %s", err, string(fileContent))
+		return err
+	}
+	if !strings.Contains(string(fileContent), data) {
+		return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 	}
 	k.log.Info("Validation complete")
 	return nil
@@ -5441,9 +5445,13 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	// Run a cat command from within the pod to verify the content of dirtydata
 	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
 	command := exec.Command("kubectl", cmdArgs...)
-	fileConent, err := command.Output()
-	if !strings.Contains(string(fileConent), data) {
-		return fmt.Errorf("restored volume does NOT contain data from original volume")
+	fileContent, err := command.CombinedOutput()
+	if err != nil {
+		k.log.Errorf("Error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
+		return err
+	}
+	if !strings.Contains(string(fileContent), data) {
+		return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 	}
 	k.log.Info("Validation complete")
 	return nil
