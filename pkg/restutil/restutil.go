@@ -139,10 +139,10 @@ func setBasicAuthAndHeaders(req *http.Request, auth *Auth, headers map[string]st
 }
 
 func getBody(rBody io.ReadCloser) ([]byte, error) {
-	log.Debugf("Response: %v", rBody)
 	respBody, err := ioutil.ReadAll(rBody)
 	if err != nil {
 		return nil, err
 	}
+	log.Debugf("Response: %s", string(respBody))
 	return respBody, nil
 }

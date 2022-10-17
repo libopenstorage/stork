@@ -3,6 +3,8 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -193,6 +195,9 @@ var eventRing *ring.Ring
 //decommissionedNode for rejoin test
 var decommissionedNode = node.Node{}
 
+// node with autopilot rule enabled
+var autoPilotLabelNode node.Node
+
 // emailRecords stores events for rendering
 // email template
 type emailRecords struct {
@@ -375,6 +380,8 @@ const (
 	AddDiskAndReboot = "addDiskAndReboot"
 	// ResizeDiskAndReboot performs  resize-disk and reboots node
 	ResizeDiskAndReboot = "resizeDiskAndReboot"
+	// AutopilotRebalance performs  pool rebalance
+	AutopilotRebalance = "autopilotRebalance"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3716,9 +3723,12 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Initiating multiple pool expansions by resize-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
-			wg.Add(1)
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by resize-disk
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
+				wg.Add(1)
+			}
 
 		}
 		wg.Wait()
@@ -3763,12 +3773,16 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 			logrus.Error(err)
 			UpdateOutcome(event, err)
 		}
+		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
-			poolToBeResized := poolsToBeResized[0]
+			for _, pool := range poolsToBeResized {
+				if !isPoolRebalanceEnabled(pool.Uuid) {
+					poolToBeResized = pool
+				}
+			}
 			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
 		}
-
 	})
 
 	Step("validate all apps after pool resize using resize-disk operation", func() {
@@ -3777,7 +3791,6 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		}
 	})
 	updateMetrics(*event)
-
 }
 
 // TriggerPoolAddDisk peforms add-disk on the storage pools for the given contexts
@@ -3812,10 +3825,13 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Initiating multiple pool expansions by add-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
-			wg.Add(1)
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by add-disk
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
+				wg.Add(1)
 
+			}
 		}
 		wg.Wait()
 
@@ -3856,12 +3872,16 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			logrus.Error(err)
 			UpdateOutcome(event, err)
 		}
+		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
-			poolToBeResized := poolsToBeResized[0]
+			for _, pool := range poolsToBeResized {
+				if !isPoolRebalanceEnabled(pool.Uuid) {
+					poolToBeResized = pool
+				}
+			}
 			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
 		}
-
 	})
 
 	Step("validate all apps after pool resize using add-disk operation", func() {
@@ -3869,8 +3889,179 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			ValidateContext(ctx)
 		}
 	})
-	updateMetrics(*event)
 
+	updateMetrics(*event)
+}
+
+func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AutopilotRebalance,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	poolLabel := map[string]string{"autopilot": "rebalance"}
+	apRule := aututils.PoolRuleRebalanceAbsolute(120, 70, false)
+	apRule.Spec.ActionsCoolDownPeriod = int64(getReblanceCoolOffPeriod(AutopilotRebalance))
+	apRule.Spec.Selector = apapi.RuleObjectSelector{
+		LabelSelector: meta_v1.LabelSelector{
+			MatchLabels: poolLabel,
+		},
+	}
+
+	if autoPilotLabelNode.Name == "" {
+
+		Step("Create autopilot rule", func() {
+			logrus.Infof("Creating autopilot rule ; %+v", apRule)
+
+			storageNodes := node.GetStorageDriverNodes()
+			maxUsed := uint64(0)
+			for _, sNode := range storageNodes {
+				totalSize := uint64(0)
+				for _, p := range sNode.StoragePools {
+					totalSize += p.StoragePool.Used
+				}
+				if totalSize > maxUsed {
+					autoPilotLabelNode = sNode
+					maxUsed = totalSize
+				}
+			}
+
+			logrus.Infof("Adding label %s to the node %s", poolLabel, autoPilotLabelNode.Name)
+			err := AddLabelsOnNode(autoPilotLabelNode, poolLabel)
+			UpdateOutcome(event, err)
+			if err == nil {
+				_, err = Inst().S.CreateAutopilotRule(apRule)
+				UpdateOutcome(event, err)
+				//Removing the label if autopilot rule creation is failed
+				if err != nil {
+					for k := range poolLabel {
+						Inst().S.RemoveLabelOnNode(autoPilotLabelNode, k)
+						autoPilotLabelNode = node.Node{}
+					}
+				}
+			} else {
+				logrus.Warn("Skipping autopilot rule creation as node is not labelled")
+			}
+
+		})
+	} else {
+
+		Step("validate the  autopilot events", func() {
+			logrus.Infof("validate the  autopilot events for %s", apRule.Name)
+			ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+				FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+			})
+			UpdateOutcome(event, err)
+
+			if err == nil {
+				for _, ruleEvent := range ruleEvents.Items {
+					//checking the events triggered in last 60 mins
+					if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-3600 {
+						continue
+					}
+					logrus.Infof("autopilot rule event reason : %s and message: %s ", ruleEvent.Reason, ruleEvent.Message)
+					if strings.Contains(ruleEvent.Reason, "FailedAction") {
+						UpdateOutcome(event, fmt.Errorf("autopilot rule %s failed, Reason: %s, Message; %s", apRule.Name, ruleEvent.Reason, ruleEvent.Message))
+					}
+
+				}
+
+			}
+
+		})
+
+		Step("validate Px on the rebalanced node", func() {
+			logrus.Infof("Validating PX on node : %s", autoPilotLabelNode.Name)
+			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
+			UpdateOutcome(event, err)
+
+			rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+			UpdateOutcome(event, err)
+			if err == nil {
+
+				for _, job := range rebalanceJobs {
+					jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+					UpdateOutcome(event, err)
+					if err == nil {
+
+						previousDone := uint64(0)
+						jobState := jobResponse.GetJob().GetState()
+						if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+							UpdateOutcome(event, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary()))
+
+						}
+
+						if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+							logrus.Infof("Job %v is in paused/pending state", job.GetId())
+						}
+
+						if jobState == opsapi.StorageRebalanceJobState_DONE {
+							logrus.Infof("Job %v is in DONE state", job.GetId())
+						}
+
+						if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+							logrus.Infof("Job %v is in Running state", job.GetId())
+
+							currentDone, total := getReblanceWorkSummary(jobResponse)
+							//checking for rebalance progress
+							for currentDone < total && previousDone < currentDone {
+								time.Sleep(2 * time.Minute)
+								logrus.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+								jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+								UpdateOutcome(event, err)
+								if err != nil {
+									break
+								}
+								previousDone = currentDone
+								currentDone, total = getReblanceWorkSummary(jobResponse)
+							}
+
+							if previousDone == currentDone {
+								UpdateOutcome(event, fmt.Errorf("job %v is in running state but not progressing further", job.GetId()))
+							}
+							if currentDone == total {
+								logrus.Infof("Rebalance for job %v completed,", job.GetId())
+							}
+
+						}
+
+					}
+				}
+			}
+		})
+	}
+
+}
+
+func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
+	status := jobResponse.GetJob().GetStatus()
+	if status != "" {
+		logrus.Infof(" Job Status: %s", status)
+	}
+
+	currentDone := uint64(0)
+	currentPending := uint64(0)
+	total := uint64(0)
+	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
+
+	for _, summary := range rebalWorkSummary {
+		currentDone += summary.GetDone()
+		currentPending += summary.GetPending()
+		logrus.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
+
+	}
+	total = currentDone + currentPending
+
+	return currentDone, total
 }
 
 // TriggerUpgradeVolumeDriver upgrades volume driver version to the latest build
@@ -5369,6 +5560,49 @@ func setMetrics(event EventRecord) {
 func updateMetrics(event EventRecord) {
 	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
 	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
+}
+
+func isPoolRebalanceEnabled(poolUUID string) bool {
+	if autoPilotLabelNode.Name != "" {
+		for _, pool := range autoPilotLabelNode.Pools {
+			if pool.Uuid == poolUUID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func getReblanceCoolOffPeriod(triggerType string) int {
+	var timePeriodInSeconds int
+
+	t := ChaosMap[triggerType]
+
+	baseInterval := 3600
+
+	switch t {
+	case 1:
+		timePeriodInSeconds = baseInterval
+	case 2:
+		timePeriodInSeconds = 3 * baseInterval
+	case 3:
+		timePeriodInSeconds = 6 * baseInterval
+	case 4:
+		timePeriodInSeconds = 9 * baseInterval
+	case 5:
+		timePeriodInSeconds = 12 * baseInterval
+	case 6:
+		timePeriodInSeconds = 15 * baseInterval
+	case 7:
+		timePeriodInSeconds = 18 * baseInterval
+	case 8:
+		timePeriodInSeconds = 21 * baseInterval
+	case 9:
+		timePeriodInSeconds = 24 * baseInterval
+	case 10:
+		timePeriodInSeconds = 30 * baseInterval
+	}
+	return timePeriodInSeconds
 }
 
 var htmlTemplate = `<!DOCTYPE html>

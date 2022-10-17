@@ -4462,6 +4462,20 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 
 }
 
+// GetRebalanceJobs returns the list of rebalance jobs
+func (d *portworx) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
+	jobsResp, err := d.storagePoolManager.EnumerateRebalanceJobs(d.getContext(), &api.SdkEnumerateRebalanceJobsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return jobsResp.GetJobs(), nil
+}
+
+// GetRebalanceJobStatus returns the rebalance jobs response
+func (d *portworx) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error) {
+	return d.storagePoolManager.GetRebalanceJobStatus(d.getContext(), &api.SdkGetRebalanceJobStatusRequest{Id: jobID})
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &portworx{})
 	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})

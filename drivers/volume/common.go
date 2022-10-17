@@ -873,3 +873,19 @@ func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
 		Operation: "AddBlockDrives()",
 	}
 }
+
+// GetRebalanceJobs returns the list of rebalance jobs
+func (d *DefaultDriver) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetRebalanceJobs()",
+	}
+}
+
+// GetRebalanceJobStatus returns the rebalance jobs response
+func (d *DefaultDriver) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetRebalanceJobStatus()",
+	}
+}

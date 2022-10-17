@@ -354,6 +354,12 @@ type Driver interface {
 
 	// AddBlockDrives add drives to the node using PXCTL
 	AddBlockDrives(n *node.Node, drivePath []string) error
+
+	// GetRebalanceJobs returns the list of rebalance jobs
+	GetRebalanceJobs() ([]*api.StorageRebalanceJob, error)
+
+	// GetRebalanceJobStatus returns the rebalance jobs response
+	GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

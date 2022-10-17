@@ -93,6 +93,7 @@ var _ = Describe("{Longevity}", func() {
 		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
 		AddDiskAndReboot:     TriggerPoolAddDiskAndReboot,
 		ResizeDiskAndReboot:  TriggerPoolResizeDiskAndReboot,
+		AutopilotRebalance:   TriggerAutopilotPoolRebalance,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -578,6 +579,7 @@ func populateIntervals() {
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
+	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1038,6 +1040,17 @@ func populateIntervals() {
 	triggerInterval[ResizeDiskAndReboot][2] = 24 * baseInterval
 	triggerInterval[ResizeDiskAndReboot][1] = 30 * baseInterval
 
+	triggerInterval[AutopilotRebalance][10] = 1 * baseInterval
+	triggerInterval[AutopilotRebalance][9] = 3 * baseInterval
+	triggerInterval[AutopilotRebalance][8] = 6 * baseInterval
+	triggerInterval[AutopilotRebalance][7] = 9 * baseInterval
+	triggerInterval[AutopilotRebalance][6] = 12 * baseInterval
+	triggerInterval[AutopilotRebalance][5] = 15 * baseInterval
+	triggerInterval[AutopilotRebalance][4] = 18 * baseInterval
+	triggerInterval[AutopilotRebalance][3] = 21 * baseInterval
+	triggerInterval[AutopilotRebalance][2] = 24 * baseInterval
+	triggerInterval[AutopilotRebalance][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1171,6 +1184,7 @@ func populateIntervals() {
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0
 	triggerInterval[ResizeDiskAndReboot][0] = 0
+	triggerInterval[AutopilotRebalance][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

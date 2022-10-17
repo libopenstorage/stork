@@ -59,9 +59,9 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	f = CreateLogFile("SystemCheck.log")
-	defer dash.TestCaseEnd()
-	defer CloseLogFile(f)
 	defer dash.TestSetEnd()
+	defer CloseLogFile(f)
+	defer dash.TestCaseEnd()
 	if f != nil {
 		SetTorpedoFileOutput(log, f)
 	}
