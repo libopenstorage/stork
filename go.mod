@@ -24,7 +24,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
 	github.com/libopenstorage/openstorage v9.4.20+incompatible
-	github.com/libopenstorage/operator v0.0.0-20220927184959-7d7a4c157f9c
+	github.com/libopenstorage/operator v0.0.0-20221017204507-4328e80ff06f
 	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
@@ -35,6 +35,7 @@ require (
 	github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
+	github.com/prometheus/client_golang v1.11.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.2-0.20220317124727-77977386932a
@@ -51,7 +52,6 @@ require (
 	k8s.io/apiextensions-apiserver v0.21.4
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v12.0.0+incompatible
-	github.com/prometheus/client_golang v1.11.0
 )
 
 replace (
