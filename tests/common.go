@@ -318,14 +318,6 @@ var dash *aetosutil.Dashboard
 func InitInstance() {
 	var err error
 	var token string
-	if Inst().ConfigMap != "" {
-		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
-		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-		expect(err).NotTo(haveOccurred())
-		log.Infof("Token used for initializing: %s ", token)
-	} else {
-		token = ""
-	}
 
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:                          Inst().SpecDir,
@@ -348,6 +340,15 @@ func InitInstance() {
 		log.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
 	}
 	expect(err).NotTo(haveOccurred())
+
+	if Inst().ConfigMap != "" {
+		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		expect(err).NotTo(haveOccurred())
+		log.Infof("Token used for initializing: %s ", token)
+	} else {
+		token = ""
+	}
 
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,

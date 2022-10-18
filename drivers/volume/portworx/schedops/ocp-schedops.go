@@ -1,6 +1,8 @@
 package schedops
 
-import "github.com/sirupsen/logrus"
+import (
+	"github.com/sirupsen/logrus"
+)
 
 // This is a subclass of k8sSchedOps
 // This is needed to differentiate k8s and OCP scheduler
@@ -16,4 +18,5 @@ func init() {
 
 func (o *ocpSchedOps) Init(logger *logrus.Logger) {
 	o.log = logger
+	o.k8sSchedOps.log = logger
 }
