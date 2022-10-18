@@ -407,12 +407,12 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 					return nil
 				}
 				if err := storkops.Instance().ValidateResourceTransformation(resp.Name, ns, 1*time.Minute, 5*time.Second); err != nil {
-					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.TransformSpecs, resp.Status.Status)
+					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.TransformSpecs[0], resp.Status.Status)
 					log.MigrationLog(migration).Errorf(errMsg)
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),
-						err.Error())
+						errMsg)
 					err = m.updateMigrationCR(context.Background(), migration)
 					if err != nil {
 						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
