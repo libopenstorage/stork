@@ -44,6 +44,10 @@ func (r *ResourceCollector) prepareSecretForApply(
 	if secret.Annotations != nil {
 		if _, ok := secret.Annotations[serviceAccountUIDKey]; ok {
 			secret.Annotations[serviceAccountUIDKey] = ""
+			// Reset the secret token data to empty, so that new service account token will be updated by k8s, during restore.
+			if secret.Data["token"] != nil {
+				secret.Data["token"] = nil
+			}
 		}
 	}
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&secret)
