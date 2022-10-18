@@ -50,6 +50,9 @@ const (
 	// TransformedResourceName is the annotation used to check if resource has been updated
 	// as per transformation rules
 	TransformedResourceName = "stork.libopenstorage.org/resourcetransformation-name"
+	// CurrentStorageClassName is the annotation used to store the current storage class of the PV before
+	// taking backup as we will reset it to empty.
+	CurrentStorageClassName = "stork.libopenstorage.org/current-storage-class-name"
 
 	// ServiceKind for k8s service resources
 	ServiceKind = "Service"
@@ -817,7 +820,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		}
 		return true, nil
 	case "PersistentVolume":
-		return r.preparePVResourceForApply(object, pvNameMappings, vInfo)
+		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings)
 	case "PersistentVolumeClaim":
 		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo)
 	case "ClusterRoleBinding":
