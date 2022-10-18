@@ -509,6 +509,10 @@ spec:
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT
       value: "${S3_ENDPOINT}"
+    - name: S3_AWS_ACCESS_KEY_ID
+      value: "${S3_AWS_ACCESS_KEY_ID}"
+    - name: S3_AWS_SECRET_ACCESS_KEY
+      value: "${S3_AWS_SECRET_ACCESS_KEY}"
     - name: S3_REGION
       value: "${S3_REGION}"
     - name: S3_DISABLE_SSL
