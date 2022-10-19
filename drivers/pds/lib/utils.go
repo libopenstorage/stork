@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-//ResourceSettingTemplate struct used to store template values
+// ResourceSettingTemplate struct used to store template values
 type ResourceSettingTemplate struct {
 	Resources struct {
 		Limits struct {
@@ -38,7 +38,7 @@ type ResourceSettingTemplate struct {
 	} `json:"resources"`
 }
 
-//StorageOptions struct used to store template values
+// StorageOptions struct used to store template values
 type StorageOptions struct {
 	Filesystem  string
 	ForceSpread string
@@ -46,7 +46,7 @@ type StorageOptions struct {
 	VolumeGroup bool
 }
 
-//StorageClassConfig struct used to unmarshal
+// StorageClassConfig struct used to unmarshal
 type StorageClassConfig struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
@@ -97,7 +97,7 @@ type StorageClassConfig struct {
 	} `json:"spec"`
 }
 
-//PDS const
+// PDS const
 const (
 	storageTemplateName   = "Volume replication (best-effort spread)"
 	resourceTemplateName  = "Small"
@@ -120,7 +120,7 @@ const (
 	rabbitmq              = "RabbitMQ"
 )
 
-//PDS vars
+// PDS vars
 var (
 	k8sCore = core.Instance()
 	k8sApps = apps.Instance()
@@ -260,7 +260,7 @@ func GetClusterID(projectID string, targetClusterName string) (string, error) {
 	return "", nil
 }
 
-//GetStorageTemplate return the storage template id
+// GetStorageTemplate return the storage template id
 func GetStorageTemplate(tenantID string) (string, error) {
 	logrus.Infof("Get the storage template")
 	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
@@ -439,7 +439,7 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
 
-//ValidateDataServiceDeployment checks if deployment is healthy and running
+// ValidateDataServiceDeployment checks if deployment is healthy and running
 func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) error {
 	var ss *v1.StatefulSet
 	namespace := GetAndExpectStringEnvVar("NAMESPACE")
@@ -485,13 +485,13 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) error {
 	return err
 }
 
-//DeleteK8sPods deletes the pods in given namespace
+// DeleteK8sPods deletes the pods in given namespace
 func DeleteK8sPods(pod string, namespace string) error {
 	err := k8sCore.DeletePod(pod, namespace, true)
 	return err
 }
 
-//DeleteK8sDeployments deletes the deployments in given namespace
+// DeleteK8sDeployments deletes the deployments in given namespace
 func DeleteK8sDeployments(deployment string, namespace string) error {
 	err := k8sApps.DeleteDeployment(deployment, namespace)
 	return err
@@ -507,7 +507,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	return resp, nil
 }
 
-//GetDeploymentConnectionInfo returns the dns endpoint
+// GetDeploymentConnectionInfo returns the dns endpoint
 func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 	var isfound bool
 	var dnsEndpoint string
@@ -537,7 +537,7 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 	return dnsEndpoint, nil
 }
 
-//GetDeploymentCredentials returns the password to connect to the dataservice
+// GetDeploymentCredentials returns the password to connect to the dataservice
 func GetDeploymentCredentials(deploymentID string) (string, error) {
 	dataServiceDeployment := components.DataServiceDeployment
 	dataServicePassword, err := dataServiceDeployment.GetDeploymentCredentials(deploymentID)
@@ -549,7 +549,7 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 	return pdsPassword, nil
 }
 
-//CreatecassandraWorkload generate workloads on the cassandra db
+// CreatecassandraWorkload generate workloads on the cassandra db
 func CreatecassandraWorkload(cassCommand string, deploymentName string, namespace string) (*v1.Deployment, error) {
 
 	var replicas int32 = 1
@@ -599,7 +599,7 @@ func CreatecassandraWorkload(cassCommand string, deploymentName string, namespac
 	return deployment, nil
 }
 
-//CreatepostgresqlWorkload generate workloads on the pg db
+// CreatepostgresqlWorkload generate workloads on the pg db
 func CreatepostgresqlWorkload(dnsEndpoint string, pdsPassword string, scalefactor string, iterations string, deploymentName string, namespace string) (*v1.Deployment, error) {
 	var replicas int32 = 1
 	deploymentSpec := &v1.Deployment{
@@ -699,7 +699,7 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 	return pod, nil
 }
 
-//CreateRmqWorkload generate workloads for rmq
+// CreateRmqWorkload generate workloads for rmq
 func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string) (*corev1.Pod, error) {
 	var value []string
 	podSpec := &corev1.Pod{
@@ -751,7 +751,7 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 	return pod, nil
 }
 
-//CreateDataServiceWorkloads func
+// CreateDataServiceWorkloads func
 func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
@@ -885,7 +885,7 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID, d
 	return deploymentsMap, dataServiceImageMap, dataServiceVersionBuildMap, nil
 }
 
-//UpdateDataServiceVerison modifies the existing deployment version/image
+// UpdateDataServiceVerison modifies the existing deployment version/image
 func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage string, dsVersion string) (*pds.ModelsDeployment, error) {
 
 	//Validate if the passed dsImage is available in the list of images
@@ -925,7 +925,7 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 
 }
 
-//GetAllSupportedDataServices get the supported datasservices and returns the map
+// GetAllSupportedDataServices get the supported datasservices and returns the map
 func GetAllSupportedDataServices() map[string]string {
 	dataService, _ := components.DataService.ListDataServices()
 	for _, ds := range dataService {
@@ -939,7 +939,25 @@ func GetAllSupportedDataServices() map[string]string {
 	return dataServiceNameIDMap
 }
 
-//ValidateDataServiceVolumes validates the volumes
+// UpdateDataServices modifies the existing deployment
+func UpdateDataServices(deploymentID string, appConfigID string, dataServiceImageMap map[string][]string, nodeCount int32, resourceTemplateID string) (*pds.ModelsDeployment, error) {
+	for version := range dataServiceImageMap {
+		for i := range dataServiceImageMap[version] {
+			imageID := dataServiceImageMap[version][i]
+			logrus.Infof("Version %v ImageID %v", version, imageID)
+			logrus.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
+			deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
+			if err != nil {
+				logrus.Errorf("An Error Occured while updating deployment %v", err)
+				return nil, err
+			}
+			ValidateDataServiceDeployment(deployment)
+		}
+	}
+	return deployment, nil
+}
+
+// ValidateDataServiceVolumes validates the volumes
 func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig, error) {
 	var config StorageClassConfig
 	var resourceTemp ResourceSettingTemplate
