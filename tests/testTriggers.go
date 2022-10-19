@@ -255,10 +255,9 @@ func GenerateUUID() string {
 // UpdateOutcome updates outcome based on error
 func UpdateOutcome(event *EventRecord, err error) {
 
-	logrus.Infof("Hit Error: %s in event %v", err.Error(), event)
 	if err != nil && event != nil {
 		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
-		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
+		logrus.Infof("Hit Error: %s in event %s", err.Error(), event.Event.Type)
 		er := fmt.Errorf(err.Error() + "<br>")
 		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
 		event.Outcome = append(event.Outcome, er)
