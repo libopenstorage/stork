@@ -3883,6 +3883,14 @@ func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) e
 		return err
 	}
 	if len(pxOps.Items) > 0 {
+		// Auto update components as operator doesn't do it between k8s/ocp version upgrades
+		updateStrategy := v1.OnceAutoUpdate
+		pxOps.Items[0].Spec.AutoUpdateComponents = &updateStrategy
+		stc, err := pxOperator.UpdateStorageCluster(&pxOps.Items[0])
+		if err != nil {
+			return err
+		}
+
 		k8sVersion, err := k8sCore.GetVersion()
 		if err != nil {
 			return err
@@ -3891,7 +3899,7 @@ func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) e
 		if err != nil {
 			return err
 		}
-		if err = optest.ValidateStorageCluster(imageList, &pxOps.Items[0], validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
 			return err
 		}
 	}
