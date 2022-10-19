@@ -29,9 +29,6 @@ import (
 
 const (
 	enumerateBatchSize = 100
-	post_install_hook_pod = "pxcentral-post-install-hook"
-	quick_maintenance_pod = "quick-maintenance-repo"
-	full_maintenance_pod  = "full-maintenance-repo"
 )
 
 var (
@@ -60,13 +57,120 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 
 //This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
+	JustBeforeEach(func() {
+		log.Infof(" No pre-setup required for this testcase")
+	})
 	It("Backup Cluster Verification", func() {
-		Step("Check the status of pxcentral-post-install-hook pods", func() {
+		Step("Check the status of backup pods", func() {
+			dash.Info("Check the status of backup pods")
 			status := validateBackupCluster()
-			Expect(status).NotTo(Equal(false),
-				fmt.Sprintf("Backup pods are not in expected state"))
+			dash.VerifyFatal(status, false, fmt.Sprintf("Backup pods are not in expected state"))
 		})
 		//Will add CRD verification here
+	})
+	JustAfterEach(func() {
+		log.Infof(" No cleanup required for this testcase")
+	})
+})
+
+//This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{BasicBackupCreateRestore}", func() {
+	var contexts []*scheduler.Context
+	var appContexts []*scheduler.Context
+	JustBeforeEach(func() {
+		dash.Info("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+		}
+	})
+	It("Baic Backup Creation", func() {
+		var (
+			ps               = make(map[string]map[string]string)
+			create_pre_rule  = false
+			create_post_rule = false
+			app_list         = Inst().AppList
+		)
+		Step("Validate applications and get their labels", func() {
+			ValidateApplications(contexts)
+			logrus.Infof("Create list of pod selector for the apps deployed")
+			for _, ctx := range appContexts {
+				for _, specObj := range ctx.App.SpecList {
+					if obj, ok := specObj.(*appsapi.Deployment); ok {
+						if contains(app_list, obj.Name) == true {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+						if contains(app_list, obj.Name) == true {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					}
+				}
+			}
+		})
+		Step("Creating rules for backup", func() {
+			pre_ps_list := []map[string]string{}
+			pre_actions := []string{}
+			pre_container_list := []string{}
+			pre_background := []bool{}
+			pre_run_in_single_pod := []bool{}
+			dash.Info(" Creating pre rule for deployed apps")
+			for i := 0; i < len(app_list); i++ {
+				if app_list[i] == "cassandra" || app_list[i] == "postgres" {
+					create_pre_rule = true
+					pre_ps_list = append(pre_ps_list, ps[app_list[i]])
+					pre_actions = append(pre_actions, pre_action_list[app_list[i]])
+					pre_background = append(pre_background, background_check_dict[app_list[i]])
+					pre_run_in_single_pod = append(pre_run_in_single_pod, run_in_single_pod_dict[app_list[i]])
+					// Here user has to set env for each app container if required in the format container<app name> eg: containersql
+					container_name := fmt.Sprintf("%s%s", "container", app_list[i])
+					fmt.Println(" Conainer name is ", container_name)
+					pre_container_list = append(pre_container_list, os.Getenv(container_name))
+				}
+			}
+			if create_pre_rule == true {
+				pre_rule_status := createRuleForBackup("backup-pre-rule", "default", pre_ps_list, pre_actions,
+					pre_background, pre_run_in_single_pod, pre_container_list)
+				fmt.Println(pre_rule_status)
+				dash.VerifyFatal(pre_rule_status, true, fmt.Sprintf("Pre rule failed to be created"))
+			}
+			dash.Info(" Creating post rule for deployed apps")
+			post_ps_list := []map[string]string{}
+			post_actions := []string{}
+			post_container_list := []string{}
+			post_background := []bool{}
+			post_run_in_single_pod := []bool{}
+			for i := 0; i < len(app_list); i++ {
+				if app_list[i] == "cassandra" {
+					create_post_rule = true
+					post_ps_list = append(post_ps_list, ps[app_list[i]])
+					post_actions = append(post_actions, post_action_list[app_list[i]])
+					post_background = append(post_background, background_check_dict[app_list[i]])
+					post_run_in_single_pod = append(post_run_in_single_pod, run_in_single_pod_dict[app_list[i]])
+					container_name := fmt.Sprintf("%s%s", "container", app_list[i])
+					fmt.Println(" Conainer name is ", container_name)
+					post_container_list = append(post_container_list, os.Getenv(container_name))
+				}
+			}
+			if create_post_rule == true {
+				post_rule_status := createRuleForBackup("backup-post-rule", "default", post_ps_list, post_actions,
+					post_background, post_run_in_single_pod, post_container_list)
+				fmt.Println(post_rule_status)
+				dash.VerifyFatal(post_rule_status, true, fmt.Sprintf("Post rule failed to be created"))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		dash.Info("Deleting the deployed apps after the testcase")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			err := Inst().S.Destroy(contexts[i], opts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+		}
 	})
 })
 
@@ -1956,7 +2060,7 @@ func getBackupUID(orgID, backupName string) string {
 
 func validateBackupCluster() bool {
 	flag := false
-	labelSelectors := map[string]string{"job-name": "pxcentral-post-install-hook"}
+	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
 	ns := backup.GetPxBackupNamespace()
 	pods, err := core.Instance().GetPods(ns, labelSelectors)
 	if err != nil {
@@ -1990,7 +2094,7 @@ func validateBackupCluster() bool {
 		if !matched {
 			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
 			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
-			if !(equal || equal1){
+			if !(equal || equal1) {
 				logrus.Info("Checking if all the containers are up or not")
 				res := core.Instance().IsPodRunning(pod)
 				if !res {
@@ -2007,4 +2111,69 @@ func validateBackupCluster() bool {
 		}
 	}
 	return true
+}
+
+func createRuleForBackup(rule_name string, orgID string, pod_selector []map[string]string, action_value []string,
+	background []bool, run_in_single_pod []bool, container []string) bool {
+	var rulesinfo api.RulesInfo
+	var uid string
+	total_rules := len(action_value)
+	rulesinfo_ruleitem := make([]api.RulesInfo_RuleItem, total_rules)
+	for i := 0; i < total_rules; i++ {
+		rule_action := api.RulesInfo_Action{Background: background[i], RunInSinglePod: run_in_single_pod[i], Value: action_value[i]}
+		var actions []*api.RulesInfo_Action = []*api.RulesInfo_Action{&rule_action}
+		rulesinfo_ruleitem[i].PodSelector = pod_selector[i]
+		rulesinfo_ruleitem[i].Actions = actions
+		rulesinfo_ruleitem[i].Container = container[i]
+		rulesinfo.Rules = append(rulesinfo.Rules, &rulesinfo_ruleitem[i])
+	}
+	RuleCreateReq := &api.RuleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  rule_name,
+			OrgId: orgID,
+		},
+		RulesInfo: &rulesinfo,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+	if err != nil {
+		logrus.Errorf("Failed to get context with error:%v", err)
+		return false
+	}
+	_, err = Inst().Backup.CreateRule(ctx, RuleCreateReq)
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create rules Error: [%v]", err))
+	if err != nil {
+		logrus.Errorf("Rules failed to get created with error: %v", err)
+		return false
+	}
+	logrus.Info("Validate rules for backup")
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+	for i := 0; i < len(rule_list.Rules); i++ {
+		if rule_list.Rules[i].Metadata.Name == rule_name {
+			uid = rule_list.Rules[i].Metadata.Uid
+			break
+		}
+	}
+	RuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  rule_name,
+		Uid:   uid,
+	}
+	_, err1 := Inst().Backup.InspectRule(ctx, RuleInspectReq)
+	if err1 != nil {
+		logrus.Errorf("Failed to validate the created rule with Error: [%v]", err)
+		return false
+	}
+	return true
+}
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
 }
