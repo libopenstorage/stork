@@ -127,7 +127,9 @@ type GoogleConfig struct {
 }
 
 type NfsConfig struct {
-	NfsServerAddr string `json:"nfsServerAddr"`
+	ServerAddr  string `json:"serverAddr"`
+	SubPath     string `json:"subPath"`
+	MountOption string `json:"mountOption"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -195,7 +197,13 @@ func (bl *BackupLocation) getMergedNfsConfig(client kubernetes.Interface) error 
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
 		if val, ok := secretConfig.Data["serverAddr"]; ok && val != nil {
-			bl.Location.NfsConfig.NfsServerAddr = strings.TrimSuffix(string(val), "\n")
+			bl.Location.NfsConfig.ServerAddr = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["subPath"]; ok && val != nil {
+			bl.Location.NfsConfig.SubPath = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["mountOption"]; ok && val != nil {
+			bl.Location.NfsConfig.MountOption = strings.TrimSuffix(string(val), "\n")
 		}
 	}
 	return nil
