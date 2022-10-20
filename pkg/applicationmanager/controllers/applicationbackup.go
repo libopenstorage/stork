@@ -1676,7 +1676,7 @@ func (a *ApplicationBackupController) backupResources(
 	if nfs {
 		// Check whether ResourceExport is preset or not
 		crName := getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
-		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, backup.Namespace)
+		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, a.backupAdminNamespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
 				// create resource export CR
@@ -1696,7 +1696,7 @@ func (a *ApplicationBackupController) backupResources(
 				resourceExport.Annotations = make(map[string]string)
 				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
 				resourceExport.Name = getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
-				resourceExport.Namespace = backup.Namespace
+				resourceExport.Namespace = a.backupAdminNamespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
 				source := &kdmpapi.ResourceExportObjectReference{
 					APIVersion: backup.APIVersion,
@@ -1970,7 +1970,7 @@ func (a *ApplicationBackupController) cleanupResources(
 	// Directly calling DeleteResourceExport with out checking backuplocation type.
 	// For other backuplocation type, expecting Notfound
 	crName := getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
-	err := kdmpShedOps.Instance().DeleteResourceExport(crName, backup.Namespace)
+	err := kdmpShedOps.Instance().DeleteResourceExport(crName, a.backupAdminNamespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
 		log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
