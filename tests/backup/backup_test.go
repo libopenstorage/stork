@@ -30,7 +30,6 @@ const (
 )
 
 var (
-	orgID      string
 	bucketName string
 )
 
@@ -56,7 +55,7 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 //This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
-		log.Infof(" No pre-setup required for this testcase")
+		log.Infof("No pre-setup required for this testcase")
 		dash.TestCaseBegin("Backup: BackupClusterVerification", "validating backup cluster pods", "", nil)
 	})
 	It("Backup Cluster Verification", func() {
@@ -75,8 +74,16 @@ var _ = Describe("{BackupClusterVerification}", func() {
 
 //This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreateWithRules}", func() {
+	var (
+		ps       = make(map[string]map[string]string)
+		app_list = Inst().AppList
+	)
 	var contexts []*scheduler.Context
+	var CloudCredUID_list []string
 	var appContexts []*scheduler.Context
+	var post_rule_uid string
+	var pre_rule_uid string
+	providers := getProviders()
 	JustBeforeEach(func() {
 		dash.Info("Deploy applications")
 		dash.TestCaseBegin("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", "", nil)
@@ -87,13 +94,7 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 			contexts = append(contexts, appContexts...)
 		}
 	})
-	It("Baic Backup Creation", func() {
-		var (
-			ps               = make(map[string]map[string]string)
-			create_pre_rule  = false
-			create_post_rule = false
-			app_list         = Inst().AppList
-		)
+	It("Basic Backup Creation", func() {
 		Step("Validate applications and get their labels", func() {
 			ValidateApplications(contexts)
 			logrus.Infof("Create list of pod selector for the apps deployed")
@@ -112,68 +113,77 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 			}
 		})
 		Step("Creating rules for backup", func() {
-			pre_ps_list := []map[string]string{}
-			pre_actions := []string{}
-			pre_container_list := []string{}
-			pre_background := []bool{}
-			pre_run_in_single_pod := []bool{}
-			dash.Info(" Creating pre rule for deployed apps")
-			for i := 0; i < len(app_list); i++ {
-				if app_list[i] == "cassandra" || app_list[i] == "postgres" {
-					create_pre_rule = true
-					pre_ps_list = append(pre_ps_list, ps[app_list[i]])
-					pre_actions = append(pre_actions, pre_action_list[app_list[i]])
-					pre_background = append(pre_background, background_check_dict[app_list[i]])
-					pre_run_in_single_pod = append(pre_run_in_single_pod, run_in_single_pod_dict[app_list[i]])
-					// Here user has to set env for each app container if required in the format container<app name> eg: containersql
-					container_name := fmt.Sprintf("%s%s", "container", app_list[i])
-					fmt.Println(" Conainer name is ", container_name)
-					pre_container_list = append(pre_container_list, os.Getenv(container_name))
-				}
-			}
-			if create_pre_rule == true {
-				pre_rule_status := createRuleForBackup("backup-pre-rule", "default", pre_ps_list, pre_actions,
-					pre_background, pre_run_in_single_pod, pre_container_list)
-				fmt.Println(pre_rule_status)
-				dash.VerifyFatal(pre_rule_status, true, fmt.Sprintf("Verifying pre rule for backup"))
-			}
-			dash.Info(" Creating post rule for deployed apps")
-			post_ps_list := []map[string]string{}
-			post_actions := []string{}
-			post_container_list := []string{}
-			post_background := []bool{}
-			post_run_in_single_pod := []bool{}
-			for i := 0; i < len(app_list); i++ {
-				if app_list[i] == "cassandra" {
-					create_post_rule = true
-					post_ps_list = append(post_ps_list, ps[app_list[i]])
-					post_actions = append(post_actions, post_action_list[app_list[i]])
-					post_background = append(post_background, background_check_dict[app_list[i]])
-					post_run_in_single_pod = append(post_run_in_single_pod, run_in_single_pod_dict[app_list[i]])
-					container_name := fmt.Sprintf("%s%s", "container", app_list[i])
-					fmt.Println(" Conainer name is ", container_name)
-					post_container_list = append(post_container_list, os.Getenv(container_name))
-				}
-			}
-			if create_post_rule == true {
-				post_rule_status := createRuleForBackup("backup-post-rule", "default", post_ps_list, post_actions,
-					post_background, post_run_in_single_pod, post_container_list)
-				fmt.Println(post_rule_status)
-				dash.VerifyFatal(post_rule_status, true, fmt.Sprintf("Verifying Post rule for backup"))
+			dash.Info("Creating pre rule for deployed apps")
+			pre_rule_status := createRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
+			dash.VerifyFatal(pre_rule_status, true, fmt.Sprintf("Verifying pre rule for backup"))
+			dash.Info("Creating post rule for deployed apps")
+			post_rule_status := createRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
+			dash.VerifyFatal(post_rule_status, true, fmt.Sprintf("Verifying Post rule for backup"))
+		})
+		Step("Creating bucket,backup location and cloud setting", func() {
+			dash.Info("Creating bucket,backup location and cloud setting")
+			for _, provider := range providers {
+				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
+				CredName := fmt.Sprintf("%s-%s", "cred1", provider)
+				backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
+				CloudCredUID = uuid.New()
+				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
+				BackupLocationUID = uuid.New()
+				CreateBucket(provider, bucketName)
+				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				time.Sleep(time.Minute * 1)
+				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
 			}
 		})
 	})
 	JustAfterEach(func() {
 		dash.Info("Deleting the deployed apps after the testcase")
-		defer dash.TestCaseEnd()
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
 			opts[SkipClusterScopedObjects] = true
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
+		dash.Info("Deleting backup rules created")
+		RuleEnumerateReq := &api.RuleEnumerateRequest{
+			OrgId: orgID,
+		}
+		ctx, err := backup.GetAdminCtxFromSecret()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+		rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+		if create_post_rule == true {
+			for i := 0; i < len(rule_list.Rules); i++ {
+				if rule_list.Rules[i].Metadata.Name == "backup-post-rule" {
+					post_rule_uid = rule_list.Rules[i].Metadata.Uid
+					break
+				}
+			}
+			post_rule_delete_status := deleteRuleForBackup(orgID, "backup-post-rule", post_rule_uid)
+			dash.VerifySafely(post_rule_delete_status, true, fmt.Sprintf("Verifying Post rule deletion for backup"))
+		}
+		if create_pre_rule == true {
+			for i := 0; i < len(rule_list.Rules); i++ {
+				if rule_list.Rules[i].Metadata.Name == "backup-pre-rule" {
+					pre_rule_uid = rule_list.Rules[i].Metadata.Uid
+					break
+				}
+			}
+			pre_rule_delete_status := deleteRuleForBackup(orgID, "backup-pre-rule", pre_rule_uid)
+			dash.VerifySafely(pre_rule_delete_status, true, fmt.Sprintf("Verifying Pre rule deletion for backup"))
+		}
+		dash.Info("Deleting bucket,backup location and cloud setting")
+		for i, provider := range providers {
+			backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
+			bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
+			DeleteBucket(provider, bucketName)
+			CredName := fmt.Sprintf("%s-%s", "cred1", provider)
+			DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
+			DeleteBackupLocation(backup_location_name, orgID)
+		}
+		defer dash.TestCaseEnd()
 	})
+
 })
 
 // This test performs basic test of starting an application, backing it up and killing stork while

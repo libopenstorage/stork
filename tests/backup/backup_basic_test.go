@@ -33,10 +33,6 @@ var (
 	// selectively enable after suite actions by setting wantAllAfterSuiteActions to false and setting these to true
 	wantAfterSuiteSystemCheck     bool = false
 	wantAfterSuiteValidateCleanup bool = false
-	pre_action_list                    = map[string]string{"cassandra": "nodetool flush -- keyspace1;", "postgres": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U '$POSTGRES_USER' -c 'CHECKPOINT';"}
-	post_action_list                   = map[string]string{"cassandra": "nodetool verify -- keyspace1;"}
-	background_check_dict              = map[string]bool{"cassandra": false, "postgres": false}
-	run_in_single_pod_dict             = map[string]bool{"cassandra": false, "postgres": false}
 )
 
 var log *logrus.Logger
