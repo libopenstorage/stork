@@ -142,6 +142,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	pvNameMappings map[string]string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
 	storageClassMappings map[string]string,
+	namespaceMappings map[string]string,
 ) (bool, error) {
 	var updatedName string
 	var present bool
@@ -208,7 +209,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	if err != nil {
 		return false, err
 	}
-	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo)
+	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo, namespaceMappings)
 	if err != nil {
 		return false, err
 	}

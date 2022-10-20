@@ -89,7 +89,7 @@ type BackupObjectv1beta1Csi struct {
 	V1SnapshotRequired     bool
 }
 
-//  GetVolumeSnapshotContent retrieves a backed up volume snapshot
+// GetVolumeSnapshotContent retrieves a backed up volume snapshot
 func (cbo *csiBackupObject) GetVolumeSnapshot(snapshotID string) (interface{}, error) {
 	var vs interface{}
 	var ok bool
@@ -1170,6 +1170,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 func (c *csi) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
+	namespaceMapping map[string]string,
 ) (*v1.PersistentVolume, error) {
 	return pv, nil
 }
