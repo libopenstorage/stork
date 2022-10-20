@@ -270,6 +270,7 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 					log.TransformLog(transform).Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
 					resInfo.Status = stork_api.ResourceTransformationStatusFailed
 					resInfo.Reason = err.Error()
+					return err
 				}
 				unstructured, ok := object.(*unstructured.Unstructured)
 				if !ok {

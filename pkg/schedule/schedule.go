@@ -231,6 +231,9 @@ func GetOptions(policyName string, namespace string, policyType stork_api.Schedu
 		return schedulePolicy.Policy.Interval.Options, nil
 	case stork_api.SchedulePolicyTypeDaily:
 		options := schedulePolicy.Policy.Daily.Options
+		if len(options) == 0 {
+			options = make(map[string]string)
+		}
 		scheduledDay, ok := stork_api.Days[schedulePolicy.Policy.Daily.ForceFullSnapshotDay]
 		if ok {
 			currentDay := GetCurrentTime().Weekday()
