@@ -24,10 +24,6 @@ const (
 	backupLocationName       = "tp-blocation"
 	appReadinessTimeout      = 10 * time.Minute
 	defaultRetryInterval     = 10 * time.Second
-	post_install_hook_pod    = "pxcentral-post-install-hook"
-	quick_maintenance_pod    = "quick-maintenance-repo"
-	full_maintenance_pod     = "full-maintenance-repo"
-	taskNamePrefix           = "backupcreaterestore"
 )
 
 var (
