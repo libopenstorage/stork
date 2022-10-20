@@ -279,16 +279,28 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		return nil
 	}
 
-	/* TODO: Temp disabling it, would move to nfs path with restore vol changes
-	err = a.verifyNamespaces(restore)
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
 	if err != nil {
-		log.ApplicationRestoreLog(restore).Errorf(err.Error())
-		a.recorder.Event(restore,
-			v1.EventTypeWarning,
-			string(storkapi.ApplicationRestoreStatusFailed),
-			err.Error())
-		return nil
-	}*/
+		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
+		return err
+	}
+
+	nfs, err := IsNFSBackuplocationType(backup)
+	if err != nil {
+		logrus.Errorf("error in checking backuplocation type")
+	}
+
+	if !nfs {
+		err = a.verifyNamespaces(restore)
+		if err != nil {
+			log.ApplicationRestoreLog(restore).Errorf(err.Error())
+			a.recorder.Event(restore,
+				v1.EventTypeWarning,
+				string(storkapi.ApplicationRestoreStatusFailed),
+				err.Error())
+			return nil
+		}
+	}
 
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
@@ -1280,7 +1292,7 @@ func (a *ApplicationRestoreController) restoreResources(
 	} else {
 		// Check whether ResourceExport is preset or not
 		crName := getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace)
-		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
+		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, a.restoreAdminNamespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
 				// create resource export CR
@@ -1300,7 +1312,7 @@ func (a *ApplicationRestoreController) restoreResources(
 				resourceExport.Annotations = make(map[string]string)
 				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
 				resourceExport.Name = crName
-				resourceExport.Namespace = restore.Namespace
+				resourceExport.Namespace = a.restoreAdminNamespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
 				source := &kdmpapi.ResourceExportObjectReference{
 					APIVersion: restore.APIVersion,
@@ -1539,7 +1551,7 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 	// Directly calling DeleteResourceExport with out checking backuplocation type.
 	// For other backuplocation type, expecting Notfound
 	crName := getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace)
-	err := kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
+	err := kdmpShedOps.Instance().DeleteResourceExport(crName, a.restoreAdminNamespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
 		log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
