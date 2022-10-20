@@ -23,7 +23,6 @@ const (
 	destinationClusterName   = "destination-cluster"
 	backupLocationName       = "tp-blocation"
 	appReadinessTimeout      = 10 * time.Minute
-	defaultTimeout           = 6 * time.Minute
 	defaultRetryInterval     = 10 * time.Second
 	post_install_hook_pod    = "pxcentral-post-install-hook"
 	quick_maintenance_pod    = "quick-maintenance-repo"
@@ -58,8 +57,10 @@ func TestBasic(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
+	log = Inst().Logger
 	logrus.Infof("Init instance")
 	InitInstance()
+	dash.TestSetBegin(dash.TestSet)
 })
 
 var _ = AfterSuite(func() {
@@ -69,6 +70,7 @@ var _ = AfterSuite(func() {
 	if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
 		ValidateCleanup()
 	}
+	defer dash.TestCaseEnd()
 })
 
 func TestMain(m *testing.M) {
