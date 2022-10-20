@@ -362,6 +362,7 @@ func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 func (g *gcp) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
+	namespaceMapping map[string]string,
 ) (*v1.PersistentVolume, error) {
 	if pv.Spec.CSI != nil {
 		key, err := common.VolumeIDToKey(pv.Spec.CSI.VolumeHandle)
