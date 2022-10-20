@@ -46,6 +46,8 @@ type JobOpts struct {
 	KopiaImageExecutorSourceNs string
 	NodeAffinity               map[string]string
 	NfsServer                  string
+	NfsMountOption             string
+	NfsSubPath                 string
 	NfsExportDir               string
 	RestoreExportName          string
 	AppCRName                  string
@@ -96,6 +98,22 @@ func WithRestoreExport(name string) JobOption {
 
 // WithNfsServer is job parameter.
 func WithNfsServer(server string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsServer = strings.TrimSpace(server)
+		return nil
+	}
+}
+
+// WithNfsMountOption is job parameter.
+func WithNfsMountOption(server string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsMountOption = strings.TrimSpace(server)
+		return nil
+	}
+}
+
+// WithNfsSubPath is job parameter.
+func WithNfsSubPath(server string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.NfsServer = strings.TrimSpace(server)
 		return nil

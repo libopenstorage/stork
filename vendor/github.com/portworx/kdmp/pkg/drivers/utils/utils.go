@@ -307,7 +307,7 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 	return registry, "", nil
 }
 
-//GetExecutorImageAndSecret returns the image name and secret to to use in the job pod
+// GetExecutorImageAndSecret returns the image name and secret to to use in the job pod
 func GetExecutorImageAndSecret(executorImageType, deploymentName, deploymentNs,
 	jobName string, jobOption drivers.JobOpts) (string, string, error) {
 	var imageRegistry, imageRegistrySecret string
@@ -382,7 +382,7 @@ func GetKopiaExecutorImageRegistryAndSecret(source, sourceNs string) (string, st
 func CreateNfsSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
-	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.NfsServerAddr)
+	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.ServerAddr)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	err := CreateJobSecret(secretName, namespace, credentialData, labels)
@@ -422,7 +422,7 @@ func GetKopiaExecutorImageName() string {
 	return strings.Join([]string{drivers.KopiaExecutorImage, version.Get().GitVersion}, ":")
 }
 
-//GetNfsExecutorImageName - will return the default nfs executor image
+// GetNfsExecutorImageName - will return the default nfs executor image
 func GetNfsExecutorImageName() string {
 	return strings.Join([]string{drivers.NfsExecutorImage, version.Get().GitVersion}, ":")
 }
@@ -625,17 +625,17 @@ func CreateImageRegistrySecret(sourceName, destName, sourceNamespace, destNamesp
 	return nil
 }
 
-//GetCredSecretName - get credential secret name
+// GetCredSecretName - get credential secret name
 func GetCredSecretName(name string) string {
 	return CredSecret + "-" + name
 }
 
-//GetImageSecretName - get image secret name
+// GetImageSecretName - get image secret name
 func GetImageSecretName(name string) string {
 	return ImageSecret + "-" + name
 }
 
-//GetCertSecretName - get cert secret name
+// GetCertSecretName - get cert secret name
 func GetCertSecretName(name string) string {
 	return CertSecret + "-" + name
 }
