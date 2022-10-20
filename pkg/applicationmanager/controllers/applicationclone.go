@@ -588,7 +588,7 @@ func (a *ApplicationCloneController) preparePVResource(
 		return err
 	}
 
-	_, err := a.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil)
+	_, err := a.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil)
 	if err != nil {
 		return err
 	}

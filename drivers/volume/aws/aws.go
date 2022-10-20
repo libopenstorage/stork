@@ -397,6 +397,7 @@ func (a *aws) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 func (a *aws) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
+	namespaceMapping map[string]string,
 ) (*v1.PersistentVolume, error) {
 	if pv.Spec.CSI != nil {
 		pv.Spec.CSI.VolumeHandle = pv.Name

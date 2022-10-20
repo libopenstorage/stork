@@ -395,6 +395,7 @@ func (l *linstor) Stop() error {
 func (l *linstor) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
+	namespaceMapping map[string]string,
 ) (*v1.PersistentVolume, error) {
 
 	return pv, nil
