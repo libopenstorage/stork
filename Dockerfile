@@ -31,9 +31,5 @@ RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/down
 
 WORKDIR /
 
-COPY ./bin/linux/storkctl /storkctl/linux/
-COPY ./bin/darwin/storkctl /storkctl/darwin/
-COPY ./bin/windows/storkctl.exe /storkctl/windows/
 COPY ./LICENSE /licenses
 COPY ./bin/stork /
-COPY ./bin/px_statfs.so /
