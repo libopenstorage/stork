@@ -31,7 +31,9 @@ jobs:
 
       - name: Build an image from Dockerfile
         run: |
-          make
+          make stork
+          make storkctl
+          make px-statfs
           make container
 
       - name: Run Trivy vulnerability scanner
