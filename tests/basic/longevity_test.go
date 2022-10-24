@@ -14,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -462,8 +461,12 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	log.Info("Add Topology Labels on node")
 	var secret PureSecret
+	volumeDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volume driver namespace. Error [%v]", err)
+	}
 	pureSecretString, err := Inst().S.GetSecretData(
-		schedops.PXNamespace, PureSecretName, PureSecretDataField,
+		volumeDriverNamespace, PureSecretName, PureSecretDataField,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read pure secret [%s]. Error [%v]",
@@ -507,7 +510,8 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
 	logrus.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
-	if err := deletePXPods(""); err != nil {
+
+	if err := deletePXPods(volumeDriverNamespace); err != nil {
 		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)
 	}
 
@@ -528,9 +532,6 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 // deletePXPods delete px pods
 func deletePXPods(nameSpace string) error {
 	pxLabel := make(map[string]string)
-	if nameSpace == "" {
-		nameSpace = k8s.PXNamespace
-	}
 	pxLabel["name"] = "portworx"
 	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
 		return err

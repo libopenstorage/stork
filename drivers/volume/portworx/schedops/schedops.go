@@ -38,6 +38,8 @@ type Driver interface {
 	ValidateSnapshot(volumeParams map[string]string, parent *api.Volume) error
 	// GetVolumeName returns the volume name based on the volume object received
 	GetVolumeName(v *volume.Volume) string
+	// GetPortworxNamespace returns the Portworx namespace
+	GetPortworxNamespace() (string, error)
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
 	GetServiceEndpoint() (string, error)
 	// UpgradePortworx upgrades portworx to the given docker image and tag

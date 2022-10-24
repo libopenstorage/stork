@@ -32,8 +32,6 @@ import (
 const (
 	// PXServiceName is the name of the portworx service in kubernetes
 	PXServiceName = "portworx-service"
-	// PXNamespace is the kubernetes namespace in which portworx daemon set runs
-	PXNamespace = "kube-system"
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
 	// PXServiceLabelKey is the label key used for px systemd service control
@@ -553,11 +551,20 @@ func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 
 // GetServiceEndpoint get IP addr of portworx-service, preferable external IP
 func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
-	return k8sCore.GetServiceEndpoint(PXServiceName, PXNamespace)
+	var namespace string
+	var err error
+	if namespace, err = k.GetPortworxNamespace(); err != nil {
+		return "", err
+	}
+	return k8sCore.GetServiceEndpoint(PXServiceName, namespace)
 }
 
 func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
-
+	var namespace string
+	var err error
+	if namespace, err = k.GetPortworxNamespace(); err != nil {
+		return err
+	}
 	binding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "talisman",
@@ -565,14 +572,14 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 		Subjects: []rbacv1.Subject{{
 			Kind:      "ServiceAccount",
 			Name:      talismanServiceAccount,
-			Namespace: PXNamespace,
+			Namespace: namespace,
 		}},
 		RoleRef: rbacv1.RoleRef{
 			Kind: "ClusterRole",
 			Name: "cluster-admin",
 		},
 	}
-	binding, err := k8sRbac.CreateClusterRoleBinding(binding)
+	binding, err = k8sRbac.CreateClusterRoleBinding(binding)
 	if err != nil {
 		return err
 	}
@@ -580,7 +587,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 	account := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      talismanServiceAccount,
-			Namespace: PXNamespace,
+			Namespace: namespace,
 		},
 	}
 	account, err = k8sCore.CreateServiceAccount(account)
@@ -605,7 +612,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
-			Namespace: PXNamespace,
+			Namespace: namespace,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &valOne,
@@ -664,7 +671,13 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 // IsPXReadyOnNode validates if Portworx pod is up and running
 func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	var isPxPodPresent bool = false
-	pxPods, err := k8sCore.GetPodsByNode(n.Name, PXNamespace)
+
+	var namespace string
+	var err error
+	if namespace, err = k.GetPortworxNamespace(); err != nil {
+		return false
+	}
+	pxPods, err := k8sCore.GetPodsByNode(n.Name, namespace)
 	if err != nil {
 		k.log.Errorf("Failed to get apps on node %s", n.Name)
 		return false
@@ -864,6 +877,21 @@ func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 		return nil, fmt.Errorf("Failed to get list of autopilotrules. Err: %v", err)
 	}
 	return listAutopilotRules, nil
+}
+
+func (k *k8sSchedOps) GetPortworxNamespace() (string, error) {
+	var allServices *corev1.ServiceList
+	var err error
+
+	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
+		return "", fmt.Errorf("Failed to get list of services. Err: %v", err)
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == PXServiceName {
+			return svc.Namespace, nil
+		}
+	}
+	return "", fmt.Errorf("can't find %s Portworx service from list of services.", PXServiceName)
 }
 
 func printStatus(k *k8sSchedOps, pods ...corev1.Pod) {

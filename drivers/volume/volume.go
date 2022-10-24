@@ -49,13 +49,16 @@ type Options struct {
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
 // Torpedo.  The functions defined here are meant to be destructive and illustrative
-// of failure scenarious that can happen with an external storage provider.
+// of failure scenarios that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
 	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string, logger *logrus.Logger) error
 
 	// String returns the string name of this driver.
 	String() string
+
+	// GetVolumeDriverNamespace returns the namespace of this driver.
+	GetVolumeDriverNamespace() (string, error)
 
 	// CreateVolume creates a volume with the default setting
 	// returns volume_id of the new volume
@@ -69,10 +72,10 @@ type Driver interface {
 	// returns the device path
 	AttachVolume(volumeID string) (string, error)
 
-	// DetachVolume detaches the volume given the volumeID
+	// DetachVolume detaches the volume for given volumeID
 	DetachVolume(volumeID string) error
 
-	// Delete the volume of the Volume ID provided
+	// DeleteVolume deletes the volume for given volumeID
 	DeleteVolume(volumeID string) error
 
 	// InspectVolume inspects the volume with the given name

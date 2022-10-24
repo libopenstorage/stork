@@ -83,6 +83,14 @@ func (d *DefaultDriver) String() string {
 	return ""
 }
 
+func (d *DefaultDriver) GetVolumeDriverNamespace() (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetVolumeDriverNamespace()",
+	}
+
+}
+
 // Init initializes the volume driver under the given scheduler
 func (d *DefaultDriver) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	StorageProvisioner = DefaultStorageProvisioner
