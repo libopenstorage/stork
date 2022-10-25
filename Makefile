@@ -42,7 +42,7 @@ BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 .DEFAULT_GOAL=all
 .PHONY: test clean vendor vendor-update px-statfs
 
-all: stork storkctl cmdexecutor pretest px-statfs
+all: stork
 
 vendor-tidy:
 	go mod tidy
