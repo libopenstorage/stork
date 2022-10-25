@@ -113,6 +113,7 @@ jobs:
         with:
           image-ref: 'openstorage/stork:dev'
           format: 'template'
+          exit-code: '1'
           template: '@/contrib/sarif.tpl'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
