@@ -3,6 +3,7 @@ package webhookadmission
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -50,6 +51,7 @@ type Controller struct {
 	lock         sync.Mutex
 	started      bool
 	SkipResource string
+	sqlDSN       string
 }
 
 // Serve method for webhook server
@@ -204,6 +206,28 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 				return &pt
 			}(),
 		}
+	}
+
+	// Store ID in MySQL
+	var pool *sql.DB
+	pool, err = sql.Open("stork-driver", c.sqlDSN)
+	if err != nil {
+		// This will not be a connection error, but a DSN parse error or
+		// another initialization error.
+		http.Error(w, fmt.Sprintf("could not open SQL connection: %v", err), http.StatusInternalServerError)
+	}
+	defer pool.Close()
+
+	// User input ID
+	id := arReq.UID
+
+	// Non-protected query
+	q := fmt.Sprintf("SELECT object_type FROM request_ids WHERE id='%s'", id)
+	_, err = pool.Query(q)
+	if err != nil {
+		// This will not be a connection error, but a DSN parse error or
+		// another initialization error.
+		http.Error(w, fmt.Sprintf("could not query for object type: %v", err), http.StatusInternalServerError)
 	}
 
 	admissionResponse.UID = arReq.UID
