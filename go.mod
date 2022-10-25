@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go v0.65.0
 	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-pipeline-go v0.2.2
-	github.com/Azure/azure-sdk-for-go v67.0.0+incompatible
+	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
 	github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/Azure/go-autorest/autorest v0.11.13
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.5
