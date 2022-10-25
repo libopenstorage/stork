@@ -3293,7 +3293,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		d.log.Debugf("Node %v is offline, collecting diags using pxctl", hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f --output %s", d.getPxctlPath(n), config.OutputFile), opts)
+		out, err := d.GetPxctlCmdOutputConnectionOpts(n, fmt.Sprintf("sv diags -a -f --output %s", config.OutputFile), opts, true)
 		if err != nil {
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
 		}
@@ -3315,6 +3315,11 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 					diagsPort = pxMgmntPort + 10
 				}
 			}
+		}
+
+		if len(d.token) > 0 {
+			config.Token = d.token
+			d.log.Infof("Added securty token: %s", config.Token)
 		}
 
 		url := netutil.MakeURL("http://", n.Addresses[0], diagsPort)
@@ -3339,8 +3344,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", hostname, err, out)
 		}
 
-		pxctlPath := d.getPxctlPath(n)
-		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status | egrep ^Telemetry:", pxctlPath), opts)
+		out, err = d.GetPxctlCmdOutputConnectionOpts(n, "status | egrep ^Telemetry:", opts, true)
 		if err != nil {
 			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
 		}
