@@ -146,7 +146,6 @@ help:
 
 deploy:
 	sudo docker push $(STORK_IMG)
-	sudo docker push $(CMD_EXECUTOR_IMG)
 
 clean:
 	-rm -rf $(BIN)
