@@ -8,9 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -35,9 +33,6 @@ var (
 	wantAfterSuiteValidateCleanup bool = false
 )
 
-var log *logrus.Logger
-var dash *aetosutil.Dashboard
-
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -50,7 +45,7 @@ func TestBasic(t *testing.T) {
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
 	log = Inst().Logger
-	logrus.Infof("Init instance")
+	log.Infof("Init instance")
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)
 })

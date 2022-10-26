@@ -68,7 +68,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	})
 	JustAfterEach(func() {
 		defer dash.TestCaseEnd()
-		log.Infof(" No cleanup required for this testcase")
+		log.Infof("No cleanup required for this testcase")
 	})
 })
 
@@ -81,10 +81,22 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 	var contexts []*scheduler.Context
 	var CloudCredUID_list []string
 	var appContexts []*scheduler.Context
-	var post_rule_uid string
-	var pre_rule_uid string
+
 	providers := getProviders()
 	JustBeforeEach(func() {
+		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
+		for i := 0; i < len(app_list); i++ {
+			if contains(post_rule_app, app_list[i]) == true {
+				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, fmt.Sprintf("Post Rule details mentioned for the apps"))
+				}
+			}
+			if contains(post_rule_app, app_list[i]) == true {
+				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, fmt.Sprintf("Pre Rule details mentioned for the apps"))
+				}
+			}
+		}
 		dash.Info("Deploy applications")
 		dash.TestCaseBegin("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", "", nil)
 		contexts = make([]*scheduler.Context, 0)
@@ -97,7 +109,7 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 	It("Basic Backup Creation", func() {
 		Step("Validate applications and get their labels", func() {
 			ValidateApplications(contexts)
-			logrus.Infof("Create list of pod selector for the apps deployed")
+			log.Infof("Create list of pod selector for the apps deployed")
 			for _, ctx := range appContexts {
 				for _, specObj := range ctx.App.SpecList {
 					if obj, ok := specObj.(*appsapi.Deployment); ok {
@@ -137,50 +149,9 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		dash.Info("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
-		dash.Info("Deleting backup rules created")
-		RuleEnumerateReq := &api.RuleEnumerateRequest{
-			OrgId: orgID,
-		}
-		ctx, err := backup.GetAdminCtxFromSecret()
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
-		rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
-		if create_post_rule == true {
-			for i := 0; i < len(rule_list.Rules); i++ {
-				if rule_list.Rules[i].Metadata.Name == "backup-post-rule" {
-					post_rule_uid = rule_list.Rules[i].Metadata.Uid
-					break
-				}
-			}
-			post_rule_delete_status := deleteRuleForBackup(orgID, "backup-post-rule", post_rule_uid)
-			dash.VerifySafely(post_rule_delete_status, true, fmt.Sprintf("Verifying Post rule deletion for backup"))
-		}
-		if create_pre_rule == true {
-			for i := 0; i < len(rule_list.Rules); i++ {
-				if rule_list.Rules[i].Metadata.Name == "backup-pre-rule" {
-					pre_rule_uid = rule_list.Rules[i].Metadata.Uid
-					break
-				}
-			}
-			pre_rule_delete_status := deleteRuleForBackup(orgID, "backup-pre-rule", pre_rule_uid)
-			dash.VerifySafely(pre_rule_delete_status, true, fmt.Sprintf("Verifying Pre rule deletion for backup"))
-		}
-		dash.Info("Deleting bucket,backup location and cloud setting")
-		for i, provider := range providers {
-			backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
-			bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
-			DeleteBucket(provider, bucketName)
-			CredName := fmt.Sprintf("%s-%s", "cred1", provider)
-			DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
-			DeleteBackupLocation(backup_location_name, orgID)
-		}
+
+		teardown_status := teardownForTestcase(contexts, providers, CloudCredUID_list)
+		dash.VerifyFatal(teardown_status, true, fmt.Sprintf("Testcase teardown status"))
 		defer dash.TestCaseEnd()
 	})
 
