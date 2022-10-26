@@ -637,6 +637,7 @@ func (k *kdmp) StartRestore(
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 	objects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	funct := "kdmp.StartRestore"
 	log.ApplicationRestoreLog(restore).Debugf("started generic restore: %v", restore.Name)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	nodes, err := core.Instance().GetNodes()
@@ -681,27 +682,33 @@ func (k *kdmp) StartRestore(
 			destFullZoneName = strings.Join(splitDestRegion, "-")
 			volumeInfo.Zones = append(volumeInfo.Zones, destFullZoneName)
 		}
-
-		// get corresponding pvc object from objects list
-		pvc, err := storkvolume.GetPVCFromObjects(objects, bkpvInfo)
-		if err != nil {
-			return nil, err
-		}
-		if !nonSupportedProvider {
-			for _, node := range nodes.Items {
-				zone := node.Labels[v1.LabelTopologyZone]
-				if zone == destFullZoneName {
-					pvc.Annotations[storageNodeAnnotation] = node.Name
-				}
-			}
-		}
-
 		val, ok := restore.Spec.NamespaceMapping[bkpvInfo.Namespace]
 		if !ok {
 			return nil, fmt.Errorf("restore namespace mapping not found: %s", bkpvInfo.Namespace)
 
 		}
 		restoreNamespace := val
+		pvc := &v1.PersistentVolumeClaim{}
+
+		if objects != nil {
+			// get corresponding pvc object from objects list
+			pvc, err = storkvolume.GetPVCFromObjects(objects, bkpvInfo)
+			if err != nil {
+				return nil, err
+			}
+			if !nonSupportedProvider {
+				for _, node := range nodes.Items {
+					zone := node.Labels[v1.LabelTopologyZone]
+					if zone == destFullZoneName {
+						pvc.Annotations[storageNodeAnnotation] = node.Name
+					}
+				}
+			}
+			pvc.Namespace = restoreNamespace
+		} else {
+			pvc.Name = bkpvInfo.PersistentVolumeClaim
+			pvc.Namespace = restoreNamespace
+		}
 		volumeInfo.PersistentVolumeClaim = bkpvInfo.PersistentVolumeClaim
 		volumeInfo.PersistentVolumeClaimUID = bkpvInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = bkpvInfo.Namespace
@@ -722,7 +729,6 @@ func (k *kdmp) StartRestore(
 				labels[restoreObjectUIDKey] = utils.GetValidLabel(restore.Annotations[utils.PxbackupObjectUIDKey])
 			}
 		}
-
 		volBackup := &kdmpapi.VolumeBackup{}
 		volBackup.Labels = labels
 		volBackup.Annotations = make(map[string]string)
@@ -741,8 +747,6 @@ func (k *kdmp) StartRestore(
 			logrus.Errorf("unable to create volumebackup CR: %v", err)
 			return nil, err
 		}
-
-		pvc.Namespace = restoreNamespace
 
 		backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
 		if err != nil {
@@ -789,6 +793,7 @@ func (k *kdmp) StartRestore(
 			Namespace:  restoreNamespace,
 			APIVersion: "v1",
 		}
+		logrus.Tracef("%s de cr name [%v/%v]", funct, dataExport.Namespace, dataExport.Name)
 		if _, err := kdmpShedOps.Instance().CreateDataExport(dataExport); err != nil {
 			logrus.Errorf("failed to create DataExport CR: %v", err)
 			return volumeInfos, err
@@ -848,7 +853,6 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
-
 		if dataExport.Status.TransferID == "" {
 			vInfo.Status = storkapi.ApplicationRestoreStatusInitial
 			vInfo.Reason = "Volume restore not started yet"
