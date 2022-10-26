@@ -29,6 +29,8 @@ const (
 	ResourceBackupStatusFailed ResourceBackupStatus = "Failed"
 	// ResourceBackupStatusSuccessful when Resource has been transferred.
 	ResourceBackupStatusSuccessful ResourceBackupStatus = "Successful"
+	// ResourceBackupStatusPartialSuccess when Resource was partially successful
+	ResourceBackupStatusPartialSuccess ResourceBackupStatus = "PartialSuccess"
 )
 
 // ResourceBackupProgressStatus overall resource backup/restore progress
@@ -53,12 +55,18 @@ type ResourceBackup struct {
 	Type ResourceBackupType `json:"type,omitempty"`
 	// Status Overall status
 	Status ResourceBackupProgressStatus `json:"status,omitempty"`
+	// VolumesInfo Contains list of vols to be restored. Filled in by nfs executor job
+	VolumesInfo []*ResourceBackupVolumeInfo `json:"volumesInfo,omitempty"`
+	// ExistingVolumesInfo existing vols which are not be restored
+	ExistingVolumesInfo []*ResourceRestoreVolumeInfo `json:"existingVolumesInfo,omitempty"`
 }
 
 // ResourceBackupSpec configuration parameters for ResourceBackup
 type ResourceBackupSpec struct {
 	// ObjRef here is backuplocation CR
 	ObjRef ResourceBackupObjectReference `json:"source,omitempty"`
+	// PVC obj ref - During restore of vols store the ref of pvc
+	PVCObjRef ResourceBackupObjectReference `json:"pvcobj,omitempty"`
 }
 
 // ResourceBackupObjectReference contains enough information to let you inspect the referred object.
@@ -84,4 +92,38 @@ type ResourceBackupList struct {
 	metav1.ListMeta `json:"metaResource,omitempty"`
 
 	Items []ResourceBackup `json:"items"`
+}
+
+// ResourceBackupVolumeInfo is the info for the backup of a volume
+type ResourceBackupVolumeInfo struct {
+	PersistentVolumeClaim    string               `json:"persistentVolumeClaim"`
+	PersistentVolumeClaimUID string               `json:"persistentVolumeClaimUID"`
+	Namespace                string               `json:"namespace"`
+	Volume                   string               `json:"volume"`
+	BackupID                 string               `json:"backupID"`
+	DriverName               string               `json:"driverName"`
+	Zones                    []string             `json:"zones"`
+	Status                   ResourceBackupStatus `json:"status"`
+	Reason                   string               `json:"reason"`
+	Options                  map[string]string    `json:"options"`
+	TotalSize                uint64               `json:"totalSize"`
+	ActualSize               uint64               `json:"actualSize"`
+	StorageClass             string               `json:"storageClass"`
+	Provisioner              string               `json:"provisioner"`
+	VolumeSnapshot           string               `json:"volumeSnapshot"`
+}
+
+// ResourceRestoreVolumeInfo is the info for the restore of a volume
+type ResourceRestoreVolumeInfo struct {
+	PersistentVolumeClaim    string               `json:"persistentVolumeClaim"`
+	PersistentVolumeClaimUID string               `json:"persistentVolumeClaimUID"`
+	SourceNamespace          string               `json:"sourceNamespace"`
+	SourceVolume             string               `json:"sourceVolume"`
+	RestoreVolume            string               `json:"restoreVolume"`
+	DriverName               string               `json:"driverName"`
+	Zones                    []string             `json:"zones"`
+	Status                   ResourceBackupStatus `json:"status"`
+	Reason                   string               `json:"reason"`
+	TotalSize                uint64               `json:"totalSize"`
+	Options                  map[string]string    `json:"options"`
 }

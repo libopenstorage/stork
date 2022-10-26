@@ -94,18 +94,6 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		return utils.ToNFSJobStatus(errMsg, jobStatus), nil
 	}
 
-	/*vb, err := kdmpops.Instance().GetVolumeBackup(context.Background(), name, namespace)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			if utils.IsJobPending(job) {
-				logrus.Warnf("backup job %s is in pending state", job.Name)
-				return utils.ToJobStatus(0, "", jobStatus), nil
-			}
-		}
-		errMsg := fmt.Sprintf("failed to fetch volumebackup %s/%s status: %v", namespace, name, err)
-		logrus.Errorf("%s: %v", fn, errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}*/
 	res, err := kdmp.Instance().GetResourceBackup(name, namespace)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -114,7 +102,6 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 				return utils.ToNFSJobStatus(err.Error(), jobStatus), nil
 			}
 		}
-
 	}
 
 	return utils.ToNFSJobStatus(res.Status.Reason, jobStatus), nil
@@ -203,6 +190,7 @@ func jobForBackupResource(
 		jobOption.KopiaImageExecutorSourceNs,
 		jobOption.JobName,
 		jobOption)
+
 	if err != nil {
 		logrus.Errorf("failed to get the executor image details")
 		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobOption.JobName)
@@ -224,7 +212,7 @@ func jobForBackupResource(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   nil,
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.RestoreExportName)),
 					ServiceAccountName: jobOption.RestoreExportName,
 					//NodeName:           mountPod.Spec.NodeName,
 					Containers: []corev1.Container{

@@ -221,7 +221,12 @@ func ToJobStatus(progress float64, errMsg string, jobStatus batchv1.JobCondition
 
 // ToNFSJobStatus returns a job status for provided parameters.
 func ToNFSJobStatus(errMsg string, jobStatus batchv1.JobConditionType) *drivers.JobStatus {
-	if errMsg == "upload resource Successfully" {
+	// Note: This err msg has to match with the msg set in executor when the job
+	// is successful
+	// TODO: Need to have better logical way to notify job completion, this
+	// hard coding of msg doesn't look good
+	if errMsg == "upload resource Successfully" ||
+		errMsg == "pvc bounded successfully" {
 		return &drivers.JobStatus{
 			State:  drivers.JobStateCompleted,
 			Reason: errMsg,
