@@ -2628,11 +2628,15 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 				} else {
 					pv.Spec.CSI.ControllerExpandSecretRef.Name = val
 				}
-				// In the case of portworx volume backup, we will have namespace mapping always.
-				// So no need to check for the template string as we are going to change the value to destination namespace always.
-				// If user does not change the namespace, the source and destination namespace in the mapping will be same.
-				if _, ok := sc.Parameters[controllerExpandSecretNamespace]; ok {
+			}
+			if val, ok := sc.Parameters[controllerExpandSecretNamespace]; ok {
+				if pv.Spec.CSI.ControllerExpandSecretRef == nil {
+					pv.Spec.CSI.ControllerExpandSecretRef = &v1.SecretReference{}
+				}
+				if val == templatizedNamespace {
 					pv.Spec.CSI.ControllerExpandSecretRef.Namespace = dstNamespace
+				} else {
+					pv.Spec.CSI.ControllerExpandSecretRef.Namespace = val
 				}
 			}
 
@@ -2646,10 +2650,18 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 				} else {
 					pv.Spec.CSI.NodePublishSecretRef.Name = val
 				}
-				if _, ok := sc.Parameters[nodePublishSecretNamespace]; ok {
+			}
+			if val, ok := sc.Parameters[nodePublishSecretNamespace]; ok {
+				if pv.Spec.CSI.NodePublishSecretRef == nil {
+					pv.Spec.CSI.NodePublishSecretRef = &v1.SecretReference{}
+				}
+				if val == templatizedNamespace {
 					pv.Spec.CSI.NodePublishSecretRef.Namespace = dstNamespace
+				} else {
+					pv.Spec.CSI.NodePublishSecretRef.Namespace = val
 				}
 			}
+
 			// Update driver (provisioner) name
 			pv.Spec.CSI.Driver = sc.Provisioner
 			// In the case of csi, will set pv.Spec.portworxVolume to nil as we will have csi section now.
