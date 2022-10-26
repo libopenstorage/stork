@@ -28,9 +28,11 @@ const (
 	// TLSCertMountVol mount vol name for tls certificate secret
 	TLSCertMountVol = "tls-secret"
 	// NfsVolumeName is the Volume spec's name to be used in kopia Job Spec
-	NfsVolumeName         = "nfs-target"
-	defaultTimeout        = 1 * time.Minute
-	progressCheckInterval = 5 * time.Second
+	NfsVolumeName = "nfs-target"
+	// DefaultTimeout default timeout for tasks retry
+	DefaultTimeout = 1 * time.Minute
+	// ProgressCheckInterval regular interval at which task does a retry
+	ProgressCheckInterval = 5 * time.Second
 	// KdmpConfigmapName kdmp config map name
 	KdmpConfigmapName = "kdmp-config"
 	// KdmpConfigmapNamespace kdmp config map ns
@@ -76,7 +78,7 @@ func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 		}
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, progressCheckInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, DefaultTimeout, ProgressCheckInterval); err != nil {
 		errMsg := fmt.Sprintf("max retries done, failed in fetching secret token of sa [%v/%v]: %v ", name, namespace, err)
 		logrus.Errorf("%v", errMsg)
 		// Exhausted all retries
@@ -144,7 +146,7 @@ func SetupNFSServiceAccount(name, namespace string, role *rbacv1.ClusterRole) er
 		}
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, progressCheckInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, DefaultTimeout, ProgressCheckInterval); err != nil {
 		errMsg := fmt.Sprintf("max retries done, failed in fetching secret token of sa [%v/%v]: %v ", name, namespace, err)
 		logrus.Errorf("%v", errMsg)
 		// Exhausted all retries

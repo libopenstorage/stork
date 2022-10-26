@@ -23,6 +23,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
+
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -234,7 +235,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			// Create the pvc from the spec provided in the dataexport CR
 			pvcSpec := dataExport.Status.RestorePVC
 			_, err = c.createPVC(dataExport)
-			if err != nil {
+			if err != nil && k8sErrors.IsNotFound(err) {
 				msg := fmt.Sprintf("Error creating pvc %s/%s for restore: %v", pvcSpec.Namespace, pvcSpec.Name, err)
 				logrus.Errorf(msg)
 				data := updateDataExportDetail{
@@ -243,7 +244,6 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				}
 				return false, c.updateStatus(dataExport, data)
 			}
-
 			_, err = checkPVCIgnoringJobMounts(dataExport.Spec.Destination, dataExport.Name)
 			if err != nil {
 				msg := fmt.Sprintf("Destination pvc %s/%s is not bound yet: %v", pvcSpec.Namespace, pvcSpec.Name, err)

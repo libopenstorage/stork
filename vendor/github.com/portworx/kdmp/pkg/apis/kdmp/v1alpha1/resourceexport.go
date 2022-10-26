@@ -46,6 +46,8 @@ const (
 	ResourceRestoreStatusRetained ResourceRestoreStatus = "Retained"
 	// ResourceRestoreStatusSuccessful Restore Successful
 	ResourceRestoreStatusSuccessful ResourceRestoreStatus = "Successful"
+	// ResourceRestoreStatusInProgress Restore InProgress
+	ResourceRestoreStatusInProgress ResourceRestoreStatus = "InProgress"
 )
 
 const (
@@ -90,6 +92,10 @@ type ResourceExport struct {
 	Spec              ResourceExportSpec `json:"spec"`
 	// Status Overall status
 	Status ResourceStatus `json:"status,omitempty"`
+	// VolumesInfo Contains list of vols to be restored. Filled in by nfs executor job
+	VolumesInfo []*ResourceBackupVolumeInfo `json:"volumesInfo"`
+	// ExistingVolumesInfo existing vols which are not be restored
+	ExistingVolumesInfo []*ResourceRestoreVolumeInfo `json:"existingVolumesInfo,omitempty"`
 }
 
 // ResourceExportSpec configuration parameters for ResourceExport

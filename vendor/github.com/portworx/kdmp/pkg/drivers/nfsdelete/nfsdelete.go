@@ -182,7 +182,7 @@ func jobForDeleteResource(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   nil,
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.JobName)),
 					ServiceAccountName: jobOption.ServiceAccountName,
 					Containers: []corev1.Container{
 						{

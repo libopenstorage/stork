@@ -25,14 +25,17 @@ import (
 // updateResourceExportFields when and update needs to be done to ResourceExport
 // user can choose which filed to be updated and pass the same to updateStatus()
 type updateResourceExportFields struct {
-	stage     kdmpapi.ResourceExportStage
-	status    kdmpapi.ResourceExportStatus
-	reason    string
-	id        string
-	resources []*kdmpapi.ResourceRestoreResourceInfo
+	stage               kdmpapi.ResourceExportStage
+	status              kdmpapi.ResourceExportStatus
+	reason              string
+	id                  string
+	resources           []*kdmpapi.ResourceRestoreResourceInfo
+	VolumesInfo         []*kdmpapi.ResourceBackupVolumeInfo
+	ExistingVolumesInfo []*kdmpapi.ResourceRestoreVolumeInfo
 }
 
 func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (bool, error) {
+	funct := "re.process"
 	if in == nil {
 		return false, nil
 	}
@@ -100,7 +103,6 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		return false, c.updateStatus(resourceExport, updateData)
 	}
 
-	//var serr error
 	switch resourceExport.Status.Stage {
 	case kdmpapi.ResourceExportStageInitial:
 		// Create ResourceBackup CR
@@ -114,6 +116,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			return false, c.updateStatus(resourceExport, updateData)
 		}
 		// start data transfer
+
 		id, serr := startNfsResourceJob(
 			driver,
 			utils.KdmpConfigmapName,
@@ -121,8 +124,9 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			resourceExport,
 			backupLocation,
 		)
+		logrus.Tracef("%s: startNfsResourceJob id: %v", funct, id)
 		if serr != nil {
-			logrus.Errorf("err: %v", serr)
+			logrus.Errorf("%s: serr: %v", funct, serr)
 			updateData := updateResourceExportFields{
 				stage:  kdmpapi.ResourceExportStageFinal,
 				status: kdmpapi.ResourceExportStatusFailed,
@@ -138,8 +142,10 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		}
 		return false, c.updateStatus(resourceExport, updateData)
 	case kdmpapi.ResourceExportStageInProgress:
+
 		// Read the job status and move the reconciler to next state
 		progress, err := driver.JobStatus(resourceExport.Status.TransferID)
+		logrus.Tracef("%s job progress: %v", funct, progress)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to get %s job status: %s", resourceExport.Status.TransferID, err)
 			updateData := updateResourceExportFields{
@@ -171,6 +177,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			}
 			return true, c.updateStatus(resourceExport, updateData)
 		}
+
 		var rb *kdmpapi.ResourceBackup
 		// Get the resourcebackup
 		rb, err = kdmp.Instance().GetResourceBackup(resourceExport.Name, resourceExport.Namespace)
@@ -182,6 +189,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			}
 			return false, c.updateStatus(resourceExport, updateData)
 		}
+
 		switch progress.State {
 		case drivers.JobStateFailed:
 			errMsg := fmt.Sprintf("%s transfer job failed: %s", resourceExport.Status.TransferID, progress.Reason)
@@ -197,11 +205,14 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		case drivers.JobStateCompleted:
 			// Go for clean up with success state
 			updateData := updateResourceExportFields{
-				stage:     kdmpapi.ResourceExportStageFinal,
-				status:    kdmpapi.ResourceExportStatusSuccessful,
-				reason:    "Job successful",
-				resources: rb.Status.Resources,
+				stage:               kdmpapi.ResourceExportStageFinal,
+				status:              kdmpapi.ResourceExportStatusSuccessful,
+				reason:              "Job successful",
+				resources:           rb.Status.Resources,
+				VolumesInfo:         rb.VolumesInfo,
+				ExistingVolumesInfo: rb.ExistingVolumesInfo,
 			}
+
 			return true, c.updateStatus(resourceExport, updateData)
 		}
 	case kdmpapi.ResourceExportStageFinal:
@@ -222,8 +233,8 @@ func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) er
 		return err
 	}
 	err = kdmp.Instance().DeleteResourceBackup(rbName, rbNamespace)
-	if err != nil {
-		errMsg := fmt.Sprintf("failed to delete ResourceExport CR[%v/%v]: %v", rbNamespace, rbName, err)
+	if err != nil && !k8sErrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("failed to delete ResourceBackup CR[%v/%v]: %v", rbNamespace, rbName, err)
 		logrus.Errorf("%v", errMsg)
 		return err
 	}
@@ -236,12 +247,14 @@ func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) er
 func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourceExportFields) error {
 	var updErr error
 	t := func() (interface{}, bool, error) {
+		logrus.Infof("updateStatus data: %+v", data)
+		//logrus.Infof("re cr: %+v", re)
 		namespacedName := types.NamespacedName{}
 		namespacedName.Name = re.Name
 		namespacedName.Namespace = re.Namespace
 		err := c.client.Get(context.TODO(), namespacedName, re)
 		if err != nil && !k8sErrors.IsNotFound(err) {
-			errMsg := fmt.Sprintf("failed in getting DE CR %v/%v: %v", re.Namespace, re.Name, err)
+			errMsg := fmt.Sprintf("failed in getting RE CR %v/%v: %v", re.Namespace, re.Name, err)
 			logrus.Infof("%v", errMsg)
 			return "", true, fmt.Errorf("%v", errMsg)
 		}
@@ -261,6 +274,13 @@ func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourc
 
 		if len(data.resources) != 0 {
 			re.Status.Resources = data.resources
+		}
+		if len(data.VolumesInfo) != 0 {
+			re.VolumesInfo = data.VolumesInfo
+		}
+
+		if len(data.ExistingVolumesInfo) != 0 {
+			re.ExistingVolumesInfo = data.ExistingVolumesInfo
 		}
 
 		updErr = c.client.Update(context.TODO(), re)
@@ -332,7 +352,7 @@ func startNfsResourceJob(
 	switch drv.Name() {
 	case drivers.NFSBackup:
 		return drv.StartJob(
-			// TODO: below two calls need to be generalized and chnaged in all the startJob Calls
+			// TODO: below two calls need to be generalized and changed in all the startJob Calls
 			// For NFS it need to be populated in ResourceExport CR and passed to Job via its reconciler.
 			drivers.WithKopiaImageExecutorSource("stork"),
 			drivers.WithKopiaImageExecutorSourceNs("kube-system"),

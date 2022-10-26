@@ -283,7 +283,6 @@ func jobFor(
 		logrus.Errorf("failed to get the executor image details")
 		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobName)
 	}
-
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,

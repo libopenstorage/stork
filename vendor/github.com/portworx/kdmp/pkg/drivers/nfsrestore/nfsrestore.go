@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/kdmp"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
@@ -43,11 +46,11 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	if err != nil {
 		return "", err
 	}
-	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
+	/*if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
 		errMsg := fmt.Sprintf("creation of restore job %s failed: %v", o.RestoreExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
 		return "", fmt.Errorf(errMsg)
-	}
+	}*/
 
 	return utils.NamespacedName(job.Namespace, job.Name), nil
 }
@@ -84,6 +87,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 	jobErr, nodeErr := utils.IsJobOrNodeFailed(job)
+
 	var errMsg string
 	if jobErr {
 		errMsg = fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
@@ -94,18 +98,6 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		return utils.ToNFSJobStatus(errMsg, jobStatus), nil
 	}
 
-	/*vb, err := kdmpops.Instance().GetVolumeBackup(context.Background(), name, namespace)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			if utils.IsJobPending(job) {
-				logrus.Warnf("backup job %s is in pending state", job.Name)
-				return utils.ToJobStatus(0, "", jobStatus), nil
-			}
-		}
-		errMsg := fmt.Sprintf("failed to fetch volumebackup %s/%s status: %v", namespace, name, err)
-		logrus.Errorf("%s: %v", fn, errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}*/
 	res, err := kdmp.Instance().GetResourceBackup(name, namespace)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -114,9 +106,8 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 				return utils.ToNFSJobStatus(err.Error(), jobStatus), nil
 			}
 		}
-
 	}
-
+	logrus.Tracef("%s jobStatus:%v", fn, jobStatus)
 	return utils.ToNFSJobStatus(res.Status.Reason, jobStatus), nil
 }
 
@@ -136,12 +127,21 @@ func buildJob(
 	if err != nil {
 		return nil, err
 	}
-
-	job, err := jobForRestoreResource(jobOptions, resources)
-	if err != nil {
-		errMsg := fmt.Sprintf("building resource backup job %s failed: %v", jobOptions.RestoreExportName, err)
-		logrus.Errorf("%s: %v", funct, errMsg)
-		return nil, fmt.Errorf(errMsg)
+	var job *batchv1.Job
+	cleanupTask := func() (interface{}, bool, error) {
+		job, err = jobForRestoreResource(jobOptions, resources)
+		if err != nil {
+			errMsg := fmt.Sprintf("building resource backup job failed, trying in next %s: %v",
+				jobOptions.RestoreExportName, err)
+			logrus.Errorf("%s: %v", funct, errMsg)
+			return nil, true, fmt.Errorf(errMsg)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(cleanupTask, utils.DefaultTimeout, utils.ProgressCheckInterval); err != nil {
+		errMsg := fmt.Sprintf("max retries done, restore job creation failed: %v", err)
+		logrus.Errorf("%v", errMsg)
+		return nil, err
 	}
 
 	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -180,9 +180,29 @@ func jobForRestoreResource(
 	jobOption drivers.JobOpts,
 	resources corev1.ResourceRequirements,
 ) (*batchv1.Job, error) {
+	funct := "jobForRestoreResource"
+	// Read the ApplicationRestore stage and decide which restore operation to perform
+	restoreCR, err := storkops.Instance().GetApplicationRestore(jobOption.AppCRName, jobOption.AppCRNamespace)
+	if err != nil {
+		logrus.Errorf("%s: Error getting restore cr: %v", funct, err)
+		return nil, err
+	}
+	var opType string
+	switch restoreCR.Status.Stage {
+	case storkapi.ApplicationRestoreStageVolumes:
+		opType = "restore-vol"
+	case storkapi.ApplicationRestoreStageApplications:
+		opType = "restore"
+	default:
+		errMsg := fmt.Sprintf("invalid stage %v in applicationRestore CR[%v/%v]:",
+			restoreCR.Status.Stage, jobOption.AppCRNamespace, jobOption.AppCRName)
+		logrus.Errorf("%v", errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
 	cmd := strings.Join([]string{
 		"/nfsexecutor",
-		"restore",
+		opType,
 		"--app-cr-name",
 		jobOption.AppCRName,
 		"--restore-namespace",
@@ -224,9 +244,8 @@ func jobForRestoreResource(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   nil,
+					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.RestoreExportName)),
 					ServiceAccountName: jobOption.RestoreExportName,
-					//NodeName:           mountPod.Spec.NodeName,
 					Containers: []corev1.Container{
 						{
 							Name:            drivers.NfsExecutorImage,
