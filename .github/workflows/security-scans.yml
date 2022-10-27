@@ -108,26 +108,15 @@ jobs:
         run: |
           make stork
           make container
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.7.1
-        if: ${{ github.event_name == 'pull_request' }}
-        with:
-          image-ref: 'openstorage/stork:dev'
-          format: 'sarif'
-          exit-code: '1'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
-        if: ${{ github.event_name == 'push' }}
         with:
           image-ref: 'openstorage/stork:dev'
           format: 'template'
           template: '@/contrib/sarif.tpl'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v2
