@@ -396,7 +396,6 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 //VerifyFatal verify test and abort operation upon failure
 func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string) {
 
-	d.Log.Info("Verify Fatal")
 	d.VerifySafely(actual, expected, description)
 	var err error
 	if actual != expected {
