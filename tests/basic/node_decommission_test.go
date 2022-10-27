@@ -6,7 +6,6 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -15,9 +14,12 @@ import (
 
 var _ = Describe("{DecommissionNode}", func() {
 	var contexts []*scheduler.Context
+	StartTorpedoTest("DecommissionNode", "Validate node decommission", nil)
 
 	testName := "decommissionnode"
-	It("has to decommission a node and check if node was decommissioned successfully", func() {
+	stepLog := "has to decommission a node and check if node was decommissioned successfully"
+	It(stepLog, func() {
+		dash.Infof(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -29,7 +31,7 @@ var _ = Describe("{DecommissionNode}", func() {
 		var workerNodes []node.Node
 		Step(fmt.Sprintf("get worker nodes"), func() {
 			workerNodes = node.GetWorkerNodes()
-			Expect(workerNodes).NotTo(BeEmpty())
+			dash.VerifyFatal(len(workerNodes) > 0, true, "Verify worker nodes")
 		})
 
 		nodeIndexMap := make(map[int]int)
@@ -51,12 +53,16 @@ var _ = Describe("{DecommissionNode}", func() {
 		// decommission nodes one at a time according to chaosLevel
 		for nodeIndex := range nodeIndexMap {
 			nodeToDecommission := workerNodes[nodeIndex]
-			Step(fmt.Sprintf("decommission node %s", nodeToDecommission.Name), func() {
+			stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Validate node decommission preparation")
 				err = Inst().V.DecommissionNode(&nodeToDecommission)
-				Expect(err).NotTo(HaveOccurred())
-				Step(fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name), func() {
+				dash.VerifyFatal(err, nil, "Validate node decommission init")
+				stepLog = fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name)
+				Step(stepLog, func() {
+					dash.Info(stepLog)
 					t := func() (interface{}, bool, error) {
 						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
 						if err != nil {
@@ -68,15 +74,17 @@ var _ = Describe("{DecommissionNode}", func() {
 						return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
 					}
 					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(decommissioned.(bool)).To(BeTrue())
+					dash.VerifyFatal(err, nil, "Validate get decommissioned node status")
+					dash.VerifyFatal(decommissioned.(bool), true, "Validate node is decommissioned")
 				})
 			})
-			Step(fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name), func() {
+			stepLog = fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				err := Inst().V.RejoinNode(&nodeToDecommission)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Validate node rejoin init")
 				err = Inst().V.WaitDriverUpOnNode(nodeToDecommission, Inst().DriverStartTimeout)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Validate driver up on reoined node")
 			})
 
 		}
@@ -91,6 +99,7 @@ var _ = Describe("{DecommissionNode}", func() {
 
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })

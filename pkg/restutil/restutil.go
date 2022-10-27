@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"net/http"
 	neturl "net/url"
 	"time"
@@ -102,22 +103,33 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 	}
 	var resp *http.Response
 	resp, err = client.Do(req)
-	defer func(Body io.ReadCloser) {
-		tempErr := Body.Close()
-		if tempErr != nil {
-			err = tempErr
-		}
-	}(resp.Body)
+	if err != nil {
+		resp, err = retryRequest(client, req)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
 	log.Tracef("Response Status Code: %d", resp.StatusCode)
-
 	respBody, err := getBody(resp.Body)
 	if err != nil {
 		return nil, 0, err
 	}
+	err = resp.Body.Close()
 	return respBody, resp.StatusCode, err
+}
+
+func retryRequest(client *http.Client, req *http.Request) (*http.Response, error) {
+	var err error
+	var resp *http.Response
+	wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		resp, err = client.Do(req)
+		if err == nil {
+			return true, nil
+		}
+		return false, err
+	})
+	return resp, err
+
 }
 
 func setBasicAuthAndHeaders(req *http.Request, auth *Auth, headers map[string]string) *http.Request {

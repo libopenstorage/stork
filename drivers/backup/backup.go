@@ -3,11 +3,11 @@ package backup
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Image Generic struct
@@ -317,7 +317,7 @@ func Get(name string) (Driver, error) {
 func init() {
 	str, err := GetPxCentralAdminPwd()
 	if err != nil {
-		logrus.Errorf("Error fetching password from secret: %v", err)
+		log.GetLogInstance().Errorf("Error fetching password from secret: %v", err)
 	}
 	PxCentralAdminPwd = str
 }

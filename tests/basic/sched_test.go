@@ -5,7 +5,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -17,12 +16,15 @@ var _ = Describe("{StopScheduler}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35268
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("StopScheduler", "Validate stop scheduler and apps", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
 	testName := "stopscheduler"
-	It("has to stop scheduler service and check if applications are fine", func() {
+	stepLog := "has to stop scheduler service and check if applications are fine"
+	It(stepLog, func() {
+		dash.Info(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -30,16 +32,20 @@ var _ = Describe("{StopScheduler}", func() {
 		}
 
 		ValidateApplications(contexts)
-
-		Step("get nodes and induce scheduler service to stop on the node", func() {
+		stepLog = "get nodes and induce scheduler service to stop on the node"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, storageNode := range node.GetStorageDriverNodes() {
-
-				Step(fmt.Sprintf("stop scheduler service on node %s", storageNode.Name), func() {
+				stepLog = fmt.Sprintf("stop scheduler service on node %s", storageNode.Name)
+				Step(stepLog, func() {
+					dash.Infof(stepLog)
 					err := Inst().S.StopSchedOnNode(storageNode)
-					Expect(err).NotTo(HaveOccurred())
+					dash.VerifyFatal(err, nil, "validate scheduler is stopped")
 				})
 
-				Step("wait for the service to stop and reschedule apps", func() {
+				stepLog = "wait for the service to stop and reschedule apps"
+				Step(stepLog, func() {
+					dash.Info(stepLog)
 					time.Sleep(6 * time.Minute)
 				})
 
@@ -49,9 +55,11 @@ var _ = Describe("{StopScheduler}", func() {
 					}
 				})
 
-				Step(fmt.Sprintf("start scheduler service on node %s", storageNode.Name), func() {
+				stepLog = fmt.Sprintf("start scheduler service on node %s", storageNode.Name)
+				Step(stepLog, func() {
+					dash.Info(stepLog)
 					err := Inst().S.StartSchedOnNode(storageNode)
-					Expect(err).NotTo(HaveOccurred())
+					dash.VerifyFatal(err, nil, "Validate start scheduler on the node")
 				})
 
 				Step("validate apps", func() {
@@ -66,6 +74,7 @@ var _ = Describe("{StopScheduler}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

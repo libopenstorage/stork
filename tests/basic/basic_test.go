@@ -38,7 +38,6 @@ var (
 
 var log *logrus.Logger
 var dash *aetosutil.Dashboard
-var f *os.File
 
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -58,13 +57,13 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	f = CreateLogFile("SystemCheck.log")
+
+	TestLogger = CreateLogger("SystemCheck.log")
 	defer dash.TestSetEnd()
-	defer CloseLogFile(f)
+
+	defer CloseLogger(TestLogger)
 	defer dash.TestCaseEnd()
-	if f != nil {
-		SetTorpedoFileOutput(log, f)
-	}
+	SetTorpedoFileOutput(log, TestLogger)
 
 	dash.TestCaseBegin("System check", "validating system check and clean up", "", nil)
 	if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {

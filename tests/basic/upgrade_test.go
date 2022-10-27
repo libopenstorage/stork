@@ -29,12 +29,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
 	var runID int
 	JustBeforeEach(func() {
-		f = CreateLogFile("UpgradeVolumeDriver.log")
-		if f != nil {
-			SetTorpedoFileOutput(log, f)
-		}
-
-		dash.TestCaseBegin("Upgrade: UpgradeVolumeDriver", "validating volume driver upgrade", "", nil)
+		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -119,8 +114,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer dash.TestCaseEnd()
-		defer CloseLogFile(f)
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -131,12 +125,7 @@ var _ = Describe("{UpgradeStork}", func() {
 	var runID int
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
-		f = CreateLogFile("UpgradeStork.log")
-		if f != nil {
-			SetTorpedoFileOutput(log, f)
-		}
-
-		dash.TestCaseBegin("Upgrade: UpgradeStork", "validating stork upgrade", "", nil)
+		StartTorpedoTest("UpgradeStork", "Validating stork upgrade", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
@@ -186,8 +175,7 @@ var _ = Describe("{UpgradeStork}", func() {
 		})
 	}
 	JustAfterEach(func() {
-		defer dash.TestCaseEnd()
-		defer CloseLogFile(f)
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

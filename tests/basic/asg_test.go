@@ -27,11 +27,13 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58847
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("ClusterScaleUpDown", "Validate storage nodes scale down and scale up", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
+		dash.Infof("Has to validate that storage nodes are not lost during asg scaledown")
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -41,45 +43,56 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		ValidateApplications(contexts)
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
-		Expect(err).NotTo(HaveOccurred())
+		dash.VerifyFatal(err, nil, "Verify Get ASG cluster size")
 
 		scaleupCount := intitialNodeCount + intitialNodeCount/2
-		Step(fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
-			intitialNodeCount, (scaleupCount/3)*3), func() {
-
+		stepLog := fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
+			intitialNodeCount, (scaleupCount/3)*3)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			// After scale up, get fresh list of nodes
 			// by re-initializing scheduler and volume driver
 			err = Inst().S.RefreshNodeRegistry()
-			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "Verify node registry refresh")
 
 			err = Inst().V.RefreshDriverEndpoints()
 			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "Verify driver end points refresh")
 
 			Scale(scaleupCount)
-			Step(fmt.Sprintf("validate number of storage nodes after scale up"), func() {
+			stepLog = "validate number of storage nodes after scale up"
+			Step(fmt.Sprintf(stepLog), func() {
+				dash.Info(stepLog)
 				ValidateClusterSize(scaleupCount)
 			})
 
 		})
 
-		Step(fmt.Sprintf("scale down cluster back to original size of %d nodes",
-			intitialNodeCount), func() {
+		stepLog = fmt.Sprintf("scale down cluster back to original size of %d nodes",
+			intitialNodeCount)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			Scale(intitialNodeCount)
 
-			Step(fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
-				Inst().AutoStorageNodeRecoveryTimeout.String()), func() {
+			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+				Inst().AutoStorageNodeRecoveryTimeout.String())
+
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
 			})
 
 			// After scale down, get fresh list of nodes
 			// by re-initializing scheduler and volume driver
 			err = Inst().S.RefreshNodeRegistry()
-			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "verify refresh node registry")
 
 			err = Inst().V.RefreshDriverEndpoints()
-			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "verify refresh driver end points")
 
-			Step(fmt.Sprintf("validate number of storage nodes after scale down"), func() {
+			stepLog = fmt.Sprintf("validate number of storage nodes after scale down")
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				ValidateClusterSize(intitialNodeCount)
 			})
 		})
@@ -89,6 +102,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		ValidateAndDestroy(contexts, opts)
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -100,6 +114,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58848
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("ASGKillRandomNodes", "Validate PX and Apps when ASG enabled nodes are deleted", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -114,6 +129,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Step("Ensure apps are deployed", func() {
+			dash.Info("Deploy Apps")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgchaos-%d", i))...)
 			}
@@ -121,7 +137,9 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 		ValidateApplications(contexts)
 
-		Step("Randomly kill one storage node", func() {
+		stepLog := "Randomly kill one storage node"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 
 			// set frequency mins depending on the chaos level
 			var frequency int
@@ -197,7 +215,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 func Scale(count int64) {
 	// In multi-zone ASG cluster, node count is per zone
 	zones, err := Inst().N.GetZones()
-	Expect(err).NotTo(HaveOccurred())
+	dash.VerifyFatal(err, nil, "Verify Get zones")
 
 	perZoneCount := count / int64(len(zones))
 
@@ -214,7 +232,7 @@ func Scale(count int64) {
 	}
 
 	_, err = task.DoRetryWithTimeout(t, 60*time.Minute, 2*time.Minute)
-	Expect(err).NotTo(HaveOccurred())
+	dash.VerifyFatal(err, nil, "Verify Set ASG Cluster size")
 
 }
 
@@ -222,22 +240,28 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 	rand.Seed(time.Now().Unix())
 	nodeToKill := storageDriverNodes[rand.Intn(len(storageDriverNodes))]
 
-	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
+	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
+	Step(stepLog, func() {
+		dash.Info(stepLog)
 		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
-		Expect(err).NotTo(HaveOccurred())
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
 	})
 
-	Step("Wait for 10 min. to node get replaced by autoscalling group", func() {
+	stepLog = "Wait for 10 min. to node get replaced by autoscalling group"
+	Step(stepLog, func() {
+		log.Info(stepLog)
 		time.Sleep(10 * time.Minute)
 	})
 
 	err := Inst().S.RefreshNodeRegistry()
-	Expect(err).NotTo(HaveOccurred())
+	dash.VerifyFatal(err, nil, "Verify node registry refresh")
 
 	err = Inst().V.RefreshDriverEndpoints()
-	Expect(err).NotTo(HaveOccurred())
+	dash.VerifyFatal(err, nil, "Verfiy driver end points refresh")
 
-	Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill.Name), func() {
+	stepLog = fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill.Name)
+	Step(stepLog, func() {
+		dash.Info(stepLog)
 		ValidateClusterSize(int64(len(storageDriverNodes)))
 	})
 }

@@ -3230,12 +3230,12 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 		if time.Since(start) >= timeToTryPreviousFolder {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error in getting g3 objects %v", err)
 			}
 		} else {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error in getting g3 objects %v", err)
 			}
 		}
 		for _, obj := range objects {
@@ -3293,7 +3293,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		d.log.Debugf("Node %v is offline, collecting diags using pxctl", hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f --output %s", d.getPxctlPath(n), config.OutputFile), opts)
+		out, err := d.GetPxctlCmdOutputConnectionOpts(n, fmt.Sprintf("sv diags -a -f --output %s", config.OutputFile), opts, true)
 		if err != nil {
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
 		}
@@ -3315,6 +3315,11 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 					diagsPort = pxMgmntPort + 10
 				}
 			}
+		}
+
+		if len(d.token) > 0 {
+			config.Token = d.token
+			d.log.Infof("Added securty token: %s", config.Token)
 		}
 
 		url := netutil.MakeURL("http://", n.Addresses[0], diagsPort)
@@ -3339,14 +3344,16 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", hostname, err, out)
 		}
 
-		pxctlPath := d.getPxctlPath(n)
-		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status -j | jq .telemetrystatus.connection_status.error_code", pxctlPath), opts)
-
+		out, err = d.GetPxctlCmdOutputConnectionOpts(n, "status | egrep ^Telemetry:", opts, true)
 		if err != nil {
 			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
 		}
+		telStatus, err := regexp.MatchString(`Telemetry:.*Healthy`, out)
+		if err != nil {
+			return fmt.Errorf("Error in checking telemetry status")
+		}
 		d.log.Debugf("Status returned by pxctl %s", out)
-		if strings.TrimSpace(out) == telemetryNotEnabled {
+		if !telStatus {
 			d.log.Debugf("Telemetry not enabled in PX Status on node %s. Skipping validation on s3", n.Name)
 			return nil
 		}
@@ -3880,6 +3887,14 @@ func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) e
 		return err
 	}
 	if len(pxOps.Items) > 0 {
+		// Auto update components as operator doesn't do it between k8s/ocp version upgrades
+		updateStrategy := v1.OnceAutoUpdate
+		pxOps.Items[0].Spec.AutoUpdateComponents = &updateStrategy
+		stc, err := pxOperator.UpdateStorageCluster(&pxOps.Items[0])
+		if err != nil {
+			return err
+		}
+
 		k8sVersion, err := k8sCore.GetVersion()
 		if err != nil {
 			return err
@@ -3888,7 +3903,7 @@ func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) e
 		if err != nil {
 			return err
 		}
-		if err = optest.ValidateStorageCluster(imageList, &pxOps.Items[0], validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
 			return err
 		}
 	}

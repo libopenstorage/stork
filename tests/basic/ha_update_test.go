@@ -5,12 +5,10 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -31,12 +29,20 @@ func performHaIncreaseRebootTest(testName string) {
 	var contexts []*scheduler.Context
 
 	nodeRebootType := "target"
+	testDesc := "HaIncreaseRebootTarget"
 
 	if testName == "ha-inc-reboot-src" {
 		nodeRebootType = "source"
+		testDesc = "HaIncreaseRebootSource"
 
 	}
-	It(fmt.Sprintf("has to perform repl increase and reboot %s node", nodeRebootType), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(testDesc, fmt.Sprintf("Validate HA increase and reboot %s", nodeRebootType), nil)
+
+	})
+	stepLog := fmt.Sprintf("has to perform repl increase and reboot %s node", nodeRebootType)
+	It(stepLog, func() {
+		dash.Info(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -46,10 +52,12 @@ func performHaIncreaseRebootTest(testName string) {
 		ValidateApplications(contexts)
 
 		//Reboot target node and source node while repl increase is in progress
-		Step(fmt.Sprintf("get a volume to  increase replication factor and reboot %s node", nodeRebootType), func() {
+		stepLog = fmt.Sprintf("get a volume to  increase replication factor and reboot %s node", nodeRebootType)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			storageNodeMap := make(map[string]node.Node)
 			storageNodes, err := GetStorageNodes()
-			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "Verify Get storage nodes")
 
 			for _, n := range storageNodes {
 				storageNodeMap[n.Id] = n
@@ -58,36 +66,35 @@ func performHaIncreaseRebootTest(testName string) {
 			for _, ctx := range contexts {
 				var appVolumes []*volume.Volume
 				var err error
-				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					dash.Info(stepLog)
 					appVolumes, err = Inst().S.GetVolumes(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					if len(appVolumes) == 0 {
-						err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
-						Expect(err).NotTo(HaveOccurred())
-					}
+					dash.VerifyFatal(err, nil, "Verify Get volumes")
+					dash.VerifyFatal(len(appVolumes) > 0, true, fmt.Sprintf("Verify length of app volmues %d", len(appVolumes)))
 				})
 
 				for _, v := range appVolumes {
 					// Check if volumes are Pure FA/FB DA volumes
 					isPureVol, err := Inst().V.IsPureVolume(v)
-					Expect(err).NotTo(HaveOccurred())
+					dash.VerifyFatal(err, nil, "Validate PURE volume check")
 					if isPureVol {
-						logrus.Warningf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						dash.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
 						continue
 					}
 
 					currRep, err := Inst().V.GetReplicationFactor(v)
-					Expect(err).NotTo(HaveOccurred())
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verify Get Repl factor for vil %s", v.Name))
 
 					if currRep != 0 {
 						//Reduce replication factor
 						if currRep == 3 {
-							logrus.Infof("Current replication is  3, reducing before proceeding")
+							log.Infof("Current replication is  3, reducing before proceeding")
 							opts := volume.Options{
 								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 							}
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true, opts)
-							Expect(err).NotTo(HaveOccurred())
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
 						}
 					}
 
@@ -111,6 +118,7 @@ func performHaIncreaseRebootTest(testName string) {
 	})
 
 	JustAfterEach(func() {
+		EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 

@@ -49,13 +49,19 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	s3Region string, disableSSLBool bool) {
 
 	// TODO: add separate function to return cred object based on type
-	id = os.Getenv("AWS_ACCESS_KEY_ID")
+	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
+	if id == ""{
+		id = os.Getenv("AWS_ACCESS_KEY_ID")
+	}
 	expect(id).NotTo(equal(""),
-		"AWS_ACCESS_KEY_ID Environment variable should not be empty")
+		"S3_AWS_ACCESS_KEY_ID Environment variable should not be empty")
 
-	secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	secret = os.Getenv("S3_AWS_SECRET_ACCESS_KEY")
+	if secret == "" {
+		secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
 	expect(secret).NotTo(equal(""),
-		"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+		"S3_AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
 
 	endpoint = os.Getenv("S3_ENDPOINT")
 	expect(endpoint).NotTo(equal(""),

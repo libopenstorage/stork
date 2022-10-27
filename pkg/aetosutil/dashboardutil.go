@@ -121,7 +121,15 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 		}
 
 		if testSet.Description == "" {
-			d.Log.Warn("Description should not be empty")
+			testSet.Description = "Torpedo Workflows"
+		}
+
+		if testSet.User == "" {
+			testSet.User = "nouser"
+		}
+
+		if testSet.TestType == "" {
+			testSet.TestType = "SystemTest"
 		}
 
 		if testSet.Product == "" {
@@ -248,6 +256,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 
 		if d.TestSetID == 0 {
 			d.Log.Error("TestSetID is empty")
+			return
 		}
 
 		updateTestSetURL := fmt.Sprintf("%s/testset/%d", DashBoardBaseURL, d.TestSetID)
@@ -265,14 +274,15 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
-func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, tags []string) {
+func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags []string) {
 	if d.IsEnabled {
 		if d.TestSetID == 0 {
-			d.Log.Errorf("TestSetID is empty, cannot update update testcase")
+			d.Log.Errorf("TestSetID is empty, skipping begin testcase")
 			return
 		}
 
 		testCase = TestCase{}
+		testCase.Name = testName
 
 		_, file, _, ok := runtime.Caller(1)
 		if ok {
@@ -282,14 +292,13 @@ func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, ta
 			r := m.FindStringIndex(file)
 			if r != nil {
 				fp := file[r[0]:]
-				testCase.Name = fp
+				testCase.ModuleName = fp
 				files := strings.Split(fp, "/")
 				testCase.ShortName = files[len(files)-1]
 
-				d.Log.Infof("Running test from file %s, module: %s", fp, moduleName)
+				d.Log.Infof("Running test from file %s, module: %s", fp, testName)
 
 			}
-			testCase.ModuleName = moduleName
 
 		}
 		//t.StartTime = time.Now().Format(time.RFC3339)
@@ -335,6 +344,7 @@ func (d *Dashboard) verify(r result) {
 
 		if r.TestCaseID == 0 {
 			d.Log.Errorf("TestcaseId should not be empty for updating result")
+			return
 		}
 
 		commentURL := fmt.Sprintf("%s/result", DashBoardBaseURL)
@@ -475,6 +485,7 @@ func (d *Dashboard) addComment(c comment) {
 
 		if c.TestCaseID == 0 {
 			d.Log.Errorf("TestcaseId should not be empty for updating result")
+			return
 		}
 
 		commentURL := fmt.Sprintf("%s/result", DashBoardBaseURL)

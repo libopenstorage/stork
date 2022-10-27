@@ -6,7 +6,6 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
@@ -17,12 +16,15 @@ var _ = Describe("{CrashOneNode}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35255
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("CrashOneNode", "Validate Crash one node", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
 	var contexts []*scheduler.Context
 
-	It("has to schedule apps and crash node(s) with volumes", func() {
+	stepLog := "has to schedule apps and crash node(s) with volumes"
+	It(stepLog, func() {
+		dash.Info(stepLog)
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 
@@ -31,15 +33,20 @@ var _ = Describe("{CrashOneNode}", func() {
 		}
 
 		ValidateApplications(contexts)
-
-		Step("get all nodes and crash one by one", func() {
+		stepLog = "get all nodes and crash one by one"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			nodesToCrash := node.GetWorkerNodes()
 
 			// Crash node and check driver status
-			Step(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash), func() {
+			stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
+			Step(stepLog, func() {
+				dash.Info(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash))
 				for _, n := range nodesToCrash {
 					if n.IsStorageDriverInstalled {
-						Step(fmt.Sprintf("crash node: %s", n.Name), func() {
+						stepLog = fmt.Sprintf("crash node: %s", n.Name)
+						Step(stepLog, func() {
+							dash.Info(stepLog)
 							err = Inst().N.CrashNode(n, node.CrashNodeOpts{
 								Force: true,
 								ConnectionOpts: node.ConnectionOpts{
@@ -47,25 +54,28 @@ var _ = Describe("{CrashOneNode}", func() {
 									TimeBeforeRetry: defaultCommandRetry,
 								},
 							})
-							Expect(err).NotTo(HaveOccurred())
+							dash.VerifySafely(err, nil, "Validate node is crashed")
+
 						})
 
-						Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+						stepLog = fmt.Sprintf("wait for node: %s to be back up", n.Name)
+						Step(stepLog, func() {
+							dash.Info(stepLog)
 							err = Inst().N.TestConnection(n, node.ConnectionOpts{
 								Timeout:         defaultTestConnectionTimeout,
 								TimeBeforeRetry: defaultWaitRebootRetry,
 							})
-							Expect(err).NotTo(HaveOccurred())
+							dash.VerifyFatal(err, nil, "Validate node is back up")
 						})
 
-						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
-							Inst().S.String(), Inst().V.String()), func() {
-
+						stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+							Inst().S.String(), Inst().V.String())
+						Step(stepLog, func() {
+							dash.Info(stepLog)
 							err = Inst().S.IsNodeReady(n)
-							Expect(err).NotTo(HaveOccurred())
-
+							dash.VerifyFatal(err, nil, "Validate node is ready")
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-							Expect(err).NotTo(HaveOccurred())
+							dash.VerifyFatal(err, nil, "Validate volume is driver up")
 						})
 
 						Step("validate apps", func() {
@@ -87,6 +97,7 @@ var _ = Describe("{CrashOneNode}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

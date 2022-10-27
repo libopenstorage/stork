@@ -1,11 +1,10 @@
 package log
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"os"
-	"path"
-	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -131,24 +130,40 @@ func init() {
 
 //GetLogInstance returns the logrus instance
 func GetLogInstance() *logrus.Logger {
-
-	//To-DO: add rolling file appender
-	//max: 50MB and 10 files
-
 	if log == nil {
 		lock.Lock()
 		defer lock.Unlock()
 		if log == nil {
 			log = logrus.New()
-			log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, TimestampFormat: "2006-01-02 15:04:05",
-				CallerPrettyfier: func(frame *runtime.Frame) (function string, file string) {
-					fileName := path.Base(frame.File) + ":" + strconv.Itoa(frame.Line)
-					//return frame.Function, fileName
-					return "", fileName
-				}})
+			log.SetFormatter(&MyFormatter{})
 			log.ReportCaller = true
 			log.Out = io.MultiWriter(os.Stdout)
 		}
 	}
 	return log
+}
+
+type MyFormatter struct{}
+
+func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	var b *bytes.Buffer
+	if entry.Buffer != nil {
+		b = entry.Buffer
+	} else {
+		b = &bytes.Buffer{}
+	}
+	level := strings.ToUpper(entry.Level.String())
+	strList := strings.Split(entry.Caller.File, "/")
+	fileName := strList[len(strList)-1]
+	funcList := strings.Split(entry.Caller.Function, "/")
+	funcName := funcList[len(funcList)-1]
+	subIndex := strings.Index(funcName, ".")
+	if subIndex != -1 {
+		funcName = funcName[subIndex+1:]
+	}
+
+	b.WriteString(fmt.Sprintf("%s:[%s %s::%s:%d]  %s\n",
+		entry.Time.Format("2006-01-02 15:04:05 -0700"), level, fileName, funcName, entry.Caller.Line,
+		entry.Message))
+	return b.Bytes(), nil
 }
