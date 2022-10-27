@@ -3,12 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -19,14 +13,19 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+
+	"os"
+	"path"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	. "github.com/portworx/torpedo/tests"
+
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-const (
-	enumerateBatchSize = 100
 )
 
 var (
@@ -56,18 +55,19 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
-		dash.TestCaseBegin("Backup: BackupClusterVerification", "validating backup cluster pods", "", nil)
+		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil)
+
 	})
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
 			dash.Info("Check the status of backup pods")
-			status := validateBackupCluster()
-			dash.VerifyFatal(status, true, fmt.Sprintf("Validating backup pod"))
+			status := ValidateBackupCluster()
+			dash.VerifyFatal(status, true, "Validating backup pod")
 		})
 		//Will add CRD verification here
 	})
 	JustAfterEach(func() {
-		defer dash.TestCaseEnd()
+		defer EndTorpedoTest()
 		log.Infof("No cleanup required for this testcase")
 	})
 })
@@ -84,21 +84,21 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 
 	providers := getProviders()
 	JustBeforeEach(func() {
+		StartTorpedoTest("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", nil)
 		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
 		for i := 0; i < len(app_list); i++ {
-			if contains(post_rule_app, app_list[i]) == true {
+			if Contains(post_rule_app, app_list[i]) {
 				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
-					dash.VerifyFatal(ok, true, fmt.Sprintf("Post Rule details mentioned for the apps"))
+					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
 				}
 			}
-			if contains(post_rule_app, app_list[i]) == true {
-				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
-					dash.VerifyFatal(ok, true, fmt.Sprintf("Pre Rule details mentioned for the apps"))
+			if Contains(pre_rule_app, app_list[i]) {
+				if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
 				}
 			}
 		}
 		dash.Info("Deploy applications")
-		dash.TestCaseBegin("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", "", nil)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -113,11 +113,11 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 			for _, ctx := range appContexts {
 				for _, specObj := range ctx.App.SpecList {
 					if obj, ok := specObj.(*appsapi.Deployment); ok {
-						if contains(app_list, obj.Name) == true {
+						if Contains(app_list, obj.Name) {
 							ps[obj.Name] = obj.Spec.Template.Labels
 						}
 					} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-						if contains(app_list, obj.Name) == true {
+						if Contains(app_list, obj.Name) {
 							ps[obj.Name] = obj.Spec.Template.Labels
 						}
 					}
@@ -126,11 +126,11 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 		})
 		Step("Creating rules for backup", func() {
 			dash.Info("Creating pre rule for deployed apps")
-			pre_rule_status := createRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
-			dash.VerifyFatal(pre_rule_status, true, fmt.Sprintf("Verifying pre rule for backup"))
+			pre_rule_status := CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
+			dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
 			dash.Info("Creating post rule for deployed apps")
-			post_rule_status := createRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
-			dash.VerifyFatal(post_rule_status, true, fmt.Sprintf("Verifying Post rule for backup"))
+			post_rule_status := CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
+			dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
 		})
 		Step("Creating bucket,backup location and cloud setting", func() {
 			dash.Info("Creating bucket,backup location and cloud setting")
@@ -147,14 +147,13 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
 			}
 		})
+
 	})
 	JustAfterEach(func() {
-
-		teardown_status := teardownForTestcase(contexts, providers, CloudCredUID_list)
-		dash.VerifyFatal(teardown_status, true, fmt.Sprintf("Testcase teardown status"))
-		defer dash.TestCaseEnd()
+		defer EndTorpedoTest()
+		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list)
+		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
 	})
-
 })
 
 // This test performs basic test of starting an application, backing it up and killing stork while
