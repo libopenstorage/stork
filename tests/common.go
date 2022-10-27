@@ -8,8 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"regexp"
-
-
 	logInstance "github.com/portworx/torpedo/pkg/log"
 	"net/http"
 
