@@ -46,6 +46,7 @@ require (
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	google.golang.org/genproto v0.0.0-20220819174105-e9f053255caa
 	google.golang.org/grpc v1.48.0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
 	k8s.io/api v0.24.0

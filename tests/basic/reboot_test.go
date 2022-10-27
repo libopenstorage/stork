@@ -26,12 +26,7 @@ var _ = Describe("{RebootOneNode}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35266
 	var runID int
 	JustBeforeEach(func() {
-		f = CreateLogFile("RebootOneNode.log")
-		if f != nil {
-			SetTorpedoFileOutput(log, f)
-		}
-
-		dash.TestCaseBegin("RebootOneNode", "validating Px and apps after node reboot", "", nil)
+		StartTorpedoTest("RebootOneNode", "Reboot one storage node at a time and validate apps and px", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -125,8 +120,7 @@ var _ = Describe("{RebootOneNode}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer dash.TestCaseEnd()
-		defer CloseLogFile(f)
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -137,12 +131,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58844
 	var runID int
 	JustBeforeEach(func() {
-		f = CreateLogFile("ReallocateSharedMount.log")
-		if f != nil {
-			SetTorpedoFileOutput(log, f)
-		}
-
-		dash.TestCaseBegin("ReallocateSharedMount", "validating Px and apps after reallocating shared mounts", "", nil)
+		StartTorpedoTest("ReallocateSharedMount", "Validating Px and apps after reallocating shared mounts", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -260,8 +249,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer dash.TestCaseEnd()
-		defer CloseLogFile(f)
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

@@ -11,7 +11,6 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -24,11 +23,14 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58846
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("MultiVolumeMountsForSharedV4", "Validate mounting multiple SV4 volumes for one app", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
-	It("has to create multiple sharedv4 volumes and mount to single pod", func() {
+	stepLog := "has to create multiple sharedv4 volumes and mount to single pod"
+	It(stepLog, func() {
+		dash.Info(stepLog)
 		// set frequency mins depending on the chaos level
 		var frequency int
 		var timeout time.Duration
@@ -41,7 +43,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 			frequency = 10
 			timeout = 1 * time.Minute
 		}
-		logrus.Infof("setting number of volumes=%v and app readiness timeout=%v for chaos level %v",
+		dash.Infof("setting number of volumes=%v and app readiness timeout=%v for chaos level %v",
 			frequency, timeout, chaosLevel)
 
 		customAppConfig := scheduler.AppConfig{
@@ -56,17 +58,18 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 
 		Inst().CustomAppConfig[appName] = customAppConfig
 		err := Inst().S.RescanSpecs(Inst().SpecDir, provider)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to rescan specs from %s for storage provider %s. Error: [%v]",
+			Inst().SpecDir, provider, err))
 
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to rescan specs from %s for storage provider %s. Error: [%v]",
-				Inst().SpecDir, provider, err))
+		stepLog = "schedule application with multiple sharedv4 volumes attached"
 
-		Step("schedule application with multiple sharedv4 volumes attached", func() {
-			logrus.Infof("Number of Volumes to be mounted: %v", frequency)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
+			dash.Infof("Number of Volumes to be mounted: %v", frequency)
 
 			taskName := "sharedv4-multivol"
 
-			logrus.Infof("Task name %s\n", taskName)
+			log.Infof("Task name %s\n", taskName)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				newContexts := ScheduleApplications(taskName)
@@ -79,33 +82,36 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 				ValidateContext(ctx)
 			}
 		})
-
-		Step("get nodes where volume is attached and restart volume driver", func() {
+		stepLog = "get nodes where volume is attached and restart volume driver"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, ctx := range contexts {
 				appVolumes, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
 				for _, appVolume := range appVolumes {
 					attachedNode, err := Inst().V.GetNodeForVolume(appVolume, defaultCommandTimeout, defaultCommandRetry)
-					Expect(err).NotTo(HaveOccurred())
-					Step(
-						fmt.Sprintf("stop volume driver %s on app %s's node: %s",
-							Inst().V.String(), ctx.App.Key, attachedNode.Name),
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get node the volume %s", appVolume.Name))
+					stepLog = fmt.Sprintf("stop volume driver %s on app %s's node: %s",
+						Inst().V.String(), ctx.App.Key, attachedNode.Name)
+					Step(stepLog,
 						func() {
+							dash.Info(stepLog)
 							StopVolDriverAndWait([]node.Node{*attachedNode})
 						})
-
-					Step(
-						fmt.Sprintf("starting volume %s driver on app %s's node %s",
-							Inst().V.String(), ctx.App.Key, attachedNode.Name),
+					stepLog = fmt.Sprintf("starting volume %s driver on app %s's node %s",
+						Inst().V.String(), ctx.App.Key, attachedNode.Name)
+					Step(stepLog,
 						func() {
+							dash.Info(stepLog)
 							StartVolDriverAndWait([]node.Node{*attachedNode})
 						})
-
-					Step("Giving few seconds for volume driver to stabilize", func() {
+					stepLog = "Giving few seconds for volume driver to stabilize"
+					Step(stepLog, func() {
+						dash.Info(stepLog)
 						time.Sleep(20 * time.Second)
 					})
-
-					Step(fmt.Sprintf("validate app %s", attachedNode.Name), func() {
+					stepLog = fmt.Sprintf("validate app %s", attachedNode.Name)
+					Step(stepLog, func() {
 						ctx.ReadinessTimeout = timeout
 						ctx.SkipVolumeValidation = true
 						ValidateContext(ctx)
@@ -115,15 +121,18 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // This test performs sharedv4 nfs server pod termination failover use case
 var _ = Describe("{NFSServerNodeDelete}", func() {
+	StartTorpedoTest("NFSServerNodeDelete", "Vslidate NFS server delete", nil)
 	var contexts []*scheduler.Context
-
-	It("has to validate that the new pods started successfully after nfs server node is terminated", func() {
+	stepLog := "has to validate that the new pods started successfully after nfs server node is terminated"
+	It(stepLog, func() {
+		dash.Info(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		var err error
 
@@ -134,53 +143,62 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 		ValidateApplications(contexts)
 		for _, ctx := range contexts {
 			var appVolumes []*volume.Volume
-			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(appVolumes).NotTo(BeEmpty())
+				dash.VerifyFatal(err, nil, "Validate get volumes")
+				dash.VerifyFatal(len(appVolumes) > 0, 0, "Validate app volumes are not empty")
 			})
 			for _, v := range appVolumes {
-
-				Step("get attached node and stop the instance", func() {
+				stepLog = "get attached node and stop the instance"
+				Step(stepLog, func() {
+					dash.Info(stepLog)
 					currNodes := node.GetStorageDriverNodes()
 					countOfCurrNodes := len(currNodes)
 
 					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
 
+					stepLog = fmt.Sprintf("delete node : %v having volume: %v attached", attachedNode.Name, v.Name)
 					// Delete node and check Apps status
-					Step(fmt.Sprintf("delete node : %v having volume: %v attached", attachedNode.Name, v.Name), func() {
-
+					Step(stepLog, func() {
+						dash.Info(stepLog)
 						sv4KillANodeAndValidate(*attachedNode)
-
-						Step(fmt.Sprintf("validate node: %v is deleted", attachedNode.Name), func() {
+						stepLog = fmt.Sprintf("validate node: %v is deleted", attachedNode.Name)
+						Step(stepLog, func() {
+							dash.Info(stepLog)
 							currNodes = node.GetStorageDriverNodes()
 							for _, currNode := range currNodes {
 								if currNode.Name == attachedNode.Name {
-									Fail(fmt.Sprintf("Node: %v still exists",
+									dash.VerifyFatal(currNode.Name, attachedNode.Name, fmt.Sprintf("Node: %v still exists",
 										attachedNode.Name))
 									break
 								}
 							}
 						})
 
-						Step(fmt.Sprintf("validate applications after node [%v] deletion", attachedNode.Name), func() {
+						stepLog = fmt.Sprintf("validate applications after node [%v] deletion", attachedNode.Name)
+						Step(stepLog, func() {
+							dash.Info(stepLog)
 							for _, ctx := range contexts {
 								ValidateContext(ctx)
 							}
 						})
-
-						Step(fmt.Sprintf("wait to new instance to start scheduler: %s and volume driver: %s",
-							Inst().S.String(), Inst().V.String()), func() {
+						stepLog = fmt.Sprintf("wait to new instance to start scheduler: %s and volume driver: %s",
+							Inst().S.String(), Inst().V.String())
+						Step(stepLog, func() {
+							dash.Info(stepLog)
 							time.Sleep(2 * time.Minute)
 							currNodes = node.GetStorageDriverNodes()
+							dash.VerifyFatal(countOfCurrNodes, len(currNodes), "Verify new instance is created")
 							Expect(countOfCurrNodes).To(Equal(len(currNodes)))
 							for _, n := range currNodes {
 
 								err = Inst().S.IsNodeReady(n)
-								Expect(err).NotTo(HaveOccurred())
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node %s is ready", n.Name))
 
 								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								Expect(err).NotTo(HaveOccurred())
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume driver is up in node %s", n.Name))
 							}
 						})
 
@@ -198,25 +216,28 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
 
 func sv4KillANodeAndValidate(nodeToKill node.Node) {
-
-	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
-		logrus.Infof("Instance is of %v ", Inst().N.String())
+	steplog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
+	Step(steplog, func() {
+		dash.Info(steplog)
+		log.Infof("Instance is of %v ", Inst().N.String())
 		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
-		Expect(err).NotTo(HaveOccurred())
+		dash.VerifyFatal(err, nil, "Validate node delete init")
 	})
-
-	Step(fmt.Sprintf("Wait for node: %v to be deleted", nodeToKill.Name), func() {
+	steplog = fmt.Sprintf("Wait for node: %v to be deleted", nodeToKill.Name)
+	Step(steplog, func() {
+		dash.Info(steplog)
 		maxWait := 10
 	OUTER:
 		for maxWait > 0 {
 			for _, currNode := range node.GetStorageDriverNodes() {
 				if currNode.Name == nodeToKill.Name {
-					logrus.Infof("Node %v still exists. Waiting for a minute to check again", nodeToKill.Name)
+					log.Infof("Node %v still exists. Waiting for a minute to check again", nodeToKill.Name)
 					maxWait--
 					time.Sleep(1 * time.Minute)
 					continue OUTER
@@ -227,8 +248,8 @@ func sv4KillANodeAndValidate(nodeToKill node.Node) {
 	})
 
 	err := Inst().S.RefreshNodeRegistry()
-	Expect(err).NotTo(HaveOccurred())
+	dash.VerifyFatal(err, nil, "Validate node registry refresh")
 
 	err = Inst().V.RefreshDriverEndpoints()
-	Expect(err).NotTo(HaveOccurred())
+	dash.VerifyFatal(err, nil, "Validate volume driver end points refresh")
 }

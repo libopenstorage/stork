@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	jira "github.com/andygrunwald/go-jira"
+	logInstance "github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/trivago/tgo/tcontainer"
 )
@@ -11,6 +12,7 @@ import (
 var (
 	client                     *jira.Client
 	isJiraConnectionSuccessful bool
+	log                        *logrus.Logger
 
 	//AccountID for bug assignment
 	AccountID string
@@ -22,6 +24,7 @@ const (
 
 // Init function for the Jira
 func Init(username, token string) {
+	log = logInstance.GetLogInstance()
 	httpClient := jira.BasicAuthTransport{
 		Username: username,
 		Password: token,
@@ -51,7 +54,7 @@ func CreateIssue(issueDesription, issueSummary string) (string, error) {
 
 		issueKey, err = createPTX(issueDesription, issueSummary)
 	} else {
-		logrus.Warn("Skipping issue creation as jira connection is not successful")
+		log.Warn("Skipping issue creation as jira connection is not successful")
 	}
 	return issueKey, err
 
@@ -60,12 +63,12 @@ func CreateIssue(issueDesription, issueSummary string) (string, error) {
 func getPTX(issueID string) {
 
 	issue, _, err := client.Issue.Get(issueID, nil)
-	logrus.Infof("Error: %v", err)
+	log.Infof("Error: %v", err)
 
-	logrus.Infof("%s: %+v\n", issue.Key, issue.Fields.Summary)
+	log.Infof("%s: %+v\n", issue.Key, issue.Fields.Summary)
 
-	logrus.Infof("%s: %s\n", issue.ID, issue.Fields.Summary)
-	logrus.Info(issue.Fields.FixVersions[0].Name)
+	log.Infof("%s: %s\n", issue.ID, issue.Fields.Summary)
+	log.Info(issue.Fields.FixVersions[0].Name)
 
 }
 
@@ -106,7 +109,7 @@ func createPTX(description, summary string) (string, error) {
 	}
 	issue, resp, err := client.Issue.Create(&i)
 
-	logrus.Infof("Resp: %v", resp.StatusCode)
+	log.Infof("Resp: %v", resp.StatusCode)
 	issueKey := ""
 	if resp.StatusCode == 201 {
 		logrus.Info("Successfully created new jira issue.")
@@ -131,13 +134,13 @@ func getProjects() {
 	projects := new([]jira.Project)
 	_, err := client.Do(req, projects)
 	if err != nil {
-		logrus.Info("Error while getting project")
-		logrus.Error(err)
+		log.Info("Error while getting project")
+		log.Error(err)
 		return
 	}
 
 	for _, project := range *projects {
 
-		logrus.Infof("%s: %s\n", project.Key, project.Name)
+		log.Infof("%s: %s\n", project.Key, project.Name)
 	}
 }

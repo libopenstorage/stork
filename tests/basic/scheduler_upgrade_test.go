@@ -10,8 +10,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
-
 	// https://github.com/kubernetes/client-go/issues/242
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
@@ -25,17 +23,20 @@ var _ = Describe("{UpgradeScheduler}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58849
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeScheduler", "Validate scheduler upgrade", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
-	It("upgrade scheduler and ensure everything is running fine", func() {
+	stepLog := "upgrade scheduler and ensure everything is running fine"
+	It(stepLog, func() {
+		dash.Info(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
 		Expect(err).NotTo(HaveOccurred())
 
-		logrus.Infof("Validating cluster size before upgrade. Initial Node Count: [%v]", intitialNodeCount)
+		dash.Infof("Validating cluster size before upgrade. Initial Node Count: [%v]", intitialNodeCount)
 		ValidateClusterSize(intitialNodeCount)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -45,28 +46,34 @@ var _ = Describe("{UpgradeScheduler}", func() {
 		ValidateApplications(contexts)
 
 		upgradeHops := strings.Split(Inst().SchedUpgradeHops, ",")
-		Expect(len(upgradeHops)).NotTo(Equal(0), "No upgrade hops provided for UpgradeScheduler test")
+		dash.VerifyFatal(len(upgradeHops) > 0, true, "Validate upgrade hops are provided")
 
 		for _, schedVersion := range upgradeHops {
 			schedVersion = strings.TrimSpace(schedVersion)
-			Step(fmt.Sprintf("start the upgrade of scheduler to version [%v]", schedVersion), func() {
+			stepLog = fmt.Sprintf("start the upgrade of scheduler to version [%v]", schedVersion)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				err := Inst().N.SetClusterVersion(schedVersion, upgradeTimeoutMins)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Validate set cluster version")
 			})
 
-			Step(fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
-				Inst().AutoStorageNodeRecoveryTimeout.String()), func() {
+			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
+				Inst().AutoStorageNodeRecoveryTimeout.String())
+			Step(stepLog, func() {
+				dash.Info(fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
+					Inst().AutoStorageNodeRecoveryTimeout.String()))
 				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
 			})
 
 			err = Inst().S.RefreshNodeRegistry()
-			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "Validate node registry refresh")
 
 			err = Inst().V.RefreshDriverEndpoints()
-			Expect(err).NotTo(HaveOccurred())
-
-			Step(fmt.Sprintf("validate number of storage nodes after scheduler upgrade to [%s]",
-				schedVersion), func() {
+			dash.VerifyFatal(err, nil, "Validate driver end points refresh")
+			stepLog = fmt.Sprintf("validate number of storage nodes after scheduler upgrade to [%s]",
+				schedVersion)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				ValidateClusterSize(intitialNodeCount)
 			})
 
@@ -85,6 +92,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 	})
 
 	JustAfterEach(func() {
+		EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

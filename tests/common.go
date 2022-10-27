@@ -7,9 +7,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net"
-
 	logInstance "github.com/portworx/torpedo/pkg/log"
+	"net/http"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
@@ -112,6 +111,7 @@ import (
 	context1 "context"
 
 	"github.com/pborman/uuid"
+	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -311,7 +311,10 @@ var log *logrus.Logger
 
 //TpLogPath torpedo log path
 var tpLogPath string
-var tpLogFile *os.File
+var suiteLogger *lumberjack.Logger
+
+//TestLogger for logging test logs
+var TestLogger *lumberjack.Logger
 var dash *aetosutil.Dashboard
 
 // InitInstance is the ginkgo spec for initializing torpedo
@@ -456,6 +459,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
+		dash.Info(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
@@ -465,11 +469,15 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
+				dash.Info(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
 				ValidateVolumes(ctx, errChan...)
 			}
 		})
 
-		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+		stepLog := fmt.Sprintf("wait for %s app to start running", ctx.App.Key)
+
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			if err != nil {
 				processError(err, errChan...)
@@ -479,7 +487,9 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		// Validating Topology Labels for apps if Topology is enabled
 		if len(Inst().TopologyLabels) > 0 {
-			Step(fmt.Sprintf("validate topology labels for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("validate topology labels for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				err := Inst().S.ValidateTopologyLabel(ctx)
 				if err != nil {
 					processError(err, errChan...)
@@ -487,11 +497,13 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 			})
 		}
+		stepLog = fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key)
 
-		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+		Step(stepLog, func() {
 			if ctx.SkipVolumeValidation {
 				return
 			}
+			dash.Info(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
 			vols, err := Inst().S.GetVolumes(ctx)
 			// Fixing issue where it is priniting nil
@@ -500,7 +512,9 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 
 			for _, vol := range vols {
-				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+				stepLog = fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol)
+				Step(stepLog, func() {
+					log.Infof(stepLog)
 					err := Inst().V.ValidateVolumeSetup(vol)
 					if err != nil {
 						processError(err, errChan...)
@@ -1199,7 +1213,9 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		vols := DeleteVolumes(ctx, options)
 
 		// Tear down application
-		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
+		stepLog := fmt.Sprintf("start destroying %s app", ctx.App.Key)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err = Inst().S.Destroy(ctx, opts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", ctx.App.Key, err))
 		})
@@ -1235,7 +1251,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 	for _, vol := range vols {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
-			log.Infof("validate %s app's volume %s has been deleted in the volume driver",
+			dash.Infof("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
@@ -1359,6 +1375,7 @@ func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
 // ValidateApplications validates applications
 func ValidateApplications(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
+		dash.Info("Validate applications")
 		for _, ctx := range contexts {
 			ValidateContext(ctx)
 		}
@@ -1373,14 +1390,18 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("start volume driver on nodes: %v", appNodes), func() {
+		stepLog := fmt.Sprintf("start volume driver on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
 				processError(err, errChan...)
 			}
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1399,12 +1420,16 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("stop volume driver on nodes: %v", appNodes), func() {
+		stepLog := fmt.Sprintf("stop volume driver on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err := Inst().V.StopDriver(appNodes, false, nil)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
+		stepLog = fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
 				processError(err, errChan...)
@@ -1422,12 +1447,16 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("crash volume driver on nodes: %v", appNodes), func() {
+		stepLog := fmt.Sprintf("crash volume driver on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err := Inst().V.StopDriver(appNodes, true, nil)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1440,12 +1469,14 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 // ValidateAndDestroy validates application and then destroys them
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
+		dash.Info("Validating apps")
 		for _, ctx := range contexts {
 			ValidateContext(ctx)
 		}
 	})
 
 	Step("destroy apps", func() {
+		dash.Info("Destroying apps")
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
@@ -1537,17 +1568,17 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
 	zones, err := Inst().N.GetZones()
-	expect(err).NotTo(haveOccurred())
-	logrus.Debugf("ASG is running in [%+v] zones\n", zones)
+	dash.VerifyFatal(err, nil, "Verify Get zones")
+	dash.Infof("ASG is running in [%+v] zones\n", zones)
 	perZoneCount := count / int64(len(zones))
 
 	// Validate total node count
 	currentNodeCount, err := Inst().N.GetASGClusterSize()
-	expect(err).NotTo(haveOccurred())
-	expect(perZoneCount*int64(len(zones))).Should(equal(currentNodeCount),
-		"ASG cluster size is not as expected."+
-			" Current size is [%d]. Expected ASG size is [%d]",
-		currentNodeCount, perZoneCount*int64(len(zones)))
+	dash.VerifyFatal(err, nil, "Verify Get ASG Cluster Size")
+
+	dash.VerifyFatal(perZoneCount*int64(len(zones)), currentNodeCount, fmt.Sprintf("Verify if ASG cluster size is as expected."+
+		" Current size is [%d]. Expected ASG size is [%d]",
+		currentNodeCount, perZoneCount*int64(len(zones))))
 
 	// Validate storage node count
 	var expectedStorageNodesPerZone int
@@ -1557,14 +1588,14 @@ func ValidateClusterSize(count int64) {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
 	storageNodes, err := GetStorageNodes()
+	dash.VerifyFatal(err, nil, "Verify Get storage nodes")
 
-	expect(err).NotTo(haveOccurred())
-	expect(len(storageNodes)).Should(equal(expectedStorageNodesPerZone*len(zones)),
-		"Current number of storeage nodes [%d] does not match expected number of storage nodes [%d]."+
+	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones),
+		fmt.Sprintf("Verify if c urrent number of storeage nodes [%d] match the expected number of storage nodes [%d]."+
 			"List of storage nodes:[%v]",
-		len(storageNodes), expectedStorageNodesPerZone*len(zones), storageNodes)
+			len(storageNodes), expectedStorageNodesPerZone*len(zones), storageNodes))
 
-	logrus.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
+	dash.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
 }
 
 //GetStorageNodes get storage nodes in the cluster
@@ -3272,22 +3303,24 @@ func DeleteBucket(provider string, bucketName string) {
 //HaIncreaseRebootTargetNode repl increase and reboot target node
 func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
 
-	Step(
-		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
-			Inst().V.String(), ctx.App.Key, v),
+	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
+		Inst().V.String(), ctx.App.Key, v)
+
+	Step(stepLog,
 		func() {
+			dash.Info(stepLog)
 			currRep, err := Inst().V.GetReplicationFactor(v)
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				logrus.Warn(err)
+				log.Warn(err)
 				UpdateOutcome(event, err)
 				return
 			}
@@ -3295,7 +3328,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 			replicaSets, err := Inst().V.GetReplicaSets(v)
 			if err == nil {
 				replicaNodes := replicaSets[0].Nodes
-				logrus.Infof("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
+				dash.Infof("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
 				var newReplID string
 				var newReplNode node.Node
 
@@ -3314,26 +3347,26 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						break
 					}
 				}
-
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
+				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+					Inst().V.String(), ctx.App.Key, v)
+				Step(stepLog,
 					func() {
-						logrus.Infof("Increasing repl with target node  [%v]", newReplID)
+						dash.Info(stepLog)
+						dash.Infof("Increasing repl with target node  [%v]", newReplID)
 						err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
 						if err != nil {
-							logrus.Errorf("There is an error increasing repl [%v]", err.Error())
+							log.Errorf("There is an error increasing repl [%v]", err.Error())
 							UpdateOutcome(event, err)
 						}
 					})
 
 				if err == nil {
-					Step(
-						fmt.Sprintf("reboot target node %s while repl increase is in-progres",
-							newReplNode.Hostname),
+					stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+						newReplNode.Hostname)
+					Step(stepLog,
 						func() {
-
-							logrus.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
+							dash.Info(stepLog)
+							log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 							time.Sleep(10 * time.Second)
 
 							err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
@@ -3344,22 +3377,22 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								},
 							})
 							if err != nil {
-								logrus.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+								log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
 								UpdateOutcome(event, err)
 							}
 
 							err = validateReplFactorUpdate(v, currRep+1)
 							if err != nil {
 								err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
-								logrus.Error(err)
+								log.Error(err)
 								UpdateOutcome(event, err)
 							} else {
-								logrus.Infof("repl successfully increased to %d", currRep+1)
+								dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 							}
 						})
 				}
 			} else {
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 
 			}
@@ -3368,14 +3401,15 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 //HaIncreaseRebootSourceNode repl increase and reboot source node
 func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
-	Step(
-		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
-			Inst().V.String(), ctx.App.Key, v),
+	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
+		Inst().V.String(), ctx.App.Key, v)
+	Step(stepLog,
 		func() {
+			dash.Info(stepLog)
 			currRep, err := Inst().V.GetReplicationFactor(v)
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 				return
 			}
@@ -3383,25 +3417,26 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				logrus.Warn(err)
+				log.Warn(err)
 				UpdateOutcome(event, err)
 				return
 			}
 
 			if err == nil {
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
+				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+					Inst().V.String(), ctx.App.Key, v)
+				Step(stepLog,
 					func() {
+						dash.Info(stepLog)
 						replicaSets, err := Inst().V.GetReplicaSets(v)
 						if err == nil {
 							replicaNodes := replicaSets[0].Nodes
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, false)
 							if err != nil {
-								logrus.Errorf("There is an error increasing repl [%v]", err.Error())
+								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
 							} else {
-								logrus.Info("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
+								log.Info("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(10 * time.Second)
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
@@ -3414,29 +3449,29 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										},
 									})
 									if err != nil {
-										logrus.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
+										log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
 										UpdateOutcome(event, err)
 									}
 								}
 								err = validateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
-									logrus.Error(err)
+									log.Error(err)
 									UpdateOutcome(event, err)
 								} else {
-									logrus.Infof("repl successfully increased to %d", currRep+1)
+									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								}
 							}
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
-							logrus.Error(err)
+							log.Error(err)
 							UpdateOutcome(event, err)
 						}
 
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 			}
 
@@ -3775,8 +3810,8 @@ func ParseFlags() {
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
-	flag.StringVar(&user, userFlag, "no-user", "user name running the tests")
-	flag.StringVar(&testDescription, testDescriptionFlag, "Running Torpedo test-suiter", "test suite description")
+	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
+	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
 	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
 	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests")
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
@@ -3788,10 +3823,8 @@ func ParseFlags() {
 	log.Out = io.MultiWriter(log.Out)
 	setLoglevel(log, logLevel)
 	tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
-	tpLogFile = CreateLogFile(tpLogPath)
-	if tpLogFile != nil {
-		SetTorpedoFileOutput(log, tpLogFile)
-	}
+	suiteLogger = CreateLogger(tpLogPath)
+	SetTorpedoFileOutput(log, suiteLogger)
 
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
@@ -3932,12 +3965,19 @@ func printFlags() {
 
 func isDashboardReachable() bool {
 	timeout := 5 * time.Second
-	dashURLSplice := strings.Split(aetosutil.DashBoardBaseURL, "/")
-	_, err := net.DialTimeout("tcp", fmt.Sprintf("%s:80", dashURLSplice[2]), timeout)
-	if err == nil {
+	client := http.Client{
+		Timeout: timeout,
+	}
+
+	response, err := client.Get(aetosutil.DashBoardBaseURL)
+
+	if err != nil {
+		log.Warn(err.Error())
+		return false
+	}
+	if response.StatusCode == 200 {
 		return true
 	}
-	log.Warn(err.Error())
 	return false
 }
 
@@ -3960,9 +4000,12 @@ func setLoglevel(tpLog *logrus.Logger, logLevel string) {
 }
 
 //SetTorpedoFileOutput adds output destination for logging
-func SetTorpedoFileOutput(tpLog *logrus.Logger, f *os.File) {
-	tpLog.Out = io.MultiWriter(tpLog.Out, f)
-	tpLog.Infof("Log Dir: %s", f.Name())
+func SetTorpedoFileOutput(tpLog *logrus.Logger, logger *lumberjack.Logger) {
+
+	//tpLog.Out = io.MultiWriter(tpLog.Out, f)
+	tpLog.Out = io.MultiWriter(tpLog.Out, logger)
+	tpLog.Infof("Log Dir: %s", logger.Filename)
+	//tpLog.Infof("Log Dir: %s", f.Name())
 }
 
 //CreateLogFile creates file and return the file object
@@ -3983,18 +4026,34 @@ func CreateLogFile(filename string) *os.File {
 
 }
 
+//CreateLogger creates file and return the file object
+func CreateLogger(filename string) *lumberjack.Logger {
+	var filePath string
+	if strings.Contains(filename, "/") {
+		filePath = filename
+	} else {
+		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
+	}
+
+	logger := &lumberjack.Logger{
+		Filename:   filePath,
+		MaxSize:    10, // megabytes
+		MaxBackups: 10,
+		MaxAge:     30,   //days
+		Compress:   true, // disabled by default
+		LocalTime:  true,
+	}
+
+	return logger
+
+}
+
 //CloseLogFile ends testcase file object
-func CloseLogFile(f *os.File) {
-	if f != nil {
-		f.Close()
+func CloseLogger(testLogger *lumberjack.Logger) {
+	if testLogger != nil {
+		testLogger.Close()
 		//Below steps are performed to remove current file from log output
-		tpLogFile.Close()
-		tpFile, err := os.OpenFile(tpLogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			fmt.Println("Failed to create logfile torpedo.log")
-			fmt.Println("Error: ", err)
-		}
-		log.Out = io.MultiWriter(os.Stdout, tpFile)
+		log.Out = io.MultiWriter(os.Stdout, suiteLogger)
 	}
 
 }
@@ -4047,9 +4106,9 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 	for _, currNode := range node.GetWorkerNodes() {
 		err := runCmd("pwd", currNode)
 		if err == nil {
-			logrus.Infof("Creating directors logs in the node %v", currNode.Name)
+			log.Infof("Creating directors logs in the node %v", currNode.Name)
 			runCmd(fmt.Sprintf("mkdir -p %v", rootLogDir), currNode)
-			logrus.Info("Mounting nfs diags directory")
+			log.Info("Mounting nfs diags directory")
 			runCmd(fmt.Sprintf("mount -t nfs %v %v", diagsDirPath, rootLogDir), currNode)
 			if !isIssueDirCreated {
 				logrus.Infof("Creating PTX %v directory in the node %v", issueKey, currNode.Name)
@@ -4057,7 +4116,7 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 				isIssueDirCreated = true
 			}
 
-			logrus.Infof("collect diags on node: %s", currNode.Name)
+			log.Infof("collect diags on node: %s", currNode.Name)
 
 			filePath := fmt.Sprintf("/var/cores/%s-diags-*.tar.gz", currNode.Name)
 
@@ -4076,10 +4135,10 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 			err = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, Async: true})
 
 			if err == nil {
-				logrus.Infof("copying logs %v  on node: %s", filePath, currNode.Name)
+				log.Infof("copying logs %v  on node: %s", filePath, currNode.Name)
 				runCmd(fmt.Sprintf("cp %v %v/%v/", filePath, rootLogDir, issueKey), currNode)
 			} else {
-				logrus.Warnf("Error collecting diags on node: %v, Error: %v", currNode.Name, err)
+				log.Warnf("Error collecting diags on node: %v, Error: %v", currNode.Name, err)
 			}
 
 		}
@@ -4098,7 +4157,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 				// Getting 250 lines from the pod logs to get the io_bytes
 				TailLines: getInt64Address(250),
 			}
-			logrus.Info("Collecting stork logs")
+			log.Info("Collecting stork logs")
 			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
 			if err != nil {
 				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
@@ -4108,9 +4167,9 @@ func collectAndCopyStorkLogs(issueKey string) {
 		masterNode := node.GetMasterNodes()[0]
 		err = runCmd("pwd", masterNode)
 		if err == nil {
-			logrus.Infof("Creating directors logs in the node %v", masterNode.Name)
+			log.Infof("Creating directors logs in the node %v", masterNode.Name)
 			runCmd(fmt.Sprintf("mkdir -p %v", rootLogDir), masterNode)
-			logrus.Info("Mounting nfs diags directory")
+			log.Info("Mounting nfs diags directory")
 			runCmd(fmt.Sprintf("mount -t nfs %v %v", diagsDirPath, rootLogDir), masterNode)
 
 			for k, v := range logsByPodName {
@@ -4121,7 +4180,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 		}
 
 	} else {
-		logrus.Errorf("Error in getting stork pods, Err: %v", err.Error())
+		log.Errorf("Error in getting stork pods, Err: %v", err.Error())
 	}
 
 }
@@ -4137,10 +4196,10 @@ func collectAndCopyOperatorLogs(issueKey string) {
 				// Getting 250 lines from the pod logs to get the io_bytes
 				TailLines: getInt64Address(250),
 			}
-			logrus.Info("Collecting portworx operator logs")
+			log.Info("Collecting portworx operator logs")
 			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
 			if err != nil {
-				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+				log.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
 			}
 			logsByPodName[p.Name] = output
 		}
@@ -4155,7 +4214,7 @@ func collectAndCopyOperatorLogs(issueKey string) {
 		}
 
 	} else {
-		logrus.Errorf("Error in getting portworx-operator pods, Err: %v", err.Error())
+		log.Errorf("Error in getting portworx-operator pods, Err: %v", err.Error())
 	}
 
 }
@@ -4171,10 +4230,10 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 				// Getting 250 lines from the pod logs to get the io_bytes
 				TailLines: getInt64Address(250),
 			}
-			logrus.Info("Collecting autopilot logs")
+			log.Info("Collecting autopilot logs")
 			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
 			if err != nil {
-				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+				log.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
 			}
 			logsByPodName[p.Name] = output
 		}
@@ -4189,7 +4248,7 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 			}
 		}
 	} else {
-		logrus.Errorf("Error in getting autopilot pods, Err: %v", err.Error())
+		log.Errorf("Error in getting autopilot pods, Err: %v", err.Error())
 	}
 
 }
@@ -4231,7 +4290,7 @@ func WaitForExpansionToStart(poolID string) error {
 
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
 				// storage pool resize has been triggered
-				logrus.Infof("Pool %s expansion started", poolID)
+				dash.Infof("Pool %s expansion started", poolID)
 				return nil, true, nil
 			}
 		}
@@ -4321,4 +4380,17 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	}
 
 	return pool, nil
+}
+
+//StartTorpedoTest starts the logging for torpedo test
+func StartTorpedoTest(testName, testDescription string, tags []string) {
+	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
+	SetTorpedoFileOutput(log, TestLogger)
+	dash.TestCaseBegin(testName, testDescription, "", tags)
+}
+
+//EndTorpedoTest ends the logging for torpedo test
+func EndTorpedoTest() {
+	CloseLogger(TestLogger)
+	dash.TestCaseEnd()
 }
