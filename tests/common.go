@@ -7,9 +7,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"regexp"
-	logInstance "github.com/portworx/torpedo/pkg/log"
 	"net/http"
+	"regexp"
+
+	logInstance "github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
@@ -4404,7 +4405,6 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 
 	return pool, nil
 }
-
 
 func ValidateBackupCluster() bool {
 	flag := false

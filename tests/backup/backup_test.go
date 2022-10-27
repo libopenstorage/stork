@@ -147,7 +147,6 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
 			}
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -165,7 +164,6 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 		namespaceMapping map[string]string
 		taskNamePrefix   = "backupcreaterestore"
 	)
-
 	labelSelectores := make(map[string]string)
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
