@@ -107,6 +107,23 @@ var _ = Describe("{MigrateDeployment}", func() {
 					mig.Name, mig.Namespace, err))
 		}
 
+		logrus.Info("Start volume only migration")
+		includeResourcesFlag = false
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)
+			currMig, create_mig_err := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+			allMigrations = append(allMigrations, currMig)
+			Expect(create_mig_err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, create_mig_err))
+			err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to validate migration: %s in namespace %s. Error: [%v]", currMig.Name, currMig.Namespace, err))
+			resp, get_mig_err := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)
+			Expect(get_mig_err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to Get migration: %s in namespace %s. Error: [%v]",
+					currMig.Name, currMig.Namespace, get_mig_err))
+			Expect(resp.Status.Summary.NumberOfMigratedResources).Should(BeNumerically("==", 0))
+		}
+
 		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, map[string]bool{
