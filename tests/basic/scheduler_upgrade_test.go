@@ -92,7 +92,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 	})
 
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

@@ -129,7 +129,7 @@ var _ = Describe("{DriveFailure}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

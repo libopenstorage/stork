@@ -66,7 +66,7 @@ var _ = Describe("{Longevity}", func() {
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
 		AppTaskDown:          TriggerAppTaskDown,
-		AppTasksDown:         TriggerAppTaskDown,
+		AppTasksDown:         TriggerAppTasksDown,
 		AddDrive:             TriggerAddDrive,
 		CoreChecker:          TriggerCoreChecker,
 		CloudSnapShot:        TriggerCloudSnapShot,

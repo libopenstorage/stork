@@ -118,7 +118,7 @@ func performHaIncreaseRebootTest(testName string) {
 	})
 
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 

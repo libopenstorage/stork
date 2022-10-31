@@ -1,0 +1,38 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: vdbench-fastpath-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  placement_strategy: "fastpath-repl1-vdbench-vps"
+  repl: "1"
+  sharedv4: "true"
+  fastpath: "true"
+  allow_others: "true"
+  fs: "ext4"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc
+spec:
+  storageClassName: vdbench-fastpath-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-output
+spec:
+  storageClassName: vdbench-fastpath-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi

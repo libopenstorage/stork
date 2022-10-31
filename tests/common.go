@@ -1214,6 +1214,44 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 	}
 }
 
+func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.FastpathStatus) error {
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, vol := range appVolumes {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return err
+		}
+		if decommissionedNode.Name != "" && decommissionedNode.Id == appVol.FpConfig.Replicas[0].NodeUuid {
+			expectedStatus = opsapi.FastpathStatus_FASTPATH_INACTIVE
+
+		}
+
+		fpConfig := appVol.FpConfig
+		log.Infof("fpconfig: %+v", fpConfig)
+		if len(fpConfig.Replicas) > 1 {
+			expectedStatus = opsapi.FastpathStatus_FASTPATH_INACTIVE
+		}
+		if fpConfig.Status == expectedStatus {
+			log.Infof("Fastpath status is %v", fpConfig.Status)
+			if fpConfig.Status == opsapi.FastpathStatus_FASTPATH_ACTIVE {
+				if fpConfig.Dirty {
+					return fmt.Errorf("fastpath vol %s is dirty", vol.Name)
+				}
+				if !fpConfig.Promote {
+					return fmt.Errorf("fastpath vol %s is not promoted", vol.Name)
+				}
+			}
+		} else {
+			return fmt.Errorf("expected Fastpath Status: %v, Actual: %v", expectedStatus, fpConfig.Status)
+		}
+	}
+
+	return nil
+}
+
 // TearDownContext is the ginkgo spec for tearing down a scheduled context
 // In the tear down flow we first want to delete volumes, then applications and only then we want to delete StorageClasses
 // StorageClass has to be deleted last because it has information that is required for when deleting PVC, if StorageClass objects are deleted before
@@ -3376,6 +3414,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 				Step(stepLog,
 					func() {
 						dash.Info(stepLog)
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							defer Inst().S.RemoveLabelOnNode(newReplNode, k8s.NodeType)
+							Inst().S.AddLabelOnNode(newReplNode, k8s.NodeType, k8s.FastpathNodeType)
+
+						}
 						dash.Infof("Increasing repl with target node  [%v]", newReplID)
 						err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
 						if err != nil {
@@ -3412,6 +3455,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								UpdateOutcome(event, err)
 							} else {
 								dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+							}
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+								UpdateOutcome(event, err)
+								err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
 							}
 						})
 				}
@@ -3455,6 +3503,13 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 						replicaSets, err := Inst().V.GetReplicaSets(v)
 						if err == nil {
 							replicaNodes := replicaSets[0].Nodes
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								newFastPathNode, err := AddFastPathLabel(ctx)
+								if err == nil {
+									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
+								}
+								UpdateOutcome(event, err)
+							}
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -3485,6 +3540,11 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								} else {
 									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									UpdateOutcome(event, err)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+								}
 							}
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
@@ -3500,6 +3560,21 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 			}
 
 		})
+}
+
+func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
+	sNodes := node.GetStorageDriverNodes()
+	appNodes, err := Inst().S.GetNodesForApp(ctx)
+	if err == nil {
+		appNode := appNodes[0]
+		for _, n := range sNodes {
+			if n.Name != appNode.Name {
+				Inst().S.AddLabelOnNode(n, k8s.NodeType, k8s.FastpathNodeType)
+				return &n, nil
+			}
+		}
+	}
+	return nil, err
 }
 
 func validateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
@@ -3988,12 +4063,13 @@ func printFlags() {
 }
 
 func isDashboardReachable() bool {
-	timeout := 5 * time.Second
+	timeout := 15 * time.Second
 	client := http.Client{
 		Timeout: timeout,
 	}
-
-	response, err := client.Get(aetosutil.DashBoardBaseURL)
+	aboutURL := strings.Replace(aetosutil.DashBoardBaseURL, "dashboard", "datamodel/about", -1)
+	log.Infof("Checking URL: %s", aboutURL)
+	response, err := client.Get(aboutURL)
 
 	if err != nil {
 		log.Warn(err.Error())

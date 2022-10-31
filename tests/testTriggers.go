@@ -85,6 +85,7 @@ const (
 	PureBackend = "backend"
 	// EssentialsFaFbSKU is license strings for FA/FB essential license
 	EssentialsFaFbSKU = "Portworx CSI for FA/FB"
+	fastpathAppName   = "fastpath"
 )
 
 const (
@@ -389,6 +390,7 @@ const (
 // TriggerCoreChecker checks if any cores got generated
 func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(CoreChecker)
 	event := &EventRecord{
 		Event: Event{
@@ -442,15 +444,15 @@ func startLongevityTest(testName string) {
 	SetTorpedoFileOutput(log, longevityLogger)
 	dash.TestCaseBegin(testName, fmt.Sprintf("validating %s in longevity cluster", testName), "", nil)
 }
-func endLongevityTest(testName string) {
-	CloseLogger(longevityLogger)
+func endLongevityTest() {
 	dash.TestCaseEnd()
-
+	CloseLogger(longevityLogger)
 }
 
 // TriggerDeployNewApps deploys applications in separate namespaces
 func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(DeployApps)
 	event := &EventRecord{
 		Event: Event{
@@ -498,12 +500,12 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 		}
 	})
-	endLongevityTest(DeployApps)
 }
 
 // TriggerHAIncreaseAndReboot triggers repl increase and reboots target and source nodes
 func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(HAIncreaseAndReboot)
 	event := &EventRecord{
 		Event: Event{
@@ -591,13 +593,13 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 			}
 		}
 		updateMetrics(*event)
-		endLongevityTest(HAIncreaseAndReboot)
 	})
 }
 
 // TriggerHAIncrease performs repl-add on all volumes of given contexts
 func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(HAIncrease)
 	event := &EventRecord{
 		Event: Event{
@@ -680,6 +682,17 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						dash.Infof("Max Replication factor %v", MaxRF)
 						expReplMap[v] = expRF
 						if !errExpected {
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								newFastPathNode, err := AddFastPathLabel(ctx)
+								if err == nil {
+									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
+								}
+								UpdateOutcome(event, err)
+							}
+							replSets, err := Inst().V.GetReplicaSets(v)
+							if err != nil {
+								log.Infof("Replica Set before ha-increase : %+v", replSets[0].Nodes)
+							}
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, true, opts)
 							if err != nil {
 								dash.Errorf("There is a error setting repl [%v]", err.Error())
@@ -698,6 +711,10 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 						dash.VerifySafely(newRepl, expReplMap[v], fmt.Sprintf("validat repl update for volume %s", v.Name))
 						dash.Infof("repl increase validation completed on app %s", v.Name)
+						replSets, err := Inst().V.GetReplicaSets(v)
+						if err != nil {
+							log.Infof("Replica Set after ha-increase : %+v", replSets[0].Nodes)
+						}
 					})
 			}
 			stepLog = fmt.Sprintf("validating context after increasing HA for app: %s",
@@ -716,16 +733,20 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 					log.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
 				}
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+					UpdateOutcome(event, err)
+				}
 			})
 		}
 		updateMetrics(*event)
-		endLongevityTest(HAIncrease)
 	})
 }
 
 // TriggerHADecrease performs repl-reduce on all volumes of given contexts
 func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(HADecrease)
 	event := &EventRecord{
 		Event: Event{
@@ -790,6 +811,10 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						dash.Infof("Expected Replication factor %v", expRF)
 						dash.Infof("Min Replication factor %v", MinRF)
 						if !errExpected {
+							replSets, err := Inst().V.GetReplicaSets(v)
+							if err != nil {
+								log.Infof("Replica Set before ha-decrease : %+v", replSets[0].Nodes)
+							}
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true, opts)
 							if err != nil {
 								dash.Errorf("There is an error decreasing repl [%v]", err.Error())
@@ -809,6 +834,10 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						UpdateOutcome(event, err)
 						dash.VerifySafely(newRepl, expReplMap[v], "Validate reduced rep value for the volume")
 						dash.Infof("repl decrease validation completed on app %s", v.Name)
+						replSets, err := Inst().V.GetReplicaSets(v)
+						if err != nil {
+							log.Infof("Replica Set after ha-decrease : %+v", replSets[0].Nodes)
+						}
 
 					})
 			}
@@ -825,16 +854,20 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 					log.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
 				}
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
+				}
 			})
 		}
 		updateMetrics(*event)
-		endLongevityTest(HADecrease)
 	})
 }
 
 // TriggerAppTaskDown deletes application task for all contexts
 func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(AppTaskDown)
 	event := &EventRecord{
 		Event: Event{
@@ -871,12 +904,12 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		})
 	}
 	updateMetrics(*event)
-	endLongevityTest(AppTaskDown)
 }
 
 // TriggerCrashVolDriver crashes vol driver
 func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(CrashVolDriver)
 	event := &EventRecord{
 		Event: Event{
@@ -912,13 +945,13 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				})
 		}
 		updateMetrics(*event)
-		endLongevityTest(CrashVolDriver)
 	})
 }
 
 // TriggerRestartVolDriver restarts volume driver and validates app
 func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(RestartVolDriver)
 	event := &EventRecord{
 		Event: Event{
@@ -981,17 +1014,21 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
 				})
 			}
 		}
 		updateMetrics(*event)
-		endLongevityTest(RestartVolDriver)
 	})
 }
 
 // TriggerRestartManyVolDriver restarts one or more volume drivers and validates app
 func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(RestartManyVolDriver)
 	event := &EventRecord{
 		Event: Event{
@@ -1073,10 +1110,13 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				for err := range errorChan {
 					UpdateOutcome(event, err)
 				}
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
+				}
 			})
 		}
 		updateMetrics(*event)
-		endLongevityTest(RestartManyVolDriver)
 
 	})
 }
@@ -1084,6 +1124,7 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 // TriggerRestartKvdbVolDriver restarts volume driver where kvdb resides and validates app
 func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(RestartKvdbVolDriver)
 	event := &EventRecord{
 		Event: Event{
@@ -1146,17 +1187,21 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
 				})
 			}
 		}
 		updateMetrics(*event)
-		endLongevityTest(RestartKvdbVolDriver)
 	})
 }
 
 // TriggerRebootNodes reboots node on which apps are running
 func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(RebootNode)
 	event := &EventRecord{
 		Event: Event{
@@ -1238,13 +1283,16 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 								for err := range errorChan {
 									UpdateOutcome(event, err)
 								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+									UpdateOutcome(event, err)
+								}
 							})
 						}
 					})
 				}
 			}
 			updateMetrics(*event)
-			endLongevityTest(RebootNode)
 		})
 	})
 }
@@ -1252,6 +1300,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 // TriggerRebootManyNodes reboots one or more nodes on which apps are running
 func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(RebootManyNodes)
 	event := &EventRecord{
 		Event: Event{
@@ -1357,12 +1406,15 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 						for err := range errorChan {
 							UpdateOutcome(event, err)
 						}
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+							UpdateOutcome(event, err)
+						}
 					})
 				}
 			})
 		})
 		updateMetrics(*event)
-		endLongevityTest(RebootManyNodes)
 	})
 }
 
@@ -1424,6 +1476,7 @@ func getNodesByChaosLevel(triggerType string) []node.Node {
 // TriggerCrashNodes crashes Worker nodes
 func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(CrashNode)
 	event := &EventRecord{
 		Event: Event{
@@ -1494,6 +1547,10 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 								for err := range errorChan {
 									UpdateOutcome(event, err)
 								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+									UpdateOutcome(event, err)
+								}
 							})
 						}
 					})
@@ -1501,12 +1558,12 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			}
 		})
 	})
-	endLongevityTest(CrashNode)
 }
 
 // TriggerVolumeClone clones all volumes, validates and destorys the clone
 func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(VolumeClone)
 	event := &EventRecord{
 		Event: Event{
@@ -1581,13 +1638,13 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 		}
 		updateMetrics(*event)
-		endLongevityTest(VolumeClone)
 	})
 }
 
 // TriggerVolumeResize increases all volumes size and validates app
 func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(VolumeResize)
 	event := &EventRecord{
 		Event: Event{
@@ -1651,13 +1708,13 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 				})
 		}
 		updateMetrics(*event)
-		endLongevityTest(VolumeResize)
 	})
 }
 
 // TriggerLocalSnapShot takes local snapshots of the volumes and validates snapshot
 func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(LocalSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
@@ -1781,8 +1838,6 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 		}
 		updateMetrics(*event)
-		endLongevityTest(LocalSnapShot)
-
 	})
 
 }
@@ -1790,6 +1845,7 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 // TriggerDeleteLocalSnapShot deletes local snapshots and snapshot schedules
 func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(DeleteLocalSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
@@ -1875,8 +1931,6 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 			}
 		}
 		updateMetrics(*event)
-		endLongevityTest(DeleteLocalSnapShot)
-
 	})
 
 }
@@ -1884,6 +1938,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 // TriggerCloudSnapShot deploy Interval Policy and validates snapshot
 func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(CloudSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
@@ -1991,8 +2046,6 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 		}
 		updateMetrics(*event)
-		endLongevityTest(CloudSnapShot)
-
 	})
 
 }
@@ -2000,6 +2053,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 // TriggerVolumeDelete delete the volumes
 func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(VolumesDelete)
 	uuid := GenerateUUID()
 	event := &EventRecord{
@@ -2043,7 +2097,6 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*contexts = nil
 		TriggerDeployNewApps(contexts, recordChan)
 		updateMetrics(*event)
-		endLongevityTest(VolumesDelete)
 	})
 }
 
@@ -3819,6 +3872,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 // TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
 func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(PoolResizeDisk)
 	event := &EventRecord{
 		Event: Event{
@@ -3867,16 +3921,19 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		dash.Info(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
 		updateMetrics(*event)
 	})
-	endLongevityTest(PoolResizeDisk)
-
 }
 
 // TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
 func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(ResizeDiskAndReboot)
 	event := &EventRecord{
 		Event: Event{
@@ -3922,15 +3979,19 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		dash.Info(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(ResizeDiskAndReboot)
 }
 
 // TriggerPoolAddDisk peforms add-disk on the storage pools for the given contexts
 func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(PoolAddDisk)
 	event := &EventRecord{
 		Event: Event{
@@ -3979,15 +4040,19 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		dash.Info(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(PoolAddDisk)
 }
 
 // TriggerPoolAddDiskAndReboot performs add-disk and reboots the node
 func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(AddDiskAndReboot)
 	event := &EventRecord{
 		Event: Event{
@@ -4031,15 +4096,19 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 		dash.Info(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
 	})
 
 	updateMetrics(*event)
-	endLongevityTest(AddDiskAndReboot)
 }
 
 func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(AutopilotRebalance)
 	event := &EventRecord{
 		Event: Event{
@@ -4115,7 +4184,7 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 						continue
 					}
 					dash.Infof("autopilot rule event reason : %s and message: %s ", ruleEvent.Reason, ruleEvent.Message)
-					if strings.Contains(ruleEvent.Reason, "FailedAction") {
+					if strings.Contains(ruleEvent.Reason, "FailedAction") || strings.Contains(ruleEvent.Reason, "RuleCheckFailed") {
 						UpdateOutcome(event, fmt.Errorf("autopilot rule %s failed, Reason: %s, Message; %s", apRule.Name, ruleEvent.Reason, ruleEvent.Message))
 					}
 
@@ -4185,8 +4254,6 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 			}
 		})
 	}
-	endLongevityTest(AutopilotRebalance)
-
 }
 
 func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
@@ -4214,6 +4281,7 @@ func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse
 // TriggerUpgradeVolumeDriver upgrades volume driver version to the latest build
 func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(UpgradeVolumeDriver)
 	event := &EventRecord{
 		Event: Event{
@@ -4264,11 +4332,14 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 			for _, ctx := range *contexts {
 				ctx.SkipVolumeValidation = true
 				ValidateContext(ctx)
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
+				}
 			}
 		})
 	})
 	updateMetrics(*event)
-	endLongevityTest(UpgradeVolumeDriver)
 }
 
 func getOperatorLatestVersion() (string, error) {
@@ -4300,6 +4371,7 @@ func getOperatorLatestVersion() (string, error) {
 // TriggerUpgradeStork peforms upgrade of the stork
 func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(UpgradeStork)
 	event := &EventRecord{
 		Event: Event{
@@ -4326,12 +4398,12 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 		})
 	updateMetrics(*event)
-	endLongevityTest(UpgradeStork)
 }
 
 // TriggerAutoFsTrim enables Auto Fstrim in the PX Cluster
 func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(AutoFsTrim)
 	event := &EventRecord{
 		Event: Event{
@@ -4429,19 +4501,16 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					}
 
 				}
-
 				validateAutoFsTrim(contexts, event)
-
 			})
 	})
 	updateMetrics(*event)
-	endLongevityTest(AutoFsTrim)
-
 }
 
 // TriggerVolumeUpdate enables to test volume update
 func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(UpdateVolume)
 	event := &EventRecord{
 		Event: Event{
@@ -4469,7 +4538,6 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 			})
 	})
 	updateMetrics(*event)
-	endLongevityTest(UpdateVolume)
 }
 
 // updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
@@ -4594,7 +4662,6 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 }
 
 func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) string {
-
 	doExit := false
 	exitCount := 50
 
@@ -4616,14 +4683,13 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) stri
 		}
 		exitCount--
 	}
-
 	return ""
-
 }
 
 // TriggerTrashcan enables trashcan feature in the PX Cluster and validates it
 func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(Trashcan)
 	event := &EventRecord{
 		Event: Event{
@@ -4711,13 +4777,12 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(Trashcan)
-
 }
 
 // TriggerRelaxedReclaim enables Relaxed Reclaim in the PX Cluster
 func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(RelaxedReclaim)
 	event := &EventRecord{
 		Event: Event{
@@ -4793,13 +4858,12 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(RelaxedReclaim)
-
 }
 
 // TriggerNodeDecommission decommission the node for the PX cluster
 func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(NodeDecommission)
 	event := &EventRecord{
 		Event: Event{
@@ -4863,7 +4927,6 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 
 		})
 		updateMetrics(*event)
-
 	})
 
 	for _, ctx := range *contexts {
@@ -4875,15 +4938,19 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
 				UpdateOutcome(event, err)
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
+				}
 			}
 		})
 	}
-	endLongevityTest(NodeDecommission)
 }
 
 // TriggerNodeRejoin rejoins the decommissioned node
 func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(NodeRejoin)
 	event := &EventRecord{
 		Event: Event{
@@ -4950,15 +5017,10 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					} else {
 						dash.Infof("node %v rejoin is successful ", decommissionedNode.Hostname)
 					}
-
 				}
-
 			})
-
 			decommissionedNode = node.Node{}
-
 		}
-
 	})
 
 	for _, ctx := range *contexts {
@@ -4974,14 +5036,13 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		})
 	}
 	updateMetrics(*event)
-	endLongevityTest(NodeRejoin)
-
 }
 
 // TriggerCsiSnapShot takes csi snapshots of the volumes and validates snapshot
 func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	var err error
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(CsiSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
@@ -5061,13 +5122,12 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(CsiSnapShot)
 }
 
 // TriggerCsiSnapRestore create pvc from snapshot and validate the restored PVC
 func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(CsiSnapRestore)
 	uuid := GenerateUUID()
 	event := &EventRecord{
@@ -5119,7 +5179,6 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(CsiSnapRestore)
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {
@@ -5249,6 +5308,7 @@ func createLongevityJiraIssue(event *EventRecord, err error) {
 // TriggerKVDBFailover performs kvdb failover in cyclic manner
 func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(KVDBFailover)
 	event := &EventRecord{
 		Event: Event{
@@ -5389,7 +5449,6 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		})
 	})
 	updateMetrics(*event)
-	endLongevityTest(KVDBFailover)
 }
 
 func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
@@ -5424,6 +5483,7 @@ func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.Meta
 // TriggerAppTasksDown performs app scale up and down according to chaos level
 func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(AppTasksDown)
 	event := &EventRecord{
 		Event: Event{
@@ -5462,12 +5522,12 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(AppTasksDown)
 }
 
 // TriggerValidateDeviceMapperCleanup validate device mapper device cleaned up for FA setup
 func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(ValidateDeviceMapper)
 	event := &EventRecord{
 		Event: Event{
@@ -5522,12 +5582,12 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 		}
 	})
 	updateMetrics(*event)
-	endLongevityTest(ValidateDeviceMapper)
 }
 
 // TriggerAddDrive performs add drive operation
 func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
 	startLongevityTest(AddDrive)
 	event := &EventRecord{
 		Event: Event{
@@ -5598,8 +5658,6 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 	})
 	updateMetrics(*event)
-	endLongevityTest(AddDrive)
-
 }
 
 // TriggerAsyncDR triggers Async DR

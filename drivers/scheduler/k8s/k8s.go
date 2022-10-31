@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -113,6 +114,10 @@ const (
 	PXNamespace = "kube-system"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
+	//NodeType for enabling specific features
+	NodeType = "node-type"
+	//FastpathNodeType fsatpath node type value
+	FastpathNodeType = "fastpath"
 )
 
 const (
@@ -1274,6 +1279,18 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 	}
 
+	if strings.Contains(app.Key, "fastpath") {
+		vpsSpec := "../deployments/customconfigs/fastpath-vps.yaml"
+		if _, err := os.Stat(vpsSpec); err == nil {
+			cmdArgs := []string{"apply", "-f", vpsSpec}
+			err = osutils.Kubectl(cmdArgs)
+			if err != nil {
+				k.log.Errorf("Error applying spec %s", vpsSpec)
+			}
+		}
+
+	}
+
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
@@ -1646,6 +1663,18 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if len(options.TopologyLabels) > 0 {
 			Affinity := getAffinity(options.TopologyLabels)
 			obj.Spec.Template.Spec.Affinity = Affinity.DeepCopy()
+		}
+		fmt.Printf("%+v\n", obj.Spec.Template.Spec)
+		if obj.Spec.Template.Spec.Affinity != nil && obj.Spec.Template.Spec.Affinity.NodeAffinity != nil {
+			nodeAff := obj.Spec.Template.Spec.Affinity.NodeAffinity
+			labels := getLabelsFromNodeAffinity(nodeAff)
+			val, ok := labels[NodeType]
+			if ok {
+				if val == FastpathNodeType {
+					k.AddLabelOnNode(node.GetStorageDriverNodes()[0], NodeType, FastpathNodeType)
+				}
+			}
+
 		}
 
 		secret, err := k.createDockerRegistrySecret(app.Key, obj.Namespace)

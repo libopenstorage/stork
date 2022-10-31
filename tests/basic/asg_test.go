@@ -208,6 +208,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

@@ -24,7 +24,6 @@ const (
 
 // Init function for the Jira
 func Init(username, token string) {
-	log = logInstance.GetLogInstance()
 	httpClient := jira.BasicAuthTransport{
 		Username: username,
 		Password: token,
@@ -143,4 +142,9 @@ func getProjects() {
 
 		log.Infof("%s: %s\n", project.Key, project.Name)
 	}
+}
+
+func init() {
+	log = logInstance.GetLogInstance()
+
 }
