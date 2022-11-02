@@ -141,7 +141,6 @@ func getRancherProjectMapping(restore *storkapi.ApplicationRestore) map[string]s
 	return rancherProjectMapping
 }
 
-/*
 func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.ApplicationRestore) error {
 	// Check whether namespace is allowed to be restored to before each stage
 	// Restrict restores to only the namespace that the object belongs
@@ -262,7 +261,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 	}
 	return nil
 }
-*/
+
 // Reconcile updates for ApplicationRestore objects.
 func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Infof("Reconciling ApplicationRestore %s/%s", request.Namespace, request.Name)
@@ -427,20 +426,19 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 	return nil
 }
 
-/*
-	func (a *ApplicationRestoreController) namespaceRestoreAllowed(restore *storkapi.ApplicationRestore) bool {
-		// Restrict restores to only the namespace that the object belongs
-		// except for the namespace designated by the admin
-		if restore.Namespace != a.restoreAdminNamespace {
-			for _, ns := range restore.Spec.NamespaceMapping {
-				if ns != restore.Namespace {
-					return false
-				}
+func (a *ApplicationRestoreController) namespaceRestoreAllowed(restore *storkapi.ApplicationRestore) bool {
+	// Restrict restores to only the namespace that the object belongs
+	// except for the namespace designated by the admin
+	if restore.Namespace != a.restoreAdminNamespace {
+		for _, ns := range restore.Spec.NamespaceMapping {
+			if ns != restore.Namespace {
+				return false
 			}
 		}
 		return true
 	}
-*/
+	return true
+}
 func (a *ApplicationRestoreController) getDriversForRestore(restore *storkapi.ApplicationRestore) map[string]bool {
 	drivers := make(map[string]bool)
 	for _, volumeInfo := range restore.Status.Volumes {
