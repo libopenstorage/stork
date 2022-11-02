@@ -2,11 +2,11 @@ package utils
 
 import (
 	"fmt"
+	"github.com/aquilax/truncate"
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	"github.com/aquilax/truncate"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"strings"
 )
