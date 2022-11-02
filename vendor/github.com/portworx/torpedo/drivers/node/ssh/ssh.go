@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -689,8 +688,6 @@ func (s *SSH) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.
 }
 
 func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
-	var sshErr error
-	var cli interface{}
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
 			// check if address is responding on port 22
@@ -698,13 +695,13 @@ func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts
 			conn, err := ssh_pkg.Dial("tcp", endpoint, s.sshConfig)
 			return conn, true, err
 		}
-		if cli, sshErr = task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); sshErr == nil {
+		if cli, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
 			n.UsableAddr = addr
 			return cli.(*ssh_pkg.Client), nil
 		}
 	}
-	return nil, fmt.Errorf("no usable address found. Tried: %v. Error: %v"+
-		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses, sshErr)
+	return nil, fmt.Errorf("no usable address found. Tried: %v. "+
+		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
 }
 
 // SystemCheck check if any cores are generated on given node
@@ -722,56 +719,6 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 		}
 	}
 	return file, nil
-}
-
-//GetBlockDrives returns the block drives on the node
-func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
-	drives := make(map[string]*node.BlockDrive)
-	driveCmd := fmt.Sprintf("sudo /bin/lsblk -P -s -d -p -o NAME,SIZE,MOUNTPOINT,FSTYPE,TYPE")
-	t := func() (interface{}, bool, error) {
-		out, err := s.doCmd(n, options.ConnectionOpts, driveCmd, false)
-		if err != nil {
-			return out, true, err
-		}
-		return out, false, nil
-	}
-	out, err := task.DoRetryWithTimeout(t, options.ConnectionOpts.Timeout, options.ConnectionOpts.TimeBeforeRetry)
-	if err != nil {
-		return drives, &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: err.Error(),
-		}
-	}
-	driveOutput := fmt.Sprint(out)
-
-	for _, line := range strings.Split(strings.TrimSpace(driveOutput), "\n") {
-		drive := &node.BlockDrive{}
-		columns := strings.Split(line, " ")
-		for _, col := range columns {
-			if ok, _ := regexp.MatchString("^NAME", col); ok {
-				lastBin := strings.LastIndex(col, "=")
-				drive.Path = col[lastBin+2 : len(col)-1]
-			}
-			if ok, _ := regexp.MatchString("^MOUNTPOINT", col); ok {
-				lastBin := strings.LastIndex(col, "=")
-				drive.MountPoint = col[lastBin+2 : len(col)-1]
-			}
-			if ok, _ := regexp.MatchString("^SIZE", col); ok {
-				lastBin := strings.LastIndex(col, "=")
-				drive.Size = col[lastBin+2 : len(col)-1]
-			}
-			if ok, _ := regexp.MatchString("^FSTYPE", col); ok {
-				lastBin := strings.LastIndex(col, "=")
-				drive.FSType = col[lastBin+2 : len(col)-1]
-			}
-			if ok, _ := regexp.MatchString("^TYPE", col); ok {
-				lastBin := strings.LastIndex(col, "=")
-				drive.Type = col[lastBin+2 : len(col)-1]
-			}
-		}
-		drives[drive.Path] = drive
-	}
-	return drives, nil
 }
 
 // New returns a new SSH object

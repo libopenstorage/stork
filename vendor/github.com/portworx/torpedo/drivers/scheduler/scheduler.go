@@ -102,10 +102,6 @@ type InitOptions struct {
 	VaultToken string
 	// PureVolumes identifies if this setup is using Pure backend
 	PureVolumes bool
-	// PureSANType identifies which SAN type is being used for Pure volumes
-	PureSANType string
-	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
-	RunCSISnapshotAndRestoreManyTest bool
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -209,9 +205,6 @@ type Driver interface {
 
 	// GetVolumes returns all storage volumes for the given context
 	GetVolumes(*Context) ([]*volume.Volume, error)
-
-	// GetPureVolumes returns all PureVolumes is enabled by type (PureBlock or PureFile)
-	GetPureVolumes(*Context, string) ([]*volume.Volume, error)
 
 	// GetPodsForPVC returns pods using the pvc
 	GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error)
@@ -340,26 +333,11 @@ type Driver interface {
 	// RecyleNode deletes nodes with given node
 	RecycleNode(n node.Node) error
 
-	// CreateCsiSnapshotClass create csi snapshot class
-	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error)
+	// CreateCsiSanpshotClass create csi snapshot class
+	CreateCsiSanpshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error)
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
-	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
-	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
-	// to make the interface consistent
 	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
-
-	// CSISnapshotTest create csi snapshot and return a pvc using that snapshot
-	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
-	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
-	// to make the interface consistent
-	CSISnapshotTest(*Context, CSISnapshotRequest) error
-
-	// CSISnapshotAndRestoreMany create a single snapshot and try to restore many volumes
-	CSISnapshotAndRestoreMany(*Context, CSISnapshotRequest) error
-
-	// CSICloneTest clones a volume and validate the content
-	CSICloneTest(*Context, CSICloneRequest) error
 
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
 	CreateCsiSnapsForVolumes(*Context, string) (map[string]*v1beta1.VolumeSnapshot, error)
@@ -443,22 +421,4 @@ func Get(name string) (Driver, error) {
 		ID:   name,
 		Type: "Scheduler",
 	}
-}
-
-// CSISnapshotRequest contains the necessary info to create a CSI snapshot for validation purpose
-type CSISnapshotRequest struct {
-	Namespace         string
-	Timestamp         string
-	OriginalPVCName   string
-	SnapName          string
-	RestoredPVCName   string
-	SnapshotclassName string
-}
-
-// CSICloneRequest contains the necessary info to clone from an existing CSI volume
-type CSICloneRequest struct {
-	Namespace       string
-	Timestamp       string
-	OriginalPVCName string
-	RestoredPVCName string
 }

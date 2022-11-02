@@ -61,8 +61,6 @@ type DiagOps struct {
 	Validate bool
 	// Async toggle to indicate that we want to use async diags
 	Async bool
-	// PxIsStopped
-	PxStopped bool
 }
 
 // MetadataNode TODO temporary solution until sdk supports metadataNode response
@@ -168,14 +166,6 @@ func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 		Operation: "GetStorageDevices()",
 	}
 
-}
-
-//IsPxInstalled checks for Px to be installed on a node
-func (d *DefaultDriver) IsPxInstalled(n node.Node) (bool, error) {
-	return false, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "IsPxInstalled()",
-	}
 }
 
 // RecoverDriver will recover a volume driver from a failure/storage down state.
@@ -526,14 +516,6 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 	}
 }
 
-// ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
-func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ValidateDiagsOnS3()",
-	}
-}
-
 // ValidateStoragePools validates all the storage pools
 func (d *DefaultDriver) ValidateStoragePools() error {
 	return &errors.ErrNotSupported{
@@ -794,14 +776,6 @@ func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	}
 }
 
-// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
-func (d *DefaultDriver) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
-	return "", &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetPxctlCmdOutputConnectionOpts()",
-	}
-}
-
 // GetPxctlCmdOutput returns the command output run on the given node and any error
 func (d *DefaultDriver) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
 	return "", &errors.ErrNotSupported{
@@ -863,13 +837,5 @@ func (d *DefaultDriver) RejoinNode(n *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RejoinNode()",
-	}
-}
-
-// AddBlockDrives add drives to the node using PXCTL
-func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "AddBlockDrives()",
 	}
 }

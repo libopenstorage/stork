@@ -183,9 +183,6 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
-	//IsPxInstalled checks for Px to be installed on a node
-	IsPxInstalled(n node.Node) (bool, error)
-
 	//GetPxVersionOnNode get PXVersion on the given node
 	GetPxVersionOnNode(n node.Node) (string, error)
 
@@ -231,9 +228,6 @@ type Driver interface {
 
 	// CollectDiags collects live diags on a node
 	CollectDiags(n node.Node, config *DiagRequestConfig, diagOps DiagOps) error
-
-	// ValidateDiagsOnS3 validates the Diags or diags file collected on S3
-	ValidateDiagsOnS3(n node.Node, diagsFile string) error
 
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error
@@ -309,7 +303,7 @@ type Driver interface {
 	// GetPxNode return api.StorageNode
 	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
 
-	// GetStoragelessNodes return list of storageless nodes
+	// GetStoragelessNodes() return list of storageless nodes
 	GetStoragelessNodes() ([]*api.StorageNode, error)
 
 	// RecyclePXHost Recycle a node and validate the storageless node picked all it drives
@@ -333,9 +327,6 @@ type Driver interface {
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
-	// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
-	GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error)
-
 	// GetPxctlCmdOutput returns the command output run on the given node and any error
 	GetPxctlCmdOutput(n node.Node, command string) (string, error)
 
@@ -350,9 +341,6 @@ type Driver interface {
 
 	// GetNodePureVolumeAttachedCountMap returns map of node name and count of pure volume attached on that node
 	GetNodePureVolumeAttachedCountMap() (map[string]int, error)
-
-	// AddBlockDrives add drives to the node using PXCTL
-	AddBlockDrives(n *node.Node, drivePath []string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

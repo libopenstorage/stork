@@ -29,7 +29,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kdmp v0.4.1-0.20221020172845-7898dec64114
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20220915143205-3fe6e54a2a4d
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20221102055014-b3a55a3df5c8
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sirupsen/logrus v1.8.1
@@ -76,7 +76,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220915143205-3fe6e54a2a4d
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20221102055014-b3a55a3df5c8
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220815024644-ca99a26a617c
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.1

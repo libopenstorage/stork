@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-version"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,11 +45,8 @@ const (
 
 	// MigrationDryRunCompletedReason is added to an event when dry run is completed
 	MigrationDryRunCompletedReason = "MigrationDryRunCompleted"
-	// MigrationDryRunFailedReason is added to an event when dry run fails.
+	// MigrationDryRunFailedReason is aded to an event when dry run fails.
 	MigrationDryRunFailedReason = "MigrationDryRunFailed"
-
-	// DefaultImageRegistry is the default registry when no registry is provided
-	DefaultImageRegistry = "docker.io"
 )
 
 var (
@@ -60,28 +58,12 @@ var (
 		"registry-1.docker.io":        true,
 		"registry.connect.redhat.com": true,
 	}
-
 	// podTopologySpreadConstraintKeys is a list of topology keys considered for pod spread constraints
 	podTopologySpreadConstraintKeys = []string{
 		"topology.kubernetes.io/region",
 		"topology.kubernetes.io/zone",
 	}
 )
-
-// AddDefaultRegistryToImage adds default registry to image.
-func AddDefaultRegistryToImage(image string) string {
-	if image == "" {
-		return ""
-	}
-
-	for k := range commonDockerRegistries {
-		if strings.HasPrefix(image, k) || strings.HasPrefix(image, "gcr.io") || strings.HasPrefix(image, "k8s.gcr.io") {
-			return image
-		}
-	}
-
-	return DefaultImageRegistry + "/" + image
-}
 
 func getMergedCommonRegistries(cluster *corev1.StorageCluster) map[string]bool {
 	val, ok := cluster.Annotations[constants.AnnotationCommonImageRegistries]
@@ -121,7 +103,7 @@ func GetImageURN(cluster *corev1.StorageCluster, image string) string {
 	registryAndRepo = strings.TrimRight(registryAndRepo, "/")
 	if registryAndRepo == "" {
 		// no registry/repository specifed, return image
-		return AddDefaultRegistryToImage(image)
+		return image
 	}
 
 	imgParts := strings.Split(image, "/")
@@ -140,7 +122,6 @@ func GetImageURN(cluster *corev1.StorageCluster, image string) string {
 			imgParts = imgParts[len(imgParts)-1:]
 		}
 	}
-
 	return registryAndRepo + "/" + path.Join(imgParts...)
 }
 
@@ -237,33 +218,33 @@ func DeepEqualObjects(
 	return nil
 }
 
-// DeepEqualPodTemplate compares if two pod template specs are same.
-func DeepEqualPodTemplate(t1, t2 *v1.PodTemplateSpec) (bool, error) {
+// DeepEqualDeployment compares if two deployments are same.
+func DeepEqualDeployment(d1 *appsv1.Deployment, d2 *appsv1.Deployment) (bool, error) {
 	// DeepDerivative will return true if first argument is nil, hence check the length of volumes.
-	// The reason we don't2 use deepEqual for volumes is k8s API server may add defaultMode to it.
-	if !equality.Semantic.DeepDerivative(t1.Spec.Containers, t2.Spec.Containers) {
-		return false, fmt.Errorf("containers not equal, first: %+v, second: %+v", t1.Spec.Containers, t2.Spec.Containers)
+	// The reason we don't use deepEqual for volumes is k8s API server may add defaultMode to it.
+	if !equality.Semantic.DeepDerivative(d1.Spec.Template.Spec.Containers, d2.Spec.Template.Spec.Containers) {
+		return false, fmt.Errorf("containers not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Containers, d2.Spec.Template.Spec.Containers)
 	}
 
-	if !(len(t1.Spec.Volumes) == len(t2.Spec.Volumes) &&
-		equality.Semantic.DeepDerivative(t1.Spec.Volumes, t2.Spec.Volumes)) {
-		return false, fmt.Errorf("volumes not equal, first: %+v, second: %+v", t1.Spec.Volumes, t2.Spec.Volumes)
+	if !(len(d1.Spec.Template.Spec.Volumes) == len(d2.Spec.Template.Spec.Volumes) &&
+		equality.Semantic.DeepDerivative(d1.Spec.Template.Spec.Volumes, d2.Spec.Template.Spec.Volumes)) {
+		return false, fmt.Errorf("volumes not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Volumes, d2.Spec.Template.Spec.Volumes)
 	}
 
-	if !equality.Semantic.DeepEqual(t1.Spec.ImagePullSecrets, t2.Spec.ImagePullSecrets) {
-		return false, fmt.Errorf("image pull secrets not equal, first: %+v, second: %+v", t1.Spec.ImagePullSecrets, t2.Spec.ImagePullSecrets)
+	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.ImagePullSecrets, d2.Spec.Template.Spec.ImagePullSecrets) {
+		return false, fmt.Errorf("image pull secrets not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.ImagePullSecrets, d2.Spec.Template.Spec.ImagePullSecrets)
 	}
 
-	if !equality.Semantic.DeepEqual(t1.Spec.Affinity, t2.Spec.Affinity) {
-		return false, fmt.Errorf("affinity not equal, first: %+v, second: %+v", t1.Spec.Affinity, t2.Spec.Affinity)
+	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.Affinity, d2.Spec.Template.Spec.Affinity) {
+		return false, fmt.Errorf("affinity not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Affinity, d2.Spec.Template.Spec.Affinity)
 	}
 
-	if !equality.Semantic.DeepEqual(t1.Spec.Tolerations, t2.Spec.Tolerations) {
-		return false, fmt.Errorf("tolerations not equal, first: %+v, second: %+v", t1.Spec.Tolerations, t2.Spec.Tolerations)
+	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.Tolerations, d2.Spec.Template.Spec.Tolerations) {
+		return false, fmt.Errorf("tolerations not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Tolerations, d2.Spec.Template.Spec.Tolerations)
 	}
 
-	if !equality.Semantic.DeepEqual(t1.Spec.ServiceAccountName, t2.Spec.ServiceAccountName) {
-		return false, fmt.Errorf("service account name not equal, first: %s, second: %s", t1.Spec.ServiceAccountName, t2.Spec.ServiceAccountName)
+	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.ServiceAccountName, d2.Spec.Template.Spec.ServiceAccountName) {
+		return false, fmt.Errorf("service account name not equal, first: %s, second: %s", d1.Spec.Template.Spec.ServiceAccountName, d2.Spec.Template.Spec.ServiceAccountName)
 	}
 
 	return true, nil
