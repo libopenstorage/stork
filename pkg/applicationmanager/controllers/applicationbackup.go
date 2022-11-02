@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"math"
 	"os"
 	"path/filepath"
