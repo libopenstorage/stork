@@ -36,7 +36,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		dash.VerifyFatal(err, nil, "Validate list storage pools")
-		dash.VerifyFatal(len(pools), 0, "Validate storage pools exist")
+		dash.VerifyFatal(len(pools) > 0, true, "Validate storage pools exist")
 
 		// pick a random pool from a pools list and resize it
 		poolIDToResize = getRandomPoolID(pools)
@@ -121,7 +121,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		dash.VerifyFatal(err, nil, "Validate list storage pools")
-		dash.VerifyFatal(len(pools), 0, "Validate storage pools exist")
+		dash.VerifyFatal(len(pools) > 0, true, "Validate storage pools exist")
 
 		// pick a random pool from a pools list and resize it
 		poolIDToResize = getRandomPoolID(pools)
@@ -205,7 +205,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		dash.VerifyFatal(err, nil, "Validate list storage pools")
-		dash.VerifyFatal(len(pools), 0, "Validate storage pools exist")
+		dash.VerifyFatal(len(pools) > 0, true, "Validate storage pools exist")
 
 		// pick a random pool from a pools list and resize it
 		poolIDToResize = getRandomPoolID(pools)
@@ -300,7 +300,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		dash.VerifyFatal(err, nil, "Validate list storage pools")
-		dash.VerifyFatal(len(pools), 0, "Validate storage pools exist")
+		dash.VerifyFatal(len(pools) > 0, true, "Validate storage pools exist")
 
 		// pick a random pool from a pools list and resize it
 		poolIDToResize = getRandomPoolID(pools)
@@ -389,7 +389,7 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			dash.VerifyFatal(err, nil, "Validate get storage pools list")
 
-			dash.VerifyFatal(len(pools), 0, "Validate storage pools exist")
+			dash.VerifyFatal(len(pools) > 0, true, "Validate storage pools exist")
 
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
 			dash.VerifyFatal(updatedPoolToBeResized != nil, true, "Validate pool to be resized exist")

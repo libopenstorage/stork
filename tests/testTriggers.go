@@ -5244,10 +5244,8 @@ func getCloudSnapInterval(triggerType string) int {
 }
 
 func createLongevityJiraIssue(event *EventRecord, err error) {
-	log.Info("Creating Jira Issue")
 
 	actualEvent := strings.Split(event.Event.Type, "<br>")[0]
-
 	eventsGenerated, ok := jiraEvents[actualEvent]
 	issueExists := false
 	t := time.Now().Format(time.RFC1123)
@@ -5259,19 +5257,15 @@ func createLongevityJiraIssue(event *EventRecord, err error) {
 			if strings.Contains(iss, err.Error()) {
 				issueExists = true
 			}
-
 		}
-
 	} else {
 		log.Infof("Event type [%v] does not exists", actualEvent)
-
 		errorsSlice := make([]string, 0)
-
 		jiraEvents[actualEvent] = errorsSlice
-
 	}
 
 	if !issueExists {
+		log.Info("Creating Jira Issue")
 
 		//adding issue to existing jiraEvents
 		issues := jiraEvents[actualEvent]
