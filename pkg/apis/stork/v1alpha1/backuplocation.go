@@ -41,7 +41,11 @@ type BackupLocationItem struct {
 	S3Config           *S3Config     `json:"s3Config,omitempty"`
 	AzureConfig        *AzureConfig  `json:"azureConfig,omitempty"`
 	GoogleConfig       *GoogleConfig `json:"googleConfig,omitempty"`
+<<<<<<< HEAD
 	NFSConfig          *NFSConfig    `json:"nfsConfig,omitempty"`
+=======
+	NfsConfig          *NfsConfig    `json:"nfsConfig,omitempty"`
+>>>>>>> 65abc8cc (Changes required in backuplocation CR definition of NFS type.)
 	SecretConfig       string        `json:"secretConfig"`
 	Sync               bool          `json:"sync"`
 	RepositoryPassword string        `json:"repositoryPassword"`
