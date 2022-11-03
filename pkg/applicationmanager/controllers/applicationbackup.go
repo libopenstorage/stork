@@ -27,8 +27,11 @@ import (
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
+	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
+	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/gcerrors"
@@ -63,16 +66,34 @@ const (
 	backupCancelBackoffFactor       = 1
 	backupCancelBackoffSteps        = math.MaxInt32
 
-	allNamespacesSpecifier        = "*"
-	backupVolumeBatchCountEnvVar  = "BACKUP-VOLUME-BATCH-COUNT"
-	defaultBackupVolumeBatchCount = 3
-	backupResourcesBatchCount     = 15
-	maxRetry                      = 10
-	retrySleep                    = 10 * time.Second
-	genericBackupKey              = "BACKUP_TYPE"
-	kdmpDriverOnly                = "kdmp"
-	nonKdmpDriverOnly             = "nonkdmp"
-	mixedDriver                   = "mixed"
+	allNamespacesSpecifier          = "*"
+	backupVolumeBatchCountEnvVar    = "BACKUP-VOLUME-BATCH-COUNT"
+	defaultBackupVolumeBatchCount   = 3
+	backupResourcesBatchCount       = 15
+	maxRetry                        = 10
+	retrySleep                      = 10 * time.Second
+	genericBackupKey                = "BACKUP_TYPE"
+	kdmpDriverOnly                  = "kdmp"
+	nonKdmpDriverOnly               = "nonkdmp"
+	mixedDriver                     = "mixed"
+	oneMBSizeBytes                  = 1 << (10 * 2)
+	prefixBackup                    = "backup"
+	prefixRestore                   = "restore"
+	applicationBackupCRNameKey      = kdmpAnnotationPrefix + "applicationbackup-cr-name"
+	applicationRestoreCRNameKey     = kdmpAnnotationPrefix + "applicationrestore-cr-name"
+	applicationBackupCRUIDKey       = kdmpAnnotationPrefix + "applicationbackup-cr-uid"
+	applicationRestoreCRUIDKey      = kdmpAnnotationPrefix + "applicationrestore-cr-uid"
+	kdmpAnnotationPrefix            = "kdmp.portworx.com/"
+	pxbackupAnnotationCreateByKey   = pxbackupAnnotationPrefix + "created-by"
+	pxbackupAnnotationCreateByValue = "px-backup"
+	backupObjectNameKey             = kdmpAnnotationPrefix + "backupobject-name"
+	restoreObjectNameKey            = kdmpAnnotationPrefix + "restoreobject-name"
+	pxbackupObjectUIDKey            = pxbackupAnnotationPrefix + "backup-uid"
+	pxbackupAnnotationPrefix        = "portworx.io/"
+	pxbackupObjectNameKey           = pxbackupAnnotationPrefix + "backup-name"
+	backupObjectUIDKey              = kdmpAnnotationPrefix + "backupobject-uid"
+	restoreObjectUIDKey             = kdmpAnnotationPrefix + "restoreobject-uid"
+	skipResourceAnnotation          = "stork.libopenstorage.org/skip-resource"
 )
 
 var (
@@ -215,6 +236,10 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 	if err != nil {
 		return fmt.Errorf("error getting backup location path: %v", err)
 	}
+	// For NFS skip creating path
+	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
+		return nil
+	}
 	if err := objectstore.CreateBucket(backupLocation); err != nil {
 		return fmt.Errorf("error creating backup location path: %v", err)
 	}
@@ -329,8 +354,6 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				return nil
 			}
 		}
-
-		// Try to create the backupLocation path, just log error if it fails
 		err := a.createBackupLocationPath(backup)
 		if err != nil {
 			log.ApplicationBackupLog(backup).Errorf(err.Error())
@@ -584,7 +607,11 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					continue
 				}
 				var driverName string
-				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType)
+				backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+				if err != nil {
+					return err
+				}
+				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType, backupLocation.Location.Type)
 				if err != nil {
 					// Skip unsupported PVCs
 					if _, ok := err.(*errors.ErrNotSupported); ok {
@@ -1434,11 +1461,22 @@ func (a *ApplicationBackupController) uploadMetadata(
 	return a.uploadObject(backup, metadataObjectName, jsonBytes)
 }
 
+func getResourceExportCRName(opsPrefix, crUID, ns string) string {
+	name := fmt.Sprintf("%s-%s-%s", opsPrefix, utils.GetShortUID(crUID), ns)
+	name = utils.GetValidLabel(name)
+	return name
+}
+
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
 	var err error
 	var resourceTypes []metav1.APIResource
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
+	if err != nil {
+		logrus.Errorf("error in checking backuplocation type: %v", err)
+		return err
+	}
 	// Listing all resource types
 	if len(backup.Spec.ResourceTypes) != 0 {
 		optionalResourceTypes := []string{}
@@ -1656,6 +1694,110 @@ func (a *ApplicationBackupController) backupResources(
 		}
 	}
 
+	if nfs {
+		// Check whether ResourceExport is present or not
+		crName := getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
+		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, a.backupAdminNamespace)
+		if err != nil {
+			if k8s_errors.IsNotFound(err) {
+				// create resource export CR
+				resourceExport := &kdmpapi.ResourceExport{}
+				// Adding required label for debugging
+				labels := make(map[string]string)
+				labels[utils.ApplicationBackupCRNameKey] = utils.GetValidLabel(backup.Name)
+				labels[utils.ApplicationBackupCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(backup.UID)))
+				// If backup from px-backup, update the backup object details in the label
+				if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+					if val == utils.PxbackupAnnotationCreateByValue {
+						labels[utils.BackupObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
+						labels[utils.BackupObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
+					}
+				}
+				resourceExport.Labels = labels
+				resourceExport.Annotations = make(map[string]string)
+				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
+				resourceExport.Name = getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
+				resourceExport.Namespace = a.backupAdminNamespace
+				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
+				source := &kdmpapi.ResourceExportObjectReference{
+					APIVersion: backup.APIVersion,
+					Kind:       backup.Kind,
+					Namespace:  backup.Namespace,
+					Name:       backup.Name,
+				}
+				backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+				if err != nil {
+					return fmt.Errorf("error getting backup location path: %v", err)
+				}
+				destination := &kdmpapi.ResourceExportObjectReference{
+					// TODO: .GetBackupLocation is not returning APIVersion and kind.
+					// Hardcoding for now.
+					// APIVersion: backupLocation.APIVersion,
+					// Kind:       backupLocation.Kind,
+					APIVersion: utils.StorkAPIVersion,
+					Kind:       utils.BackupLocationKind,
+					Namespace:  backupLocation.Namespace,
+					Name:       backupLocation.Name,
+				}
+				resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
+				storkPodNs, err := k8sutils.GetStorkPodNamespace()
+				if err != nil {
+					logrus.Errorf("error in getting stork pod namespace: %v", err)
+					return err
+				}
+				resourceExport.Spec.TriggeredFromNs = storkPodNs
+				resourceExport.Spec.Source = *source
+				resourceExport.Spec.Destination = *destination
+
+				_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
+				if err != nil {
+					logrus.Errorf("failed to create ResourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
+					return err
+				}
+				return nil
+			}
+			logrus.Errorf("failed to get backup resourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
+			// Will retry in the next cycle of reconciler.
+			return nil
+		} else {
+			var message string
+			// Check the status of the resourceExport CR and update it to the applicationBackup CR
+			switch resourceExport.Status.Status {
+			case kdmpapi.ResourceExportStatusFailed:
+				message = fmt.Sprintf("Error uploading resources: %v", err)
+				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				backup.Status.Reason = message
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				backup.Status.FinishTimestamp = metav1.Now()
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
+					return err
+				}
+				a.recorder.Event(backup,
+					v1.EventTypeWarning,
+					string(stork_api.ApplicationBackupStatusFailed),
+					message)
+				log.ApplicationBackupLog(backup).Errorf(message)
+				return err
+			case kdmpapi.ResourceExportStatusSuccessful:
+				backup.Status.BackupPath = GetObjectPath(backup)
+				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				backup.Status.FinishTimestamp = metav1.Now()
+				backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
+				backup.Status.Reason = "Volumes and resources were backed up successfully"
+				// Only on success compute the total backup size
+				for _, vInfo := range backup.Status.Volumes {
+					backup.Status.TotalSize += vInfo.TotalSize
+				}
+			case kdmpapi.ResourceExportStatusInitial:
+			case kdmpapi.ResourceExportStatusPending:
+			case kdmpapi.ResourceExportStatusInProgress:
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+			}
+			return nil
+		}
+	}
 	// Upload the resources to the backup location
 	if err = a.uploadResources(backup, allObjects); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v", err)
@@ -1749,6 +1891,11 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 			return true, nil
 		}
 		return true, err
+	}
+	// TODO: for nfs type, we need to invoke job based deletion.
+	// For now, skipping it.
+	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
+		return true, nil
 	}
 	bucket, err := objectstore.GetBucket(backupLocation)
 	if err != nil {
@@ -1853,6 +2000,15 @@ func (a *ApplicationBackupController) cleanupResources(
 		if err := driver.CleanupBackupResources(backup); err != nil {
 			logrus.Errorf("unable to cleanup post backup resources, err: %v", err)
 		}
+	}
+	// Directly calling DeleteResourceExport with out checking backuplocation type.
+	// For other backuplocation type, expecting Notfound
+	crName := getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
+	err := kdmpShedOps.Instance().DeleteResourceExport(crName, a.backupAdminNamespace)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
+		log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+		return err
 	}
 	return nil
 }
