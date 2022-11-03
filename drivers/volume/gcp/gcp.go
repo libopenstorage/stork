@@ -98,9 +98,15 @@ func (g *gcp) OwnsPVCForBackup(
 	pvc *v1.PersistentVolumeClaim,
 	cmBackupType string,
 	crBackupType string,
+	blType storkapi.BackupLocationType,
 ) bool {
 	if cmBackupType == storkapi.ApplicationBackupGeneric {
 		// If user has forced the backupType in config map, default to generic always
+		return false
+	}
+	// For gcp volume and backuplocation type is NFS, we will not own.
+	// It will default to kdmp
+	if blType == storkapi.BackupLocationNFS {
 		return false
 	}
 	return g.OwnsPVC(coreOps, pvc)

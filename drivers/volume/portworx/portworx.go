@@ -691,7 +691,7 @@ func (p *portworx) GetClusterID() (string, error) {
 	return cluster.Id, nil
 }
 
-func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool {
 	if enablePXGenericBackup() {
 		logrus.Tracef("Provisioner in Storageclass is Portworx but will take generic backup")
 		return false
