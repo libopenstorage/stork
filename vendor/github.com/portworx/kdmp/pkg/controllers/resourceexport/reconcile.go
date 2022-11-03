@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
@@ -241,6 +242,24 @@ func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) er
 	if err = batch.Instance().DeleteJob(resourceExport.Name, resourceExport.Namespace); err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
+	pvcName := "pvc-" + rbName
+	if err := core.Instance().DeletePersistentVolumeClaim(pvcName, rbNamespace); err != nil && !k8sErrors.IsNotFound(err) {
+		return fmt.Errorf("delete %s/%s pvc: %s", rbNamespace, pvcName, err)
+	}
+	pvName := "pv-" + rbName
+	if err := core.Instance().DeletePersistentVolume(pvName); err != nil && !k8sErrors.IsNotFound(err) {
+		return fmt.Errorf("delete %s pv: %s", pvName, err)
+	}
+	if err := utils.CleanServiceAccount(rbName, rbNamespace); err != nil {
+		errMsg := fmt.Sprintf("deletion of service account %s/%s failed: %v", rbNamespace, rbName, err)
+		logrus.Errorf("%s: %v", "cleanupResources", errMsg)
+		return fmt.Errorf(errMsg)
+	}
+	if err := core.Instance().DeleteSecret(utils.GetCredSecretName(rbName), rbNamespace); err != nil && !k8sErrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", rbName, err)
+		logrus.Errorf(errMsg)
+		return fmt.Errorf(errMsg)
+	}
 	return nil
 }
 
@@ -365,6 +384,7 @@ func startNfsResourceJob(
 			drivers.WithNamespace(re.Namespace),
 			drivers.WithResoureBackupName(re.Name),
 			drivers.WithResoureBackupNamespace(re.Namespace),
+			drivers.WithNfsMountOption(bl.Location.NfsConfig.MountOption),
 		)
 	case drivers.NFSRestore:
 		return drv.StartJob(
@@ -379,6 +399,7 @@ func startNfsResourceJob(
 			drivers.WithNamespace(re.Namespace),
 			drivers.WithResoureBackupName(re.Name),
 			drivers.WithResoureBackupNamespace(re.Namespace),
+			drivers.WithNfsMountOption(bl.Location.NfsConfig.MountOption),
 		)
 	}
 	return "", fmt.Errorf("unknown data transfer driver: %s", drv.Name())

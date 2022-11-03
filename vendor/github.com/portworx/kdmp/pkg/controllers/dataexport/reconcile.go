@@ -37,7 +37,6 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	k8shelper "k8s.io/component-helpers/storage/volume"
@@ -74,9 +73,7 @@ const (
 	// pvcNameLenLimitForJob is the max length of PVC name that the bound job
 	// will incorporate in their names
 	pvcNameLenLimitForJob = 48
-	volumeinitialDelay    = 2 * time.Second
-	volumeFactor          = 1.5
-	volumeSteps           = 15
+
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	compressionKey        = "KDMP_COMPRESSION"
@@ -96,12 +93,6 @@ type updateDataExportDetail struct {
 	snapshotNamespace    string
 	removeFinalizer      bool
 	volumeSnapshot       string
-}
-
-var volumeAPICallBackoff = wait.Backoff{
-	Duration: volumeinitialDelay,
-	Factor:   volumeFactor,
-	Steps:    volumeSteps,
 }
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
@@ -304,6 +295,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			utils.KdmpConfigmapNamespace,
 			backupLocation.Location.NfsConfig.ServerAddr,
 			backupLocation.Location.Path,
+			backupLocation.Location.NfsConfig.MountOption,
 		)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
@@ -1332,6 +1324,21 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		if err != nil && !k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("delete %s job: %s", de.Status.TransferID, err)
 		}
+		//TODO : Need better way to find BL type from de CR
+		// For now deleting unconditionally for all BL type.
+		namespace, jobName, err := utils.ParseJobID(de.Status.TransferID)
+		if err != nil {
+			return err
+		}
+		pvcName := "pvc-" + jobName
+		if err := core.Instance().DeletePersistentVolumeClaim(pvcName, namespace); err != nil && !k8sErrors.IsNotFound(err) {
+			return fmt.Errorf("delete %s/%s pvc: %s", namespace, pvcName, err)
+		}
+
+		pvName := "pv-" + jobName
+		if err := core.Instance().DeletePersistentVolume(pvName); err != nil && !k8sErrors.IsNotFound(err) {
+			return fmt.Errorf("delete %s pv: %s", pvName, err)
+		}
 	}
 
 	if err := core.Instance().DeleteSecret(utils.GetCredSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
@@ -1627,6 +1634,7 @@ func startTransferJob(
 	jobConfigMapNs string,
 	nfsServerAddr string,
 	nfsExportPath string,
+	nfsMountOption string,
 ) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
@@ -1677,6 +1685,7 @@ func startTransferJob(
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
 			drivers.WithNfsServer(nfsServerAddr),
 			drivers.WithNfsExportDir(nfsExportPath),
+			drivers.WithNfsMountOption(nfsMountOption),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
@@ -1706,7 +1715,7 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 		return nil, err
 	}
 	// wait for pvc to get bound
-	pvc, err := waitForPVCBound(in, checkMounts)
+	pvc, err := utils.WaitForPVCBound(in.Name, in.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -1720,36 +1729,6 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 		if len(pods) > 0 {
 			return nil, fmt.Errorf("mounted to %v pods", toPodNames(pods))
 		}
-	}
-	return pvc, nil
-}
-
-func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.PersistentVolumeClaim, error) {
-	if err := checkNameNamespace(in); err != nil {
-		return nil, err
-	}
-	// wait for pvc to get bound
-	var pvc *corev1.PersistentVolumeClaim
-	var err error
-	var errMsg string
-	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
-		pvc, err = core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
-		if err != nil {
-			return false, err
-		}
-
-		if pvc.Status.Phase != corev1.ClaimBound {
-			errMsg = fmt.Sprintf("pvc status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
-			logrus.Debugf("%v", errMsg)
-			return false, nil
-		}
-
-		return true, nil
-	})
-
-	if wErr != nil {
-		logrus.Errorf("%v", wErr)
-		return nil, fmt.Errorf("%s:%s", wErr, errMsg)
 	}
 	return pvc, nil
 }
@@ -1775,7 +1754,7 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 			logrus.Debugf("checkPVCIgnoringJobMounts: pvc name %v - storage class VolumeBindingMode %v", pvc.Name, *sc.VolumeBindingMode)
 			if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
 				// wait for pvc to get bound
-				pvc, checkErr = waitForPVCBound(in, true)
+				pvc, checkErr = utils.WaitForPVCBound(in.Name, in.Namespace)
 				if checkErr != nil {
 					return "", false, checkErr
 				}
@@ -1783,7 +1762,7 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 		} else {
 			// If sc is not set, we will direct check the pvc status
 			// wait for pvc to get bound
-			pvc, checkErr = waitForPVCBound(in, true)
+			pvc, checkErr = utils.WaitForPVCBound(in.Name, in.Namespace)
 			if checkErr != nil {
 				return "", false, checkErr
 			}

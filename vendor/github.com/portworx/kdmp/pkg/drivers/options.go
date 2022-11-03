@@ -115,7 +115,7 @@ func WithNfsMountOption(server string) JobOption {
 // WithNfsSubPath is job parameter.
 func WithNfsSubPath(server string) JobOption {
 	return func(opts *JobOpts) error {
-		opts.NfsServer = strings.TrimSpace(server)
+		opts.NfsSubPath = strings.TrimSpace(server)
 		return nil
 	}
 }
