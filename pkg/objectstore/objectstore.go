@@ -7,6 +7,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/objectstore/azure"
 	"github.com/libopenstorage/stork/pkg/objectstore/common"
 	"github.com/libopenstorage/stork/pkg/objectstore/google"
+	"github.com/libopenstorage/stork/pkg/objectstore/nfs"
 	"github.com/libopenstorage/stork/pkg/objectstore/s3"
 	"gocloud.dev/blob"
 )
@@ -59,6 +60,8 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 		return azure.GetObjLockInfo(backupLocation)
 	case stork_api.BackupLocationS3:
 		return s3.GetObjLockInfo(backupLocation)
+	case stork_api.BackupLocationNFS:
+		return nfs.GetObjLockInfo(backupLocation)
 	default:
 		return nil, fmt.Errorf("invalid backupLocation type: %v", backupLocation.Location.Type)
 	}
