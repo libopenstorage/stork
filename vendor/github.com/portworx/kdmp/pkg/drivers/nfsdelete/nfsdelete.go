@@ -55,6 +55,15 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		logrus.Errorf("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
+
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(o.JobName, job.ObjectMeta.Namespace, o)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
 		errMsg := fmt.Sprintf("creation of resource delete job %s failed: %v", job.Name, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
@@ -231,9 +240,8 @@ func jobForDeleteResource(
 		volume := corev1.Volume{
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
-				NFS: &corev1.NFSVolumeSource{
-					Server: jobOption.NfsServer,
-					Path:   jobOption.NfsExportDir,
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: "pvc-" + jobOption.JobName,
 				},
 			},
 		}

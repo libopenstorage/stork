@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aquilax/truncate"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -22,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -51,6 +53,9 @@ const (
 	ResourceCleanupKey = "RESOURCE_CLEANUP"
 	// ResourceCleanupDefaultValue is true as resource cleanup process is enabled by default for debugging user can set to false.
 	ResourceCleanupDefaultValue = "true"
+	volumeinitialDelay          = 2 * time.Second
+	volumeFactor                = 1.5
+	volumeSteps                 = 15
 )
 
 var (
@@ -59,6 +64,11 @@ var (
 	// ErrJobAlreadyRunning - Already a job is running for the given instance of PVC
 	ErrJobAlreadyRunning = errors.New("job Already Running")
 )
+var volumeAPICallBackoff = wait.Backoff{
+	Duration: volumeinitialDelay,
+	Factor:   volumeFactor,
+	Steps:    volumeSteps,
+}
 
 // NamespacedName returns a name in form "<namespace>/<name>".
 func NamespacedName(namespace, name string) string {
@@ -390,6 +400,8 @@ func CreateNfsSecret(secretName string, backupLocation *storkapi.BackupLocation,
 	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.ServerAddr)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
+	credentialData["subPath"] = []byte(backupLocation.Location.NfsConfig.SubPath)
+
 	err := CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
@@ -643,4 +655,167 @@ func GetImageSecretName(name string) string {
 // GetCertSecretName - get cert secret name
 func GetCertSecretName(name string) string {
 	return CertSecret + "-" + name
+}
+
+// CreateNfsPv - Create a persistent volume for NFS specific jobs
+func CreateNfsPv(pvName string,
+	nfsServerAddr string,
+	nfsExportDir string,
+	nfsMountOption string) error {
+
+	fn := "CreateNfsPv"
+	// Let's Create PV & PVC before creating JOB
+	pv := &corev1.PersistentVolume{
+		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: pvName,
+			Annotations: map[string]string{
+				SkipResourceAnnotation: "true",
+			},
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				"ReadWriteMany",
+			},
+			Capacity: corev1.ResourceList{
+				corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("3Mi"),
+			},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				NFS: &corev1.NFSVolumeSource{
+					Server:   nfsServerAddr,
+					Path:     nfsExportDir,
+					ReadOnly: false,
+				},
+			},
+			MountOptions: []string{nfsMountOption},
+		},
+	}
+
+	if _, err := core.Instance().CreatePersistentVolume(pv); err != nil && !apierrors.IsAlreadyExists(err) {
+		errMsg := fmt.Sprintf("creation of pv name [%s] failed: %v", pvName, err)
+		logrus.Errorf("%s: %v", fn, errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	// wait for pv to be available
+	_, err := WaitForPVAvailable(pvName)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CreateNfsPvc - Create a persistent volume claim for NFS specific jobs
+func CreateNfsPvc(pvcName string, pvName string, namespace string) error {
+	fn := "CreateNfsPvc"
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				SkipResourceAnnotation: "true",
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("3Mi"),
+				},
+			},
+			VolumeName: pvName,
+		},
+	}
+
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvc)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		errMsg := fmt.Sprintf("creation of pvc name [%s] failed: %v", pvcName, err)
+		logrus.Errorf("%s: %v", fn, errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	// wait for pvc to get bound
+	_, err = WaitForPVCBound(pvcName, namespace)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CreateNFSPvPvcForJob - this function creates PV and PVC for NFS job.
+func CreateNFSPvPvcForJob(jobName string, namespace string, o drivers.JobOpts) error {
+	// create PV before creating job
+	nfsPvName := "pv-" + jobName
+	if err := CreateNfsPv(nfsPvName, o.NfsServer, o.NfsExportDir, o.NfsMountOption); err != nil {
+		return err
+	}
+	logrus.Debugf("Created NFS PV successfully %s", nfsPvName)
+	// create pvc before creating job
+	nfsPvcName := "pvc-" + jobName
+	if err := CreateNfsPvc(nfsPvcName, nfsPvName, namespace); err != nil {
+		return err
+	}
+	logrus.Debugf("Created NFS PVC successfully %s", nfsPvcName)
+	return nil
+}
+
+// WaitForPVCBound - This function makes the flow wait till the PVC moves to Bound state else returns timeout error.
+func WaitForPVCBound(pvcName string, namespace string) (*corev1.PersistentVolumeClaim, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace has to be set")
+	}
+	// wait for pvc to get bound
+	var pvc *corev1.PersistentVolumeClaim
+	var err error
+	var errMsg string
+	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
+		pvc, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+		if err != nil {
+			return false, err
+		}
+
+		if pvc.Status.Phase != corev1.ClaimBound {
+			errMsg = fmt.Sprintf("nfs pvc status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
+			logrus.Debugf("%v", errMsg)
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if wErr != nil {
+		logrus.Errorf("%v", wErr)
+		return nil, fmt.Errorf("%s:%s", wErr, errMsg)
+	}
+	return pvc, nil
+}
+
+// WaitForPVAvailable - This function makes the flow wait till the PV becomes available else returns timeout error.
+func WaitForPVAvailable(pvName string) (*corev1.PersistentVolume, error) {
+	// wait for pv to be available
+	var pv *corev1.PersistentVolume
+	var err error
+	var errMsg string
+	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
+		pv, err = core.Instance().GetPersistentVolume(pvName)
+		if err != nil {
+			return false, err
+		}
+
+		if pv.Status.Phase != corev1.VolumeAvailable {
+			errMsg = fmt.Sprintf("nfs pv status: expected %s, got %s", corev1.VolumeAvailable, pv.Status.Phase)
+			logrus.Debugf("%v", errMsg)
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if wErr != nil {
+		logrus.Errorf("%v", wErr)
+		return nil, fmt.Errorf("%s:%s", wErr, errMsg)
+	}
+	return pv, nil
 }

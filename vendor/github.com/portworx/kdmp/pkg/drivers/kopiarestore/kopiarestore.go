@@ -70,6 +70,15 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	if err != nil {
 		return "", err
 	}
+
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(jobName, job.ObjectMeta.Namespace, o)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
 		return "", err
 	}
@@ -312,9 +321,8 @@ func jobFor(
 		volume := corev1.Volume{
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
-				NFS: &corev1.NFSVolumeSource{
-					Server: jobOption.NfsServer,
-					Path:   jobOption.NfsExportDir,
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: "pvc-" + jobName,
 				},
 			},
 		}

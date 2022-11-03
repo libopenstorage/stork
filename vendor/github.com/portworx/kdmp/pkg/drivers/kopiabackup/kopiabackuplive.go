@@ -161,13 +161,11 @@ func jobForLiveBackup(
 		volume := corev1.Volume{
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
-				NFS: &corev1.NFSVolumeSource{
-					Server: jobOption.NfsServer,
-					Path:   jobOption.NfsExportDir,
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: "pvc-" + jobName,
 				},
 			},
 		}
-
 		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
 	}
 

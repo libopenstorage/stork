@@ -10,7 +10,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/kdmp"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/sched-ops/task"
 
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
@@ -46,11 +45,19 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	if err != nil {
 		return "", err
 	}
-	/*if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(o.RestoreExportName, job.ObjectMeta.Namespace, o)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
 		errMsg := fmt.Sprintf("creation of restore job %s failed: %v", o.RestoreExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
 		return "", fmt.Errorf(errMsg)
-	}*/
+	}
 
 	return utils.NamespacedName(job.Namespace, job.Name), nil
 }
@@ -127,25 +134,9 @@ func buildJob(
 	if err != nil {
 		return nil, err
 	}
-	var job *batchv1.Job
-	cleanupTask := func() (interface{}, bool, error) {
-		job, err = jobForRestoreResource(jobOptions, resources)
-		if err != nil {
-			errMsg := fmt.Sprintf("building resource backup job failed, trying in next %s: %v",
-				jobOptions.RestoreExportName, err)
-			logrus.Errorf("%s: %v", funct, errMsg)
-			return nil, true, fmt.Errorf(errMsg)
-		}
-		return "", false, nil
-	}
-	if _, err := task.DoRetryWithTimeout(cleanupTask, utils.DefaultTimeout, utils.ProgressCheckInterval); err != nil {
-		errMsg := fmt.Sprintf("max retries done, restore job creation failed: %v", err)
-		logrus.Errorf("%v", errMsg)
-		return nil, err
-	}
-
-	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
-		errMsg := fmt.Sprintf("creation of restore job %s failed: %v", jobOptions.RestoreExportName, err)
+	job, err := jobForRestoreResource(jobOptions, resources)
+	if err != nil {
+		errMsg := fmt.Sprintf("building resource backup job %s failed: %v", jobOptions.RestoreExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
@@ -296,9 +287,8 @@ func jobForRestoreResource(
 		volume := corev1.Volume{
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
-				NFS: &corev1.NFSVolumeSource{
-					Server: jobOption.NfsServer,
-					Path:   jobOption.NfsExportDir,
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: "pvc-" + jobOption.RestoreExportName,
 				},
 			},
 		}
