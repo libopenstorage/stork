@@ -1174,9 +1174,20 @@ func (a *ApplicationRestoreController) updateResourceStatus(
 func (a *ApplicationRestoreController) updateResourceStatusFromRestoreCR(
 	restore *storkapi.ApplicationRestore,
 	resource *kdmpapi.ResourceRestoreResourceInfo,
-	status storkapi.ApplicationRestoreStatusType,
+	status kdmpapi.ResourceRestoreStatus,
 	reason string,
 ) {
+	var resourceStatus storkapi.ApplicationRestoreStatusType
+	switch status {
+	case kdmpapi.ResourceRestoreStatusSuccessful:
+		resourceStatus = storkapi.ApplicationRestoreStatusSuccessful
+	case kdmpapi.ResourceRestoreStatusRetained:
+		resourceStatus = storkapi.ApplicationRestoreStatusRetained
+	case kdmpapi.ResourceRestoreStatusFailed:
+		resourceStatus = storkapi.ApplicationRestoreStatusFailed
+	case kdmpapi.ResourceRestoreStatusInProgress:
+		resourceStatus = storkapi.ApplicationRestoreStatusInProgress
+	}
 	updatedResource := &storkapi.ApplicationRestoreResourceInfo{
 		ObjectInfo: storkapi.ObjectInfo{
 			Name:      resource.Name,
@@ -1187,6 +1198,8 @@ func (a *ApplicationRestoreController) updateResourceStatusFromRestoreCR(
 				Kind:    resource.Kind,
 			},
 		},
+		Status: resourceStatus,
+		Reason: reason,
 	}
 	restore.Status.Resources = append(restore.Status.Resources, updatedResource)
 }
@@ -1637,7 +1650,7 @@ func (a *ApplicationRestoreController) restoreResources(
 					a.updateResourceStatusFromRestoreCR(
 						restore,
 						resource,
-						storkapi.ApplicationRestoreStatusType(resource.Status),
+						resource.Status,
 						resource.Reason)
 				}
 				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
