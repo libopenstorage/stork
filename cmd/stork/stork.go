@@ -44,6 +44,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/webhookadmission"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/controllers/dataexport"
+	"github.com/portworx/kdmp/pkg/controllers/resourceexport"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/jobratelimit"
 	kdmpversion "github.com/portworx/kdmp/pkg/version"
@@ -579,6 +580,14 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 		}
 		if err := dataexport.Init(mgr); err != nil {
 			log.Fatalf("Error initializing kdmp controller: %v", err)
+		}
+		resourceexport, err := resourceexport.NewController(mgr)
+		if err != nil {
+			log.Fatalf("Error initializing resource export controller: %v", err)
+		}
+
+		if err := resourceexport.Init(mgr); err != nil {
+			log.Fatalf("Error initializing resource export controller manager: %v", err)
 		}
 	}
 
