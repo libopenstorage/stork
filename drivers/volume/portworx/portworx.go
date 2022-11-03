@@ -2621,67 +2621,69 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	if len(pv.Spec.StorageClassName) != 0 {
 		sc, err := storage.Instance().GetStorageClass(pv.Spec.StorageClassName)
 		if err != nil {
-			return nil, fmt.Errorf("failed in getting the storage class [%v]: %v", pv.Spec.StorageClassName, err)
+			logrus.Warnf("failed in getting the storage class [%v]: %v", pv.Spec.StorageClassName, err)
 		}
-		if isCsiProvisioner(sc.Provisioner) {
-			// add csi section in the pv spec
-			if pv.Spec.CSI == nil {
-				pv.Spec.CSI = &v1.CSIPersistentVolumeSource{}
-			}
-			// get the destinationNamespace
-			var dstNamespace string
-			var exists bool
-			if dstNamespace, exists = namespaceMapping[vInfo.SourceNamespace]; !exists {
-				dstNamespace = vInfo.SourceNamespace
-			}
-			// Update the controller expand secret
-			if val, ok := sc.Parameters[controllerExpandSecretName]; ok {
-				if pv.Spec.CSI.ControllerExpandSecretRef == nil {
-					pv.Spec.CSI.ControllerExpandSecretRef = &v1.SecretReference{}
+		if sc != nil {
+			if isCsiProvisioner(sc.Provisioner) {
+				// add csi section in the pv spec
+				if pv.Spec.CSI == nil {
+					pv.Spec.CSI = &v1.CSIPersistentVolumeSource{}
 				}
-				if val == templatizedName {
-					pv.Spec.CSI.ControllerExpandSecretRef.Name = vInfo.PersistentVolumeClaim
-				} else {
-					pv.Spec.CSI.ControllerExpandSecretRef.Name = val
+				// get the destinationNamespace
+				var dstNamespace string
+				var exists bool
+				if dstNamespace, exists = namespaceMapping[vInfo.SourceNamespace]; !exists {
+					dstNamespace = vInfo.SourceNamespace
 				}
-			}
-			if val, ok := sc.Parameters[controllerExpandSecretNamespace]; ok {
-				if pv.Spec.CSI.ControllerExpandSecretRef == nil {
-					pv.Spec.CSI.ControllerExpandSecretRef = &v1.SecretReference{}
+				// Update the controller expand secret
+				if val, ok := sc.Parameters[controllerExpandSecretName]; ok {
+					if pv.Spec.CSI.ControllerExpandSecretRef == nil {
+						pv.Spec.CSI.ControllerExpandSecretRef = &v1.SecretReference{}
+					}
+					if val == templatizedName {
+						pv.Spec.CSI.ControllerExpandSecretRef.Name = vInfo.PersistentVolumeClaim
+					} else {
+						pv.Spec.CSI.ControllerExpandSecretRef.Name = val
+					}
 				}
-				if val == templatizedNamespace {
-					pv.Spec.CSI.ControllerExpandSecretRef.Namespace = dstNamespace
-				} else {
-					pv.Spec.CSI.ControllerExpandSecretRef.Namespace = val
+				if val, ok := sc.Parameters[controllerExpandSecretNamespace]; ok {
+					if pv.Spec.CSI.ControllerExpandSecretRef == nil {
+						pv.Spec.CSI.ControllerExpandSecretRef = &v1.SecretReference{}
+					}
+					if val == templatizedNamespace {
+						pv.Spec.CSI.ControllerExpandSecretRef.Namespace = dstNamespace
+					} else {
+						pv.Spec.CSI.ControllerExpandSecretRef.Namespace = val
+					}
 				}
-			}
 
-			// Update the node publish secret
-			if val, ok := sc.Parameters[nodePublishSecretName]; ok {
-				if pv.Spec.CSI.NodePublishSecretRef == nil {
-					pv.Spec.CSI.NodePublishSecretRef = &v1.SecretReference{}
+				// Update the node publish secret
+				if val, ok := sc.Parameters[nodePublishSecretName]; ok {
+					if pv.Spec.CSI.NodePublishSecretRef == nil {
+						pv.Spec.CSI.NodePublishSecretRef = &v1.SecretReference{}
+					}
+					if val == templatizedName {
+						pv.Spec.CSI.NodePublishSecretRef.Name = vInfo.PersistentVolumeClaim
+					} else {
+						pv.Spec.CSI.NodePublishSecretRef.Name = val
+					}
 				}
-				if val == templatizedName {
-					pv.Spec.CSI.NodePublishSecretRef.Name = vInfo.PersistentVolumeClaim
-				} else {
-					pv.Spec.CSI.NodePublishSecretRef.Name = val
+				if val, ok := sc.Parameters[nodePublishSecretNamespace]; ok {
+					if pv.Spec.CSI.NodePublishSecretRef == nil {
+						pv.Spec.CSI.NodePublishSecretRef = &v1.SecretReference{}
+					}
+					if val == templatizedNamespace {
+						pv.Spec.CSI.NodePublishSecretRef.Namespace = dstNamespace
+					} else {
+						pv.Spec.CSI.NodePublishSecretRef.Namespace = val
+					}
 				}
-			}
-			if val, ok := sc.Parameters[nodePublishSecretNamespace]; ok {
-				if pv.Spec.CSI.NodePublishSecretRef == nil {
-					pv.Spec.CSI.NodePublishSecretRef = &v1.SecretReference{}
-				}
-				if val == templatizedNamespace {
-					pv.Spec.CSI.NodePublishSecretRef.Namespace = dstNamespace
-				} else {
-					pv.Spec.CSI.NodePublishSecretRef.Namespace = val
-				}
-			}
 
-			// Update driver (provisioner) name
-			pv.Spec.CSI.Driver = sc.Provisioner
-			// In the case of csi, will set pv.Spec.portworxVolume to nil as we will have csi section now.
-			pv.Spec.PortworxVolume = nil
+				// Update driver (provisioner) name
+				pv.Spec.CSI.Driver = sc.Provisioner
+				// In the case of csi, will set pv.Spec.portworxVolume to nil as we will have csi section now.
+				pv.Spec.PortworxVolume = nil
+			}
 		}
 	}
 
