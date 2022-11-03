@@ -21,7 +21,9 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
+	"github.com/portworx/kdmp/pkg/executor"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -39,17 +41,17 @@ import (
 )
 
 const (
-	// snapshotPrefix is appended to CSI backup snapshot
-	snapshotBackupPrefix = "backup"
-	// snapshotPrefix is appended to CSI restore snapshot
+	// SnapshotBackupPrefix is appended to CSI backup snapshot
+	SnapshotBackupPrefix = "backup"
+	// snapshotRestorePrefix is appended to CSI restore snapshot
 	snapshotRestorePrefix = "restore"
 	// snapshotClassNamePrefix is the prefix for snapshot classes per CSI driver
 	snapshotClassNamePrefix = "stork-csi-snapshot-class-"
 
-	// snapshotObjectName is the object stored for the volumesnapshot
-	snapshotObjectName = "snapshots.json"
-	// storageClassesObjectName is the object stored for storageclasses
-	storageClassesObjectName = "storageclasses.json"
+	// SnapshotObjectName is the object stored for the volumesnapshot
+	SnapshotObjectName = "snapshots.json"
+	// StorageClassesObjectName is the object stored for storageclasses
+	StorageClassesObjectName = "storageclasses.json"
 	// resourcesObjectName is the object stored for the all backup resources
 	resourcesObjectName = "resources.json"
 
@@ -65,12 +67,12 @@ const (
 	restoreUIDLabel        = "restoreUID"
 )
 
-// csiBackupObject represents a backup of a series of CSI objects
-type csiBackupObject struct {
+// CsiBackupObject represents a backup of a series of CSI objects
+type CsiBackupObject struct {
 	VolumeSnapshots          interface{} `json:"volumeSnapshots"`
 	VolumeSnapshotContents   interface{} `json:"volumeSnapshotContents"`
 	VolumeSnapshotClasses    interface{} `json:"volumeSnapshotClasses"`
-	v1VolumeSnapshotRequired bool
+	V1VolumeSnapshotRequired bool
 }
 
 // BackupObjectv1Csi represents a backup of a series of v1 VolumeSnapshot CSI objects
@@ -90,11 +92,11 @@ type BackupObjectv1beta1Csi struct {
 }
 
 // GetVolumeSnapshotContent retrieves a backed up volume snapshot
-func (cbo *csiBackupObject) GetVolumeSnapshot(snapshotID string) (interface{}, error) {
+func (cbo *CsiBackupObject) GetVolumeSnapshot(snapshotID string) (interface{}, error) {
 	var vs interface{}
 	var ok bool
 
-	if cbo.v1VolumeSnapshotRequired {
+	if cbo.V1VolumeSnapshotRequired {
 		vs, ok = cbo.VolumeSnapshots.(map[string]*kSnapshotv1.VolumeSnapshot)[snapshotID]
 	} else {
 		vs, ok = cbo.VolumeSnapshots.(map[string]*kSnapshotv1beta1.VolumeSnapshot)[snapshotID]
@@ -106,11 +108,11 @@ func (cbo *csiBackupObject) GetVolumeSnapshot(snapshotID string) (interface{}, e
 }
 
 // GetVolumeSnapshotContent retrieves a backed up volume snapshot content
-func (cbo *csiBackupObject) GetVolumeSnapshotContent(snapshotID string) (interface{}, error) {
+func (cbo *CsiBackupObject) GetVolumeSnapshotContent(snapshotID string) (interface{}, error) {
 	var vsc interface{}
 	var ok bool
 
-	if cbo.v1VolumeSnapshotRequired {
+	if cbo.V1VolumeSnapshotRequired {
 		vsc, ok = cbo.VolumeSnapshotContents.(map[string]*kSnapshotv1.VolumeSnapshotContent)[snapshotID]
 	} else {
 		vsc, ok = cbo.VolumeSnapshotContents.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)[snapshotID]
@@ -122,12 +124,12 @@ func (cbo *csiBackupObject) GetVolumeSnapshotContent(snapshotID string) (interfa
 }
 
 // GetVolumeSnapshotClass retrieves a backed up volume snapshot class
-func (cbo *csiBackupObject) GetVolumeSnapshotClass(snapshotID string) (interface{}, error) {
+func (cbo *CsiBackupObject) GetVolumeSnapshotClass(snapshotID string) (interface{}, error) {
 	var vsClass, vs interface{}
 	var vsClassName string
 	var ok bool
 
-	if cbo.v1VolumeSnapshotRequired {
+	if cbo.V1VolumeSnapshotRequired {
 		vs, ok = cbo.VolumeSnapshots.(map[string]*kSnapshotv1.VolumeSnapshot)[snapshotID]
 		if !ok {
 			logrus.Errorf("failed to retrieve volume snapshot for snapshot ID %s", snapshotID)
@@ -450,7 +452,7 @@ func (c *csi) backupStorageClasses(storageClasses []*storagev1.StorageClass, bac
 		return err
 	}
 
-	err = c.uploadObject(backup, storageClassesObjectName, scBytes)
+	err = c.uploadObject(backup, StorageClassesObjectName, scBytes)
 	if err != nil {
 		return err
 	}
@@ -471,10 +473,18 @@ func (c *csi) StartBackup(
 	backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	funct := "StartBackup:"
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	var storageClasses []*storagev1.StorageClass
 	storageClassAdded := make(map[string]bool)
 	log.ApplicationBackupLog(backup).Debugf("started CSI backup: %v", backup.Name)
+
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
+	if err != nil {
+		logrus.Errorf("%v error in checking backuplocation type: %v", funct, err)
+		return nil, err
+	}
+
 	for _, pvc := range pvcs {
 		if pvc.DeletionTimestamp != nil {
 			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
@@ -507,35 +517,40 @@ func (c *csi) StartBackup(
 
 		volumeInfo.Options[optCSIDriverName] = csiDriverName
 		volumeInfo.BackupID = string(vsName)
+		if !nfs {
+			// In the case of nfs backuplocation type, uploading of storageclass.json will
+			// happen as part of resource exexutor job as part of resource stage.
+			sc, err := core.Instance().GetStorageClassForPVC(&pvc)
+			if err != nil {
+				c.cancelBackupDuringStartFailure(backup, volumeInfos)
+				return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
+			}
 
-		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
-		if err != nil {
-			c.cancelBackupDuringStartFailure(backup, volumeInfos)
-			return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
-		}
-
-		// only add one instance of a storageclass
-		if !storageClassAdded[sc.Name] {
-			sc.Kind = "StorageClass"
-			sc.APIVersion = "storage.k8s.io/v1"
-			sc.ResourceVersion = ""
-			storageClasses = append(storageClasses, sc)
-			storageClassAdded[sc.Name] = true
+			// only add one instance of a storageclass
+			if !storageClassAdded[sc.Name] {
+				sc.Kind = "StorageClass"
+				sc.APIVersion = "storage.k8s.io/v1"
+				sc.ResourceVersion = ""
+				storageClasses = append(storageClasses, sc)
+				storageClassAdded[sc.Name] = true
+			}
 		}
 	}
-
-	// Backup the storage class
-	err := c.backupStorageClasses(storageClasses, backup)
-	if err != nil {
-		c.cancelBackupDuringStartFailure(backup, volumeInfos)
-		return nil, fmt.Errorf("failed to backup storage classes: %v", err)
+	if !nfs {
+		// In the case of nfs backuplocation type, uploading of storageclass.json will
+		// happen as part of resource exexutor job as part of resource stage.
+		err := c.backupStorageClasses(storageClasses, backup)
+		if err != nil {
+			c.cancelBackupDuringStartFailure(backup, volumeInfos)
+			return nil, fmt.Errorf("failed to backup storage classes: %v", err)
+		}
 	}
 
 	return volumeInfos, nil
 }
 
 func (c *csi) getBackupSnapshotName(pvc *v1.PersistentVolumeClaim, backup *storkapi.ApplicationBackup) string {
-	return fmt.Sprintf("%s-%s-%s", snapshotBackupPrefix, getUIDLastSection(backup.UID), getUIDLastSection(pvc.UID))
+	return fmt.Sprintf("%s-%s-%s", SnapshotBackupPrefix, utils.GetUIDLastSection(backup.UID), utils.GetUIDLastSection(pvc.UID))
 }
 
 // uploadObject uploads the given data to the backup location specified in the backup object
@@ -596,18 +611,18 @@ func (c *csi) uploadCSIBackupObject(
 		return fmt.Errorf("failed to get volumesnapshot version supported by cluster")
 	}
 	if v1VolumeSnapshotRequired {
-		csiBackup = csiBackupObject{
+		csiBackup = CsiBackupObject{
 			VolumeSnapshots:          vsMap.(map[string]*kSnapshotv1.VolumeSnapshot),
 			VolumeSnapshotContents:   vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent),
 			VolumeSnapshotClasses:    vsClassMap.(map[string]*kSnapshotv1.VolumeSnapshotClass),
-			v1VolumeSnapshotRequired: true,
+			V1VolumeSnapshotRequired: true,
 		}
 	} else {
-		csiBackup = csiBackupObject{
+		csiBackup = CsiBackupObject{
 			VolumeSnapshots:          vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot),
 			VolumeSnapshotContents:   vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent),
 			VolumeSnapshotClasses:    vsClassMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotClass),
-			v1VolumeSnapshotRequired: false,
+			V1VolumeSnapshotRequired: false,
 		}
 	}
 
@@ -618,7 +633,7 @@ func (c *csi) uploadCSIBackupObject(
 		return err
 	}
 
-	err = c.uploadObject(backup, snapshotObjectName, csiBackupBytes)
+	err = c.uploadObject(backup, SnapshotObjectName, csiBackupBytes)
 	if err != nil {
 		return err
 	}
@@ -795,6 +810,7 @@ func (c *csi) cleanupSnapshots(
 }
 
 func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	funct := "csi GetBackupStatus"
 	if c.snapshotClient == nil {
 		if err := c.Init(nil); err != nil {
 			return nil, err
@@ -940,22 +956,31 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		vsMapLen = len(vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot))
 		vsContentMapLen = len(vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent))
 	}
-	// if all have finished, add all VolumeSnapshot and VolumeSnapshotContent to objectstore
-	if !anyInProgress && vsContentMapLen > 0 && vsMapLen > 0 {
-		err := c.uploadCSIBackupObject(backup, vsMap, vsContentMap, vsClassMap)
-		if err != nil {
-			return nil, err
-		}
-		log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", vsMapLen, vsContentMapLen)
-	}
 
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
+	if err != nil {
+		logrus.Errorf("%v error in checking backuplocation type: %v", funct, err)
+		return nil, err
+	}
+	// In the case of nfs backuplocation type, uploading of snapshot.json will
+	// happen as part of resource exexutor job as part of resource stage.
+	if !nfs {
+		// if all have finished, add all VolumeSnapshot and VolumeSnapshotContent to objectstore
+		if !anyInProgress && vsContentMapLen > 0 && vsMapLen > 0 {
+			err := c.uploadCSIBackupObject(backup, vsMap, vsContentMap, vsClassMap)
+			if err != nil {
+				return nil, err
+			}
+			log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", vsMapLen, vsContentMapLen)
+		}
+	}
 	return volumeInfos, nil
 }
 
 func (c *csi) recreateSnapshotForDeletion(
 	backup *storkapi.ApplicationBackup,
 	vbInfo *storkapi.ApplicationBackupVolumeInfo,
-	csiBackupObject *csiBackupObject,
+	csiBackupObject *CsiBackupObject,
 	snapshotClassCreatedForDriver map[string]bool,
 ) error {
 	var err error
@@ -1101,10 +1126,10 @@ func (c *csi) cleanupBackupLocation(backup *storkapi.ApplicationBackup) error {
 
 	objectPath := backup.Status.BackupPath
 	if objectPath != "" {
-		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, snapshotObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, SnapshotObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
 			return fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
-		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, storageClassesObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, StorageClassesObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
 			return fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 	}
@@ -1176,18 +1201,15 @@ func (c *csi) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 	return pv, nil
 }
 
-func (c *csi) getRestoreStorageClasses(backup *storkapi.ApplicationBackup, resources []runtime.Unstructured) ([]runtime.Unstructured, error) {
+func (c *csi) getRestoreStorageClasses(backup *storkapi.ApplicationBackup, resources []runtime.Unstructured, storageClassesBytes []byte) ([]runtime.Unstructured, error) {
 	storageClasses := make([]storagev1.StorageClass, 0)
-	storageClassesBytes, err := c.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, storageClassesObjectName)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(storageClassesBytes, &storageClasses)
+	err := json.Unmarshal(storageClassesBytes, &storageClasses)
 	if err != nil {
 		return nil, err
 	}
@@ -1213,8 +1235,9 @@ func (c *csi) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
 	restore *storkapi.ApplicationRestore,
 	resources []runtime.Unstructured,
+	storageClassBytes []byte,
 ) ([]runtime.Unstructured, error) {
-	return c.getRestoreStorageClasses(backup, resources)
+	return c.getRestoreStorageClasses(backup, resources, storageClassBytes)
 }
 
 func (c *csi) downloadObject(
@@ -1223,35 +1246,54 @@ func (c *csi) downloadObject(
 	namespace string,
 	objectName string,
 ) ([]byte, error) {
+
+	funct := "downloadObject"
+	var data []byte
 	restoreLocation, err := storkops.Instance().GetBackupLocation(backupLocation, namespace)
 	if err != nil {
 		return nil, err
 	}
-	bucket, err := objectstore.GetBucket(restoreLocation)
-	if err != nil {
-		return nil, err
-	}
-
-	objectPath := backup.Status.BackupPath
-	exists, err := bucket.Exists(context.TODO(), filepath.Join(objectPath, objectName))
-	if err != nil || !exists {
-		return nil, nil
-	}
-
-	data, err := bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
-	if err != nil {
-		return nil, err
-	}
-	if restoreLocation.Location.EncryptionKey != "" {
-		return nil, fmt.Errorf("EncryptionKey is deprecated, use EncryptionKeyV2 instead")
-	}
-	if restoreLocation.Location.EncryptionV2Key != "" {
-		var decryptData []byte
-		if decryptData, err = crypto.Decrypt(data, restoreLocation.Location.EncryptionV2Key); err != nil {
-			logrus.Debugf("decrypt failed with: %v and returning the data as it is", err)
-			return data, nil
+	if restoreLocation.Location.Type == storkapi.BackupLocationNFS {
+		// NFS backuplocation type.
+		repo, err := executor.ParseCloudCred()
+		if err != nil {
+			logrus.Errorf("%s: error parsing cloud cred: %v", funct, err)
+			return nil, err
 		}
-		return decryptData, nil
+		bkpDir := filepath.Join(repo.Path, backup.Status.BackupPath)
+		data, err = executor.DownloadObject(bkpDir, objectName, restoreLocation.Location.EncryptionV2Key)
+		if err != nil {
+			return nil, fmt.Errorf("error downloading resources: %v", err)
+		}
+		return data, nil
+	} else {
+		// Non NFS backuplocation type
+		bucket, err := objectstore.GetBucket(restoreLocation)
+		if err != nil {
+			return nil, err
+		}
+
+		objectPath := backup.Status.BackupPath
+		exists, err := bucket.Exists(context.TODO(), filepath.Join(objectPath, objectName))
+		if err != nil || !exists {
+			return nil, nil
+		}
+
+		data, err = bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
+		if err != nil {
+			return nil, err
+		}
+		if restoreLocation.Location.EncryptionKey != "" {
+			return nil, fmt.Errorf("EncryptionKey is deprecated, use EncryptionKeyV2 instead")
+		}
+		if restoreLocation.Location.EncryptionV2Key != "" {
+			var decryptData []byte
+			if decryptData, err = crypto.Decrypt(data, restoreLocation.Location.EncryptionV2Key); err != nil {
+				logrus.Debugf("decrypt failed with: %v and returning the data as it is", err)
+				return data, nil
+			}
+			return decryptData, nil
+		}
 	}
 
 	return data, nil
@@ -1259,17 +1301,17 @@ func (c *csi) downloadObject(
 
 // getRestoreSnapshotsAndContent retrieves the volumeSnapshots and
 // volumeSnapshotContents associated with a backupID
-func (c *csi) getCSIBackupObject(backupName, backupNamespace string) (*csiBackupObject, error) {
+func (c *csi) getCSIBackupObject(backupName, backupNamespace string) (*CsiBackupObject, error) {
 	backup, err := storkops.Instance().GetApplicationBackup(backupName, backupNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting backup spec for CSI restore: %v", err)
 	}
 
-	backupObjectBytes, err := c.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, snapshotObjectName)
+	backupObjectBytes, err := c.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, SnapshotObjectName)
 	if err != nil {
 		return nil, err
 	}
-	cboCommon := &csiBackupObject{}
+	cboCommon := &CsiBackupObject{}
 	if c.v1SnapshotRequired {
 		cbov1 := &BackupObjectv1Csi{}
 		err = json.Unmarshal(backupObjectBytes, cbov1)
@@ -1279,7 +1321,7 @@ func (c *csi) getCSIBackupObject(backupName, backupNamespace string) (*csiBackup
 		cboCommon.VolumeSnapshots = cbov1.VolumeSnapshots
 		cboCommon.VolumeSnapshotContents = cbov1.VolumeSnapshotContents
 		cboCommon.VolumeSnapshotClasses = cbov1.VolumeSnapshotClasses
-		cboCommon.v1VolumeSnapshotRequired = c.v1SnapshotRequired
+		cboCommon.V1VolumeSnapshotRequired = c.v1SnapshotRequired
 		return cboCommon, nil
 	}
 	cbov1beta1 := &BackupObjectv1beta1Csi{}
@@ -1290,7 +1332,7 @@ func (c *csi) getCSIBackupObject(backupName, backupNamespace string) (*csiBackup
 	cboCommon.VolumeSnapshots = cbov1beta1.VolumeSnapshots
 	cboCommon.VolumeSnapshotContents = cbov1beta1.VolumeSnapshotContents
 	cboCommon.VolumeSnapshotClasses = cbov1beta1.VolumeSnapshotClasses
-	cboCommon.v1VolumeSnapshotRequired = c.v1SnapshotRequired
+	cboCommon.V1VolumeSnapshotRequired = c.v1SnapshotRequired
 
 	return cboCommon, nil
 }
@@ -1482,7 +1524,7 @@ func (c *csi) restoreVolumeSnapshotContent(
 	return vsc, nil
 }
 
-func getUIDLastSection(uid types.UID) string {
+func GetUIDLastSection(uid types.UID) string {
 	parts := strings.Split(string(uid), "-")
 	uidLastSection := parts[len(parts)-1]
 
@@ -1493,17 +1535,17 @@ func getUIDLastSection(uid types.UID) string {
 }
 
 func (c *csi) getRestoreSnapshotName(existingSnapshotUID types.UID, restoreUID types.UID) string {
-	return fmt.Sprintf("%s-vs-%s-%s", snapshotRestorePrefix, getUIDLastSection(restoreUID), getUIDLastSection(existingSnapshotUID))
+	return fmt.Sprintf("%s-vs-%s-%s", snapshotRestorePrefix, utils.GetUIDLastSection(restoreUID), utils.GetUIDLastSection(existingSnapshotUID))
 }
 
 func (c *csi) getRestoreSnapshotContentName(existingSnapshotUID types.UID, restoreUID types.UID) string {
-	return fmt.Sprintf("%s-vsc-%s-%s", snapshotRestorePrefix, getUIDLastSection(restoreUID), getUIDLastSection(existingSnapshotUID))
+	return fmt.Sprintf("%s-vsc-%s-%s", snapshotRestorePrefix, utils.GetUIDLastSection(restoreUID), utils.GetUIDLastSection(existingSnapshotUID))
 }
 
 func (c *csi) createRestoreSnapshotsAndPVCs(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
-	csiBackupObject *csiBackupObject,
+	csiBackupObject *CsiBackupObject,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	var err error
 	volumeRestoreInfos := []*storkapi.ApplicationRestoreVolumeInfo{}

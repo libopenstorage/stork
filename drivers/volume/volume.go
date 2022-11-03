@@ -199,7 +199,7 @@ type MigratePluginInterface interface {
 	CancelMigration(*storkapi.Migration) error
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
-	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string) (*v1.PersistentVolume, error)
+	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string, string, string) (*v1.PersistentVolume, error)
 }
 
 type ActionPluginInterface interface {
@@ -231,7 +231,7 @@ type BackupRestorePluginInterface interface {
 	// Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) (bool, error)
 	// Get any resources that should be created before the restore is started
-	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured) ([]runtime.Unstructured, error)
+	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured, []byte) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
 	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo, []runtime.Unstructured) ([]*storkapi.ApplicationRestoreVolumeInfo, error)

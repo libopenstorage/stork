@@ -410,8 +410,15 @@ func (a *azure) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
-	disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, pv.Name)
+	azureSession, err := a.getAzureSession(backuplocationName, backuplocationNamespace)
+	if err != nil {
+		return nil, err
+	}
+	diskClient := azureSession.diskClient
+	disk, err := diskClient.Get(context.TODO(), a.resourceGroup, pv.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -466,6 +473,7 @@ func (a *azure) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
 	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
+	[]byte,
 ) ([]runtime.Unstructured, error) {
 	return nil, nil
 }
