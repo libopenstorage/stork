@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aquilax/truncate"
+	"github.com/libopenstorage/stork/pkg/utils"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	stork_driver "github.com/libopenstorage/stork/drivers"
@@ -31,20 +32,17 @@ import (
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 const (
-	prefixRepo             = "generic-backup"
-	prefixRestore          = "restore"
-	prefixBackup           = "backup"
-	prefixDelete           = "delete"
-	skipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
-	volumeinitialDelay     = 2 * time.Second
-	volumeFactor           = 1.5
-	volumeSteps            = 20
+	prefixRepo         = "generic-backup"
+	prefixRestore      = "restore"
+	prefixDelete       = "delete"
+	volumeinitialDelay = 2 * time.Second
+	volumeFactor       = 1.5
+	volumeSteps        = 20
 	// StorkAPIVersion current api version supported by stork
 	StorkAPIVersion = "stork.libopenstorage.org/v1alpha1"
 	// KdmpAPIVersion current api version supported by KDMP
@@ -60,32 +58,19 @@ const (
 	// StorkAnnotation for pvcs created by stork-kdmp driver
 	StorkAnnotation = "stork.libopenstorage.org/kdmp"
 	// backupUID annotation key
-	backupUIDKey = "portworx.io/backup-uid"
-
-	pxbackupAnnotationPrefix        = "portworx.io/"
-	pxbackupAnnotationCreateByKey   = pxbackupAnnotationPrefix + "created-by"
-	pxbackupAnnotationCreateByValue = "px-backup"
-	pxbackupObjectUIDKey            = pxbackupAnnotationPrefix + "backup-uid"
-	pxbackupObjectNameKey           = pxbackupAnnotationPrefix + "backup-name"
-	pxRestoreObjectUIDKey           = pxbackupAnnotationPrefix + "restore-uid"
-	pxRestoreObjectNameKey          = pxbackupAnnotationPrefix + "restore-name"
+	backupUIDKey           = "portworx.io/backup-uid"
+	pxRestoreObjectUIDKey  = utils.PxbackupAnnotationPrefix + "restore-uid"
+	pxRestoreObjectNameKey = utils.PxbackupAnnotationPrefix + "restore-name"
 
 	//kdmp related labels
-	kdmpAnnotationPrefix = "kdmp.portworx.com/"
-	// backup related Labels
-	applicationBackupCRNameKey = kdmpAnnotationPrefix + "applicationbackup-cr-name"
-	applicationBackupCRUIDKey  = kdmpAnnotationPrefix + "applicationbackup-cr-uid"
-	backupObjectNameKey        = kdmpAnnotationPrefix + "backupobject-name"
-	backupObjectUIDKey         = kdmpAnnotationPrefix + "backupobject-uid"
-
 	// restore related Labels
-	applicationRestoreCRNameKey = kdmpAnnotationPrefix + "applicationrestore-cr-name"
-	applicationRestoreCRUIDKey  = kdmpAnnotationPrefix + "applicationrestore-cr-uid"
-	restoreObjectNameKey        = kdmpAnnotationPrefix + "restoreobject-name"
-	restoreObjectUIDKey         = kdmpAnnotationPrefix + "restoreobject-uid"
+	applicationRestoreCRNameKey = utils.KdmpAnnotationPrefix + "applicationrestore-cr-name"
+	applicationRestoreCRUIDKey  = utils.KdmpAnnotationPrefix + "applicationrestore-cr-uid"
+	restoreObjectNameKey        = utils.KdmpAnnotationPrefix + "restoreobject-name"
+	restoreObjectUIDKey         = utils.KdmpAnnotationPrefix + "restoreobject-uid"
 
-	pvcNameKey = kdmpAnnotationPrefix + "pvc-name"
-	pvcUIDKey  = kdmpAnnotationPrefix + "pvc-uid"
+	pvcNameKey = utils.KdmpAnnotationPrefix + "pvc-name"
+	pvcUIDKey  = utils.KdmpAnnotationPrefix + "pvc-uid"
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -134,7 +119,7 @@ func (k *kdmp) Stop() error {
 	return nil
 }
 
-func (k *kdmp) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+func (k *kdmp) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool {
 	// KDMP can handle any PVC type. KDMP driver will always be a fallback
 	// option when none of the other supported drivers by stork own the PVC
 	return true
@@ -153,8 +138,8 @@ func (k *kdmp) OwnsPV(pv *v1.PersistentVolume) bool {
 }
 
 func getGenericCRName(opsPrefix, crUID, pvcUID, ns string) string {
-	name := fmt.Sprintf("%s-%s-%s-%s", opsPrefix, getShortUID(crUID), getShortUID(pvcUID), ns)
-	name = getValidLabel(name)
+	name := fmt.Sprintf("%s-%s-%s-%s", opsPrefix, utils.GetShortUID(crUID), utils.GetShortUID(pvcUID), ns)
+	name = utils.GetValidLabel(name)
 	return name
 }
 
@@ -296,15 +281,15 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		dataExport := &kdmpapi.DataExport{}
 		// Adding required label for debugging
 		labels := make(map[string]string)
-		labels[applicationBackupCRNameKey] = getValidLabel(backup.Name)
-		labels[applicationBackupCRUIDKey] = getValidLabel(getShortUID(string(backup.UID)))
-		labels[pvcNameKey] = getValidLabel(pvc.Name)
-		labels[pvcUIDKey] = getValidLabel(getShortUID(string(pvc.UID)))
+		labels[utils.ApplicationBackupCRNameKey] = utils.GetValidLabel(backup.Name)
+		labels[utils.ApplicationBackupCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(backup.UID)))
+		labels[pvcNameKey] = utils.GetValidLabel(pvc.Name)
+		labels[pvcUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(pvc.UID)))
 		// If backup from px-backup, update the backup object details in the label
-		if val, ok := backup.Annotations[pxbackupAnnotationCreateByKey]; ok {
-			if val == pxbackupAnnotationCreateByValue {
-				labels[backupObjectNameKey] = getValidLabel(backup.Annotations[pxbackupObjectNameKey])
-				labels[backupObjectUIDKey] = getValidLabel(backup.Annotations[pxbackupObjectUIDKey])
+		if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+			if val == utils.PxbackupAnnotationCreateByValue {
+				labels[utils.BackupObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
+				labels[utils.BackupObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
 			}
 		}
 
@@ -317,10 +302,10 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		dataExport.Spec.TriggeredFromNs = storkPodNs
 		dataExport.Annotations = make(map[string]string)
-		dataExport.Annotations[skipResourceAnnotation] = "true"
-		dataExport.Annotations[backupObjectUIDKey] = string(backup.Annotations[pxbackupObjectUIDKey])
+		dataExport.Annotations[utils.SkipResourceAnnotation] = "true"
+		dataExport.Annotations[utils.BackupObjectUIDKey] = string(backup.Annotations[utils.PxbackupObjectUIDKey])
 		dataExport.Annotations[pvcUIDKey] = string(pvc.UID)
-		dataExport.Name = getGenericCRName(prefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
+		dataExport.Name = getGenericCRName(utils.PrefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
 		dataExport.Namespace = pvc.Namespace
 		dataExport.Spec.Type = kdmpapi.DataExportKopia
 		dataExport.Spec.Destination = kdmpapi.DataExportObjectReference{
@@ -337,7 +322,17 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
 		if snapshotClassRequired {
-			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
+			// This is a temporary change, once CSI support enabled properly for NFS this check will be altered.
+			backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			if backupLocation.Location.Type != storkapi.BackupLocationNFS {
+				dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
+			} else {
+				dataExport.Spec.SnapshotStorageClass = ""
+			}
+
 		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
@@ -356,7 +351,7 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
-		crName := getGenericCRName(prefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
+		crName := getGenericCRName(utils.PrefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
 		dataExport, err := kdmpShedOps.Instance().GetDataExport(crName, vInfo.Namespace)
 		if err != nil {
 			logrus.Errorf("failed to get backup DataExport CR: %v", err)
@@ -419,7 +414,7 @@ func isDataExportCompleted(status kdmpapi.ExportStatus) bool {
 
 func (k *kdmp) CancelBackup(backup *storkapi.ApplicationBackup) error {
 	for _, vInfo := range backup.Status.Volumes {
-		crName := getGenericCRName(prefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
+		crName := getGenericCRName(utils.PrefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
 		err := kdmpShedOps.Instance().DeleteDataExport(crName, vInfo.Namespace)
 		if err != nil && k8serror.IsNotFound(err) {
 			errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
@@ -434,9 +429,9 @@ func (k *kdmp) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {
 	// For Applicationbackup CR created by px-backup, we want to handle deleting
 	// successful PVC (of in-progress backup) from px-backup deleteworker() to avoid two entities
 	// doing the delete of snapshot leading to races.
-	if val, ok := backup.Annotations[pxbackupAnnotationCreateByKey]; !ok {
+	if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; !ok {
 		return deleteKdmpSnapshot(backup)
-	} else if val != pxbackupAnnotationCreateByValue {
+	} else if val != utils.PxbackupAnnotationCreateByValue {
 		return deleteKdmpSnapshot(backup)
 	} else {
 		logrus.Infof("skipping snapshot deletion as ApplicationBackup CR [%v] is created by px-backup", backup.Name)
@@ -470,15 +465,15 @@ func deleteKdmpSnapshot(backup *storkapi.ApplicationBackup) (bool, error) {
 			if err != nil && k8serror.IsNotFound(err) {
 				// Adding required label for debugging
 				labels := make(map[string]string)
-				labels[applicationBackupCRNameKey] = getValidLabel(backup.Name)
-				labels[applicationBackupCRUIDKey] = getValidLabel(string(backup.UID))
-				labels[pvcNameKey] = getValidLabel(vInfo.PersistentVolumeClaim)
-				labels[pvcUIDKey] = getValidLabel(vInfo.PersistentVolumeClaimUID)
+				labels[utils.ApplicationBackupCRNameKey] = utils.GetValidLabel(backup.Name)
+				labels[utils.ApplicationBackupCRUIDKey] = utils.GetValidLabel(string(backup.UID))
+				labels[pvcNameKey] = utils.GetValidLabel(vInfo.PersistentVolumeClaim)
+				labels[pvcUIDKey] = utils.GetValidLabel(vInfo.PersistentVolumeClaimUID)
 				// If backup from px-backup, update the backup object details in the label
-				if val, ok := backup.Annotations[pxbackupAnnotationCreateByKey]; ok {
-					if val == pxbackupAnnotationCreateByValue {
-						labels[backupObjectNameKey] = getValidLabel(backup.Annotations[pxbackupObjectNameKey])
-						labels[backupObjectUIDKey] = getValidLabel(backup.Annotations[pxbackupObjectUIDKey])
+				if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+					if val == utils.PxbackupAnnotationCreateByValue {
+						labels[utils.BackupObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
+						labels[utils.BackupObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
 					}
 				}
 				err := dataexport.CreateCredentialsSecret(secretName, backup.Spec.BackupLocation, backup.Namespace, backup.Namespace, labels)
@@ -654,6 +649,7 @@ func (k *kdmp) StartRestore(
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 	objects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	funct := "kdmp.StartRestore"
 	log.ApplicationRestoreLog(restore).Debugf("started generic restore: %v", restore.Name)
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	nodes, err := core.Instance().GetNodes()
@@ -698,27 +694,33 @@ func (k *kdmp) StartRestore(
 			destFullZoneName = strings.Join(splitDestRegion, "-")
 			volumeInfo.Zones = append(volumeInfo.Zones, destFullZoneName)
 		}
-
-		// get corresponding pvc object from objects list
-		pvc, err := storkvolume.GetPVCFromObjects(objects, bkpvInfo)
-		if err != nil {
-			return nil, err
-		}
-		if !nonSupportedProvider {
-			for _, node := range nodes.Items {
-				zone := node.Labels[v1.LabelTopologyZone]
-				if zone == destFullZoneName {
-					pvc.Annotations[storageNodeAnnotation] = node.Name
-				}
-			}
-		}
-
 		val, ok := restore.Spec.NamespaceMapping[bkpvInfo.Namespace]
 		if !ok {
 			return nil, fmt.Errorf("restore namespace mapping not found: %s", bkpvInfo.Namespace)
 
 		}
 		restoreNamespace := val
+		pvc := &v1.PersistentVolumeClaim{}
+
+		if objects != nil {
+			// get corresponding pvc object from objects list
+			pvc, err = storkvolume.GetPVCFromObjects(objects, bkpvInfo)
+			if err != nil {
+				return nil, err
+			}
+			if !nonSupportedProvider {
+				for _, node := range nodes.Items {
+					zone := node.Labels[v1.LabelTopologyZone]
+					if zone == destFullZoneName {
+						pvc.Annotations[storageNodeAnnotation] = node.Name
+					}
+				}
+			}
+			pvc.Namespace = restoreNamespace
+		} else {
+			pvc.Name = bkpvInfo.PersistentVolumeClaim
+			pvc.Namespace = restoreNamespace
+		}
 		volumeInfo.PersistentVolumeClaim = bkpvInfo.PersistentVolumeClaim
 		volumeInfo.PersistentVolumeClaimUID = bkpvInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = bkpvInfo.Namespace
@@ -728,22 +730,21 @@ func (k *kdmp) StartRestore(
 		// create VolumeBackup CR
 		// Adding required label for debugging
 		labels := make(map[string]string)
-		labels[applicationRestoreCRNameKey] = getValidLabel(restore.Name)
-		labels[applicationRestoreCRUIDKey] = getValidLabel(string(restore.UID))
-		labels[pvcNameKey] = getValidLabel(bkpvInfo.PersistentVolumeClaim)
-		labels[pvcUIDKey] = getValidLabel(bkpvInfo.PersistentVolumeClaimUID)
+		labels[applicationRestoreCRNameKey] = utils.GetValidLabel(restore.Name)
+		labels[applicationRestoreCRUIDKey] = utils.GetValidLabel(string(restore.UID))
+		labels[pvcNameKey] = utils.GetValidLabel(bkpvInfo.PersistentVolumeClaim)
+		labels[pvcUIDKey] = utils.GetValidLabel(bkpvInfo.PersistentVolumeClaimUID)
 		// If restorefrom px-backup, update the restore object details in the label
-		if val, ok := restore.Annotations[pxbackupAnnotationCreateByKey]; ok {
-			if val == pxbackupAnnotationCreateByValue {
-				labels[restoreObjectNameKey] = getValidLabel(restore.Annotations[pxbackupObjectNameKey])
-				labels[restoreObjectUIDKey] = getValidLabel(restore.Annotations[pxbackupObjectUIDKey])
+		if val, ok := restore.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+			if val == utils.PxbackupAnnotationCreateByValue {
+				labels[restoreObjectNameKey] = utils.GetValidLabel(restore.Annotations[utils.PxbackupObjectNameKey])
+				labels[restoreObjectUIDKey] = utils.GetValidLabel(restore.Annotations[utils.PxbackupObjectUIDKey])
 			}
 		}
-
 		volBackup := &kdmpapi.VolumeBackup{}
 		volBackup.Labels = labels
 		volBackup.Annotations = make(map[string]string)
-		volBackup.Annotations[skipResourceAnnotation] = "true"
+		volBackup.Annotations[utils.SkipResourceAnnotation] = "true"
 		volBackup.Name = getGenericCRName(prefixRestore, string(restore.UID), bkpvInfo.PersistentVolumeClaimUID, restoreNamespace)
 		volBackup.Namespace = restoreNamespace
 		volBackup.Spec.BackupLocation = kdmpapi.DataExportObjectReference{
@@ -758,8 +759,6 @@ func (k *kdmp) StartRestore(
 			logrus.Errorf("unable to create volumebackup CR: %v", err)
 			return nil, err
 		}
-
-		pvc.Namespace = restoreNamespace
 
 		backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
 		if err != nil {
@@ -782,8 +781,8 @@ func (k *kdmp) StartRestore(
 		}
 		dataExport.Spec.TriggeredFromNs = storkPodNs
 		dataExport.Annotations = make(map[string]string)
-		dataExport.Annotations[skipResourceAnnotation] = "true"
-		dataExport.Annotations[backupObjectUIDKey] = backupUID
+		dataExport.Annotations[utils.SkipResourceAnnotation] = "true"
+		dataExport.Annotations[utils.BackupObjectUIDKey] = backupUID
 		dataExport.Annotations[pvcUIDKey] = bkpvInfo.PersistentVolumeClaimUID
 		dataExport.Name = getGenericCRName(prefixRestore, string(restore.UID), bkpvInfo.PersistentVolumeClaimUID, restoreNamespace)
 		dataExport.Namespace = restoreNamespace
@@ -806,6 +805,7 @@ func (k *kdmp) StartRestore(
 			Namespace:  restoreNamespace,
 			APIVersion: "v1",
 		}
+		logrus.Tracef("%s de cr name [%v/%v]", funct, dataExport.Namespace, dataExport.Name)
 		if _, err := kdmpShedOps.Instance().CreateDataExport(dataExport); err != nil {
 			logrus.Errorf("failed to create DataExport CR: %v", err)
 			return volumeInfos, err
@@ -865,7 +865,6 @@ func (k *kdmp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storka
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
-
 		if dataExport.Status.TransferID == "" {
 			vInfo.Status = storkapi.ApplicationRestoreStatusInitial
 			vInfo.Reason = "Volume restore not started yet"
@@ -952,7 +951,7 @@ func (k *kdmp) CleanupBackupResources(backup *storkapi.ApplicationBackup) error 
 		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
 		}
-		crName := getGenericCRName(prefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
+		crName := getGenericCRName(utils.PrefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
 		logrus.Infof("deleting data export CR: %s%s", vInfo.Namespace, crName)
 		de, err := kdmpShedOps.Instance().GetDataExport(crName, vInfo.Namespace)
 		if err != nil && !k8serror.IsNotFound(err) {
@@ -1033,27 +1032,6 @@ func init() {
 	if err := storkvolume.Register(storkvolume.KDMPDriverName, a); err != nil {
 		logrus.Panicf("Error registering kdmp volume driver: %v", err)
 	}
-}
-
-// getValidLabel - will validate the label to make sure the length is less 63 and contains valid label format.
-// If the length is greater then 63, it will truncate to 63 character.
-func getValidLabel(labelVal string) string {
-	if len(labelVal) > validation.LabelValueMaxLength {
-		labelVal = truncate.Truncate(labelVal, validation.LabelValueMaxLength, "", truncate.PositionEnd)
-		// make sure the truncated value does not end with the hyphen.
-		labelVal = strings.Trim(labelVal, "-")
-		// make sure the truncated value does not end with the dot.
-		labelVal = strings.Trim(labelVal, ".")
-	}
-	return labelVal
-}
-
-// getShortUID returns the first part of the UID
-func getShortUID(uid string) string {
-	if len(uid) < 8 {
-		return ""
-	}
-	return uid[0:7]
 }
 
 // getVolumeSnapshotClassFromBackupVolumeInfo returns the volumesnapshotclass if it is present

@@ -328,7 +328,7 @@ func (l *linstor) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim) 
 	return linstorTemplates, nil
 }
 
-func (l *linstor) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+func (l *linstor) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool {
 	return l.OwnsPVC(coreOps, pvc)
 }
 
