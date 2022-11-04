@@ -159,7 +159,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			dash.VerifyFatal(daily_policy_status, nil, "Creating daily schedule policy")
 
 			dash.Info("Creating backup schedule policy of type weekly")
-			weekly_schedule_policy_info := CreateWeeklySchedulePolicy(1, "Friday", "9:10AM", 2)
+			weekly_schedule_policy_info := CreateWeeklySchedulePolicy(1, Friday, "9:10AM", 2)
 			weekly_policy_status := Backupschedulepolicy("weekly", uuid.New(), orgID, weekly_schedule_policy_info)
 			dash.VerifyFatal(weekly_policy_status, nil, "Creating weekly schedule policy")
 
