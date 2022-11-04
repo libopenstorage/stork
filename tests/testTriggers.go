@@ -5687,8 +5687,10 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 // TriggerAsyncDRVolumeOnly triggers Async DR
 func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	logrus.Infof("Async DR triggered at: %v", time.Now())
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRVolumeOnly)
 	defer ginkgo.GinkgoRecover()
+	dash.Infof("Volume Only Async DR triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -5707,28 +5709,28 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 	chaosLevel := ChaosMap[AsyncDRVolumeOnly]
 	var (
 		migrationNamespaces   []string
-		taskNamePrefix        = "async-dr-mig"
+		taskNamePrefix        = "async-dr-vol-only-mig"
 		allMigrations         []*storkapi.Migration
 		includeResourcesFlag  = false
 		startApplicationsFlag = false
 	)
 
-	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+	Step(fmt.Sprintf("Deploy applications for volume-only migration, with frequency: %v", chaosLevel), func() {
 
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			logrus.Errorf("Failed to write kubeconfig: %v", err)
+			dash.Errorf("Failed to write kubeconfig: %v", err)
 		}
 
 		err = SetSourceKubeConfig()
 		if err != nil {
-			logrus.Errorf("Failed to Set source kubeconfig: %v", err)
+			dash.Errorf("Failed to Set source kubeconfig: %v", err)
 		}
 		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
-			logrus.Infof("Task name %s\n", taskName)
+			dash.Infof("Task name %s\n", taskName)
 			appContexts := ScheduleApplications(taskName)
 			*contexts = append(*contexts, appContexts...)
 			ValidateApplications(*contexts)
@@ -5744,12 +5746,12 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 			})
 		}
 
-		logrus.Infof("Migration Namespaces: %v", migrationNamespaces)
+		dash.Infof("Volume-only Migration Namespaces: %v", migrationNamespaces)
 
 	})
 
 	time.Sleep(5 * time.Minute)
-	logrus.Info("Start volume only migration")
+	dash.Info("Start volume only migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i)
@@ -5766,21 +5768,17 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-		} else {
-			UpdateOutcome(event, err)
 		}
 		resp, get_mig_err := storkops.Instance().GetMigration(mig.Name, mig.Namespace)
 		if get_mig_err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to get migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, get_mig_err))
-		} else {
-			UpdateOutcome(event, get_mig_err)
 		}
 		resourcesMigrated := resp.Status.Summary.NumberOfMigratedResources
 		if resourcesMigrated != 0 {
 			UpdateOutcome(event, fmt.Errorf("resources should not migrate in volumeonlymigration case, numberOfmigratedresources should %d, getting %d",
 				0, resourcesMigrated))
 		} else {
-			UpdateOutcome(event, fmt.Errorf(""))
+			dash.Infof("Number of resources migrated in Volume Only migration should be 0, Resources migrated: %d", resourcesMigrated)
 		}
 	}
 	updateMetrics(*event)
