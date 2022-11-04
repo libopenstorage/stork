@@ -149,7 +149,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 		Step("Creating backup schedule policies", func() {
 			dash.Info("Creating backup interval schedule policy")
-			interval_schedule_policy_info := CreateIntervalSchedulePolicy(5, int64(15*time.Minute), 2)
+			interval_schedule_policy_info := CreateIntervalSchedulePolicy(5, 15, 2)
 			interval_policy_status := Backupschedulepolicy("interval", uuid.New(), orgID, interval_schedule_policy_info)
 			dash.VerifyFatal(interval_policy_status, nil, "Creating interval schedule policy")
 
