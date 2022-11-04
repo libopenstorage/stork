@@ -26,9 +26,9 @@ const (
 	// PrefixBackup - prefix string that will be used for the kdmp backup job
 	PrefixBackup = "backup"
 	// PrefixRestore prefix string that will be used for the kdmp restore job
-	PrefixRestore = "restore"
-	// PrefixNFSVolRestore prefix string that will be used for nfs vol restore
-	PrefixNFSVolRestore = "nfs-vol-restore"
+	PrefixRestore = "nfs-restore-resource"
+	// PrefixNFSRestorePVC prefix string that will be used for pvc creation during nfs vol restore
+	PrefixNFSRestorePVC = "nfs-restore-pvc"
 
 	// KdmpAnnotationPrefix - KDMP annotation prefix
 	KdmpAnnotationPrefix = "kdmp.portworx.com/"

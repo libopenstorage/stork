@@ -733,7 +733,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					time.Sleep(retrySleep)
 					return nil
 				}
-				crName := getResourceExportCRName(utils.PrefixNFSVolRestore, string(restore.UID), restore.Namespace)
+				crName := getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace)
 				resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
 				if err != nil {
 					if k8s_errors.IsNotFound(err) {
@@ -1834,7 +1834,7 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 		log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
 		return err
 	}
-	crName = getResourceExportCRName(utils.PrefixNFSVolRestore, string(restore.UID), restore.Namespace)
+	crName = getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace)
 	err = kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete resource export CR [%v]: %v", crName, err)
