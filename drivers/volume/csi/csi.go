@@ -309,6 +309,7 @@ func (c *csi) OwnsPVCForBackup(
 	pvc *v1.PersistentVolumeClaim,
 	cmBackupType string,
 	crBackupType string,
+	blType storkapi.BackupLocationType,
 ) bool {
 	if cmBackupType == storkapi.ApplicationBackupGeneric || crBackupType == storkapi.ApplicationBackupGeneric {
 		// If user has forced the backupType in config map or applicationbackup CR, default to generic always
