@@ -102,6 +102,10 @@ type ResourceExport struct {
 type ResourceExportSpec struct {
 	// Type - Backup or Restore
 	Type ResourceExportType `json:"type,omitempty"`
+	// TriggeredFrom is to know which module is created the resourceExport CR.
+	// The intention is to know from where to get the nfs executor image
+	TriggeredFrom   string `json:"triggerFrom,omitempty"`
+	TriggeredFromNs string `json:"triggerFromNs,omitempty"`
 	// Source here is applicationBackup CR for backup
 	Source ResourceExportObjectReference `json:"source,omitempty"`
 	// Destination is the ref to BL CR

@@ -76,7 +76,7 @@ func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	requeue, err := c.process(context.TODO(), restoreExport)
 	if err != nil {
-		logrus.Errorf("fail to execute sync function for restoreExport CR %v: %v", restoreExport.Name, err)
+		logrus.Errorf("fail to execute process function for restoreExport CR %v: %v", restoreExport.Name, err)
 		return reconcile.Result{RequeueAfter: kdmpcontroller.RequeuePeriod}, nil
 	}
 	if requeue {

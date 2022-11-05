@@ -225,16 +225,25 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 			// Create the pvc from the spec provided in the dataexport CR
 			pvcSpec := dataExport.Status.RestorePVC
-			_, err = c.createPVC(dataExport)
-			if err != nil && k8sErrors.IsNotFound(err) {
-				msg := fmt.Sprintf("Error creating pvc %s/%s for restore: %v", pvcSpec.Namespace, pvcSpec.Name, err)
-				logrus.Errorf(msg)
-				data := updateDataExportDetail{
-					status: kdmpapi.DataExportStatusFailed,
-					reason: msg,
+			// For NFS PVC creation happens upfront and createPVC() fails internally during vol restore
+			// as in DE CR PVC ref doesn't have all PVC params to create just has pvc name and ns which is
+			// expected as PVC is already created so doing additional check.
+			_, err = core.Instance().GetPersistentVolumeClaim(pvcSpec.Name, pvcSpec.Namespace)
+			if err != nil {
+				if k8sErrors.IsNotFound(err) {
+					_, err = c.createPVC(dataExport)
+					if err != nil {
+						msg := fmt.Sprintf("Error creating pvc %s/%s for restore: %v", pvcSpec.Namespace, pvcSpec.Name, err)
+						logrus.Errorf(msg)
+						data := updateDataExportDetail{
+							status: kdmpapi.DataExportStatusFailed,
+							reason: msg,
+						}
+						return false, c.updateStatus(dataExport, data)
+					}
 				}
-				return false, c.updateStatus(dataExport, data)
 			}
+
 			_, err = checkPVCIgnoringJobMounts(dataExport.Spec.Destination, dataExport.Name)
 			if err != nil {
 				msg := fmt.Sprintf("Destination pvc %s/%s is not bound yet: %v", pvcSpec.Namespace, pvcSpec.Name, err)
@@ -1330,12 +1339,12 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		if err != nil {
 			return err
 		}
-		pvcName := "pvc-" + jobName
+		pvcName := utils.GetPvcNameForJob(jobName)
 		if err := core.Instance().DeletePersistentVolumeClaim(pvcName, namespace); err != nil && !k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("delete %s/%s pvc: %s", namespace, pvcName, err)
 		}
 
-		pvName := "pv-" + jobName
+		pvName := utils.GetPvNameForJob(jobName)
 		if err := core.Instance().DeletePersistentVolume(pvName); err != nil && !k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("delete %s pv: %s", pvName, err)
 		}

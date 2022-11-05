@@ -135,8 +135,7 @@ func SetupNFSServiceAccount(name, namespace string, role *rbacv1.ClusterRole) er
 		sa, err = coreops.Instance().GetServiceAccount(name, namespace)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed fetching sa [%v/%v]: %v", name, namespace, err)
-			logrus.Tracef("%v", errMsg)
-			logrus.Infof("failed whiel fetching sa-secret %v", err)
+			logrus.Errorf("%v", errMsg)
 			return "", true, fmt.Errorf("%v", errMsg)
 		}
 		if sa.Secrets == nil {

@@ -199,8 +199,9 @@ func jobFor(
 		jobName,
 		jobOption)
 	if err != nil {
-		logrus.Errorf("failed to get the executor image details")
-		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		errMsg := fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		logrus.Errorf("%v", errMsg)
+		return nil, errMsg
 	}
 
 	job := &batchv1.Job{
@@ -272,7 +273,7 @@ func jobFor(
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: "pvc-" + jobName,
+					ClaimName: utils.GetPvcNameForJob(jobName),
 				},
 			},
 		}

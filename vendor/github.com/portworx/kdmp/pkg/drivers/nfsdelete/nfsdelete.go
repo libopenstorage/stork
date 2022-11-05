@@ -241,7 +241,7 @@ func jobForDeleteResource(
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: "pvc-" + jobOption.JobName,
+					ClaimName: utils.GetPvcNameForJob(jobOption.JobName),
 				},
 			},
 		}

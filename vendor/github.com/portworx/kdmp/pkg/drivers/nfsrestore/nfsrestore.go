@@ -130,7 +130,7 @@ func buildJob(
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	resources, err := utils.KopiaResourceRequirements(jobOptions.JobConfigMap, jobOptions.JobConfigMapNs)
+	resources, err := utils.NFSResourceRequirements(jobOptions.JobConfigMap, jobOptions.JobConfigMapNs)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func jobForRestoreResource(
 	// Read the ApplicationRestore stage and decide which restore operation to perform
 	restoreCR, err := storkops.Instance().GetApplicationRestore(jobOption.AppCRName, jobOption.AppCRNamespace)
 	if err != nil {
-		logrus.Errorf("%s: Error getting restore cr: %v", funct, err)
+		logrus.Errorf("%s: Error getting restore cr[%v/%v]: %v", funct, jobOption.AppCRNamespace, jobOption.AppCRName, err)
 		return nil, err
 	}
 	var opType string
@@ -263,9 +263,6 @@ func jobForRestoreResource(
 							Name: "cred-secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									//SecretName: utils.GetCredSecretName(jobOption.DataExportName),
-									// TODO: During integration change this to DE CR name as that is the
-									// secret created
 									SecretName: utils.GetCredSecretName(jobOption.RestoreExportName),
 								},
 							},
@@ -288,7 +285,7 @@ func jobForRestoreResource(
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: "pvc-" + jobOption.RestoreExportName,
+					ClaimName: utils.GetPvcNameForJob(jobOption.RestoreExportName),
 				},
 			},
 		}
