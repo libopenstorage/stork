@@ -614,12 +614,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if err != nil {
 					return err
 				}
-				// Generic Backup type is forced for all backup taken on a NFS backuplocation.
-				// This change will make portworx volume also to follow kdmp path.
-				if backupLocation.Location.Type == stork_api.BackupLocationNFS {
-					driverType = stork_api.ApplicationBackupGeneric
-				}
-				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType)
+				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType, backupLocation.Location.Type)
 				if err != nil {
 					// Skip unsupported PVCs
 					if _, ok := err.(*errors.ErrNotSupported); ok {
