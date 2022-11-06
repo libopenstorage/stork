@@ -22,6 +22,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
@@ -778,6 +779,13 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 							Namespace:  backupLocation.Namespace,
 							Name:       backupLocation.Name,
 						}
+						resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
+						storkPodNs, err := k8sutils.GetStorkPodNamespace()
+						if err != nil {
+							logrus.Errorf("error in getting stork pod namespace: %v", err)
+							return err
+						}
+						resourceExport.Spec.TriggeredFromNs = storkPodNs
 						resourceExport.Spec.Source = *source
 						resourceExport.Spec.Destination = *destination
 						_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
