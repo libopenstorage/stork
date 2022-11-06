@@ -70,6 +70,14 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		return "", fmt.Errorf(errMsg)
 	}
 
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(jobName, o.JobNamespace, o)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if requiresV1 {
 		jobV1 := job.(*batchv1.CronJob)
 		_, err = batch.Instance().CreateCronJob(jobV1)
@@ -196,19 +204,15 @@ func jobFor(
 		jobOption.MaintenanceType,
 	}, " ")
 
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during maintenance: %v", err)
-		return nil, err
-	}
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+		errMsg := fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		logrus.Errorf("%v", errMsg)
+		return nil, errMsg
 	}
 
 	jobObjectMeta := metav1.ObjectMeta{
@@ -257,10 +261,30 @@ func jobFor(
 			},
 		},
 	}
-
 	var volumeMount corev1.VolumeMount
 	var volume corev1.Volume
 	var env []corev1.EnvVar
+
+	if len(jobOption.NfsServer) != 0 {
+		volumeMount = corev1.VolumeMount{
+			Name:      utils.NfsVolumeName,
+			MountPath: drivers.NfsMount,
+		}
+		jobSpec.Containers[0].VolumeMounts = append(
+			jobSpec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		volume = corev1.Volume{
+			Name: utils.NfsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: utils.GetPvcNameForJob(jobName),
+				},
+			},
+		}
+		jobSpec.Volumes = append(jobSpec.Volumes, volume)
+	}
+
 	if drivers.CertFilePath != "" {
 		volumeMount = corev1.VolumeMount{
 			Name:      utils.TLSCertMountVol,

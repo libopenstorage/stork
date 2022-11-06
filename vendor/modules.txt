@@ -691,13 +691,14 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149
+# github.com/portworx/kdmp v0.4.1-0.20221106080928-1fd01d5e6ed0
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
 github.com/portworx/kdmp/pkg/client/clientset/versioned
 github.com/portworx/kdmp/pkg/client/clientset/versioned/scheme
 github.com/portworx/kdmp/pkg/client/clientset/versioned/typed/kdmp/v1alpha1
+github.com/portworx/kdmp/pkg/controllers
 github.com/portworx/kdmp/pkg/controllers/dataexport
 github.com/portworx/kdmp/pkg/drivers
 github.com/portworx/kdmp/pkg/drivers/driversinstance
@@ -705,6 +706,9 @@ github.com/portworx/kdmp/pkg/drivers/kopiabackup
 github.com/portworx/kdmp/pkg/drivers/kopiadelete
 github.com/portworx/kdmp/pkg/drivers/kopiamaintenance
 github.com/portworx/kdmp/pkg/drivers/kopiarestore
+github.com/portworx/kdmp/pkg/drivers/nfsbackup
+github.com/portworx/kdmp/pkg/drivers/nfsdelete
+github.com/portworx/kdmp/pkg/drivers/nfsrestore
 github.com/portworx/kdmp/pkg/drivers/resticbackup
 github.com/portworx/kdmp/pkg/drivers/resticrestore
 github.com/portworx/kdmp/pkg/drivers/rsync
@@ -731,7 +735,7 @@ github.com/portworx/px-object-controller/client/listers/objectservice/v1alpha1
 github.com/portworx/px-object-controller/pkg/client
 github.com/portworx/px-object-controller/pkg/controller
 github.com/portworx/px-object-controller/pkg/utils
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20220401024625-dbc61a336f65 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20221102055014-b3a55a3df5c8 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1628,7 +1632,7 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/workqueue
 # k8s.io/cloud-provider v0.21.5 => k8s.io/cloud-provider v0.21.5
 k8s.io/cloud-provider
-# k8s.io/code-generator v0.21.5 => k8s.io/code-generator v0.21.5
+# k8s.io/code-generator v0.22.1 => k8s.io/code-generator v0.21.5
 ## explicit
 k8s.io/code-generator
 k8s.io/code-generator/cmd/client-gen

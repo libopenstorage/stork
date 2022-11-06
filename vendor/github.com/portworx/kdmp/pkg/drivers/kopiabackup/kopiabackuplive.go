@@ -69,29 +69,16 @@ func jobForLiveBackup(
 	}
 
 	privileged := true
-
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+	kopiaExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during live backup: %v", err)
-		return nil, err
+		errMsg := fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		logrus.Errorf("%v", errMsg)
+		return nil, errMsg
 	}
-	if len(imageRegistrySecret) != 0 {
-		err = utils.CreateImageRegistrySecret(imageRegistrySecret, jobName, jobOption.KopiaImageExecutorSourceNs, jobOption.Namespace)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
-	}
-
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -161,6 +148,26 @@ func jobForLiveBackup(
 				},
 			},
 		},
+	}
+
+	if len(jobOption.NfsServer) != 0 {
+		volumeMount := corev1.VolumeMount{
+			Name:      utils.NfsVolumeName,
+			MountPath: drivers.NfsMount,
+		}
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		volume := corev1.Volume{
+			Name: utils.NfsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: utils.GetPvcNameForJob(jobName),
+				},
+			},
+		}
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
 	}
 
 	if drivers.CertFilePath != "" {

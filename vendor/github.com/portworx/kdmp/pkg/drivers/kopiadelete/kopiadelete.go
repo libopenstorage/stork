@@ -84,6 +84,15 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		logrus.Errorf("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
+
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(jobName, job.ObjectMeta.Namespace, o)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
 		errMsg := fmt.Sprintf("creation of backup snapshot delete job [%s] failed: %v", jobName, err)
 		logrus.Errorf("%s %v", fn, errMsg)
@@ -184,19 +193,15 @@ func jobFor(
 		jobOption.VolumeBackupDeleteNamespace,
 	}, " ")
 
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during delete: %v", err)
-		return nil, err
-	}
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+		errMsg := fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		logrus.Errorf("%v", errMsg)
+		return nil, errMsg
 	}
 
 	job := &batchv1.Job{
@@ -253,6 +258,27 @@ func jobFor(
 				},
 			},
 		},
+	}
+
+	if len(jobOption.NfsServer) != 0 {
+		volumeMount := corev1.VolumeMount{
+			Name:      utils.NfsVolumeName,
+			MountPath: drivers.NfsMount,
+		}
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		volume := corev1.Volume{
+			Name: utils.NfsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: utils.GetPvcNameForJob(jobName),
+				},
+			},
+		}
+
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
 	}
 
 	if drivers.CertFilePath != "" {

@@ -18,10 +18,12 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
+
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -35,7 +37,6 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	k8shelper "k8s.io/component-helpers/storage/volume"
@@ -72,9 +73,7 @@ const (
 	// pvcNameLenLimitForJob is the max length of PVC name that the bound job
 	// will incorporate in their names
 	pvcNameLenLimitForJob = 48
-	volumeinitialDelay    = 2 * time.Second
-	volumeFactor          = 1.5
-	volumeSteps           = 15
+
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	compressionKey        = "KDMP_COMPRESSION"
@@ -94,12 +93,6 @@ type updateDataExportDetail struct {
 	snapshotNamespace    string
 	removeFinalizer      bool
 	volumeSnapshot       string
-}
-
-var volumeAPICallBackoff = wait.Backoff{
-	Duration: volumeinitialDelay,
-	Factor:   volumeFactor,
-	Steps:    volumeSteps,
 }
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
@@ -123,7 +116,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 	// delete an object on the init stage without cleanup
 	if dataExport.DeletionTimestamp != nil && dataExport.Status.Stage == kdmpapi.DataExportStageInitial {
-		if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
+		if !controllers.ContainsFinalizer(dataExport, kdmpcontroller.CleanupFinalizer) {
 			return false, nil
 		}
 
@@ -158,7 +151,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 	}
 
 	if dataExport.DeletionTimestamp != nil {
-		if !controllers.ContainsFinalizer(dataExport, cleanupFinalizer) {
+		if !controllers.ContainsFinalizer(dataExport, kdmpcontroller.CleanupFinalizer) {
 			return false, nil
 		}
 		if err = c.cleanUp(driver, dataExport); err != nil {
@@ -232,15 +225,23 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 			// Create the pvc from the spec provided in the dataexport CR
 			pvcSpec := dataExport.Status.RestorePVC
-			_, err = c.createPVC(dataExport)
+			// For NFS PVC creation happens upfront and createPVC() fails internally during vol restore
+			// as in DE CR PVC ref doesn't have all PVC params to create just has pvc name and ns which is
+			// expected as PVC is already created so doing additional check.
+			_, err = core.Instance().GetPersistentVolumeClaim(pvcSpec.Name, pvcSpec.Namespace)
 			if err != nil {
-				msg := fmt.Sprintf("Error creating pvc %s/%s for restore: %v", pvcSpec.Namespace, pvcSpec.Name, err)
-				logrus.Errorf(msg)
-				data := updateDataExportDetail{
-					status: kdmpapi.DataExportStatusFailed,
-					reason: msg,
+				if k8sErrors.IsNotFound(err) {
+					_, err = c.createPVC(dataExport)
+					if err != nil {
+						msg := fmt.Sprintf("Error creating pvc %s/%s for restore: %v", pvcSpec.Namespace, pvcSpec.Name, err)
+						logrus.Errorf(msg)
+						data := updateDataExportDetail{
+							status: kdmpapi.DataExportStatusFailed,
+							reason: msg,
+						}
+						return false, c.updateStatus(dataExport, data)
+					}
 				}
-				return false, c.updateStatus(dataExport, data)
 			}
 
 			_, err = checkPVCIgnoringJobMounts(dataExport.Spec.Destination, dataExport.Name)
@@ -273,6 +274,24 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			compressionType = kdmpData.Data[compressionKey]
 			podDataPath = kdmpData.Data[backupPath]
 		}
+		blName := dataExport.Spec.Destination.Name
+		blNamespace := dataExport.Spec.Destination.Namespace
+
+		if driverName == drivers.KopiaRestore {
+			blName = vb.Spec.BackupLocation.Name
+			blNamespace = vb.Spec.BackupLocation.Namespace
+		}
+
+		backupLocation, err := readBackupLocation(blName, blNamespace, "")
+		if err != nil {
+			msg := fmt.Sprintf("reading of backuplocation [%v/%v] failed: %v", blNamespace, blName, err)
+			logrus.Errorf(msg)
+			data := updateDataExportDetail{
+				status: kdmpapi.DataExportStatusFailed,
+				reason: msg,
+			}
+			return false, c.updateStatus(dataExport, data)
+		}
 
 		// start data transfer
 		id, err := startTransferJob(
@@ -283,6 +302,9 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			podDataPath,
 			utils.KdmpConfigmapName,
 			utils.KdmpConfigmapNamespace,
+			backupLocation.Location.NfsConfig.ServerAddr,
+			backupLocation.Location.Path,
+			backupLocation.Location.NfsConfig.MountOption,
 		)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {
 			msg := fmt.Sprintf("failed to start a data transfer job, dataexport [%v]: %v", dataExport.Name, err)
@@ -429,6 +451,17 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		data := updateDataExportDetail{
 			stage: kdmpapi.DataExportStageFinal,
 		}
+		// Append the job-pod log to stork's pod log in case of failure
+		// it is best effort approach, hence errors are ignored.
+		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+			if dataExport.Status.TransferID != "" {
+				namespace, name, err := utils.ParseJobID(dataExport.Status.TransferID)
+				if err != nil {
+					logrus.Infof("job-pod name and namespace extraction failed: %v", err)
+				}
+				appendPodLogToStork(name, namespace)
+			}
+		}
 		cleanupTask := func() (interface{}, bool, error) {
 			cleanupErr := c.cleanUp(driver, dataExport)
 			if cleanupErr != nil {
@@ -450,6 +483,34 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		return false, nil
 	}
 	return false, nil
+}
+
+func appendPodLogToStork(jobName string, namespace string) {
+	// Get job and check whether it has live pod attaced to it
+	job, err := batch.Instance().GetJob(jobName, namespace)
+	if err != nil && !k8sErrors.IsNotFound(err) {
+		logrus.Infof("failed in getting job %v/%v with err: %v", namespace, jobName, err)
+	}
+	pods, err := core.Instance().GetPods(
+		job.Namespace,
+		map[string]string{
+			"job-name": job.Name,
+		},
+	)
+	if err != nil {
+		logrus.Infof("failed in fetching job pods %s/%s: %v", namespace, jobName, err)
+	}
+	for _, pod := range pods.Items {
+		numLogLines := int64(50)
+		podLog, err := core.Instance().GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{TailLines: &numLogLines})
+		if err != nil {
+			logrus.Infof("error fetching log of job-pod %s: %v", pod.Name, err)
+		} else {
+			logrus.Infof("start of job-pod [%s]'s log...", pod.Name)
+			logrus.Infof(podLog)
+			logrus.Infof("end of job-pod [%s]'s log...", pod.Name)
+		}
+	}
 }
 
 func (c *Controller) createJobCredCertSecrets(
@@ -1190,6 +1251,13 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 
 func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) error {
 	var bl *storkapi.BackupLocation
+	doCleanup, err := utils.DoCleanupResource()
+	if err != nil {
+		return err
+	}
+	if (de.Status.Status == kdmpapi.DataExportStatusFailed) && !doCleanup {
+		return nil
+	}
 	if driver == nil {
 		return fmt.Errorf("driver is nil")
 	}
@@ -1264,6 +1332,21 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		err := driver.DeleteJob(de.Status.TransferID)
 		if err != nil && !k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("delete %s job: %s", de.Status.TransferID, err)
+		}
+		//TODO : Need better way to find BL type from de CR
+		// For now deleting unconditionally for all BL type.
+		namespace, jobName, err := utils.ParseJobID(de.Status.TransferID)
+		if err != nil {
+			return err
+		}
+		pvcName := utils.GetPvcNameForJob(jobName)
+		if err := core.Instance().DeletePersistentVolumeClaim(pvcName, namespace); err != nil && !k8sErrors.IsNotFound(err) {
+			return fmt.Errorf("delete %s/%s pvc: %s", namespace, pvcName, err)
+		}
+
+		pvName := utils.GetPvNameForJob(jobName)
+		if err := core.Instance().DeletePersistentVolume(pvName); err != nil && !k8sErrors.IsNotFound(err) {
+			return fmt.Errorf("delete %s pv: %s", pvName, err)
 		}
 	}
 
@@ -1389,7 +1472,7 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, data updateDataExportD
 			de.Status.SnapshotNamespace = data.snapshotNamespace
 		}
 		if data.removeFinalizer {
-			controllers.RemoveFinalizer(de, cleanupFinalizer)
+			controllers.RemoveFinalizer(de, kdmpcontroller.CleanupFinalizer)
 		}
 		if data.volumeSnapshot != "" {
 			de.Status.VolumeSnapshot = data.volumeSnapshot
@@ -1557,7 +1640,11 @@ func startTransferJob(
 	dataExport *kdmpapi.DataExport,
 	podDataPath string,
 	jobConfigMap string,
-	jobConfigMapNs string) (string, error) {
+	jobConfigMapNs string,
+	nfsServerAddr string,
+	nfsExportPath string,
+	nfsMountOption string,
+) (string, error) {
 	if drv == nil {
 		return "", fmt.Errorf("data transfer driver is not set")
 	}
@@ -1605,6 +1692,9 @@ func startTransferJob(
 			drivers.WithPodDatapathType(podDataPath),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
+			drivers.WithNfsServer(nfsServerAddr),
+			drivers.WithNfsExportDir(nfsExportPath),
+			drivers.WithNfsMountOption(nfsMountOption),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(
@@ -1621,6 +1711,8 @@ func startTransferJob(
 			drivers.WithCertSecretNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
+			drivers.WithNfsServer(nfsServerAddr),
+			drivers.WithNfsExportDir(nfsExportPath),
 		)
 	}
 
@@ -1632,7 +1724,7 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 		return nil, err
 	}
 	// wait for pvc to get bound
-	pvc, err := waitForPVCBound(in, checkMounts)
+	pvc, err := utils.WaitForPVCBound(in.Name, in.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -1646,36 +1738,6 @@ func checkPVC(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.P
 		if len(pods) > 0 {
 			return nil, fmt.Errorf("mounted to %v pods", toPodNames(pods))
 		}
-	}
-	return pvc, nil
-}
-
-func waitForPVCBound(in kdmpapi.DataExportObjectReference, checkMounts bool) (*corev1.PersistentVolumeClaim, error) {
-	if err := checkNameNamespace(in); err != nil {
-		return nil, err
-	}
-	// wait for pvc to get bound
-	var pvc *corev1.PersistentVolumeClaim
-	var err error
-	var errMsg string
-	wErr := wait.ExponentialBackoff(volumeAPICallBackoff, func() (bool, error) {
-		pvc, err = core.Instance().GetPersistentVolumeClaim(in.Name, in.Namespace)
-		if err != nil {
-			return false, err
-		}
-
-		if pvc.Status.Phase != corev1.ClaimBound {
-			errMsg = fmt.Sprintf("pvc status: expected %s, got %s", corev1.ClaimBound, pvc.Status.Phase)
-			logrus.Debugf("%v", errMsg)
-			return false, nil
-		}
-
-		return true, nil
-	})
-
-	if wErr != nil {
-		logrus.Errorf("%v", wErr)
-		return nil, fmt.Errorf("%s:%s", wErr, errMsg)
 	}
 	return pvc, nil
 }
@@ -1701,7 +1763,7 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 			logrus.Debugf("checkPVCIgnoringJobMounts: pvc name %v - storage class VolumeBindingMode %v", pvc.Name, *sc.VolumeBindingMode)
 			if *sc.VolumeBindingMode != storagev1.VolumeBindingWaitForFirstConsumer {
 				// wait for pvc to get bound
-				pvc, checkErr = waitForPVCBound(in, true)
+				pvc, checkErr = utils.WaitForPVCBound(in.Name, in.Namespace)
 				if checkErr != nil {
 					return "", false, checkErr
 				}
@@ -1709,7 +1771,7 @@ func checkPVCIgnoringJobMounts(in kdmpapi.DataExportObjectReference, expectedMou
 		} else {
 			// If sc is not set, we will direct check the pvc status
 			// wait for pvc to get bound
-			pvc, checkErr = waitForPVCBound(in, true)
+			pvc, checkErr = utils.WaitForPVCBound(in.Name, in.Namespace)
 			if checkErr != nil {
 				return "", false, checkErr
 			}
@@ -1899,6 +1961,8 @@ func CreateCredentialsSecret(secretName, blName, blNamespace, namespace string, 
 		return createGoogleSecret(secretName, backupLocation, namespace, labels)
 	case storkapi.BackupLocationAzure:
 		return createAzureSecret(secretName, backupLocation, namespace, labels)
+	case storkapi.BackupLocationNFS:
+		return utils.CreateNfsSecret(secretName, backupLocation, namespace, labels)
 	}
 
 	return fmt.Errorf("unsupported backup location: %v", backupLocation.Location.Type)
@@ -1936,7 +2000,7 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, 
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["disablessl"] = []byte(strconv.FormatBool(backupLocation.Location.S3Config.DisableSSL))
-	err := createJobSecret(secretName, namespace, credentialData, labels)
+	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
@@ -1948,7 +2012,7 @@ func createGoogleSecret(secretName string, backupLocation *storkapi.BackupLocati
 	credentialData["accountkey"] = []byte(backupLocation.Location.GoogleConfig.AccountKey)
 	credentialData["projectid"] = []byte(backupLocation.Location.GoogleConfig.ProjectID)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
-	err := createJobSecret(secretName, namespace, credentialData, labels)
+	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
@@ -1960,7 +2024,7 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
-	err := createJobSecret(secretName, namespace, credentialData, labels)
+	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
 }
@@ -1977,38 +2041,12 @@ func createCertificateSecret(secretName, namespace string, labels map[string]str
 
 		certData := make(map[string][]byte)
 		certData[drivers.CertFileName] = certificateData
-		err = createJobSecret(secretName, namespace, certData, labels)
+		err = utils.CreateJobSecret(secretName, namespace, certData, labels)
 
 		return err
 	}
 
 	return nil
-}
-
-func createJobSecret(
-	secretName string,
-	namespace string,
-	credentialData map[string][]byte,
-	labels map[string]string,
-) error {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: namespace,
-			Labels:    labels,
-			Annotations: map[string]string{
-				utils.SkipResourceAnnotation: "true",
-			},
-		},
-		Data: credentialData,
-		Type: corev1.SecretTypeOpaque,
-	}
-	_, err := core.Instance().CreateSecret(secret)
-	if err != nil && k8sErrors.IsAlreadyExists(err) {
-		return nil
-	}
-
-	return err
 }
 
 func toSnapName(pvcName, dataExportUID string) string {
