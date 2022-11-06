@@ -700,6 +700,7 @@ github.com/portworx/kdmp/pkg/client/clientset/versioned/scheme
 github.com/portworx/kdmp/pkg/client/clientset/versioned/typed/kdmp/v1alpha1
 github.com/portworx/kdmp/pkg/controllers
 github.com/portworx/kdmp/pkg/controllers/dataexport
+github.com/portworx/kdmp/pkg/controllers/resourceexport
 github.com/portworx/kdmp/pkg/drivers
 github.com/portworx/kdmp/pkg/drivers/driversinstance
 github.com/portworx/kdmp/pkg/drivers/kopiabackup
@@ -735,7 +736,7 @@ github.com/portworx/px-object-controller/client/listers/objectservice/v1alpha1
 github.com/portworx/px-object-controller/pkg/client
 github.com/portworx/px-object-controller/pkg/controller
 github.com/portworx/px-object-controller/pkg/utils
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20221102055014-b3a55a3df5c8 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20221102055014-b3a55a3df5c8 => github.com/portworx/sched-ops v1.20.4-rc1.0.20221102055014-b3a55a3df5c8
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1056,7 +1057,7 @@ google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/status
 google.golang.org/genproto/googleapis/type/expr
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/grpc v1.43.0
+# google.golang.org/grpc v1.48.0
 ## explicit
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -1068,6 +1069,7 @@ google.golang.org/grpc/balancer/grpclb/grpc_lb_v1
 google.golang.org/grpc/balancer/grpclb/state
 google.golang.org/grpc/balancer/roundrobin
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
+google.golang.org/grpc/channelz
 google.golang.org/grpc/codes
 google.golang.org/grpc/connectivity
 google.golang.org/grpc/credentials
@@ -1086,6 +1088,7 @@ google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/grpclog
 google.golang.org/grpc/internal
 google.golang.org/grpc/internal/backoff
+google.golang.org/grpc/internal/balancer/gracefulswitch
 google.golang.org/grpc/internal/balancerload
 google.golang.org/grpc/internal/binarylog
 google.golang.org/grpc/internal/buffer
@@ -1098,6 +1101,7 @@ google.golang.org/grpc/internal/grpcrand
 google.golang.org/grpc/internal/grpcsync
 google.golang.org/grpc/internal/grpcutil
 google.golang.org/grpc/internal/metadata
+google.golang.org/grpc/internal/pretty
 google.golang.org/grpc/internal/resolver
 google.golang.org/grpc/internal/resolver/dns
 google.golang.org/grpc/internal/resolver/passthrough
@@ -1911,7 +1915,7 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220707215604-afbea03c04c5
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20221102055014-b3a55a3df5c8
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220714042817-25f6ab6dc5d1
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.1
