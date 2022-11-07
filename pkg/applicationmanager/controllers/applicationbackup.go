@@ -232,6 +232,10 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 	if err != nil {
 		return fmt.Errorf("error getting backup location path: %v", err)
 	}
+	// For NFS skip creating path
+	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
+		return nil
+	}
 	if err := objectstore.CreateBucket(backupLocation); err != nil {
 		return fmt.Errorf("error creating backup location path: %v", err)
 	}
@@ -342,21 +346,13 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				return nil
 			}
 		}
-
-		// Try to create the backupLocation path, just log error if it fails
-		backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+		err := a.createBackupLocationPath(backup)
 		if err != nil {
-			return fmt.Errorf("error getting backup location path: %v", err)
-		}
-		if backupLocation.Location.Type != stork_api.BackupLocationNFS {
-			err := a.createBackupLocationPath(backup)
-			if err != nil {
-				log.ApplicationBackupLog(backup).Errorf(err.Error())
-				a.recorder.Event(backup,
-					v1.EventTypeWarning,
-					string(stork_api.ApplicationBackupStatusFailed),
-					err.Error())
-			}
+			log.ApplicationBackupLog(backup).Errorf(err.Error())
+			a.recorder.Event(backup,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationBackupStatusFailed),
+				err.Error())
 		}
 
 		// Make sure the rules exist if configured
@@ -1203,7 +1199,7 @@ func IsNFSBackuplocationType(
 ) (bool, error) {
 	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
-		return false, fmt.Errorf("error getting backup location path: %v", err)
+		return false, fmt.Errorf("error getting backup location path for backup [%v/%v]: %v", backup.Namespace, backup.Name, err)
 	}
 	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
 		return true, nil
@@ -1224,7 +1220,8 @@ func (a *ApplicationBackupController) backupResources(
 	var resourceTypes []metav1.APIResource
 	nfs, err := IsNFSBackuplocationType(backup)
 	if err != nil {
-		logrus.Errorf("error in checking backuplocation type")
+		logrus.Errorf("error in checking backuplocation type: %v", err)
+		return err
 	}
 	// Listing all resource types
 	if len(backup.Spec.ResourceTypes) != 0 {
@@ -1378,7 +1375,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	if nfs {
-		// Check whether ResourceExport is preset or not
+		// Check whether ResourceExport is present or not
 		crName := getResourceExportCRName(utils.PrefixBackup, string(backup.UID), backup.Namespace)
 		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, a.backupAdminNamespace)
 		if err != nil {
@@ -1417,8 +1414,8 @@ func (a *ApplicationBackupController) backupResources(
 					// Hardcoding for now.
 					// APIVersion: backupLocation.APIVersion,
 					// Kind:       backupLocation.Kind,
-					APIVersion: "stork.libopenstorage.org/v1alpha1",
-					Kind:       "BackupLocation",
+					APIVersion: utils.StorkAPIVersion,
+					Kind:       utils.BackupLocationKind,
 					Namespace:  backupLocation.Namespace,
 					Name:       backupLocation.Name,
 				}
@@ -1434,12 +1431,12 @@ func (a *ApplicationBackupController) backupResources(
 
 				_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
 				if err != nil {
-					logrus.Errorf("failed to create DataExport CR: %v", err)
+					logrus.Errorf("failed to create ResourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
 					return err
 				}
 				return nil
 			}
-			logrus.Errorf("failed to get backup resourceExport CR: %v", err)
+			logrus.Errorf("failed to get backup resourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
 			// Will retry in the next cycle of reconciler.
 			return nil
 		} else {
@@ -1452,6 +1449,7 @@ func (a *ApplicationBackupController) backupResources(
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.Reason = message
 				backup.Status.LastUpdateTimestamp = metav1.Now()
+				backup.Status.FinishTimestamp = metav1.Now()
 				err = a.client.Update(context.TODO(), backup)
 				if err != nil {
 					return err

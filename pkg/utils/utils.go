@@ -61,6 +61,10 @@ const (
 	PxbackupObjectNameKey = PxbackupAnnotationPrefix + "backup-name"
 	// SkipResourceAnnotation - annotation value to skip resource during resource collector
 	SkipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
+	// StorkAPIVersion API version
+	StorkAPIVersion = "stork.libopenstorage.org/v1alpha1"
+	// BackupLocationKind CR kind
+	BackupLocationKind = "BackupLocation"
 )
 
 // ParseKeyValueList parses a list of key=values string into a map
