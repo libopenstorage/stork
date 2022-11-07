@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/osutils"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -22,6 +21,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/osutils"
 
 	yaml2 "gopkg.in/yaml.v2"
 
@@ -115,6 +116,10 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
+	// PxLabelNameKey is key for map
+	PxLabelNameKey = "name"
+	// PxLabelValue portworx pod label
+	PxLabelValue = "portworx"
 )
 
 const (
@@ -267,6 +272,26 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
+	}
+
+	// Update node PxPodRestartCount during init
+	namespace, err := k.GetAutopilotNamespace()
+	if err != nil {
+		k.log.Fatal(err)
+	}
+	pxLabel := make(map[string]string)
+	pxLabel[PxLabelNameKey] = PxLabelValue
+	pxPodRestartCountMap, err := k.GetPodsRestartCount(namespace, pxLabel)
+	if err != nil {
+		k.log.Fatal(err)
+	}
+
+	for pod, value := range pxPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		if err != nil {
+			k.log.Fatal(err)
+		}
+		n.PxPodRestartCount = value
 	}
 
 	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)
@@ -6112,6 +6137,26 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1be
 
 	k.log.Infof("Successfully validated the snapshot %s", csiSnapshot.Name)
 	return nil
+}
+
+// GetPodsRestartCount return map of HostIP and it restart count in given namespace
+func (k *K8s) GetPodsRestartCount(namespace string, podLabelMap map[string]string) (map[*v1.Pod]int32, error) {
+	podRestartCountMap := make(map[*v1.Pod]int32)
+	podList, err := k8sCore.GetPods(namespace, podLabelMap)
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range podList.Items {
+		actualPod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		containerStatus := actualPod.Status.ContainerStatuses
+		for _, status := range containerStatus {
+			podRestartCountMap[actualPod] += status.RestartCount
+		}
+	}
+	return podRestartCountMap, nil
 }
 
 func substituteImageWithInternalRegistry(spec interface{}) {

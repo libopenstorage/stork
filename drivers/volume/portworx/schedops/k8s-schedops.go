@@ -684,13 +684,23 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	}
 	// Need to make sure if px pod is present or not
 	for _, pod := range pxPods.Items {
-		if pod.Labels["name"] == PXDaemonSet {
-			isPxPodPresent = true
-		}
-
 		if pod.Labels["name"] == PXDaemonSet && !k8sCore.IsPodReady(pod) {
 			printStatus(k, pod)
 			return false
+		}
+
+		if pod.Labels["name"] == PXDaemonSet {
+			isPxPodPresent = true
+			// Update pod restart count
+			n.PxPodRestartCount = 0
+			containersStatuses := pod.Status.ContainerStatuses
+			for _, containerStatus := range containersStatuses {
+				n.PxPodRestartCount += containerStatus.RestartCount
+			}
+			if err = node.UpdateNode(n); err != nil {
+				return false
+			}
+			break
 		}
 	}
 	return isPxPodPresent
