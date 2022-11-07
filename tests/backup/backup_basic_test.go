@@ -68,13 +68,6 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	defer dash.TestCaseEnd()
-	if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
-		PerformSystemCheck()
-	}
-	if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
-		ValidateCleanup()
-	}
-
 })
 
 func TestMain(m *testing.M) {

@@ -56,7 +56,6 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil)
-
 	})
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
@@ -73,7 +72,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 })
 
 //This testcase verifies basic backup rule,backup location, cloud setting
-var _ = Describe("{BasicBackupCreateWithRules}", func() {
+var _ = Describe("{BasicBackupCreation}", func() {
 	var (
 		ps       = make(map[string]map[string]string)
 		app_list = Inst().AppList
@@ -84,7 +83,7 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 
 	providers := getProviders()
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", nil)
+		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil)
 		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
 		for i := 0; i < len(app_list); i++ {
 			if Contains(post_rule_app, app_list[i]) {
@@ -124,6 +123,7 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 				}
 			}
 		})
+
 		Step("Creating rules for backup", func() {
 			dash.Info("Creating pre rule for deployed apps")
 			pre_rule_status := CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
@@ -136,8 +136,8 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 			dash.Info("Creating bucket,backup location and cloud setting")
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
-				CredName := fmt.Sprintf("%s-%s", "cred1", provider)
-				backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
+				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
 				CloudCredUID = uuid.New()
 				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
 				BackupLocationUID = uuid.New()
@@ -147,10 +147,32 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
 			}
 		})
+		Step("Creating backup schedule policies", func() {
+			dash.Info("Creating backup interval schedule policy")
+			interval_schedule_policy_info := CreateIntervalSchedulePolicy(5, 15, 2)
+			interval_policy_status := Backupschedulepolicy("interval", uuid.New(), orgID, interval_schedule_policy_info)
+			dash.VerifyFatal(interval_policy_status, nil, "Creating interval schedule policy")
+
+			dash.Info("Creating backup daily schedule policy")
+			daily_schedule_policy_info := CreateDailySchedulePolicy(1, "9:00AM", 2)
+			daily_policy_status := Backupschedulepolicy("daily", uuid.New(), orgID, daily_schedule_policy_info)
+			dash.VerifyFatal(daily_policy_status, nil, "Creating daily schedule policy")
+
+			dash.Info("Creating backup weekly schedule policy")
+			weekly_schedule_policy_info := CreateWeeklySchedulePolicy(1, Friday, "9:10AM", 2)
+			weekly_policy_status := Backupschedulepolicy("weekly", uuid.New(), orgID, weekly_schedule_policy_info)
+			dash.VerifyFatal(weekly_policy_status, nil, "Creating weekly schedule policy")
+
+			dash.Info("Creating backup monthly schedule policy")
+			monthly_schedule_policy_info := CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
+			monthly_policy_status := Backupschedulepolicy("monthly", uuid.New(), orgID, monthly_schedule_policy_info)
+			dash.VerifyFatal(monthly_policy_status, nil, "Creating monthly schedule policy")
+		})
 	})
 	JustAfterEach(func() {
+		policy_list := []string{"interval", "daily", "weekly", "monthly"}
 		defer EndTorpedoTest()
-		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list)
+		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list, policy_list)
 		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
 	})
 })

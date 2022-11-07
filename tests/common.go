@@ -329,6 +329,18 @@ const (
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
 
+type Weekday string
+
+const (
+	Monday    Weekday = "Mon"
+	Tuesday           = "Tue"
+	Wednesday         = "Wed"
+	Thursday          = "Thu"
+	Friday            = "Fri"
+	Saturday          = "Sat"
+	Sunday            = "Sun"
+)
+
 var log *logrus.Logger
 
 //TpLogPath torpedo log path
@@ -4649,7 +4661,7 @@ func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_
 	return true
 }
 
-func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string) bool {
+func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
 	var flag bool = true
 	dash.Info("Deleting the deployed apps after the testcase")
 	for i := 0; i < len(contexts); i++ {
@@ -4662,7 +4674,6 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 	}
-
 	dash.Info("Deleting backup rules created")
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
@@ -4698,12 +4709,34 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	}
 	dash.Info("Deleting bucket,backup location and cloud setting")
 	for i, provider := range providers {
-		backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
+		backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
 		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
 		DeleteBucket(provider, bucketName)
-		CredName := fmt.Sprintf("%s-%s", "cred1", provider)
+		CredName := fmt.Sprintf("%s-%s", "cred", provider)
 		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
 		DeleteBackupLocation(backup_location_name, orgID)
+	}
+	dash.Info("Deleting schedule policies")
+	sched_policy_map := make(map[string]string)
+	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schedule_policy_list, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
+	dash.VerifyFatal(err, nil, "Getting list of schedule policies")
+	for i := 0; i < len(schedule_policy_list.SchedulePolicies); i++ {
+		sched_policy_map[schedule_policy_list.SchedulePolicies[i].Metadata.Name] = schedule_policy_list.SchedulePolicies[i].Metadata.Uid
+	}
+	for i := 0; i < len(policy_list); i++ {
+		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
+			OrgId: orgID,
+			Name:  policy_list[i],
+			Uid:   sched_policy_map[policy_list[i]],
+		}
+		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
+		if err != nil {
+			flag = false
+		}
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
 	}
 	if flag == false {
 		return false
@@ -4723,4 +4756,78 @@ func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 
+}
+
+func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			Uid:   uid,
+			OrgId: orgid,
+		},
+		SchedulePolicy: schedule_policy_info,
+	}
+	_, err = Inst().Backup.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		log.Infof(" \n\n eeror in schel policy is +%v", err)
+		return err
+	}
+	return nil
+}
+
+func CreateIntervalSchedulePolicy(retain int64, min int64, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Interval: &api.SchedulePolicyInfo_IntervalPolicy{
+			Retain:  retain,
+			Minutes: min,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateDailySchedulePolicy(retain int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Daily: &api.SchedulePolicyInfo_DailyPolicy{
+			Retain: retain,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateWeeklySchedulePolicy(retain int64, day Weekday, time string, incr_count uint64) *api.SchedulePolicyInfo {
+
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Weekly: &api.SchedulePolicyInfo_WeeklyPolicy{
+			Retain: retain,
+			Day:    string(day),
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Monthly: &api.SchedulePolicyInfo_MonthlyPolicy{
+			Retain: retain,
+			Date:   date,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
 }
