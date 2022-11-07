@@ -549,6 +549,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	nfs, err := IsNFSBackuplocationType(backup)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type")
+		return err
 	}
 	if len(restore.Status.Volumes) != pvcCount {
 		// Here backupVolumeInfoMappings is framed based on driver name mapping, hence startRestore()
@@ -564,7 +565,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			//	s3 + EBS/GKE/Azure = legacy code path
 			if !nfs || (nfs && driverName != volume.KDMPDriverName) {
 				existingRestoreVolInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
-				//driver, err := volume.Get(driverName)
 				if err != nil {
 					return err
 				}
@@ -640,7 +640,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					return err
 				}
 			}
-			// Check whether ResourceExport is preset or not
+			// Check whether ResourceExport is present or not
 			if nfs && driverName == volume.KDMPDriverName {
 				err = a.client.Update(context.TODO(), restore)
 				if err != nil {
@@ -685,10 +685,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						destination := &kdmpapi.ResourceExportObjectReference{
 							// TODO: GetBackupLocation is not returning APIVersion and kind.
 							// Hardcoding for now.
-							// APIVersion: backupLocation.APIVersion,
-							// Kind:       backupLocation.Kind,
-							APIVersion: "stork.libopenstorage.org/v1alpha1",
-							Kind:       "BackupLocation",
+							APIVersion: utils.StorkAPIVersion,
+							Kind:       utils.BackupLocationKind,
 							Namespace:  backupLocation.Namespace,
 							Name:       backupLocation.Name,
 						}
@@ -839,7 +837,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				restore.Status.FinishTimestamp = metav1.Now()
 				restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
 				restore.Status.Reason = vInfo.Reason
-
 				break
 			} else if vInfo.Status == storkapi.ApplicationRestoreStatusSuccessful {
 				a.recorder.Event(restore,
@@ -1462,7 +1459,7 @@ func (a *ApplicationRestoreController) restoreResources(
 	}
 	nfs, err := IsNFSBackuplocationType(backup)
 	if err != nil {
-		logrus.Errorf("error in checking backuplocation type")
+		logrus.Errorf("error in checking backuplocation type: %v", err)
 		return err
 	}
 
@@ -1510,15 +1507,15 @@ func (a *ApplicationRestoreController) restoreResources(
 				}
 				backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 				if err != nil {
-					return fmt.Errorf("error getting backup location path: %v", err)
+					return fmt.Errorf("error getting backup location path %v: %v", backup.Spec.BackupLocation, err)
 				}
 				destination := &kdmpapi.ResourceExportObjectReference{
 					// TODO: .GetBackupLocation is not returning APIVersion and kind.
 					// Hardcoding for now.
 					// APIVersion: backupLocation.APIVersion,
 					// Kind:       backupLocation.Kind,
-					APIVersion: "stork.libopenstorage.org/v1alpha1",
-					Kind:       "BackupLocation",
+					APIVersion: utils.StorkAPIVersion,
+					Kind:       utils.BackupLocationKind,
 					Namespace:  backupLocation.Namespace,
 					Name:       backupLocation.Name,
 				}
@@ -1526,7 +1523,7 @@ func (a *ApplicationRestoreController) restoreResources(
 				resourceExport.Spec.Destination = *destination
 				_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
 				if err != nil {
-					logrus.Errorf("failed to create DataExport CR: %v", err)
+					logrus.Errorf("failed to create ResourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
 					return err
 				}
 				return nil
@@ -1545,6 +1542,7 @@ func (a *ApplicationRestoreController) restoreResources(
 				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 				restore.Status.Reason = message
 				restore.Status.LastUpdateTimestamp = metav1.Now()
+				restore.Status.FinishTimestamp = metav1.Now()
 				err = a.client.Update(context.TODO(), restore)
 				if err != nil {
 					return err
@@ -1568,7 +1566,6 @@ func (a *ApplicationRestoreController) restoreResources(
 				restore.Status.FinishTimestamp = metav1.Now()
 				restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
 				restore.Status.Reason = "Volumes and resources were restored up successfully"
-
 			case kdmpapi.ResourceExportStatusInitial:
 				doCleanup = false
 			case kdmpapi.ResourceExportStatusPending:
@@ -1577,6 +1574,7 @@ func (a *ApplicationRestoreController) restoreResources(
 				restore.Status.LastUpdateTimestamp = metav1.Now()
 				doCleanup = false
 			}
+			restore.Status.LastUpdateTimestamp = metav1.Now()
 			err = a.client.Update(context.TODO(), restore)
 			if err != nil {
 				return err
@@ -1741,14 +1739,14 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 	crName := getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace)
 	err := kdmpShedOps.Instance().DeleteResourceExport(crName, a.restoreAdminNamespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
-		errMsg := fmt.Sprintf("failed to delete resource export CR [%v]: %v", crName, err)
+		errMsg := fmt.Sprintf("failed to delete restore resource export CR [%v]: %v", crName, err)
 		log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
 		return err
 	}
 	crName = getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace)
 	err = kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
-		errMsg := fmt.Sprintf("failed to delete resource export CR [%v]: %v", crName, err)
+		errMsg := fmt.Sprintf("failed to delete pvc creation resource export CR [%v]: %v", crName, err)
 		log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
 		return err
 	}
