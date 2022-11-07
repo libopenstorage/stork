@@ -317,7 +317,12 @@ github.com/go-openapi/jsonreference
 github.com/go-openapi/spec
 # github.com/go-openapi/swag v0.19.5
 github.com/go-openapi/swag
-# github.com/gobuffalo/packr v1.11.0
+# github.com/gobuffalo/envy v1.7.1
+github.com/gobuffalo/envy
+# github.com/gobuffalo/packd v0.3.0
+github.com/gobuffalo/packd
+github.com/gobuffalo/packd/internal/takeon/github.com/markbates/errx
+# github.com/gobuffalo/packr v1.30.1
 github.com/gobuffalo/packr
 # github.com/gobwas/glob v0.2.3
 github.com/gobwas/glob
@@ -466,6 +471,8 @@ github.com/jmespath/go-jmespath
 # github.com/jmoiron/sqlx v1.3.1
 github.com/jmoiron/sqlx
 github.com/jmoiron/sqlx/reflectx
+# github.com/joho/godotenv v1.3.0
+github.com/joho/godotenv
 # github.com/json-iterator/go v1.1.11
 github.com/json-iterator/go
 # github.com/jstemmer/go-junit-report v0.9.1
@@ -515,7 +522,7 @@ github.com/libopenstorage/gossip/pkg/probation
 github.com/libopenstorage/gossip/proto
 github.com/libopenstorage/gossip/proto/state
 github.com/libopenstorage/gossip/types
-# github.com/libopenstorage/openstorage v9.4.20+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4
+# github.com/libopenstorage/openstorage v9.4.20+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20221107194400-f490a440b592
 ## explicit
 github.com/libopenstorage/openstorage/alerts
 github.com/libopenstorage/openstorage/api
@@ -689,7 +696,7 @@ github.com/openshift/client-go/security/clientset/versioned/fake
 github.com/openshift/client-go/security/clientset/versioned/scheme
 github.com/openshift/client-go/security/clientset/versioned/typed/security/v1
 github.com/openshift/client-go/security/clientset/versioned/typed/security/v1/fake
-# github.com/pborman/uuid v1.2.0
+# github.com/pborman/uuid v1.2.1
 ## explicit
 github.com/pborman/uuid
 # github.com/peterbourgon/diskv v2.0.1+incompatible
@@ -819,6 +826,10 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/rogpeppe/go-internal v1.6.1
+github.com/rogpeppe/go-internal/modfile
+github.com/rogpeppe/go-internal/module
+github.com/rogpeppe/go-internal/semver
 # github.com/rs/cors v1.6.1-0.20190116175910-76f58f330d76
 github.com/rs/cors
 # github.com/rubenv/sql-migrate v0.0.0-20200616145509-8d140a17f351
@@ -893,10 +904,6 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
-# go.pedge.io/pb v0.0.0-20171203174523-dbc791b8a69c
-go.pedge.io/pb/go/google/protobuf
-# go.pedge.io/proto v0.0.0-20170422232847-c5da4db108f6
-go.pedge.io/proto/time
 # go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5
 go.starlark.net/internal/compile
 go.starlark.net/internal/spell
@@ -1934,7 +1941,7 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220804223926-812cb10d08c4
+# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221107194400-f490a440b592
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220922150029-c1d35df2436a
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7

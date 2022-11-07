@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package mount
@@ -606,7 +607,6 @@ func (m *Mounter) Unmount(
 	}
 	info, ok := m.mounts[device]
 	if !ok {
-		m.Unlock()
 		logrus.Warnf("Unable to unmount device %q path %q: %v",
 			devPath, path, ErrEnoent.Error())
 		logrus.Infof("Found %v mounts in mounter's cache: ", len(m.mounts))
@@ -620,6 +620,7 @@ func (m *Mounter) Unmount(
 				logrus.Infof("\t Mountpath: %v Rootpath: %v", path.Path, path.Root)
 			}
 		}
+		m.Unlock()
 		return ErrEnoent
 	}
 	m.Unlock()
@@ -702,6 +703,11 @@ func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) erro
 			hasher.Write([]byte(mountPath))
 			symlinkName := hex.EncodeToString(hasher.Sum(nil))
 			symlinkPath := path.Join(m.trashLocation, symlinkName)
+			if p, err := filepath.EvalSymlinks(symlinkPath); err == nil && p == mountPath {
+				// we already scheduled the removal for this mountPath
+				logrus.Infof("RemoveMountPath is called where symlink still exists on: %v", symlinkPath)
+				return nil
+			}
 
 			if err = os.Symlink(mountPath, symlinkPath); err != nil {
 				if !os.IsExist(err) {
@@ -711,6 +717,7 @@ func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) erro
 
 			if _, err = sched.Instance().Schedule(
 				func(sched.Interval) {
+					logrus.Infof("[RemoveMountPath] Scheduled removing mount path %v ", mountPath)
 					if err = m.removeMountPath(mountPath); err != nil {
 						return
 					}
@@ -743,6 +750,7 @@ func (m *Mounter) EmptyTrashDir() error {
 	if _, err := sched.Instance().Schedule(
 		func(sched.Interval) {
 			for _, file := range files {
+				logrus.Infof("[EmptyTrashDir] Scheduled removing file %v in trash location %v", file.Name(), m.trashLocation)
 				e := m.removeSoftlinkAndTarget(path.Join(m.trashLocation, file.Name()))
 				if e != nil {
 					logrus.Errorf("failed to remove link: %s. Err: %v", path.Join(m.trashLocation, file.Name()), e)
@@ -812,7 +820,7 @@ func New(
 	case DeviceMount:
 		return NewDeviceMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case NFSMount:
-		return NewNFSMounter(identifiers, mountImpl, allowedDirs)
+		return NewNFSMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case BindMount:
 		return NewBindMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case CustomMount:
