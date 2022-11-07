@@ -194,6 +194,15 @@ func (d *Dashboard) TestSetEnd() {
 
 // TestCaseEnd update testcase  to dashboard DB
 func (d *Dashboard) TestCaseEnd() {
+	result := "PASS"
+
+	for _, v := range verifications {
+
+		if !v.ResultStatus {
+			result = "FAIL"
+			break
+		}
+	}
 	if d.IsEnabled {
 
 		if d.testcaseID == 0 {
@@ -212,25 +221,16 @@ func (d *Dashboard) TestCaseEnd() {
 			d.Log.Infof("TestCase %d ended successfully", d.testcaseID)
 		}
 
-		result := "PASS"
-
-		for _, v := range verifications {
-
-			if !v.ResultStatus {
-				result = "FAIL"
-				break
-			}
-		}
-
-		d.Log.Info("--------Test End------")
-		d.Log.Infof("#Test: %s ", testCase.ShortName)
-		d.Log.Infof("#Description: %s ", testCase.Description)
-		d.Log.Infof("#Resuly: %s ", result)
-		d.Log.Info("------------------------")
 		verifications = nil
 		removeTestCaseFromStack(d.testcaseID)
 
 	}
+
+	d.Log.Info("--------Test End------")
+	d.Log.Infof("#Test: %s ", testCase.ShortName)
+	d.Log.Infof("#Description: %s ", testCase.Description)
+	d.Log.Infof("#Result: %s ", result)
+	d.Log.Info("------------------------")
 }
 
 func removeTestCaseFromStack(testcaseID int) {
@@ -275,6 +275,11 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 
 // TestCaseBegin start the test case and push data to dashboard DB
 func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags []string) {
+
+	d.Log.Info("--------Test Start------")
+	d.Log.Infof("#Test: %s ", testName)
+	d.Log.Infof("#Description: %s ", description)
+	d.Log.Info("------------------------")
 	if d.IsEnabled {
 		if d.TestSetID == 0 {
 			d.Log.Errorf("TestSetID is empty, skipping begin testcase")
@@ -329,10 +334,6 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags
 				d.Log.Errorf("TestCase creation failed. Cause : %v", err)
 			}
 		}
-		d.Log.Info("--------Test Start------")
-		d.Log.Infof("#Test: %s ", testCase.ShortName)
-		d.Log.Infof("#Description: %s ", description)
-		d.Log.Info("------------------------")
 
 		testCasesStack = append(testCasesStack, d.testcaseID)
 

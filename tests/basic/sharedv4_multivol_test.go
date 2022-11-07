@@ -128,7 +128,10 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 
 // This test performs sharedv4 nfs server pod termination failover use case
 var _ = Describe("{NFSServerNodeDelete}", func() {
-	StartTorpedoTest("NFSServerNodeDelete", "Vslidate NFS server delete", nil)
+	JustBeforeEach(func() {
+		StartTorpedoTest("NFSServerNodeDelete", "Vslidate NFS server delete", nil)
+	})
+
 	var contexts []*scheduler.Context
 	stepLog := "has to validate that the new pods started successfully after nfs server node is terminated"
 	It(stepLog, func() {

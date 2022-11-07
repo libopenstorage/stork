@@ -716,17 +716,6 @@ func populateIntervals() {
 	triggerInterval[BackupRestartNode][6] = 5 * baseInterval
 	triggerInterval[BackupRestartNode][5] = 6 * baseInterval
 
-	triggerInterval[AppTasksDown][10] = 1 * baseInterval
-	triggerInterval[AppTasksDown][9] = 2 * baseInterval
-	triggerInterval[AppTasksDown][8] = 3 * baseInterval
-	triggerInterval[AppTasksDown][7] = 4 * baseInterval
-	triggerInterval[AppTasksDown][6] = 5 * baseInterval
-	triggerInterval[AppTasksDown][5] = 6 * baseInterval
-	triggerInterval[AppTasksDown][4] = 7 * baseInterval
-	triggerInterval[AppTasksDown][3] = 8 * baseInterval
-	triggerInterval[AppTasksDown][2] = 9 * baseInterval
-	triggerInterval[AppTasksDown][1] = 10 * baseInterval
-
 	triggerInterval[AsyncDR][10] = 1 * baseInterval
 	triggerInterval[AsyncDR][9] = 3 * baseInterval
 	triggerInterval[AsyncDR][8] = 6 * baseInterval
@@ -739,6 +728,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
+
+	triggerInterval[AppTasksDown][10] = 1 * baseInterval
+	triggerInterval[AppTasksDown][9] = 2 * baseInterval
+	triggerInterval[AppTasksDown][8] = 3 * baseInterval
+	triggerInterval[AppTasksDown][7] = 4 * baseInterval
+	triggerInterval[AppTasksDown][6] = 5 * baseInterval
+	triggerInterval[AppTasksDown][5] = 6 * baseInterval
+	triggerInterval[AppTasksDown][4] = 7 * baseInterval
+	triggerInterval[AppTasksDown][3] = 8 * baseInterval
+	triggerInterval[AppTasksDown][2] = 9 * baseInterval
+	triggerInterval[AppTasksDown][1] = 10 * baseInterval
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval
