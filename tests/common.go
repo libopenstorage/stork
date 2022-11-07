@@ -4750,6 +4750,84 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	return true
 }
 
+//ValidatePoolRebalance checks rebalnce state of pools if running
+func ValidatePoolRebalance() error {
+	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+
+	if err == nil {
+
+		for _, job := range rebalanceJobs {
+			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+
+			if err == nil {
+
+				previousDone := uint64(0)
+				jobState := jobResponse.GetJob().GetState()
+				if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+					return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+					dash.Infof("Job %v is in paused/pending state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_DONE {
+					dash.Infof("Job %v is in DONE state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+					dash.Infof("Job %v is in Running state", job.GetId())
+
+					currentDone, total := getReblanceWorkSummary(jobResponse)
+					//checking for rebalance progress
+					for currentDone < total && previousDone < currentDone {
+						time.Sleep(2 * time.Minute)
+						dash.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+						jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+						if err != nil {
+							return err
+						}
+						previousDone = currentDone
+						currentDone, total = getReblanceWorkSummary(jobResponse)
+					}
+
+					if previousDone == currentDone {
+						return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
+					}
+					if currentDone == total {
+						dash.Infof("Rebalance for job %v completed,", job.GetId())
+					}
+
+				}
+
+			}
+		}
+	}
+	return err
+}
+
+func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
+	status := jobResponse.GetJob().GetStatus()
+	if status != "" {
+		log.Infof(" Job Status: %s", status)
+	}
+
+	currentDone := uint64(0)
+	currentPending := uint64(0)
+	total := uint64(0)
+	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
+
+	for _, summary := range rebalWorkSummary {
+		currentDone += summary.GetDone()
+		currentPending += summary.GetPending()
+		log.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
+
+	}
+	total = currentDone + currentPending
+
+	return currentDone, total
+}
+
 func updatePxRuntimeOpts() error {
 	if pxRuntimeOpts != "" {
 		dash.Infof("Setting run time options: %s", pxRuntimeOpts)
@@ -4772,6 +4850,7 @@ func updatePxRuntimeOpts() error {
 		log.Info("No run time options provided to update")
 	}
 	return nil
+
 }
 
 //StartTorpedoTest starts the logging for torpedo test
@@ -4785,7 +4864,6 @@ func StartTorpedoTest(testName, testDescription string, tags []string) {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
-
 }
 
 func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {

@@ -3729,7 +3729,10 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 	poolResizePossible := false
 	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
+
 		dash.Infof("Validating pool :%v to expand", poolToBeResized.Uuid)
+		waitCount := 5
+
 		for {
 			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
 
@@ -3748,12 +3751,17 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 					return poolResizePossible, err
 
 				}
+				err = ValidatePoolRebalance()
+				if err != nil {
+					return poolResizePossible, err
+				}
 
 				dash.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
 					break
 				}
-				time.Sleep(time.Second * 90)
+				time.Sleep(time.Second * 60)
+				waitCount--
 				continue
 			}
 			poolResizePossible = true
@@ -4203,83 +4211,12 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
 			UpdateOutcome(event, err)
 
-			rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+			err = ValidatePoolRebalance()
+
 			UpdateOutcome(event, err)
-			if err == nil {
 
-				for _, job := range rebalanceJobs {
-					jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
-					UpdateOutcome(event, err)
-					if err == nil {
-
-						previousDone := uint64(0)
-						jobState := jobResponse.GetJob().GetState()
-						if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
-							UpdateOutcome(event, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary()))
-
-						}
-
-						if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
-							dash.Infof("Job %v is in paused/pending state", job.GetId())
-						}
-
-						if jobState == opsapi.StorageRebalanceJobState_DONE {
-							dash.Infof("Job %v is in DONE state", job.GetId())
-						}
-
-						if jobState == opsapi.StorageRebalanceJobState_RUNNING {
-							dash.Infof("Job %v is in Running state", job.GetId())
-
-							currentDone, total := getReblanceWorkSummary(jobResponse)
-							//checking for rebalance progress
-							for currentDone < total && previousDone < currentDone {
-								time.Sleep(2 * time.Minute)
-								dash.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
-								jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
-								UpdateOutcome(event, err)
-								if err != nil {
-									break
-								}
-								previousDone = currentDone
-								currentDone, total = getReblanceWorkSummary(jobResponse)
-							}
-
-							if previousDone == currentDone {
-								UpdateOutcome(event, fmt.Errorf("job %v is in running state but not progressing further", job.GetId()))
-							}
-							if currentDone == total {
-								dash.Infof("Rebalance for job %v completed,", job.GetId())
-							}
-
-						}
-
-					}
-				}
-			}
 		})
 	}
-}
-
-func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
-	status := jobResponse.GetJob().GetStatus()
-	if status != "" {
-		log.Infof(" Job Status: %s", status)
-	}
-
-	currentDone := uint64(0)
-	currentPending := uint64(0)
-	total := uint64(0)
-	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
-
-	for _, summary := range rebalWorkSummary {
-		currentDone += summary.GetDone()
-		currentPending += summary.GetPending()
-		log.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
-
-	}
-	total = currentDone + currentPending
-
-	return currentDone, total
 }
 
 // TriggerUpgradeVolumeDriver upgrades volume driver version to the latest build
