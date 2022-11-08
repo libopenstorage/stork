@@ -37,7 +37,7 @@ func performHaIncreaseRebootTest(testName string) {
 
 	}
 	JustBeforeEach(func() {
-		StartTorpedoTest(testDesc, fmt.Sprintf("Validate HA increase and reboot %s", nodeRebootType), nil)
+		StartTorpedoTest(testDesc, fmt.Sprintf("Validate HA increase and reboot %s", nodeRebootType), nil, 0)
 
 	})
 	stepLog := fmt.Sprintf("has to perform repl increase and reboot %s node", nodeRebootType)

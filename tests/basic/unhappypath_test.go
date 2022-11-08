@@ -33,7 +33,7 @@ const (
 	waitTimeForPXAfterError       = 20 * time.Minute
 )
 
-// This test is to verify stability of the system when there  is  a network error on the system.
+// This test is to verify stability of the system when there is a network error on the system.
 var _ = Describe("{NetworkErrorInjection}", func() {
 	var testrailID = 3526435
 	injectionType := "drop"
@@ -41,6 +41,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("NetworkErrorInjection", "Verify stability of the system when there is a network error", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -142,6 +143,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

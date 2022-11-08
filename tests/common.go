@@ -446,7 +446,9 @@ func InitInstance() {
 	commitID := strings.Split(pxVersion, "-")[1]
 	t := Inst().Dash.TestSet
 	t.CommitID = commitID
-	t.Tags = append(t.Tags, pxVersion)
+	if pxVersion != "" {
+		t.Tags["px-version"] = pxVersion
+	}
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -3929,7 +3931,7 @@ func ParseFlags() {
 	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
 	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
 	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
-	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests")
+	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests. Eg: key1:val1,key2:val2")
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
@@ -3997,12 +3999,25 @@ func ParseFlags() {
 			Description: testDescription,
 			Branch:      testBranch,
 			TestType:    testType,
-			Tags:        make([]string, 0),
+			Tags:        make(map[string]string),
 			Status:      aetosutil.NOTSTARTED,
 		}
 		if testTags != "" {
-			tags := strings.Split(testTags, ",")
-			testSet.Tags = append(testSet.Tags, tags...)
+			tags, err := splitCsv(testTags)
+			if err != nil {
+				log.Fatalf("failed to parse tags: %v. err: %v", testTags, err)
+			} else {
+				for _, tag := range tags {
+					var key, value string
+					if !strings.Contains(tag, ":") {
+						log.Info("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
+					} else {
+						key = strings.SplitN(tag, ":", 2)[0]
+						value = strings.SplitN(tag, ":", 2)[1]
+						testSet.Tags[key] = value
+					}
+				}
+			}
 		}
 
 		val, ok := os.LookupEnv("TESTSET-ID")
@@ -4854,10 +4869,10 @@ func updatePxRuntimeOpts() error {
 }
 
 //StartTorpedoTest starts the logging for torpedo test
-func StartTorpedoTest(testName, testDescription string, tags []string) {
+func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
 	SetTorpedoFileOutput(log, TestLogger)
-	dash.TestCaseBegin(testName, testDescription, "", tags)
+	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 }
 
 //EndTorpedoTest ends the logging for torpedo test

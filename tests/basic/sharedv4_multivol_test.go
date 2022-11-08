@@ -23,7 +23,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58846
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultiVolumeMountsForSharedV4", "Validate mounting multiple SV4 volumes for one app", nil)
+		StartTorpedoTest("MultiVolumeMountsForSharedV4", "Validate mounting multiple SV4 volumes for one app", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -129,7 +129,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 // This test performs sharedv4 nfs server pod termination failover use case
 var _ = Describe("{NFSServerNodeDelete}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("NFSServerNodeDelete", "Vslidate NFS server delete", nil)
+		StartTorpedoTest("NFSServerNodeDelete", "Vslidate NFS server delete", nil, 0)
 	})
 
 	var contexts []*scheduler.Context

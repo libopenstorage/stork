@@ -68,15 +68,15 @@ type Dashboard struct {
 
 //TestSet struct
 type TestSet struct {
-	CommitID    string   `json:"commitId"`
-	User        string   `json:"user"`
-	Product     string   `json:"product"`
-	Description string   `json:"description"`
-	HostOs      string   `json:"hostOs"`
-	Branch      string   `json:"branch"`
-	TestType    string   `json:"testType"`
-	Tags        []string `json:"tags"`
-	Status      string   `json:"status"`
+	CommitID    string            `json:"commitId"`
+	User        string            `json:"user"`
+	Product     string            `json:"product"`
+	Description string            `json:"description"`
+	HostOs      string            `json:"hostOs"`
+	Branch      string            `json:"branch"`
+	TestType    string            `json:"testType"`
+	Tags        map[string]string `json:"nTags"`
+	Status      string            `json:"status"`
 }
 
 //TestCase struct
@@ -85,16 +85,16 @@ type TestCase struct {
 	ShortName  string `json:"shortName"`
 	ModuleName string `json:"moduleName"`
 
-	Status      string   `json:"status"`
-	Errors      []string `json:"errors"`
-	LogFile     string   `json:"logFile"`
-	Description string   `json:"description"`
-	Command     string   `json:"command"`
-	HostOs      string   `json:"hostOs"`
-	Tags        []string `json:"tags"`
-	TestSetID   int      `json:"testSetID"`
-	TestRepoID  string   `json:"testRepoID"`
-	Duration    string   `json:"duration"`
+	Status      string            `json:"status"`
+	Errors      []string          `json:"errors"`
+	LogFile     string            `json:"logFile"`
+	Description string            `json:"description"`
+	Command     string            `json:"command"`
+	HostOs      string            `json:"hostOs"`
+	Tags        map[string]string `json:"nTags"`
+	TestSetID   int               `json:"testSetID"`
+	TestRailID  string            `json:"testRepoID"`
+	Duration    string            `json:"duration"`
 }
 
 type result struct {
@@ -274,7 +274,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
-func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags []string) {
+func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags map[string]string) {
 
 	d.Log.Info("--------Test Start------")
 	d.Log.Infof("#Test: %s ", testName)
@@ -313,7 +313,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags
 
 		testCase.TestSetID = d.TestSetID
 
-		testCase.TestRepoID = testRepoID
+		testCase.TestRailID = testRailID
 		if tags != nil {
 			testCase.Tags = tags
 		}

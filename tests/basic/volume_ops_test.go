@@ -30,7 +30,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35271
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeUpdate", "Validate Volume update", nil)
+		StartTorpedoTest("VolumeUpdate", "Validate Volume update", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -181,7 +181,7 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58504
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeIOThrottle", "Validate volume IO throttle", nil)
+		StartTorpedoTest("VolumeIOThrottle", "Validate volume IO throttle", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	stepLog := "has to schedule IOPs and limit them to a max bandwidth"
@@ -261,7 +261,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58838
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeUpdateForAttachedNode", "Validate volume update for the attached node", nil)
+		StartTorpedoTest("VolumeUpdateForAttachedNode", "Validate volume update for the attached node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

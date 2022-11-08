@@ -27,7 +27,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58847
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("ClusterScaleUpDown", "Validate storage nodes scale down and scale up", nil)
+		StartTorpedoTest("ClusterScaleUpDown", "Validate storage nodes scale down and scale up", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -114,7 +114,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58848
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("ASGKillRandomNodes", "Validate PX and Apps when ASG enabled nodes are deleted", nil)
+		StartTorpedoTest("ASGKillRandomNodes", "Validate PX and Apps when ASG enabled nodes are deleted", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

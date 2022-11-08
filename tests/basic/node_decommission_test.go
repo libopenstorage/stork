@@ -15,7 +15,7 @@ import (
 var _ = Describe("{DecommissionNode}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DecommissionNode", "Validate node decommission", nil)
+		StartTorpedoTest("DecommissionNode", "Validate node decommission", nil, 0)
 	})
 	var contexts []*scheduler.Context
 

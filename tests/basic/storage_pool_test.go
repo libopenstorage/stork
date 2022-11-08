@@ -20,7 +20,7 @@ const retryTimeout = time.Minute
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion expansion using resize-disk option", nil)
+		StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion expansion using resize-disk option", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
@@ -107,7 +107,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 
 var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion expansion using add-disk option", nil)
+		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion expansion using add-disk option", nil, 0)
 	})
 	var contexts []*scheduler.Context
 
@@ -194,7 +194,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 var _ = Describe("{PoolResizeDiskReboot}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolResizeDiskReboot", "Initiate pool expansion using resize-disk and reboot node", nil)
+		StartTorpedoTest("PoolResizeDiskReboot", "Initiate pool expansion using resize-disk and reboot node", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
@@ -290,7 +290,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 var _ = Describe("{PoolAddDiskReboot}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolAddDiskReboot", "Initiate pool expansion using add-disk and reboot node", nil)
+		StartTorpedoTest("PoolAddDiskReboot", "Initiate pool expansion using add-disk and reboot node", nil, 0)
 	})
 	var contexts []*scheduler.Context
 

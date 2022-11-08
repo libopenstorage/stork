@@ -55,7 +55,7 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
-		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil)
+		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil, 0)
 	})
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
@@ -83,7 +83,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 	providers := getProviders()
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil)
+		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
 		for i := 0; i < len(app_list); i++ {
 			if Contains(post_rule_app, app_list[i]) {

@@ -16,7 +16,7 @@ var _ = Describe("{CrashOneNode}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35255
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("CrashOneNode", "Validate Crash one node", nil)
+		StartTorpedoTest("CrashOneNode", "Validate Crash one node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 

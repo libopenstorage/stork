@@ -21,7 +21,7 @@ var _ = Describe("{SetupTeardown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("SetupTeardown", "Validate setup tear down", nil)
+		StartTorpedoTest("SetupTeardown", "Validate setup tear down", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -54,7 +54,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverDown", "Validate volume driver down", nil)
+		StartTorpedoTest("VolumeDriverDown", "Validate volume driver down", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -123,7 +123,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35260
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverDownAttachedNode", "Validate Volume drive down on an volume attached node", nil)
+		StartTorpedoTest("VolumeDriverDownAttachedNode", "Validate Volume drive down on an volume attached node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -195,7 +195,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverCrash", "Validate PX after volume driver crash", nil)
+		StartTorpedoTest("VolumeDriverCrash", "Validate PX after volume driver crash", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -243,7 +243,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35262
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverAppDown", "Validate volume driver down and app deletion", nil)
+		StartTorpedoTest("VolumeDriverAppDown", "Validate volume driver down and app deletion", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -315,7 +315,7 @@ var _ = Describe("{AppTasksDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("AppTasksDown", "Validate app after tasks are deleted", nil)
+		StartTorpedoTest("AppTasksDown", "Validate app after tasks are deleted", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -405,7 +405,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("AppScaleUpAndDown", "Validate Apps sclae up and scale down", nil)
+		StartTorpedoTest("AppScaleUpAndDown", "Validate Apps sclae up and scale down", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -491,7 +491,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54373
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("CordonDeployDestroy", "Validate Cordon node and destroy app", nil)
+		StartTorpedoTest("CordonDeployDestroy", "Validate Cordon node and destroy app", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
@@ -562,7 +562,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 
 var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("CordonStorageNodesDeployDestroy", "Validate Cordon storage node , deploy and destroy app", nil)
+		StartTorpedoTest("CordonStorageNodesDeployDestroy", "Validate Cordon storage node , deploy and destroy app", nil, 0)
 
 	})
 	var contexts []*scheduler.Context
@@ -648,7 +648,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	)
 
 	BeforeEach(func() {
-		StartTorpedoTest("SecretsVaultFunctional", "Validate Secrets Vault", nil)
+		StartTorpedoTest("SecretsVaultFunctional", "Validate Secrets Vault", nil, 0)
 		isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 		if !isOpBased {
 			k8sApps := apps.Instance()
