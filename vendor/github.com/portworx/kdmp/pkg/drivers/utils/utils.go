@@ -679,6 +679,8 @@ func CreateNfsPv(pvName string,
 			},
 		},
 		Spec: corev1.PersistentVolumeSpec{
+			// Setting it to empty stringm so that default storage class will not selected.
+			StorageClassName: "",
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				"ReadWriteMany",
 			},
@@ -714,6 +716,7 @@ func CreateNfsPv(pvName string,
 // CreateNfsPvc - Create a persistent volume claim for NFS specific jobs
 func CreateNfsPvc(pvcName string, pvName string, namespace string) error {
 	fn := "CreateNfsPvc"
+	empttyStorageClass := ""
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
@@ -723,6 +726,8 @@ func CreateNfsPvc(pvcName string, pvName string, namespace string) error {
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
+			// Setting it to empty stringm so that default storage class will not selected.
+			StorageClassName: &empttyStorageClass,
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
