@@ -230,6 +230,8 @@ message StorageResource {
   bool metadata = 13;
   // True if dedicated as cache
   bool cache = 14;
+  // True if the resource is used as thin pool metadata disk
+  bool pool_metadata_dev = 15;
 }
 
 // StoragePool groups different storage devices based on their CosType
@@ -254,6 +256,13 @@ message StoragePool {
   StoragePoolOperation last_operation = 11;
 }
 
+// SchedulerTopology defines the topology information of the storage node
+// in scheduler context
+message SchedulerTopology {
+    // Key-value pairs defining the topology of the node
+    map<string, string> labels = 1;
+}
+
 // StoragePoolOperation defines an operation being performed on a storage pool
 message StoragePoolOperation {
   // Type is the type of the operation
@@ -266,6 +275,11 @@ message StoragePoolOperation {
   SdkStoragePool.OperationStatus status = 4;
 }
 
+// TopologyRequirement defines the topology requirement for a volume
+message TopologyRequirement {
+    // Key-value pairs defining the required topology for a volume
+    map<string, string> labels = 1;
+}
 
 // VolumeLocator is a structure that is attached to a volume
 // and is used to carry opaque metadata.
@@ -330,13 +344,13 @@ message Xattr {
 enum ExportProtocol  {
   // Invalid uninitialized value
   INVALID = 0;
-  // PXD the volume is exported over Portworx block interace.
+  // PXD the volume is exported over Portworx block interface.
   PXD = 1;
   // ISCSI the volume is exported over ISCSI.
   ISCSI = 2;
   // NFS the volume is exported over NFS.
   NFS = 3;
-  // Custom the volume is exported over custom interace.
+  // Custom the volume is exported over custom interface.
   CUSTOM = 4;
 }
 
@@ -387,11 +401,14 @@ message PXDProxySpec {
 
 // PureBlockSpec is the spec for proxying a volume on pure_block backends
 message PureBlockSpec {
+  string serial_num = 1;
+  string full_vol_name = 2;
 }
 
 // PureFileSpec is the spec for proxying a volume on pure_file backends
 message PureFileSpec {
   string export_rules = 1;
+  string full_vol_name = 2;
 }
 
 // ProxySpec defines how this volume will reflect an external data source.
@@ -441,6 +458,8 @@ message Sharedv4ServiceSpec {
       // Applicable when running in cloud. In this mode the sharedv4 volume
       // can be accessed from outside the cluster.
       LOADBALANCER = 3;
+      // Do not use sharedv4 service feature. Use legacy sharedv4 volumes instead.
+      NONE = 4;
     }
 }
 
@@ -535,6 +554,8 @@ message FastpathConfig {
   bool dirty = 5;
   // fastpath coordinator node uuid to enhance reporting
   string coord_uuid = 6;
+  // fastpath force failover, disable auto promote to fastpath
+  bool force_failover = 7;
 }
 
 // ScanPolicy defines when a filesystem check is triggered and what action to take
@@ -671,6 +692,12 @@ message VolumeSpec {
   uint32 number_of_chunks = 46;
   // Enable readahead for the volume
   bool readahead = 47;
+  // TopologyRequirement topology requirement for this volume
+  TopologyRequirement topology_requirement = 48;
+  // winshare is true if this volume can be accessed from windows pods.
+  bool winshare = 49;
+  // Filesystem create options to be honored.
+  string fa_create_options = 50;
 }
 
 // VolumeSpecUpdate provides a method to set any of the VolumeSpec of an existing volume
@@ -742,6 +769,8 @@ message VolumeSpecUpdate {
   oneof io_throttle_opt { IoThrottle io_throttle = 40;}
   // Enable readahead for the volume
   oneof readahead_opt { bool readahead  = 41; }
+  // winshare is true if this volume can be accessed from windows pods.
+  oneof winshare_opt { bool winshare = 42; }
 }
 
 // VolumeSpecPolicy provides a method to set volume storage policy
@@ -833,6 +862,8 @@ message VolumeSpecPolicy {
   oneof io_throttle_opt { IoThrottle io_throttle = 66;}
   // Enable readahead for the volume
   oneof readahead_opt { bool readahead  = 67; }
+  // winshare is true if this volume can be accessed from windows.
+  oneof winshare_opt { bool winshare = 68; }
 }
 
 // ReplicaSet set of machine IDs (nodes) to which part of this volume is erasure
@@ -1015,7 +1046,7 @@ message Stats {
 
 // Provides details on exclusive and shared storage used by
 // snapshot/volume specifically for copy-on-write(COW) snapshots. Deletion
-// of snapshots and overwirte of volume will affect the exclusive storage
+// of snapshots and overwrite of volume will affect the exclusive storage
 // used by the other dependent snaps and parent volume.
 message CapacityUsageInfo {
   // Storage consumed exclusively by this single snapshot. Deletion of this
@@ -1103,11 +1134,11 @@ message Alert {
   int64 alert_type = 3;
   // Message describing the Alert
   string message = 4;
-  //Timestamp when Alert occured
+  //Timestamp when Alert occurred
   google.protobuf.Timestamp timestamp = 5;
-  // ResourceId where Alert occured
+  // ResourceId where Alert occurred
   string resource_id = 6;
-  // Resource where Alert occured
+  // Resource where Alert occurred
   ResourceType resource = 7;
   // Cleared Flag
   bool cleared = 8;
@@ -1123,9 +1154,9 @@ message Alert {
 
 // SdkAlertsTimeSpan to store time window information.
 message SdkAlertsTimeSpan {
-    //Start timestamp when Alert occured
+    //Start timestamp when Alert occurred
     google.protobuf.Timestamp start_time = 1;
-    //End timestamp when Alert occured
+    //End timestamp when Alert occurred
     google.protobuf.Timestamp end_time = 2;
 }
 
@@ -1233,7 +1264,7 @@ service OpenStorageAlerts {
     //
     // #### Input
     // SdkAlertsEnumerateRequest takes a list of such queries and the returned
-    // output is a collective ouput from each of these queries. In that sense,
+    // output is a collective output from each of these queries. In that sense,
     // the filtering of these queries has a behavior of OR operation.
     // Each query also has a list of optional options. These options allow
     // narrowing down the scope of alerts search. These options have a
@@ -1516,7 +1547,7 @@ message StorageNode {
     SECURED = 2;
     // Node is secured, but in the process of removing security. This state allows
     // other unsecured nodes to join the cluster since the cluster is in the process
-    // of removing secuirty authenticaiton and authorization.
+    // of removing security authentication and authorization.
     SECURED_ALLOW_SECURITY_REMOVAL = 3;
   }
 
@@ -1553,6 +1584,8 @@ message StorageNode {
   HardwareType HWType = 18;
   // Determine if the node is secured
   SecurityStatus security_status = 19;
+  // Topology information of the node in scheduler context
+  SchedulerTopology scheduler_topology = 20;
 }
 
 // StorageCluster represents the state and information about the cluster
@@ -2091,6 +2124,137 @@ service OpenStorageNode {
     }
 }
 
+// BucketService to manage the bucket driver
+service OpenStorageBucket {
+  rpc Create(BucketCreateRequest)
+    returns (BucketCreateResponse) {
+      option(google.api.http) = {
+        post: "/v1/bucket"
+        body: "*"
+      };
+    }
+
+  rpc Delete(BucketDeleteRequest)
+  returns (BucketDeleteResponse) {
+    option(google.api.http) = {
+      delete: "/v1/bucket/{bucket_id}"
+    };
+  }
+
+  rpc GrantAccess(BucketGrantAccessRequest)
+  returns (BucketGrantAccessResponse) {
+    option(google.api.http) = {
+      post: "/v1/bucket/access/{bucket_id}"
+      body: "*"
+    };
+  }
+
+  rpc RevokeAccess(BucketRevokeAccessRequest)
+  returns (BucketRevokeAccessResponse) {
+    option(google.api.http) = {
+      post: "/v1/bucket/revoke/{bucket_id}"
+      body: "*"
+    };
+  }
+}
+
+// Defines a request to create a bucket.
+message BucketCreateRequest {
+  // Unique name of the bucket. This will be used for idempotency.
+  string name = 1;
+
+  // Region in which bucket will be created.
+  string region = 2;
+
+  // Endpoint to use when creating the bucket
+  string endpoint = 3;
+
+  //Anonymous access policy for the bucket.
+  AnonymousBucketAccessMode anonymousBucketAccessMode  = 4;
+}
+
+// Defines a response to the creation of a bucket
+message BucketCreateResponse {
+  // Id of new bucket
+  string bucket_id = 1;
+}
+
+// Defines the request to delete a bucket
+message BucketDeleteRequest {
+  // Id of bucket to delete
+  string bucket_id = 1;
+
+  // Region in which bucket will be created.
+  string region = 2;
+
+  // Endpoint to use when deleting the bucket
+  string endpoint = 3;
+
+  // Flag to allow non empty bucket deletion.
+  bool clear_bucket = 4;
+}
+
+// Empty response
+message BucketDeleteResponse {
+}
+
+// Defines a request to grant access to the bucket
+message BucketGrantAccessRequest {
+  // Id of the bucket
+  string bucket_id = 1;
+
+  // Name of the account to which access to be provided
+  string account_name = 2;
+
+  // Access policy to be applied for the account
+  string access_policy = 3;
+}
+
+
+// Defines a response to the creation of a bucket
+message BucketGrantAccessResponse {
+  // This is the account_id that is being provided access. This will
+  // This will be required later to revoke access.
+  string account_id = 1;
+
+  // Credentials supplied for accessing the bucket ex: aws access key id and secret, etc.
+  BucketAccessCredentials credentials = 2;
+}
+
+// Defines the request to revoke access to the bucket
+message BucketRevokeAccessRequest {
+  // Id of bucket to delete
+  string bucket_id = 1;
+
+  // AccountId that is having its access revoked.
+  string account_id = 2;
+}
+
+// Empty response
+message BucketRevokeAccessResponse {
+}
+
+// Defines the bucket access credential object
+message BucketAccessCredentials {
+  // Access key id
+  string access_key_id = 1;
+
+  // Secret access key
+  string secret_access_key = 2;
+}
+
+enum AnonymousBucketAccessMode {
+    UnknownBucketAccessMode = 0;
+    // Default, disallow uncredentialed access to the backend storage.
+    Private = 1;
+    // Read only, uncredentialed users can call ListBucket and GetObject.
+    ReadOnly = 2;
+    // Write only, uncredentialed users can only call PutObject.
+    WriteOnly = 3;
+    // Read/Write, uncredentialed users can read objects as well as PutObject.
+    ReadWrite = 4;
+}
+
 // OpenStorageVolume is a service used to manage the volumes of a storage system
 service OpenStorageVolume {
 
@@ -2255,7 +2419,7 @@ service OpenStorageVolume {
 
   // SnapshotEnumerate returns a list of snapshots.
   // To filter all the snapshots for a specific volume which may no longer exist,
-  // specifiy a volume id.
+  // specify a volume id.
   // Labels can also be used to filter the snapshot list.
   // If neither are provided all snapshots will be returned.
   rpc SnapshotEnumerateWithFilters(SdkVolumeSnapshotEnumerateWithFiltersRequest)
@@ -3021,6 +3185,8 @@ message SdkCredentialCreateRequest {
     SdkAzureCredentialRequest azure_credential = 201;
     // Credentials for Google
     SdkGoogleCredentialRequest google_credential = 202;
+    // Credentials for NFS
+    SdkNfsCredentialRequest nfs_credential = 203;
   }
 }
 
@@ -3072,6 +3238,18 @@ message SdkGoogleCredentialRequest {
   string json_key = 2;
 }
 
+// Defines credentials for NFS
+message SdkNfsCredentialRequest {
+  // NFS Server address
+  string server = 1;
+  // NFS export path
+  string sub_path = 2;
+  // mount options for nfs mount
+  string mount_opts = 3;
+  // timeout for nfs IO in seconds
+  uint32 timeout_seconds = 4;
+}
+
 // Defines the response for AWS/S3 credentials
 message SdkAwsCredentialResponse {
   // Access key
@@ -3098,6 +3276,18 @@ message SdkAzureCredentialResponse {
 message SdkGoogleCredentialResponse {
   // Project ID
   string project_id = 2;
+}
+
+// Defines the response for NFS credential
+message SdkNfsCredentialResponse {
+  // NFS Server Address
+  string server = 1;
+  // NFS export path
+  string sub_path = 2;
+  // mount options ( "," separated)
+  string mount_opts = 3;
+  // timeout in seconds
+  uint32 timeout_seconds = 4;
 }
 
 // Empty request
@@ -3141,6 +3331,8 @@ message SdkCredentialInspectResponse {
     SdkAzureCredentialResponse azure_credential = 201;
     // Google credentials
     SdkGoogleCredentialResponse google_credential = 202;
+    // NFS credentials
+    SdkNfsCredentialResponse nfs_credential = 203;
   }
 }
 
@@ -3386,7 +3578,7 @@ message SdkVolumeUpdateRequest {
 message SdkVolumeUpdateResponse {
 }
 
-// Defines a request to retreive volume statistics
+// Defines a request to retrieve volume statistics
 message SdkVolumeStatsRequest {
   // Id of the volume to get statistics
   string volume_id = 1;
@@ -3937,7 +4129,7 @@ message StorageRebalanceTriggerThreshold {
     // AbsolutePercent indicates absolute percent comparison.
     // Example, 75 % used of capacity, or 50 % provisioned of capacity.
     ABSOLUTE_PERCENT = 0;
-    // DeltaMeanPercent indicates mean percent comparision threshold.
+    // DeltaMeanPercent indicates mean percent comparison threshold.
     // Example, 10 % more than mean for cluster.
     DELTA_MEAN_PERCENT = 1;
   }
@@ -4239,7 +4431,7 @@ message SdkCloudBackupCreateRequest {
   // Labels are list of key value pairs to tag the cloud backup. These labels
   // are stored in the metadata associated with the backup.
   map<string, string> labels = 5;
-  // FullBackupFrequency indicates number of incremental backup after whcih
+  // FullBackupFrequency indicates number of incremental backup after which
   // a fullbackup must be created. This is to override the default value for
   // manual/user triggerred backups and not applicable for scheduled backups
   // Value of 0 retains the default behavior.
@@ -4325,6 +4517,8 @@ message SdkCloudBackupDeleteRequest {
   // needed if the backup is an incremental backup and subsequent backups
   // depend on this backup specified by `backup_id`.
   bool force = 3;
+  // Bucket name to which cloud backup belongs to
+  string bucket = 4;
 }
 
 // Empty response
@@ -4435,7 +4629,7 @@ enum SdkCloudBackupOpType {
 
 // CloudBackup status types
 enum SdkCloudBackupStatusType {
-  // Unkonwn
+  // Unknown
   SdkCloudBackupStatusTypeUnknown = 0;
   // Not started
   SdkCloudBackupStatusTypeNotStarted = 1;
@@ -4489,7 +4683,7 @@ message SdkCloudBackupStatus {
   string group_id = 13;
 }
 
-// Defines a request to retreive the status of a backup or restore for a
+// Defines a request to retrieve the status of a backup or restore for a
 // specified volume
 message SdkCloudBackupStatusRequest {
   // (optional) VolumeId is a value which is used to get information on the
@@ -4536,7 +4730,7 @@ message SdkCloudBackupHistoryItem {
   SdkCloudBackupStatusType status = 3;
 }
 
-// Defines a request to retreive the history of the backups for
+// Defines a request to retrieve the history of the backups for
 // a specific volume to a cloud provider
 message SdkCloudBackupHistoryRequest {
   // This optional value defines which history of backups is being
@@ -4952,9 +5146,9 @@ message SdkFilesystemCheckStopResponse{
 message SdkIdentityCapabilitiesRequest {
 }
 
-// Defines a response containing the capabilites of the cluster
+// Defines a response containing the capabilities of the cluster
 message SdkIdentityCapabilitiesResponse {
-  // Provides all the capabilites supported by the cluster
+  // Provides all the capabilities supported by the cluster
   repeated SdkServiceCapability capabilities = 1;
 }
 
@@ -5034,7 +5228,7 @@ message SdkVersion {
     // SDK version major value of this specification
     Major = 0;
     // SDK version minor value of this specification
-    Minor = 133;
+    Minor = 152;
     // SDK version patch value of this specification
     Patch = 0;
   }
@@ -5372,7 +5566,7 @@ message SdkClusterPairInspectRequest{
     string id = 1;
 }
 
-// Reponse to get a cluster pair
+// Response to get a cluster pair
 message ClusterPairGetResponse {
     // Info about the cluster pair
     ClusterPairInfo pair_info = 1;

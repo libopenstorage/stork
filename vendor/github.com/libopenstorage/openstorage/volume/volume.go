@@ -28,8 +28,11 @@ var (
 	ErrAttachedHostSpecNotFound = errors.New("Spec of the attached host is not found")
 	// ErrVolAttached returned when volume is in attached state
 	ErrVolAttached = errors.New("Volume is attached")
-	// ErrVolAttachedOnRemoteNode returned when volume is in attached on different node
-	ErrVolAttachedOnRemoteNode = errors.New("Volume is attached on another node")
+        // ErrVolAttachedOnRemoteNode returned when volume is attached on different node
+        ErrVolAttachedOnRemoteNode = errors.New("Volume is attached on another node")
+        // ErrNonSharedVolAttachedOnRemoteNode returned when a non-shared volume is attached on different node
+        ErrNonSharedVolAttachedOnRemoteNode = errors.New("Non-shared volume is already attached on another node." +
+                " Non-shared volumes can only be attached on one node at a time.")
 	// ErrVolAttachedScale returned when volume is attached and can be scaled
 	ErrVolAttachedScale = errors.New("Volume is attached on another node." +
 		" Increase scale factor to create more instances")
@@ -179,7 +182,7 @@ type CloudBackupDriver interface {
 	CloudBackupCatalog(input *api.CloudBackupCatalogRequest) (*api.CloudBackupCatalogResponse, error)
 	// CloudBackupHistory displays past backup/restore operations on a volume
 	CloudBackupHistory(input *api.CloudBackupHistoryRequest) (*api.CloudBackupHistoryResponse, error)
-	// CloudBackupStateChange allows a current backup state transisions(pause/resume/stop)
+	// CloudBackupStateChange allows a current backup state transitions(pause/resume/stop)
 	CloudBackupStateChange(input *api.CloudBackupStateChangeRequest) error
 	// CloudBackupSchedCreate creates a schedule to backup volume to cloud
 	CloudBackupSchedCreate(input *api.CloudBackupSchedCreateRequest) (*api.CloudBackupSchedCreateResponse, error)
@@ -260,10 +263,10 @@ type ProtoDriver interface {
 	Version() (*api.StorageVersion, error)
 	// Create a new Vol for the specific volume spec.
 	// It returns a system generated VolumeID that uniquely identifies the volume
-	Create(locator *api.VolumeLocator, Source *api.Source, spec *api.VolumeSpec) (string, error)
+	Create(ctx context.Context, locator *api.VolumeLocator, Source *api.Source, spec *api.VolumeSpec) (string, error)
 	// Delete volume.
 	// Errors ErrEnoEnt, ErrVolHasSnaps may be returned.
-	Delete(volumeID string) error
+	Delete(ctx context.Context, volumeID string) error
 	// Mount volume at specified path
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
 	Mount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error

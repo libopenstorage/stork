@@ -11,7 +11,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
-	github.com/fatih/color v1.9.0
+	github.com/fatih/color v1.13.0
 	github.com/frankban/quicktest v1.14.2 // indirect
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gofrs/flock v0.8.1
@@ -37,7 +37,7 @@ require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.7.2-0.20220317124727-77977386932a
 	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.22.2
@@ -68,7 +68,7 @@ replace (
 	// PX dependencies
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220204053814-097a5af93b1e
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20221031201916-ff678099081a
 	//github.com/libopenstorage/operator => github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 
 	// Stork dependencies
