@@ -8,6 +8,7 @@ parameters:
   priority_io: "high"
   sharedv4: "true"
   io_profile: "cms"
+  sharedv4_svc_type: ""
 allowVolumeExpansion: true
 ---
 apiVersion: storage.k8s.io/v1

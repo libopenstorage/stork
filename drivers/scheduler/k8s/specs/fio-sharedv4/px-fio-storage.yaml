@@ -9,6 +9,7 @@ parameters:
   io_profile: "db_remote"
   repl: "3"
   sharedv4: "true"
+  sharedv4_svc_type: ""
 allowVolumeExpansion: true
 ---
 kind: PersistentVolumeClaim

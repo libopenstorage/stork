@@ -9,7 +9,6 @@ parameters:
   aggregation_level: "2"
   io_profile: "db"
   sharedv4: "true"
-  sharedv4_svc_type: "ClusterIP"
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim
