@@ -293,6 +293,9 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			return false, c.updateStatus(dataExport, data)
 		}
 
+		if backupLocation.Location.Type != storkapi.BackupLocationNFS {
+			backupLocation.Location.NfsConfig = &storkapi.NfsConfig{}
+		}
 		// start data transfer
 		id, err := startTransferJob(
 			driver,
