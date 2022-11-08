@@ -168,6 +168,12 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			monthly_policy_status := Backupschedulepolicy("monthly", uuid.New(), orgID, monthly_schedule_policy_info)
 			dash.VerifyFatal(monthly_policy_status, nil, "Creating monthly schedule policy")
 		})
+		Step("Register cluster for backup", func() {
+			CloudCredUID = uuid.New()
+			CreateCloudCredential("azure", "azureaccount", CloudCredUID, orgID)
+			CreateSourceAndDestClusters(orgID, "azureaccount", CloudCredUID)
+			CreateSourceAndDestClusters(orgID, "", "")
+		})
 	})
 	JustAfterEach(func() {
 		policy_list := []string{"interval", "daily", "weekly", "monthly"}
@@ -1854,8 +1860,8 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 		kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
-		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider), cloudCred,
-			kubeconfigPath, orgID)
+		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
+			kubeconfigPath, orgID, "", "")
 	})
 }
 
