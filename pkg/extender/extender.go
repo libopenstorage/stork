@@ -12,6 +12,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/monitor"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/prometheus/client_golang/prometheus"
@@ -171,6 +172,13 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
+
+	// Filter px-csi-ext on nodes where PX is online
+	if strings.HasPrefix(pod.Name, monitor.CSIPodNamePrefix) {
+		e.processCSIExtPodFilterRequest(encoder, args, pod)
+		return
+	}
+
 	for _, vol := range pod.Spec.Volumes {
 		// if any of pvc has restore annotation skip scheduling pod
 		if vol.PersistentVolumeClaim == nil {
@@ -481,7 +489,6 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)
 	}
-	respList := schedulerapi.HostPriorityList{}
 
 	// Intialize scores to 0
 	priorityMap := make(map[string]int)
@@ -493,9 +500,18 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		}
 	}
 
+	respList := schedulerapi.HostPriorityList{}
+
 	// Score all nodes the same if hyperconvergence is disabled
 	disableHyperconvergence := false
 	var err error
+
+	// Prioritize px-csi-ext on nodes where PX is online
+	if strings.HasPrefix(pod.Name, monitor.CSIPodNamePrefix) {
+		e.processCSIExtPodPrioritizeRequest(encoder, args, pod, respList)
+		return
+	}
+
 	if pod.Annotations != nil {
 		if value, ok := pod.Annotations[disableHyperconvergenceAnnotation]; ok {
 			if disableHyperconvergence, err = strconv.ParseBool(value); err != nil {
@@ -624,6 +640,89 @@ sendResponse:
 	}
 
 	storklog.PodLog(pod).Debugf("Nodes in response:")
+	for _, node := range respList {
+		storklog.PodLog(pod).Debugf("%+v", node)
+	}
+
+	if err := encoder.Encode(respList); err != nil {
+		storklog.PodLog(pod).Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (e *Extender) processCSIExtPodFilterRequest(
+	encoder *json.Encoder,
+	args schedulerapi.ExtenderArgs,
+	pod *v1.Pod) {
+	filteredNodes := []v1.Node{}
+	driverNodes, err := e.Driver.GetNodes()
+	if err != nil {
+		storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
+	} else {
+		for _, knode := range args.Nodes.Items {
+			for _, dnode := range driverNodes {
+				storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
+				if (dnode.Status == volume.NodeOnline || dnode.Status == volume.NodeDegraded) &&
+					volume.IsNodeMatch(&knode, dnode) {
+					filteredNodes = append(filteredNodes, knode)
+					break
+				}
+			}
+		}
+	}
+
+	if len(filteredNodes) == 0 {
+		filteredNodes = args.Nodes.Items
+	}
+
+	storklog.PodLog(pod).Debugf("Nodes in filter response:")
+	for _, node := range filteredNodes {
+		log.Debugf("%v %+v", node.Name, node.Status.Addresses)
+	}
+	response := &schedulerapi.ExtenderFilterResult{
+		Nodes: &v1.NodeList{
+			Items: filteredNodes,
+		},
+	}
+	if err := encoder.Encode(response); err != nil {
+		storklog.PodLog(pod).Errorf("Error encoding filter response: %+v : %v", response, err)
+	}
+}
+
+func (e *Extender) processCSIExtPodPrioritizeRequest(
+	encoder *json.Encoder,
+	args schedulerapi.ExtenderArgs,
+	pod *v1.Pod,
+	respList schedulerapi.HostPriorityList) {
+	driverNodes, err := e.Driver.GetNodes()
+	if err != nil || len(driverNodes) == 0 {
+		storklog.PodLog(pod).Errorf("Error getting nodes for driver: %v", err)
+		for _, knode := range args.Nodes.Items {
+			hostPriority := schedulerapi.HostPriority{Host: knode.Name, Score: int64(defaultScore)}
+			respList = append(respList, hostPriority)
+		}
+	} else {
+		driverNodes = volume.RemoveDuplicateOfflineNodes(driverNodes)
+
+		for _, dnode := range driverNodes {
+			var score int64
+			for _, knode := range args.Nodes.Items {
+				if volume.IsNodeMatch(&knode, dnode) {
+					if dnode.Status == volume.NodeOnline {
+						score = int64(nodePriorityScore)
+					} else if dnode.Status == volume.NodeOffline {
+						score = 0
+					} else {
+						score = int64(nodePriorityScore * (degradedNodeScorePenaltyPercentage / 100))
+					}
+					hostPriority := schedulerapi.HostPriority{Host: knode.Name, Score: int64(score)}
+					respList = append(respList, hostPriority)
+					break
+				}
+			}
+		}
+	}
+
+	storklog.PodLog(pod).Debugf("Nodes in prioritize response:")
 	for _, node := range respList {
 		storklog.PodLog(pod).Debugf("%+v", node)
 	}
