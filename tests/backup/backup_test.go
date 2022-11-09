@@ -1860,8 +1860,7 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 	Step(fmt.Sprintf("Create cluster [%s-%s] in org [%s]",
 		clusterName, provider, orgID), func() {
 		kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+		dash.VerifyFatal(err, nil, "Fetching kubeconfig path for source cluster")
 		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
 			kubeconfigPath, orgID, "", "")
 	})
