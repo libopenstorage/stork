@@ -2,6 +2,7 @@ package gce
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/parser"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
+	google "golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
 	container "google.golang.org/api/container/v1"
 	"google.golang.org/api/googleapi"
@@ -63,6 +65,7 @@ type instance struct {
 	clusterName     string
 	clusterLocation string
 	nodePoolID      string
+	serviceAccount  string
 }
 
 // IsDevMode checks if the pkg is invoked in developer mode where GCE credentials
@@ -77,9 +80,10 @@ func IsDevMode() bool {
 func NewClient() (cloudops.Ops, error) {
 
 	var i = new(instance)
+	ctx := context.Background()
 	var err error
 	if metadata.OnGCE() {
-		err = gceInfo(i)
+		err = gceInfo(ctx, i)
 	} else if ok := IsDevMode(); ok {
 		err = gceInfoFromEnv(i)
 	} else {
@@ -90,7 +94,6 @@ func NewClient() (cloudops.Ops, error) {
 		return nil, fmt.Errorf("error fetching instance info. Err: %v", err)
 	}
 
-	ctx := context.Background()
 	computeService, err := compute.NewService(ctx, option.WithScopes(compute.ComputeScope))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Compute service: %v", err)
@@ -378,15 +381,21 @@ func (s *gceOps) Create(
 			"Invalid volume template given", "")
 	}
 
+	if isDiskEncryptedWithDefaultAccount(v) {
+		logrus.Infof("Default service account to be used as disk encryption kms service account")
+		v.DiskEncryptionKey.KmsKeyServiceAccount = s.inst.serviceAccount
+	}
+
 	newDisk := &compute.Disk{
-		Description:    "Disk created by openstorage",
-		Labels:         formatLabels(labels),
-		Name:           v.Name,
-		SizeGb:         v.SizeGb,
-		SourceImage:    v.SourceImage,
-		SourceSnapshot: v.SourceSnapshot,
-		Type:           v.Type,
-		Zone:           path.Base(v.Zone),
+		Description:       "Disk created by openstorage",
+		Labels:            formatLabels(labels),
+		Name:              v.Name,
+		SizeGb:            v.SizeGb,
+		SourceImage:       v.SourceImage,
+		SourceSnapshot:    v.SourceSnapshot,
+		Type:              v.Type,
+		DiskEncryptionKey: v.DiskEncryptionKey,
+		Zone:              path.Base(v.Zone),
 	}
 
 	operation, err := s.computeService.Disks.Insert(s.inst.project, newDisk.Zone, newDisk).Do()
@@ -1172,7 +1181,7 @@ func (s *gceOps) describeinstance() (*compute.Instance, error) {
 }
 
 // gceInfo fetches the GCE instance metadata from the metadata server
-func gceInfo(inst *instance) error {
+func gceInfo(ctx context.Context, inst *instance) error {
 	var err error
 	inst.zone, err = metadata.Zone()
 	if err != nil {
@@ -1224,6 +1233,19 @@ func gceInfo(inst *instance) error {
 			}
 		}
 	}
+
+	credential, err := google.FindDefaultCredentials(ctx)
+	content := map[string]interface{}{}
+	json.Unmarshal(credential.JSON, &content)
+	if content["client_email"] != nil {
+		inst.serviceAccount = fmt.Sprintf("%s", content["client_email"])
+	} else {
+		inst.serviceAccount, err = metadata.Email("")
+		if err != nil {
+			// No need to error out for non-GKE compute instances
+			logrus.Warnf("unable to get gce instance service account")
+		}
+	}
 	return nil
 }
 
@@ -1249,6 +1271,7 @@ func gceInfoFromEnv(inst *instance) error {
 	inst.clusterName, _ = cloudops.GetEnvValueStrict("GKE_CLUSTER_NAME")
 	inst.clusterLocation, _ = cloudops.GetEnvValueStrict("GKE_CLUSTER_LOCATION")
 	inst.nodePoolID, _ = cloudops.GetEnvValueStrict("GKE_NODE_POOL")
+	inst.serviceAccount, _ = cloudops.GetEnvValueStrict("GKE_CLUSTER_SERVICE_ACCOUNT")
 
 	return nil
 }
@@ -1480,4 +1503,10 @@ func isZonalCluster(clusterLocation string) (bool, error) {
 	// Zone e.g. us-central1-a
 	zoneRegex := "[a-zA-z0-9]+-[a-zA-Z0-9]+-[a-zA-Z]"
 	return regexp.MatchString(zoneRegex, clusterLocation)
+}
+
+func isDiskEncryptedWithDefaultAccount(d *compute.Disk) bool {
+	return d.DiskEncryptionKey != nil &&
+		len(d.DiskEncryptionKey.KmsKeyName) > 0 &&
+		len(d.DiskEncryptionKey.KmsKeyServiceAccount) == 0
 }

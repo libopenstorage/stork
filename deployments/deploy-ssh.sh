@@ -241,6 +241,12 @@ if [ -n "${TORPEDO_SSH_KEY}" ]; then
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
 
+ORACLE_API_KEY_VOLUME=""
+if [ -n "${ORACLE_API_KEY}" ]; then
+    ORACLE_API_KEY_VOLUME="{ \"name\": \"oracle-api-key-volume\", \"secret\": { \"secretName\": \"key4oracle\", \"defaultMode\": 256 }}"
+    ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
+fi
+
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
@@ -272,6 +278,14 @@ VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
 
 if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
+fi
+
+if [ -n "${ORACLE_API_KEY_MOUNT}" ]; then
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${ORACLE_API_KEY_MOUNT}"
+fi
+
+if [ -n "${ORACLE_API_KEY_VOLUME}" ]; then
+    VOLUMES="${VOLUMES},${ORACLE_API_KEY_VOLUME}"
 fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_VOLUME}" ]; then
@@ -315,6 +329,9 @@ if [ -n "${K8S_VENDOR}" ]; then
             ;;
         aks)
             NODE_DRIVER="aks"
+            ;;
+        oracle)
+            NODE_DRIVER="oracle"
             ;;
     esac
 fi
@@ -572,7 +589,12 @@ spec:
       value: "${TARGET_KUBECONFIG}"
     - name: TARGET_CLUSTER_NAME
       value: "${TARGET_CLUSTER_NAME}"
-    
+    - name: PX_ORACLE_user_ocid
+      value: "${PX_ORACLE_user_ocid}"
+    - name: PX_ORACLE_fingerprint
+      value: "${PX_ORACLE_fingerprint}"
+    - name: PX_ORACLE_private_key_path
+      value: "${ORACLE_API_KEY}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

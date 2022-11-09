@@ -478,12 +478,13 @@ github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
-# github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
+# github.com/libopenstorage/cloudops v0.0.0-20221104040503-78e71ce44fb7
 github.com/libopenstorage/cloudops
 github.com/libopenstorage/cloudops/azure
 github.com/libopenstorage/cloudops/backoff
 github.com/libopenstorage/cloudops/gce
 github.com/libopenstorage/cloudops/ibm
+github.com/libopenstorage/cloudops/oracle
 github.com/libopenstorage/cloudops/unsupported
 # github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e
 github.com/libopenstorage/gossip/types
@@ -663,6 +664,11 @@ github.com/openshift/client-go/config/clientset/versioned/typed/config/v1
 github.com/openshift/client-go/security/clientset/versioned
 github.com/openshift/client-go/security/clientset/versioned/scheme
 github.com/openshift/client-go/security/clientset/versioned/typed/security/v1
+# github.com/oracle/oci-go-sdk/v65 v65.13.1
+github.com/oracle/oci-go-sdk/v65/common
+github.com/oracle/oci-go-sdk/v65/common/auth
+github.com/oracle/oci-go-sdk/v65/containerengine
+github.com/oracle/oci-go-sdk/v65/core
 # github.com/pborman/uuid v1.2.0
 github.com/pborman/uuid
 # github.com/peterbourgon/diskv v2.0.1+incompatible
@@ -746,6 +752,8 @@ github.com/shopspring/decimal
 github.com/sirupsen/logrus
 # github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 github.com/skyrings/skyring-common/tools/uuid
+# github.com/sony/gobreaker v0.5.0
+github.com/sony/gobreaker
 # github.com/spf13/cast v1.3.1
 github.com/spf13/cast
 # github.com/spf13/cobra v1.6.1
@@ -874,7 +882,7 @@ golang.org/x/net/ipv6
 golang.org/x/net/proxy
 golang.org/x/net/trace
 golang.org/x/net/websocket
-# golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
+# golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
 golang.org/x/oauth2
 golang.org/x/oauth2/authhandler
 golang.org/x/oauth2/google

@@ -35,6 +35,12 @@ func (u *unsupportedCompute) InspectInstanceGroupForInstance(instanceID string) 
 	}
 }
 
+func (u *unsupportedCompute) GetInstance(displayName string) (interface{}, error) {
+	return nil, &cloudops.ErrNotSupported{
+		Operation: "GetInstance",
+	}
+}
+
 func (u *unsupportedCompute) SetInstanceGroupSize(instanceGroupID string,
 	count int64,
 	timeout time.Duration) error {
