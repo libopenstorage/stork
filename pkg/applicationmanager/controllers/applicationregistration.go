@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +72,35 @@ func createAppReg(regCRD map[string][]stork_api.ApplicationResource) error {
 		if _, err := stork.Instance().CreateApplicationRegistration(appReg); err != nil && !errors.IsAlreadyExists(err) {
 			logrus.Errorf("unable to register app %v, err: %v", appReg, err)
 			return err
+		} else if errors.IsAlreadyExists(err) {
+			// Get the existing app reg
+			existingAppReg, err := stork.Instance().GetApplicationRegistration(appReg.Name)
+			if err != nil {
+				logrus.Errorf("unable to get an existing application registration")
+			} else {
+				needsRegistration := false
+				for _, newResource := range appReg.Resources {
+					found := false
+					for _, existingResource := range existingAppReg.Resources {
+						if newResource.Group == existingResource.Group && newResource.Kind == existingResource.Kind {
+							found = true
+						}
+					}
+					if !found {
+						// Found a resource whose Group+Kind does not match with an existing app reg
+						// For ex. strimzi.kafka.io.Kafka vs platform.confluent.io.Kafka
+						needsRegistration = true
+					}
+				}
+				if needsRegistration {
+					appReg.Name = appReg.Name + "-" + strconv.FormatInt(time.Now().Unix(), 10)
+					if _, err := stork.Instance().CreateApplicationRegistration(appReg); err != nil && !errors.IsAlreadyExists(err) {
+						logrus.Errorf("unable to register app %v, err: %v", appReg, err)
+						return err
+					}
+				}
+
+			}
 		}
 	}
 	return nil
