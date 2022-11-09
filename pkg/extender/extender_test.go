@@ -312,6 +312,10 @@ done:
 
 func TestExtender(t *testing.T) {
 	t.Run("setup", setup)
+	t.Run("pxCSIExtPodNoDriverTest", pxCSIExtPodNoDriverTest)
+	t.Run("pxCSIExtPodDriverTest", pxCSIExtPodDriverTest)
+	t.Run("pxCSIExtPodDegradedNodesTest", pxCSIExtPodDegradedNodesTest)
+	t.Run("pxCSIExtPodOfflinePxNodesTest", pxCSIExtPodOfflinePxNodesTest)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("noDriverVolumeTest", noDriverVolumeTest)
 	t.Run("WFFCVolumeTest", WFFCVolumeTest)
@@ -336,6 +340,140 @@ func TestExtender(t *testing.T) {
 	t.Run("preferLocalNodeTest", preferLocalNodeTest)
 	t.Run("extenderMetricsTest", extenderMetricsTest)
 	t.Run("teardown", teardown)
+}
+
+// Send scheduler request for px-csi-ext pod with volume driver disabled
+// filter response should return all the input nodes
+// prioritize response should return all nodes with defaultScore
+func pxCSIExtPodNoDriverTest(t *testing.T) {
+	pod := newPod("px-csi-ext-foo", nil)
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{defaultScore, defaultScore, defaultScore},
+		prioritizeResponse)
+}
+
+// Send scheduler request for px-csi-ext pod with PX online on all nodes
+// filter response should return all the input nodes
+// prioritize response should return all nodes with nodePriorityScore
+func pxCSIExtPodDriverTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("px-csi-ext-foo", nil)
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore, nodePriorityScore, nodePriorityScore},
+		prioritizeResponse)
+}
+
+// Send scheduler request for px-csi-ext pod with a node in degraded state
+// filter response should return all the input nodes
+// prioritize response should return all nodes giving lower score to degraded node
+func pxCSIExtPodDegradedNodesTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("px-csi-ext-foo", nil)
+
+	if err := driver.UpdateNodeStatus(2, volume.NodeDegraded); err != nil {
+		t.Fatalf("Error setting node status to Degraded: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore * (degradedNodeScorePenaltyPercentage / 100), nodePriorityScore, nodePriorityScore},
+		prioritizeResponse)
+}
+
+// Send scheduler request for px-csi-ext pod with PX offline on one node
+// filter response should return all the input nodes except node with PX offline
+// prioritize response should give 0 score to offline PX node
+func pxCSIExtPodOfflinePxNodesTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("px-csi-ext-foo", nil)
+
+	if err := driver.UpdateNodeStatus(2, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Degraded: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{nodePriorityScore, nodePriorityScore, 0, nodePriorityScore, nodePriorityScore},
+		prioritizeResponse)
 }
 
 // Send requests for a pod that doesn't have any PVCs.
