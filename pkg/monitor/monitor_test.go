@@ -57,6 +57,7 @@ func TestMonitor(t *testing.T) {
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
 	t.Run("testOfflineStorageNodeDuplicateIP", testOfflineStorageNodeDuplicateIP)
 	t.Run("testVolumeAttachmentCleanup", testVolumeAttachmentCleanup)
+	t.Run("testOfflineStorageNodeForCSIExtPod", testOfflineStorageNodeForCSIExtPod)
 	t.Run("teardown", teardown)
 }
 
@@ -492,4 +493,21 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 
 	// total pods rescheduled during UT's
 	require.Equal(t, testutil.ToFloat64(HealthCounter), float64(8), "pods_reschduled_total not matched")
+}
+
+func testOfflineStorageNodeForCSIExtPod(t *testing.T) {
+	pod := newPod("px-csi-ext-foo", nil)
+	_, err := core.Instance().CreatePod(pod)
+	require.NoError(t, err, "failed to create pod")
+
+	err = driver.UpdateNodeStatus(0, volume.NodeOffline)
+	require.NoError(t, err, "Error setting node status to Offline")
+	defer func() {
+		err = driver.UpdateNodeStatus(0, volume.NodeOnline)
+		require.NoError(t, err, "Error setting node status to Online")
+	}()
+
+	time.Sleep(testNodeOfflineTimeout)
+	_, err = core.Instance().GetPodByName(pod.Name, "")
+	require.Error(t, err, "expected error from get pod as pod should be deleted")
 }
