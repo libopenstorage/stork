@@ -191,7 +191,7 @@ func jobForBackupResource(
 	nfsExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
 		jobOption.NfsImageExecutorSource,
 		jobOption.NfsImageExecutorSourceNs,
-		jobOption.JobName,
+		jobOption.RestoreExportName,
 		jobOption)
 
 	if err != nil {

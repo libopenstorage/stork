@@ -352,7 +352,13 @@ func GetExecutorImageAndSecret(executorImageType, deploymentName, deploymentNs,
 		}
 	}
 	if len(imageRegistrySecret) != 0 {
-		err = CreateImageRegistrySecret(imageRegistrySecret, jobName, jobOption.KopiaImageExecutorSourceNs, jobOption.Namespace)
+		var secretSourceNs string
+		if executorImageType == drivers.NfsExecutorImage {
+			secretSourceNs = jobOption.NfsImageExecutorSourceNs
+		} else {
+			secretSourceNs = jobOption.KopiaImageExecutorSourceNs
+		}
+		err = CreateImageRegistrySecret(imageRegistrySecret, jobName, secretSourceNs, jobOption.Namespace)
 		if err != nil {
 			return "", "", err
 		}
