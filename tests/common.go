@@ -2847,7 +2847,7 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
-		logrus.Debugf("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
+		log.Infof("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
 		CreateCluster(sourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
 	})
 
@@ -2856,7 +2856,7 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
-		logrus.Debugf("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
 		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
 	})
 }
