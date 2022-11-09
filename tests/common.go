@@ -2754,7 +2754,7 @@ func SetupBackup(testName string) {
 	CreateOrganization(OrgID)
 	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
 	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID)
-	CreateSourceAndDestClusters(CredName, OrgID)
+	CreateSourceAndDestClusters(OrgID, "", "")
 }
 
 // DeleteBackup deletes backup
@@ -2826,7 +2826,7 @@ func DeleteBackupLocation(name string, orgID string) {
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(cloudCred, orgID string) {
+func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -2847,8 +2847,8 @@ func CreateSourceAndDestClusters(cloudCred, orgID string) {
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
-		logrus.Debugf("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
-		CreateCluster(sourceClusterName, cloudCred, srcClusterConfigPath, orgID)
+		log.Infof("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
+		CreateCluster(sourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
 	})
 
 	// Register destination cluster with backup driver
@@ -2856,8 +2856,8 @@ func CreateSourceAndDestClusters(cloudCred, orgID string) {
 		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
-		logrus.Debugf("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-		CreateCluster(destinationClusterName, cloudCred, dstClusterConfigPath, orgID)
+		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
 	})
 }
 
@@ -2872,7 +2872,8 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 }
 
 // CreateCluster creates/registers cluster with px-backup
-func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID string) {
+func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string) {
+	var clusterCreateReq *api.ClusterCreateRequest
 
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
@@ -2880,14 +2881,26 @@ func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID s
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to read kubeconfig file from location [%s]. Error:[%v]",
 				kubeconfigPath, err))
-
-		clusterCreateReq := &api.ClusterCreateRequest{
-			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
-				OrgId: orgID,
-			},
-			Kubeconfig:      base64.StdEncoding.EncodeToString(kubeconfigRaw),
-			CloudCredential: cloudCred,
+		if cloud_name != "" {
+			clusterCreateReq = &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					OrgId: orgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+				CloudCredentialRef: &api.ObjectRef{
+					Name: cloud_name,
+					Uid:  uid,
+				},
+			}
+		} else {
+			clusterCreateReq = &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					OrgId: orgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+			}
 		}
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -4759,6 +4772,8 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
 	}
+	DeleteCluster(destinationClusterName, OrgID)
+	DeleteCluster(sourceClusterName, OrgID)
 	if flag == false {
 		return false
 	}
@@ -4953,4 +4968,15 @@ func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_cou
 		},
 	}
 	return SchedulePolicy
+}
+
+func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
+	CreateSourceAndDestClusters(orgID, cloud_name, uid)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: sourceClusterName, IncludeSecrets: true}
+	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+	dash.VerifyFatal(err, nil, "Inspecting cluster object")
+	clusterObj := clusterResp.GetCluster()
+	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 }
