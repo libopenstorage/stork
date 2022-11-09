@@ -171,8 +171,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Register cluster for backup", func() {
 			CloudCredUID = uuid.New()
 			CreateCloudCredential("azure", "azureaccount", CloudCredUID, orgID)
-			CreateSourceAndDestClusters(orgID, "azureaccount", CloudCredUID)
-			CreateSourceAndDestClusters(orgID, "", "")
+			// To create cloud clustre
+			RegisterBackupCluster(orgID, "azure", CloudCredUID)
+			//To create on prem cluster
+			RegisterBackupCluster(orgID, "", "")
 		})
 	})
 	JustAfterEach(func() {

@@ -4969,3 +4969,14 @@ func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_cou
 	}
 	return SchedulePolicy
 }
+
+func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
+	CreateSourceAndDestClusters(orgID, cloud_name, uid)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: sourceClusterName, IncludeSecrets: true}
+	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+	dash.VerifyFatal(err, nil, "Inspecting cluster object")
+	clusterObj := clusterResp.GetCluster()
+	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+}
