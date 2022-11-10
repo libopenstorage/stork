@@ -691,7 +691,7 @@ github.com/pierrec/lz4/internal/xxh32
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20221109152346-d4c8431982fc
+# github.com/portworx/kdmp v0.4.1-0.20221110051828-bdbb3afc4dd0
 ## explicit
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
@@ -1121,8 +1121,6 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# google.golang.org/grpc/examples v0.0.0-20220715232852-f601dfac73c9
-## explicit
 # google.golang.org/protobuf v1.28.0
 google.golang.org/protobuf/cmd/protoc-gen-go/internal_gengo
 google.golang.org/protobuf/compiler/protogen
@@ -1176,7 +1174,6 @@ gopkg.in/square/go-jose.v2/jwt
 ## explicit
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.1
-## explicit
 gopkg.in/yaml.v3
 # helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 => helm.sh/helm/v3 v3.6.1
 helm.sh/helm/v3/internal/experimental/registry
