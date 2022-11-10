@@ -482,6 +482,7 @@ spec:
             "--testset-id=$TESTSET_ID",
             "--branch=$BRANCH",
             "--product=$PRODUCT",
+            "--pds-parameter-json=$PDS_PARAMETER_JSON",
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "$APP_DESTROY_TIMEOUT_ARG",

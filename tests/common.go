@@ -157,6 +157,7 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
+	pdsParamCliFlag                      = "pds-parameter-json"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -191,7 +192,7 @@ const (
 	torpedoJobTypeFlag = "torpedo-job-type"
 )
 
-//Dashboard params
+// Dashboard params
 const (
 	enableDashBoardFlag = "enable-dash"
 	userFlag            = "user"
@@ -347,11 +348,11 @@ const (
 
 var log *logrus.Logger
 
-//TpLogPath torpedo log path
+// TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
 
-//TestLogger for logging test logs
+// TestLogger for logging test logs
 var TestLogger *lumberjack.Logger
 var dash *aetosutil.Dashboard
 var post_rule_uid string
@@ -1678,7 +1679,7 @@ func ValidateClusterSize(count int64) {
 	dash.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
 }
 
-//GetStorageNodes get storage nodes in the cluster
+// GetStorageNodes get storage nodes in the cluster
 func GetStorageNodes() ([]node.Node, error) {
 
 	storageNodes := []node.Node{}
@@ -2257,7 +2258,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 	wg.Wait()
 }
 
-//UpgradePxStorageCluster perform storage cluster upgrade
+// UpgradePxStorageCluster perform storage cluster upgrade
 func UpgradePxStorageCluster() (bool, error) {
 	dash.Info("Initiating operator based install upgrade")
 	operatorTag, err := getOperatorLatestVersion()
@@ -2510,7 +2511,7 @@ func ObjectExists(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "object not found")
 }
 
-//GetBackupCreateRequest returns a backupcreaterequest
+// GetBackupCreateRequest returns a backupcreaterequest
 func GetBackupCreateRequest(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string) *api.BackupCreateRequest {
 	return &api.BackupCreateRequest{
@@ -2528,7 +2529,7 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 	}
 }
 
-//CreateBackupFromRequest creates a backup using a provided request
+// CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -2637,7 +2638,7 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 	return bkpScheduleInspectResponse, err
 }
 
-//DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
+// DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
 func DeleteLabelFromResource(spec interface{}, key string) {
 	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		if obj.Labels != nil {
@@ -3215,7 +3216,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 	return err
 }
 
-//AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
+// AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
 func AddLabelToResource(spec interface{}, key string, val string) error {
 	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		if obj.Labels == nil {
@@ -3396,7 +3397,7 @@ func DeleteBucket(provider string, bucketName string) {
 	})
 }
 
-//HaIncreaseRebootTargetNode repl increase and reboot target node
+// HaIncreaseRebootTargetNode repl increase and reboot target node
 func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
@@ -3505,7 +3506,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 		})
 }
 
-//HaIncreaseRebootSourceNode repl increase and reboot source node
+// HaIncreaseRebootSourceNode repl increase and reboot source node
 func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
@@ -3809,6 +3810,7 @@ type Torpedo struct {
 	M                                   monitor.Driver
 	SpecDir                             string
 	AppList                             []string
+	PDSParams                           string
 	LogLoc                              string
 	LogLevel                            string
 	Logger                              *logrus.Logger
@@ -3849,7 +3851,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, pdsParam, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -3892,6 +3894,7 @@ func ParseFlags() {
 	var torpedoJobName string
 	var torpedoJobType string
 
+	flag.StringVar(&pdsParam, pdsParamCliFlag, "", "PDS Test Params")
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
@@ -4067,6 +4070,7 @@ func ParseFlags() {
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
+				PDSParams:                           pdsParam,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
@@ -4147,7 +4151,7 @@ func setLoglevel(tpLog *logrus.Logger, logLevel string) {
 	}
 }
 
-//SetTorpedoFileOutput adds output destination for logging
+// SetTorpedoFileOutput adds output destination for logging
 func SetTorpedoFileOutput(tpLog *logrus.Logger, logger *lumberjack.Logger) {
 
 	//tpLog.Out = io.MultiWriter(tpLog.Out, f)
@@ -4156,11 +4160,11 @@ func SetTorpedoFileOutput(tpLog *logrus.Logger, logger *lumberjack.Logger) {
 	//tpLog.Infof("Log Dir: %s", f.Name())
 }
 
-//CreateLogFile creates file and return the file object
+// CreateLogFile creates file and return the file object
 func CreateLogFile(filename string) *os.File {
 	var filePath string
 	if strings.Contains(filename, "/") {
-		filePath = filename
+		filePath = "filename"
 	} else {
 		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
 	}
@@ -4174,7 +4178,7 @@ func CreateLogFile(filename string) *os.File {
 
 }
 
-//CreateLogger creates file and return the file object
+// CreateLogger creates file and return the file object
 func CreateLogger(filename string) *lumberjack.Logger {
 	var filePath string
 	if strings.Contains(filename, "/") {
@@ -4196,7 +4200,7 @@ func CreateLogger(filename string) *lumberjack.Logger {
 
 }
 
-//CloseLogFile ends testcase file object
+// CloseLogFile ends testcase file object
 func CloseLogger(testLogger *lumberjack.Logger) {
 	if testLogger != nil {
 		testLogger.Close()
@@ -4236,7 +4240,7 @@ func init() {
 	logrus.SetOutput(os.Stdout)
 }
 
-//CreateJiraIssueWithLogs creates a jira issue and copy logs to nfs mount
+// CreateJiraIssueWithLogs creates a jira issue and copy logs to nfs mount
 func CreateJiraIssueWithLogs(issueDescription, issueSummary string) {
 	issueKey, err := jirautils.CreateIssue(issueDescription, issueSummary)
 	if err == nil && issueKey != "" {
@@ -4405,7 +4409,7 @@ func getInt64Address(x int64) *int64 {
 	return &x
 }
 
-//IsCloudDriveInitialised checks if cloud drive is initialised in the PX cluster
+// IsCloudDriveInitialised checks if cloud drive is initialised in the PX cluster
 func IsCloudDriveInitialised(n node.Node) (bool, error) {
 
 	_, err := Inst().N.RunCommandWithNoRetry(n, pxctlCDListCmd, node.ConnectionOpts{
@@ -4423,7 +4427,7 @@ func IsCloudDriveInitialised(n node.Node) (bool, error) {
 	return false, err
 }
 
-//WaitForExpansionToStart waits for pool expansion to trigger
+// WaitForExpansionToStart waits for pool expansion to trigger
 func WaitForExpansionToStart(poolID string) error {
 	f := func() (interface{}, bool, error) {
 		expandedPool, err := GetStoragePoolByUUID(poolID)
@@ -4449,7 +4453,7 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-//RebootNodeAndWait reboots node and waits for to be up
+// RebootNodeAndWait reboots node and waits for to be up
 func RebootNodeAndWait(n node.Node) error {
 
 	if &n == nil {
@@ -4491,7 +4495,7 @@ func RebootNodeAndWait(n node.Node) error {
 
 }
 
-//GetNodeWithGivenPoolID returns node having pool id
+// GetNodeWithGivenPoolID returns node having pool id
 func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
 	pxNodes, err := GetStorageNodes()
 
@@ -4511,7 +4515,7 @@ func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
 	return nil, fmt.Errorf("no storage node found with given Pool UUID : %s", poolID)
 }
 
-//GetStoragePoolByUUID reruns storage pool based on ID
+// GetStoragePoolByUUID reruns storage pool based on ID
 func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 	if err != nil {
@@ -4892,7 +4896,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 }
 
-//EndTorpedoTest ends the logging for torpedo test
+// EndTorpedoTest ends the logging for torpedo test
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
