@@ -1,0 +1,107 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+data:
+  logstash.conf: |
+    input {
+      beats {
+        port => "5044"
+      }
+    }
+    filter {
+      if [fields][type] == "sysrfc3164" {
+        grok {
+          match => { "message" => "%{SYSLOGTIMESTAMP:syslog_timestamp} %{SYSLOGHOST:syslog_hostname} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}" }
+          add_field => [ "received_at", "%{@timestamp}" ]
+          add_field => [ "received_from", "%{host}" ]
+        }
+        date {
+          match => [ "syslog_timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+        }
+      } else if [fields][type] == "appachecombined" {
+         grok {
+           match => { "message" => "%{COMBINEDAPACHELOG}" }
+         }
+         date {
+           match => [ "timestamp" , "dd/MMM/yyyy:HH:mm:ss Z" ]
+         }
+      } else if [fields][type] == "apachecommon" {
+         grok {
+           match => { "message" => "%{COMMONAPACHELOG}" }
+         }
+         date {
+           match => [ "timestamp" , "dd/MMM/yyyy:HH:mm:ss Z" ]
+         }
+      } else if [fields][type] == "apacheerror" {
+         grok {
+           match => { "message" => "%{COMBINEDAPACHELOG}" }
+         }
+         date {
+           match => [ "timestamp" , "dd/MMM/yyyy:HH:mm:ss Z" ]
+         }
+      }
+    }
+
+    output {
+        elasticsearch {
+          hosts => ["http://elasticsearch:9200"]
+          sniffing => true
+          manage_template => false
+          index => "%{[fields][type]}-%{+YYYY.MM.dd}"
+        }
+        stdout {
+          codec => rubydebug
+        }
+    }
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: logstash
+  template:
+    metadata:
+      labels:
+        name: logstash
+    spec:
+      hostname: logstash
+      containers:
+      - name: logstash
+        ports:
+        - containerPort: 5044
+          name: filebeat
+        image: logstash:7.8.0
+        volumeMounts:
+        - name: logstash-pipeline
+          mountPath: /usr/share/logstash/pipeline/
+        command:
+        - logstash
+      volumes:
+      - name: logstash-pipeline
+        configMap:
+          name: logstash-pipeline
+          items:
+          - key: logstash.conf
+            path: logstash.conf        
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: logstash
+  labels:
+    name: logstash
+spec:
+  selector:
+    name: logstash
+  type: NodePort
+  ports:
+    - port: 5044
+      name: logstash
+      targetPort: 5044
+---

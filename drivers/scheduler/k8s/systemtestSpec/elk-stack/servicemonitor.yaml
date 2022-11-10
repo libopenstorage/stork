@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: es-exporter-metrics-sm
+  namespace: kube-system
+  labels:
+    name: portworx-prometheus-sm
+spec:
+  selector:
+    matchLabels:
+      component: elasticsearch
+      role: exporter
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: metrics
+    targetPort: 9114
