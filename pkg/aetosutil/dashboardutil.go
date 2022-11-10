@@ -6,7 +6,6 @@ import (
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
 	"net/http"
-	"os"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -30,6 +29,7 @@ var (
 const (
 	//DashBoardBaseURL for posting logs
 	DashBoardBaseURL = "http://aetos.pwx.purestorage.com/dashboard" //"http://aetos-dm.pwx.purestorage.com:3939/dashboard"
+	AetosBaseURL     = "http://aetos.pwx.purestorage.com"
 )
 
 const (
@@ -153,9 +153,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 			} else {
 				d.Log.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
-			d.Log.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
-			os.Setenv("TESTSET-ID", fmt.Sprint(d.TestSetID))
-
+			d.Log.Infof("Dashboard URL : %s", fmt.Sprintf("%s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID))
 		}
 	}
 

@@ -8,8 +8,8 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
-if [ -z "${TESTSET_ID}" ]; then
-    TESTSET_ID="0"
+if [ -z "${DASH_UID}" ]; then
+    DASH_UID="0"
 fi
 
 if [ -z "${SCALE_FACTOR}" ]; then
@@ -479,7 +479,7 @@ spec:
             "--test-desc=$TEST_DESCRIPTION",
             "--test-type=$TEST_TYPE",
             "--test-tags=$TEST_TAGS",
-            "--testset-id=$TESTSET_ID",
+            "--testset-id=$DASH_UID",
             "--branch=$BRANCH",
             "--product=$PRODUCT",
             "--pds-parameter-json=$PDS_PARAMETER_JSON",
