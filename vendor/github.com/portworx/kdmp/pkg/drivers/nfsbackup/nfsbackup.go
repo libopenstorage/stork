@@ -198,6 +198,12 @@ func jobForBackupResource(
 		logrus.Errorf("failed to get the executor image details")
 		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobOption.JobName)
 	}
+	tolerations, err := utils.GetTolerationsFromDeployment(jobOption.NfsImageExecutorSource,
+		jobOption.NfsImageExecutorSourceNs)
+	if err != nil {
+		logrus.Errorf("failed to get the toleration details: %v", err)
+		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobOption.RestoreExportName)
+	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobOption.RestoreExportName,
@@ -238,6 +244,7 @@ func jobForBackupResource(
 							},
 						},
 					},
+					Tolerations: tolerations,
 					Volumes: []corev1.Volume{
 						{
 							Name: "cred-secret",

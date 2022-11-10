@@ -165,15 +165,20 @@ func jobForDeleteResource(
 	}, " ")
 
 	nfsExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
-		jobOption.KopiaImageExecutorSource,
-		jobOption.KopiaImageExecutorSourceNs,
+		jobOption.NfsImageExecutorSource,
+		jobOption.NfsImageExecutorSourceNs,
 		jobOption.JobName,
 		jobOption)
 	if err != nil {
 		logrus.Errorf("failed to get the executor image details")
 		return nil, fmt.Errorf("failed to get the executor image details for job %s", jobOption.JobName)
 	}
-
+	tolerations, err := utils.GetTolerationsFromDeployment(jobOption.NfsImageExecutorSource,
+		jobOption.NfsImageExecutorSourceNs)
+	if err != nil {
+		logrus.Errorf("failed to get the toleration details: %v", err)
+		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobOption.JobName)
+	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobOption.JobName,
@@ -214,6 +219,7 @@ func jobForDeleteResource(
 							},
 						},
 					},
+					Tolerations: tolerations,
 					Volumes: []corev1.Volume{
 						{
 							Name: "cred-secret",
@@ -247,6 +253,16 @@ func jobForDeleteResource(
 		}
 
 		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
+	}
+
+	nodeAffinity, err := utils.GetNodeAffinityFromDeployment(jobOption.NfsImageExecutorSource,
+		jobOption.NfsImageExecutorSourceNs)
+	if err != nil {
+		logrus.Errorf("failed to get the node affinity details: %v", err)
+		return nil, fmt.Errorf("failed to get the node affinity details for job [%s/%s]", jobOption.Namespace, jobOption.JobName)
+	}
+	job.Spec.Template.Spec.Affinity = &corev1.Affinity{
+		NodeAffinity: nodeAffinity,
 	}
 
 	return job, nil

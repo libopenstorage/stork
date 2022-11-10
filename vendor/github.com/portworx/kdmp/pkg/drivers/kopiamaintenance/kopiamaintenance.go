@@ -215,6 +215,13 @@ func jobFor(
 		return nil, errMsg
 	}
 
+	tolerations, err := utils.GetTolerationsFromDeployment(jobOption.KopiaImageExecutorSource,
+		jobOption.KopiaImageExecutorSourceNs)
+	if err != nil {
+		logrus.Errorf("failed to get the toleration details: %v", err)
+		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobName)
+	}
+
 	jobObjectMeta := metav1.ObjectMeta{
 		Name:      jobName,
 		Namespace: jobOption.JobNamespace,
@@ -250,6 +257,7 @@ func jobFor(
 				},
 			},
 		},
+		Tolerations: tolerations,
 		Volumes: []corev1.Volume{
 			{
 				Name: "cred-secret",
@@ -332,6 +340,16 @@ func jobFor(
 					},
 				},
 			},
+		}
+	} else {
+		nodeAffinity, err := utils.GetNodeAffinityFromDeployment(jobOption.KopiaImageExecutorSource,
+			jobOption.KopiaImageExecutorSourceNs)
+		if err != nil {
+			logrus.Errorf("failed to get the node affinity details: %v", err)
+			return nil, fmt.Errorf("failed to get the node affinity details for job [%s/%s]", jobOption.Namespace, jobName)
+		}
+		jobSpec.Affinity = &corev1.Affinity{
+			NodeAffinity: nodeAffinity,
 		}
 	}
 
