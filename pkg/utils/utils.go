@@ -25,6 +25,8 @@ const (
 
 	// PrefixBackup - prefix string that will be used for the kdmp backup job
 	PrefixBackup = "backup"
+	// PrefixNFSBackup prefix string that will be used for the nfs backup job
+	PrefixNFSBackup = "nfs-backup"
 	// PrefixRestore prefix string that will be used for the kdmp restore job
 	PrefixRestore = "nfs-restore-resource"
 	// PrefixNFSRestorePVC prefix string that will be used for pvc creation during nfs vol restore
