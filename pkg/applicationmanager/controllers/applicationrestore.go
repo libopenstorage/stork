@@ -1499,6 +1499,13 @@ func (a *ApplicationRestoreController) restoreResources(
 				resourceExport.Name = crName
 				resourceExport.Namespace = a.restoreAdminNamespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
+				resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
+				storkPodNs, err := k8sutils.GetStorkPodNamespace()
+				if err != nil {
+					logrus.Errorf("error in getting stork pod namespace: %v", err)
+					return err
+				}
+				resourceExport.Spec.TriggeredFromNs = storkPodNs
 				source := &kdmpapi.ResourceExportObjectReference{
 					APIVersion: restore.APIVersion,
 					Kind:       restore.Kind,
