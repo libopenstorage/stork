@@ -372,7 +372,7 @@ func toRepoName(pvcName, pvcNamespace string) string {
 
 func addVolumeBackupDeleteLabels(jobOpts drivers.JobOpts) map[string]string {
 	labels := make(map[string]string)
-	labels[utils.BackupObjectNameKey] = jobOpts.BackupObjectName
+	labels[utils.BackupObjectNameKey] = utils.GetValidLabel(jobOpts.BackupObjectName)
 	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
 	return labels
 }
@@ -383,7 +383,7 @@ func addJobLabels(labels map[string]string, jobOpts drivers.JobOpts) map[string]
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.KopiaDelete
-	labels[utils.BackupObjectNameKey] = jobOpts.BackupObjectName
+	labels[utils.BackupObjectNameKey] = utils.GetValidLabel(jobOpts.BackupObjectName)
 	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
 	return labels
 }

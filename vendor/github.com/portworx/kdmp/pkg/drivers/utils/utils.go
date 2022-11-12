@@ -61,6 +61,8 @@ const (
 	ResourceUploadSuccessMsg = "upload resource Successfully"
 	// PvcBoundSuccessMsg - pvc bound success message
 	PvcBoundSuccessMsg = "pvc bounded successfully"
+	// PvcBoundFailedMsg pvc not bounded msg
+	PvcBoundFailedMsg = "pvc not bounded"
 )
 
 var (
@@ -211,19 +213,20 @@ func FetchJobContainerRestartCount(j *batchv1.Job) (int32, error) {
 
 // ToJobStatus returns a job status for provided parameters.
 func ToJobStatus(progress float64, errMsg string, jobStatus batchv1.JobConditionType) *drivers.JobStatus {
-	if len(errMsg) > 0 {
-		return &drivers.JobStatus{
-			State:  drivers.JobStateFailed,
-			Reason: errMsg,
-			Status: jobStatus,
-		}
-	}
-
 	if drivers.IsTransferCompleted(progress) {
 		return &drivers.JobStatus{
 			State:            drivers.JobStateCompleted,
 			ProgressPercents: progress,
 			Status:           jobStatus,
+			Reason:           errMsg,
+		}
+	}
+
+	if len(errMsg) > 0 {
+		return &drivers.JobStatus{
+			State:  drivers.JobStateFailed,
+			Reason: errMsg,
+			Status: jobStatus,
 		}
 	}
 
@@ -231,34 +234,6 @@ func ToJobStatus(progress float64, errMsg string, jobStatus batchv1.JobCondition
 		State:            drivers.JobStateInProgress,
 		ProgressPercents: progress,
 		Status:           jobStatus,
-	}
-}
-
-// ToNFSJobStatus returns a job status for provided parameters.
-func ToNFSJobStatus(errMsg string, jobStatus batchv1.JobConditionType) *drivers.JobStatus {
-	// Note: This err msg has to match with the msg set in executor when the job
-	// is successful
-	// TODO: Need to have better logical way to notify job completion, this
-	// hard coding of msg doesn't look good
-	if errMsg == ResourceUploadSuccessMsg ||
-		errMsg == PvcBoundSuccessMsg {
-		return &drivers.JobStatus{
-			State:  drivers.JobStateCompleted,
-			Reason: errMsg,
-			Status: jobStatus,
-		}
-	}
-	if len(errMsg) > 0 {
-		return &drivers.JobStatus{
-			State:  drivers.JobStateFailed,
-			Reason: errMsg,
-			Status: jobStatus,
-		}
-	}
-
-	return &drivers.JobStatus{
-		State:  drivers.JobStateInProgress,
-		Status: jobStatus,
 	}
 }
 

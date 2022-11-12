@@ -688,7 +688,7 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 	snapName := toSnapName(dataExport.Spec.Source.Name, string(dataExport.UID))
 	annotations := make(map[string]string)
 	annotations[dataExportUIDAnnotation] = string(dataExport.UID)
-	annotations[dataExportNameAnnotation] = trimLabel(dataExport.Name)
+	annotations[dataExportNameAnnotation] = utils.GetValidLabel(dataExport.Name)
 	annotations[backupObjectUIDKey] = backupUID
 	annotations[pvcUIDKey] = pvcUID
 	labels := make(map[string]string)
@@ -1526,7 +1526,7 @@ func (c *Controller) restoreSnapshot(ctx context.Context, snapshotDriver snapsho
 	pvc.Annotations = make(map[string]string)
 	pvc.Annotations[skipResourceAnnotation] = "true"
 	pvc.Annotations[dataExportUIDAnnotation] = string(de.UID)
-	pvc.Annotations[dataExportNameAnnotation] = trimLabel(de.Name)
+	pvc.Annotations[dataExportNameAnnotation] = utils.GetValidLabel(de.Name)
 
 	// If storage class annotation is set , then put that annotation too in the temp pvc
 	// Sometimes the spec.storageclass might be empty, in that case the temp pvc may get the sc as the default sc
@@ -2077,13 +2077,6 @@ func toBoundJobPVCName(pvcName string, pvcUID string) string {
 	}
 	uidToken := strings.Split(pvcUID, "-")
 	return fmt.Sprintf("%s-%s-%s", "bound", truncatedPVCName, uidToken[0])
-}
-
-func trimLabel(label string) string {
-	if len(label) > 63 {
-		return label[:63]
-	}
-	return label
 }
 
 func getRepoPVCName(de *kdmpapi.DataExport, pvcName string) string {

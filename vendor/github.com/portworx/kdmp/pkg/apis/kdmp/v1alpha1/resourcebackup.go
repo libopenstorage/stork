@@ -35,6 +35,8 @@ const (
 
 // ResourceBackupProgressStatus overall resource backup/restore progress
 type ResourceBackupProgressStatus struct {
+	// ProgressPercentage is the progress of the command in percentage
+	ProgressPercentage float64
 	// Status status of resource export
 	Status ResourceBackupStatus `json:"status,omitempty"`
 	// Reason status reason

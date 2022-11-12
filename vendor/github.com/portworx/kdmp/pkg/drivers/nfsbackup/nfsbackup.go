@@ -73,7 +73,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	fn := "JobStatus"
 	namespace, name, err := utils.ParseJobID(id)
 	if err != nil {
-		return utils.ToNFSJobStatus(err.Error(), batchv1.JobConditionType("")), nil
+		return utils.ToJobStatus(0, err.Error(), batchv1.JobConditionType("")), nil
 	}
 
 	job, err := batch.Instance().GetJob(name, namespace)
@@ -97,11 +97,11 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	var errMsg string
 	if jobErr {
 		errMsg = fmt.Sprintf("check %s/%s job for details: %s", namespace, name, drivers.ErrJobFailed)
-		return utils.ToNFSJobStatus(errMsg, jobStatus), nil
+		return utils.ToJobStatus(0, errMsg, jobStatus), nil
 	}
 	if nodeErr {
 		errMsg = fmt.Sprintf("Node [%v] on which job [%v/%v] schedules is NotReady", job.Spec.Template.Spec.NodeName, namespace, name)
-		return utils.ToNFSJobStatus(errMsg, jobStatus), nil
+		return utils.ToJobStatus(0, errMsg, jobStatus), nil
 	}
 
 	res, err := kdmp.Instance().GetResourceBackup(name, namespace)
@@ -109,12 +109,12 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		if apierrors.IsNotFound(err) {
 			if utils.IsJobPending(job) {
 				logrus.Warnf("backup job %s is in pending state", job.Name)
-				return utils.ToNFSJobStatus(err.Error(), jobStatus), nil
+				return utils.ToJobStatus(0, err.Error(), jobStatus), nil
 			}
 		}
 	}
-
-	return utils.ToNFSJobStatus(res.Status.Reason, jobStatus), nil
+	logrus.Tracef("res.Status: %v", res.Status)
+	return utils.ToJobStatus(res.Status.ProgressPercentage, res.Status.Reason, jobStatus), nil
 }
 
 func buildJob(
