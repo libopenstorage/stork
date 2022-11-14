@@ -167,16 +167,11 @@ case $i in
 esac
 done
 
-apk update
-apk add jq
-apt-get -y update 
-apt-get -y install jq
-
-sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /specs/stork-deployment.yaml
+sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /stork-specs/stork-deployment.yaml
 
 # Replace volume driver in stork
 if [ "$volume_driver" != "pxd" ] ; then
-	sed -i 's/- --driver=pxd//g' /specs/stork-deployment.yaml
+	sed -i 's/- --driver=pxd//g' /stork-specs/stork-deployment.yaml
 fi
 
 # For integration test mock times
@@ -184,7 +179,7 @@ kubectl delete cm stork-mock-time  -n kube-system || true
 kubectl create cm stork-mock-time  -n kube-system --from-literal=time=""
 
 echo "Creating stork deployment"
-kubectl apply -f /specs/stork-deployment.yaml
+kubectl apply -f /stork-specs/stork-deployment.yaml
 
 # Turn on test mode
 kubectl set env deploy/stork -n kube-system TEST_MODE="true"
@@ -199,7 +194,7 @@ else
   echo "No environment variables passed."
 fi
 
-if [ "$volume_driver" == "azure" ] ; then
+if [ "$volume_driver" = "azure" ] ; then
     echo "For azure backups add environment variables to stork from existing k8s secret px-azure"
     kubectl -n  kube-system set env --from=secret/$cloud_secret deploy/stork
 fi
@@ -211,7 +206,7 @@ kubectl delete pods -n kube-system -l name=stork
 echo "Waiting for stork to be in running state"
 for i in $(seq 1 100) ; do
     replicas=$(kubectl get deployment -n kube-system stork -o json | jq ".status.readyReplicas")
-    if [ "$replicas" == "3" ]; then
+    if [ "$replicas" = "3" ]; then
         break
     else
         echo "Stork is not ready yet"
@@ -219,7 +214,7 @@ for i in $(seq 1 100) ; do
     fi
 done
 
-if [ "$run_cluster_domain_test" == "true" ] ; then
+if [ "$run_cluster_domain_test" = "true" ] ; then
 	sed -i 's/'enable_cluster_domain'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 else 
 	sed -i 's/'enable_cluster_domain'/'\"\"'/g' /testspecs/stork-test-pod.yaml
@@ -273,20 +268,20 @@ if [ "$generic_csi_configmap_name" != "" ] ; then
 	sed -i 's/- -generic-csi-config=csi_config_map_name/- -generic-csi-config='"$generic_csi_configmap_name"'/g' /testspecs/stork-test-pod.yaml
 fi
 
-if [ "$external_test_pod" == "true" ] ; then
+if [ "$external_test_pod" = "true" ] ; then
 	sed -i 's/'external_test_cluster'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 else 
 	sed -i 's/'external_test_cluster'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
-if [ "$stork_test_version_check" == "true" ] ; then
+if [ "$stork_test_version_check" = "true" ] ; then
 	sed -i 's/'stork_test_version_check'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 	sed -i 's/- -stork-version-check=false/- -stork-version-check='"$stork_test_version_check"'/g' /testspecs/stork-test-pod.yaml
 else 
 	sed -i 's/'stork_test_version_check'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
-if [ "$cloud_deletion_validation" == "true" ] ; then
+if [ "$cloud_deletion_validation" = "true" ] ; then
        sed -i 's/'cloud_deletion_validation'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 else
        sed -i 's/'cloud_deletion_validation'/'\"\"'/g' /testspecs/stork-test-pod.yaml
@@ -297,7 +292,7 @@ kubectl create -f /testspecs/stork-test-pod.yaml
 
 for i in $(seq 1 100) ; do
     test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase" -r)
-    if [ "$test_status" == "Running" ] || [ "$test_status" == "Completed" ]; then
+    if [ "$test_status" = "Running" ] || [ "$test_status" = "Completed" ]; then
         break
     else
         echo "Test hasn't started yet, status: $test_status"
@@ -308,7 +303,7 @@ done
 kubectl logs stork-test  -n kube-system -f
 for i in $(seq 1 100) ; do
     test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase" -r)
-    if [ "$test_status" == "Running" ]; then
+    if [ "$test_status" = "Running" ]; then
         echo "Test is still running, status: $test_status"
         kubectl logs stork-test  -n kube-system -f
     else
@@ -318,10 +313,10 @@ for i in $(seq 1 100) ; do
 done
 
 test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase" -r)
-if [ "$test_status" == "Succeeded" ]; then
+if [ "$test_status" = "Succeeded" ]; then
     echo "Tests passed"
     exit 0
-elif [ "$test_status" == "Failed" ]; then
+elif [ "$test_status" = "Failed" ]; then
     echo "Tests failed"
     exit 1
 else
