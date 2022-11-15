@@ -321,6 +321,11 @@ func (m *Driver) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSO
 	return nil, nil
 }
 
+// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+func (a *Driver) GetCSIPodPrefix() (string, error) {
+	return "px-csi-ext", nil
+}
+
 func init() {
 	if err := storkvolume.Register(driverName, &Driver{}); err != nil {
 		logrus.Panicf("Error registering mock volume driver: %v", err)

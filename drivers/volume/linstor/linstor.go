@@ -449,6 +449,11 @@ func (l *linstor) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JS
 	return nil, nil
 }
 
+// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+func (a *linstor) GetCSIPodPrefix() (string, error) {
+	return "", &errors.ErrNotSupported{}
+}
+
 func init() {
 	l := &linstor{}
 	if err := storkvolume.Register(storkvolume.LinstorDriverName, l); err != nil {

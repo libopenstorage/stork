@@ -155,6 +155,8 @@ const (
 	restoreNamePrefix = "in-place-restore-"
 	restoreTaskPrefix = "restore-"
 
+	csiPodNamePrefix = "px-csi-ext"
+
 	// Annotation to skip checking if the backup is being done to the same
 	// BackupLocationName
 	skipBackupLocationNameCheckAnnotation = "portworx.io/skip-backup-location-name-check"
@@ -4057,6 +4059,11 @@ func (p *portworx) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
 // GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
 func (p *portworx) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
 	return p.getVirtLauncherPatches(podNamespace, pod)
+}
+
+// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+func (a *portworx) GetCSIPodPrefix() (string, error) {
+	return csiPodNamePrefix, nil
 }
 
 func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
