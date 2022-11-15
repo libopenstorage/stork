@@ -188,6 +188,8 @@ func jobForBackupResource(
 
 	labels := addJobLabels(jobOption.Labels)
 
+	var nobodyUser int64 = 65534
+
 	nfsExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
 		jobOption.NfsImageExecutorSource,
 		jobOption.NfsImageExecutorSourceNs,
@@ -241,6 +243,9 @@ func jobForBackupResource(
 									MountPath: drivers.KopiaCredSecretMount,
 									ReadOnly:  true,
 								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser: &nobodyUser,
 							},
 						},
 					},

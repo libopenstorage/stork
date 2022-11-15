@@ -209,6 +209,7 @@ func jobFor(
 		logrus.Errorf("failed to get the toleration details: %v", err)
 		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobName)
 	}
+	var nobodyUser int64 = 65534
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -247,6 +248,9 @@ func jobFor(
 									MountPath: drivers.KopiaCredSecretMount,
 									ReadOnly:  true,
 								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser: &nobodyUser,
 							},
 						},
 					},

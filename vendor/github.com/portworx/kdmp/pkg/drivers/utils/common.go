@@ -39,6 +39,14 @@ const (
 	KdmpConfigmapNamespace = "kube-system"
 	// DefaultCompresion default compression type
 	DefaultCompresion = "s2-parallel-8"
+	// DefaultQPS - default qps value for k8s apis
+	DefaultQPS = 100
+	// DefaultBurst - default burst value for k8s apis
+	DefaultBurst = 100
+	// QPSKey - configmap QPS key name
+	QPSKey = "K8S_QPS"
+	// BurstKey - configmap burst key name
+	BurstKey = "K8S_BURST"
 )
 
 var (

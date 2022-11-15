@@ -204,6 +204,8 @@ func jobFor(
 		jobOption.MaintenanceType,
 	}, " ")
 
+	var nobodyUser int64 = 65534
+
 	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
@@ -254,6 +256,9 @@ func jobFor(
 						MountPath: drivers.KopiaCredSecretMount,
 						ReadOnly:  true,
 					},
+				},
+				SecurityContext: &corev1.SecurityContext{
+					RunAsUser: &nobodyUser,
 				},
 			},
 		},

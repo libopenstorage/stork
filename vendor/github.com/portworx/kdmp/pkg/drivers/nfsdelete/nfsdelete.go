@@ -164,6 +164,8 @@ func jobForDeleteResource(
 		jobOption.AppCRNamespace,
 	}, " ")
 
+	var nobodyUser int64 = 65534
+
 	nfsExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
 		jobOption.NfsImageExecutorSource,
 		jobOption.NfsImageExecutorSourceNs,
@@ -216,6 +218,9 @@ func jobForDeleteResource(
 									MountPath: drivers.KopiaCredSecretMount,
 									ReadOnly:  true,
 								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser: &nobodyUser,
 							},
 						},
 					},
