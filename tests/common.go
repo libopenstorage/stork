@@ -4885,6 +4885,26 @@ func updatePxRuntimeOpts() error {
 
 }
 
+//GetCloudDriveDeviceSpecs returns Cloud drive specs on the storage cluster
+func GetCloudDriveDeviceSpecs() ([]string, error) {
+	dash.Info("Getting cloud drive specs")
+	deviceSpecs := make([]string, 0)
+	IsOperatorBasedInstall, err := Inst().V.IsOperatorBasedInstall()
+	if err != nil {
+		return deviceSpecs, err
+	}
+
+	if !IsOperatorBasedInstall {
+		return deviceSpecs, fmt.Errorf("it is not operator based install,cannot get device spec")
+	}
+	stc, err := Inst().V.GetStorageCluster()
+	if err != nil {
+		return deviceSpecs, err
+	}
+	deviceSpecs = *stc.Spec.CloudStorage.DeviceSpecs
+	return deviceSpecs, nil
+}
+
 //StartTorpedoTest starts the logging for torpedo test
 func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
 	"math/rand"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -630,3 +632,80 @@ func getRandomPoolID(pools map[string]*api.StoragePool) string {
 	}
 	return ""
 }
+
+var _ = Describe("{PoolAddDrive}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolAddDrive", "Initiate pool expansion using add-drive", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+
+	It(stepLog, func() {
+		dash.Info(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "No storage nodes found")
+		}
+
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+
+		if err != nil {
+			dash.VerifyFatal(err, nil, "Error getting cloud drive specs")
+		}
+		stNode := stNodes[0]
+		nodePools := stNode.Pools
+		var currentTotalPoolSize uint64
+		for _, nodePool := range nodePools {
+			currentTotalPoolSize += nodePool.TotalSize / units.GiB
+		}
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+		var specSize uint64
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				val := strings.Split(param, "=")[1]
+				specSize, err = strconv.ParseUint(val, 10, 64)
+				if err != nil {
+					dash.VerifyFatal(err, nil, "Error converting size to uint64")
+				}
+			}
+		}
+		expectedTotalPoolSize := currentTotalPoolSize + specSize
+		stepLog = "Initiate add cloud drive and validate"
+		Step(stepLog, func() {
+			err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
+			if err != nil {
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+			} else {
+				dash.Info("Validate pool rebalance after drive add")
+				err = ValidatePoolRebalance()
+				if err != nil {
+					dash.VerifySafely(err, nil, "Validate pool rebalance")
+				}
+			}
+
+			var newTotalPoolSize uint64
+			for _, nodePool := range nodePools {
+				pool, err := GetStoragePoolByUUID(nodePool.GetUuid())
+				if err != nil {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Error getting pool details of %s", nodePool.GetUuid()))
+				}
+				newTotalPoolSize += pool.GetTotalSize() / units.GiB
+			}
+			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
