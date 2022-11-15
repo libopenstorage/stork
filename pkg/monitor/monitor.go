@@ -147,7 +147,8 @@ func (m *Monitor) podMonitor() error {
 
 		var msg string
 		if podUnknownState {
-			if strings.HasPrefix(pod.Name, CSIPodNamePrefix) {
+			csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
+			if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
 				msg = "Force deleting csi-ext-pod as it's in unknown state."
 				storklog.PodLog(pod).Infof(msg)
 			} else {
@@ -167,7 +168,7 @@ func (m *Monitor) podMonitor() error {
 			}
 			// force delete the pod
 			m.Recorder.Event(pod, v1.EventTypeWarning, node.NodeUnreachablePodReason, msg)
-			err := core.Instance().DeletePods([]v1.Pod{*pod}, true)
+			err = core.Instance().DeletePods([]v1.Pod{*pod}, true)
 			if err != nil {
 				if errors.IsNotFound(err) {
 					return nil
@@ -254,8 +255,10 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 
 	for _, pod := range pods.Items {
 		var msg string
-		if strings.HasPrefix(pod.Name, CSIPodNamePrefix) {
+		csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
+		if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
 			msg = fmt.Sprintf("Deleting px-csi-ext pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+
 		} else {
 			msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
 			owns, err := m.doesDriverOwnPodVolumes(&pod)

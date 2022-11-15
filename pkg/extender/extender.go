@@ -12,7 +12,6 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
-	"github.com/libopenstorage/stork/pkg/monitor"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/prometheus/client_golang/prometheus"
@@ -173,9 +172,10 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Filter px-csi-ext on nodes where PX is online
-	if strings.HasPrefix(pod.Name, monitor.CSIPodNamePrefix) {
-		e.processCSIExtPodFilterRequest(encoder, args, pod)
+	// Filter csi pods on nodes where PX is online
+	csiPodPrefix, err := e.Driver.GetCSIPodPrefix()
+	if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
+		e.processCSIExtPodFilterRequest(encoder, args)
 		return
 	}
 
@@ -506,9 +506,10 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	disableHyperconvergence := false
 	var err error
 
-	// Prioritize px-csi-ext on nodes where PX is online
-	if strings.HasPrefix(pod.Name, monitor.CSIPodNamePrefix) {
-		e.processCSIExtPodPrioritizeRequest(encoder, args, pod, respList)
+	// Prioritize csi pods on nodes where PX is online
+	csiPodPrefix, err := e.Driver.GetCSIPodPrefix()
+	if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
+		e.processCSIExtPodPrioritizeRequest(encoder, args)
 		return
 	}
 
@@ -651,9 +652,9 @@ sendResponse:
 
 func (e *Extender) processCSIExtPodFilterRequest(
 	encoder *json.Encoder,
-	args schedulerapi.ExtenderArgs,
-	pod *v1.Pod) {
+	args schedulerapi.ExtenderArgs) {
 	filteredNodes := []v1.Node{}
+	pod := args.Pod
 	driverNodes, err := e.Driver.GetNodes()
 	if err != nil {
 		storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
@@ -690,9 +691,9 @@ func (e *Extender) processCSIExtPodFilterRequest(
 
 func (e *Extender) processCSIExtPodPrioritizeRequest(
 	encoder *json.Encoder,
-	args schedulerapi.ExtenderArgs,
-	pod *v1.Pod,
-	respList schedulerapi.HostPriorityList) {
+	args schedulerapi.ExtenderArgs) {
+	respList := schedulerapi.HostPriorityList{}
+	pod := args.Pod
 	driverNodes, err := e.Driver.GetNodes()
 	if err != nil || len(driverNodes) == 0 {
 		storklog.PodLog(pod).Errorf("Error getting nodes for driver: %v", err)
