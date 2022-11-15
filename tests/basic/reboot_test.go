@@ -255,14 +255,14 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 })
 
 var _ = Describe("{ClusterPxRestart}", func() {
-	var testrailID = 35255
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35255
+	var testrailID = 60042
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/60042&group_by=cases:section_id&group_order=asc&display_deleted_cases=0&group_id=4120
 	var runID int
 	loc, _ := time.LoadLocation("UTC")
 	t1 := time.Now().In(loc)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ClusterPxRestart", "Validate restart of PX in cluster", nil)
+		StartTorpedoTest("ClusterPxRestart", "Validate restart of PX in cluster", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
