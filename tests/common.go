@@ -157,7 +157,7 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
-	pdsParamCliFlag                      = "pds-parameter-json"
+	pdsParamCliFlag                      = "pds-param-cm"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"

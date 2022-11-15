@@ -140,6 +140,8 @@ const (
 	rabbitmq              = "RabbitMQ"
 	pxLabel               = "pds.portworx.com/available"
 	defaultParams         = "../drivers/pds/parameters/pds_default_parameters.json"
+	pdsParamsConfigmap    = "pds-params"
+	configmapNamespace    = "default"
 )
 
 // PDS vars
@@ -329,22 +331,36 @@ func ReadParams(filename string) (*Parameter, error) {
 			return nil, err
 		}
 		logrus.Infof("Parameter json file is not used, use initial parameters value.")
+		logrus.Infof("Reading params from %v ", filename)
+		file, err := ioutil.ReadFile(filename)
+		if err != nil {
+
+			logrus.Errorf("File error: %v\n", err)
+			return nil, err
+		}
+		err = json.Unmarshal(file, &jsonPara)
+		if err != nil {
+			logrus.Errorf("Error while unmarshalling json: %v\n", err)
+			return nil, err
+		}
+	} else {
+		cm, err := core.Instance().GetConfigMap(pdsParamsConfigmap, configmapNamespace)
+		if err != nil {
+			logrus.Errorf("Error reading config map: %v", err)
+		}
+		if len(cm.Data) > 0 {
+			configmap := &cm.Data
+			for key, data := range *configmap {
+				logrus.Infof("key %v \n value %v", key, data)
+				json_data := []byte(data)
+				err = json.Unmarshal(json_data, &jsonPara)
+				if err != nil {
+					logrus.Errorf("Error while unmarshalling json: %v\n", err)
+					return nil, err
+				}
+			}
+		}
 	}
-
-	logrus.Infof("Reading params from %v ", filename)
-	file, err := ioutil.ReadFile(filename)
-	if err != nil {
-
-		logrus.Errorf("File error: %v\n", err)
-		return nil, err
-	}
-
-	err = json.Unmarshal(file, &jsonPara)
-	if err != nil {
-		logrus.Errorf("Error while unmarshalling json: %v\n", err)
-		return nil, err
-	}
-
 	return &jsonPara, nil
 }
 

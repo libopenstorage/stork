@@ -10,6 +10,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
@@ -51,6 +52,7 @@ var (
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter
 	isDeploymentsDeleted                    bool
+	dash                                    *aetosutil.Dashboard
 )
 
 func TestDataService(t *testing.T) {
@@ -65,7 +67,8 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
-
+		dash = Inst().Dash
+		dash.TestSetBegin(dash.TestSet)
 		pdsparams := Inst().PDSParams
 		params, err = pdslib.ReadParams(pdsparams)
 		Expect(err).NotTo(HaveOccurred())
@@ -73,7 +76,6 @@ var _ = BeforeSuite(func() {
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
 		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
@@ -93,12 +95,20 @@ var _ = BeforeSuite(func() {
 	})
 })
 
+var _ = AfterSuite(func() {
+	defer dash.TestSetEnd()
+	defer dash.TestCaseEnd()
+})
+
 var _ = Describe("{ScaleUPDataServices}", func() {
 
 	It("deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
+				if ds.Name == "MySQL" {
+					continue
+				}
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())

@@ -38,12 +38,10 @@
     },
     {
       "Name": "Redis",
-      "Version": "7.0.5",
-      "Image": "b7919ff",
-      "Replicas": 3,
-      "ScaleReplicas": 6,
-      "OldVersion": "7.0.4",
-      "OldImage": "212733c"
+      "Version": "7.0.4",
+      "Image": "212733c",
+      "Replicas": 6,
+      "ScaleReplicas": 8
     },
     {
       "Name": "Cassandra",
