@@ -718,6 +718,18 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 	return resp.VolumeId, nil
 }
 
+func (d *portworx) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
+	volDriver := d.getVolDriver()
+	resp, err := volDriver.Create(d.getContext(), request)
+	if err != nil {
+		return "", fmt.Errorf("error while creating volume because of: %v", err)
+	}
+
+	d.log.Infof("Successfully created Portworx volume %v ", resp.VolumeId)
+
+	return resp.VolumeId, nil
+}
+
 func (d *portworx) CloneVolume(volumeID string) (string, error) {
 	volDriver := d.getVolDriver()
 	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})

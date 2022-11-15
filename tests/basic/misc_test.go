@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	opsapi "github.com/libopenstorage/openstorage/api"
 	"math/rand"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -711,5 +713,88 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	AfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VolumeCreatePXRestart}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeCreatePXRestart", "Validate restart PX while create and attach", nil, 0)
+
+	})
+	contexts := make([]*scheduler.Context, 0)
+
+	stepLog := "Validate volume attachment when px is restarting"
+	It(stepLog, func() {
+		var createdVolIDs map[string]string
+		var err error
+		volCreateCount := 10
+		stepLog := "Create multiple volumes , attached and restart PX"
+		Step(stepLog, func() {
+			dash.Infof(stepLog)
+
+			stNodes := node.GetStorageNodes()
+			index := rand.Intn(len(stNodes))
+			selectedNode := stNodes[index]
+
+			dash.Infof("Creating and attaching %d volumes on node %s", volCreateCount, selectedNode.Name)
+
+			wg := new(sync.WaitGroup)
+			wg.Add(1)
+			go func(appNode node.Node) {
+				createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
+				if err != nil {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while creating volumes. Err: %v", err))
+				}
+			}(selectedNode)
+			time.Sleep(2 * time.Second)
+			wg.Add(1)
+			go func(appNode node.Node) {
+				defer wg.Done()
+				stepLog = fmt.Sprintf("restart volume driver %s on node: %s", Inst().V.String(), appNode.Name)
+				Step(stepLog, func() {
+					dash.Info(stepLog)
+					err = Inst().V.RestartDriver(appNode, nil)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while restarting volume driver. Err: %v", err))
+
+				})
+			}(selectedNode)
+			wg.Wait()
+
+		})
+
+		stepLog = "Validate the created volumes"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
+
+			for vol, volPath := range createdVolIDs {
+				cVol, err := Inst().V.InspectVolume(vol)
+				if err == nil {
+					dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
+					dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
+				} else {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while inspecting volume %s. Err: %v", vol, err))
+				}
+			}
+		})
+
+		stepLog = "Deleting the created volumes"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
+
+			for vol, _ := range createdVolIDs {
+				log.Infof("Detaching and deleting volume: %s", vol)
+				err := Inst().V.DetachVolume(vol)
+				if err == nil {
+					err = Inst().V.DeleteVolume(vol)
+				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting volume %s. Err: %v", vol, err))
+
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

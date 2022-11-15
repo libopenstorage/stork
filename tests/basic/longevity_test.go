@@ -64,37 +64,38 @@ var _ = Describe("{Longevity}", func() {
 		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
-		AppTaskDown:          TriggerAppTaskDown,
-		AppTasksDown:         TriggerAppTasksDown,
-		AddDrive:             TriggerAddDrive,
-		CoreChecker:          TriggerCoreChecker,
-		CloudSnapShot:        TriggerCloudSnapShot,
-		LocalSnapShot:        TriggerLocalSnapShot,
-		DeleteLocalSnapShot:  TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:       TriggerPoolResizeDisk,
-		PoolAddDisk:          TriggerPoolAddDisk,
-		UpgradeStork:         TriggerUpgradeStork,
-		VolumesDelete:        TriggerVolumeDelete,
-		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
-		AutoFsTrim:           TriggerAutoFsTrim,
-		UpdateVolume:         TriggerVolumeUpdate,
-		RestartManyVolDriver: TriggerRestartManyVolDriver,
-		RebootManyNodes:      TriggerRebootManyNodes,
-		NodeDecommission:     TriggerNodeDecommission,
-		NodeRejoin:           TriggerNodeRejoin,
-		CsiSnapShot:          TriggerCsiSnapShot,
-		CsiSnapRestore:       TriggerCsiSnapRestore,
-		RelaxedReclaim:       TriggerRelaxedReclaim,
-		Trashcan:             TriggerTrashcan,
-		KVDBFailover:         TriggerKVDBFailover,
-		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
-		AsyncDR:              TriggerAsyncDR,
-		AsyncDRVolumeOnly:    TriggerAsyncDRVolumeOnly,
-		RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
-		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
-		AddDiskAndReboot:     TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:  TriggerPoolResizeDiskAndReboot,
-		AutopilotRebalance:   TriggerAutopilotPoolRebalance,
+		AppTaskDown:           TriggerAppTaskDown,
+		AppTasksDown:          TriggerAppTasksDown,
+		AddDrive:              TriggerAddDrive,
+		CoreChecker:           TriggerCoreChecker,
+		CloudSnapShot:         TriggerCloudSnapShot,
+		LocalSnapShot:         TriggerLocalSnapShot,
+		DeleteLocalSnapShot:   TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:        TriggerPoolResizeDisk,
+		PoolAddDisk:           TriggerPoolAddDisk,
+		UpgradeStork:          TriggerUpgradeStork,
+		VolumesDelete:         TriggerVolumeDelete,
+		UpgradeVolumeDriver:   TriggerUpgradeVolumeDriver,
+		AutoFsTrim:            TriggerAutoFsTrim,
+		UpdateVolume:          TriggerVolumeUpdate,
+		RestartManyVolDriver:  TriggerRestartManyVolDriver,
+		RebootManyNodes:       TriggerRebootManyNodes,
+		NodeDecommission:      TriggerNodeDecommission,
+		NodeRejoin:            TriggerNodeRejoin,
+		CsiSnapShot:           TriggerCsiSnapShot,
+		CsiSnapRestore:        TriggerCsiSnapRestore,
+		RelaxedReclaim:        TriggerRelaxedReclaim,
+		Trashcan:              TriggerTrashcan,
+		KVDBFailover:          TriggerKVDBFailover,
+		ValidateDeviceMapper:  TriggerValidateDeviceMapperCleanup,
+		AsyncDR:               TriggerAsyncDR,
+		AsyncDRVolumeOnly:     TriggerAsyncDRVolumeOnly,
+		RestartKvdbVolDriver:  TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:   TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:      TriggerPoolAddDiskAndReboot,
+		ResizeDiskAndReboot:   TriggerPoolResizeDiskAndReboot,
+		AutopilotRebalance:    TriggerAutopilotPoolRebalance,
+		VolumeCreatePxRestart: TriggerVolumeCreatePXRestart,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -349,6 +350,7 @@ func populateDisruptiveTriggers() {
 		HAIncreaseAndReboot:             true,
 		AddDiskAndReboot:                true,
 		ResizeDiskAndReboot:             true,
+		VolumeCreatePxRestart:           true,
 	}
 }
 
@@ -597,6 +599,7 @@ func populateIntervals() {
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
+	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1079,6 +1082,17 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance][2] = 24 * baseInterval
 	triggerInterval[AutopilotRebalance][1] = 27 * baseInterval
 
+	triggerInterval[VolumeCreatePxRestart][10] = 1 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][9] = 2 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][8] = 3 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][7] = 4 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][6] = 5 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][5] = 6 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][4] = 7 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][3] = 8 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][2] = 9 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][1] = 10 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1214,6 +1228,7 @@ func populateIntervals() {
 	triggerInterval[AddDiskAndReboot][0] = 0
 	triggerInterval[ResizeDiskAndReboot][0] = 0
 	triggerInterval[AutopilotRebalance][0] = 0
+	triggerInterval[VolumeCreatePxRestart][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

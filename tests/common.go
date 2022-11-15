@@ -4986,3 +4986,48 @@ func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
 	clusterObj := clusterResp.GetCluster()
 	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 }
+
+func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
+	createdVolIDs := make(map[string]string)
+	defer wg.Done()
+	for count > 0 {
+		volName := fmt.Sprintf("%s-%d", VolumeCreatePxRestart, count)
+		log.Infof("Creating volume : %s", volName)
+		volCreateRequest := &opsapi.SdkVolumeCreateRequest{
+			Name: volName,
+			Spec: &opsapi.VolumeSpec{
+				Size:    1000,
+				HaLevel: 1,
+				Format:  opsapi.FSType_FS_TYPE_EXT4,
+				ReplicaSet: &opsapi.ReplicaSet{
+					Nodes: []string{nodeName},
+				},
+			}}
+		t := func() (interface{}, bool, error) {
+			out, err := Inst().V.CreateVolumeUsingRequest(volCreateRequest)
+			return out, true, err
+		}
+
+		out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+
+		var volPath string
+		var volId string
+		if err == nil {
+			volId = fmt.Sprintf("%v", out)
+			log.Infof("Volume %s created", volId)
+			t := func() (interface{}, bool, error) {
+				out, err := Inst().V.AttachVolume(volId)
+				return out, true, err
+			}
+			out, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+		}
+		if err != nil {
+			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+		}
+		volPath = fmt.Sprintf("%v", out)
+		createdVolIDs[volId] = volPath
+		log.Infof("Volume %s attached to path %s", volId, volPath)
+		count--
+	}
+	return createdVolIDs, nil
+}

@@ -115,6 +115,15 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	}
 }
 
+// CreateVolumeUsingRequest creates a volume with the given create request
+// returns volume_id of the new volume
+func (d *DefaultDriver) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeUsingRequest()",
+	}
+}
+
 // CloneVolume clones the volume specified in VolumeId paramerter
 // returns the volume_id of the cloned volume
 func (d *DefaultDriver) CloneVolume(volumeID string) (string, error) {

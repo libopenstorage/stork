@@ -64,6 +64,10 @@ type Driver interface {
 	// returns volume_id of the new volume
 	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
 
+	// CreateVolumeUsingRequest creates a volume with the given volume request
+	// returns volume_id of the new volume
+	CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error)
+
 	// CloneVolume creates a clone of the volume whose volumeName is passed as arg.
 	// returns volume_id of the cloned volume and error if there is any
 	CloneVolume(volumeID string) (string, error)
