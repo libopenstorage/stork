@@ -20,6 +20,7 @@ import (
 const (
 	deploymentName          = "qa"
 	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
+	envPDSConfigMap         = "PDS_PARAM_CM"
 	postgresql              = "PostgreSQL"
 	cassandra               = "Cassandra"
 	redis                   = "Redis"
@@ -69,7 +70,7 @@ var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
 		dash = Inst().Dash
 		dash.TestSetBegin(dash.TestSet)
-		pdsparams := Inst().PDSParams
+		pdsparams := pdslib.GetAndExpectStringEnvVar("envPDSConfigMap")
 		params, err = pdslib.ReadParams(pdsparams)
 		Expect(err).NotTo(HaveOccurred())
 		infraParams := params.InfraToTest

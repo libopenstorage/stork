@@ -482,7 +482,6 @@ spec:
             "--testset-id=$DASH_UID",
             "--branch=$BRANCH",
             "--product=$PRODUCT",
-            "--pds-param-cm=$PDS_PARAMETER_CM",
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "$APP_DESTROY_TIMEOUT_ARG",
@@ -584,6 +583,8 @@ spec:
       value: "${PDS_CLIENT_ID}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
+    - name: PDS_PARAM_CM
+      value: "${PDS_PARAM_CM}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG

@@ -157,7 +157,6 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
-	pdsParamCliFlag                      = "pds-param-cm"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -3810,7 +3809,6 @@ type Torpedo struct {
 	M                                   monitor.Driver
 	SpecDir                             string
 	AppList                             []string
-	PDSParams                           string
 	LogLoc                              string
 	LogLevel                            string
 	Logger                              *logrus.Logger
@@ -3851,7 +3849,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, pdsParam, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -3894,7 +3892,6 @@ func ParseFlags() {
 	var torpedoJobName string
 	var torpedoJobType string
 
-	flag.StringVar(&pdsParam, pdsParamCliFlag, "", "PDS Test Params")
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
@@ -4070,7 +4067,6 @@ func ParseFlags() {
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
-				PDSParams:                           pdsParam,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
