@@ -569,7 +569,6 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 	var cleanup []string
 	for _, ds := range params.DataServiceToTest {
-		isDeploymentsDeleted = false
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -596,15 +595,6 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 			nname,
 		)
 		Expect(err).NotTo(HaveOccurred())
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-			}
-		}()
 
 		Step("Validate Storage Configurations", func() {
 
@@ -683,7 +673,6 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 					_, err := pdslib.DeleteDeployment(dep)
 					Expect(err).NotTo(HaveOccurred())
 				}
-				isDeploymentsDeleted = true
 			})
 
 		})
