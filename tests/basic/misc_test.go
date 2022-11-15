@@ -659,7 +659,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			})
 			dash.VerifyFatal(err, nil, "validate get daemon sets list")
 			dash.VerifyFatal(len(daemonSets) > 0, true, "validate daemon sets list")
-			dash.VerifyFatal(daemonSets[0].Spec.Template.Spec.Containers, "", "validate daemon set container is not empty")
+			dash.VerifyFatal(len(daemonSets[0].Spec.Template.Spec.Containers) > 0, true, "validate daemon set container is not empty")
 			usingVault := false
 			for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
 				if container.Name == portworxContainerName {
