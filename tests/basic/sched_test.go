@@ -16,7 +16,7 @@ var _ = Describe("{StopScheduler}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35268
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("StopScheduler", "Validate stop scheduler and apps", nil)
+		StartTorpedoTest("StopScheduler", "Validate stop scheduler and apps", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

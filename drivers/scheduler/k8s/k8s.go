@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	baseErrors "errors"
 	"fmt"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"io"
@@ -108,10 +109,6 @@ const (
 	PureBlock = "pure_block"
 	// PortworxStrict provisioner for using same provisioner as provided in the spec
 	PortworxStrict = "strict"
-	// PXDaemonSet DaemonSet Name
-	PXDaemonSet = "portworx"
-	// PXNamespace default namespace
-	PXNamespace = "kube-system"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
 	//NodeType for enabling specific features
@@ -136,8 +133,8 @@ const (
 	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
 
-	autopilotServiceName          = "autopilot"
 	autopilotDefaultNamespace     = "kube-system"
+	portworxServiceName           = "portworx-service"
 	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
 	pvcLabelsAnnotationKey        = "torpedo.io/pvclabels-enabled"
@@ -1280,15 +1277,16 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	}
 
 	if strings.Contains(app.Key, "fastpath") {
-		vpsSpec := "../deployments/customconfigs/fastpath-vps.yaml"
-		if _, err := os.Stat(vpsSpec); err == nil {
+		vpsSpec := "/torpedo/deployments/customconfigs/fastpath-vps.yaml"
+		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
+			k.log.Warnf("Cannot find fastpath-vps.yaml in path %s", vpsSpec)
+		} else {
 			cmdArgs := []string{"apply", "-f", vpsSpec}
 			err = osutils.Kubectl(cmdArgs)
 			if err != nil {
 				k.log.Errorf("Error applying spec %s", vpsSpec)
 			}
 		}
-
 	}
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
@@ -5016,7 +5014,7 @@ func (k *K8s) GetAutopilotNamespace() (string, error) {
 		return "", err
 	}
 	for _, svc := range allServices.Items {
-		if svc.Name == autopilotServiceName {
+		if svc.Name == portworxServiceName {
 			return svc.Namespace, nil
 		}
 	}

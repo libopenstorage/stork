@@ -1,0 +1,79 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beat-config
+data:
+  filebeat.yml: |-
+    filebeat.inputs:
+      - type: log 
+        enabled: true
+        paths:
+          - /tmp/combinedappache*.log 
+        fields:
+          type: appachecombined
+      - type: log
+        enabled: true
+        fields:
+          type: sysrfc3164
+        paths: 
+          - /tmp/sys*.log
+      - type: log
+        enabled: true
+        fields:
+          type: apachecommon
+        paths:
+          - /tmp/apachecommon*.log
+      - type: log
+        enabled: true
+        fields:
+          type: apacheerror
+        paths:
+          - /tmp/apacheerror*.log
+    output:
+      logstash:
+        hosts: [ "logstash:5044" ]
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: logging-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: logging-app
+  template:
+    metadata:
+      labels:
+        name: logging-app
+    spec:
+      hostname: logging-app
+      containers:
+      - name: beat-app
+        image: elastic/filebeat:7.8.0
+        args: [
+            "-c", "/etc/filebeat/filebeat.yml",
+            "-e"
+        ]
+        volumeMounts:
+        - name: beat-config
+          mountPath: /etc/filebeat/
+        - name: manual-log-directory
+          mountPath: /tmp/
+      - name: flog-app
+        image: docker.pwx.dev.purestorage.com/portworx/logstash-fog
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: manual-log-directory
+          mountPath: /tmp/
+      restartPolicy: Always  
+      volumes:
+      - name: beat-config
+        configMap:
+          name: beat-config
+          items:
+            - key: filebeat.yml
+              path: filebeat.yml
+      - name: manual-log-directory
+        emptyDir: {}

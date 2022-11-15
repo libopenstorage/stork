@@ -16,12 +16,14 @@ require (
 	github.com/hashicorp/go-version v1.2.1
 	github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a
+	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20211217234328-ead591c0f22d
 	github.com/prometheus/client_golang v1.9.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/vmware/govmomi v0.22.2
+	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
 	google.golang.org/api v0.30.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/apimachinery v0.20.4

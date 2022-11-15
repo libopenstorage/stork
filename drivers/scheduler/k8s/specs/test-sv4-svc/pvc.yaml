@@ -10,7 +10,6 @@ parameters:
   sharedv4: {{ .StorageClassSharedv4 }}
   {{ else }}
   sharedv4: "true"{{ end }}
-  sharedv4_svc_type: "ClusterIP"
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim

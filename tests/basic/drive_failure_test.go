@@ -24,7 +24,7 @@ var _ = Describe("{DriveFailure}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35265
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("DriveFailure", "Validate PX after drive failure", nil)
+		StartTorpedoTest("DriveFailure", "Validate PX after drive failure", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

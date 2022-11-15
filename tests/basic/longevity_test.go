@@ -14,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -65,36 +64,38 @@ var _ = Describe("{Longevity}", func() {
 		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
-		AppTaskDown:          TriggerAppTaskDown,
-		AppTasksDown:         TriggerAppTasksDown,
-		AddDrive:             TriggerAddDrive,
-		CoreChecker:          TriggerCoreChecker,
-		CloudSnapShot:        TriggerCloudSnapShot,
-		LocalSnapShot:        TriggerLocalSnapShot,
-		DeleteLocalSnapShot:  TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:       TriggerPoolResizeDisk,
-		PoolAddDisk:          TriggerPoolAddDisk,
-		UpgradeStork:         TriggerUpgradeStork,
-		VolumesDelete:        TriggerVolumeDelete,
-		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
-		AutoFsTrim:           TriggerAutoFsTrim,
-		UpdateVolume:         TriggerVolumeUpdate,
-		RestartManyVolDriver: TriggerRestartManyVolDriver,
-		RebootManyNodes:      TriggerRebootManyNodes,
-		NodeDecommission:     TriggerNodeDecommission,
-		NodeRejoin:           TriggerNodeRejoin,
-		CsiSnapShot:          TriggerCsiSnapShot,
-		CsiSnapRestore:       TriggerCsiSnapRestore,
-		RelaxedReclaim:       TriggerRelaxedReclaim,
-		Trashcan:             TriggerTrashcan,
-		KVDBFailover:         TriggerKVDBFailover,
-		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
-		AsyncDR:              TriggerAsyncDR,
-		RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
-		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
-		AddDiskAndReboot:     TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:  TriggerPoolResizeDiskAndReboot,
-		AutopilotRebalance:   TriggerAutopilotPoolRebalance,
+		AppTaskDown:           TriggerAppTaskDown,
+		AppTasksDown:          TriggerAppTasksDown,
+		AddDrive:              TriggerAddDrive,
+		CoreChecker:           TriggerCoreChecker,
+		CloudSnapShot:         TriggerCloudSnapShot,
+		LocalSnapShot:         TriggerLocalSnapShot,
+		DeleteLocalSnapShot:   TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:        TriggerPoolResizeDisk,
+		PoolAddDisk:           TriggerPoolAddDisk,
+		UpgradeStork:          TriggerUpgradeStork,
+		VolumesDelete:         TriggerVolumeDelete,
+		UpgradeVolumeDriver:   TriggerUpgradeVolumeDriver,
+		AutoFsTrim:            TriggerAutoFsTrim,
+		UpdateVolume:          TriggerVolumeUpdate,
+		RestartManyVolDriver:  TriggerRestartManyVolDriver,
+		RebootManyNodes:       TriggerRebootManyNodes,
+		NodeDecommission:      TriggerNodeDecommission,
+		NodeRejoin:            TriggerNodeRejoin,
+		CsiSnapShot:           TriggerCsiSnapShot,
+		CsiSnapRestore:        TriggerCsiSnapRestore,
+		RelaxedReclaim:        TriggerRelaxedReclaim,
+		Trashcan:              TriggerTrashcan,
+		KVDBFailover:          TriggerKVDBFailover,
+		ValidateDeviceMapper:  TriggerValidateDeviceMapperCleanup,
+		AsyncDR:               TriggerAsyncDR,
+		AsyncDRVolumeOnly:     TriggerAsyncDRVolumeOnly,
+		RestartKvdbVolDriver:  TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:   TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:      TriggerPoolAddDiskAndReboot,
+		ResizeDiskAndReboot:   TriggerPoolResizeDiskAndReboot,
+		AutopilotRebalance:    TriggerAutopilotPoolRebalance,
+		VolumeCreatePxRestart: TriggerVolumeCreatePXRestart,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -103,7 +104,7 @@ var _ = Describe("{Longevity}", func() {
 
 	BeforeEach(func() {
 		if !populateDone {
-			StartTorpedoTest("PX-Longevity", "Validate PX longevity workflow", nil)
+			StartTorpedoTest("PX-Longevity", "Validate PX longevity workflow", nil, 0)
 
 			populateIntervals()
 			populateDisruptiveTriggers()
@@ -349,6 +350,7 @@ func populateDisruptiveTriggers() {
 		HAIncreaseAndReboot:             true,
 		AddDiskAndReboot:                true,
 		ResizeDiskAndReboot:             true,
+		VolumeCreatePxRestart:           true,
 	}
 }
 
@@ -462,8 +464,12 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	log.Info("Add Topology Labels on node")
 	var secret PureSecret
+	volumeDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volume driver namespace. Error [%v]", err)
+	}
 	pureSecretString, err := Inst().S.GetSecretData(
-		schedops.PXNamespace, PureSecretName, PureSecretDataField,
+		volumeDriverNamespace, PureSecretName, PureSecretDataField,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read pure secret [%s]. Error [%v]",
@@ -507,7 +513,8 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
 	logrus.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
-	if err := deletePXPods(""); err != nil {
+
+	if err := deletePXPods(volumeDriverNamespace); err != nil {
 		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)
 	}
 
@@ -528,9 +535,6 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 // deletePXPods delete px pods
 func deletePXPods(nameSpace string) error {
 	pxLabel := make(map[string]string)
-	if nameSpace == "" {
-		nameSpace = k8s.PXNamespace
-	}
 	pxLabel["name"] = "portworx"
 	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
 		return err
@@ -589,11 +593,13 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
+	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -715,17 +721,6 @@ func populateIntervals() {
 	triggerInterval[BackupRestartNode][6] = 5 * baseInterval
 	triggerInterval[BackupRestartNode][5] = 6 * baseInterval
 
-	triggerInterval[AppTasksDown][10] = 1 * baseInterval
-	triggerInterval[AppTasksDown][9] = 2 * baseInterval
-	triggerInterval[AppTasksDown][8] = 3 * baseInterval
-	triggerInterval[AppTasksDown][7] = 4 * baseInterval
-	triggerInterval[AppTasksDown][6] = 5 * baseInterval
-	triggerInterval[AppTasksDown][5] = 6 * baseInterval
-	triggerInterval[AppTasksDown][4] = 7 * baseInterval
-	triggerInterval[AppTasksDown][3] = 8 * baseInterval
-	triggerInterval[AppTasksDown][2] = 9 * baseInterval
-	triggerInterval[AppTasksDown][1] = 10 * baseInterval
-
 	triggerInterval[AsyncDR][10] = 1 * baseInterval
 	triggerInterval[AsyncDR][9] = 3 * baseInterval
 	triggerInterval[AsyncDR][8] = 6 * baseInterval
@@ -737,7 +732,29 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
 
+	triggerInterval[AsyncDRVolumeOnly][10] = 1 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][9] = 3 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][8] = 6 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][7] = 9 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][6] = 12 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][5] = 15 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][4] = 18 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][3] = 21 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][2] = 24 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][1] = 27 * baseInterval
+
 	baseInterval = 60 * time.Minute
+
+	triggerInterval[AppTasksDown][10] = 1 * baseInterval
+	triggerInterval[AppTasksDown][9] = 2 * baseInterval
+	triggerInterval[AppTasksDown][8] = 3 * baseInterval
+	triggerInterval[AppTasksDown][7] = 4 * baseInterval
+	triggerInterval[AppTasksDown][6] = 5 * baseInterval
+	triggerInterval[AppTasksDown][5] = 6 * baseInterval
+	triggerInterval[AppTasksDown][4] = 7 * baseInterval
+	triggerInterval[AppTasksDown][3] = 8 * baseInterval
+	triggerInterval[AppTasksDown][2] = 9 * baseInterval
+	triggerInterval[AppTasksDown][1] = 10 * baseInterval
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval
@@ -1065,6 +1082,17 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance][2] = 24 * baseInterval
 	triggerInterval[AutopilotRebalance][1] = 27 * baseInterval
 
+	triggerInterval[VolumeCreatePxRestart][10] = 1 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][9] = 2 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][8] = 3 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][7] = 4 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][6] = 5 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][5] = 6 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][4] = 7 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][3] = 8 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][2] = 9 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][1] = 10 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1194,11 +1222,13 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[AsyncDRVolumeOnly][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0
 	triggerInterval[ResizeDiskAndReboot][0] = 0
 	triggerInterval[AutopilotRebalance][0] = 0
+	triggerInterval[VolumeCreatePxRestart][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

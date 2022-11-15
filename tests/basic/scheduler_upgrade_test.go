@@ -23,7 +23,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58849
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeScheduler", "Validate scheduler upgrade", nil)
+		StartTorpedoTest("UpgradeScheduler", "Validate scheduler upgrade", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

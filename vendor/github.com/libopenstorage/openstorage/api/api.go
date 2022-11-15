@@ -98,6 +98,7 @@ const (
 	SpecSharedv4ExternalAccess              = "sharedv4_external_access"
 	SpecFastpath                            = "fastpath"
 	SpecAutoFstrim                          = "auto_fstrim"
+	SpecBackendVolName                      = "pure_vol_name"
 	SpecBackendType                         = "backend"
 	SpecBackendPureBlock                    = "pure_block"
 	SpecBackendPureFile                     = "pure_file"
@@ -166,6 +167,14 @@ const (
 	OptCredOwnership = "CredOwnership"
 	// OptCredProxy proxy key in params
 	OptCredProxy = "CredProxy"
+	// OptCredNFSServer is the server address for NFS access
+	OptCredNFSServer = "CredNFSServer"
+	// OptCredNFSSubPath is the sub-path for objects
+	OptCredNFSSubPath = "CredNFSSubPath"
+	// OptCredNFSMountOpts is the optional mount options
+	OptCredNFSMountOpts = "CredNFSMountOpts"
+	// OptCredNFSTimeout is the optional timeout value
+	OptCredNFSTimeoutSeconds = "CredNFSTimeout"
 	// OptCredIAMPolicy if "true", indicates IAM creds to be used
 	OptCredIAMPolicy = "CredIAMPolicy"
 	// OptRemoteCredUUID is the UUID of the remote cluster credential
@@ -261,6 +270,8 @@ type Node struct {
 	HWType HardwareType
 	// Determine if the node is secure with authentication and authorization
 	SecurityStatus StorageNode_SecurityStatus
+	// SchedulerTopology topology information of the node in scheduler context
+	SchedulerTopology *SchedulerTopology
 }
 
 // FluentDConfig describes ip and port of a fluentdhost.
@@ -343,7 +354,7 @@ type CloudBackupCreateRequest struct {
 	// Labels are list of key value pairs to tag the cloud backup. These labels
 	// are stored in the metadata associated with the backup.
 	Labels map[string]string
-	// FullBackupFrequency indicates number of incremental backup after whcih
+	// FullBackupFrequency indicates number of incremental backup after which
 	// a fullbackup must be created. This is to override the default value for
 	// manual/user triggerred backups and not applicable for scheduled backups.
 	// Value of 0 retains the default behavior.
@@ -625,7 +636,7 @@ type CloudBackupScheduleInfo struct {
 	SrcVolumeID string
 	// CredentialUUID is the cloud credential used with this schedule
 	CredentialUUID string
-	// Schedule is the frequence of backup
+	// Schedule is the frequencies of backup
 	Schedule string
 	// MaxBackups are the maximum number of backups retained
 	// in cloud.Older backups are deleted
@@ -981,6 +992,7 @@ func (s *Node) ToStorageNode() *StorageNode {
 		Hostname:          s.Hostname,
 		HWType:            s.HWType,
 		SecurityStatus:    s.SecurityStatus,
+		SchedulerTopology: s.SchedulerTopology,
 	}
 
 	node.Disks = make(map[string]*StorageResource)
@@ -1351,6 +1363,30 @@ func ParseProxyEndpoint(proxyEndpoint string) (ProxyProtocol, string) {
 func (s *ProxySpec) IsPureBackend() bool {
 	return s.ProxyProtocol == ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK ||
 		s.ProxyProtocol == ProxyProtocol_PROXY_PROTOCOL_PURE_FILE
+}
+
+func (s *ProxySpec) IsPureImport() bool {
+	if !s.IsPureBackend() {
+		return false
+	}
+
+	return (s.PureBlockSpec != nil && s.PureBlockSpec.FullVolName != "") || (s.PureFileSpec != nil && s.PureFileSpec.FullVolName != "")
+}
+
+func (s *ProxySpec) GetPureFullVolumeName() string {
+	if !s.IsPureImport() {
+		return ""
+	}
+
+	if s.PureBlockSpec != nil {
+		return s.PureBlockSpec.FullVolName
+	}
+
+	if s.PureFileSpec != nil {
+		return s.PureFileSpec.FullVolName
+	}
+
+	return ""
 }
 
 // GetAllEnumInfo returns an EnumInfo for every proto enum

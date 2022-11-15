@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package mount
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -33,7 +35,7 @@ type Manager interface {
 	// Reload mount table for specified device.
 	Reload(source string) error
 	// Load mount table for all devices that match the list of identifiers
-	Load(source []string) error
+	Load(source []*regexp.Regexp) error
 	// Inspect mount table for specified source. ErrEnoent may be returned.
 	Inspect(source string) []*PathInfo
 	// Mounts returns paths for specified source.
@@ -149,7 +151,7 @@ type Mounter struct {
 	trashLocation string
 }
 
-type findMountPoint func(source *mount.Info, destination string, mountInfo []*mount.Info) (bool, string, string)
+type findMountPoint func(source *mount.Info, destination *regexp.Regexp, mountInfo []*mount.Info) (bool, string, string)
 
 // DefaultMounter defaults to syscall implementation.
 type DefaultMounter struct {
@@ -361,7 +363,7 @@ func (m *Mounter) reload(device string, newM *Info) error {
 	return nil
 }
 
-func (m *Mounter) load(prefixes []string, fmp findMountPoint) error {
+func (m *Mounter) load(prefixes []*regexp.Regexp, fmp findMountPoint) error {
 	info, err := GetMounts()
 	if err != nil {
 		return err
@@ -373,14 +375,14 @@ func (m *Mounter) load(prefixes []string, fmp findMountPoint) error {
 		)
 		for _, devPrefix := range prefixes {
 			foundPrefix, sourcePath, devicePath = fmp(v, devPrefix, info)
-			targetDevice = getTargetDevice(devPrefix)
+			targetDevice = getTargetDevice(devPrefix.String())
 			if !foundPrefix && targetDevice != "" {
-				foundTarget, _, _ = fmp(v, targetDevice, info)
+				foundTarget, _, _ = fmp(v, regexp.MustCompile(regexp.QuoteMeta(targetDevice)), info)
 				// We could not find a mountpoint for devPrefix (/dev/mapper/vg-lvm1) but found
 				// one for its target device (/dev/dm-0). Change the sourcePath to devPrefix
 				// as fmp might have returned an incorrect or empty sourcePath
-				sourcePath = devPrefix
-				devicePath = devPrefix
+				sourcePath = devPrefix.String()
+				devicePath = devPrefix.String()
 			}
 
 			if foundPrefix || foundTarget {
@@ -537,7 +539,7 @@ func (m *Mounter) Mount(
 			}
 		}
 
-		return fmt.Errorf("%s", err)
+		return err
 	}
 
 	info.Mountpoint = append(info.Mountpoint, &PathInfo{Path: path})
@@ -605,7 +607,6 @@ func (m *Mounter) Unmount(
 	}
 	info, ok := m.mounts[device]
 	if !ok {
-		m.Unlock()
 		logrus.Warnf("Unable to unmount device %q path %q: %v",
 			devPath, path, ErrEnoent.Error())
 		logrus.Infof("Found %v mounts in mounter's cache: ", len(m.mounts))
@@ -619,6 +620,7 @@ func (m *Mounter) Unmount(
 				logrus.Infof("\t Mountpath: %v Rootpath: %v", path.Path, path.Root)
 			}
 		}
+		m.Unlock()
 		return ErrEnoent
 	}
 	m.Unlock()
@@ -643,7 +645,7 @@ func (m *Mounter) Unmount(
 		return nil
 	}
 	logrus.Warnf("Device %q is not mounted at path %q", device, path)
-	return nil
+	return ErrEnoent
 }
 
 func (m *Mounter) removeMountPath(path string) error {
@@ -661,7 +663,7 @@ func (m *Mounter) removeMountPath(path string) error {
 	}
 
 	var bindMountPath string
-	bindMounter, err := New(BindMount, nil, []string{""}, nil, []string{}, "")
+	bindMounter, err := New(BindMount, nil, []*regexp.Regexp{regexp.MustCompile("")}, nil, []string{}, "")
 	if err != nil {
 		return err
 	}
@@ -701,6 +703,11 @@ func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) erro
 			hasher.Write([]byte(mountPath))
 			symlinkName := hex.EncodeToString(hasher.Sum(nil))
 			symlinkPath := path.Join(m.trashLocation, symlinkName)
+			if p, err := filepath.EvalSymlinks(symlinkPath); err == nil && p == mountPath {
+				// we already scheduled the removal for this mountPath
+				logrus.Infof("RemoveMountPath is called where symlink still exists on: %v", symlinkPath)
+				return nil
+			}
 
 			if err = os.Symlink(mountPath, symlinkPath); err != nil {
 				if !os.IsExist(err) {
@@ -710,6 +717,7 @@ func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) erro
 
 			if _, err = sched.Instance().Schedule(
 				func(sched.Interval) {
+					logrus.Infof("[RemoveMountPath] Scheduled removing mount path %v ", mountPath)
 					if err = m.removeMountPath(mountPath); err != nil {
 						return
 					}
@@ -742,6 +750,7 @@ func (m *Mounter) EmptyTrashDir() error {
 	if _, err := sched.Instance().Schedule(
 		func(sched.Interval) {
 			for _, file := range files {
+				logrus.Infof("[EmptyTrashDir] Scheduled removing file %v in trash location %v", file.Name(), m.trashLocation)
 				e := m.removeSoftlinkAndTarget(path.Join(m.trashLocation, file.Name()))
 				if e != nil {
 					logrus.Errorf("failed to remove link: %s. Err: %v", path.Join(m.trashLocation, file.Name()), e)
@@ -797,7 +806,7 @@ func (m *Mounter) makeMountpathWriteable(mountpath string) error {
 func New(
 	mounterType MountType,
 	mountImpl MountImpl,
-	identifiers []string,
+	identifiers []*regexp.Regexp,
 	customMounter CustomMounter,
 	allowedDirs []string,
 	trashLocation string,
@@ -811,7 +820,7 @@ func New(
 	case DeviceMount:
 		return NewDeviceMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case NFSMount:
-		return NewNFSMounter(identifiers, mountImpl, allowedDirs)
+		return NewNFSMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case BindMount:
 		return NewBindMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case CustomMount:

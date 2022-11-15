@@ -6,7 +6,6 @@ import (
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
 	"net/http"
-	"os"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -30,6 +29,7 @@ var (
 const (
 	//DashBoardBaseURL for posting logs
 	DashBoardBaseURL = "http://aetos.pwx.purestorage.com/dashboard" //"http://aetos-dm.pwx.purestorage.com:3939/dashboard"
+	AetosBaseURL     = "http://aetos.pwx.purestorage.com"
 )
 
 const (
@@ -68,15 +68,15 @@ type Dashboard struct {
 
 //TestSet struct
 type TestSet struct {
-	CommitID    string   `json:"commitId"`
-	User        string   `json:"user"`
-	Product     string   `json:"product"`
-	Description string   `json:"description"`
-	HostOs      string   `json:"hostOs"`
-	Branch      string   `json:"branch"`
-	TestType    string   `json:"testType"`
-	Tags        []string `json:"tags"`
-	Status      string   `json:"status"`
+	CommitID    string            `json:"commitId"`
+	User        string            `json:"user"`
+	Product     string            `json:"product"`
+	Description string            `json:"description"`
+	HostOs      string            `json:"hostOs"`
+	Branch      string            `json:"branch"`
+	TestType    string            `json:"testType"`
+	Tags        map[string]string `json:"nTags"`
+	Status      string            `json:"status"`
 }
 
 //TestCase struct
@@ -85,16 +85,16 @@ type TestCase struct {
 	ShortName  string `json:"shortName"`
 	ModuleName string `json:"moduleName"`
 
-	Status      string   `json:"status"`
-	Errors      []string `json:"errors"`
-	LogFile     string   `json:"logFile"`
-	Description string   `json:"description"`
-	Command     string   `json:"command"`
-	HostOs      string   `json:"hostOs"`
-	Tags        []string `json:"tags"`
-	TestSetID   int      `json:"testSetID"`
-	TestRepoID  string   `json:"testRepoID"`
-	Duration    string   `json:"duration"`
+	Status      string            `json:"status"`
+	Errors      []string          `json:"errors"`
+	LogFile     string            `json:"logFile"`
+	Description string            `json:"description"`
+	Command     string            `json:"command"`
+	HostOs      string            `json:"hostOs"`
+	Tags        map[string]string `json:"nTags"`
+	TestSetID   int               `json:"testSetID"`
+	TestRailID  string            `json:"testRepoID"`
+	Duration    string            `json:"duration"`
 }
 
 type result struct {
@@ -153,9 +153,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 			} else {
 				d.Log.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
-			d.Log.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
-			os.Setenv("TESTSET-ID", fmt.Sprint(d.TestSetID))
-
+			d.Log.Infof("Dashboard URL : %s", fmt.Sprintf("%s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID))
 		}
 	}
 
@@ -194,6 +192,15 @@ func (d *Dashboard) TestSetEnd() {
 
 // TestCaseEnd update testcase  to dashboard DB
 func (d *Dashboard) TestCaseEnd() {
+	result := "PASS"
+
+	for _, v := range verifications {
+
+		if !v.ResultStatus {
+			result = "FAIL"
+			break
+		}
+	}
 	if d.IsEnabled {
 
 		if d.testcaseID == 0 {
@@ -212,25 +219,16 @@ func (d *Dashboard) TestCaseEnd() {
 			d.Log.Infof("TestCase %d ended successfully", d.testcaseID)
 		}
 
-		result := "PASS"
-
-		for _, v := range verifications {
-
-			if !v.ResultStatus {
-				result = "FAIL"
-				break
-			}
-		}
-
-		d.Log.Info("--------Test End------")
-		d.Log.Infof("#Test: %s ", testCase.ShortName)
-		d.Log.Infof("#Description: %s ", testCase.Description)
-		d.Log.Infof("#Resuly: %s ", result)
-		d.Log.Info("------------------------")
 		verifications = nil
 		removeTestCaseFromStack(d.testcaseID)
 
 	}
+
+	d.Log.Info("--------Test End------")
+	d.Log.Infof("#Test: %s ", testCase.ShortName)
+	d.Log.Infof("#Description: %s ", testCase.Description)
+	d.Log.Infof("#Result: %s ", result)
+	d.Log.Info("------------------------")
 }
 
 func removeTestCaseFromStack(testcaseID int) {
@@ -274,7 +272,12 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
-func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags []string) {
+func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags map[string]string) {
+
+	d.Log.Info("--------Test Start------")
+	d.Log.Infof("#Test: %s ", testName)
+	d.Log.Infof("#Description: %s ", description)
+	d.Log.Info("------------------------")
 	if d.IsEnabled {
 		if d.TestSetID == 0 {
 			d.Log.Errorf("TestSetID is empty, skipping begin testcase")
@@ -308,7 +311,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags
 
 		testCase.TestSetID = d.TestSetID
 
-		testCase.TestRepoID = testRepoID
+		testCase.TestRailID = testRailID
 		if tags != nil {
 			testCase.Tags = tags
 		}
@@ -329,10 +332,6 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags
 				d.Log.Errorf("TestCase creation failed. Cause : %v", err)
 			}
 		}
-		d.Log.Info("--------Test Start------")
-		d.Log.Infof("#Test: %s ", testCase.ShortName)
-		d.Log.Infof("#Description: %s ", description)
-		d.Log.Info("------------------------")
 
 		testCasesStack = append(testCasesStack, d.testcaseID)
 

@@ -192,6 +192,7 @@ type portworx struct {
 	portworxServiceClient pxapi.PortworxServiceClient
 	schedOps              schedops.Driver
 	nodeDriver            node.Driver
+	namespace             string
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
@@ -286,6 +287,10 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
+func (d *portworx) GetVolumeDriverNamespace() (string, error) {
+	return d.schedOps.GetPortworxNamespace()
+}
+
 // init is all the functionality of Init, but allowing you to set a custom driver name
 func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string, logger *logrus.Logger) error {
 	d.log = logger
@@ -306,6 +311,12 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
 	}
 	d.schedOps.Init(d.log)
+
+	namespace, err := d.GetVolumeDriverNamespace()
+	if err != nil {
+		return err
+	}
+	d.namespace = namespace
 
 	if err = d.setDriver(); err != nil {
 		return err
@@ -703,6 +714,18 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 	}
 
 	d.log.Infof("successfully created Portworx volume %v ", resp.VolumeId)
+
+	return resp.VolumeId, nil
+}
+
+func (d *portworx) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
+	volDriver := d.getVolDriver()
+	resp, err := volDriver.Create(d.getContext(), request)
+	if err != nil {
+		return "", fmt.Errorf("error while creating volume because of: %v", err)
+	}
+
+	d.log.Infof("Successfully created Portworx volume %v ", resp.VolumeId)
 
 	return resp.VolumeId, nil
 }
@@ -1216,7 +1239,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.Spec.IoProfile {
+			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
+				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
+				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
 			}
 		case api.SpecSize:
@@ -2004,7 +2029,7 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 //GetAutoFsTrimStatus get status of autofstrim
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 
-	sdkport, _ := getSDKPort()
+	sdkport, _ := d.getSDKPort()
 	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
 	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
@@ -2402,12 +2427,12 @@ func (d *portworx) setDriver() error {
 }
 
 func (d *portworx) testAndSetEndpointUsingService(endpoint string) error {
-	sdkPort, err := getSDKPort()
+	sdkPort, err := d.getSDKPort()
 	if err != nil {
 		return err
 	}
 
-	restPort, err := getRestPort()
+	restPort, err := d.getRestPort()
 	if err != nil {
 		return err
 	}
@@ -2416,12 +2441,12 @@ func (d *portworx) testAndSetEndpointUsingService(endpoint string) error {
 }
 
 func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
-	sdkPort, err := getSDKContainerPort()
+	sdkPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return err
 	}
 
-	restPort, err := getRestContainerPort()
+	restPort, err := d.getRestContainerPort()
 	if err != nil {
 		return err
 	}
@@ -2671,7 +2696,7 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string) (map[stri
 	// file up cluster pair info
 	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
 	pairInfo[tokenKey] = resp.Result.Token
-	pwxServicePort, err := getRestContainerPort()
+	pwxServicePort, err := d.getRestContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2918,7 +2943,7 @@ func (d *portworx) getClusterPairManager() api.OpenStorageClusterPairClient {
 }
 
 func (d *portworx) getClusterPairManagerByAddress(addr, token string) (api.OpenStorageClusterPairClient, error) {
-	pxPort, err := getSDKContainerPort()
+	pxPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2949,7 +2974,7 @@ func (d *portworx) getAlertsManager() api.OpenStorageAlertsClient {
 }
 
 func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClient, error) {
-	pxPort, err := getSDKContainerPort()
+	pxPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2980,7 +3005,7 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	// we are removing using service endpoint because services would
 	// return a random node endpoint the service chooses and puts it in maintenance.
 	// this would fail the status check in `EnterMaintenanc` and `ExitMaintenance`
-	pxdRestPort, err := getRestContainerPort()
+	pxdRestPort, err := d.getRestContainerPort()
 	if err != nil {
 		return err
 	}
@@ -3148,7 +3173,7 @@ func hasIgnorePrefix(str string) bool {
 func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.MetadataNode, error) {
 	var err error
 	kvdbMembers := make(map[string]*torpedovolume.MetadataNode)
-	pxdRestPort, err := getRestPort()
+	pxdRestPort, err := d.getRestPort()
 
 	if err != nil {
 		return kvdbMembers, err
@@ -3160,7 +3185,7 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 
 	if err != nil || endpoint == "" {
 		d.log.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
-		pxdRestPort, err = getRestContainerPort()
+		pxdRestPort, err = d.getRestContainerPort()
 		if err != nil {
 			return kvdbMembers, err
 		}
@@ -3817,7 +3842,7 @@ func (d *portworx) RunSecretsLogin(n node.Node, secretType string) error {
 }
 
 func (d *portworx) GetStorageCluster() (*v1.StorageCluster, error) {
-	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+	pxOps, err := pxOperator.ListStorageClusters(d.namespace)
 	if err != nil {
 		er := fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
 		d.log.Error(er.Error())
@@ -3854,7 +3879,7 @@ func (d *portworx) UpdateStorageClusterImage(imageName string) error {
 }
 
 func (d *portworx) GetPXStorageCluster() (*v1.StorageCluster, error) {
-	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+	pxOps, err := pxOperator.ListStorageClusters(d.namespace)
 	if err != nil {
 		err = fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
 		d.log.Error(err.Error())
@@ -3882,7 +3907,7 @@ func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) e
 	} else if k8serrors.IsNotFound(err) {
 		return nil
 	}
-	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+	pxOps, err := pxOperator.ListStorageClusters(d.namespace)
 	if err != nil {
 		return err
 	}
@@ -4037,8 +4062,8 @@ func parseMaxSize(maxSize string) (uint64, error, error) {
 }
 
 // getRestPort gets the service port for rest api, required when using service endpoint
-func getRestPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getRestPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -4051,8 +4076,8 @@ func getRestPort() (int32, error) {
 }
 
 // getRestContainerPort gets the rest api container port exposed in the node, required when using node ip
-func getRestContainerPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getRestContainerPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -4065,8 +4090,8 @@ func getRestContainerPort() (int32, error) {
 }
 
 // getSDKPort gets sdk service port, required when using service endpoint
-func getSDKPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getSDKPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -4079,8 +4104,8 @@ func getSDKPort() (int32, error) {
 }
 
 // getSDKContainerPort gets the sdk container port in the node, required when using node ip
-func getSDKContainerPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getSDKContainerPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}

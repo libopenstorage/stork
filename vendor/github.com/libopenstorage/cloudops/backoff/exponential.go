@@ -89,6 +89,23 @@ func (e *exponentialBackoff) InspectInstanceGroupForInstance(instanceID string) 
 	return instanceGroupInfo, origErr
 }
 
+func (e *exponentialBackoff) GetInstance(displayName string) (interface{}, error) {
+	var (
+		instanceDetails interface{}
+		origErr         error
+	)
+	conditionFn := func() (bool, error) {
+		instanceDetails, origErr = e.cloudOps.GetInstance(displayName)
+		msg := fmt.Sprintf("Failed to get instance details for instance: %v.", displayName)
+		return e.handleError(origErr, msg)
+	}
+	expErr := wait.ExponentialBackoff(e.backoff, conditionFn)
+	if expErr == wait.ErrWaitTimeout {
+		return nil, cloudops.NewStorageError(cloudops.ErrExponentialTimeout, origErr.Error(), "")
+	}
+	return instanceDetails, origErr
+}
+
 func (e *exponentialBackoff) SetInstanceGroupSize(instanceGroupID string,
 	count int64,
 	timeout time.Duration) error {

@@ -2,6 +2,8 @@ package jirautils
 
 import (
 	"bytes"
+	"net/http"
+	"time"
 
 	jira "github.com/andygrunwald/go-jira"
 	logInstance "github.com/portworx/torpedo/pkg/log"
@@ -24,22 +26,31 @@ const (
 
 // Init function for the Jira
 func Init(username, token string) {
-	httpClient := jira.BasicAuthTransport{
+	jiraAuth := jira.BasicAuthTransport{
 		Username: username,
 		Password: token,
 	}
 	var err error
-
-	client, err = jira.NewClient(httpClient.Client(), jiraURL)
-	if err != nil {
+	timeout := 15 * time.Second
+	httpClient := http.Client{
+		Timeout: timeout,
+	}
+	response, err := httpClient.Get(jiraURL)
+	if err == nil {
+		isJiraConnectionSuccessful = true
+	}
+	if response != nil && response.StatusCode != 200 {
+		log.Warnf("Response code : %d", response.StatusCode)
 		isJiraConnectionSuccessful = false
-		logrus.Errorf("Jira connection not successful, Cause: %v", err)
-
-	} else {
-		logrus.Info("Jira connection is successful")
 	}
 
-	isJiraConnectionSuccessful = true
+	if isJiraConnectionSuccessful {
+		client, err = jira.NewClient(jiraAuth.Client(), jiraURL)
+	} else {
+		log.Errorf("Jira connection not successful, Cause: %v", err)
+	}
+
+	log.Info("Jira connection is successful")
 
 }
 
@@ -48,9 +59,7 @@ func CreateIssue(issueDesription, issueSummary string) (string, error) {
 
 	issueKey := ""
 	var err error
-
-	if isJiraConnectionSuccessful {
-
+	if isJiraConnectionSuccessful && client != nil {
 		issueKey, err = createPTX(issueDesription, issueSummary)
 	} else {
 		log.Warn("Skipping issue creation as jira connection is not successful")
@@ -111,16 +120,16 @@ func createPTX(description, summary string) (string, error) {
 	log.Infof("Resp: %v", resp.StatusCode)
 	issueKey := ""
 	if resp.StatusCode == 201 {
-		logrus.Info("Successfully created new jira issue.")
-		logrus.Infof("Jira Issue: %+v\n", issue.Key)
+		log.Info("Successfully created new jira issue.")
+		log.Infof("Jira Issue: %+v\n", issue.Key)
 		issueKey = issue.Key
 
 	} else {
-		logrus.Infof("Error while creating jira issue: %v", err)
+		log.Infof("Error while creating jira issue: %v", err)
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		newStr := buf.String()
-		logrus.Infof(newStr)
+		log.Infof(newStr)
 
 	}
 	return issueKey, err
@@ -146,5 +155,4 @@ func getProjects() {
 
 func init() {
 	log = logInstance.GetLogInstance()
-
 }

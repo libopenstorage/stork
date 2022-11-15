@@ -1,0 +1,62 @@
+{
+  "DataServiceToTest": [
+    {
+      "Name": "PostgreSQL",
+      "Version": "14.5",
+      "Image": "25852e0",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
+      "OldVersion": "14.4",
+      "OldImage": "b64d741"
+    },
+    {
+      "Name": "MySQL",
+      "Version": "8.0.30",
+      "Image": "a7bc638",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
+      "OldVersion": "8.0.30",
+      "OldImage": "78d76cf"
+    },
+    {
+      "Name": "Kafka",
+      "Version": "3.2.3",
+      "Image": "1b480fb",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
+      "OldVersion": "3.2.1",
+      "OldImage": "1a1dc76"
+    },
+    {
+      "Name": "RabbitMQ",
+      "Version": "3.10.9",
+      "Image": "716b7b8",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
+      "OldVersion": "3.10.7",
+      "OldImage": "862425e"
+    },
+    {
+      "Name": "Redis",
+      "Version": "7.0.4",
+      "Image": "212733c",
+      "Replicas": 6,
+      "ScaleReplicas": 8
+    },
+    {
+      "Name": "Cassandra",
+      "Version": "4.0.6",
+      "Image": "f888127",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
+      "OldVersion": "4.0.5",
+      "OldImage": "029172b"
+    }
+  ],
+  "InfraToTest": {
+    "ControlPlaneURL": "https://staging.pds.portworx.com/",
+    "AccountName": "Portworx",
+    "ClusterType": "onprem",
+    "Namespace": "automation"
+  }
+}

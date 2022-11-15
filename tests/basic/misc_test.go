@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	opsapi "github.com/libopenstorage/openstorage/api"
 	"math/rand"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -21,7 +23,7 @@ var _ = Describe("{SetupTeardown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("SetupTeardown", "Validate setup tear down", nil)
+		StartTorpedoTest("SetupTeardown", "Validate setup tear down", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -54,7 +56,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverDown", "Validate volume driver down", nil)
+		StartTorpedoTest("VolumeDriverDown", "Validate volume driver down", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -123,7 +125,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35260
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverDownAttachedNode", "Validate Volume drive down on an volume attached node", nil)
+		StartTorpedoTest("VolumeDriverDownAttachedNode", "Validate Volume drive down on an volume attached node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -195,7 +197,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverCrash", "Validate PX after volume driver crash", nil)
+		StartTorpedoTest("VolumeDriverCrash", "Validate PX after volume driver crash", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -243,7 +245,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35262
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeDriverAppDown", "Validate volume driver down and app deletion", nil)
+		StartTorpedoTest("VolumeDriverAppDown", "Validate volume driver down and app deletion", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -315,7 +317,7 @@ var _ = Describe("{AppTasksDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("AppTasksDown", "Validate app after tasks are deleted", nil)
+		StartTorpedoTest("AppTasksDown", "Validate app after tasks are deleted", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -405,7 +407,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("AppScaleUpAndDown", "Validate Apps sclae up and scale down", nil)
+		StartTorpedoTest("AppScaleUpAndDown", "Validate Apps sclae up and scale down", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -491,7 +493,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54373
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("CordonDeployDestroy", "Validate Cordon node and destroy app", nil)
+		StartTorpedoTest("CordonDeployDestroy", "Validate Cordon node and destroy app", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
@@ -562,7 +564,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 
 var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("CordonStorageNodesDeployDestroy", "Validate Cordon storage node , deploy and destroy app", nil)
+		StartTorpedoTest("CordonStorageNodesDeployDestroy", "Validate Cordon storage node , deploy and destroy app", nil, 0)
 
 	})
 	var contexts []*scheduler.Context
@@ -648,7 +650,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	)
 
 	BeforeEach(func() {
-		StartTorpedoTest("SecretsVaultFunctional", "Validate Secrets Vault", nil)
+		StartTorpedoTest("SecretsVaultFunctional", "Validate Secrets Vault", nil, 0)
 		isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 		if !isOpBased {
 			k8sApps := apps.Instance()
@@ -657,7 +659,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			})
 			dash.VerifyFatal(err, nil, "validate get daemon sets list")
 			dash.VerifyFatal(len(daemonSets) > 0, true, "validate daemon sets list")
-			dash.VerifyFatal(daemonSets[0].Spec.Template.Spec.Containers, "", "validate daemon set container is not empty")
+			dash.VerifyFatal(len(daemonSets[0].Spec.Template.Spec.Containers) > 0, true, "validate daemon set container is not empty")
 			usingVault := false
 			for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
 				if container.Name == portworxContainerName {
@@ -711,5 +713,88 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	AfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VolumeCreatePXRestart}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeCreatePXRestart", "Validate restart PX while create and attach", nil, 0)
+
+	})
+	contexts := make([]*scheduler.Context, 0)
+
+	stepLog := "Validate volume attachment when px is restarting"
+	It(stepLog, func() {
+		var createdVolIDs map[string]string
+		var err error
+		volCreateCount := 10
+		stepLog := "Create multiple volumes , attached and restart PX"
+		Step(stepLog, func() {
+			dash.Infof(stepLog)
+
+			stNodes := node.GetStorageNodes()
+			index := rand.Intn(len(stNodes))
+			selectedNode := stNodes[index]
+
+			dash.Infof("Creating and attaching %d volumes on node %s", volCreateCount, selectedNode.Name)
+
+			wg := new(sync.WaitGroup)
+			wg.Add(1)
+			go func(appNode node.Node) {
+				createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
+				if err != nil {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while creating volumes. Err: %v", err))
+				}
+			}(selectedNode)
+			time.Sleep(2 * time.Second)
+			wg.Add(1)
+			go func(appNode node.Node) {
+				defer wg.Done()
+				stepLog = fmt.Sprintf("restart volume driver %s on node: %s", Inst().V.String(), appNode.Name)
+				Step(stepLog, func() {
+					dash.Info(stepLog)
+					err = Inst().V.RestartDriver(appNode, nil)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while restarting volume driver. Err: %v", err))
+
+				})
+			}(selectedNode)
+			wg.Wait()
+
+		})
+
+		stepLog = "Validate the created volumes"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
+
+			for vol, volPath := range createdVolIDs {
+				cVol, err := Inst().V.InspectVolume(vol)
+				if err == nil {
+					dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
+					dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
+				} else {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while inspecting volume %s. Err: %v", vol, err))
+				}
+			}
+		})
+
+		stepLog = "Deleting the created volumes"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
+
+			for vol, _ := range createdVolIDs {
+				log.Infof("Detaching and deleting volume: %s", vol)
+				err := Inst().V.DetachVolume(vol)
+				if err == nil {
+					err = Inst().V.DeleteVolume(vol)
+				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting volume %s. Err: %v", vol, err))
+
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

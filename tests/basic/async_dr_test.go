@@ -107,6 +107,20 @@ var _ = Describe("{MigrateDeployment}", func() {
 					mig.Name, mig.Namespace, err))
 		}
 
+		dash.Info("Start volume only migration")
+		includeResourcesFlag = false
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)
+			currMig, create_mig_err := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+			allMigrations = append(allMigrations, currMig)
+			dash.VerifyFatal(create_mig_err, nil, fmt.Sprintf("Validate %s migration is triggered in %s namespace", migrationName, currMigNamespace))
+			err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			dash.VerifyFatal(err, nil, "Validate migration should be successful")
+			resp, get_mig_err := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)
+			dash.VerifyFatal(get_mig_err, nil, "Validate get migration response")
+			dash.VerifyFatal(resp.Status.Summary.NumberOfMigratedResources == 0, true, "Validate no resources migrated")
+		}
+
 		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, map[string]bool{

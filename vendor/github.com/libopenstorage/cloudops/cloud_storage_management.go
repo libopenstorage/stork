@@ -27,7 +27,7 @@ type ErrStorageDistributionCandidateNotFound struct {
 
 func (e *ErrStorageDistributionCandidateNotFound) Error() string {
 	if len(e.Reason) > 0 {
-		return fmt.Sprintf("could not find a suitable storage distribution candidate due to: %s", e.Reason)
+		return fmt.Sprintf("could not find a suitable storage distribution candidate: %s", e.Reason)
 	}
 
 	return fmt.Sprintf("could not find a suitable storage distribution candidate")

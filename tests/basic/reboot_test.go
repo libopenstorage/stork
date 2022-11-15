@@ -26,7 +26,7 @@ var _ = Describe("{RebootOneNode}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35266
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("RebootOneNode", "Reboot one storage node at a time and validate apps and px", nil)
+		StartTorpedoTest("RebootOneNode", "Reboot one storage node at a time and validate apps and px", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -131,7 +131,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58844
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("ReallocateSharedMount", "Validating Px and apps after reallocating shared mounts", nil)
+		StartTorpedoTest("ReallocateSharedMount", "Validating Px and apps after reallocating shared mounts", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

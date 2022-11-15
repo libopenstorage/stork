@@ -8,8 +8,8 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
-if [ -z "${TESTSET_ID}" ]; then
-    TESTSET_ID="0"
+if [ -z "${DASH_UID}" ]; then
+    DASH_UID="0"
 fi
 
 if [ -z "${SCALE_FACTOR}" ]; then
@@ -241,6 +241,12 @@ if [ -n "${TORPEDO_SSH_KEY}" ]; then
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
 
+ORACLE_API_KEY_VOLUME=""
+if [ -n "${ORACLE_API_KEY}" ]; then
+    ORACLE_API_KEY_VOLUME="{ \"name\": \"oracle-api-key-volume\", \"secret\": { \"secretName\": \"key4oracle\", \"defaultMode\": 256 }}"
+    ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
+fi
+
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
@@ -272,6 +278,14 @@ VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
 
 if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
+fi
+
+if [ -n "${ORACLE_API_KEY_MOUNT}" ]; then
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${ORACLE_API_KEY_MOUNT}"
+fi
+
+if [ -n "${ORACLE_API_KEY_VOLUME}" ]; then
+    VOLUMES="${VOLUMES},${ORACLE_API_KEY_VOLUME}"
 fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_VOLUME}" ]; then
@@ -315,6 +329,9 @@ if [ -n "${K8S_VENDOR}" ]; then
             ;;
         aks)
             NODE_DRIVER="aks"
+            ;;
+        oracle)
+            NODE_DRIVER="oracle"
             ;;
     esac
 fi
@@ -441,6 +458,7 @@ spec:
             "--pure-san-type=$PURE_SAN_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
+            "--px-runtime-opts=$PX_RUNTIME_OPTS",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
@@ -461,7 +479,7 @@ spec:
             "--test-desc=$TEST_DESCRIPTION",
             "--test-type=$TEST_TYPE",
             "--test-tags=$TEST_TAGS",
-            "--testset-id=$TESTSET_ID",
+            "--testset-id=$DASH_UID",
             "--branch=$BRANCH",
             "--product=$PRODUCT",
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
@@ -565,13 +583,20 @@ spec:
       value: "${PDS_CLIENT_ID}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
+    - name: PDS_PARAM_CM
+      value: "${PDS_PARAM_CM}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
       value: "${TARGET_KUBECONFIG}"
     - name: TARGET_CLUSTER_NAME
       value: "${TARGET_CLUSTER_NAME}"
-    
+    - name: PX_ORACLE_user_ocid
+      value: "${PX_ORACLE_user_ocid}"
+    - name: PX_ORACLE_fingerprint
+      value: "${PX_ORACLE_fingerprint}"
+    - name: PX_ORACLE_private_key_path
+      value: "${ORACLE_API_KEY}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

@@ -81,6 +81,8 @@ import (
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
+	// import oracle driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/node/oracle"
 
 	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
@@ -189,7 +191,7 @@ const (
 	torpedoJobTypeFlag = "torpedo-job-type"
 )
 
-//Dashboard params
+// Dashboard params
 const (
 	enableDashBoardFlag = "enable-dash"
 	userFlag            = "user"
@@ -252,6 +254,8 @@ const (
 const (
 	pxctlCDListCmd = "pxctl cd list"
 )
+
+var pxRuntimeOpts string
 
 const (
 	post_install_hook_pod = "pxcentral-post-install-hook"
@@ -329,13 +333,25 @@ const (
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
 
+type Weekday string
+
+const (
+	Monday    Weekday = "Mon"
+	Tuesday           = "Tue"
+	Wednesday         = "Wed"
+	Thursday          = "Thu"
+	Friday            = "Fri"
+	Saturday          = "Sat"
+	Sunday            = "Sun"
+)
+
 var log *logrus.Logger
 
-//TpLogPath torpedo log path
+// TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
 
-//TestLogger for logging test logs
+// TestLogger for logging test logs
 var TestLogger *lumberjack.Logger
 var dash *aetosutil.Dashboard
 var post_rule_uid string
@@ -432,7 +448,9 @@ func InitInstance() {
 	commitID := strings.Split(pxVersion, "-")[1]
 	t := Inst().Dash.TestSet
 	t.CommitID = commitID
-	t.Tags = append(t.Tags, pxVersion)
+	if pxVersion != "" {
+		t.Tags["px-version"] = pxVersion
+	}
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -1660,7 +1678,7 @@ func ValidateClusterSize(count int64) {
 	dash.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
 }
 
-//GetStorageNodes get storage nodes in the cluster
+// GetStorageNodes get storage nodes in the cluster
 func GetStorageNodes() ([]node.Node, error) {
 
 	storageNodes := []node.Node{}
@@ -1785,7 +1803,10 @@ func PerformSystemCheck() {
 					log.Info("an error occurred, collecting bundle")
 					CollectSupport()
 				}
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verify if an error occurred, Err: %v", err))
+				if err != nil {
+					dash.VerifySafely(err, nil, fmt.Sprintf("Error occurred while checking for core on node %s, Err: %v", n.Name, err))
+				}
+
 				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 			}
 		})
@@ -2236,7 +2257,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 	wg.Wait()
 }
 
-//UpgradePxStorageCluster perform storage cluster upgrade
+// UpgradePxStorageCluster perform storage cluster upgrade
 func UpgradePxStorageCluster() (bool, error) {
 	dash.Info("Initiating operator based install upgrade")
 	operatorTag, err := getOperatorLatestVersion()
@@ -2489,7 +2510,7 @@ func ObjectExists(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "object not found")
 }
 
-//GetBackupCreateRequest returns a backupcreaterequest
+// GetBackupCreateRequest returns a backupcreaterequest
 func GetBackupCreateRequest(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string) *api.BackupCreateRequest {
 	return &api.BackupCreateRequest{
@@ -2507,7 +2528,7 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 	}
 }
 
-//CreateBackupFromRequest creates a backup using a provided request
+// CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -2616,7 +2637,7 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 	return bkpScheduleInspectResponse, err
 }
 
-//DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
+// DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
 func DeleteLabelFromResource(spec interface{}, key string) {
 	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		if obj.Labels != nil {
@@ -2735,7 +2756,7 @@ func SetupBackup(testName string) {
 	CreateOrganization(OrgID)
 	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
 	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID)
-	CreateSourceAndDestClusters(CredName, OrgID)
+	CreateSourceAndDestClusters(OrgID, "", "")
 }
 
 // DeleteBackup deletes backup
@@ -2807,7 +2828,7 @@ func DeleteBackupLocation(name string, orgID string) {
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(cloudCred, orgID string) {
+func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -2828,8 +2849,8 @@ func CreateSourceAndDestClusters(cloudCred, orgID string) {
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
-		logrus.Debugf("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
-		CreateCluster(sourceClusterName, cloudCred, srcClusterConfigPath, orgID)
+		log.Infof("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
+		CreateCluster(sourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
 	})
 
 	// Register destination cluster with backup driver
@@ -2837,8 +2858,8 @@ func CreateSourceAndDestClusters(cloudCred, orgID string) {
 		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
-		logrus.Debugf("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-		CreateCluster(destinationClusterName, cloudCred, dstClusterConfigPath, orgID)
+		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
 	})
 }
 
@@ -2853,7 +2874,8 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 }
 
 // CreateCluster creates/registers cluster with px-backup
-func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID string) {
+func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string) {
+	var clusterCreateReq *api.ClusterCreateRequest
 
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
@@ -2861,14 +2883,26 @@ func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID s
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to read kubeconfig file from location [%s]. Error:[%v]",
 				kubeconfigPath, err))
-
-		clusterCreateReq := &api.ClusterCreateRequest{
-			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
-				OrgId: orgID,
-			},
-			Kubeconfig:      base64.StdEncoding.EncodeToString(kubeconfigRaw),
-			CloudCredential: cloudCred,
+		if cloud_name != "" {
+			clusterCreateReq = &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					OrgId: orgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+				CloudCredentialRef: &api.ObjectRef{
+					Name: cloud_name,
+					Uid:  uid,
+				},
+			}
+		} else {
+			clusterCreateReq = &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					OrgId: orgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+			}
 		}
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -3181,7 +3215,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 	return err
 }
 
-//AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
+// AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
 func AddLabelToResource(spec interface{}, key string, val string) error {
 	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		if obj.Labels == nil {
@@ -3362,7 +3396,7 @@ func DeleteBucket(provider string, bucketName string) {
 	})
 }
 
-//HaIncreaseRebootTargetNode repl increase and reboot target node
+// HaIncreaseRebootTargetNode repl increase and reboot target node
 func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
@@ -3471,7 +3505,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 		})
 }
 
-//HaIncreaseRebootSourceNode repl increase and reboot source node
+// HaIncreaseRebootSourceNode repl increase and reboot source node
 func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
@@ -3912,10 +3946,11 @@ func ParseFlags() {
 	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
 	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
 	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
-	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests")
+	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests. Eg: key1:val1,key2:val2")
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
+	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.Parse()
 
 	log = logInstance.GetLogInstance()
@@ -3979,15 +4014,28 @@ func ParseFlags() {
 			Description: testDescription,
 			Branch:      testBranch,
 			TestType:    testType,
-			Tags:        make([]string, 0),
+			Tags:        make(map[string]string),
 			Status:      aetosutil.NOTSTARTED,
 		}
 		if testTags != "" {
-			tags := strings.Split(testTags, ",")
-			testSet.Tags = append(testSet.Tags, tags...)
+			tags, err := splitCsv(testTags)
+			if err != nil {
+				log.Fatalf("failed to parse tags: %v. err: %v", testTags, err)
+			} else {
+				for _, tag := range tags {
+					var key, value string
+					if !strings.Contains(tag, ":") {
+						log.Info("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
+					} else {
+						key = strings.SplitN(tag, ":", 2)[0]
+						value = strings.SplitN(tag, ":", 2)[1]
+						testSet.Tags[key] = value
+					}
+				}
+			}
 		}
 
-		val, ok := os.LookupEnv("TESTSET-ID")
+		val, ok := os.LookupEnv("DASH_UID")
 		if ok {
 			testsetID, err = strconv.Atoi(val)
 			if err != nil {
@@ -3996,7 +4044,7 @@ func ParseFlags() {
 		}
 		if testsetID != 0 {
 			dash.TestSetID = testsetID
-			os.Setenv("TESTSET-ID", fmt.Sprint(testsetID))
+			os.Setenv("DASH_UID", fmt.Sprint(testsetID))
 		}
 
 		dash.TestSet = &testSet
@@ -4099,7 +4147,7 @@ func setLoglevel(tpLog *logrus.Logger, logLevel string) {
 	}
 }
 
-//SetTorpedoFileOutput adds output destination for logging
+// SetTorpedoFileOutput adds output destination for logging
 func SetTorpedoFileOutput(tpLog *logrus.Logger, logger *lumberjack.Logger) {
 
 	//tpLog.Out = io.MultiWriter(tpLog.Out, f)
@@ -4108,11 +4156,11 @@ func SetTorpedoFileOutput(tpLog *logrus.Logger, logger *lumberjack.Logger) {
 	//tpLog.Infof("Log Dir: %s", f.Name())
 }
 
-//CreateLogFile creates file and return the file object
+// CreateLogFile creates file and return the file object
 func CreateLogFile(filename string) *os.File {
 	var filePath string
 	if strings.Contains(filename, "/") {
-		filePath = filename
+		filePath = "filename"
 	} else {
 		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
 	}
@@ -4126,7 +4174,7 @@ func CreateLogFile(filename string) *os.File {
 
 }
 
-//CreateLogger creates file and return the file object
+// CreateLogger creates file and return the file object
 func CreateLogger(filename string) *lumberjack.Logger {
 	var filePath string
 	if strings.Contains(filename, "/") {
@@ -4148,7 +4196,7 @@ func CreateLogger(filename string) *lumberjack.Logger {
 
 }
 
-//CloseLogFile ends testcase file object
+// CloseLogFile ends testcase file object
 func CloseLogger(testLogger *lumberjack.Logger) {
 	if testLogger != nil {
 		testLogger.Close()
@@ -4188,7 +4236,7 @@ func init() {
 	logrus.SetOutput(os.Stdout)
 }
 
-//CreateJiraIssueWithLogs creates a jira issue and copy logs to nfs mount
+// CreateJiraIssueWithLogs creates a jira issue and copy logs to nfs mount
 func CreateJiraIssueWithLogs(issueDescription, issueSummary string) {
 	issueKey, err := jirautils.CreateIssue(issueDescription, issueSummary)
 	if err == nil && issueKey != "" {
@@ -4357,7 +4405,7 @@ func getInt64Address(x int64) *int64 {
 	return &x
 }
 
-//IsCloudDriveInitialised checks if cloud drive is initialised in the PX cluster
+// IsCloudDriveInitialised checks if cloud drive is initialised in the PX cluster
 func IsCloudDriveInitialised(n node.Node) (bool, error) {
 
 	_, err := Inst().N.RunCommandWithNoRetry(n, pxctlCDListCmd, node.ConnectionOpts{
@@ -4375,7 +4423,7 @@ func IsCloudDriveInitialised(n node.Node) (bool, error) {
 	return false, err
 }
 
-//WaitForExpansionToStart waits for pool expansion to trigger
+// WaitForExpansionToStart waits for pool expansion to trigger
 func WaitForExpansionToStart(poolID string) error {
 	f := func() (interface{}, bool, error) {
 		expandedPool, err := GetStoragePoolByUUID(poolID)
@@ -4401,7 +4449,7 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-//RebootNodeAndWait reboots node and waits for to be up
+// RebootNodeAndWait reboots node and waits for to be up
 func RebootNodeAndWait(n node.Node) error {
 
 	if &n == nil {
@@ -4443,7 +4491,7 @@ func RebootNodeAndWait(n node.Node) error {
 
 }
 
-//GetNodeWithGivenPoolID returns node having pool id
+// GetNodeWithGivenPoolID returns node having pool id
 func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
 	pxNodes, err := GetStorageNodes()
 
@@ -4463,7 +4511,7 @@ func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
 	return nil, fmt.Errorf("no storage node found with given Pool UUID : %s", poolID)
 }
 
-//GetStoragePoolByUUID reruns storage pool based on ID
+// GetStoragePoolByUUID reruns storage pool based on ID
 func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 	if err != nil {
@@ -4649,7 +4697,7 @@ func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_
 	return true
 }
 
-func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string) bool {
+func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
 	var flag bool = true
 	dash.Info("Deleting the deployed apps after the testcase")
 	for i := 0; i < len(contexts); i++ {
@@ -4662,7 +4710,6 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 	}
-
 	dash.Info("Deleting backup rules created")
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
@@ -4698,29 +4745,285 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	}
 	dash.Info("Deleting bucket,backup location and cloud setting")
 	for i, provider := range providers {
-		backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
+		backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
 		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
 		DeleteBucket(provider, bucketName)
-		CredName := fmt.Sprintf("%s-%s", "cred1", provider)
+		CredName := fmt.Sprintf("%s-%s", "cred", provider)
 		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
 		DeleteBackupLocation(backup_location_name, orgID)
 	}
+	dash.Info("Deleting schedule policies")
+	sched_policy_map := make(map[string]string)
+	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schedule_policy_list, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
+	dash.VerifyFatal(err, nil, "Getting list of schedule policies")
+	for i := 0; i < len(schedule_policy_list.SchedulePolicies); i++ {
+		sched_policy_map[schedule_policy_list.SchedulePolicies[i].Metadata.Name] = schedule_policy_list.SchedulePolicies[i].Metadata.Uid
+	}
+	for i := 0; i < len(policy_list); i++ {
+		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
+			OrgId: orgID,
+			Name:  policy_list[i],
+			Uid:   sched_policy_map[policy_list[i]],
+		}
+		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
+		if err != nil {
+			flag = false
+		}
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
+	}
+	DeleteCluster(destinationClusterName, OrgID)
+	DeleteCluster(sourceClusterName, OrgID)
 	if flag == false {
 		return false
 	}
 	return true
 }
 
-//StartTorpedoTest starts the logging for torpedo test
-func StartTorpedoTest(testName, testDescription string, tags []string) {
-	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
-	SetTorpedoFileOutput(log, TestLogger)
-	dash.TestCaseBegin(testName, testDescription, "", tags)
+//ValidatePoolRebalance checks rebalnce state of pools if running
+func ValidatePoolRebalance() error {
+	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+
+	if err == nil {
+
+		for _, job := range rebalanceJobs {
+			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+
+			if err == nil {
+
+				previousDone := uint64(0)
+				jobState := jobResponse.GetJob().GetState()
+				if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+					return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+					dash.Infof("Job %v is in paused/pending state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_DONE {
+					dash.Infof("Job %v is in DONE state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+					dash.Infof("Job %v is in Running state", job.GetId())
+
+					currentDone, total := getReblanceWorkSummary(jobResponse)
+					//checking for rebalance progress
+					for currentDone < total && previousDone < currentDone {
+						time.Sleep(2 * time.Minute)
+						dash.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+						jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+						if err != nil {
+							return err
+						}
+						previousDone = currentDone
+						currentDone, total = getReblanceWorkSummary(jobResponse)
+					}
+
+					if previousDone == currentDone {
+						return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
+					}
+					if currentDone == total {
+						dash.Infof("Rebalance for job %v completed,", job.GetId())
+					}
+
+				}
+
+			}
+		}
+	}
+	return err
 }
 
-//EndTorpedoTest ends the logging for torpedo test
+func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
+	status := jobResponse.GetJob().GetStatus()
+	if status != "" {
+		log.Infof(" Job Status: %s", status)
+	}
+
+	currentDone := uint64(0)
+	currentPending := uint64(0)
+	total := uint64(0)
+	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
+
+	for _, summary := range rebalWorkSummary {
+		currentDone += summary.GetDone()
+		currentPending += summary.GetPending()
+		log.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
+
+	}
+	total = currentDone + currentPending
+
+	return currentDone, total
+}
+
+func updatePxRuntimeOpts() error {
+	if pxRuntimeOpts != "" {
+		dash.Infof("Setting run time options: %s", pxRuntimeOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxRuntimeOpts)
+		if err != nil {
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Error parsing run time options, err : %v", err))
+		}
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				dash.VerifyFatal(false, true, fmt.Sprintf("Given run time option is not in expected format key=val, Actual : %v", opt))
+			}
+			optArr := strings.Split(opt, "=")
+			optionsMap[optArr[0]] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
+	} else {
+		log.Info("No run time options provided to update")
+	}
+	return nil
+
+}
+
+//StartTorpedoTest starts the logging for torpedo test
+func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
+	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
+	SetTorpedoFileOutput(log, TestLogger)
+	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
+}
+
+// EndTorpedoTest ends the logging for torpedo test
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
 
+func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			Uid:   uid,
+			OrgId: orgid,
+		},
+		SchedulePolicy: schedule_policy_info,
+	}
+	_, err = Inst().Backup.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		log.Infof(" \n\n eeror in schel policy is +%v", err)
+		return err
+	}
+	return nil
+}
+
+func CreateIntervalSchedulePolicy(retain int64, min int64, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Interval: &api.SchedulePolicyInfo_IntervalPolicy{
+			Retain:  retain,
+			Minutes: min,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateDailySchedulePolicy(retain int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Daily: &api.SchedulePolicyInfo_DailyPolicy{
+			Retain: retain,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateWeeklySchedulePolicy(retain int64, day Weekday, time string, incr_count uint64) *api.SchedulePolicyInfo {
+
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Weekly: &api.SchedulePolicyInfo_WeeklyPolicy{
+			Retain: retain,
+			Day:    string(day),
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Monthly: &api.SchedulePolicyInfo_MonthlyPolicy{
+			Retain: retain,
+			Date:   date,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
+	CreateSourceAndDestClusters(orgID, cloud_name, uid)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: sourceClusterName, IncludeSecrets: true}
+	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+	dash.VerifyFatal(err, nil, "Inspecting cluster object")
+	clusterObj := clusterResp.GetCluster()
+	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+}
+
+func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
+	createdVolIDs := make(map[string]string)
+	defer wg.Done()
+	for count > 0 {
+		volName := fmt.Sprintf("%s-%d", VolumeCreatePxRestart, count)
+		log.Infof("Creating volume : %s", volName)
+		volCreateRequest := &opsapi.SdkVolumeCreateRequest{
+			Name: volName,
+			Spec: &opsapi.VolumeSpec{
+				Size:    1000,
+				HaLevel: 1,
+				Format:  opsapi.FSType_FS_TYPE_EXT4,
+				ReplicaSet: &opsapi.ReplicaSet{
+					Nodes: []string{nodeName},
+				},
+			}}
+		t := func() (interface{}, bool, error) {
+			out, err := Inst().V.CreateVolumeUsingRequest(volCreateRequest)
+			return out, true, err
+		}
+
+		out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+
+		var volPath string
+		var volId string
+		if err == nil {
+			volId = fmt.Sprintf("%v", out)
+			log.Infof("Volume %s created", volId)
+			t := func() (interface{}, bool, error) {
+				out, err := Inst().V.AttachVolume(volId)
+				return out, true, err
+			}
+			out, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+		}
+		if err != nil {
+			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+		}
+		volPath = fmt.Sprintf("%v", out)
+		createdVolIDs[volId] = volPath
+		log.Infof("Volume %s attached to path %s", volId, volPath)
+		count--
+	}
+	return createdVolIDs, nil
 }

@@ -1,0 +1,26 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: es-read
+  labels:
+    app: es-read
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: es-read
+  template:
+    metadata:
+      labels:
+        app: es-read
+    spec:
+      containers:
+      - name: es-read
+        image: docker.pwx.dev.purestorage.com/portworx/elasticseach_read
+        imagePullPolicy: Always
+        command:
+          - /bin/bash
+          - -c
+          - "./esread.sh --es_address elasticsearch:9200"
+      restartPolicy: Always
