@@ -796,6 +796,7 @@ var _ = Describe("{DeployDSDeleteNamespace}", func() {
 					_, err := pdslib.DeleteDeployment(dep)
 					Expect(err).NotTo(HaveOccurred())
 				}
+				isDeploymentsDeleted = true
 			})
 
 		})
