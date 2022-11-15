@@ -30,7 +30,6 @@ const (
 	nodeWaitFactor       = 2
 	nodeWaitSteps        = 5
 
-	CSIPodNamePrefix           = "px-csi-ext"
 	storageDriverOfflineReason = "StorageDriverOffline"
 )
 
@@ -149,7 +148,7 @@ func (m *Monitor) podMonitor() error {
 		if podUnknownState {
 			csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
 			if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
-				msg = "Force deleting csi-ext-pod as it's in unknown state."
+				msg = "Force deleting csi pod as it's in unknown state."
 				storklog.PodLog(pod).Infof(msg)
 			} else {
 				owns, err := m.doesDriverOwnPodVolumes(pod)
@@ -257,7 +256,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 		var msg string
 		csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
 		if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
-			msg = fmt.Sprintf("Deleting px-csi-ext pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			msg = fmt.Sprintf("Deleting csi pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
 
 		} else {
 			msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
