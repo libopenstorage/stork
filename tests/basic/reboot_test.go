@@ -275,7 +275,7 @@ var _ = Describe("{ClusterPxRestart}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("restartPX-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("restartpx-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -309,11 +309,11 @@ var _ = Describe("{ClusterPxRestart}", func() {
 						}
 					}
 					t2 := time.Now()
-					dash.Info(fmt.Sprintf("Time taken to reboot all the PX is: %f", t2.Sub(t1).Seconds()))
+					dash.Info(fmt.Sprintf("Time taken to reboot all the PX is: %fsecs", t2.Sub(t1).Seconds()))
 					if (t2.Sub(t1).Seconds()) <= (float64(len(nodesToPXRestart) * 240)) {
-						dash.Info(fmt.Sprintf("Time taken to reboot all the PX is: %f which is less than the timeout of %f", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
+						dash.Info(fmt.Sprintf("Time taken to reboot all the PX is: %fsecs which is less than the timeout of %fsecs", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
 					} else {
-						log.Errorf(fmt.Sprintf("Time taken to reboot all the PX is: %f which is greater than the timeout of %f", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
+						log.Errorf(fmt.Sprintf("Time taken to reboot all the PX is: %fsecs which is greater than the timeout of %fsecs", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
 					}
 				})
 			})
