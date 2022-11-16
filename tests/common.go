@@ -193,14 +193,16 @@ const (
 
 // Dashboard params
 const (
-	enableDashBoardFlag = "enable-dash"
-	userFlag            = "user"
-	testTypeFlag        = "test-type"
-	testDescriptionFlag = "test-desc"
-	testTagsFlag        = "test-tags"
-	testSetIDFlag       = "testset-id"
-	testBranchFlag      = "branch"
-	testProductFlag     = "product"
+	enableDashBoardFlag     = "enable-dash"
+	userFlag                = "user"
+	testTypeFlag            = "test-type"
+	testDescriptionFlag     = "test-desc"
+	testTagsFlag            = "test-tags"
+	testSetIDFlag           = "testset-id"
+	testBranchFlag          = "branch"
+	testProductFlag         = "product"
+	failOnPxPodRestartCount = "fail-on-px-pod-restartcount"
+	portworxOperatorName    = "portworx-operator"
 )
 
 // Backup constants
@@ -239,6 +241,7 @@ const (
 	authTokenParam                        = "auth-token"
 	defaultTorpedoJob                     = "torpedo-job"
 	defaultTorpedoJobType                 = "functional"
+	labelNameKey                          = "name"
 )
 
 const (
@@ -563,6 +566,10 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 					}
 				})
 			}
+		})
+
+		Step("Validate Px pod restart count", func() {
+			ValidatePxPodRestartCount(ctx, errChan...)
 		})
 	})
 }
@@ -1624,6 +1631,45 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 	err = Inst().V.ValidateStoragePools()
 	expect(err).NotTo(haveOccurred())
 
+}
+
+// ValidatePxPodRestartCount validates portworx restart count
+func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
+	context("Validating portworx pods restart count ...", func() {
+		Step("Getting current restart counts for portworx pods and matching", func() {
+			pxLabel := make(map[string]string)
+			pxLabel[labelNameKey] = defaultStorageProvisioner
+			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+			dash.VerifyFatal(err, nil, "Getting portworx pod restart count")
+
+			// Validate portworx pod restart count after test
+			for pod, value := range pxPodRestartCountMap {
+				n, err := node.GetNodeByIP(pod.Status.HostIP)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get node object using IP: %s", pod.Status.HostIP))
+				if n.PxPodRestartCount != value {
+					log.Errorf("Portworx pods restart many times in a node: [%s]", n.Name)
+					if Inst().PortworxPodRestartCheck {
+						dash.VerifyFatal(fmt.Errorf("portworx pods restart [%d] times", value), nil, "Validate portworx restart count")
+					}
+				}
+				log.Infof("Portworx pods restart count: [%d] matching with expected count: [%d]", value, n.PxPodRestartCount)
+			}
+
+			// Validate portworx operator pod check
+			pxLabel[labelNameKey] = portworxOperatorName
+			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+			dash.VerifyFatal(err, nil, "Getting portworx operator pod restart count")
+			for _, v := range pxPodRestartCountMap {
+				if v > 0 {
+					log.Errorf("Portworx operator pods restarted many times: [%d]", v)
+					if Inst().PortworxPodRestartCheck {
+						dash.VerifyFatal(fmt.Errorf("portworx operator pods restart [%d] times", v), nil, "Checking portworx pod restart count")
+					}
+				}
+			}
+			log.Info("Portworx operator pod not restarted during this test")
+		})
+	})
 }
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
@@ -3844,6 +3890,7 @@ type Torpedo struct {
 	Dash                                *aetosutil.Dashboard
 	JobName                             string
 	JobType                             string
+	PortworxPodRestartCheck             bool
 }
 
 // ParseFlags parses command line flags
@@ -3870,6 +3917,7 @@ func ParseFlags() {
 	var customConfigPath string
 	var hyperConverged bool
 	var enableDash bool
+	var pxPodRestartCheck bool
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -3951,6 +3999,7 @@ func ParseFlags() {
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
+	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.Parse()
 
 	log = logInstance.GetLogInstance()
@@ -4091,6 +4140,7 @@ func ParseFlags() {
 				Dash:                                dash,
 				JobName:                             torpedoJobName,
 				JobType:                             torpedoJobType,
+				PortworxPodRestartCheck:             pxPodRestartCheck,
 			}
 		})
 	}
