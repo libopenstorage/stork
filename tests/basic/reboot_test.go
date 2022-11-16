@@ -256,7 +256,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 
 var _ = Describe("{ClusterPxRestart}", func() {
 	var testrailID = 60042
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/60042&group_by=cases:section_id&group_order=asc&display_deleted_cases=0&group_id=4120
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/60042
 	var runID int
 	loc, _ := time.LoadLocation("UTC")
 	t1 := time.Now().In(loc)
@@ -268,54 +268,37 @@ var _ = Describe("{ClusterPxRestart}", func() {
 
 	var contexts []*scheduler.Context
 
-	stepLog := "has to restart cluster with volumes"
+	stepLog := "has to restart Px cluster "
 	It(stepLog, func() {
 		dash.Info(stepLog)
 		//var err error
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootPX-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("restartPX-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
-		stepLog = "get all nodes and reboot PX one by one"
+		stepLog = "get all nodes which has PX installed and restart PX one by one"
 		Step(stepLog, func() {
 			dash.Info(stepLog)
 
-			Step("get all PX nodes and reboot one by one", func() {
-				nodesToReboot := node.GetWorkerNodes()
+			Step("get all PX nodes and restart PX one by one", func() {
+				nodesToPXRestart := node.GetWorkerNodes()
 
 				// Reboot node and check driver status
-				Step(fmt.Sprintf("reboot px one at a time from the node(s): %v", nodesToReboot), func() {
-					for _, n := range nodesToReboot {
+				Step(fmt.Sprintf("restart px one at a time on node(s): %v", nodesToPXRestart), func() {
+					for _, n := range nodesToPXRestart {
 						if n.IsStorageDriverInstalled {
-							Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+							Step(fmt.Sprintf("node with Px restart is: %s", n.Name), func() {
 
 								err := Inst().V.RestartDriver(n, nil)
 								dash.VerifyFatal(err, nil, "Restart PX")
 							})
-							Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
-								err := Inst().N.TestConnection(n, node.ConnectionOpts{
-									Timeout:         defaultTestConnectionTimeout,
-									TimeBeforeRetry: defaultWaitRebootRetry,
-								})
-								dash.VerifyFatal(err, nil, "Validate node is back up")
-							})
 
-							Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
-								err := Inst().V.WaitDriverDownOnNode(n)
-								dash.VerifyFatal(err, nil, "Validate node is back up")
-							})
-
-							Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
-								Inst().S.String(), Inst().V.String()), func() {
-
-								err := Inst().S.IsNodeReady(n)
-								dash.VerifyFatal(err, nil, "Validate PX Node is back up")
-
-								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								dash.VerifyFatal(err, nil, "Validate PX driver is back up")
+							Step(fmt.Sprintf("wait for volume driver to restart on node: %v", n.Name), func() {
+								err := Inst().V.WaitForPxPodsToBeUp(n)
+								dash.VerifyFatal(err, nil, "Validate PX restart is done")
 							})
 
 							Step("validate apps", func() {
@@ -325,11 +308,17 @@ var _ = Describe("{ClusterPxRestart}", func() {
 							})
 						}
 					}
+					t2 := time.Now()
+					dash.Info(fmt.Sprintf("Time taken to reboot all the PX is: %f", t2.Sub(t1).Seconds()))
+					if (t2.Sub(t1).Seconds()) <= (float64(len(nodesToPXRestart) * 240)) {
+						dash.Info(fmt.Sprintf("Time taken to reboot all the PX is: %f which is less than the timeout of %f", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
+					} else {
+						log.Errorf(fmt.Sprintf("Time taken to reboot all the PX is: %f which is greater than the timeout of %f", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
+					}
 				})
 			})
 		})
-		t2 := time.Now()
-		fmt.Printf("Time taken to reboot all the PX is: %f", t2.Sub(t1).Hours())
+
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
