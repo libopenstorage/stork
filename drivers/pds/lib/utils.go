@@ -1343,6 +1343,17 @@ func ValidateDataServiceDeploymentNegative(deployment *pds.ModelsDeployment, nam
 	return err
 }
 
+func ValidateK8sNamespaceDeleted(namespace string) error {
+	_, err := k8sCore.GetNamespace(namespace)
+	if err == nil {
+		logrus.Errorf("The namespace %v has not been deleted", namespace)
+		return fmt.Errorf("the namespace %v has not been deleted", namespace)
+	}
+	logrus.Infof("The namespace has been successfully deleted")
+	return nil
+
+}
+
 func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
 	ns, err := k8sCore.CreateNamespace(&corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{

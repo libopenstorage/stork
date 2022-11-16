@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
@@ -697,10 +698,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
-			logrus.Infof("Cleanup: Deleting created namespace %v", nname)
-			dash.Infof("Cleanup: Deleting created namespace %v", nname)
-			err := pdslib.DeleteK8sPDSNamespace(nname)
-			Expect(err).NotTo(HaveOccurred())
+
 		}()
 
 		logrus.Info("Waiting for created namespaces to be available in PDS")
@@ -717,7 +715,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newNamespaceID).NotTo(BeEmpty())
 
-			var cleanup []string
+			var cleanup []*pds.ModelsDeployment
 			for _, ds := range params.DataServiceToTest {
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
@@ -782,7 +780,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
 					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
 					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
-					cleanup = append(cleanup, deployment.GetId())
+					cleanup = append(cleanup, deployment)
 
 				})
 
@@ -791,9 +789,24 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			logrus.Infof("List of created deployments: %v ", cleanup)
 			dash.Infof("List of created deployments: %v ", cleanup)
 
-			Step("Delete created deployments", func() {
+			Step("Delete created namespace", func() {
+				logrus.Infof("Cleanup: Deleting created namespace %v", nname)
+				dash.Infof("Cleanup: Deleting created namespace %v", nname)
+				err := pdslib.DeleteK8sPDSNamespace(nname)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			logrus.Infof("Waiting for 10 seconds for the namespace to be deleted")
+			time.Sleep(10 * time.Second)
+
+			Step("Verify that the namespace was deleted", func() {
+				err := pdslib.ValidateK8sNamespaceDeleted(nname)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Step("Verify created deployments have been deleted", func() {
 				for _, dep := range cleanup {
-					_, err := pdslib.DeleteDeployment(dep)
+					err := pdslib.ValidateDataServiceDeploymentNegative(dep, nname)
 					Expect(err).NotTo(HaveOccurred())
 				}
 				isDeploymentsDeleted = true
