@@ -800,7 +800,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					logrus.Infof("%s re cr %v status %v", funct, crName, resourceExport.Status.Status)
 					switch resourceExport.Status.Status {
 					case kdmpapi.ResourceExportStatusFailed:
-						message = fmt.Sprintf("%s Error creating CR %v for pvc creation: %v", funct, crName, err)
+						message = fmt.Sprintf("%s Error creating CR %v for pvc creation: %v", funct, crName, resourceExport.Status.Reason)
 						restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
 						restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 						restore.Status.Reason = message
