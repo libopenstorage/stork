@@ -796,8 +796,8 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			logrus.Infof("Waiting for 10 seconds for the namespace to be deleted")
-			time.Sleep(10 * time.Second)
+			logrus.Infof("Waiting for 60 seconds for the namespace to be deleted...")
+			time.Sleep(60 * time.Second)
 
 			Step("Verify that the namespace was deleted", func() {
 				err := pdslib.ValidateK8sNamespaceDeleted(nname)
