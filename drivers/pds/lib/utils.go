@@ -1338,9 +1338,9 @@ func ValidateDataServiceDeploymentNegative(deployment *pds.ModelsDeployment, nam
 	})
 	if err == nil {
 		logrus.Errorf("Validate DS Deployment negative failed, the StatefulSet still exists %v", ss)
-		return nil
+		return fmt.Errorf("the deployment %v has not been deleted", deployment.Name)
 	}
-	return err
+	return nil
 }
 
 func ValidateK8sNamespaceDeleted(namespace string) error {
