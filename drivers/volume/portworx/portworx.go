@@ -500,6 +500,7 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 	info := &storkvolume.Info{}
 	info.VolumeID = vols[0].Id
+
 	info.VolumeName = vols[0].Locator.Name
 	for _, rset := range vols[0].ReplicaSets {
 		info.DataNodes = append(info.DataNodes, rset.Nodes...)
@@ -521,8 +522,9 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 	for k, v := range vols[0].Locator.GetVolumeLabels() {
 		info.Labels[k] = v
 	}
-
+	info.IsSharedV4SvcVolume = vols[0].Spec.Sharedv4 && vols[0].Spec.Sharedv4ServiceSpec != nil
 	info.VolumeSourceRef = vols[0]
+
 	return info, nil
 }
 
