@@ -95,6 +95,7 @@ type TestCase struct {
 	TestSetID   int               `json:"testSetID"`
 	TestRailID  string            `json:"testRepoID"`
 	Duration    string            `json:"duration"`
+	TestType    string            `json:"testType"`
 }
 
 type result struct {
@@ -308,6 +309,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		testCase.Status = INPROGRESS
 		testCase.Description = description
 		testCase.HostOs = runtime.GOOS
+		testCase.TestType = "TEST"
 
 		testCase.TestSetID = d.TestSetID
 

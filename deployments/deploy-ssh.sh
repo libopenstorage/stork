@@ -9,8 +9,13 @@ if [ -z "${ENABLE_DASH}" ]; then
 fi
 
 if [ -z "${DASH_UID}" ]; then
-    DASH_UID="0"
+    if [ -e /build.properties ]; then
+      DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
+    else
+      DASH_UID="0"
+    fi
 fi
+
 
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"

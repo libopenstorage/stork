@@ -29,7 +29,9 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", nil, testrailID)
+		tags := make(map[string]string)
+		tags["upgradeTo"] = Inst().StorageDriverUpgradeEndpointVersion
+		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", tags, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -125,7 +127,9 @@ var _ = Describe("{UpgradeStork}", func() {
 	var runID int
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeStork", "Validating stork upgrade", nil, testrailID)
+		tags := make(map[string]string)
+		tags["upgradeTo"] = Inst().StorageDriverUpgradeEndpointVersion
+		StartTorpedoTest("UpgradeStork", "Validating stork upgrade", tags, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
