@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
+		dash.TestCaseBegin("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", "", nil)
 	})
 
 	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
@@ -115,7 +115,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+		dash.TestCaseBegin("ScaleUPDataServices", "Deploys and Scales Up the dataservices", "", nil)
 	})
 
 	It("deploy Dataservices", func() {
@@ -277,7 +277,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)
+		dash.TestCaseBegin("UpgradeDataServiceVersion", "Upgrades the dataservice version", "", nil)
 	})
 
 	It("runs the dataservice version upgrade test", func() {
@@ -293,7 +293,7 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", nil, 0)
+		dash.TestCaseBegin("UpgradeDataServiceImage", "Upgrades the dataservice image", "", nil)
 	})
 
 	It("runs the dataservice build image upgrade test", func() {
@@ -310,7 +310,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", nil, 0)
+		dash.TestCaseBegin("DeployDataServicesOnDemand", "Deploys DataServices", "", nil)
 	})
 
 	It("Deploy DataservicesOnDemand", func() {
