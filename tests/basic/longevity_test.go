@@ -64,38 +64,38 @@ var _ = Describe("{Longevity}", func() {
 		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
-		AppTaskDown:           TriggerAppTaskDown,
-		AppTasksDown:          TriggerAppTasksDown,
-		AddDrive:              TriggerAddDrive,
-		CoreChecker:           TriggerCoreChecker,
-		CloudSnapShot:         TriggerCloudSnapShot,
-		LocalSnapShot:         TriggerLocalSnapShot,
-		DeleteLocalSnapShot:   TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:        TriggerPoolResizeDisk,
-		PoolAddDisk:           TriggerPoolAddDisk,
-		UpgradeStork:          TriggerUpgradeStork,
-		VolumesDelete:         TriggerVolumeDelete,
-		UpgradeVolumeDriver:   TriggerUpgradeVolumeDriver,
-		AutoFsTrim:            TriggerAutoFsTrim,
-		UpdateVolume:          TriggerVolumeUpdate,
-		RestartManyVolDriver:  TriggerRestartManyVolDriver,
-		RebootManyNodes:       TriggerRebootManyNodes,
-		NodeDecommission:      TriggerNodeDecommission,
-		NodeRejoin:            TriggerNodeRejoin,
-		CsiSnapShot:           TriggerCsiSnapShot,
-		CsiSnapRestore:        TriggerCsiSnapRestore,
-		RelaxedReclaim:        TriggerRelaxedReclaim,
-		Trashcan:              TriggerTrashcan,
-		KVDBFailover:          TriggerKVDBFailover,
-		ValidateDeviceMapper:  TriggerValidateDeviceMapperCleanup,
-		AsyncDR:               TriggerAsyncDR,
-		AsyncDRVolumeOnly:     TriggerAsyncDRVolumeOnly,
-		RestartKvdbVolDriver:  TriggerRestartKvdbVolDriver,
-		HAIncreaseAndReboot:   TriggerHAIncreaseAndReboot,
-		AddDiskAndReboot:      TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:   TriggerPoolResizeDiskAndReboot,
-		AutopilotRebalance:    TriggerAutopilotPoolRebalance,
-		VolumeCreatePxRestart: TriggerVolumeCreatePXRestart,
+		AppTaskDown:            TriggerAppTaskDown,
+		AppTasksDown:           TriggerAppTasksDown,
+		AddDrive:               TriggerAddDrive,
+		CoreChecker:            TriggerCoreChecker,
+		CloudSnapShot:          TriggerCloudSnapShot,
+		LocalSnapShot:          TriggerLocalSnapShot,
+		DeleteLocalSnapShot:    TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:         TriggerPoolResizeDisk,
+		PoolAddDisk:            TriggerPoolAddDisk,
+		UpgradeStork:           TriggerUpgradeStork,
+		VolumesDelete:          TriggerVolumeDelete,
+		UpgradeVolumeDriver:    TriggerUpgradeVolumeDriver,
+		AutoFsTrim:             TriggerAutoFsTrim,
+		UpdateVolume:           TriggerVolumeUpdate,
+		RestartManyVolDriver:   TriggerRestartManyVolDriver,
+		RebootManyNodes:        TriggerRebootManyNodes,
+		NodeDecommission:       TriggerNodeDecommission,
+		NodeRejoin:             TriggerNodeRejoin,
+		CsiSnapShot:            TriggerCsiSnapShot,
+		CsiSnapRestore:         TriggerCsiSnapRestore,
+		RelaxedReclaim:         TriggerRelaxedReclaim,
+		Trashcan:               TriggerTrashcan,
+		KVDBFailover:           TriggerKVDBFailover,
+		ValidateDeviceMapper:   TriggerValidateDeviceMapperCleanup,
+		AsyncDR:                TriggerAsyncDR,
+		AsyncDRVolumeOnly:      TriggerAsyncDRVolumeOnly,
+		StorkApplicationBackup: TriggerStorkApplicationBackup,
+		RestartKvdbVolDriver:   TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:    TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:       TriggerPoolAddDiskAndReboot,
+		ResizeDiskAndReboot:    TriggerPoolResizeDiskAndReboot,
+		AutopilotRebalance:     TriggerAutopilotPoolRebalance,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -592,6 +592,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
+	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
@@ -740,6 +741,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDRVolumeOnly][3] = 21 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][2] = 24 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][1] = 27 * baseInterval
+
+	triggerInterval[StorkApplicationBackup][10] = 1 * baseInterval
+	triggerInterval[StorkApplicationBackup][9] = 3 * baseInterval
+	triggerInterval[StorkApplicationBackup][8] = 6 * baseInterval
+	triggerInterval[StorkApplicationBackup][7] = 9 * baseInterval
+	triggerInterval[StorkApplicationBackup][6] = 12 * baseInterval
+	triggerInterval[StorkApplicationBackup][5] = 15 * baseInterval
+	triggerInterval[StorkApplicationBackup][4] = 18 * baseInterval
+	triggerInterval[StorkApplicationBackup][3] = 21 * baseInterval
+	triggerInterval[StorkApplicationBackup][2] = 24 * baseInterval
+	triggerInterval[StorkApplicationBackup][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
 
@@ -1221,6 +1233,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
 	triggerInterval[AsyncDRVolumeOnly][0] = 0
+	triggerInterval[StorkApplicationBackup][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0
