@@ -40,6 +40,7 @@ type Parameter struct {
 		AccountName     string `json:"AccountName"`
 		ClusterType     string `json:"ClusterType"`
 		Namespace       string `json:"Namespace"`
+		PxNamespace     string `json:"PxNamespace"`
 	} `json:"InfraToTest"`
 }
 
@@ -1357,4 +1358,167 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 
 	return resourceTemp, storageOp, config, nil
 
+}
+
+// DeleteK8sNamespace deletes the specified namespace
+func DeleteK8sNamespace(namespace string) error {
+	err := k8sCore.DeleteNamespace(namespace)
+	if err != nil {
+		logrus.Errorf("Could not delete the specified namespace %v because %v", namespace, err)
+		return err
+	}
+	return nil
+}
+
+// ValidateDataServiceDeploymentNegative checks if deployment is not present
+func ValidateDataServiceDeploymentNegative(deployment *pds.ModelsDeployment, namespace string) error {
+	var ss *v1.StatefulSet
+	err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if err != nil {
+			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err == nil {
+		logrus.Errorf("Validate DS Deployment negative failed, the StatefulSet still exists %v", ss)
+		return fmt.Errorf("the deployment %v has not been deleted", deployment.Name)
+	}
+	return nil
+}
+
+func ValidateK8sNamespaceDeleted(namespace string) error {
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		_, err := k8sCore.GetNamespace(namespace)
+		if err == nil {
+			logrus.Warnf("The namespace %v has not been deleted", namespace)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("The namespace %v has not been deleted", namespace)
+		return fmt.Errorf("the namespace %v has not been deleted", namespace)
+	}
+	logrus.Infof("The namespace has been successfully deleted")
+	return nil
+
+}
+
+// TODO: Consolidate this function with CheckNamespace
+func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
+	ns, err := k8sCore.CreateNamespace(&corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Namespace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   nname,
+			Labels: map[string]string{"pds.portworx.com/available": "true"},
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("could not create ns %v", nname)
+	}
+
+	return ns, nil
+
+}
+
+func DeleteK8sPDSNamespace(nname string) error {
+	err := k8sCore.DeleteNamespace(nname)
+	return err
+}
+
+func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
+	var ss *v1.StatefulSet
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if err != nil {
+			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
+		return nil, err
+	}
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		logrus.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
+		return nil, err
+	}
+	return pods, nil
+}
+
+func GetK8sNodeObjectUsingPodName(nodeName string) (*corev1.Node, error) {
+	nodeObject, err := k8sCore.GetNodeByName(nodeName)
+	if err != nil {
+		logrus.Errorf("Could not get the node object for node %v because %v", nodeName, err)
+		return nil, err
+	}
+	return nodeObject, nil
+}
+
+func DrainPxPodOnK8sNode(node *corev1.Node, namespace string) error {
+	labelSelector := map[string]string{"name": "portworx"}
+	pod, err := k8sCore.GetPodsByNodeAndLabels(node.Name, namespace, labelSelector)
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return err
+	}
+	logrus.Infof("Portworx pod to be drained %v from node %v", pod.Items[0].Name, node.Name)
+	err = k8sCore.DrainPodsFromNode(node.Name, pod.Items, timeOut, maxtimeInterval)
+	if err != nil {
+		logrus.Errorf("Could not drain the node %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func LabelK8sNode(node *corev1.Node, label string) error {
+	keyval := strings.Split(label, "=")
+	err := k8sCore.AddLabelOnNode(node.Name, keyval[0], keyval[1])
+	return err
+}
+
+func RemoveLabelFromK8sNode(node *corev1.Node, label string) error {
+	err := k8sCore.RemoveLabelOnNode(node.Name, label)
+	return err
+}
+
+func UnCordonK8sNode(node *corev1.Node) error {
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		err = k8sCore.UnCordonNode(node.Name, timeOut, maxtimeInterval)
+		if err != nil {
+			logrus.Errorf("Failed uncordon node %v due to %v", node.Name, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+func VerifyPxPodOnNode(nodeName string, namespace string) (bool, error) {
+	labelSelector := map[string]string{"name": "portworx"}
+	var pods *corev1.PodList
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		pods, err = k8sCore.GetPodsByNodeAndLabels(nodeName, namespace, labelSelector)
+		if err != nil {
+			logrus.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return false, err
+	}
+	pxPodName := pods.Items[0].Name
+	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
+	return true, nil
 }

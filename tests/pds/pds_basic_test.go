@@ -29,6 +29,7 @@ const (
 
 var (
 	namespace                               string
+	pxnamespace                             string
 	tenantID                                string
 	dnsZone                                 string
 	projectID                               string

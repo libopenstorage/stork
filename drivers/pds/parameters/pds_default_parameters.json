@@ -65,6 +65,7 @@
     "ControlPlaneURL": "https://staging.pds.portworx.com/",
     "AccountName": "Portworx",
     "ClusterType": "onprem",
-    "Namespace": "automation"
+    "Namespace": "automation",
+    "PxNamespace": "portworx"
   }
 }
