@@ -71,7 +71,7 @@ const (
 	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
 	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
 
-	essentialsFaFbSKU = "PX-Essential FA/FB"
+	essentialsFaFbSKU = "Portworx CSI for FA/FB"
 
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
@@ -291,7 +291,9 @@ var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
 	})
 })
 
-/* This test
+/*
+	This test
+
 1. Deletes px-pure-secret
 2. Waits for lic_expiry_timeout
 3. Verifies that Essentials lic expires
@@ -407,7 +409,8 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 })
 
 /*
-  This Test:
+	This Test:
+
 1. Deletes px-pure-secret
 2. Restarts PX on all nodes
 3. Expects PX-Essentials FA/FB lic does not falls back to PX-Essentials license
