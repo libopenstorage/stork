@@ -362,6 +362,9 @@ type Driver interface {
 	// AddBlockDrives add drives to the node using PXCTL
 	AddBlockDrives(n *node.Node, drivePath []string) error
 
+	// AddCloudDrive add cloud drives to the node using PXCTL
+	AddCloudDrive(n *node.Node, devcieSpec string) error
+
 	// GetRebalanceJobs returns the list of rebalance jobs
 	GetRebalanceJobs() ([]*api.StorageRebalanceJob, error)
 

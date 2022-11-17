@@ -891,6 +891,14 @@ func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
 	}
 }
 
+// AddCloudDrive add drives to the node using PXCTL
+func (d *DefaultDriver) AddCloudDrive(n *node.Node, deviceSpec string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddCloudDrive()",
+	}
+}
+
 // GetRebalanceJobs returns the list of rebalance jobs
 func (d *DefaultDriver) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
 	return nil, &errors.ErrNotSupported{

@@ -373,7 +373,6 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	res.TestCaseID = d.testcaseID
 
 	d.Log.Infof("Verifying : Description : %s", description)
-	d.Log.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
 
 	if actualVal == expectedVal {
 		res.ResultType = "info"

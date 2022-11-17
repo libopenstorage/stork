@@ -85,8 +85,8 @@ const (
 	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
-	pxctlDriveAddStart                        = "%s -j service drive add -d %s -o start"
-	pxctlDriveAddStatus                       = "%s -j service drive add -d %s -o status"
+	pxctlDriveAddStart                        = "%s -j service drive add %s -o start"
+	pxctlDriveAddStatus                       = "%s -j service drive add %s -o status"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
@@ -4429,9 +4429,22 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 	return nil
 }
 
+// AddCloudDrive add cloud drives to the node using PXCTL
+func (d *portworx) AddCloudDrive(n *node.Node, deviceSpec string) error {
+	d.log.Infof("Adding Cloud drive on %s with spec %s", n.Name, deviceSpec)
+	err := addDrive(*n, deviceSpec, d)
+	return err
+}
+
 func addDrive(n node.Node, drivePath string, d *portworx) error {
 
-	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+	driveAddFlag := fmt.Sprintf("-d %s", drivePath)
+
+	if strings.Contains(drivePath, "size") {
+		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
+	}
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
 	})
@@ -4454,51 +4467,51 @@ func addDrive(n node.Node, drivePath string, d *portworx) error {
 
 	}
 	d.log.Infof("Added drive %s to node %s successfully", drivePath, n.Name)
-
 	return nil
-
 }
 
 func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error {
 
-	waitCount := 180
+	driveAddFlag := fmt.Sprintf("-d %s", drivePath)
+	var addDriveStatus statusJSON
 
-	for {
-		out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStatus, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+	if strings.Contains(drivePath, "size") {
+		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
+	}
+
+	f := func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStatus, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 			Timeout:         crashDriverTimeout,
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 		if err != nil {
-
 			if strings.Contains(err.Error(), driveExitsStatus) {
-				return nil
+				return nil, false, nil
 			}
-			err = fmt.Errorf("error while getting add drive status for path %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
-			return err
+			return nil, false, fmt.Errorf("error while getting add drive status for path %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
 		}
 		output := []byte(out)
-		var addDriveStatus statusJSON
+
 		err = json.Unmarshal(output, &addDriveStatus)
 		if err != nil {
-			return fmt.Errorf("ERROR of unmarshal add drive status: %v", err)
+			return nil, true, fmt.Errorf("ERROR of unmarshal add drive status: %v", err)
 		}
 		if &addDriveStatus == nil {
-			return fmt.Errorf("failed to get add drive status for path %s in node %s", drivePath, n.Name)
+			return nil, true, fmt.Errorf("failed to get add drive status for path %s in node %s", drivePath, n.Name)
 		}
 		d.log.Infof("Current add drive for path %s status : %+v", drivePath, addDriveStatus)
-
 		if strings.Contains(addDriveStatus.Status, "Drive add: Storage rebalance complete") || strings.Contains(addDriveStatus.Status, "Device already exists") {
-			break
+			return nil, false, nil
 		}
-		if waitCount == 0 {
-			return fmt.Errorf("failed to  add drive for path %s in node %s, status: %+v", drivePath, n.Name, addDriveStatus)
-		}
-		waitCount--
-		d.log.Info("Waiting for 30 seconds to check the status again")
-		time.Sleep(60 * time.Second)
+		return nil, true, nil
 	}
-	d.log.Infof("Added drive %s to node %s completed", drivePath, n.Name)
-	return nil
+
+	_, err := task.DoRetryWithTimeout(f, 3*time.Hour, 2*time.Minute)
+	if err == nil {
+		d.log.Infof("Added drive %s to node %s completed", drivePath, n.Name)
+		return nil
+	}
+	return fmt.Errorf("failed to  add drive for path %s in node %s, status: %+v, err: %v", drivePath, n.Name, addDriveStatus, err)
 
 }
 

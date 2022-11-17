@@ -957,6 +957,14 @@ func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, sn
 	}
 
 }
+
+func (d *dcos) GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error) {
+	// GetPodsRestartCount is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPodsRestartCoun()",
+	}
+}
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

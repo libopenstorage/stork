@@ -384,6 +384,9 @@ type Driver interface {
 
 	// DeleteCsiSnapshot delete a snapshots from namespace
 	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
+
+	// GetPodsRestartCount gets restart count maps for pods in given namespace
+	GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error)
 }
 
 var (
