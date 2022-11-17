@@ -273,6 +273,8 @@ type Info struct {
 	Labels map[string]string
 	// VolumeSourceRef is a optional reference to the source of the volume
 	VolumeSourceRef interface{}
+	// IsSharedV4SvcVolume is a flag for figuring if it's  sharedv4 service volume
+	IsSharedV4SvcVolume bool
 }
 
 // NodeStatus Status of driver on a node
