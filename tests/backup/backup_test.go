@@ -201,7 +201,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
-					labelSelectores, orgID, cluster_uid, "backup-pre-rule", pre_rule_uid, "", "")
+					labelSelectores, orgID, cluster_uid, "backup-pre-rule", pre_rule_uid, "backup-post-rule", post_rule_uid)
 				//If backup is taken without pre/post rule
 				//CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
 				//	labelSelectores, orgID, cluster_uid, "", "", "", "")
