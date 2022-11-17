@@ -4959,6 +4959,9 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
 	SetTorpedoFileOutput(log, TestLogger)
+	if tags == nil {
+		tags = make(map[string]string)
+	}
 	tags["apps"] = strings.Join(Inst().AppList, ",")
 	tags["storageProvisioner"] = Inst().Provisioner
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
