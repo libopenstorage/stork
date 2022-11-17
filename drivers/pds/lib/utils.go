@@ -1389,8 +1389,15 @@ func ValidateDataServiceDeploymentNegative(deployment *pds.ModelsDeployment, nam
 }
 
 func ValidateK8sNamespaceDeleted(namespace string) error {
-	_, err := k8sCore.GetNamespace(namespace)
-	if err == nil {
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		_, err := k8sCore.GetNamespace(namespace)
+		if err == nil {
+			logrus.Warnf("The namespace %v has not been deleted", namespace)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
 		logrus.Errorf("The namespace %v has not been deleted", namespace)
 		return fmt.Errorf("the namespace %v has not been deleted", namespace)
 	}
