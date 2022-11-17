@@ -274,7 +274,7 @@ var (
 	post_rule_app  = []string{"cassandra"}
 	app_parameters = map[string]map[string]string{
 		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
-		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U '$POSTGRES_USER' -c 'CHECKPOINT';", "background": "false", "run_in_single_pod": "false"},
+		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";", "background": "false", "run_in_single_pod": "false"},
 	}
 )
 
@@ -4610,7 +4610,8 @@ func Contains(app_list []string, app string) bool {
 	return false
 }
 
-func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_post_flag string, ps map[string]map[string]string) bool {
+func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_post_flag string,
+	ps map[string]map[string]string) (bool, string) {
 	pod_selector := []map[string]string{}
 	action_value := []string{}
 	container := []string{}
@@ -4650,13 +4651,13 @@ func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_
 				log.Infof("Post rule not required for this application")
 			}
 		}
-
 	}
 	total_rules := len(action_value)
 	if total_rules == 0 {
 		log.Info("Rules not required for the apps")
-		return true
+		return true, ""
 	}
+
 	rulesinfo_ruleitem := make([]api.RulesInfo_RuleItem, total_rules)
 	for i := 0; i < total_rules; i++ {
 		rule_action := api.RulesInfo_Action{Background: background[i], RunInSinglePod: run_in_single_pod[i], Value: action_value[i]}
@@ -4696,9 +4697,9 @@ func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_
 	_, err1 := Inst().Backup.InspectRule(ctx, RuleInspectReq)
 	if err1 != nil {
 		log.Errorf("Failed to validate the created rule with Error: [%v]", err)
-		return false
+		return false, uid
 	}
-	return true
+	return true, uid
 }
 
 func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
@@ -4976,7 +4977,7 @@ func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_cou
 	return SchedulePolicy
 }
 
-func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
+func RegisterBackupCluster(orgID string, cloud_name string, uid string) (api.ClusterInfo_StatusInfo_Status, string) {
 	CreateSourceAndDestClusters(orgID, cloud_name, uid)
 	ctx, err := backup.GetAdminCtxFromSecret()
 	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
@@ -4984,5 +4985,5 @@ func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
 	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
 	dash.VerifyFatal(err, nil, "Inspecting cluster object")
 	clusterObj := clusterResp.GetCluster()
-	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+	return clusterObj.Status.Status, clusterObj.Uid
 }
