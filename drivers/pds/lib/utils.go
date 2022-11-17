@@ -1406,6 +1406,7 @@ func ValidateK8sNamespaceDeleted(namespace string) error {
 
 }
 
+// TODO: Consolidate this function with CheckNamespace
 func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
 	ns, err := k8sCore.CreateNamespace(&corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
