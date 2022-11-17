@@ -51,6 +51,14 @@
       "ScaleReplicas": 6,
       "OldVersion": "4.0.5",
       "OldImage": "029172b"
+    },
+    {
+      "Name": "ZooKeeper",
+      "Version": "3.8.0",
+      "Image": "273fa6f",
+      "Replicas": 3,
+      "OldVersion": "3.7.1",
+      "OldImage": "d8f144f"
     }
   ],
   "InfraToTest": {
