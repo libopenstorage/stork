@@ -1569,10 +1569,6 @@ func (a *ApplicationRestoreController) restoreResources(
 						resource.Status,
 						resource.Reason)
 				}
-				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
-				restore.Status.FinishTimestamp = metav1.Now()
-				restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
-				restore.Status.Reason = "Volumes and resources were restored up successfully"
 			case kdmpapi.ResourceExportStatusInitial:
 				doCleanup = false
 			case kdmpapi.ResourceExportStatusPending:
