@@ -448,7 +448,18 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 	}
 	var resourceNamespace string
 	var live bool
-	if len(pods) > 0 {
+	// filter pods that are create by kdmp
+	count := len(pods)
+	logrus.Infof("sivakumar -- pod count for job [%v] --> %v", jobName, count)
+	for _, pod := range pods {
+		annotation := pod.Annotations
+		if _, ok := annotations[drivers.DriverNameLabel]; ok {
+			count = count - 1
+			logrus.Infof("sivakumar -- kopia pod annotation, decrementing the pod count now count --> %v", count)
+		}
+	}
+
+	if count > 0 {
 		resourceNamespace = utils.AdminNamespace
 		live = true
 	} else {
