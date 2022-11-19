@@ -1477,7 +1477,7 @@ func (a *ApplicationRestoreController) restoreResources(
 	} else {
 		// Check whether ResourceExport is present or not
 		crName := getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace)
-		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, a.restoreAdminNamespace)
+		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
 				// create resource export CR
@@ -1497,7 +1497,7 @@ func (a *ApplicationRestoreController) restoreResources(
 				resourceExport.Annotations = make(map[string]string)
 				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
 				resourceExport.Name = crName
-				resourceExport.Namespace = a.restoreAdminNamespace
+				resourceExport.Namespace = restore.Namespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
 				resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
 				storkPodNs, err := k8sutils.GetStorkPodNamespace()
@@ -1695,6 +1695,19 @@ func (a *ApplicationRestoreController) cleanupRestore(restore *storkapi.Applicat
 			return fmt.Errorf("cancel restore: %s", err)
 		}
 	}
+	var crNames = []string{}
+	// Directly calling DeleteResourceExport with out checking backuplocation type.
+	// For other backuplocation type, expecting Notfound
+	crNames = append(crNames, getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace))
+	crNames = append(crNames, getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace))
+	for _, crName := range crNames {
+		err := kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			errMsg := fmt.Sprintf("failed to delete restore resource export CR [%v]: %v", crName, err)
+			log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1737,21 +1750,18 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 			logrus.Errorf("unable to cleanup post restore resources, err: %v", err)
 		}
 	}
+	var crNames = []string{}
 	// Directly calling DeleteResourceExport with out checking backuplocation type.
 	// For other backuplocation type, expecting Notfound
-	crName := getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace)
-	err := kdmpShedOps.Instance().DeleteResourceExport(crName, a.restoreAdminNamespace)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		errMsg := fmt.Sprintf("failed to delete restore resource export CR [%v]: %v", crName, err)
-		log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
-		return err
-	}
-	crName = getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace)
-	err = kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		errMsg := fmt.Sprintf("failed to delete pvc creation resource export CR [%v]: %v", crName, err)
-		log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
-		return err
+	crNames = append(crNames, getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace))
+	crNames = append(crNames, getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace))
+	for _, crName := range crNames {
+		err := kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			errMsg := fmt.Sprintf("failed to delete restore resource export CR [%v]: %v", crName, err)
+			log.ApplicationRestoreLog(restore).Errorf("%v", errMsg)
+			return err
+		}
 	}
 	return nil
 }
