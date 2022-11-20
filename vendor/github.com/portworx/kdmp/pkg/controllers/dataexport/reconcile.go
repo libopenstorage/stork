@@ -540,7 +540,15 @@ func (c *Controller) createJobCredCertSecrets(
 			}
 			return data, err
 		}
-		if len(pods) > 0 {
+		// filter out the pods that are create by us
+		count := len(pods)
+		for _, pod := range pods {
+			labels := pod.ObjectMeta.Labels
+			if _, ok := labels[drivers.DriverNameLabel]; ok {
+				count--
+			}
+		}
+		if count > 0 {
 			namespace = utils.AdminNamespace
 		}
 		blName = dataExport.Spec.Destination.Name
