@@ -8,10 +8,13 @@ import (
 	"testing"
 	"time"
 
+	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
+
 	"github.com/stretchr/testify/require"
 	appsapi "k8s.io/api/apps/v1"
 )
@@ -29,6 +32,7 @@ func TestHealthMonitor(t *testing.T) {
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("stopKubeletTest", stopKubeletTest)
 	t.Run("healthCheckFixTest", healthCheckFixTest)
+	t.Run("stopDriverCsiPodFailoverTest", stopDriverCsiPodFailoverTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -213,4 +217,71 @@ func healthCheckFixTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, ctxs)
+}
+
+func stopDriverCsiPodFailoverTest(t *testing.T) {
+	// Verify CSI pods are running on online nodes
+	logrus.Infof("Checking if CSI pods are initially scheduled on online PX nodes")
+	verifyCsiPodsRunningOnOnlineNode(t)
+
+	// Get all csi pod instances
+	csiPods, err := core.Instance().GetPods(storkNamespace, map[string]string{"app": "px-csi-driver"})
+	require.NoError(t, err, "Failed to get csi pods")
+
+	nodeNameMap := node.GetNodesByName()
+	nonCsiNodeAlreadyFound := false
+
+	// Get all nodes where CSI pods are running
+	isCsiPodNode := make(map[string]bool)
+	for _, csiPod := range csiPods.Items {
+		isCsiPodNode[csiPod.Spec.NodeName] = true
+	}
+
+	// Make sure to stop px on all the non csi nodes expect one
+	logrus.Infof("Stopping PX on all non CSI pods except one for failover verification")
+	for nodeName, schedNode := range nodeNameMap {
+		if val, ok := isCsiPodNode[nodeName]; ok && val {
+			continue
+		}
+		if nonCsiNodeAlreadyFound && schedNode.IsStorageDriverInstalled {
+			err = volumeDriver.StopDriver([]node.Node{schedNode}, false, nil)
+			require.NoError(t, err, "Error stopping driver on node %+v", nodeNameMap[nodeName])
+			defer volumeDriver.StartDriver(nodeNameMap[nodeName])
+		} else {
+			nonCsiNodeAlreadyFound = true
+		}
+	}
+
+	podToFailover := csiPods.Items[0]
+	nodeName := podToFailover.Spec.NodeName
+
+	// Stop px one of of the csi nodes
+	logrus.Infof("Stopping PX on node = %v where px pod %v is running", nodeName, podToFailover.Name)
+	err = volumeDriver.StopDriver([]node.Node{nodeNameMap[nodeName]}, false, nil)
+	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
+	defer volumeDriver.StartDriver(nodeNameMap[nodeName])
+	time.Sleep(nodeOfflineTimeout)
+
+	// Verify CSI pods are running on online nodes after failover
+	logrus.Infof("Checking if all CSI pods are running on online PX nodes after failoever")
+	verifyCsiPodsRunningOnOnlineNode(t)
+}
+
+func verifyCsiPodsRunningOnOnlineNode(t *testing.T) {
+	csiPods, err := core.Instance().GetPods(storkNamespace, map[string]string{"app": "px-csi-driver"})
+	require.NoError(t, err, "Failed to get csi pods after failoever")
+
+	driverNodes, err := storkVolumeDriver.GetNodes()
+	require.NoError(t, err, "Error getting nodes from stork driver")
+
+	for _, csiPod := range csiPods.Items {
+		found := false
+		for _, dNode := range driverNodes {
+			if csiPod.Spec.NodeName == dNode.Hostname {
+				require.Equal(t, dNode.Status, storkdriver.NodeOnline, "CSI pod : %v scheduled on an offline node %v", csiPod.Name, dNode.Hostname)
+				found = true
+			}
+		}
+		require.Equal(t, true, found, "CSI node not found in driver node list : %v", driverNodes)
+	}
 }
