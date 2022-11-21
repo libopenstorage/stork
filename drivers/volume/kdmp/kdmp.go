@@ -614,7 +614,8 @@ func (k *kdmp) getRestorePVCs(
 				delete(pvc.Annotations, bindCompletedKey)
 				delete(pvc.Annotations, boundByControllerKey)
 				delete(pvc.Annotations, storageClassKey)
-				delete(pvc.Annotations, storageProvisioner)
+				delete(pvc.Annotations, k8shelper.AnnBetaStorageProvisioner)
+				delete(pvc.Annotations, k8shelper.AnnStorageProvisioner)
 				delete(pvc.Annotations, storageNodeAnnotation)
 				pvc.Annotations[KdmpAnnotation] = StorkAnnotation
 			}
