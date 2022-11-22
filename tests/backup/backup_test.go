@@ -51,7 +51,7 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteBucket(provider, BucketName)
 }
 
-//This testcase verifies if the backup pods are in Ready state or not
+// This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
@@ -71,7 +71,71 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	})
 })
 
-//This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{UserGroupManagement}", func() {
+	JustBeforeEach(func() {
+		log.Infof("No pre-setup required for this testcase")
+		StartTorpedoTest("Backup: UserGroupManagement", "Creating users and adding them to groups", nil, 0)
+	})
+	It("User and group role mappings", func() {
+		Step("Create Users", func() {
+			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", "Password1")
+			if err != nil {
+				logrus.Errorf("Failed to create user - %s", err)
+				return
+			}
+		})
+		Step("Create Groups", func() {
+			err := backup.AddGroup("testgroup1")
+			if err != nil {
+				logrus.Errorf("Failed to create group - %s", err)
+				return
+			}
+		})
+		Step("Add users to group", func() {
+			err := backup.AddGroupToUser("testuser1", "testgroup1")
+			if err != nil {
+				logrus.Errorf("Failed to assign group to user - %s", err)
+				return
+			}
+		})
+		Step("Assign role to groups", func() {
+			err := backup.AddRoleToGroup("testgroup1", backup.ApplicationOwner, "testing from torpedo")
+			if err != nil {
+				logrus.Errorf("Failed to assign group to user - %s", err)
+				return
+			}
+		})
+		Step("Verify Application Owner role permissions for user", func() {
+			// User is assigned the role of ApplicationUser but since it is part of DefaultRoles, we are verifying with it
+			dash.VerifyFatal(backup.ValidateUserRole("testuser1", backup.ApplicationOwner), true, "Verifying the user role mapping")
+		})
+		Step("Update role to groups", func() {
+			err := backup.DeleteRoleFromGroup("testgroup1", backup.ApplicationOwner, "removing role from testgroup1")
+			if err != nil {
+				logrus.Errorf("Failed to delete user - %s", err)
+				return
+			}
+			err = backup.AddRoleToGroup("testgroup1", backup.ApplicationUser, "testing from torpedo")
+			if err != nil {
+				logrus.Errorf("Failed to assign group to user - %s", err)
+				return
+			}
+		})
+		Step("Verify Application User role permissions for user", func() {
+			// User is assigned the role of ApplicationUser but since it is part of DefaultRoles, we are veriying with it
+			dash.VerifyFatal(backup.ValidateUserRole("testuser1", backup.ApplicationUser), true, "Verifying the user role mapping")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.Infof("Cleanup started")
+		backup.DeleteUser("testuser1")
+		backup.DeleteGroup("testgroup1")
+		log.Infof("Cleanup done")
+	})
+})
+
+// This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (
 		ps       = make(map[string]map[string]string)
@@ -2004,7 +2068,7 @@ func CreateRestore(restoreName string, backupName string,
 	})
 }
 
-//TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
+// TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
 func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	for _, backupName := range backups {
 		backupUID := getBackupUID(OrgID, backupName)

@@ -233,7 +233,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 	return nil
 }
 
-//GetStorageSpec get the storage spec used to deploy portworx
+// GetStorageSpec get the storage spec used to deploy portworx
 func (d *portworx) GetStorageSpec() (*pxapi.StorageSpec, error) {
 	storageSpecResp, err := d.portworxServiceClient.GetStorageSpec(d.getContext(), &pxapi.PxGetStorageSpecRequest{})
 	var storageSpec *pxapi.StorageSpec
@@ -604,7 +604,7 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 	return result.(*api.StorageNode), nil
 }
 
-//IsPxInstalled returns if Px is installed on a node
+// IsPxInstalled returns if Px is installed on a node
 func (d *portworx) IsPxInstalled(n node.Node) (bool, error) {
 	log.Infof("Checking if px is installed on %s", n.Name)
 	pxInstalled, err := d.schedOps.IsPXEnabled(n)
@@ -1600,7 +1600,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
-//GetNodeForVolume returns the node on which volume is attached
+// GetNodeForVolume returns the node on which volume is attached
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	d.refreshEndpoint = true
@@ -2024,7 +2024,7 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 	return expectedPoolSizes, nil
 }
 
-//GetAutoFsTrimStatus get status of autofstrim
+// GetAutoFsTrimStatus get status of autofstrim
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 
 	sdkport, _ := d.getSDKPort()

@@ -162,7 +162,7 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 	return dsModel, err
 }
 
-//UpdateDeployment func
+// UpdateDeployment func
 func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID string,
 	appConfigOverride map[string]string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi

@@ -4796,7 +4796,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	return true
 }
 
-//ValidatePoolRebalance checks rebalnce state of pools if running
+// ValidatePoolRebalance checks rebalnce state of pools if running
 func ValidatePoolRebalance() error {
 	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
 
@@ -4897,7 +4897,7 @@ func updatePxRuntimeOpts() error {
 
 }
 
-//GetCloudDriveDeviceSpecs returns Cloud drive specs on the storage cluster
+// GetCloudDriveDeviceSpecs returns Cloud drive specs on the storage cluster
 func GetCloudDriveDeviceSpecs() ([]string, error) {
 	log.InfoD("Getting cloud drive specs")
 	deviceSpecs := make([]string, 0)
@@ -4917,12 +4917,12 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	return deviceSpecs, nil
 }
 
-//StartTorpedoTest starts the logging for torpedo test
+// StartTorpedoTest starts the logging for torpedo test
 func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
 	log.SetTorpedoFileOutput(TestLogger)
 	if tags == nil {
-		tags = make(map[string]string)
+		tags = make(map[string]string, 0)
 	}
 	tags["apps"] = strings.Join(Inst().AppList, ",")
 	tags["storageProvisioner"] = Inst().Provisioner

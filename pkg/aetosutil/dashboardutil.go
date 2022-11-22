@@ -58,7 +58,7 @@ type testCaseUpdateResponse struct {
 
 var workflowStatuses = []string{PASS, FAIL, ABORT, ERROR, TIMEOUT, NOTSTARTED, INPROGRESS}
 
-//Dashboard aetos dashboard structure
+// Dashboard aetos dashboard structure
 type Dashboard struct {
 	//IsEnabled enable/disable dashboard logging
 	IsEnabled bool
@@ -71,7 +71,7 @@ type Dashboard struct {
 	testCaseStartTime time.Time
 }
 
-//TestSet struct
+// TestSet struct
 type TestSet struct {
 	CommitID    string            `json:"commitId"`
 	User        string            `json:"user"`
@@ -84,7 +84,7 @@ type TestSet struct {
 	Status      string            `json:"status"`
 }
 
-//TestCase struct
+// TestCase struct
 type TestCase struct {
 	Name       string `json:"name"`
 	ShortName  string `json:"shortName"`
@@ -351,7 +351,7 @@ func (d *Dashboard) verify(r result) {
 	}
 }
 
-//VerifySafely verify test without aborting the execution
+// VerifySafely verify test without aborting the execution
 func (d *Dashboard) VerifySafely(actual, expected interface{}, description string) {
 	if actual == nil && expected == nil {
 		actual = true
@@ -403,7 +403,7 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	d.TestSetEnd()
 }
 
-//VerifyFatal verify test and abort operation upon failure
+// VerifyFatal verify test and abort operation upon failure
 func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string) {
 
 	d.VerifySafely(actual, expected, description)
@@ -501,7 +501,7 @@ func (d *Dashboard) addComment(c comment) {
 	}
 }
 
-//Get returns the dashboard struct instance
+// Get returns the dashboard struct instance
 func Get() *Dashboard {
 	if dash == nil {
 		lock.Lock()

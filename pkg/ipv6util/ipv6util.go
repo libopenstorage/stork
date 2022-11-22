@@ -45,11 +45,11 @@ type parser struct {
 
 // parserOption defines the options for parsing IPv6 line
 // the options includes:
-// - prefix: prefix used to match the line
-// - index: index of the IPv6 address in the line after split the line by commons
-//          delimiters
-// - count: in some cases after we match the prefix, we parse the lines after
-//          the match. count is used to defined how many lines to parse
+//   - prefix: prefix used to match the line
+//   - index: index of the IPv6 address in the line after split the line by commons
+//     delimiters
+//   - count: in some cases after we match the prefix, we parse the lines after
+//     the match. count is used to defined how many lines to parse
 type parserOption struct {
 	prefix string
 	index  int
@@ -85,12 +85,12 @@ func (p *parser) parse(cmdOutput string) []string {
 }
 
 // parseLine check for one of the two conditions where IPs are printed:
-// 1. The IP is on the same line. `IP: <addr>`
-//    ex: IP: 0000:111:2222:3333:444:5555:6666:777
-// 2. There are multiple IPs after the line that match prefix
-//    ex: IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
-//		0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
-// 		0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
+//  1. The IP is on the same line. `IP: <addr>`
+//     ex: IP: 0000:111:2222:3333:444:5555:6666:777
+//  2. There are multiple IPs after the line that match prefix
+//     ex: IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
+//     0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
+//     0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
 func (p *parser) parseLine(line string) {
 	for _, option := range p.options {
 		if strings.HasPrefix(line, option.prefix) {
@@ -135,12 +135,12 @@ func ParseIPv6AddressInPxctlCommand(command string, output string, nodeCount int
 
 // parseIpv6AddressInPxctlStatus takes output of `pxctl status` and return the list of IPs parsed
 // iterate each line to check for two conditions where IPs are printed:
-// 1. `IP: <addr>`
-//    ex: IP: 0000:111:2222:3333:444:5555:6666:777
-// 2. (number of nodes) lines after `IP \t ID...`
-//    ex: IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
-//		0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
-// 		0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
+//  1. `IP: <addr>`
+//     ex: IP: 0000:111:2222:3333:444:5555:6666:777
+//  2. (number of nodes) lines after `IP \t ID...`
+//     ex: IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
+//     0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
+//     0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
 func parseIPv6AddressInPxctlStatus(status string, nodeCount int) []string {
 	// parse the case for IP: 0000:111:2222:3333:444:5555:6666:777
 	p1 := newIPv6ParserOption("IP:", 1, 0)
