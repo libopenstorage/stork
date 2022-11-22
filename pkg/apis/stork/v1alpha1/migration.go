@@ -13,21 +13,48 @@ const (
 
 // MigrationSpec is the spec used to migrate apps between clusterpairs
 type MigrationSpec struct {
-	ClusterPair                  string            `json:"clusterPair"`
-	AdminClusterPair             string            `json:"adminClusterPair"`
-	Namespaces                   []string          `json:"namespaces"`
-	IncludeResources             *bool             `json:"includeResources"`
-	IncludeVolumes               *bool             `json:"includeVolumes"`
-	StartApplications            *bool             `json:"startApplications"`
-	PurgeDeletedResources        *bool             `json:"purgeDeletedResources"`
-	SkipServiceUpdate            *bool             `json:"skipServiceUpdate"`
-	IncludeNetworkPolicyWithCIDR *bool             `json:"includeNetworkPolicyWithCIDR"`
-	Selectors                    map[string]string `json:"selectors"`
-	PreExecRule                  string            `json:"preExecRule"`
-	PostExecRule                 string            `json:"postExecRule"`
-	IncludeOptionalResourceTypes []string          `json:"includeOptionalResourceTypes"`
-	SkipDeletedNamespaces        *bool             `json:"skipDeletedNamespaces"`
-	TransformSpecs               []string          `json:"transformSpecs"`
+	// ClusterPair is the name of cluster pair used for this Migration
+	ClusterPair string `json:"clusterPair"`
+	// AdminClusterPair is the name of admin cluster pair used for this Migration
+	AdminClusterPair string `json:"adminClusterPair"`
+	// Namespaces is the list of namespaces that need to be migrated
+	Namespaces []string `json:"namespaces"`
+	// IncludeResources if set to false will not migrate any kubernetes resources
+	// However if IncludeVolumes is set to true, then PV and PVC kubernetes objects will be migrated.
+	// Default value is true
+	IncludeResources *bool `json:"includeResources"`
+	// IncludeVolumes if set to false will not migrate volumes using the storage provider's migration APIs
+	// Default value is true
+	IncludeVolumes *bool `json:"includeVolumes"`
+	// StartApplications if set to true will scale up the application pods after migration on the target cluster
+	// Default value is false
+	StartApplications *bool `json:"startApplications"`
+	// PurgeDeletedResources if set to true will detect deleted kubernetes objects from the
+	// source cluster and remove them from the target cluster as part of migrations.
+	// Default value is false
+	PurgeDeletedResources *bool `json:"purgeDeletedResources"`
+	// SkipServiceUpdate if set to true will not update kubernetes Service objects while
+	// migrating to the target cluster
+	// Default value is false
+	SkipServiceUpdate *bool `json:"skipServiceUpdate"`
+	// IncludeNetworkPolicyWithCIDR will migrate NetworkPolicy objects even if they have a CIDR value set.
+	// Default value is false
+	IncludeNetworkPolicyWithCIDR *bool `json:"includeNetworkPolicyWithCIDR"`
+	// Selectors allows you to select a subset of kubernetes resources to migrate
+	Selectors map[string]string `json:"selectors"`
+	// PreExecRule allows you to execute a Rule  before triggering the migration
+	PreExecRule string `json:"preExecRule"`
+	// PostExecRule allows you to execute a Rule after triggering the migration
+	PostExecRule string `json:"postExecRule"`
+	// IncludeOptionalResourceTypes when set allows you to specific a subset of ResourceTypes to migrate
+	IncludeOptionalResourceTypes []string `json:"includeOptionalResourceTypes"`
+	// SkipDeleteNamespaces if set to false will fail the migration if a namespace provided in
+	// this Migration CR is deleted (does not exist)
+	// Default value is true
+	SkipDeletedNamespaces *bool `json:"skipDeletedNamespaces"`
+	// TransformSpecs is a list of ResourceTransformation CRs that will be used to transform kubernetes
+	// resources during migration before applying on the target cluster.
+	TransformSpecs []string `json:"transformSpecs"`
 }
 
 // MigrationStatus is the status of a migration operation
