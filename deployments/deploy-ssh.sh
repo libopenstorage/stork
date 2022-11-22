@@ -590,8 +590,6 @@ spec:
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
-    - name: PDS_PARAM_CM
-      value: "${PDS_PARAM_CM}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
