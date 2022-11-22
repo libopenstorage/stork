@@ -133,34 +133,6 @@ func (backupCredential *BackupCredential) CreateS3CompatibleBackupCredential(ten
 
 }
 
-// CreateGoogleCredential func
-func (backupCredential *BackupCredential) CreateGoogleCredential(tenantID string, name string, GcpProjectId string, jsonkey string) (*pds.ModelsBackupCredentials, error) {
-	backupClient := backupCredential.apiClient.BackupCredentialsApi
-	gcpCredsModel := pds.ModelsGoogleCredentials{
-		JsonKey:   &GcpProjectId,
-		ProjectId: &jsonkey,
-	}
-	controllerCreds := pds.ControllersCredentials{
-		Google: &gcpCredsModel,
-	}
-	createRequest := pds.ControllersCreateBackupCredentialsRequest{
-		Credentials: &controllerCreds,
-		Name:        &name,
-	}
-	ctx, err := pdsutils.GetContext()
-	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
-	}
-	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-	}
-	return backupModel, err
-
-}
-
 // UpdateAzureBackupCredential func
 func (backupCredential *BackupCredential) UpdateAzureBackupCredential(backupCredsID string, name string, accountKey string, accountName string) (*pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
@@ -228,34 +200,6 @@ func (backupCredential *BackupCredential) UpdateS3CompatibleBackupCredential(bac
 	}
 	controllerCreds := pds.ControllersCredentials{
 		S3Compatible: &s3CompatibleCredsModel,
-	}
-	updateRequest := pds.ControllersUpdateBackupCredentialsRequest{
-		Credentials: &controllerCreds,
-		Name:        &name,
-	}
-	ctx, err := pdsutils.GetContext()
-	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
-	}
-	backupModel, res, err := backupClient.ApiBackupCredentialsIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-	}
-	return backupModel, err
-
-}
-
-// UpdateGoogleBackupCredential func
-func (backupCredential *BackupCredential) UpdateGoogleBackupCredential(backupCredsID string, name string, GcpProjectId string, jsonkey string) (*pds.ModelsBackupCredentials, error) {
-	backupClient := backupCredential.apiClient.BackupCredentialsApi
-	gcpCredsModel := pds.ModelsGoogleCredentials{
-		JsonKey:   &GcpProjectId,
-		ProjectId: &jsonkey,
-	}
-	controllerCreds := pds.ControllersCredentials{
-		Google: &gcpCredsModel,
 	}
 	updateRequest := pds.ControllersUpdateBackupCredentialsRequest{
 		Credentials: &controllerCreds,

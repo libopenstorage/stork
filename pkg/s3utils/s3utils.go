@@ -50,7 +50,7 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 
 	// TODO: add separate function to return cred object based on type
 	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
-	if id == "" {
+	if id == ""{
 		id = os.Getenv("AWS_ACCESS_KEY_ID")
 	}
 	expect(id).NotTo(equal(""),
