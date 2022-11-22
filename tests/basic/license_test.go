@@ -7,6 +7,7 @@ import (
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"golang.org/x/net/context"
 
@@ -124,6 +125,13 @@ var (
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{BasicEssentialsFaFbTest}", func() {
+	var testrailID = 56354
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56354
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("BasicEssentialsFaFbTest", "Validates `Portworx CSI for FA/FB` license SKU", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to setup, validate and teardown apps", func() {
@@ -156,12 +164,20 @@ var _ = Describe("{BasicEssentialsFaFbTest}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // This test performs basic reboot test of starting an application and destroying it (along with storage)
 var _ = Describe("{BasicEssentialsRebootTest}", func() {
+	var testrailID = 56356
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56356
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("BasicEssentialsRebootTest", "Validates `Portworx CSI for FA/FB` remains active after reboot", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var err error
 	var contexts []*scheduler.Context
 
@@ -237,12 +253,20 @@ var _ = Describe("{BasicEssentialsRebootTest}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // This test performs basic limit test of starting an application and destroying it (along with storage)
 var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
+	var testrailID = 56355
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56355
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("BasicEssentialsAggrSnapLimitTest", "Validates `Portworx CSI for FA/FB` lic's limits ", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 
 	It("has to setup, validate and teardown apps", func() {
@@ -287,7 +311,8 @@ var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
 	}
 
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -302,6 +327,13 @@ var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
 6. Verifies that Essentials lic gets renewed again
 */
 var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
+	var testrailID = 56357
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56357
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteSecretLicExpiryAndRenewal", "Validates lic expires if `px-pure-secret` is deleted and it gets renewed when secret is re-created", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 	var pureSecretJSON string
 
@@ -404,18 +436,26 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 /*
-	This Test:
+This Test:
 
 1. Deletes px-pure-secret
 2. Restarts PX on all nodes
 3. Expects PX-Essentials FA/FB lic does not falls back to PX-Essentials license
 */
 var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
+	var testrailID = 84245
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteSecretRebootAllNodes", "Validates `Portworx CSI for FA/FB` does not fall back to `PX-Essentials` after deleting `PX-Pure-Secret`", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 	var err error
 	var pureSecretJSON string
@@ -552,12 +592,20 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
 // This test performs basic test disabling callhome and checking if the licnse stays valid
 var _ = Describe("{DisableCallHomeTest}", func() {
+	var testrailID = 84245
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("DisableCallHomeTest", "Validates disabling callhome does not expires lic", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 	var contexts []*scheduler.Context
 	It("has to setup, validate and teardown apps, then disable callhome and wait 65 minutes to verify the license is still valid.", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -662,7 +710,8 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
