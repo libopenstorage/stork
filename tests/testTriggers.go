@@ -607,7 +607,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 	Step(stepLog, func() {
 		dash.Info(stepLog)
 
-		for vol, _ := range createdVolIDs {
+		for vol := range createdVolIDs {
 			log.Infof("Detaching and deleting volume: %s", vol)
 			err := Inst().V.DetachVolume(vol)
 			if err == nil {

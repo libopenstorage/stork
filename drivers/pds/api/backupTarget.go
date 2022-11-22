@@ -109,22 +109,19 @@ func (backupTarget *BackupTarget) UpdateBackupTarget(backupTaregetID string, nam
 }
 
 // SyncToBackupLocation returned synced backup target model.
-func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string, name string) (*pds.ModelsBackupTarget, error) {
+func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string, name string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	updateRequest := pds.ControllersUpdateBackupTargetRequest{
-		Name: &name,
-	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	backupTargetModel, res, err := backupTargetClient.ApiBackupTargetsIdPut(ctx, backupTaregetID).Body(updateRequest).Execute()
+	res, err := backupTargetClient.ApiBackupTargetsIdRetryPost(ctx, backupTaregetID).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupTargetsIdPut``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
-	return backupTargetModel, err
+	return res, err
 }
 
 // DeleteBackupTarget delete backup target and return status.

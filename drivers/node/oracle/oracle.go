@@ -24,7 +24,7 @@ type oracle struct {
 	ops               cloudops.Ops
 	instanceID        string
 	instanceGroupName string
-	log *logrus.Logger
+	log               *logrus.Logger
 }
 
 func (o *oracle) String() string {
