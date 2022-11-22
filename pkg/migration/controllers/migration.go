@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -117,7 +118,7 @@ func (m *MigrationController) Init(mgr manager.Manager, migrationAdminNamespace 
 func (m *MigrationController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling Migration %s/%s", request.Namespace, request.Name)
 
-	// Fetch the ApplicationBackup instance
+	// Fetch the Migration instance
 	migration := &stork_api.Migration{}
 	err := m.client.Get(context.TODO(), request.NamespacedName, migration)
 	if err != nil {
@@ -487,7 +488,13 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			}
 		}
 	case stork_api.MigrationStageApplications:
-		err := m.migrateResources(migration, false)
+		var volumesOnly bool
+		if migration.Spec.IncludeResources != nil && !*migration.Spec.IncludeResources {
+			// Include Resources is set to false
+			// This is a volumeOnly migration
+			volumesOnly = true
+		}
+		err := m.migrateResources(migration, volumesOnly)
 		if err != nil {
 			message := fmt.Sprintf("Error migrating resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
@@ -988,7 +995,17 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	err = m.prepareResources(migration, updateObjects, clusterPair)
+	crdList, err := storkcache.Instance().ListApplicationRegistrations()
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error applying resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error applying resources: %v", err)
+		return err
+	}
+
+	err = m.prepareResources(migration, updateObjects, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -997,7 +1014,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, updateObjects, resKinds, clusterPair)
+	err = m.applyResources(migration, updateObjects, resKinds, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1041,11 +1058,8 @@ func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 	clusterPair *stork_api.ClusterPair,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
-	if err != nil {
-		return err
-	}
 	transformName := ""
 	// this is already handled in pre-checks, we dont support multiple resource transformation
 	// rules specified in migration specs
@@ -1054,6 +1068,7 @@ func (m *MigrationController) prepareResources(
 	}
 
 	resPatch := make(map[string]stork_api.KindResourceTransform)
+	var err error
 	if transformName != "" {
 		resPatch, err = resourcecollector.GetResourcePatch(transformName, migration.Spec.Namespaces)
 		if err != nil {
@@ -1496,6 +1511,7 @@ func (m *MigrationController) applyResources(
 	objects []runtime.Unstructured,
 	resKinds map[string]string,
 	clusterPair *stork_api.ClusterPair,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -1521,11 +1537,6 @@ func (m *MigrationController) applyResources(
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	// create CRD on destination cluster
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
-	if err != nil {
-		logrus.Warnf("unable to list crd registrations: %v", err)
-		return err
-	}
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
 			// only create relevant crds on dest cluster
@@ -2139,30 +2150,28 @@ func (m *MigrationController) getMigrationSummary(migration *stork_api.Migration
 		migrationSummary.ElapsedTimeForVolumeMigration = elapsedTimeVolume
 	}
 
-	if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
-		totalResources := uint64(len(migration.Status.Resources))
-		doneResources := uint64(0)
-		for _, resource := range migration.Status.Resources {
-			if resource.Status == stork_api.MigrationStatusSuccessful {
-				doneResources++
-			}
+	totalResources := uint64(len(migration.Status.Resources))
+	doneResources := uint64(0)
+	for _, resource := range migration.Status.Resources {
+		if resource.Status == stork_api.MigrationStatusSuccessful {
+			doneResources++
 		}
-		if totalResources > 0 {
-			migrationSummary.TotalNumberOfResources = totalResources
-			migrationSummary.NumberOfMigratedResources = doneResources
-		}
-		elapsedTimeResources := "NA"
-		if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
-			if migration.Status.Stage == stork_api.MigrationStageFinal {
-				if !migration.Status.ResourceMigrationFinishTimestamp.IsZero() {
-					elapsedTimeResources = migration.Status.ResourceMigrationFinishTimestamp.Sub(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
-				}
-			} else {
-				elapsedTimeResources = time.Since(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
-			}
-		}
-		migrationSummary.ElapsedTimeForResourceMigration = elapsedTimeResources
 	}
+	if totalResources > 0 {
+		migrationSummary.TotalNumberOfResources = totalResources
+		migrationSummary.NumberOfMigratedResources = doneResources
+	}
+	elapsedTimeResources := "NA"
+	if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
+		if migration.Status.Stage == stork_api.MigrationStageFinal {
+			if !migration.Status.ResourceMigrationFinishTimestamp.IsZero() {
+				elapsedTimeResources = migration.Status.ResourceMigrationFinishTimestamp.Sub(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
+			}
+		} else {
+			elapsedTimeResources = time.Since(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
+		}
+	}
+	migrationSummary.ElapsedTimeForResourceMigration = elapsedTimeResources
 
 	migrationSummary.TotalBytesMigrated = totalBytes
 	return migrationSummary

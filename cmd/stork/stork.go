@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"github.com/libopenstorage/stork/pkg/cache"
 	"net/http"
 	"os"
 	"os/signal"
@@ -277,11 +278,20 @@ func run(c *cli.Context) {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	qps := float32(c.Int("k8s-api-qps"))
+	burst := c.Int("k8s-api-burst")
+
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		log.Fatalf("Error getting cluster config: %v", err)
 	}
 
+	if qps > 0 {
+		config.QPS = qps
+	}
+	if burst > 0 {
+		config.Burst = burst
+	}
 	k8sClient, err := clientset.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("Error getting client, %v", err)
@@ -290,6 +300,13 @@ func run(c *cli.Context) {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: k8sClient.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: eventComponentName})
+
+	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
+	// In this way, even the stork extender code can use this cache, since the extender filter/process
+	// requests can land on any stork pod.
+	if err := cache.CreateSharedInformerCache(config); err != nil {
+		log.Fatalf("failed to setup shared informer cache: %v", err)
+	}
 
 	// Create operator-sdk manager that will manage all controllers.
 	// Setup the controller manager before starting any watches / other controllers
@@ -353,7 +370,7 @@ func run(c *cli.Context) {
 	}
 
 	runFunc := func(context.Context) {
-		runStork(mgr, d, recorder, c)
+		runStork(mgr, d, recorder, c, qps, burst)
 	}
 
 	if c.BoolT("leader-elect") {
@@ -404,18 +421,17 @@ func displayLeader(name string) {
 	log.Infof("new leader detected, current leader: %s", name)
 }
 
-func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
+func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorder, c *cli.Context, qps float32, burst int) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	if err := rule.Init(); err != nil {
 		log.Fatalf("Error initializing rule: %v", err)
 	}
-	qps := c.Int("k8s-api-qps")
-	burst := c.Int("k8s-api-burst")
+
 	resourceCollector := resourcecollector.ResourceCollector{
 		Driver: d,
-		QPS:    float32(qps),
+		QPS:    qps,
 		Burst:  burst,
 	}
 	if err := resourceCollector.Init(nil); err != nil {
