@@ -514,7 +514,7 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 	for k, v := range vols[0].Locator.GetVolumeLabels() {
 		info.Labels[k] = v
 	}
-	info.IsSharedV4SvcVolume = vols[0].Spec.Sharedv4 && vols[0].Spec.Sharedv4ServiceSpec != nil
+	info.NeedsAntiHyperconvergence = vols[0].Spec.Sharedv4 && vols[0].Spec.Sharedv4ServiceSpec != nil
 	info.VolumeSourceRef = vols[0]
 
 	return info, nil
