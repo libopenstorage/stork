@@ -8,9 +8,11 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var dash *aetosutil.Dashboard
 
 const (
 	configMapName                          = "secret-configmap"
@@ -26,7 +28,7 @@ func CreateBackupLocation(
 	namespace string,
 	secretName string,
 ) (*storkv1.BackupLocation, error) {
-	logrus.Infof("Using backup location type as %v", backupLocationType)
+	dash.Infof("Using backup location type as %v", backupLocationType)
 	secretObj, err := core.Instance().GetSecret(secretName, "default")
 	if err != nil {
 		return nil, fmt.Errorf("secret %v is not present in default namespace", secretName)
