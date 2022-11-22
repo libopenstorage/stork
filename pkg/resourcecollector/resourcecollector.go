@@ -3,6 +3,8 @@ package resourcecollector
 import (
 	"context"
 	"fmt"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +18,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -216,13 +217,15 @@ func (r *ResourceCollector) GetResourceTypes(
 		return nil, err
 	}
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := r.storkOps.ListApplicationRegistrations()
+	crdList, err := storkcache.Instance().ListApplicationRegistrations()
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	} else {
-		for _, crd := range crdList.Items {
-			for _, kind := range crd.Resources {
-				crdResources = append(crdResources, kind.GroupVersionKind)
+		if crdList != nil {
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					crdResources = append(crdResources, kind.GroupVersionKind)
+				}
 			}
 		}
 	}
@@ -264,19 +267,18 @@ func (r *ResourceCollector) GetResourcesForType(
 		objects.resourceMap = make(map[types.UID]bool)
 	}
 
-	crbs, err := r.rbacOps.ListClusterRoleBindings()
-	if err != nil {
-		if !apierrors.IsForbidden(err) {
-			return nil, err
-		}
-	}
-
 	gvr := schema.GroupVersionResource{
 		Group:    resource.Group,
 		Version:  resource.Version,
 		Resource: resource.Name,
 	}
 
+	crbs, err := r.rbacOps.ListClusterRoleBindings()
+	if err != nil {
+		if !apierrors.IsForbidden(err) {
+			return nil, err
+		}
+	}
 	for _, ns := range namespaces {
 		var dynamicClient dynamic.ResourceInterface
 		if !resource.Namespaced {
@@ -308,7 +310,7 @@ func (r *ResourceCollector) GetResourcesForType(
 				return nil, fmt.Errorf("error casting object: %v", o)
 			}
 
-			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, crbs, ns, allDrivers, opts)
+			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 			if err != nil {
 				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 			}
@@ -328,7 +330,11 @@ func (r *ResourceCollector) GetResourcesForType(
 	if err != nil {
 		return nil, err
 	}
-	err = r.prepareResourcesForCollection(modObjects, namespaces, opts)
+	crdList, err := storkcache.Instance().ListApplicationRegistrations()
+	if err != nil {
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	}
+	err = r.prepareResourcesForCollection(modObjects, namespaces, opts, crdList)
 	if err != nil {
 		return nil, err
 	}
@@ -353,16 +359,19 @@ func (r *ResourceCollector) GetResources(
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := r.storkOps.ListApplicationRegistrations()
+	crdList, err := storkcache.Instance().ListApplicationRegistrations()
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	} else {
-		for _, crd := range crdList.Items {
-			for _, kind := range crd.Resources {
-				crdResources = append(crdResources, kind.GroupVersionKind)
+		if crdList != nil {
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					crdResources = append(crdResources, kind.GroupVersionKind)
+				}
 			}
 		}
 	}
+
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		if !apierrors.IsForbidden(err) {
@@ -430,7 +439,7 @@ func (r *ResourceCollector) GetResources(
 					// With this now a user can choose to backup all resources in a ns and some
 					// selected resources from different ns
 
-					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers, opts)
+					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 					if err != nil {
 						if apierrors.IsForbidden(err) {
 							continue
@@ -456,7 +465,7 @@ func (r *ResourceCollector) GetResources(
 		return nil, err
 	}
 
-	err = r.prepareResourcesForCollection(allObjects, namespaces, opts)
+	err = r.prepareResourcesForCollection(allObjects, namespaces, opts, crdList)
 	if err != nil {
 		return nil, err
 	}
@@ -510,10 +519,10 @@ func (r *ResourceCollector) objectToBeCollected(
 	labelSelectors map[string]string,
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
-	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
 	allDrivers bool,
 	opts Options,
+	crbs *rbacv1.ClusterRoleBindingList,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
 	if err != nil {
@@ -647,11 +656,8 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 	objects []runtime.Unstructured,
 	namespaces []string,
 	opts Options,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
-	crdList, err := r.storkOps.ListApplicationRegistrations()
-	if err != nil {
-		logrus.Warnf("Unable to get registered crds, err %v", err)
-	}
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -704,7 +710,6 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 						kind.Version == resourceKind.Version {
 						// remove status from crd
 						if !kind.KeepStatus {
-
 							delete(content, "status")
 						}
 

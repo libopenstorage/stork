@@ -38,6 +38,7 @@ import (
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	applicationcontrollers "github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
@@ -46,7 +47,6 @@ import (
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
-	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -699,7 +699,7 @@ func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClai
 	provisioner := ""
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName != "" {
-		storageClass, err := storage.Instance().GetStorageClass(storageClassName)
+		storageClass, err := storkcache.Instance().GetStorageClass(storageClassName)
 		if err == nil {
 			if _, ok := storageClass.Parameters[proxyEndpoint]; ok && skipDirectAccessVolumes {
 				logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
@@ -831,7 +831,7 @@ func isWaitingForFirstConsumer(pvc *v1.PersistentVolumeClaim) bool {
 	var err error
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName != "" {
-		sc, err = storage.Instance().GetStorageClass(storageClassName)
+		sc, err = storkcache.Instance().GetStorageClass(storageClassName)
 		if err != nil {
 			logrus.Warnf("Did not get the storageclass %s for pvc %s/%s, err: %v", storageClassName, pvc.Namespace, pvc.Name, err)
 			return false
@@ -950,7 +950,7 @@ func (p *portworx) getPVSecretRefLabels(pvc *v1.PersistentVolumeClaim, pv *v1.Pe
 		// If the secret ref namespace is same as the PVC namespace check if
 		// templatized namespace was provided
 		if pv.Spec.CSI.NodePublishSecretRef.Namespace == pvc.Namespace {
-			sc, err := core.Instance().GetStorageClassForPVC(pvc)
+			sc, err := storkcache.Instance().GetStorageClassForPVC(pvc)
 			if err != nil {
 				logrus.Warnf("Failed to fetch storage class for PVC %v/%v: %v", pvc.Name, pvc.Namespace, err)
 				// Best effort - return what we have
@@ -966,7 +966,7 @@ func (p *portworx) getPVSecretRefLabels(pvc *v1.PersistentVolumeClaim, pv *v1.Pe
 		return pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace
 	} else if pvc != nil {
 		// Check if auth tokens are provided as in-tree storage class parameters
-		sc, err := core.Instance().GetStorageClassForPVC(pvc)
+		sc, err := storkcache.Instance().GetStorageClassForPVC(pvc)
 		if err == nil && sc != nil {
 			return sc.Parameters[auth_secrets.SecretNameKey], sc.Parameters[auth_secrets.SecretNamespaceKey]
 		}
@@ -2619,7 +2619,7 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 ) (*v1.PersistentVolume, error) {
 	// Get the pv storageclass and get the provision detail and decide on csi section.
 	if len(pv.Spec.StorageClassName) != 0 {
-		sc, err := storage.Instance().GetStorageClass(pv.Spec.StorageClassName)
+		sc, err := storkcache.Instance().GetStorageClass(pv.Spec.StorageClassName)
 		if err != nil {
 			logrus.Warnf("failed in getting the storage class [%v]: %v", pv.Spec.StorageClassName, err)
 		}
@@ -3557,7 +3557,7 @@ func (p *portworx) getCloudBackupRestoreSpec(
 		// No mapping provided
 		return locator, restoreSpec, nil
 	}
-	sc, err := storage.Instance().GetStorageClass(destStorageClass)
+	sc, err := storkcache.Instance().GetStorageClass(destStorageClass)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch storage class %v: %v", destStorageClass, err)
 	}
