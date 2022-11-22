@@ -209,8 +209,8 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 
 	// preferRemoteOnlyExists is a flag to track if there is a single volume that exists with label
 	preferRemoteOnlyExists := false
-	// Node -> Bool to track if a Pod using SharedV4 service volume is NOT allowed to be scheduled on the node
-	nodeNoLocalSharedV4SvcPodAllowed := make(map[string]bool)
+	// Node -> Bool to track if a Pod is not allowed to be scheduled on the node
+	nodeNoAntiHyperconvergedPodAllowed := make(map[string]bool)
 	filteredNodes := []v1.Node{}
 	driverVolumes, WFFCVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, true)
 	if err != nil {
@@ -232,10 +232,10 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 				for _, volumeNode := range volumeInfo.DataNodes {
 					for _, driverNode := range driverNodes {
 						if volumeNode == driverNode.StorageID {
-							// preferRemoteNodeOnly applies only to SharedV4 service volumes
-							if e.volumePrefersRemoteOnly(volumeInfo) && volumeInfo.IsSharedV4SvcVolume {
+							// preferRemoteNodeOnly applies only to volumes with NeedsAntiHyperconvergence
+							if e.volumePrefersRemoteOnly(volumeInfo) && volumeInfo.NeedsAntiHyperconvergence {
 								preferRemoteOnlyExists = true
-								nodeNoLocalSharedV4SvcPodAllowed[driverNode.StorageID] = true
+								nodeNoAntiHyperconvergedPodAllowed[driverNode.StorageID] = true
 							}
 							if driverNode.Status == volume.NodeOnline {
 								onlineNodeFound = true
@@ -263,20 +263,16 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 				}
 			}
 
-			nonSharedV4SvcVolumeCount := 0
-			nodeVolumeCountWithLocalReplica := make(map[string]int)
-			nodeSharedV4SvcVolumeExists := make(map[string]bool)
+			hyperconvergenceVolumeCount := 0
+			nodeHyperconverenceVolumeCount := make(map[string]int)
 			for _, volumeInfo := range driverVolumes {
-				if !volumeInfo.IsSharedV4SvcVolume {
-					nonSharedV4SvcVolumeCount++
+				if !volumeInfo.NeedsAntiHyperconvergence {
+					hyperconvergenceVolumeCount++
 				}
 				for _, volumeNode := range volumeInfo.DataNodes {
-					// nodeVolumeCountWithLocalReplica is used to determine if valid nodes exist with preferLocalNodeOnly
-					if preferLocalOnly && !volumeInfo.IsSharedV4SvcVolume {
-						nodeVolumeCountWithLocalReplica[volumeNode]++
-					}
-					if volumeInfo.IsSharedV4SvcVolume {
-						nodeSharedV4SvcVolumeExists[volumeNode] = true
+					// nodeToHyperconverenceVolumeCount is used to determine if valid nodes exist with preferLocalNodeOnly
+					if preferLocalOnly && !volumeInfo.NeedsAntiHyperconvergence {
+						nodeHyperconverenceVolumeCount[volumeNode]++
 					}
 				}
 			}
@@ -289,10 +285,10 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 						// If only nodes with replicas are to be preferred,
 						// filter out all nodes that don't have a replica
 						// for all the volumes
-						if preferLocalOnly && nodeVolumeCountWithLocalReplica[driverNode.StorageID] != nonSharedV4SvcVolumeCount {
+						if preferLocalOnly && nodeHyperconverenceVolumeCount[driverNode.StorageID] != hyperconvergenceVolumeCount {
 							continue
 						}
-						if allowed, ok := nodeNoLocalSharedV4SvcPodAllowed[driverNode.StorageID]; ok && allowed {
+						if val, ok := nodeNoAntiHyperconvergedPodAllowed[driverNode.StorageID]; ok && val {
 							continue
 						}
 						filteredNodes = append(filteredNodes, node)
@@ -350,7 +346,6 @@ func (e *Extender) volumePrefersRemoteOnly(volumeInfo *volume.Info) bool {
 				return preferRemoteOnlyExists
 			}
 		}
-		return false
 	}
 	return false
 }
@@ -640,9 +635,9 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
 					continue
 				}
-				if volume.IsSharedV4SvcVolume {
+				if volume.NeedsAntiHyperconvergence {
 					isAntihyperconvergenceRequired = true
-					storklog.PodLog(pod).Debugf("Skipping Sharedv4 service volume %v from scoring based on hyperconvergence", volume.VolumeName)
+					storklog.PodLog(pod).Debugf("Skipping NeedsAntiHyperconvergence volume %v from scoring based on hyperconvergence", volume.VolumeName)
 					continue
 				}
 				storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
@@ -705,7 +700,7 @@ func (e *Extender) updateForAntiHyperconvergence(
 	k8sNodeIndexStorageNodeMap map[int]*volume.NodeInfo,
 	priorityMap map[string]int) {
 	pod := args.Pod
-	sharedV4ServiceNodes := make(map[string]bool)
+	needsAntiHyperconvergenceReplicaNodes := make(map[string]bool)
 	for _, volume := range driverVolumes {
 		skipVolumeScoring := false
 		var err error
@@ -715,27 +710,28 @@ func (e *Extender) updateForAntiHyperconvergence(
 			}
 		}
 		if skipVolumeScoring {
+			storklog.PodLog(pod).Debugf("Skipping volume %v from scoring during antihyperconvergence evaluation due to skipScoringLabel", volume.VolumeName)
+			continue
+		}
+		if !volume.NeedsAntiHyperconvergence {
 			storklog.PodLog(pod).Debugf("Skipping volume %v from scoring based on antihyperconvergence", volume.VolumeName)
 			continue
 		}
-		if !volume.IsSharedV4SvcVolume {
-			storklog.PodLog(pod).Debugf("Skipping volume %v from scoring based on antihyperconvergence since it is not a sharedv4 service volume", volume.VolumeName)
-			continue
-		}
 		for _, datanodeID := range volume.DataNodes {
-			sharedV4ServiceNodes[datanodeID] = true
+			needsAntiHyperconvergenceReplicaNodes[datanodeID] = true
 		}
 	}
 	for k8sNodeIndex, node := range args.Nodes.Items {
 		storageNode := k8sNodeIndexStorageNodeMap[k8sNodeIndex]
 		// storageNode.StorageID = datanodeID
-		// Give defaultScore to the nodes where SharedV4 service volume exist
+		// Give defaultScore to the nodes where NeedsAntiHyperconvergence volume exist
 		// to give them a lower score
-		if val, ok := sharedV4ServiceNodes[storageNode.StorageID]; ok && val {
+		if val, ok := needsAntiHyperconvergenceReplicaNodes[storageNode.StorageID]; ok && val {
 			priorityMap[node.Name] = int(defaultScore)
 		} else if storageNode.Status == volume.NodeOnline {
-			// If there only sharedv4 service volumes exist, node score should be raised
-			// where volume replicas do not exist and the node is online
+			// In a scenario where regular volumes do not exist
+			// Raise the score of non replica nodes to give them
+			// a score higher than the default score
 			priorityMap[node.Name] += int(nodePriorityScore)
 		}
 	}
