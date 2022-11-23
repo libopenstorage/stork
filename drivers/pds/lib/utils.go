@@ -3,7 +3,6 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	state "net/http"
 
@@ -920,7 +921,8 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 				{
 					Name:    "rmqperf",
 					Image:   rmqStressImage,
-					Command: []string{command},
+					Command: []string{"/bin/sh", "-c"},
+					Args:    []string{command},
 					Env:     make([]corev1.EnvVar, 3),
 				},
 			},
@@ -983,7 +985,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
-		command := "while true; do java -jar perf-test.jar com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"
+		command := "while true; do java -jar perf-test.jar --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 100 --variable-rate 100:30 --producers 10 --consumers 50; done"
 		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
 			log.Errorf("An Error Occured while creating rabbitmq workload %v", err)

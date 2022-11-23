@@ -1,6 +1,10 @@
 package tests
 
 import (
+	"net/http"
+	"strconv"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -8,9 +12,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 var _ = Describe("{DeletePDSPods}", func() {
@@ -258,10 +259,11 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the worload generating deployments", func() {
-					log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
 					if ds.Name == "Cassandra" || ds.Name == "PostgreSQL" {
+						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
 						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 					} else {
+						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
 						err = pdslib.DeleteK8sPods(pod.Name, namespace)
 					}
 					Expect(err).NotTo(HaveOccurred())
