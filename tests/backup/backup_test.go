@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
@@ -81,28 +80,28 @@ var _ = Describe("{UserGroupManagement}", func() {
 		Step("Create Users", func() {
 			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", "Password1")
 			if err != nil {
-				logrus.Errorf("Failed to create user - %s", err)
+				log.Errorf("Failed to create user - %s", err)
 				return
 			}
 		})
 		Step("Create Groups", func() {
 			err := backup.AddGroup("testgroup1")
 			if err != nil {
-				logrus.Errorf("Failed to create group - %s", err)
+				log.Errorf("Failed to create group - %s", err)
 				return
 			}
 		})
 		Step("Add users to group", func() {
 			err := backup.AddGroupToUser("testuser1", "testgroup1")
 			if err != nil {
-				logrus.Errorf("Failed to assign group to user - %s", err)
+				log.Errorf("Failed to assign group to user - %s", err)
 				return
 			}
 		})
 		Step("Assign role to groups", func() {
 			err := backup.AddRoleToGroup("testgroup1", backup.ApplicationOwner, "testing from torpedo")
 			if err != nil {
-				logrus.Errorf("Failed to assign group to user - %s", err)
+				log.Errorf("Failed to assign group to user - %s", err)
 				return
 			}
 		})
@@ -113,12 +112,12 @@ var _ = Describe("{UserGroupManagement}", func() {
 		Step("Update role to groups", func() {
 			err := backup.DeleteRoleFromGroup("testgroup1", backup.ApplicationOwner, "removing role from testgroup1")
 			if err != nil {
-				logrus.Errorf("Failed to delete user - %s", err)
+				log.Errorf("Failed to delete user - %s", err)
 				return
 			}
 			err = backup.AddRoleToGroup("testgroup1", backup.ApplicationUser, "testing from torpedo")
 			if err != nil {
-				logrus.Errorf("Failed to assign group to user - %s", err)
+				log.Errorf("Failed to assign group to user - %s", err)
 				return
 			}
 		})

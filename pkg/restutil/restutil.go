@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-//Auth basic auth details for API
+// Auth basic auth details for API
 type Auth struct {
 	Username string
 	Password string
@@ -22,7 +22,7 @@ const (
 	defaultRestTimeOut = 10 * time.Second
 )
 
-//Get rest get call
+// Get rest get call
 func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error) {
 
 	respBody, respStatusCode, err := getResponse(http.MethodGet, url, nil, auth, headers)
@@ -32,7 +32,7 @@ func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error)
 	return respBody, respStatusCode, nil
 }
 
-//POST rest post call
+// POST rest post call
 func POST(url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
 
 	respBody, respStatusCode, err := getResponse(http.MethodPost, url, payload, auth, headers)
@@ -43,7 +43,7 @@ func POST(url string, payload interface{}, auth *Auth, headers map[string]string
 
 }
 
-//PUT rest put call
+// PUT rest put call
 func PUT(url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
 
 	respBody, respStatusCode, err := getResponse(http.MethodPut, url, payload, auth, headers)
@@ -54,7 +54,7 @@ func PUT(url string, payload interface{}, auth *Auth, headers map[string]string)
 
 }
 
-//DELETE rest delete call
+// DELETE rest delete call
 func DELETE(url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
 	respBody, respStatusCode, err := getResponse(http.MethodDelete, url, payload, auth, headers)
 	if err != nil {
