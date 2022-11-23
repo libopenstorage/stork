@@ -54,7 +54,7 @@ const (
 	pxBackupNamespace = "PX_BACKUP_NAMESPACE"
 	// OidcSecretName where secrets for OIDC auth cred info resides
 	oidcSecretName = "SECRET_NAME"
-	// PxCentralUI URL Eg: http://10.13.114.233:32482
+	// PxCentralUI URL Eg: http://<IP>:<Port>
 	PxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
 
