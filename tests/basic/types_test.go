@@ -2,9 +2,9 @@ package tests
 
 import (
 	"encoding/json"
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/sirupsen/logrus"
 )
 
 type FlashArrayEntry struct {
@@ -50,7 +50,7 @@ func GetS3Secret() (PXPureS3Secret, error) {
 func GetSecret(output interface{}, name, namespace string) error {
 	secret, err := core.Instance().GetSecret(name, namespace)
 	if err != nil {
-		logrus.Errorf("failed to retrieve secret '%s' from namespace '%s'", name, namespace)
+		log.Errorf("failed to retrieve secret '%s' from namespace '%s'", name, namespace)
 		return err
 	}
 
@@ -58,13 +58,13 @@ func GetSecret(output interface{}, name, namespace string) error {
 	var ok bool
 
 	if pureConnectionJSON, ok = secret.Data[pureJSONKey]; !ok {
-		logrus.Errorf("Secret '%s' is missing field '%s'", name, pureJSONKey)
+		log.Errorf("Secret '%s' is missing field '%s'", name, pureJSONKey)
 		return err
 	}
 
 	err = json.Unmarshal(pureConnectionJSON, output)
 	if err != nil {
-		logrus.Errorf("Error unmarshaling config file from secret '%s': %v", name, err)
+		log.Errorf("Error unmarshaling config file from secret '%s': %v", name, err)
 		return err
 	}
 

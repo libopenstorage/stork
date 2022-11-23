@@ -3,6 +3,7 @@ package tests
 import (
 	//"context"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
 	"time"
@@ -19,8 +20,6 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
-
 	//appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -68,7 +67,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 			SetSourceKubeConfig()
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-				logrus.Infof("Task name %s\n", taskName)
+				log.Infof("Task name %s\n", taskName)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				ValidateApplications(contexts)
@@ -84,12 +83,12 @@ var _ = Describe("{MigrateDeployment}", func() {
 				})
 			}
 
-			logrus.Infof("Migration Namespaces: %v", migrationNamespaces)
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
 
 		})
 
 		time.Sleep(5 * time.Minute)
-		logrus.Info("Start migration")
+		log.Info("Start migration")
 
 		for i, currMigNamespace := range migrationNamespaces {
 			migrationName := migrationKey + fmt.Sprintf("%d", i)
@@ -107,17 +106,17 @@ var _ = Describe("{MigrateDeployment}", func() {
 					mig.Name, mig.Namespace, err))
 		}
 
-		dash.Info("Start volume only migration")
+		log.InfoD("Start volume only migration")
 		includeResourcesFlag = false
 		for i, currMigNamespace := range migrationNamespaces {
 			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)
 			currMig, create_mig_err := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 			allMigrations = append(allMigrations, currMig)
-			dash.VerifyFatal(create_mig_err, nil, fmt.Sprintf("Validate %s migration is triggered in %s namespace", migrationName, currMigNamespace))
+			log.FailOnError(create_mig_err, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
 			err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
-			dash.VerifyFatal(err, nil, "Validate migration should be successful")
+			dash.VerifyFatal(err, nil, "Migration successful?")
 			resp, get_mig_err := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)
-			dash.VerifyFatal(get_mig_err, nil, "Validate get migration response")
+			dash.VerifyFatal(get_mig_err, nil, "Received migration response?")
 			dash.VerifyFatal(resp.Status.Summary.NumberOfMigratedResources == 0, true, "Validate no resources migrated")
 		}
 
@@ -210,7 +209,7 @@ func WaitForMigration(migrationList []*storkapi.Migration) error {
 				return "", false, err
 			}
 			if mig.Status.Status != storkapi.MigrationStatusSuccessful {
-				logrus.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
+				log.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
 				isComplete = false
 			}
 		}
@@ -224,7 +223,7 @@ func WaitForMigration(migrationList []*storkapi.Migration) error {
 }
 
 func DeleteAndWaitForMigrationDeletion(name, namespace string) error {
-	logrus.Infof("Deleting migration: %s in namespace: %s", name, namespace)
+	log.Infof("Deleting migration: %s in namespace: %s", name, namespace)
 	err := storkops.Instance().DeleteMigration(name, namespace)
 	if err != nil {
 		return fmt.Errorf("Failed to delete migration: %s in namespace: %s", name, namespace)

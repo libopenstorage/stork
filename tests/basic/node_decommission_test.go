@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -22,7 +23,7 @@ var _ = Describe("{DecommissionNode}", func() {
 	testName := "decommissionnode"
 	stepLog := "has to decommission a node and check if node was decommissioned successfully"
 	It(stepLog, func() {
-		dash.Infof(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -58,14 +59,14 @@ var _ = Describe("{DecommissionNode}", func() {
 			nodeToDecommission := workerNodes[nodeIndex]
 			stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
-				dash.Info(stepLog)
+				log.InfoD(stepLog)
 				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
 				dash.VerifyFatal(err, nil, "Validate node decommission preparation")
 				err = Inst().V.DecommissionNode(&nodeToDecommission)
 				dash.VerifyFatal(err, nil, "Validate node decommission init")
 				stepLog = fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name)
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					t := func() (interface{}, bool, error) {
 						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
 						if err != nil {
@@ -77,13 +78,13 @@ var _ = Describe("{DecommissionNode}", func() {
 						return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
 					}
 					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
-					dash.VerifyFatal(err, nil, "Validate get decommissioned node status")
+					log.FailOnError(err, "Failed to get decommissioned node status")
 					dash.VerifyFatal(decommissioned.(bool), true, "Validate node is decommissioned")
 				})
 			})
 			stepLog = fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
-				dash.Info(stepLog)
+				log.InfoD(stepLog)
 				err := Inst().V.RejoinNode(&nodeToDecommission)
 				dash.VerifyFatal(err, nil, "Validate node rejoin init")
 				err = Inst().V.WaitDriverUpOnNode(nodeToDecommission, Inst().DriverStartTimeout)

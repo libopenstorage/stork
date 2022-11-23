@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"math"
 	"strings"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/portworx/torpedo/pkg/snapshotutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -49,7 +49,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			logrus.Infof("Iteration number %d", i)
+			log.Infof("Iteration number %d", i)
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("applicationscaleup-%d", i))...)
 		}
 		currentTime := time.Now()
@@ -76,7 +76,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 
 		for int64(timeToExecuteTest.Sub(currentTime).Seconds()) > 0 {
 			// TODO core check
-			logrus.Infof("Remaining time to test in minutes : %d ", int64(timeToExecuteTest.Sub(currentTime).Seconds()/60))
+			log.Infof("Remaining time to test in minutes : %d ", int64(timeToExecuteTest.Sub(currentTime).Seconds()/60))
 			Step("Set packet loss on random nodes ", func() {
 				//Get all nodes and set eth0
 				nodes := node.GetWorkerNodes()
@@ -84,23 +84,23 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 				selectedNodes := nodes[:numberOfNodes]
 				//nodes []Node, errorInjectionType string, operationType string,
 				//dropPercentage int, delayInMilliseconds int
-				logrus.Infof("Set network error injection")
+				log.Infof("Set network error injection")
 				Inst().N.InjectNetworkError(selectedNodes, injectionType, "add", dropPercentage, delayInMilliseconds)
-				logrus.Infof("Wait %d minutes before checking px status ", errorPersistTimeInMinutes/(time.Minute))
+				log.Infof("Wait %d minutes before checking px status ", errorPersistTimeInMinutes/(time.Minute))
 				time.Sleep(errorPersistTimeInMinutes)
 				hasPXUp := true
 				for _, n := range nodes {
-					logrus.Infof("Check PX status on %v", n.Name)
+					log.Infof("Check PX status on %v", n.Name)
 					err := Inst().V.WaitForPxPodsToBeUp(n)
 					if err != nil {
 						hasPXUp = false
-						logrus.Errorf("PX failed to be in ready state  %v %s ", n.Name, err)
+						log.Errorf("PX failed to be in ready state  %v %s ", n.Name, err)
 					}
 				}
 				if !hasPXUp {
 					Expect(fmt.Errorf("PX is not ready on on or more nodes ")).NotTo(HaveOccurred())
 				}
-				logrus.Infof("Clear network error injection ")
+				log.Infof("Clear network error injection ")
 				Inst().N.InjectNetworkError(selectedNodes, injectionType, "delete", 0, 0)
 				//Get kvdb members and
 				if injectionType == "drop" {
@@ -109,7 +109,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 					injectionType = "drop"
 				}
 			})
-			logrus.Infof("Wait %d minutes before checking application status ", waitTimeForPXAfterError/(time.Minute))
+			log.Infof("Wait %d minutes before checking application status ", waitTimeForPXAfterError/(time.Minute))
 			time.Sleep(waitTimeForPXAfterError)
 			Step("Verify application after clearing error", func() {
 				for _, ctx := range contexts {
@@ -132,7 +132,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 			Step("Check for crash and verify crash was found before ", func() {
 				//TODO need to add this method in future.
 			})
-			logrus.Infof("Wait  %d minutes before starting next iteration ", errorPersistTimeInMinutes/(time.Minute))
+			log.Infof("Wait  %d minutes before starting next iteration ", errorPersistTimeInMinutes/(time.Minute))
 			time.Sleep(errorPersistTimeInMinutes)
 			currentTime = time.Now()
 		}
@@ -163,7 +163,7 @@ func createSnapshotSchedule(contexts []*scheduler.Context) {
 			}
 			if len(appVolumes) == 0 {
 				err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
-				logrus.Warnf("No appvolumes found")
+				log.Warnf("No appvolumes found")
 				Expect(err).NotTo(HaveOccurred())
 			}
 		}
@@ -175,31 +175,31 @@ func verifyCloudSnaps(contexts []*scheduler.Context) {
 	for _, ctx := range contexts {
 		appVolumes, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
-			logrus.Warnf("Error found while getting volumes %s ", err)
+			log.Warnf("Error found while getting volumes %s ", err)
 		}
 		if len(appVolumes) == 0 {
 			err = fmt.Errorf("found no volumes for app %s", ctx.App.Key)
-			logrus.Warnf("No appvolumes found")
+			log.Warnf("No appvolumes found")
 		}
 		//Verify cloudsnap is continuing
 		for _, v := range appVolumes {
 			if strings.Contains(ctx.App.Key, "cloudsnap") == false {
-				logrus.Warningf("Apps are not cloudsnap supported %s ", v.Name)
+				log.Warnf("Apps are not cloudsnap supported %s ", v.Name)
 				continue
 			}
 			// Skip cloud snapshot trigger for Pure DA volumes
 			isPureVol, err := Inst().V.IsPureVolume(v)
 			if err != nil {
-				logrus.Warnf("No pure volumes found in %s ", ctx.App.Key)
+				log.Warnf("No pure volumes found in %s ", ctx.App.Key)
 			}
 			if isPureVol {
-				logrus.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s]", v.Name)
+				log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s]", v.Name)
 				continue
 			}
 			snapshotScheduleName := v.Name + "-interval-schedule"
-			logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+			log.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 			appNamespace := ctx.App.Key + "-" + ctx.UID
-			logrus.Infof("Namespace : %v", appNamespace)
+			log.Infof("Namespace : %v", appNamespace)
 
 			err = snapshotutils.ValidateSnapshotSchedule(snapshotScheduleName, appNamespace)
 			Expect(err).NotTo(HaveOccurred())
@@ -210,15 +210,15 @@ func verifyCloudSnaps(contexts []*scheduler.Context) {
 // SchedulePolicy
 func SchedulePolicy(ctx *scheduler.Context, policyName string, interval int) error {
 	if strings.Contains(ctx.App.Key, "cloudsnap") {
-		logrus.Infof("APP with cloudsnap key available %v ", ctx.App.Key)
+		log.Infof("APP with cloudsnap key available %v ", ctx.App.Key)
 		schedPolicy, err := storkInst.GetSchedulePolicy(policyName)
 		if err == nil {
-			logrus.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+			log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
 		} else {
 			err = snapshotutils.SchedulePolicyInDefaultNamespace(policyName, interval, 2)
 			Expect(err).NotTo(HaveOccurred())
 		}
-		logrus.Infof("Waiting for 10 mins for Snapshots to be completed")
+		log.Infof("Waiting for 10 mins for Snapshots to be completed")
 		time.Sleep(10 * time.Minute)
 	}
 	return nil

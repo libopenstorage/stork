@@ -2,7 +2,6 @@ package volume
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -52,7 +51,7 @@ type Options struct {
 // of failure scenarios that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string, logger *logrus.Logger) error
+	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string) error
 
 	// String returns the string name of this driver.
 	String() string

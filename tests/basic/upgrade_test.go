@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
 
@@ -37,13 +38,13 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	var contexts []*scheduler.Context
 
 	It("upgrade volume driver and ensure everything is running fine", func() {
-		dash.Info("upgrade volume driver and ensure everything is running fine")
+		log.InfoD("upgrade volume driver and ensure everything is running fine")
 		contexts = make([]*scheduler.Context, 0)
 
 		storageNodes := node.GetStorageNodes()
 
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
-		dash.VerifyFatal(err, nil, "Validate cloud drive installation")
+		log.FailOnError(err, "Cloud drive installation failed")
 
 		if !isCloudDrive {
 			for _, storageNode := range storageNodes {
@@ -51,10 +52,10 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
 					continue
 				}
-				dash.VerifyFatal(err, nil, "Verify adding block drive(s)")
+				log.Fatalf("Adding block drive(s) failed. ERR: %v", err)
 			}
 		}
-		dash.Info("Scheduling applications and validating")
+		log.InfoD("Scheduling applications and validating")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
@@ -64,19 +65,17 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		var timeAfterUpgrade time.Time
 
 		Step("start the upgrade of volume driver", func() {
-			dash.Info("start the upgrade of volume driver")
+			log.InfoD("start the upgrade of volume driver")
 
 			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 			if IsOperatorBasedInstall {
 				timeBeforeUpgrade = time.Now()
 				status, err := UpgradePxStorageCluster()
 				timeAfterUpgrade = time.Now()
-				if status {
-					dash.Info("Volume Driver upgrade is successful")
-				} else {
-					dash.Error("Volume Driver upgrade failed")
+				if err != nil {
+					log.Fatalf("Failed to Upgrade Px Storage Cluster. ERR: %v", err)
 				}
-				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for operator based set up")
+				dash.VerifyFatal(status, true, "Volume driver upgrade successful?")
 
 			} else {
 				timeBeforeUpgrade = time.Now()
@@ -84,22 +83,22 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					Inst().StorageDriverUpgradeEndpointVersion,
 					false)
 				timeAfterUpgrade = time.Now()
-				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for daemon set based set up")
+				dash.VerifyFatal(err, nil, "Volume drive upgrade for daemon set based set up successful?")
 			}
 
 			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
 			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
 			dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
 			if durationInMins <= expectedUpgradeTime {
-				dash.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
 			} else {
-				dash.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
+				log.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
 				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
 			}
 		})
 
 		Step("reinstall and validate all apps after upgrade", func() {
-			dash.Info("reinstall and validate all apps after upgrade")
+			log.InfoD("reinstall and validate all apps after upgrade")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
 			}
@@ -107,7 +106,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		})
 
 		Step("Destroy apps", func() {
-			dash.Info("Destroy apps")
+			log.InfoD("Destroy apps")
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -136,28 +135,28 @@ var _ = Describe("{UpgradeStork}", func() {
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
 
 		It("upgrade volume driver and ensure everything is running fine", func() {
-			dash.Info("upgrade volume driver and ensure everything is running fine")
+			log.InfoD("upgrade volume driver and ensure everything is running fine")
 			contexts = make([]*scheduler.Context, 0)
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradestorkdeployment-%d", i))...)
 
 			ValidateApplications(contexts)
 
 			Step("start the upgrade of stork deployment", func() {
-				dash.Info("start the upgrade of stork deployment")
+				log.InfoD("start the upgrade of stork deployment")
 				err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion)
-				dash.VerifyFatal(err, nil, "Verify stork upgrade")
+				dash.VerifyFatal(err, nil, "Stork upgrade successful?")
 			})
 
 			Step("validate all apps after upgrade", func() {
-				dash.Info("validate all apps after upgrade")
+				log.InfoD("validate all apps after upgrade")
 				for _, ctx := range contexts {
 					ValidateContext(ctx)
 				}
 			})
 
 			Step("destroy apps", func() {
-				dash.Info("Destroy apps")
+				log.InfoD("Destroy apps")
 				opts := make(map[string]bool)
 				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 				for _, ctx := range contexts {
@@ -166,14 +165,14 @@ var _ = Describe("{UpgradeStork}", func() {
 			})
 
 			Step("validate stork pods after upgrade", func() {
-				dash.Info("validate stork pods after upgrade")
+				log.InfoD("validate stork pods after upgrade")
 				k8sApps := apps.Instance()
 
 				storkDeploy, err := k8sApps.GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = k8sApps.ValidateDeployment(storkDeploy, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
-				dash.VerifyFatal(err, nil, "Verify stork deployment")
+				dash.VerifyFatal(err, nil, "Stork deployment successful?")
 			})
 
 		})

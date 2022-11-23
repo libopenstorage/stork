@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 
@@ -10,7 +11,6 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -83,7 +83,7 @@ var _ = BeforeSuite(func() {
 	Step("Get StorageTemplateID and Replicas", func() {
 		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
 		Expect(err).NotTo(HaveOccurred())
-		logrus.Infof("storageTemplateID %v", storageTemplateID)
+		log.Infof("storageTemplateID %v", storageTemplateID)
 	})
 
 	Step("Create/Get Namespace and NamespaceID", func() {

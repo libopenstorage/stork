@@ -14,7 +14,7 @@ import (
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -188,16 +188,16 @@ func GetToken(userName, password string) (string, error) {
 	headers := make(http.Header)
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(values.Encode()))
-	logrus.Errorf("%s: %v", fn, err)
+	log.Errorf("%s: %v", fn, err)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 
 	token := &tokenResponse{}
 	err = json.Unmarshal(response, &token)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 
@@ -209,7 +209,7 @@ func GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
 	fn := "GetCommonHTTPHeaders"
 	token, err := GetToken(userName, password)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	headers := make(http.Header)
@@ -240,7 +240,7 @@ func GetAllRoles() ([]KeycloakRoleRepresentation, error) {
 	fn := "GetAllRoles"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -251,13 +251,13 @@ func GetAllRoles() ([]KeycloakRoleRepresentation, error) {
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	var roles []KeycloakRoleRepresentation
 	err = json.Unmarshal(response, &roles)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 
@@ -270,7 +270,7 @@ func GetRoleID(role string) (string, error) {
 	// Fetch all roles
 	roles, err := GetAllRoles()
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 	// Now fetch the current role ID
@@ -291,7 +291,7 @@ func GetUserRole(userName string) error {
 	// First fetch all users to get the client id for the client
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -308,7 +308,7 @@ func GetUserRole(userName string) error {
 	var users []KeycloakUserRepresentation
 	err = json.Unmarshal(response, &users)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -333,7 +333,7 @@ func GetUserRole(userName string) error {
 	var r []KeycloakRoleRepresentation
 	err = json.Unmarshal(response, &r)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -346,7 +346,7 @@ func FetchIDOfUser(userName string) (string, error) {
 	// First fetch all users to get the client id for the client
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -357,13 +357,13 @@ func FetchIDOfUser(userName string) (string, error) {
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 	var users []KeycloakUserRepresentation
 	err = json.Unmarshal(response, &users)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 
@@ -384,13 +384,13 @@ func AddRoleToUser(userName string, role string, description string) error {
 	// First fetch the client ID of the user
 	clientID, err := FetchIDOfUser(userName)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
 	roleID, err := GetRoleID(role)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -407,7 +407,7 @@ func AddRoleToUser(userName string, role string, description string) error {
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -418,12 +418,12 @@ func AddRoleToUser(userName string, role string, description string) error {
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -436,13 +436,13 @@ func DeleteRoleFromUser(userName string, role string, description string) error 
 	// First fetch the user ID of the user
 	clientID, err := FetchIDOfUser(userName)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
 	roleID, err := GetRoleID(role)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -459,7 +459,7 @@ func DeleteRoleFromUser(userName string, role string, description string) error 
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -474,7 +474,7 @@ func DeleteRoleFromUser(userName string, role string, description string) error 
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -492,7 +492,7 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	userRep := KeycloakUserRepresentation{
@@ -511,12 +511,12 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 	}
 	userBytes, err := json.Marshal(&userRep)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -594,7 +594,7 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	if token == "" {
 		return nil, fmt.Errorf("admin token is empty")
 	}
-	logrus.Infof("Token from Admin secret: %v", token)
+	log.Infof("Token from Admin secret: %v", token)
 	ctx := GetCtxWithToken(token)
 
 	return ctx, nil
@@ -616,7 +616,7 @@ func GetAdminTokenFromSecret() (string, error) {
 	if token == "" {
 		return "", fmt.Errorf("admin token is empty")
 	}
-	logrus.Infof("Token from Admin secret: %v", token)
+	log.Infof("Token from Admin secret: %v", token)
 
 	return token, nil
 }
@@ -626,7 +626,7 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 	fn := "GetAllGroups"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -637,16 +637,16 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	var groups []KeycloakGroupRepresentation
 	err = json.Unmarshal(response, &groups)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
-	logrus.Debugf("list of groups : %v", groups)
+	log.Debugf("list of groups : %v", groups)
 	return groups, nil
 }
 
@@ -661,7 +661,7 @@ func AddGroup(group string) error {
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	groups := KeycloakGroupAdd{
@@ -670,12 +670,12 @@ func AddGroup(group string) error {
 
 	userBytes, err := json.Marshal(&groups)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -703,7 +703,7 @@ func AddGroupToUser(user, group string) error {
 	method := "PUT"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	data := KeycloakGroupToUser{
@@ -714,12 +714,12 @@ func AddGroupToUser(user, group string) error {
 
 	dataBytes, err := json.Marshal(&data)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -751,7 +751,7 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 	// First fetch all users to get the client id for the client
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return "", "", err
 	}
 	var userName string
@@ -765,13 +765,13 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 		method := "GET"
 		response, err := processHTTPRequest(method, reqURL, headers, nil)
 		if err != nil {
-			logrus.Errorf("%s: %v", fn, err)
+			log.Errorf("%s: %v", fn, err)
 			return nil, true, err
 		}
 		var users []KeycloakUserRepresentation
 		err = json.Unmarshal(response, &users)
 		if err != nil {
-			logrus.Errorf("%s: %v", fn, err)
+			log.Errorf("%s: %v", fn, err)
 			return nil, true, err
 		}
 
@@ -819,7 +819,7 @@ func processHTTPRequest(
 	defer func() {
 		err := httpResponse.Body.Close()
 		if err != nil {
-			logrus.Debugf("Error closing http response body: %v", err)
+			log.Debugf("Error closing http response body: %v", err)
 		}
 	}()
 

@@ -2,6 +2,7 @@ package openshift
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -23,7 +24,6 @@ import (
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -248,13 +248,13 @@ func (k *openshift) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	logrus.Info("Waiting for all the nodes to become ready...")
+	log.Info("Waiting for all the nodes to become ready...")
 	if err := waitNodesToBeReady(); err != nil {
 		return err
 	}
-	logrus.Info(getCluterInfo())
+	log.Info(getCluterInfo())
 
-	logrus.Infof("Cluster is now %s", upgradeVersion)
+	log.Infof("Cluster is now %s", upgradeVersion)
 	return nil
 }
 
@@ -277,7 +277,7 @@ func getCluterInfo() string {
 		return "", false, nil
 	}
 	if output, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
-		logrus.Errorf("Failed to get cluster info %v", err)
+		log.Errorf("Failed to get cluster info %v", err)
 		return ""
 	}
 	return output.(string)
@@ -312,7 +312,7 @@ func selectChannel(version string) error {
 	if channel, err = getChannel(version); err != nil {
 		return err
 	}
-	logrus.Infof("Selected channel: %s", channel)
+	log.Infof("Selected channel: %s", channel)
 
 	patch := `
 spec:
@@ -323,7 +323,7 @@ spec:
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
 			return nil, true, fmt.Errorf("failed to select channel due to %s. cause: %v", string(output), err)
 		}
-		logrus.Info(string(output))
+		log.Info(string(output))
 		return nil, false, nil
 	}
 	_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
@@ -356,7 +356,7 @@ func startUpgrade(upgradeVersion string) error {
 		if desiredVersion != upgradeVersion {
 			return nil, true, fmt.Errorf("version mismatch. expected: %s but got %s", upgradeVersion, desiredVersion)
 		}
-		logrus.Infof("Upgrade started: %s", output)
+		log.Infof("Upgrade started: %s", output)
 
 		return nil, false, nil
 	}
@@ -472,7 +472,7 @@ func downloadOCP4Client(ocpVersion string) error {
 		ocpVersion = "latest"
 	}
 
-	logrus.Info("Downloading OCP 4.X client. May take some time...")
+	log.Info("Downloading OCP 4.X client. May take some time...")
 	if versionReg.MatchString(ocpVersion) {
 		downloadURL = fmt.Sprintf("%s/%s/openshift-client-linux.tar.gz", OpenshiftMirror,
 			ocpVersion)
@@ -485,35 +485,35 @@ func downloadOCP4Client(ocpVersion string) error {
 
 	stdout, err := exec.Command("curl", "-o", clientName, downloadURL).CombinedOutput()
 	if err != nil {
-		logrus.Errorf("Error while downloading OpenShift 4.X client from %s, error %v", downloadURL, err)
-		logrus.Error(string(stdout))
+		log.Errorf("Error while downloading OpenShift 4.X client from %s, error %v", downloadURL, err)
+		log.Error(string(stdout))
 		return err
 	}
 
-	logrus.Infof("Openshift client %s downloaded successfully.", clientName)
+	log.Infof("Openshift client %s downloaded successfully.", clientName)
 
 	stdout, err = exec.Command("tar", "-xvf", clientName).CombinedOutput()
 	if err != nil {
-		logrus.Errorf("Error extracting %s, error %v", clientName, err)
-		logrus.Error(string(stdout))
+		log.Errorf("Error extracting %s, error %v", clientName, err)
+		log.Error(string(stdout))
 		return err
 	}
 
-	logrus.Infof("Extracted %s successfully.", clientName)
+	log.Infof("Extracted %s successfully.", clientName)
 
 	stdout, err = exec.Command("cp", "./oc", "/usr/local/bin").CombinedOutput()
 	if err != nil {
-		logrus.Errorf("Error copying %s, error %v", clientName, err)
-		logrus.Error(string(stdout))
+		log.Errorf("Error copying %s, error %v", clientName, err)
+		log.Error(string(stdout))
 		return err
 	}
 
 	if output, err = exec.Command("oc", "version").CombinedOutput(); err != nil {
-		logrus.Errorf("Error getting oc version, error %v", err)
-		logrus.Error(string(stdout))
+		log.Errorf("Error getting oc version, error %v", err)
+		log.Error(string(stdout))
 		return err
 	}
-	logrus.Info(string(output))
+	log.Info(string(output))
 	return nil
 }
 
@@ -534,19 +534,19 @@ func fixOCPClusterStorageOperator(version string) error {
 	if (parsedVersion.GTE(parsedVersion43) && parsedVersion.LT(parsedVersion4415)) ||
 		(parsedVersion.GTE(parsedVersion45) && parsedVersion.LT(parsedVersion453)) {
 
-		logrus.Infof("Found version %s which uses alphav1 version of snapshot", version)
-		logrus.Warn("This upgrade requires all snapshots to be deleted.")
+		log.Infof("Found version %s which uses alphav1 version of snapshot", version)
+		log.Warn("This upgrade requires all snapshots to be deleted.")
 
 		namespaces, err := k8sCore.ListNamespaces(nil)
 		if err != nil {
 			return err
 		}
 
-		logrus.Info("Deleting volume snapshots")
+		log.Info("Deleting volume snapshots")
 		for _, ns := range namespaces.Items {
 			snaps, err := snapshoterOps.ListSnapshots(ns.Name)
 			if k8serrors.IsNotFound(err) {
-				logrus.Infof("No snapshots found for namespace %s", ns.Name)
+				log.Infof("No snapshots found for namespace %s", ns.Name)
 				continue
 			}
 			if err != nil {
@@ -556,21 +556,21 @@ func fixOCPClusterStorageOperator(version string) error {
 				if err = snapshoterOps.DeleteSnapshot(snap.Name, snap.Namespace); err != nil {
 					return err
 				}
-				logrus.Infof("Deleted snapshot [%s]%s", snap.Namespace, snap.Name)
+				log.Infof("Deleted snapshot [%s]%s", snap.Namespace, snap.Name)
 			}
 		}
 
-		logrus.Info("Removing CRDs")
+		log.Info("Removing CRDs")
 		for _, crd := range volumeSnapshotCRDs {
 			err = crdOps.DeleteCRD(crd)
 			if k8serrors.IsNotFound(err) {
-				logrus.Infof("CRD %s not found", crd)
+				log.Infof("CRD %s not found", crd)
 				continue
 			}
 			if err != nil {
 				return err
 			}
-			logrus.Infof("Removed CRD %s", crd)
+			log.Infof("Removed CRD %s", crd)
 		}
 	}
 	return nil
@@ -592,7 +592,7 @@ func ackAPIRemoval(version string) error {
 			if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
 				return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
 			}
-			logrus.Info(string(output))
+			log.Info(string(output))
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
@@ -635,7 +635,7 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 	var isTriedOnce bool = false
 	var provState string = "Provisioned"
 	var driverName = k.K8s.NodeDriverName
-	logrus.Info("Using Node Driver: ", driverName)
+	log.Info("Using Node Driver: ", driverName)
 
 	t := func() (interface{}, bool, error) {
 
@@ -679,7 +679,7 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 		return "", err
 	}
 	nodeName := output.(string)
-	logrus.Infof("New OCP VM: [%s] is up now", nodeName)
+	log.Infof("New OCP VM: [%s] is up now", nodeName)
 	return nodeName, nil
 }
 
@@ -696,7 +696,7 @@ func (k *openshift) waitForJoinK8sNode(node string) error {
 	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-	logrus.Infof("New OCP VM: [%s] came up successfully and joined k8s cluster", node)
+	log.Infof("New OCP VM: [%s] came up successfully and joined k8s cluster", node)
 	return nil
 }
 
@@ -749,7 +749,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 
 		// Checking if given node is storageless node
 		if volDriver.Contains(storagelessNodes, delNode) {
-			logrus.Infof(
+			log.Infof(
 				"PX node [%s] is storageless node and pool validation is not needed",
 				delNode.Hostname,
 			)
@@ -758,21 +758,21 @@ func (k *openshift) RecycleNode(n node.Node) error {
 
 		// Printing the drives and pools info only for a storage node
 		if !isStoragelessNode {
-			logrus.Infof("Before recyling a node, Node [%s] is having following pools:",
+			log.Infof("Before recyling a node, Node [%s] is having following pools:",
 				delNode.Hostname)
 			for _, pool := range delNode.Pools {
-				logrus.Infof("Node [%s] is having pool ID: [%s]", delNode.Hostname, pool.Uuid)
+				log.Infof("Node [%s] is having pool ID: [%s]", delNode.Hostname, pool.Uuid)
 			}
-			logrus.Infof("Before recyling a node, Node [%s] is having disks: [%v]",
+			log.Infof("Before recyling a node, Node [%s] is having disks: [%v]",
 				delNode.Hostname, delNode.Disks)
 
 			if isKVDBNode {
-				logrus.Infof("Node [%s] is one of the KVDB node", delNode.Hostname)
+				log.Infof("Node [%s] is one of the KVDB node", delNode.Hostname)
 			}
 		}
 
 		// Delete the node from machines using kubectl command
-		logrus.Infof("Recycling the node [%s] having NodeID: [%s]", n.Name, delNode.Id)
+		log.Infof("Recycling the node [%s] having NodeID: [%s]", n.Name, delNode.Id)
 
 		// PowerOff machine before deleting the machine for vSphere driver
 		var driverName = k.K8s.NodeDriverName
@@ -782,7 +782,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		}
 		err = k.deleteAMachine(n.Name)
 		if err != nil {
-			logrus.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, err)
+			log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, err)
 			return err
 		}
 
@@ -796,7 +796,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 			}
 
 		}
-		logrus.Infof("Successfully deleted the OCP node: [%s] ", n.Name)
+		log.Infof("Successfully deleted the OCP node: [%s] ", n.Name)
 
 		// OCP creates a new node once the desired number of worker node count goes down
 		// Wait for OCP to provision new node and update new node to the k8s node list
@@ -845,7 +845,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		if err = volDriver.UpdateNodeWithStorageInfo(newlyProvNode, n.Name); err != nil {
 			return err
 		}
-		logrus.Infof("Successfully updated the storage info for new node: [%s] ", newlyProvNode.Name)
+		log.Infof("Successfully updated the storage info for new node: [%s] ", newlyProvNode.Name)
 
 		// Getting the new node object after storage info updated
 		newlyProvNode, err = node.GetNodeByName(newlyProvNode.Name)
@@ -853,12 +853,12 @@ func (k *openshift) RecycleNode(n node.Node) error {
 			return err
 		}
 
-		logrus.Infof("Waiting for driver to be come up on node: [%s] ", newlyProvNode.Name)
+		log.Infof("Waiting for driver to be come up on node: [%s] ", newlyProvNode.Name)
 		// Waiting and make sure driver to come up successfuly on newly provisoned node
 		if err = volDriver.WaitDriverUpOnNode(newlyProvNode, driverUpTimeout); err != nil {
 			return err
 		}
-		logrus.Infof("Driver came up successfully on node: [%s] ", newlyProvNode.Name)
+		log.Infof("Driver came up successfully on node: [%s] ", newlyProvNode.Name)
 
 		return nil
 
@@ -869,17 +869,17 @@ func (k *openshift) RecycleNode(n node.Node) error {
 func (k *openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNode,
 	volDriver volume.Driver, storagelessNodes []*api.StorageNode, isStoragelessNode bool) error {
 
-	logrus.Infof("Validating the pools and drives on new node")
+	log.Infof("Validating the pools and drives on new node")
 	// Validation is needed only when deleted node was StorageNode
 	if !isStoragelessNode {
 		// Wait for new node to pick up the deleted node ID
-		logrus.Infof("Waiting for NodeID [%s] to be picked by another node ", delNode.Id)
+		log.Infof("Waiting for NodeID [%s] to be picked by another node ", delNode.Id)
 		newPXNode, err := volDriver.WaitForNodeIDToBePickedByAnotherNode(delNode)
 		if err != nil {
 			return err
 		}
-		logrus.Infof("NodeID [%s] pick up by another node: [%s]", delNode.Id, newPXNode.Hostname)
-		logrus.Infof("Validating the node: [%s] after it picked the NodeID: [%s] ",
+		log.Infof("NodeID [%s] pick up by another node: [%s]", delNode.Id, newPXNode.Hostname)
+		log.Infof("Validating the node: [%s] after it picked the NodeID: [%s] ",
 			newPXNode.Hostname, delNode.Id,
 		)
 
@@ -887,10 +887,10 @@ func (k *openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNo
 		if err != nil {
 			return err
 		}
-		logrus.Infof("Successfully validated the pools and drives on new node")
+		log.Infof("Successfully validated the pools and drives on new node")
 		return nil
 	}
-	logrus.Infof("Skipping the pool and drives validation for storageless node: [%s]", delNode.Id)
+	log.Infof("Skipping the pool and drives validation for storageless node: [%s]", delNode.Id)
 	return nil
 }
 

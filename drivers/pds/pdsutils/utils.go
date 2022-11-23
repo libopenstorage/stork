@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"os"
 
@@ -13,8 +14,6 @@ import (
 	"net/url"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // BearerToken struct

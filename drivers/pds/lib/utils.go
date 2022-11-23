@@ -3,6 +3,7 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -18,7 +19,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -207,7 +207,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
-		logrus.Errorf("An Error Occured while parsing the URL %v", err)
+		log.Errorf("An Error Occured while parsing the URL %v", err)
 		return "", "", "", "", "", err
 	}
 	apiConf.Host = endpointURL.Host
@@ -220,66 +220,66 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
 		serviceType = "ClusterIP"
 	}
-	logrus.Infof("Deployment service type %s", serviceType)
+	log.Infof("Deployment service type %s", serviceType)
 
 	acc := components.Account
 	accounts, err := acc.GetAccountsList()
 	if err != nil {
-		logrus.Errorf("An Error Occured while getting account list %v", err)
+		log.Errorf("An Error Occured while getting account list %v", err)
 		return "", "", "", "", "", err
 	}
 
 	for i := 0; i < len(accounts); i++ {
-		logrus.Infof("Account Name: %v", accounts[i].GetName())
+		log.Infof("Account Name: %v", accounts[i].GetName())
 		if accounts[i].GetName() == AccountName {
 			accountID = accounts[i].GetId()
 		}
 	}
-	logrus.Infof("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
+	log.Infof("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
 	tnts := components.Tenant
 	tenants, _ := tnts.GetTenantsList(accountID)
 	tenantID = tenants[0].GetId()
 	tenantName := tenants[0].GetName()
-	logrus.Infof("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
+	log.Infof("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
 	dnsZone, err := controlplane.GetDNSZone(tenantID)
 	if err != nil {
-		logrus.Errorf("Error while getting DNS Zone %v ", err)
+		log.Errorf("Error while getting DNS Zone %v ", err)
 		return "", "", "", "", "", err
 	}
-	logrus.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, AccountName)
+	log.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, AccountName)
 	projcts := components.Project
 	projects, _ := projcts.GetprojectsList(tenantID)
 	projectID = projects[0].GetId()
 	projectName := projects[0].GetName()
-	logrus.Infof("Project Details- Name: %s, UUID: %s ", projectName, projectID)
+	log.Infof("Project Details- Name: %s, UUID: %s ", projectName, projectID)
 
 	ns, err = k8sCore.GetNamespace("kube-system")
 	if err != nil {
-		logrus.Errorf("Error while getting k8s namespace %v", err)
+		log.Errorf("Error while getting k8s namespace %v", err)
 		return "", "", "", "", "", err
 	}
 	clusterID := string(ns.GetObjectMeta().GetUID())
 	if len(clusterID) > 0 {
-		logrus.Infof("clusterID %v", clusterID)
+		log.Infof("clusterID %v", clusterID)
 	} else {
-		logrus.Errorf("Cluster ID is empty")
+		log.Errorf("Cluster ID is empty")
 		return "", "", "", "", "", err
 	}
 
-	logrus.Info("Get the Target cluster details")
+	log.Info("Get the Target cluster details")
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	if err != nil {
-		logrus.Errorf("Error while listing deployments %v", err)
+		log.Errorf("Error while listing deployments %v", err)
 		return "", "", "", "", "", err
 	}
 	if targetClusters == nil {
-		logrus.Fatalf("Target cluster passed is not available to the account/tenant %v", err)
+		log.Fatalf("Target cluster passed is not available to the account/tenant %v", err)
 	}
 	for i := 0; i < len(targetClusters); i++ {
 		if targetClusters[i].GetClusterId() == clusterID {
 			deploymentTargetID = targetClusters[i].GetId()
-			logrus.Infof("Deployment Target ID %v", deploymentTargetID)
-			logrus.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
+			log.Infof("Deployment Target ID %v", deploymentTargetID)
+			log.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
 		}
 	}
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
@@ -290,7 +290,7 @@ func CheckNamespace(namespace string) (bool, error) {
 	ns, err = k8sCore.GetNamespace(namespace)
 	isavailable = false
 	if err != nil {
-		logrus.Warnf("Namespace not found %v", err)
+		log.Warnf("Namespace not found %v", err)
 		if strings.Contains(err.Error(), "not found") {
 			nsName := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -298,10 +298,10 @@ func CheckNamespace(namespace string) (bool, error) {
 					Labels: map[string]string{pxLabel: "true"},
 				},
 			}
-			logrus.Infof("Creating namespace %v", namespace)
+			log.Infof("Creating namespace %v", namespace)
 			ns, err = k8sCore.CreateNamespace(nsName)
 			if err != nil {
-				logrus.Errorf("Error while creating namespace %v", err)
+				log.Errorf("Error while creating namespace %v", err)
 				return false, err
 			}
 			isavailable = true
@@ -312,7 +312,7 @@ func CheckNamespace(namespace string) (bool, error) {
 	}
 	isavailable = false
 	for key, value := range ns.Labels {
-		logrus.Infof("key: %v values: %v", key, value)
+		log.Infof("key: %v values: %v", key, value)
 		if key == pxLabel && value == "true" {
 			isavailable = true
 			break
@@ -330,37 +330,37 @@ func ReadParams(filename string) (*Parameter, error) {
 
 	if filename == "" {
 		filename, err = filepath.Abs(defaultParams)
-		logrus.Infof("filename %v", filename)
+		log.Infof("filename %v", filename)
 		if err != nil {
-			logrus.Errorf("FilePath err %v", err)
+			log.Errorf("FilePath err %v", err)
 			return nil, err
 		}
-		logrus.Infof("Parameter json file is not used, use initial parameters value.")
-		logrus.Infof("Reading params from %v ", filename)
+		log.Infof("Parameter json file is not used, use initial parameters value.")
+		log.Infof("Reading params from %v ", filename)
 		file, err := ioutil.ReadFile(filename)
 		if err != nil {
 
-			logrus.Errorf("File error: %v\n", err)
+			log.Errorf("File error: %v\n", err)
 			return nil, err
 		}
 		err = json.Unmarshal(file, &jsonPara)
 		if err != nil {
-			logrus.Errorf("Error while unmarshalling json: %v\n", err)
+			log.Errorf("Error while unmarshalling json: %v\n", err)
 			return nil, err
 		}
 	} else {
 		cm, err := core.Instance().GetConfigMap(pdsParamsConfigmap, configmapNamespace)
 		if err != nil {
-			logrus.Errorf("Error reading config map: %v", err)
+			log.Errorf("Error reading config map: %v", err)
 		}
 		if len(cm.Data) > 0 {
 			configmap := &cm.Data
 			for key, data := range *configmap {
-				logrus.Infof("key %v \n value %v", key, data)
+				log.Infof("key %v \n value %v", key, data)
 				json_data := []byte(data)
 				err = json.Unmarshal(json_data, &jsonPara)
 				if err != nil {
-					logrus.Errorf("Error while unmarshalling json: %v\n", err)
+					log.Errorf("Error while unmarshalling json: %v\n", err)
 					return nil, err
 				}
 			}
@@ -401,7 +401,7 @@ func DeleteDeploymentPods(podList *corev1.PodList) error {
 
 	//validate deployment pods are up and running after deletion
 	for _, pod := range newPods {
-		logrus.Infof("pds system pod name %v", pod.Name)
+		log.Infof("pds system pod name %v", pod.Name)
 		err = k8sOps.ValidatePod(&pod, timeOut, timeInterval)
 		if err != nil {
 			return err
@@ -412,21 +412,21 @@ func DeleteDeploymentPods(podList *corev1.PodList) error {
 
 // GetStorageTemplate return the storage template id
 func GetStorageTemplate(tenantID string) (string, error) {
-	logrus.Infof("Get the storage template")
+	log.Infof("Get the storage template")
 	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
-		logrus.Errorf("Error while listing storage template %v", err)
+		log.Errorf("Error while listing storage template %v", err)
 		return "", err
 	}
 	for i := 0; i < len(storageTemplates); i++ {
 		if storageTemplates[i].GetName() == storageTemplateName {
-			logrus.Infof("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
+			log.Infof("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
 				storageTemplates[i].GetName(),
 				storageTemplates[i].GetRepl(),
 				storageTemplates[i].GetFg(),
 				storageTemplates[i].GetFs())
 			storageTemplateID = storageTemplates[i].GetId()
-			logrus.Infof("Storage Id: %v", storageTemplateID)
+			log.Infof("Storage Id: %v", storageTemplateID)
 		}
 	}
 	return storageTemplateID, nil
@@ -434,7 +434,7 @@ func GetStorageTemplate(tenantID string) (string, error) {
 
 // GetResourceTemplate get the resource template id
 func GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
-	logrus.Infof("Get the resource template for each data services")
+	log.Infof("Get the resource template for each data services")
 	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return "", err
@@ -449,8 +449,8 @@ func GetResourceTemplate(tenantID string, supportedDataService string) (string, 
 				return "", err
 			}
 			if dataService.GetName() == supportedDataService {
-				logrus.Infof("Data service name: %v", dataService.GetName())
-				logrus.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
+				log.Infof("Data service name: %v", dataService.GetName())
+				log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
 					resourceTemplates[i].GetName(),
 					resourceTemplates[i].GetId(),
 					resourceTemplates[i].GetDataServiceId(),
@@ -463,14 +463,14 @@ func GetResourceTemplate(tenantID string, supportedDataService string) (string, 
 		}
 	}
 	if !(isavailable && isTemplateavailable) {
-		logrus.Errorf("Template with Name %v does not exis", resourceTemplateName)
+		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
 	}
 	return resourceTemplateID, nil
 }
 
 // GetAllDataserviceResourceTemplate get the resource template id's of supported dataservices and forms supported dataserviceNameIdMap
 func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string, error) {
-	logrus.Infof("Get the resource template for each data services")
+	log.Infof("Get the resource template for each data services")
 	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return nil, nil, err
@@ -486,8 +486,8 @@ func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []
 			}
 			for dataKey := range supportedDataServices {
 				if dataService.GetName() == supportedDataServices[dataKey] {
-					logrus.Infof("Data service name: %v", dataService.GetName())
-					logrus.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
+					log.Infof("Data service name: %v", dataService.GetName())
+					log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
 						resourceTemplates[i].GetName(),
 						resourceTemplates[i].GetId(),
 						resourceTemplates[i].GetDataServiceId(),
@@ -503,7 +503,7 @@ func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []
 		}
 	}
 	if !(isavailable && isTemplateavailable) {
-		logrus.Errorf("Template with Name %v does not exis", resourceTemplateName)
+		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
 	}
 	return dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, nil
 }
@@ -528,7 +528,7 @@ func GetAppConfTemplate(tenantID string, supportedDataService string) (string, e
 		}
 	}
 	if !(isavailable && isTemplateavailable) {
-		logrus.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
+		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
 	return appConfigTemplateID, nil
 }
@@ -553,7 +553,7 @@ func GetAllDataServiceAppConfTemplate(tenantID string, dataServiceNameIDMap map[
 		}
 	}
 	if !(isavailable && isTemplateavailable) {
-		logrus.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
+		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
 	return dataServiceNameDefaultAppConfigMap, nil
 }
@@ -569,13 +569,13 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error)
 				if namespaces[i].GetStatus() == "available" {
 					namespaceID = namespaces[i].GetId()
 					namespaceNameIDMap[namespaces[i].GetName()] = namespaces[i].GetId()
-					logrus.Infof("Namespace Status - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
+					log.Infof("Namespace Status - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
 					return true, nil
 				}
 			}
 		}
 		if err != nil {
-			logrus.Errorf("An Error Occured while listing namespaces %v", err)
+			log.Errorf("An Error Occured while listing namespaces %v", err)
 			return false, err
 		}
 		return false, nil
@@ -611,7 +611,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 		}
 	}
 	if !(isVersionAvailable && isBuildAvailable) {
-		logrus.Errorf("Version/Build passed is not available")
+		log.Errorf("Version/Build passed is not available")
 	}
 	return versionID, imageID, dataServiceVersionBuildMap, nil
 }
@@ -636,10 +636,10 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	}
 
 	for key := range dataServiceVersionBuildMap {
-		logrus.Infof("Version - %v,Build - %v", key, dataServiceVersionBuildMap[key])
+		log.Infof("Version - %v,Build - %v", key, dataServiceVersionBuildMap[key])
 	}
 	for key := range dataServiceIDImagesMap {
-		logrus.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
+		log.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
@@ -651,38 +651,38 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 		if err != nil {
-			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
+		log.Errorf("An Error Occured while getting statefulsets %v", err)
 		return err
 	}
 	//validate the statefulset deployed in the namespace
 	err = k8sApps.ValidateStatefulSet(ss, defaultRetryInterval)
 	if err != nil {
-		logrus.Errorf("An Error Occured while validating statefulsets %v", err)
+		log.Errorf("An Error Occured while validating statefulsets %v", err)
 		return err
 	}
 
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
-		logrus.Infof("Health status -  %v", status.GetHealth())
+		log.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
-			logrus.Errorf("Error occured while getting deployment status %v", err)
+			log.Errorf("Error occured while getting deployment status %v", err)
 			return false, nil
 		}
 		if res.StatusCode != state.StatusOK {
-			logrus.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
-			logrus.Errorf("Full HTTP response: %v\n", res)
+			log.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
+			log.Errorf("Full HTTP response: %v\n", res)
 			return false, err
 		}
 		if status.GetHealth() != "Healthy" {
 			return false, nil
 		}
-		logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
 
 	})
@@ -705,7 +705,7 @@ func DeleteK8sDeployments(deployment string, namespace string) error {
 func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	resp, err := components.DataServiceDeployment.DeleteDeployment(deploymentID)
 	if err != nil {
-		logrus.Errorf("An Error Occured while deleting deployment %v", err)
+		log.Errorf("An Error Occured while deleting deployment %v", err)
 		return nil, err
 	}
 	return resp, nil
@@ -720,21 +720,21 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 	deploymentConnectionDetails, clusterDetails, err := dataServiceDeployment.GetConnectionDetails(deploymentID)
 	deploymentConnectionDetails.MarshalJSON()
 	if err != nil {
-		logrus.Errorf("An Error Occured %v", err)
+		log.Errorf("An Error Occured %v", err)
 		return "", err
 	}
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
-	logrus.Infof("Deployment nodes %v", deploymentNodes)
+	log.Infof("Deployment nodes %v", deploymentNodes)
 	isfound = false
 	for key, value := range clusterDetails {
-		logrus.Infof("host details key %v value %v", key, value)
+		log.Infof("host details key %v value %v", key, value)
 		if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
 			dnsEndpoint = fmt.Sprint(value)
 			isfound = true
 		}
 	}
 	if !isfound {
-		logrus.Errorf("No connection string found")
+		log.Errorf("No connection string found")
 		return "", err
 	}
 
@@ -746,7 +746,7 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 	dataServiceDeployment := components.DataServiceDeployment
 	dataServicePassword, err := dataServiceDeployment.GetDeploymentCredentials(deploymentID)
 	if err != nil {
-		logrus.Errorf("An Error Occured %v", err)
+		log.Errorf("An Error Occured %v", err)
 		return "", err
 	}
 	pdsPassword := dataServicePassword.GetPassword()
@@ -787,13 +787,13 @@ func CreatecassandraWorkload(cassCommand string, deploymentName string, namespac
 	}
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		logrus.Errorf("An Error Occured while creating deployment %v", err)
+		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
 
 	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
 	if err != nil {
-		logrus.Errorf("An Error Occured while validating the pod %v", err)
+		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
 
@@ -836,12 +836,12 @@ func CreatepostgresqlWorkload(dnsEndpoint string, pdsPassword string, scalefacto
 	}
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		logrus.Errorf("An Error Occured while creating deployment %v", err)
+		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
 	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
 	if err != nil {
-		logrus.Errorf("An Error Occured while validating the pod %v", err)
+		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
 
@@ -887,13 +887,13 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 
 	pod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
-		logrus.Errorf("An Error Occured while creating %v", err)
+		log.Errorf("An Error Occured while creating %v", err)
 		return nil, err
 	}
 
 	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
 	if err != nil {
-		logrus.Errorf("An Error Occured while validating the pod %v", err)
+		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
 
@@ -939,13 +939,13 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 
 	pod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
-		logrus.Errorf("An Error Occured while creating %v", err)
+		log.Errorf("An Error Occured while creating %v", err)
 		return nil, err
 	}
 
 	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
 	if err != nil {
-		logrus.Errorf("An Error Occured while validating the pod %v", err)
+		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
 
@@ -962,14 +962,14 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
 	if err != nil {
-		logrus.Errorf("An Error Occured while getting connection info %v", err)
+		log.Errorf("An Error Occured while getting connection info %v", err)
 		return nil, nil, err
 	}
-	logrus.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
+	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 
 	pdsPassword, err := GetDeploymentCredentials(deploymentID)
 	if err != nil {
-		logrus.Errorf("An Error Occured while getting credentials info %v", err)
+		log.Errorf("An Error Occured while getting credentials info %v", err)
 		return nil, nil, err
 	}
 
@@ -977,7 +977,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 	case postgresql:
 		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, scalefactor, iterations, deploymentName, namespace)
 		if err != nil {
-			logrus.Errorf("An Error Occured while creating postgresql workload %v", err)
+			log.Errorf("An Error Occured while creating postgresql workload %v", err)
 			return nil, nil, err
 		}
 
@@ -986,7 +986,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 		command := "while true; do java -jar perf-test.jar com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"
 		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
-			logrus.Errorf("An Error Occured while creating rabbitmq workload %v", err)
+			log.Errorf("An Error Occured while creating rabbitmq workload %v", err)
 			return nil, nil, err
 		}
 
@@ -995,7 +995,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster"
 		pod, err = CreateRedisWorkload(deploymentName, redisStressImage, dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
-			logrus.Errorf("An Error Occured while creating redis workload %v", err)
+			log.Errorf("An Error Occured while creating redis workload %v", err)
 			return nil, nil, err
 		}
 
@@ -1003,7 +1003,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 		cassCommand := deploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + deploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + deploymentName + ".load.data"
 		dep, err = CreatecassandraWorkload(cassCommand, deploymentName, namespace)
 		if err != nil {
-			logrus.Errorf("An Error Occured while creating cassandra workload %v", err)
+			log.Errorf("An Error Occured while creating cassandra workload %v", err)
 			return nil, nil, err
 		}
 
@@ -1015,7 +1015,7 @@ func GetDataServiceID(ds string) string {
 	var dataServiceID string
 	dsModel, err := components.DataService.ListDataServices()
 	if err != nil {
-		logrus.Errorf("An Error Occured while listing dataservices %v", err)
+		log.Errorf("An Error Occured while listing dataservices %v", err)
 		return ""
 	}
 	for _, v := range dsModel {
@@ -1034,13 +1034,13 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 	currentReplicas = replicas
 
 	//for ds, id := range supportedDataServicesMap {
-	logrus.Infof("dataService: %v ", ds)
+	log.Infof("dataService: %v ", ds)
 	id := GetDataServiceID(ds)
 	if id == "" {
-		logrus.Errorf("dataservice ID is empty")
+		log.Errorf("dataservice ID is empty")
 		return nil, nil, nil, err
 	}
-	logrus.Infof(`Request params:
+	log.Infof(`Request params:
 				projectID- %v deploymentTargetID - %v,
 				dnsZone - %v,deploymentName - %v,namespaceID - %v
 				App config ID - %v,
@@ -1050,12 +1050,12 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 		replicas, serviceType, dataServiceDefaultResourceTemplateID, storageTemplateID)
 
 	if ds == zookeeper && replicas != 3 {
-		logrus.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
+		log.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
 		currentReplicas = 3
 	}
 	if ds == redis {
-		logrus.Infof("Replicas passed %v", replicas)
-		logrus.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
+		log.Infof("Replicas passed %v", replicas)
+		log.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
 	}
 
 	//clearing up the previous entries of dataServiceImageMap
@@ -1067,13 +1067,13 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 		delete(dataServiceVersionBuildMap, version)
 	}
 
-	logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
+	log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
 	versionID, imageID, dataServiceVersionBuildMap, err = GetVersionsImage(dsVersion, dsBuild, id)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	logrus.Infof("VersionID %v ImageID %v", versionID, imageID)
+	log.Infof("VersionID %v ImageID %v", versionID, imageID)
 	components = pdsapi.NewComponents(apiClient)
 	deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
 		deploymentTargetID,
@@ -1088,7 +1088,7 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 		storageTemplateID)
 
 	if err != nil {
-		logrus.Warnf("An Error Occured while creating deployment %v", err)
+		log.Warnf("An Error Occured while creating deployment %v", err)
 		return nil, nil, nil, err
 	}
 	err = ValidateDataServiceDeployment(deployment, namespace)
@@ -1106,8 +1106,8 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 	currentReplicas = replicas
 
 	for ds, id := range supportedDataServicesMap {
-		logrus.Infof("dataService: %v ", ds)
-		logrus.Infof(`Request params:
+		log.Infof("dataService: %v ", ds)
+		log.Infof(`Request params:
 				projectID- %v deploymentTargetID - %v,
 				dnsZone - %v,deploymentName - %v,namespaceID - %v
 				App config ID - %v,
@@ -1117,12 +1117,12 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 			replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[ds], storageTemplateID)
 
 		if ds == zookeeper && replicas != 3 {
-			logrus.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
+			log.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
 			currentReplicas = 3
 		}
 		if ds == redis {
-			logrus.Infof("Replicas passed %v", replicas)
-			logrus.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
+			log.Infof("Replicas passed %v", replicas)
+			log.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
 		}
 
 		//clearing up the previous entries of dataServiceImageMap
@@ -1138,7 +1138,7 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 		for version := range dataServiceImageMap {
 			for index := range dataServiceImageMap[version] {
 				imageID := dataServiceImageMap[version][index]
-				logrus.Infof("VersionID %v ImageID %v", version, imageID)
+				log.Infof("VersionID %v ImageID %v", version, imageID)
 				components = pdsapi.NewComponents(apiClient)
 				deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
 					deploymentTargetID,
@@ -1153,7 +1153,7 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 					storageTemplateID)
 
 				if err != nil {
-					logrus.Warnf("An Error Occured while creating deployment %v", err)
+					log.Warnf("An Error Occured while creating deployment %v", err)
 					return nil, nil, nil, err
 				}
 				err = ValidateDataServiceDeployment(deployment, namespace)
@@ -1193,12 +1193,12 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 	}
 
 	if !(isBuildAvailable) {
-		logrus.Fatalf("Version/Build passed is not available")
+		log.Fatalf("Version/Build passed is not available")
 	}
 
 	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, dsImageID, nodeCount, resourceTemplateID, nil)
 	if err != nil {
-		logrus.Errorf("An Error Occured while updating the deployment %v", err)
+		log.Errorf("An Error Occured while updating the deployment %v", err)
 		return nil, err
 	}
 
@@ -1220,7 +1220,7 @@ func GetAllSupportedDataServices() map[string]string {
 		}
 	}
 	for key, value := range dataServiceNameIDMap {
-		logrus.Infof("dsKey %v dsValue %v", key, value)
+		log.Infof("dsKey %v dsValue %v", key, value)
 	}
 	return dataServiceNameIDMap
 }
@@ -1228,10 +1228,10 @@ func GetAllSupportedDataServices() map[string]string {
 // UpdateDataServices modifies the existing deployment
 func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
 
-	logrus.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
+	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
 	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
 	if err != nil {
-		logrus.Errorf("An Error Occured while updating deployment %v", err)
+		log.Errorf("An Error Occured while updating deployment %v", err)
 		return nil, err
 	}
 
@@ -1250,30 +1250,30 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	var storageOp StorageOptions
 	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 	if err != nil {
-		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+		log.Warnf("An Error Occured while getting statefulsets %v", err)
 	}
 	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
 	if err != nil {
-		logrus.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
+		log.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
 	}
 	pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
 	if err != nil {
-		logrus.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+		log.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
 	}
 
 	for _, pvc := range pvcList.Items {
 		sc, err := k8sCore.GetStorageClassForPVC(&pvc)
 		if err != nil {
-			logrus.Errorf("Error Occured while getting storage class for pvc %v", err)
+			log.Errorf("Error Occured while getting storage class for pvc %v", err)
 		}
 		scAnnotation := sc.Annotations
 		for k, v := range scAnnotation {
 			if k == "kubectl.kubernetes.io/last-applied-configuration" {
-				logrus.Infof("Storage Options Values %v", v)
+				log.Infof("Storage Options Values %v", v)
 				data := []byte(v)
 				err := json.Unmarshal(data, &config)
 				if err != nil {
-					logrus.Errorf("Error Occured while getting volume params %v", err)
+					log.Errorf("Error Occured while getting volume params %v", err)
 				}
 			}
 		}
@@ -1281,7 +1281,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 
 	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateID)
 	if err != nil {
-		logrus.Errorf("Error Occured while getting resource setting template %v", err)
+		log.Errorf("Error Occured while getting resource setting template %v", err)
 	}
 	resourceTemp.Resources.Requests.CPU = *rt.CpuRequest
 	resourceTemp.Resources.Requests.Memory = *rt.MemoryRequest
@@ -1291,7 +1291,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 
 	st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
 	if err != nil {
-		logrus.Errorf("Error Occured while getting storage template %v", err)
+		log.Errorf("Error Occured while getting storage template %v", err)
 		return resourceTemp, storageOp, config, err
 	}
 	storageOp.Filesystem = st.GetFs()
@@ -1308,30 +1308,30 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 	var storageOp StorageOptions
 	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
 	if err != nil {
-		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+		log.Warnf("An Error Occured while getting statefulsets %v", err)
 	}
 	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
 	if err != nil {
-		logrus.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
+		log.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
 	}
 	pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
 	if err != nil {
-		logrus.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+		log.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
 	}
 
 	for _, pvc := range pvcList.Items {
 		sc, err := k8sCore.GetStorageClassForPVC(&pvc)
 		if err != nil {
-			logrus.Errorf("Error Occured while getting storage class for pvc %v", err)
+			log.Errorf("Error Occured while getting storage class for pvc %v", err)
 		}
 		scAnnotation := sc.Annotations
 		for k, v := range scAnnotation {
 			if k == "kubectl.kubernetes.io/last-applied-configuration" {
-				logrus.Infof("Storage Options Values %v", v)
+				log.Infof("Storage Options Values %v", v)
 				data := []byte(v)
 				err := json.Unmarshal(data, &config)
 				if err != nil {
-					logrus.Errorf("Error Occured while getting volume params %v", err)
+					log.Errorf("Error Occured while getting volume params %v", err)
 				}
 			}
 		}
@@ -1339,7 +1339,7 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 
 	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateIDMap[dataService])
 	if err != nil {
-		logrus.Errorf("Error Occured while getting resource setting template %v", err)
+		log.Errorf("Error Occured while getting resource setting template %v", err)
 	}
 	resourceTemp.Resources.Requests.CPU = *rt.CpuRequest
 	resourceTemp.Resources.Requests.Memory = *rt.MemoryRequest
@@ -1349,7 +1349,7 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 
 	st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
 	if err != nil {
-		logrus.Errorf("Error Occured while getting storage template %v", err)
+		log.Errorf("Error Occured while getting storage template %v", err)
 		return resourceTemp, storageOp, config, err
 	}
 	storageOp.Filesystem = st.GetFs()
@@ -1364,7 +1364,7 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 func DeleteK8sNamespace(namespace string) error {
 	err := k8sCore.DeleteNamespace(namespace)
 	if err != nil {
-		logrus.Errorf("Could not delete the specified namespace %v because %v", namespace, err)
+		log.Errorf("Could not delete the specified namespace %v because %v", namespace, err)
 		return err
 	}
 	return nil
@@ -1376,13 +1376,13 @@ func ValidateDataServiceDeploymentNegative(deployment *pds.ModelsDeployment, nam
 	err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 		if err != nil {
-			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
 			return false, nil
 		}
 		return true, nil
 	})
 	if err == nil {
-		logrus.Errorf("Validate DS Deployment negative failed, the StatefulSet still exists %v", ss)
+		log.Errorf("Validate DS Deployment negative failed, the StatefulSet still exists %v", ss)
 		return fmt.Errorf("the deployment %v has not been deleted", deployment.Name)
 	}
 	return nil
@@ -1392,16 +1392,16 @@ func ValidateK8sNamespaceDeleted(namespace string) error {
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		_, err := k8sCore.GetNamespace(namespace)
 		if err == nil {
-			logrus.Warnf("The namespace %v has not been deleted", namespace)
+			log.Warnf("The namespace %v has not been deleted", namespace)
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		logrus.Errorf("The namespace %v has not been deleted", namespace)
+		log.Errorf("The namespace %v has not been deleted", namespace)
 		return fmt.Errorf("the namespace %v has not been deleted", namespace)
 	}
-	logrus.Infof("The namespace has been successfully deleted")
+	log.Infof("The namespace has been successfully deleted")
 	return nil
 
 }
@@ -1437,18 +1437,18 @@ func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace strin
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 		if err != nil {
-			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
+		log.Errorf("An Error Occured while getting statefulsets %v", err)
 		return nil, err
 	}
 	pods, err := k8sApps.GetStatefulSetPods(ss)
 	if err != nil {
-		logrus.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
+		log.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
 		return nil, err
 	}
 	return pods, nil
@@ -1457,7 +1457,7 @@ func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace strin
 func GetK8sNodeObjectUsingPodName(nodeName string) (*corev1.Node, error) {
 	nodeObject, err := k8sCore.GetNodeByName(nodeName)
 	if err != nil {
-		logrus.Errorf("Could not get the node object for node %v because %v", nodeName, err)
+		log.Errorf("Could not get the node object for node %v because %v", nodeName, err)
 		return nil, err
 	}
 	return nodeObject, nil
@@ -1467,13 +1467,13 @@ func DrainPxPodOnK8sNode(node *corev1.Node, namespace string) error {
 	labelSelector := map[string]string{"name": "portworx"}
 	pod, err := k8sCore.GetPodsByNodeAndLabels(node.Name, namespace, labelSelector)
 	if err != nil {
-		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		log.Errorf("Could not fetch pods running on the given node %v", err)
 		return err
 	}
-	logrus.Infof("Portworx pod to be drained %v from node %v", pod.Items[0].Name, node.Name)
+	log.Infof("Portworx pod to be drained %v from node %v", pod.Items[0].Name, node.Name)
 	err = k8sCore.DrainPodsFromNode(node.Name, pod.Items, timeOut, maxtimeInterval)
 	if err != nil {
-		logrus.Errorf("Could not drain the node %v", err)
+		log.Errorf("Could not drain the node %v", err)
 		return err
 	}
 
@@ -1495,7 +1495,7 @@ func UnCordonK8sNode(node *corev1.Node) error {
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		err = k8sCore.UnCordonNode(node.Name, timeOut, maxtimeInterval)
 		if err != nil {
-			logrus.Errorf("Failed uncordon node %v due to %v", node.Name, err)
+			log.Errorf("Failed uncordon node %v due to %v", node.Name, err)
 			return false, nil
 		}
 		return true, nil
@@ -1509,16 +1509,16 @@ func VerifyPxPodOnNode(nodeName string, namespace string) (bool, error) {
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		pods, err = k8sCore.GetPodsByNodeAndLabels(nodeName, namespace, labelSelector)
 		if err != nil {
-			logrus.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
+			log.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		log.Errorf("Could not fetch pods running on the given node %v", err)
 		return false, err
 	}
 	pxPodName := pods.Items[0].Name
-	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
+	log.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
 	return true, nil
 }

@@ -4,7 +4,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/libopenstorage/cloudops"
 	iks "github.com/libopenstorage/cloudops/ibm"
@@ -50,7 +50,7 @@ func (i *ibm) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 	// IBM SDK requires per zone cluster size
 	err := i.ops.SetInstanceGroupSize(i.instanceGroup, perZoneCount, timeout)
 	if err != nil {
-		logrus.Errorf("failed to set size of node pool %s. Error: %v", i.instanceGroup, err)
+		log.Errorf("failed to set size of node pool %s. Error: %v", i.instanceGroup, err)
 		return err
 	}
 
@@ -60,7 +60,7 @@ func (i *ibm) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 func (i *ibm) GetASGClusterSize() (int64, error) {
 	nodeCount, err := i.ops.GetInstanceGroupSize(i.instanceGroup)
 	if err != nil {
-		logrus.Errorf("failed to get size of node pool %s. Error: %v", i.instanceGroup, err)
+		log.Errorf("failed to get size of node pool %s. Error: %v", i.instanceGroup, err)
 		return 0, err
 	}
 

@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -113,26 +113,24 @@ var _ = Describe("{Longevity}", func() {
 	})
 
 	It("has to schedule app and introduce test triggers", func() {
-		dash.Info("schedule apps and start test triggers")
+		log.InfoD("schedule apps and start test triggers")
 		watchLog := fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
 			configMapNS, testTriggersConfigMap)
 
 		Step(watchLog, func() {
-			dash.Info(watchLog)
+			log.InfoD(watchLog)
 			err := watchConfigMap()
 			if err != nil {
-				log.Error(err)
+				log.Fatalf(fmt.Sprintf("%v", err))
 			}
-			dash.VerifyFatal(err, nil, "Validate config map watch set")
 		})
 
 		if pureTopologyEnabled {
 			var err error
 			labels, err = SetTopologyLabelsOnNodes()
 			if err != nil {
-				log.Error(err)
+				log.Fatalf(fmt.Sprintf("%v", err))
 			}
-			dash.VerifyFatal(err, nil, "Validate set topology labels")
 			Inst().TopologyLabels = labels
 		}
 
@@ -143,24 +141,24 @@ var _ = Describe("{Longevity}", func() {
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
-				dash.Infof("Registering trigger: [%v]", triggerType)
+				log.InfoD("Registering trigger: [%v]", triggerType)
 				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
-		dash.Infof("Finished registering test triggers")
+		log.InfoD("Finished registering test triggers")
 		if Inst().MinRunTimeMins != 0 {
-			dash.Infof("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
+			log.InfoD("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
 
 		Step("Register email trigger", func() {
 			for triggerType, triggerFunc := range emailTriggerFunction {
-				dash.Infof("Registering email trigger: [%v]", triggerType)
+				log.InfoD("Registering email trigger: [%v]", triggerType)
 				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
 				wg.Add(1)
 			}
 		})
-		dash.Infof("Finished registering email trigger")
+		log.InfoD("Finished registering email trigger")
 
 		CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
@@ -194,7 +192,7 @@ func testTrigger(wg *sync.WaitGroup,
 	for {
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-			dash.Infof("Longevity Tests timed out with timeout %d  minutes", minRunTime)
+			log.InfoD("Longevity Tests timed out with timeout %d  minutes", minRunTime)
 			break
 		}
 
@@ -217,9 +215,9 @@ func testTrigger(wg *sync.WaitGroup,
 			   // If trigger is non-disruptive then just check if no other disruptive trigger is running or not
 			   // and release the lock immidiately so that other non-disruptive triggers can happen.
 				triggerLoc.Lock()
-				logrus.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
+				log.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
 				triggerLoc.Unlock()
-				logrus.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
+				log.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
 			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
@@ -263,15 +261,15 @@ func emailEventTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			dash.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			log.InfoD("Waiting for lock for trigger [%s]\n", triggerType)
 			emailTriggerLock.Lock()
-			dash.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			log.InfoD("Successfully taken lock for trigger [%s]\n", triggerType)
 
 			triggerFunc()
-			dash.Infof("Trigger Function completed for [%s]\n", triggerType)
+			log.InfoD("Trigger Function completed for [%s]\n", triggerType)
 
 			emailTriggerLock.Unlock()
-			dash.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+			log.InfoD("Successfully released lock for trigger [%s]\n", triggerType)
 
 			lastInvocationTime = time.Now().Local()
 
@@ -500,10 +498,10 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 			}
 			switch key {
 			case k8s.TopologyZoneK8sNodeLabel:
-				dash.Infof("Setting node: [%s] Topology Zone to: [%s]", n.Name, value)
+				log.InfoD("Setting node: [%s] Topology Zone to: [%s]", n.Name, value)
 				n.TopologyZone = value
 			case k8s.TopologyRegionK8sNodeLabel:
-				dash.Infof("Setting node: [%s] Topology Region to: [%s]", n.Name, value)
+				log.InfoD("Setting node: [%s] Topology Region to: [%s]", n.Name, value)
 				n.TopologyRegion = value
 			}
 		}
@@ -512,7 +510,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	}
 
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
-	logrus.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
+	log.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
 
 	if err := deletePXPods(volumeDriverNamespace); err != nil {
 		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)

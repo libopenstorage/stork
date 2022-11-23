@@ -2,6 +2,7 @@ package tests
 
 import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -36,7 +36,6 @@ var (
 	wantAfterSuiteValidateCleanup bool = false
 )
 
-var log *logrus.Logger
 var dash *aetosutil.Dashboard
 
 func TestBasic(t *testing.T) {
@@ -49,7 +48,6 @@ func TestBasic(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	log = Inst().Logger
 	dash = Inst().Dash
 	log.Infof("Init instance")
 	InitInstance()
@@ -63,7 +61,7 @@ var _ = AfterSuite(func() {
 
 	defer CloseLogger(TestLogger)
 	defer dash.TestCaseEnd()
-	SetTorpedoFileOutput(log, TestLogger)
+	log.SetTorpedoFileOutput(TestLogger)
 
 	dash.TestCaseBegin("System check", "validating system check and clean up", "", nil)
 	if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -9,14 +10,13 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 // Sanity test for OCP Recycle method
 var _ = Describe("{RecycleOCPNode}", func() {
 
 	if Inst().S.String() != openshift.SchedName {
-		logrus.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
+		log.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
 		return
 	}
 
@@ -46,7 +46,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 					func() {
 						workerNodes := node.GetWorkerNodes()
 						for x, wNode := range workerNodes {
-							logrus.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
+							log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
 						}
 					})
 				Step(
@@ -62,7 +62,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 					func() {
 						workerNodes := node.GetWorkerNodes()
 						for x, wNode := range workerNodes {
-							logrus.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
+							log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
 						}
 					})
 			}
@@ -80,7 +80,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 			Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
 				workerNodes := node.GetWorkerNodes()
 				for x, wNode := range workerNodes {
-					logrus.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
+					log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
 				}
 			})
 			// Validating the apps after recycling the Storage node

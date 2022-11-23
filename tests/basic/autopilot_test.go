@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -1421,7 +1421,7 @@ func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) err
 	upgradeAutopilot := func() error {
 		k8sApps := apps.Instance()
 
-		logrus.Infof("Upgrading autopilot with new image %s", image)
+		log.Infof("Upgrading autopilot with new image %s", image)
 		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, autDeploymentNamespace)
 
 		if err != nil {
@@ -1444,7 +1444,7 @@ func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) err
 				return fmt.Errorf("failed to upgrade autopilot. New version mismatch. Actual %s, Expected: %s", container.Image, image)
 			}
 		}
-		logrus.Infof("autopilot with new image %s upgraded successfully", image)
+		log.Infof("autopilot with new image %s upgraded successfully", image)
 		return nil
 	}
 	if opts == nil {
