@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -20,6 +22,8 @@ import (
 
 const (
 	annotationStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
+
+	maxPodBringupTime time.Duration = 2 * time.Minute
 )
 
 func TestExtender(t *testing.T) {
@@ -32,6 +36,8 @@ func TestExtender(t *testing.T) {
 	t.Run("statefulsetTest", statefulsetTest)
 	t.Run("multiplePVCTest", multiplePVCTest)
 	t.Run("driverNodeErrorTest", driverNodeErrorTest)
+	t.Run("antihyperconvergenceTest", antihyperconvergenceTest)
+	t.Run("antihyperconvergenceTestPreferRemoteOnlyTest", antihyperconvergenceTestPreferRemoteOnlyTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -239,4 +245,115 @@ func pvcOwnershipTest(t *testing.T) {
 	require.NoError(t, err, "Volume driver is not up on Node %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
+}
+
+func antihyperconvergenceTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("antihyperconvergencetest",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"test-sv4-svc-repl1"},
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	logrus.Infof("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+
+	logrus.Infof("Verifying Pods scheduling favors antihyperconvergence")
+	verifyAntihyperconvergence(t, scheduledNodes, volumeNames)
+
+	destroyAndWait(t, ctxs)
+}
+
+func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("preferremoteonlytest",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"test-sv4-svc-repl1-prefer-remote-only"},
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	logrus.Infof("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+
+	logrus.Infof("Verifying Pods scheduling favors antihyperconvergence")
+	verifyAntihyperconvergence(t, scheduledNodes, volumeNames)
+
+	logrus.Infof("Cordon the nodes where application pods are running")
+	for _, schedNode := range scheduledNodes {
+		if schedNode.IsStorageDriverInstalled {
+			err = core.Instance().CordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "Error cordorning k8s node for stork test pod")
+			defer func() {
+				err = core.Instance().UnCordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
+				require.NoError(t, err, "Error uncordorning k8s node for stork test pod")
+			}()
+		}
+	}
+
+	logrus.Infof("Delete application pods")
+	for _, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			depPods, err := apps.Instance().GetDeploymentPods(obj)
+			require.NoError(t, err, "Error getting pods for deployment.")
+
+			err = core.Instance().DeletePods(depPods, true)
+			require.NoError(t, err, "Error delete deployment pods for deploymet.")
+		}
+	}
+
+	logrus.Infof("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], maxPodBringupTime, defaultWaitInterval)
+	require.Error(t, err, "Error waiting for pod to get to running state")
+
+	destroyAndWait(t, ctxs)
+}
+
+func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []string) {
+	driverNodes, err := storkVolumeDriver.GetNodes()
+	require.NoError(t, err, "Unable to get driver nodes from stork volume driver")
+
+	scores := make(map[string]int)
+	idMap := make(map[string]*storkdriver.NodeInfo)
+	for _, dNode := range driverNodes {
+		scores[dNode.Hostname] = 100
+		idMap[dNode.StorageID] = dNode
+	}
+
+	// Assign zero score to replica nodes for antihyperconvergence
+	// Assign non zero score to non replica nodes for antihyperconvergence
+	for _, vol := range volumes {
+		volInfo, err := storkVolumeDriver.InspectVolume(vol)
+		require.NoError(t, err, "Unable to inspect volume driver")
+		for _, dataNode := range volInfo.DataNodes {
+			hostname := idMap[dataNode].Hostname
+			scores[hostname] = 0
+		}
+	}
+
+	highScore := 0
+	for _, score := range scores {
+		if score > highScore {
+			highScore = score
+		}
+	}
+
+	for _, appNode := range appNodes {
+		require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+	}
 }
