@@ -361,6 +361,9 @@ var _ = Describe("{AppTasksDown}", func() {
 					stepLog = fmt.Sprintf("delete tasks for app: %s", ctx.App.Key)
 					Step(stepLog, func() {
 						err = Inst().S.DeleteTasks(ctx, nil)
+						if err != nil {
+							PrintDescribeContext(ctx)
+						}
 						dash.VerifyFatal(err, nil, fmt.Sprintf("validate delete tasks for app: %s", ctx.App.Key))
 					})
 
@@ -373,6 +376,9 @@ var _ = Describe("{AppTasksDown}", func() {
 						stepLog = fmt.Sprintf("delete tasks for app: %s", ctx.App.Key)
 						Step(stepLog, func() {
 							err = Inst().S.DeleteTasks(ctx, nil)
+							if err != nil {
+								PrintDescribeContext(ctx)
+							}
 							dash.VerifyFatal(err, nil, fmt.Sprintf("validate delete tasks for app: %s", ctx.App.Key))
 						})
 

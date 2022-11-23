@@ -211,12 +211,12 @@ func (d *Dashboard) TestCaseEnd() {
 		if err != nil {
 			logrus.Errorf("Error parsing update test output, %v", err)
 		}
-		result := updateResponse.TestCaseStatus
-		d.VerifySafely(result, "PASS", "Test completed successfully ?")
+		testCaseResult := updateResponse.TestCaseStatus
+		d.VerifySafely(testCaseResult, "PASS", "Test completed successfully ?")
 	}
 
 	logrus.Info("--------Test End------")
-	logrus.Infof("#Test: %s ", testCase.ShortName)
+	logrus.Infof("#Test: %s ", testCase.Name)
 	logrus.Infof("#Description: %s ", testCase.Description)
 	logrus.Info("------------------------")
 }

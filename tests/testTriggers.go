@@ -1006,6 +1006,9 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			err := Inst().S.DeleteTasks(ctx, nil)
+			if err != nil {
+				PrintDescribeContext(ctx)
+			}
 			UpdateOutcome(event, err)
 		})
 		stepLog = fmt.Sprintf("validating context after delete tasks for app: [%s]",
@@ -5558,6 +5561,9 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					err := Inst().S.DeleteTasks(ctx, nil)
+					if err != nil {
+						PrintDescribeContext(ctx)
+					}
 					UpdateOutcome(event, err)
 				})
 				stepLog = "validate all apps after deletion"

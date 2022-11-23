@@ -503,6 +503,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			log.InfoD(stepLog)
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			if err != nil {
+				PrintDescribeContext(ctx)
 				processError(err, errChan...)
 				return
 			}
@@ -1282,7 +1283,11 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			err = Inst().S.Destroy(ctx, opts)
+			if err != nil {
+				PrintDescribeContext(ctx)
+			}
 			log.FailOnError(err, "Failed to destroy app %s", ctx.App.Key)
+
 		})
 
 		if !ctx.SkipVolumeValidation {
@@ -1297,6 +1302,18 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		}
 
 	})
+}
+
+func PrintDescribeContext(ctx *scheduler.Context) {
+	descOut, descErr := Inst().S.Describe(ctx)
+	if descErr != nil {
+		log.Warnf("Error describing context %s", ctx.App.Key)
+		log.Warn(descErr)
+	} else {
+		log.Warnf("Context %s Details:", ctx.App.Key)
+		log.Warnf(descOut)
+	}
+
 }
 
 // DeleteVolumes deletes volumes of a given context

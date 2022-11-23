@@ -2185,7 +2185,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			if err := k8sApps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate Deployment: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate Deployment: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2194,7 +2194,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			if err := k8sApps.ValidateStatefulSet(obj, timeout*time.Duration(*obj.Spec.Replicas)); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2204,7 +2204,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			if err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate Service: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate Service: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2214,7 +2214,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			if err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate Rule: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate Rule: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2577,7 +2577,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 			if err := k8sApps.ValidateTerminatedDeployment(obj, timeout, DefaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate destroy of deployment: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate destroy of deployment: %v, namespace: %s. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2586,7 +2586,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 			if err := k8sApps.ValidateTerminatedStatefulSet(obj, timeout, DefaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate destroy of statefulset: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate destroy of statefulset: %v, namespace: %s Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2595,7 +2595,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 			if err := k8sCore.ValidateDeletedService(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate destroy of service: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate destroy of service: %v, namespace: %s. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2604,7 +2604,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 			if err := k8sCore.WaitForPodDeletion(obj.UID, obj.Namespace, deleteTasksWaitTimeout); err != nil {
 				return &scheduler.ErrFailedToValidatePodDestroy{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate destroy of pod: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate destroy of pod: %v,namespace:%s. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2778,7 +2778,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get params for volume: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("failed to get params for volume: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2786,7 +2786,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get PVC: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("failed to get PVC: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2802,7 +2802,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get Snapshot: %v. Err: %v", obj.Metadata.Name, err),
+					Cause: fmt.Sprintf("failed to get Snapshot: %v,Namespace: %v. Err: %v", obj.Metadata.Name, obj.Metadata.Namespace, err),
 				}
 			}
 
@@ -2819,7 +2819,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get volumesnapshotdata: %s due to: %v", snapDataName, err),
+					Cause: fmt.Sprintf("failed to get volumesnapshotdata: [%s] %s due to: %v", snapData.Metadata.Namespace, snapDataName, err),
 				}
 			}
 
@@ -2827,7 +2827,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapDataName),
+					Cause: fmt.Sprintf("volumesnapshotdata: [%s] %s does not have portworx volume source set", snapData.Metadata.Namespace, snapDataName),
 				}
 			}
 
@@ -2840,7 +2840,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v, Namespace : %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2848,7 +2848,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			if err != nil || pvcList == nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v. Err: %v", ss.Name, err),
+					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v, Namespace: %v. Err: %v", ss.Name, ss.Namespace, err),
 				}
 			}
 
@@ -2862,7 +2862,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				if err != nil {
 					return nil, &scheduler.ErrFailedToGetVolumeParameters{
 						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to get params for volume: %v. Err: %v", pvc.Name, err),
+						Cause: fmt.Sprintf("Failed to get params for volume: %v, namespace: %v. Err: %v", pvc.Name, pvc.Namespace, err),
 					}
 				}
 
@@ -2913,7 +2913,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				} else {
 					return &scheduler.ErrFailedToValidateStorage{
 						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
+						Cause: fmt.Sprintf("Failed to validate PVC: %v, Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 					}
 				}
 			}
@@ -2949,7 +2949,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate snapshot: %v. Err: %v", obj.Metadata.Name, err),
+					Cause: fmt.Sprintf("Failed to validate snapshot: %v, Namespace: %v. Err: %v", obj.Metadata.Name, obj.Metadata.Namespace, err),
 				}
 			}
 
@@ -2958,7 +2958,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			if err := k8sStork.ValidateGroupSnapshot(obj.Name, obj.Namespace, true, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate group snapshot: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate group snapshot: %v, Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -2968,7 +2968,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			if err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v, Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 			// Providing the scaling factor in timeout
@@ -2979,7 +2979,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v. Err: %v", ss.Name, err),
+					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v,Namespace: %v. Err: %v", ss.Name, ss.Namespace, err),
 				}
 			}
 			log.Infof("[%v] Validated PVCs from StatefulSet: %v", ctx.App.Key, obj.Name)
@@ -3068,7 +3068,7 @@ func (k *K8s) validatePVCSize(ctx *scheduler.Context, obj *corev1.PersistentVolu
 	if err != nil {
 		return &scheduler.ErrFailedToValidateStorage{
 			App:   ctx.App,
-			Cause: fmt.Sprintf("Failed to validate size: %v of PVC: %v. Err: %v", expectedPVCSize, obj.Name, err),
+			Cause: fmt.Sprintf("Failed to validate size: %v of PVC: %v, Namespace: %v. Err: %v", expectedPVCSize, obj.Name, obj.Namespace, err),
 		}
 	}
 	return nil
@@ -3221,7 +3221,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
 			shouldAdd, err := k.filterPureVolumesIfEnabled(pvcObj)
 			if err != nil {
@@ -3251,7 +3251,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetStorage{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
 
@@ -3259,7 +3259,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			if err != nil || pvcList == nil {
 				return nil, &scheduler.ErrFailedToGetStorage{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v, Namespace: %s. Err: %v", ss.Name, ss.Namespace, err),
 				}
 			}
 
