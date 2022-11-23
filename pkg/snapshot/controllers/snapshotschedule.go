@@ -22,6 +22,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -282,7 +283,12 @@ func (s *SnapshotScheduleController) shouldStartVolumeSnapshot(snapshotSchedule 
 }
 
 func (s *SnapshotScheduleController) formatVolumeSnapshotName(snapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) string {
-	return strings.Join([]string{snapshotSchedule.Name, strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
+	snapSuffix := strings.Join([]string{strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
+	scheduleName := snapshotSchedule.Name
+	if len(scheduleName) >= validation.LabelValueMaxLength-len(snapSuffix) {
+		scheduleName = scheduleName[:validation.LabelValueMaxLength-len(snapSuffix)-1]
+	}
+	return strings.Join([]string{scheduleName, strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
 }
 
 func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) error {
