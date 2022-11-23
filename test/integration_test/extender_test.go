@@ -261,7 +261,7 @@ func antihyperconvergenceTest(t *testing.T) {
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	require.NoError(t, err, "Error getting node for app")
-	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
+	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on 3 nodes")
 
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
@@ -286,7 +286,7 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	require.NoError(t, err, "Error getting node for app")
-	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
+	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on 3 nodes")
 
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
@@ -319,7 +319,7 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 
 	logrus.Infof("Waiting for all Pods to come online")
 	err = schedulerDriver.WaitForRunning(ctxs[0], maxPodBringupTime, defaultWaitInterval)
-	require.Error(t, err, "Error waiting for pod to get to running state")
+	require.Error(t, err, "Expected an error while scheduling the pod")
 
 	destroyAndWait(t, ctxs)
 }
