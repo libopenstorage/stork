@@ -2,8 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -270,7 +271,7 @@ var _ = Describe("{ClusterPxRestart}", func() {
 
 	stepLog := "has to restart Px cluster "
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -280,7 +281,7 @@ var _ = Describe("{ClusterPxRestart}", func() {
 		ValidateApplications(contexts)
 		stepLog = "get all nodes which has PX installed and restart PX one by one"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 
 			Step("get all PX nodes and restart PX one by one", func() {
 				nodesToPXRestart := node.GetWorkerNodes()
@@ -292,12 +293,12 @@ var _ = Describe("{ClusterPxRestart}", func() {
 							Step(fmt.Sprintf("node with Px restart is: %s", n.Name), func() {
 
 								err := Inst().V.RestartDriver(n, nil)
-								dash.VerifyFatal(err, nil, fmt.Sprintf("Restart PX on node:%v", n.Name))
+								log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", n.Name))
 							})
 
 							Step(fmt.Sprintf("wait for volume driver to restart on node: %v", n.Name), func() {
 								err := Inst().V.WaitForPxPodsToBeUp(n)
-								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate PX restart is done on node:%v", n.Name))
+								log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", n.Name))
 							})
 
 							Step("validate apps", func() {
@@ -308,7 +309,7 @@ var _ = Describe("{ClusterPxRestart}", func() {
 						}
 					}
 					t2 := time.Now()
-					dash.Info(fmt.Sprintf("Time taken to reboot all the PX is: %fsecs", t2.Sub(t1).Seconds()))
+					log.InfoD(fmt.Sprintf("Time taken to reboot all the PX is: %fsecs", t2.Sub(t1).Seconds()))
 					dash.VerifyFatal(((t2.Sub(t1).Seconds()) <= (float64(len(nodesToPXRestart) * 240))), true, fmt.Sprintf("Time taken to reboot all the PX is: %fsecs which is less than the timeout of %fsecs", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
 				})
 			})
