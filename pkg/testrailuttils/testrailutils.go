@@ -3,7 +3,7 @@ package testrailuttils
 import (
 	"fmt"
 	"github.com/educlos/testrail"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 var (
@@ -37,35 +37,35 @@ type Testrail struct {
 
 // CreateMilestone Creates a milestone if it does not exists, else creates it
 func CreateMilestone() {
-	logrus.Infof("Create Testrail milestone")
+	log.Infof("Create Testrail milestone")
 	var err error
 	milestoneID, err = getMilestoneByProjectID(pwxProjectID, MilestoneName)
 	if err != nil {
-		logrus.Errorf("error in getting milestone: %s", MilestoneName)
+		log.Errorf("error in getting milestone: %s", MilestoneName)
 		return
 	}
 	if milestoneID == 0 {
-		logrus.Debugf("Creating milesone, since it does not exists")
+		log.Debugf("Creating milesone, since it does not exists")
 		sendatbleMs := testrail.SendableMilestone{
 			Name:        MilestoneName,
 			Description: "Created from Automation",
 		}
 		msCreated, err := client.AddMilestone(pwxProjectID, sendatbleMs)
 		if err != nil {
-			logrus.Errorf("error in creating milestone: %s", MilestoneName)
+			log.Errorf("error in creating milestone: %s", MilestoneName)
 		}
 		milestoneID = msCreated.ID
-		logrus.Debugf("Milestone %s created successfully ID - %d", MilestoneName, msCreated.ID)
+		log.Debugf("Milestone %s created successfully ID - %d", MilestoneName, msCreated.ID)
 	} else {
-		logrus.Debugf("Milestone %s already exists ID - %d \n", MilestoneName, milestoneID)
+		log.Debugf("Milestone %s already exists ID - %d \n", MilestoneName, milestoneID)
 	}
 }
 
 func getMilestoneByProjectID(projectID int, milestonename string) (int, error) {
-	logrus.Infof("Getting the milestone ID for projectID: %d", projectID)
+	log.Infof("Getting the milestone ID for projectID: %d", projectID)
 	milestones, err := client.GetMilestones(projectID)
 	if err != nil {
-		logrus.Warningf("Error in getting milestone: %s", err)
+		log.Warnf("Error in getting milestone: %s", err)
 		testRailConnectionSuccessful = false
 		return 0, fmt.Errorf("Error in getting milestone %s", err)
 	}
@@ -82,13 +82,13 @@ func AddRunsToMilestone(testrailID int) int {
 	if !testRailConnectionSuccessful {
 		return 0
 	}
-	logrus.Infof("Importing run to milestone %s, testrailID %d \n", MilestoneName, testrailID)
+	log.Infof("Importing run to milestone %s, testrailID %d \n", MilestoneName, testrailID)
 	filter := testrail.RequestFilterForRun{
 		MilestoneID: []int{milestoneID},
 	}
 	runID = getRunID(pwxProjectID, filter)
 	if runID == 0 {
-		logrus.Debugf("Creating run %s for milestone", RunName)
+		log.Debugf("Creating run %s for milestone", RunName)
 		includeAll := false
 		sendableRun := testrail.SendableRun{
 			SuiteID:     pwxProjectID,
@@ -100,19 +100,19 @@ func AddRunsToMilestone(testrailID int) int {
 		}
 		createdRun, err := client.AddRun(pwxProjectID, sendableRun)
 		if err != nil {
-			logrus.Errorf("Unable to add the run %s", err)
+			log.Errorf("Unable to add the run %s", err)
 		}
 		runID = createdRun.ID
 	} else {
-		logrus.Debugf("Run already exists for Job: %s - %d , checking for tests\n", RunName, runID)
+		log.Debugf("Run already exists for Job: %s - %d , checking for tests\n", RunName, runID)
 		testID := getTestIDForRunID(runID, testrailID)
-		logrus.Debugf("Test id received is %d", testID)
+		log.Debugf("Test id received is %d", testID)
 		if testID == 0 {
-			logrus.Debugf("Adding new test to the test run %s\n", RunName)
+			log.Debugf("Adding new test to the test run %s\n", RunName)
 			var existingCases []int
 			allTests, err := client.GetTests(runID)
 			if err != nil {
-				logrus.Errorf("Error in getting tests for runid: %d", runID)
+				log.Errorf("Error in getting tests for runid: %d", runID)
 			}
 			for _, test := range allTests {
 				existingCases = append(existingCases, test.CaseID)
@@ -123,10 +123,10 @@ func AddRunsToMilestone(testrailID int) int {
 			}
 			_, err = client.UpdateRun(runID, updateableRun)
 			if err != nil {
-				logrus.Errorf("Error updating the run with new case %s \n", err)
+				log.Errorf("Error updating the run with new case %s \n", err)
 			}
 		} else {
-			logrus.Debugf("Test Already exists, reusing the test")
+			log.Debugf("Test Already exists, reusing the test")
 		}
 	}
 	return runID
@@ -137,14 +137,14 @@ func AddTestEntry(testrailObject Testrail) {
 	if !testRailConnectionSuccessful {
 		return
 	}
-	logrus.Infof("Adding test entry testID %d, run Id is %d, status %s", testrailObject.TestID, testrailObject.RunID, testrailObject.Status)
+	log.Infof("Adding test entry testID %d, run Id is %d, status %s", testrailObject.TestID, testrailObject.RunID, testrailObject.Status)
 	tests, err := client.GetTests(runID)
 	if err != nil {
-		logrus.Errorf("Error getting tests for %d", runID)
+		log.Errorf("Error getting tests for %d", runID)
 	}
 	for _, test := range tests {
 		if test.CaseID == testrailObject.TestID {
-			logrus.Debugf("Found test to update %d", testrailObject.TestID)
+			log.Debugf("Found test to update %d", testrailObject.TestID)
 			var statusID int
 			if testrailObject.Status == "Pass" {
 				statusID = testRailPassStatusCode
@@ -158,23 +158,23 @@ func AddTestEntry(testrailObject Testrail) {
 			}
 			_, err = client.AddResult(test.ID, sendableResult)
 			if err != nil {
-				logrus.Errorf("Error in adding result to %d - %s", testrailObject.TestID, err)
+				log.Errorf("Error in adding result to %d - %s", testrailObject.TestID, err)
 			} else {
-				logrus.Debugf("testrail update succcesful")
+				log.Debugf("testrail update succcesful")
 			}
 		}
 	}
 }
 
 func getRunID(projectID int, filter testrail.RequestFilterForRun) int {
-	logrus.Infof("Getting the run details for project Id %d", projectID)
+	log.Infof("Getting the run details for project Id %d", projectID)
 	allRuns, err := client.GetRuns(projectID, filter)
 	if err != nil {
-		logrus.Warningf("Error in getting all jobs from milestone %s ", err)
+		log.Warnf("Error in getting all jobs from milestone %s ", err)
 	}
 	for _, run := range allRuns {
 		if run.Name == RunName {
-			logrus.Debugf("Run %s already exsits in milestone not adding it\n", RunName)
+			log.Debugf("Run %s already exsits in milestone not adding it\n", RunName)
 			return run.ID
 		}
 	}
@@ -182,14 +182,14 @@ func getRunID(projectID int, filter testrail.RequestFilterForRun) int {
 }
 
 func getTestIDForRunID(runID int, testrailID int) int {
-	logrus.Infof("Getting the Tests Id for run: %d, testrailID %d", runID, testrailID)
+	log.Infof("Getting the Tests Id for run: %d, testrailID %d", runID, testrailID)
 	tests, err := client.GetTests(runID)
 	if err != nil {
-		logrus.Warningf("Error getting tests for existing run %d", runID)
+		log.Warnf("Error getting tests for existing run %d", runID)
 	}
 	for _, test := range tests {
 		if test.CaseID == testrailID {
-			logrus.Debugf("Test already exists in the run, not adding new test")
+			log.Debugf("Test already exists in the run, not adding new test")
 			return test.CaseID
 		}
 	}
@@ -202,7 +202,7 @@ func Init(hostname string, username string, password string) error {
 	_, err := client.GetProjects()
 	if err != nil {
 		testRailConnectionSuccessful = false
-		logrus.Errorf("Testrail connection not successful")
+		log.Errorf("Testrail connection not successful")
 		return err
 	}
 	testRailConnectionSuccessful = true

@@ -19,7 +19,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	"golang.org/x/net/context"
 
 	corev1 "k8s.io/api/core/v1"
@@ -173,7 +173,7 @@ func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 			}
 			tasks = append(tasks, appTasks...)
 		} else {
-			logrus.Warnf("Invalid spec received for app %v in GetNodesForApp", ctx.App.Key)
+			log.Warnf("Invalid spec received for app %v in GetNodesForApp", ctx.App.Key)
 		}
 	}
 
@@ -349,9 +349,9 @@ func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval tim
 					Cause: fmt.Sprintf("Failed to validate Application: %v. Err: %v", obj.ID, err),
 				}
 			}
-			logrus.Infof("[%v] Validated application: %v", ctx.App.Key, obj.ID)
+			log.Infof("[%v] Validated application: %v", ctx.App.Key, obj.ID)
 		} else {
-			logrus.Warnf("Invalid spec received for app %v in WaitForRunning", ctx.App.Key)
+			log.Warnf("Invalid spec received for app %v in WaitForRunning", ctx.App.Key)
 		}
 	}
 	return nil
@@ -366,9 +366,9 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 					Cause: fmt.Sprintf("Failed to destroy Application: %v. Err: %v", obj.ID, err),
 				}
 			}
-			logrus.Infof("[%v] Destroyed application: %v", ctx.App.Key, obj.ID)
+			log.Infof("[%v] Destroyed application: %v", ctx.App.Key, obj.ID)
 		} else {
-			logrus.Warnf("Invalid spec received for app %v in Destroy", ctx.App.Key)
+			log.Warnf("Invalid spec received for app %v in Destroy", ctx.App.Key)
 		}
 	}
 
@@ -395,9 +395,9 @@ func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) err
 					Cause: fmt.Sprintf("Failed to destroy Application: %v. Err: %v", obj.ID, err),
 				}
 			}
-			logrus.Infof("[%v] Validated destroy of Application: %v", ctx.App.Key, obj.ID)
+			log.Infof("[%v] Validated destroy of Application: %v", ctx.App.Key, obj.ID)
 		} else {
-			logrus.Warnf("Invalid spec received for app %v in WaitForDestroy", ctx.App.Key)
+			log.Warnf("Invalid spec received for app %v in WaitForDestroy", ctx.App.Key)
 		}
 	}
 
@@ -415,7 +415,7 @@ func (d *dcos) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.
 
 func (d *dcos) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOptions) error {
 	if opts != nil {
-		logrus.Warnf("DCOS driver doesn't yet support delete task options")
+		log.Warnf("DCOS driver doesn't yet support delete task options")
 	}
 
 	for _, spec := range ctx.App.SpecList {
@@ -427,7 +427,7 @@ func (d *dcos) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOp
 				}
 			}
 		} else {
-			logrus.Warnf("Invalid spec received for app %v in DeleteTasks", ctx.App.Key)
+			log.Warnf("Invalid spec received for app %v in DeleteTasks", ctx.App.Key)
 		}
 	}
 	return nil
@@ -574,7 +574,7 @@ func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string
 				}
 			}
 		} else {
-			logrus.Warnf("Invalid spec received for app %v", ctx.App.Key)
+			log.Warnf("Invalid spec received for app %v", ctx.App.Key)
 		}
 	}
 
@@ -956,6 +956,14 @@ func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, sn
 		Operation: "DeleteCsiSnapshot()",
 	}
 
+}
+
+func (d *dcos) GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error) {
+	// GetPodsRestartCount is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPodsRestartCoun()",
+	}
 }
 func init() {
 	d := &dcos{}

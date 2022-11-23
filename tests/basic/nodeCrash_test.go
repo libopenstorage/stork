@@ -3,11 +3,11 @@ package tests
 import (
 	"fmt"
 
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -24,7 +24,7 @@ var _ = Describe("{CrashOneNode}", func() {
 
 	stepLog := "has to schedule apps and crash node(s) with volumes"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 
@@ -35,18 +35,18 @@ var _ = Describe("{CrashOneNode}", func() {
 		ValidateApplications(contexts)
 		stepLog = "get all nodes and crash one by one"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			nodesToCrash := node.GetWorkerNodes()
 
 			// Crash node and check driver status
 			stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
 			Step(stepLog, func() {
-				dash.Info(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash))
+				log.InfoD(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash))
 				for _, n := range nodesToCrash {
 					if n.IsStorageDriverInstalled {
 						stepLog = fmt.Sprintf("crash node: %s", n.Name)
 						Step(stepLog, func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							err = Inst().N.CrashNode(n, node.CrashNodeOpts{
 								Force: true,
 								ConnectionOpts: node.ConnectionOpts{
@@ -60,7 +60,7 @@ var _ = Describe("{CrashOneNode}", func() {
 
 						stepLog = fmt.Sprintf("wait for node: %s to be back up", n.Name)
 						Step(stepLog, func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							err = Inst().N.TestConnection(n, node.ConnectionOpts{
 								Timeout:         defaultTestConnectionTimeout,
 								TimeBeforeRetry: defaultWaitRebootRetry,
@@ -71,7 +71,7 @@ var _ = Describe("{CrashOneNode}", func() {
 						stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
 							Inst().S.String(), Inst().V.String())
 						Step(stepLog, func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							err = Inst().S.IsNodeReady(n)
 							dash.VerifyFatal(err, nil, "Validate node is ready")
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)

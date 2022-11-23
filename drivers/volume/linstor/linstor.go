@@ -3,6 +3,7 @@ package linstor
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	lclient "github.com/LINBIT/golinstor/client"
@@ -13,7 +14,6 @@ import (
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -36,16 +36,14 @@ type linstor struct {
 	schedOps schedops.Driver
 	cli      *lclient.Client
 	torpedovolume.DefaultDriver
-	log *logrus.Logger
 }
 
 func (d *linstor) String() string {
 	return string(LinstorStorage)
 }
 
-func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
-	d.log = logger
-	d.log.Infof("Using the LINSTOR volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
+	log.Infof("Using the LINSTOR volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 
 	// Configuration of linstor client happens via environment variables:
 	// * LS_CONTROLLERS
@@ -81,7 +79,7 @@ func (d *linstor) StopDriver(nodes []node.Node, force bool, triggerOpts *driver_
 			if err != nil {
 				return fmt.Errorf("Failed to set label on node %q: %w", n.Name, err)
 			}
-			logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
+			log.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
 			time.Sleep(waitVolDriverToCrash)
 		}
 		return nil
@@ -98,19 +96,19 @@ func (d *linstor) StartDriver(n node.Node) error {
 }
 
 func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
-	logrus.Debugf("waiting for LINSTOR node to be up: %s", n.Name)
+	log.Debugf("waiting for LINSTOR node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("Getting node info: %s", n.Name)
+		log.Debugf("Getting node info: %s", n.Name)
 
 		linstorNode, err := d.cli.Nodes.Get(context.TODO(), n.Name)
 		if err != nil {
 			return "", true, fmt.Errorf("failed to get info about LINSTOR node '%s': %w", n.Name, err)
 		}
 
-		logrus.Debugf("checking LINSTOR status on node: %s", n.Name)
+		log.Debugf("checking LINSTOR status on node: %s", n.Name)
 		switch linstorNode.ConnectionStatus {
 		case "ONLINE":
-			logrus.Infof("LINSTOR on node: %s is now up. status: %v", n.Name, linstorNode.ConnectionStatus)
+			log.Infof("LINSTOR on node: %s is now up. status: %v", n.Name, linstorNode.ConnectionStatus)
 			return "", false, nil
 		default:
 			return "", true, fmt.Errorf("LINSTOR node '%s' is not online. status: %s", n.Name, linstorNode.ConnectionStatus)
@@ -121,7 +119,7 @@ func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 		return err
 	}
 
-	logrus.Debugf("LINSTOR is fully operational on node: %s", n.Name)
+	log.Debugf("LINSTOR is fully operational on node: %s", n.Name)
 	return nil
 }
 

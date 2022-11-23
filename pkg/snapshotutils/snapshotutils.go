@@ -2,11 +2,11 @@ package snapshotutils
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/stork"
-	"github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -21,14 +21,14 @@ const (
 
 // ValidateSnapshotSchedule validates the scheduled snapshots
 func ValidateSnapshotSchedule(snapshotScheduleName string, appNamespace string) error {
-	logrus.Infof("snapshotScheduleName : %s", snapshotScheduleName)
-	logrus.Infof("Namespace : %v", appNamespace)
+	log.Infof("snapshotScheduleName : %s", snapshotScheduleName)
+	log.Infof("Namespace : %v", appNamespace)
 	snapStatuses, err := storkops.ValidateSnapshotSchedule(snapshotScheduleName,
 		appNamespace,
 		snapshotScheduleRetryTimeout,
 		snapshotScheduleRetryInterval)
 	if err != nil {
-		logrus.Errorf("Got error while getting volume snapshot status :%v", err.Error())
+		log.Errorf("Got error while getting volume snapshot status :%v", err.Error())
 		return err
 	}
 	if len(snapStatuses) == 0 {
@@ -36,10 +36,10 @@ func ValidateSnapshotSchedule(snapshotScheduleName string, appNamespace string) 
 		return err
 	}
 	for k, v := range snapStatuses {
-		logrus.Infof("Policy Type: %v", k)
+		log.Infof("Policy Type: %v", k)
 		for _, e := range v {
-			logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
-			logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
+			log.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
+			log.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
 		}
 	}
 	return nil
@@ -48,7 +48,7 @@ func ValidateSnapshotSchedule(snapshotScheduleName string, appNamespace string) 
 // SchedulePolicyInDefaultNamespace creates schedulePolicy
 func SchedulePolicyInDefaultNamespace(policyName string, interval int, retain int) error {
 	//Create snapshot schedule interval.
-	logrus.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+	log.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: policyName,

@@ -9,8 +9,13 @@ if [ -z "${ENABLE_DASH}" ]; then
 fi
 
 if [ -z "${DASH_UID}" ]; then
-    DASH_UID="0"
+    if [ -e /build.properties ]; then
+      DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
+    else
+      DASH_UID="0"
+    fi
 fi
+
 
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
@@ -581,10 +586,10 @@ spec:
       value: "${PDS_CLIENT_SECRET}"
     - name: PDS_CLIENT_ID
       value: "${PDS_CLIENT_ID}"
-    - name: PDS_ISSUER_URL
-      value: "${PDS_ISSUER_URL}"
     - name: PDS_PARAM_CM
       value: "${PDS_PARAM_CM}"
+    - name: PDS_ISSUER_URL
+      value: "${PDS_ISSUER_URL}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG

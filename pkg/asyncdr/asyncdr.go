@@ -2,6 +2,7 @@ package asyncdr
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -11,8 +12,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
-
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -48,7 +47,7 @@ var (
 
 // WriteKubeconfigToFiles - writes kubeconfig to files after reading the names from environment variable
 func WriteKubeconfigToFiles() error {
-	logrus.Infof("RK=> Writing kubeconfig")
+	log.Infof("RK=> Writing kubeconfig")
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	if kubeconfigs == "" {
 		return fmt.Errorf("KUBECONFIGS Environment variable should not be empty")
@@ -112,7 +111,7 @@ func WaitForMigration(migrationList []*storkapi.Migration) error {
 				return "", false, err
 			}
 			if mig.Status.Status != storkapi.MigrationStatusSuccessful {
-				logrus.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
+				log.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
 				isComplete = false
 			}
 		}
@@ -127,7 +126,7 @@ func WaitForMigration(migrationList []*storkapi.Migration) error {
 
 // DeleteAndWaitForMigrationDeletion - deletes the given migration and waits until it's deleted
 func DeleteAndWaitForMigrationDeletion(name, namespace string) error {
-	logrus.Infof("Deleting migration: %s in namespace: %s", name, namespace)
+	log.Infof("Deleting migration: %s in namespace: %s", name, namespace)
 	err := storkops.Instance().DeleteMigration(name, namespace)
 	if err != nil {
 		return fmt.Errorf("Failed to delete migration: %s in namespace: %s", name, namespace)
@@ -153,13 +152,13 @@ func DumpKubeconfigs(kubeconfigList []string) error {
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
-	logrus.Infof("dump kubeconfigs to file system")
+	log.Infof("dump kubeconfigs to file system")
 	cm, err := core.Instance().GetConfigMap(configObject, "default")
 	if err != nil {
-		logrus.Errorf("Error reading config map: %v", err)
+		log.Errorf("Error reading config map: %v", err)
 		return err
 	}
-	logrus.Infof("Get over kubeconfig list %v", kubeconfigList)
+	log.Infof("Get over kubeconfig list %v", kubeconfigList)
 	for _, kubeconfig := range kubeconfigList {
 		config := cm.Data[kubeconfig]
 		if len(config) == 0 {
@@ -168,7 +167,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 			return fmt.Errorf(configErr)
 		}
 		filePath := fmt.Sprintf("%s/%s", kubeconfigDirectory, kubeconfig)
-		logrus.Infof("Save kubeconfig to %s", filePath)
+		log.Infof("Save kubeconfig to %s", filePath)
 		err := ioutil.WriteFile(filePath, []byte(config), 0644)
 		if err != nil {
 			return err

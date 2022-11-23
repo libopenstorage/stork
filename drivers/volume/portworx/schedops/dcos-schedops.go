@@ -6,12 +6,10 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/version"
 )
 
 type dcosSchedOps struct {
-	log *logrus.Logger
 }
 
 func (d *dcosSchedOps) GetKubernetesVersion() (*version.Info, error) {
@@ -117,6 +115,5 @@ func init() {
 	Register("dcos", d)
 }
 
-func (d *dcosSchedOps) Init(tpLog *logrus.Logger) {
-	d.log = tpLog
+func (d *dcosSchedOps) Init() {
 }

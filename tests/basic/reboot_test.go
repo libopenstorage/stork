@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -32,11 +33,11 @@ var _ = Describe("{RebootOneNode}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and reboot node(s) with volumes", func() {
-		dash.Info("has to schedule apps and reboot node(s) with volumes")
+		log.InfoD("has to schedule apps and reboot node(s) with volumes")
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 
-		dash.Info("Scheduling Applications")
+		log.InfoD("Scheduling Applications")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootonenode-%d", i))...)
@@ -45,16 +46,16 @@ var _ = Describe("{RebootOneNode}", func() {
 		ValidateApplications(contexts)
 
 		Step("get all nodes and reboot one by one", func() {
-			dash.Info("get all nodes and reboot one by one")
+			log.InfoD("get all nodes and reboot one by one")
 			nodesToReboot := node.GetWorkerNodes()
 
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
-				dash.Infof("reboot node one at a time from the node(s): %v", nodesToReboot)
+				log.InfoD("reboot node one at a time from the node(s): %v", nodesToReboot)
 				for _, n := range nodesToReboot {
 					if n.IsStorageDriverInstalled {
 						Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
-							dash.Infof("reboot node: %s", n.Name)
+							log.InfoD("reboot node: %s", n.Name)
 							err = Inst().N.RebootNode(n, node.RebootNodeOpts{
 								Force: true,
 								ConnectionOpts: node.ConnectionOpts{
@@ -62,11 +63,11 @@ var _ = Describe("{RebootOneNode}", func() {
 									TimeBeforeRetry: defaultCommandRetry,
 								},
 							})
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Reboot node %s. Err: %v", n.Name, err))
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Reboot node %s successful? Err: %v", n.Name, err))
 						})
 
 						Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
-							dash.Infof("wait for node: %s to be back up", n.Name)
+							log.InfoD("wait for node: %s to be back up", n.Name)
 							err = Inst().N.TestConnection(n, node.ConnectionOpts{
 								Timeout:         defaultTestConnectionTimeout,
 								TimeBeforeRetry: defaultWaitRebootRetry,
@@ -75,32 +76,32 @@ var _ = Describe("{RebootOneNode}", func() {
 						})
 
 						Step(fmt.Sprintf("Check if node: %s rebooted in last 3 minutes", n.Name), func() {
-							dash.Infof("Check if node: %s rebooted in last 3 minutes", n.Name)
+							log.InfoD("Check if node: %s rebooted in last 3 minutes", n.Name)
 							isNodeRebootedAndUp, err := Inst().N.IsNodeRebootedInGivenTimeRange(n, defaultRebootTimeRange)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("check for node: %s rebooted in last 3 minutes. Err: %v", n.Name, err))
+							log.FailOnError(err, "Check for node: %s rebooted in last 3 minutes", n.Name)
 							if !isNodeRebootedAndUp {
 								Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
-									dash.Infof("wait for volume driver to stop on node: %v", n.Name)
+									log.InfoD("wait for volume driver to stop on node: %v", n.Name)
 									err := Inst().V.WaitDriverDownOnNode(n)
-									dash.VerifyFatal(err, nil, fmt.Sprintf("node %s is PX stopped. Err: %v", n.Name, err))
+									dash.VerifyFatal(err, nil, fmt.Sprintf("node %s is PX stopped ? Err: %v", n.Name, err))
 								})
 							}
 						})
 
 						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
 							Inst().S.String(), Inst().V.String()), func() {
-							dash.Infof("wait to scheduler: %s and volume driver: %s to start",
+							log.InfoD("wait to scheduler: %s and volume driver: %s to start",
 								Inst().S.String(), Inst().V.String())
 
 							err = Inst().S.IsNodeReady(n)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("node %s is ready. Err: %v", n.Name, err))
+							dash.VerifyFatal(err == nil, true, fmt.Sprintf("node %s is ready? Err: %v", n.Name, err))
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("node %s volume driver is up. Err: %v", n.Name, err))
+							dash.VerifyFatal(err == nil, true, fmt.Sprintf("node %s volume driver is up ? Err: %v", n.Name, err))
 
 						})
 
 						Step(fmt.Sprintf("validate apps"), func() {
-							dash.Info("Validate Apps")
+							log.InfoD("Validate Apps")
 							for _, ctx := range contexts {
 								ValidateContext(ctx)
 							}
@@ -111,7 +112,7 @@ var _ = Describe("{RebootOneNode}", func() {
 		})
 
 		Step(fmt.Sprintf("Destroying apps"), func() {
-			dash.Info("Destroying Apps")
+			log.InfoD("Destroying Apps")
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -137,22 +138,22 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and reboot node(s) with shared volume mounts", func() {
-		dash.Info("has to schedule apps and reboot node(s) with shared volume mounts")
+		log.InfoD("has to schedule apps and reboot node(s) with shared volume mounts")
 
 		//var err error
 		contexts = make([]*scheduler.Context, 0)
-		dash.Info("Scheduling Applications")
+		log.InfoD("Scheduling Applications")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reallocate-mount-%d", i))...)
 		}
 
-		dash.Info("Validating Applications")
+		log.InfoD("Validating Applications")
 
 		ValidateApplications(contexts)
 
 		Step(fmt.Sprintf("get nodes with shared mount and reboot them"), func() {
-			dash.Infof("get nodes with shared mount and reboot them")
+			log.InfoD("get nodes with shared mount and reboot them")
 			for _, ctx := range contexts {
 				vols, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
@@ -160,13 +161,13 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 					if vol.Shared {
 
 						n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Get node for volume: %s", vol.ID))
+						log.FailOnError(err, "Failed to get node for volume: %s", vol.ID)
 
-						dash.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+						log.InfoD("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
 
 						// Workaround to avoid PWX-24277 for now.
 						Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
-							dash.Infof("wait until volume %v status is Up", vol.ID)
+							log.InfoD("wait until volume %v status is Up", vol.ID)
 							prevStatus := ""
 							Eventually(func() (string, error) {
 								connOpts := node.ConnectionOpts{
@@ -177,11 +178,11 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 								cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
 								volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
 								if err != nil {
-									dash.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
+									log.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
 									return "", err
 								}
 								if volStatus != prevStatus {
-									dash.Infof("volume %v: %v", vol.ID, volStatus)
+									log.InfoD("volume %v: %v", vol.ID, volStatus)
 									prevStatus = volStatus
 								}
 								return volStatus, nil
@@ -190,10 +191,10 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 						})
 
 						err = Inst().S.DisableSchedulingOnNode(*n)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Disable sceduling on node : %s", n.Name))
+						dash.VerifyFatal(err == nil, true, fmt.Sprintf("Disable sceduling on node : %s", n.Name))
 
 						err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Stop volume driver on node : %s", n.Name))
+						dash.VerifyFatal(err == nil, true, fmt.Sprintf("Stop volume driver on node : %s success ?", n.Name))
 
 						err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
 							Force: true,
@@ -202,11 +203,11 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 								TimeBeforeRetry: defaultCommandRetry,
 							},
 						})
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting node : %s", n.Name))
+						log.FailOnError(err, "Failed Rebooting node : %s", n.Name)
 
 						// as we keep the storage driver down on node until we check if the volume, we wait a minute for
 						// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
-						dash.Infof("wait for %v for node reboot", defaultCommandTimeout)
+						log.InfoD("wait for %v for node reboot", defaultCommandTimeout)
 						time.Sleep(defaultCommandTimeout)
 
 						// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
@@ -216,23 +217,22 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 								Timeout:         5 * time.Minute,
 								TimeBeforeRetry: 10 * time.Second,
 							}})
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Starting nfs service on node : %s", n.Name))
+						log.FailOnError(err, "Failed starting nfs service on node : %s", n.Name)
 
 						ctx.RefreshStorageEndpoint = true
-						ValidateContext(ctx)
 						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Get node for volume : %s", vol.ID))
+						log.FailOnError(err, "Failed to get node for volume : %s", vol.ID)
 
 						// the mount should move to another node otherwise fail
-						dash.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
-						dash.VerifyFatal(n.SchedulerNodeName != n2.SchedulerNodeName, true, fmt.Sprintf("Verfiy volume is scheduled on differt nodes"))
+						log.InfoD("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+						dash.VerifyFatal(n.SchedulerNodeName != n2.SchedulerNodeName, true, "Volume is scheduled on different nodes?")
 
 						StartVolDriverAndWait([]node.Node{*n})
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Staet volume driver on node: %s", n.Name))
+						log.FailOnError(err, "Failed to Start volume driver on node: %s success ?", n.Name)
 						err = Inst().S.EnableSchedulingOnNode(*n)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Enable scheduling on node: %s", n.Name))
+						log.FailOnError(err, "Failed to Enable scheduling on node: %s", n.Name)
 
-						dash.Info("validating applications")
+						log.InfoD("validating applications")
 						ValidateApplications(contexts)
 					}
 				}
@@ -240,7 +240,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 		})
 
 		Step(fmt.Sprintf("Destroy apps"), func() {
-			dash.Info("Destroy apps")
+			log.InfoD("Destroy apps")
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {

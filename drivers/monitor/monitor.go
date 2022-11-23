@@ -2,9 +2,8 @@ package monitor
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
 	prometheus "github.com/prometheus/client_golang/prometheus"
 )
 
@@ -53,7 +52,7 @@ func Get(name string) (Driver, error) {
 // Register registers the given scheduler driver
 func Register(name string, m Driver) error {
 	if _, ok := monitor[name]; !ok {
-		log.GetLogInstance().Infof("Registering driver name: %s", name)
+		log.Infof("Registering driver name: %s", name)
 		monitor[name] = m
 	} else {
 		return fmt.Errorf("monitor driver: %s is already registered", name)

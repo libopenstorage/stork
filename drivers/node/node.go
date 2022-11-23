@@ -2,7 +2,6 @@ package node
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -55,6 +54,7 @@ type Node struct {
 	IsStorageDriverInstalled bool
 	IsMetadataNode           bool
 	StoragePools             []StoragePool
+	PxPodRestartCount        int32
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
@@ -123,8 +123,6 @@ type InitOptions struct {
 
 	// SpecDir app spec directory
 	SpecDir string
-	//Logger log the output
-	Logger *logrus.Logger
 }
 
 // Driver provides the node driver interface

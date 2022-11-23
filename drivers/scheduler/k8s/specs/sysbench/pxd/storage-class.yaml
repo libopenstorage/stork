@@ -5,6 +5,7 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
+  nodiscard: "true"
   priority_io: "high"
   io_profile: "db"
 allowVolumeExpansion: true

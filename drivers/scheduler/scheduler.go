@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -109,9 +108,6 @@ type InitOptions struct {
 	PureSANType string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
-
-	//Logger log the output
-	Logger *logrus.Logger
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -384,6 +380,9 @@ type Driver interface {
 
 	// DeleteCsiSnapshot delete a snapshots from namespace
 	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
+
+	// GetPodsRestartCount gets restart count maps for pods in given namespace
+	GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error)
 }
 
 var (

@@ -3,7 +3,7 @@ package pdsutils
 import (
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
