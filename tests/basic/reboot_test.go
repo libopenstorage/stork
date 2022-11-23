@@ -2,8 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -241,6 +242,80 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 
 		Step(fmt.Sprintf("Destroy apps"), func() {
 			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{ClusterPxRestart}", func() {
+	var testrailID = 60042
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/60042
+	var runID int
+	loc, _ := time.LoadLocation("UTC")
+	t1 := time.Now().In(loc)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ClusterPxRestart", "Validate restart of PX in cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+
+	stepLog := "has to restart Px cluster "
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("restartpx-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+		stepLog = "get all nodes which has PX installed and restart PX one by one"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			Step("get all PX nodes and restart PX one by one", func() {
+				nodesToPXRestart := node.GetWorkerNodes()
+
+				// Reboot node and check driver status
+				Step(fmt.Sprintf("restart px one at a time on node(s): %v", nodesToPXRestart), func() {
+					for _, n := range nodesToPXRestart {
+						if n.IsStorageDriverInstalled {
+							Step(fmt.Sprintf("node with Px restart is: %s", n.Name), func() {
+
+								err := Inst().V.RestartDriver(n, nil)
+								log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", n.Name))
+							})
+
+							Step(fmt.Sprintf("wait for volume driver to restart on node: %v", n.Name), func() {
+								err := Inst().V.WaitForPxPodsToBeUp(n)
+								log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", n.Name))
+							})
+
+							Step("validate apps", func() {
+								for _, ctx := range contexts {
+									ValidateContext(ctx)
+								}
+							})
+						}
+					}
+					t2 := time.Now()
+					log.InfoD(fmt.Sprintf("Time taken to reboot all the PX is: %fsecs", t2.Sub(t1).Seconds()))
+					dash.VerifyFatal(((t2.Sub(t1).Seconds()) <= (float64(len(nodesToPXRestart) * 240))), true, fmt.Sprintf("Time taken to reboot all the PX is: %fsecs which is less than the timeout of %fsecs", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
+				})
+			})
+		})
+
+		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
