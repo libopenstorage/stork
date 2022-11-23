@@ -189,7 +189,6 @@ func GetPxBackupNamespace() string {
 // GetToken fetches JWT token for given user credentials
 func GetToken(userName, password string) (string, error) {
 
-	fn := "GetToken"
 	values := make(url.Values)
 	values.Set("client_id", "pxcentral")
 	values.Set("username", userName)
@@ -205,16 +204,13 @@ func GetToken(userName, password string) (string, error) {
 	headers := make(http.Header)
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(values.Encode()))
-	log.Errorf("%s: %v", fn, err)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 
 	token := &tokenResponse{}
 	err = json.Unmarshal(response, &token)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 
