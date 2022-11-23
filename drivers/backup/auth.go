@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -287,7 +286,7 @@ func GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
 	fn := "GetRolesForUser"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -302,35 +301,16 @@ func GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	var roles []KeycloakRoleRepresentation
 	err = json.Unmarshal(response, &roles)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	return roles, nil
-}
-
-// ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it
-func ValidateUserRole(userName string, role PxBackupRole) bool {
-	roleMapping, err := GetRolesForUser(userName)
-	if err != nil {
-		return false
-	}
-	roleID, err := GetRoleID(role)
-	if err != nil {
-		return false
-	}
-	for _, r := range roleMapping {
-		if r.ID == roleID {
-			return true
-		}
-	}
-
-	return false
 }
 
 type PxBackupRole string
@@ -514,13 +494,13 @@ func AddRoleToGroup(groupName string, role PxBackupRole, description string) err
 	// First fetch the client ID of the user
 	groupID, err := FetchIDOfGroup(groupName)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
 	roleID, err := GetRoleID(role)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -537,7 +517,7 @@ func AddRoleToGroup(groupName string, role PxBackupRole, description string) err
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -548,12 +528,12 @@ func AddRoleToGroup(groupName string, role PxBackupRole, description string) err
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -617,13 +597,13 @@ func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string
 	// First fetch the user ID of the user
 	groupID, err := FetchIDOfGroup(groupName)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
 	roleID, err := GetRoleID(role)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -640,7 +620,7 @@ func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -655,7 +635,7 @@ func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	return nil
@@ -718,13 +698,13 @@ func DeleteUser(userName string) error {
 	method := "DELETE"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
 	_, err = processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -899,19 +879,19 @@ func DeleteGroup(group string) error {
 	}
 	groupID, err := FetchIDOfGroup(group)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/groups/%s", keycloakEndPoint, groupID)
 	method := "DELETE"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
+		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	return nil

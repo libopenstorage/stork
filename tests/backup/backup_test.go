@@ -79,51 +79,35 @@ var _ = Describe("{UserGroupManagement}", func() {
 	It("User and group role mappings", func() {
 		Step("Create Users", func() {
 			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", "Password1")
-			if err != nil {
-				log.Errorf("Failed to create user - %s", err)
-				return
-			}
+			log.FailOnError(err, "Failed to create user")
 		})
 		Step("Create Groups", func() {
 			err := backup.AddGroup("testgroup1")
-			if err != nil {
-				log.Errorf("Failed to create group - %s", err)
-				return
-			}
+			log.FailOnError(err, "Failed to create group")
 		})
 		Step("Add users to group", func() {
 			err := backup.AddGroupToUser("testuser1", "testgroup1")
-			if err != nil {
-				log.Errorf("Failed to assign group to user - %s", err)
-				return
-			}
+			log.FailOnError(err, "Failed to assign group to user")
 		})
 		Step("Assign role to groups", func() {
 			err := backup.AddRoleToGroup("testgroup1", backup.ApplicationOwner, "testing from torpedo")
-			if err != nil {
-				log.Errorf("Failed to assign group to user - %s", err)
-				return
-			}
+			log.FailOnError(err, "Failed to assign group to user")
 		})
 		Step("Verify Application Owner role permissions for user", func() {
-			// User is assigned the role of ApplicationUser but since it is part of DefaultRoles, we are verifying with it
-			dash.VerifyFatal(backup.ValidateUserRole("testuser1", backup.ApplicationOwner), true, "Verifying the user role mapping")
+			isUserRoleMapped, err := ValidateUserRole("testuser1", backup.ApplicationOwner)
+			log.FailOnError(err, "User does not contain the expected role")
+			dash.VerifyFatal(isUserRoleMapped, true, "Verifying the user role mapping")
 		})
 		Step("Update role to groups", func() {
 			err := backup.DeleteRoleFromGroup("testgroup1", backup.ApplicationOwner, "removing role from testgroup1")
-			if err != nil {
-				log.Errorf("Failed to delete user - %s", err)
-				return
-			}
+			log.FailOnError(err, "Failed to delete role from group")
 			err = backup.AddRoleToGroup("testgroup1", backup.ApplicationUser, "testing from torpedo")
-			if err != nil {
-				log.Errorf("Failed to assign group to user - %s", err)
-				return
-			}
+			log.FailOnError(err, "Failed to add role to group")
 		})
 		Step("Verify Application User role permissions for user", func() {
-			// User is assigned the role of ApplicationUser but since it is part of DefaultRoles, we are veriying with it
-			dash.VerifyFatal(backup.ValidateUserRole("testuser1", backup.ApplicationUser), true, "Verifying the user role mapping")
+			isUserRoleMapped, err := ValidateUserRole("testuser1", backup.ApplicationUser)
+			log.FailOnError(err, "User does not contain the expected role")
+			dash.VerifyFatal(isUserRoleMapped, true, "Verifying the user role mapping")
 		})
 	})
 	JustAfterEach(func() {
