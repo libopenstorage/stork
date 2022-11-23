@@ -240,18 +240,17 @@ func stopDriverCsiPodFailoverTest(t *testing.T) {
 	// Make sure to stop px on all the non csi nodes expect one
 	logrus.Infof("Stopping PX on all non CSI pods except one for failover verification")
 	for nodeName, schedNode := range nodeNameMap {
-		if val, ok := isCsiPodNode[nodeName]; ok && val {
-			continue
-		}
-		if nonCsiNodeAlreadyFound && schedNode.IsStorageDriverInstalled {
-			err = volumeDriver.StopDriver([]node.Node{schedNode}, false, nil)
-			require.NoError(t, err, "Error stopping driver on node %+v", nodeNameMap[nodeName])
-			defer func() {
-				err := volumeDriver.StartDriver(nodeNameMap[nodeName])
-				require.NoError(t, err, "Error starting driver on node %+v", nodeName)
-			}()
-		} else {
-			nonCsiNodeAlreadyFound = true
+		if _, ok := isCsiPodNode[nodeName]; !ok {
+			if nonCsiNodeAlreadyFound && schedNode.IsStorageDriverInstalled {
+				err = volumeDriver.StopDriver([]node.Node{schedNode}, false, nil)
+				require.NoError(t, err, "Error stopping driver on node %+v", nodeNameMap[nodeName])
+				defer func() {
+					err := volumeDriver.StartDriver(nodeNameMap[nodeName])
+					require.NoError(t, err, "Error starting driver on node %+v", nodeName)
+				}()
+			} else {
+				nonCsiNodeAlreadyFound = true
+			}
 		}
 	}
 
