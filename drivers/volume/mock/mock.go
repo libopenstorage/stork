@@ -143,16 +143,18 @@ func (m *Driver) ProvisionVolume(
 	replicaIndexes []int,
 	size uint64,
 	labels map[string]string,
+	needsAntiHyperconvergence bool,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
 		return fmt.Errorf("volume %v already exists", volumeName)
 	}
 
 	volume := &storkvolume.Info{
-		VolumeID:   volumeName,
-		VolumeName: volumeName,
-		Size:       size,
-		Labels:     labels,
+		VolumeID:                  volumeName,
+		VolumeName:                volumeName,
+		Size:                      size,
+		Labels:                    labels,
+		NeedsAntiHyperconvergence: needsAntiHyperconvergence,
 	}
 
 	for i := 0; i < len(replicaIndexes); i++ {

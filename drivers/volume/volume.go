@@ -273,6 +273,8 @@ type Info struct {
 	Labels map[string]string
 	// VolumeSourceRef is a optional reference to the source of the volume
 	VolumeSourceRef interface{}
+	// NeedsAntiHyperconvergence is a flag for figuring if Pod needs anti-hyperconvergence
+	NeedsAntiHyperconvergence bool
 }
 
 // NodeStatus Status of driver on a node
