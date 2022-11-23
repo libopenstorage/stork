@@ -279,10 +279,8 @@ func GetAllRoles() ([]KeycloakRoleRepresentation, error) {
 
 // GetRolesForUser lists all the available roles in keycloak for the provided username
 func GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
-	fn := "GetRolesForUser"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -297,13 +295,11 @@ func GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	var roles []KeycloakRoleRepresentation
 	err = json.Unmarshal(response, &roles)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
 	return roles, nil
@@ -486,17 +482,14 @@ func AddRoleToUser(userName string, role PxBackupRole, description string) error
 
 // AddRoleToGroup assigning a given role to an existing group
 func AddRoleToGroup(groupName string, role PxBackupRole, description string) error {
-	fn := "AddRoleToUser"
 	// First fetch the client ID of the user
 	groupID, err := FetchIDOfGroup(groupName)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
 	roleID, err := GetRoleID(role)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -513,7 +506,6 @@ func AddRoleToGroup(groupName string, role PxBackupRole, description string) err
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -524,12 +516,10 @@ func AddRoleToGroup(groupName string, role PxBackupRole, description string) err
 	method := "POST"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -589,17 +579,14 @@ func DeleteRoleFromUser(userName string, role PxBackupRole, description string) 
 
 // DeleteRoleFromGroup deleting role from a group
 func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string) error {
-	fn := "DeleteRoleFromUser"
 	// First fetch the user ID of the user
 	groupID, err := FetchIDOfGroup(groupName)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
 	roleID, err := GetRoleID(role)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -616,7 +603,6 @@ func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
@@ -631,7 +617,6 @@ func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	return nil
@@ -681,7 +666,6 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 
 // DeleteUser deletes a user with the provided userName
 func DeleteUser(userName string) error {
-	fn := "DeleteUser"
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
 	if err != nil {
 		return err
@@ -694,13 +678,11 @@ func DeleteUser(userName string) error {
 	method := "DELETE"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
 	_, err = processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
@@ -868,26 +850,22 @@ func AddGroup(group string) error {
 
 // DeleteGroup adds a new group
 func DeleteGroup(group string) error {
-	fn := "DeleteGroup"
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	groupID, err := FetchIDOfGroup(group)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/groups/%s", keycloakEndPoint, groupID)
 	method := "DELETE"
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	_, err = processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	return nil

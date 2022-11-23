@@ -113,8 +113,10 @@ var _ = Describe("{UserGroupManagement}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.Infof("Cleanup started")
-		backup.DeleteUser("testuser1")
-		backup.DeleteGroup("testgroup1")
+		err := backup.DeleteUser("testuser1")
+		log.FailOnError(err, "Failed to delete user(s)")
+		err = backup.DeleteGroup("testgroup1")
+		log.FailOnError(err, "Failed to delete group(s)")
 		log.Infof("Cleanup done")
 	})
 })

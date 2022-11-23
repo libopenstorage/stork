@@ -4598,23 +4598,15 @@ func ValidateBackupCluster() bool {
 
 // ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it
 func ValidateUserRole(userName string, role backup.PxBackupRole) (bool, error) {
-	fn := "GetRolesForUser"
 	roleMapping, err := backup.GetRolesForUser(userName)
-	if err != nil {
-		log.Errorf("%s: %v", fn, err)
-		return false, err
-	}
+	log.FailOnError(err, "Failed to get roles for user")
 	roleID, err := backup.GetRoleID(role)
-	if err != nil {
-		log.Errorf("%s: %v", fn, err)
-		return false, err
-	}
+	log.FailOnError(err, "Failed to get role ID")
 	for _, r := range roleMapping {
 		if r.ID == roleID {
 			break
 		}
 	}
-
 	return true, nil
 }
 
