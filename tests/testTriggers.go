@@ -123,7 +123,7 @@ var coresMap map[string]string
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
 
-//backupCounter holds the iteration of TriggerBacku
+// backupCounter holds the iteration of TriggerBacku
 var backupCounter = 0
 
 // restoreCounter holds the iteration of TriggerRestore
@@ -132,13 +132,13 @@ var restoreCounter = 0
 // newNamespaceCounter holds the count of current namespace
 var newNamespaceCounter = 0
 
-//jiraEvents to store raised jira events data
+// jiraEvents to store raised jira events data
 var jiraEvents = make(map[string][]string)
 
-//isAutoFsTrimEnabled to store if auto fs trim enalbed
+// isAutoFsTrimEnabled to store if auto fs trim enalbed
 var isAutoFsTrimEnabled = false
 
-//setIoPriority to set IOPriority
+// setIoPriority to set IOPriority
 var setIoPriority = true
 
 // isCsiVolumeSnapshotClassExist to store if snapshot class exist
@@ -147,10 +147,10 @@ var isCsiVolumeSnapshotClassExist = false
 // isCsiRestoreStorageClassExist to store if restore storage class exist
 var isCsiRestoreStorageClassExist = false
 
-//isRelaxedReclaimEnabled to store if relaxed reclaim enalbed
+// isRelaxedReclaimEnabled to store if relaxed reclaim enalbed
 var isRelaxedReclaimEnabled = false
 
-//isTrashcanEnabled to store if trashcan enalbed
+// isTrashcanEnabled to store if trashcan enalbed
 var isTrashcanEnabled = false
 
 // volSnapshotClass is snapshot class for FA volumes
@@ -174,7 +174,7 @@ var TestFailedCount = prometheus.TorpedoTestFailCount
 // TestPassedCount is counter metric for test passed
 var TestPassedCount = prometheus.TorpedoTestPassCount
 
-//  FailedTestAlert is a flag to alert test failed
+// FailedTestAlert is a flag to alert test failed
 var FailedTestAlert = prometheus.TorpedoAlertTestFailed
 
 // Event describes type of test trigger
@@ -196,7 +196,7 @@ type EventRecord struct {
 // events for sending email notifications
 var eventRing *ring.Ring
 
-//decommissionedNode for rejoin test
+// decommissionedNode for rejoin test
 var decommissionedNode = node.Node{}
 
 // node with autopilot rule enabled
@@ -510,7 +510,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 	})
 }
 
-//TriggerVolumeCreatePXRestart create volume , attach , detach and reboot nodes parallely
+// TriggerVolumeCreatePXRestart create volume , attach , detach and reboot nodes parallely
 func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 
 	defer ginkgo.GinkgoRecover()
@@ -3091,7 +3091,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 	})
 }
 
-//TriggerBackupByLabel gives a label to random resources on the cluster and tries to back up only resources with that label
+// TriggerBackupByLabel gives a label to random resources on the cluster and tries to back up only resources with that label
 func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
@@ -3425,7 +3425,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 	updateMetrics(*event)
 }
 
-//TriggerBackupRestartPX backs up an application and restarts Portworx during the backup
+// TriggerBackupRestartPX backs up an application and restarts Portworx during the backup
 func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
@@ -3512,7 +3512,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	})
 }
 
-//TriggerBackupRestartNode backs up an application and restarts a node with Portworx during the backup
+// TriggerBackupRestartNode backs up an application and restarts a node with Portworx during the backup
 func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{

@@ -4596,6 +4596,20 @@ func ValidateBackupCluster() bool {
 	return true
 }
 
+// ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it
+func ValidateUserRole(userName string, role backup.PxBackupRole) (bool, error) {
+	roleMapping, err := backup.GetRolesForUser(userName)
+	log.FailOnError(err, "Failed to get roles for user")
+	roleID, err := backup.GetRoleID(role)
+	log.FailOnError(err, "Failed to get role ID")
+	for _, r := range roleMapping {
+		if r.ID == roleID {
+			break
+		}
+	}
+	return true, nil
+}
+
 func DeleteRuleForBackup(orgID string, name string, uid string) bool {
 	log.InfoD("Delete rule for backup")
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -4796,7 +4810,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	return true
 }
 
-//ValidatePoolRebalance checks rebalnce state of pools if running
+// ValidatePoolRebalance checks rebalnce state of pools if running
 func ValidatePoolRebalance() error {
 	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
 
@@ -4897,7 +4911,7 @@ func updatePxRuntimeOpts() error {
 
 }
 
-//GetCloudDriveDeviceSpecs returns Cloud drive specs on the storage cluster
+// GetCloudDriveDeviceSpecs returns Cloud drive specs on the storage cluster
 func GetCloudDriveDeviceSpecs() ([]string, error) {
 	log.InfoD("Getting cloud drive specs")
 	deviceSpecs := make([]string, 0)
@@ -4917,12 +4931,12 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	return deviceSpecs, nil
 }
 
-//StartTorpedoTest starts the logging for torpedo test
+// StartTorpedoTest starts the logging for torpedo test
 func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
 	log.SetTorpedoFileOutput(TestLogger)
 	if tags == nil {
-		tags = make(map[string]string)
+		tags = make(map[string]string, 0)
 	}
 	tags["apps"] = strings.Join(Inst().AppList, ",")
 	tags["storageProvisioner"] = Inst().Provisioner

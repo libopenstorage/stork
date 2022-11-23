@@ -187,7 +187,7 @@ func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 
 }
 
-//IsPxInstalled checks for Px to be installed on a node
+// IsPxInstalled checks for Px to be installed on a node
 func (d *DefaultDriver) IsPxInstalled(n node.Node) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -583,7 +583,7 @@ func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (ma
 	}
 }
 
-//GetStorageSpec get the storage spec used to deploy portworx
+// GetStorageSpec get the storage spec used to deploy portworx
 func (d *DefaultDriver) GetStorageSpec() (*pxapi.StorageSpec, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -698,7 +698,7 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 	}
 }
 
-//UpdateIOPriority update IO priority on volume
+// UpdateIOPriority update IO priority on volume
 func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -787,7 +787,7 @@ func (d *DefaultDriver) GetStorageCluster() (*v1.StorageCluster, error) {
 	}
 }
 
-//UpdateStorageClusterImage update storage cluster image version
+// UpdateStorageClusterImage update storage cluster image version
 func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -795,7 +795,7 @@ func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
 	}
 }
 
-//GetPXStorageCluster returns portworx storage cluster
+// GetPXStorageCluster returns portworx storage cluster
 func (d *DefaultDriver) GetPXStorageCluster() (*v1.StorageCluster, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -803,7 +803,7 @@ func (d *DefaultDriver) GetPXStorageCluster() (*v1.StorageCluster, error) {
 	}
 }
 
-//GetPxVersionOnNode retruns PxVersion on the given node
+// GetPxVersionOnNode retruns PxVersion on the given node
 func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",

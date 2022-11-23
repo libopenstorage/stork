@@ -728,7 +728,7 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 	return file, nil
 }
 
-//GetBlockDrives returns the block drives on the node
+// GetBlockDrives returns the block drives on the node
 func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
 	drives := make(map[string]*node.BlockDrive)
 	driveCmd := fmt.Sprintf("sudo /bin/lsblk -P -s -d -p -o NAME,SIZE,MOUNTPOINT,FSTYPE,TYPE")

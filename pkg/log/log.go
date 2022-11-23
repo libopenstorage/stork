@@ -145,7 +145,7 @@ func New() *logrus.Logger {
 	return logursLog
 }
 
-//GetLogInstance returns the logrus instance
+// GetLogInstance returns the logrus instance
 func GetLogInstance() *logrus.Logger {
 	if tpLog == nil {
 		lock.Lock()

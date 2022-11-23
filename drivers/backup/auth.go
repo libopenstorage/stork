@@ -54,6 +54,8 @@ const (
 	pxBackupNamespace = "PX_BACKUP_NAMESPACE"
 	// OidcSecretName where secrets for OIDC auth cred info resides
 	oidcSecretName = "SECRET_NAME"
+	// PxCentralUI URL Eg: http://<IP>:<Port>
+	PxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
 
 type tokenResponse struct {
@@ -141,6 +143,21 @@ func getOidcSecretName() string {
 }
 
 func getKeycloakEndPoint(admin bool) (string, error) {
+	keycloakEndpoint := os.Getenv(PxCentralUIURL)
+	// This condition is added for cases when torpedo is not running as a pod in the cluster
+	// Since gRPC calls to pxcentral-keycloak-http:80 would fail while running from a VM or local machine using ginkgo CLI
+	// This condition will check if there is an Env variable set
+	if keycloakEndpoint != " " && len(keycloakEndpoint) > 0 {
+		if admin {
+			// admin url: http://pxcentral-keycloak-http:80/auth/realms/master
+			// non-adming url: http://pxcentral-keycloak-http:80/auth/admin/realms/master
+			newURL := fmt.Sprintf("%s/auth/admin/realms/master", keycloakEndpoint)
+			return newURL, nil
+		} else {
+			newURL := fmt.Sprintf("%s/auth/realms/master", keycloakEndpoint)
+			return newURL, nil
+		}
+	}
 	name := getOidcSecretName()
 	ns := GetPxBackupNamespace()
 	// check and validate oidc details
@@ -172,7 +189,6 @@ func GetPxBackupNamespace() string {
 // GetToken fetches JWT token for given user credentials
 func GetToken(userName, password string) (string, error) {
 
-	fn := "GetToken"
 	values := make(url.Values)
 	values.Set("client_id", "pxcentral")
 	values.Set("username", userName)
@@ -188,16 +204,13 @@ func GetToken(userName, password string) (string, error) {
 	headers := make(http.Header)
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(values.Encode()))
-	log.Errorf("%s: %v", fn, err)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 
 	token := &tokenResponse{}
 	err = json.Unmarshal(response, &token)
 	if err != nil {
-		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
 
@@ -264,8 +277,45 @@ func GetAllRoles() ([]KeycloakRoleRepresentation, error) {
 	return roles, nil
 }
 
+// GetRolesForUser lists all the available roles in keycloak for the provided username
+func GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return nil, err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := FetchIDOfUser(userName)
+	if err != nil {
+		return nil, err
+	}
+	reqURL := fmt.Sprintf("%s/users/%s/role-mappings/realm/composite", keycloakEndPoint, userID)
+	method := "GET"
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		return nil, err
+	}
+	var roles []KeycloakRoleRepresentation
+	err = json.Unmarshal(response, &roles)
+	if err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
+type PxBackupRole string
+
+const (
+	ApplicationOwner    PxBackupRole = "px-backup-app.admin"
+	ApplicationUser                  = "px-backup-app.user"
+	InfrastructureOwner              = "px-backup-infra.admin"
+	DefaultRoles                     = "default-roles-master"
+)
+
 // GetRoleID gets role ID for a given role
-func GetRoleID(role string) (string, error) {
+func GetRoleID(role PxBackupRole) (string, error) {
 	fn := "GetRoleID"
 	// Fetch all roles
 	roles, err := GetAllRoles()
@@ -276,7 +326,7 @@ func GetRoleID(role string) (string, error) {
 	// Now fetch the current role ID
 	var clientID string
 	for _, r := range roles {
-		if r.Name == role {
+		if r.Name == string(role) {
 			clientID = r.ID
 			break
 		}
@@ -378,8 +428,8 @@ func FetchIDOfUser(userName string) (string, error) {
 	return clientID, nil
 }
 
-// AddRoleToUser assigning a given role to a existing user
-func AddRoleToUser(userName string, role string, description string) error {
+// AddRoleToUser assigning a given role to an existing user
+func AddRoleToUser(userName string, role PxBackupRole, description string) error {
 	fn := "AddRoleToUser"
 	// First fetch the client ID of the user
 	clientID, err := FetchIDOfUser(userName)
@@ -402,7 +452,7 @@ func AddRoleToUser(userName string, role string, description string) error {
 		Composite:   false,
 		ContainerID: "master",
 		Description: description,
-		Name:        role,
+		Name:        string(role),
 	}
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
@@ -430,8 +480,54 @@ func AddRoleToUser(userName string, role string, description string) error {
 	return nil
 }
 
+// AddRoleToGroup assigning a given role to an existing group
+func AddRoleToGroup(groupName string, role PxBackupRole, description string) error {
+	// First fetch the client ID of the user
+	groupID, err := FetchIDOfGroup(groupName)
+	if err != nil {
+		return err
+	}
+	// Fetch the role ID
+	roleID, err := GetRoleID(role)
+	if err != nil {
+		return err
+	}
+
+	// Frame the role struct to be assigned
+	var kRoles []KeycloakRoleRepresentation
+	kRole := KeycloakRoleRepresentation{
+		ID:          roleID,
+		ClientRole:  false,
+		Composite:   false,
+		ContainerID: "master",
+		Description: description,
+		Name:        string(role),
+	}
+	kRoles = append(kRoles, kRole)
+	roleBytes, err := json.Marshal(&kRoles)
+	if err != nil {
+		return err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/groups/%s/role-mappings/realm", keycloakEndPoint, groupID)
+	method := "POST"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // DeleteRoleFromUser deleting role from a user
-func DeleteRoleFromUser(userName string, role string, description string) error {
+func DeleteRoleFromUser(userName string, role PxBackupRole, description string) error {
 	fn := "DeleteRoleFromUser"
 	// First fetch the user ID of the user
 	clientID, err := FetchIDOfUser(userName)
@@ -454,7 +550,7 @@ func DeleteRoleFromUser(userName string, role string, description string) error 
 		Composite:   false,
 		ContainerID: "master",
 		Description: description,
-		Name:        role,
+		Name:        string(role),
 	}
 	kRoles = append(kRoles, kRole)
 	roleBytes, err := json.Marshal(&kRoles)
@@ -478,6 +574,51 @@ func DeleteRoleFromUser(userName string, role string, description string) error 
 		return err
 	}
 
+	return nil
+}
+
+// DeleteRoleFromGroup deleting role from a group
+func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string) error {
+	// First fetch the user ID of the user
+	groupID, err := FetchIDOfGroup(groupName)
+	if err != nil {
+		return err
+	}
+	// Fetch the role ID
+	roleID, err := GetRoleID(role)
+	if err != nil {
+		return err
+	}
+
+	// Frame the role struct to be assigned
+	var kRoles []KeycloakRoleRepresentation
+	kRole := KeycloakRoleRepresentation{
+		ID:          roleID,
+		ClientRole:  false,
+		Composite:   false,
+		ContainerID: "master",
+		Description: description,
+		Name:        string(role),
+	}
+	kRoles = append(kRoles, kRole)
+	roleBytes, err := json.Marshal(&kRoles)
+	if err != nil {
+		return err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/groups/%s/role-mappings/realm", keycloakEndPoint, groupID)
+	method := "DELETE"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -517,6 +658,31 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
+		return err
+	}
+
+	return nil
+}
+
+// DeleteUser deletes a user with the provided userName
+func DeleteUser(userName string) error {
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	userID, err := FetchIDOfUser(userName)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
+	method := "DELETE"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+
+	_, err = processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
 		return err
 	}
 
@@ -679,6 +845,29 @@ func AddGroup(group string) error {
 		return err
 	}
 
+	return nil
+}
+
+// DeleteGroup adds a new group
+func DeleteGroup(group string) error {
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	groupID, err := FetchIDOfGroup(group)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/groups/%s", keycloakEndPoint, groupID)
+	method := "DELETE"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

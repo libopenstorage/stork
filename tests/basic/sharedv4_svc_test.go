@@ -1362,9 +1362,9 @@ func dropCaches(attachedNode *node.Node) {
 }
 
 // Validate the app counters after the failover.
-// - counters for all pods (with some exceptions) should continue incrementing
-// - the specified number of pods should have stopped incrementing their counters and the same number of
-//   new pods should have started incrementing the counters
+//   - counters for all pods (with some exceptions) should continue incrementing
+//   - the specified number of pods should have stopped incrementing their counters and the same number of
+//     new pods should have started incrementing the counters
 func validateAppCounters(ctx *scheduler.Context, countersBefore, countersAfter map[string]appCounter,
 	numPods int, numDeletions []int) {
 

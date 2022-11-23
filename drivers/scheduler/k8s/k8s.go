@@ -358,7 +358,6 @@ func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 }
 
 // RefreshNodeRegistry update the k8 node list registry
-//
 func (k *K8s) RefreshNodeRegistry() error {
 
 	nodes, err := k8sCore.GetNodes()
@@ -732,7 +731,6 @@ func (k *K8s) filterPureTypeVolumeIfEnabled(claim *v1.PersistentVolumeClaim, vol
 }
 
 // getAddressesForNode  Get IP address for the nodes in the cluster
-//
 func (k *K8s) getAddressesForNode(n corev1.Node) []string {
 	var addrs []string
 	for _, addr := range n.Status.Addresses {
@@ -744,7 +742,6 @@ func (k *K8s) getAddressesForNode(n corev1.Node) []string {
 }
 
 // parseK8SNode Parse the kubernetes clsuter nodes
-//
 func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 	var nodeType node.Type
 	var zone, region string
@@ -2178,7 +2175,6 @@ func (k *K8s) validatePodsTopology(podList *v1.PodList, labelValue string) error
 }
 
 // WaitForRunning   wait for running
-//
 func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
@@ -2570,7 +2566,6 @@ func (k *K8s) getVolumeDirPath(podUID types.UID) string {
 }
 
 // WaitForDestroy wait for schedule context destroy
-//
 func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
@@ -3213,7 +3208,6 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 }
 
 // GetVolumes  Get the volumes
-//
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8sApps
 	var vols []*volume.Volume
@@ -3278,7 +3272,6 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 }
 
 // GetPureVolumes  Get the Pure volumes (if enabled) by type (PureFile or PureBlock)
-//
 func (k *K8s) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*volume.Volume, error) {
 	k8sOps := k8sApps
 	var vols []*volume.Volume
@@ -3923,7 +3916,6 @@ func (k *K8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string
 }
 
 // GetScaleFactorMap Get scale Factory map
-//
 func (k *K8s) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
 	k8sOps := k8sApps
 	scaleFactorMap := make(map[string]int32, len(ctx.App.SpecList))

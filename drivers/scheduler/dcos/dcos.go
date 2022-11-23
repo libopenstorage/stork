@@ -109,7 +109,7 @@ func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNam
 	}
 }
 
-//DeleteSnapshots  delete the snapshots
+// DeleteSnapshots  delete the snapshots
 func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",

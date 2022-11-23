@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -33,12 +34,12 @@ const (
 	pxbRestPort           = 10001
 	defaultPxbServicePort = 10002
 	pxbServiceName        = "px-backup"
-	pxbNamespace          = "px-backup"
 	schedulerDriverName   = "k8s"
 	nodeDriverName        = "ssh"
 	volumeDriverName      = "pxd"
 	licFeatureName        = "BackupNodeCount"
 	enumerateBatchSize    = 100
+	backup_api_endpoint   = "BACKUP_API_ENDPOINT"
 )
 
 type portworx struct {
@@ -128,7 +129,7 @@ func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volum
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
-	if err = p.setDriver(pxbServiceName, pxbNamespace); err != nil {
+	if err = p.setDriver(pxbServiceName, backup.GetPxBackupNamespace()); err != nil {
 		return fmt.Errorf("Error setting px-backup endpoint: %v", err)
 	}
 
@@ -141,34 +142,41 @@ func (p *portworx) constructURL(ip string) string {
 }
 
 func (p *portworx) testAndSetEndpoint(endpoint string) error {
-	pxEndpoint := p.constructURL(endpoint)
-	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
-	if err != nil {
-		log.Errorf("unable to get grpc connection: %v", err)
-		return err
+	pxEndpoint := os.Getenv(backup_api_endpoint)
+	// This condition is added for cases when torpedo is not running as a pod in the cluster
+	// Since gRPC calls to backup pod would fail while running from a VM or local machine using ginkgo CLI
+	// This condition will check if there is an Env variable set
+	if pxEndpoint == " " || len(pxEndpoint) == 0 {
+		pxEndpoint = p.constructURL(endpoint)
+
+		conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+		if err != nil {
+			log.Errorf("unable to get grpc connection: %v", err)
+			return err
+		}
+
+		p.healthManager = api.NewHealthClient(conn)
+		_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
+		if err != nil {
+			log.Errorf("HealthManager API error: %v", err)
+			return err
+		}
+
+		p.clusterManager = api.NewClusterClient(conn)
+		p.backupLocationManager = api.NewBackupLocationClient(conn)
+		p.cloudCredentialManager = api.NewCloudCredentialClient(conn)
+		p.backupManager = api.NewBackupClient(conn)
+		p.restoreManager = api.NewRestoreClient(conn)
+		p.backupScheduleManager = api.NewBackupScheduleClient(conn)
+		p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
+		p.organizationManager = api.NewOrganizationClient(conn)
+		p.licenseManager = api.NewLicenseClient(conn)
+		p.ruleManager = api.NewRulesClient(conn)
+
+		log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 	}
 
-	p.healthManager = api.NewHealthClient(conn)
-	_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
-	if err != nil {
-		log.Errorf("HealthManager API error: %v", err)
-		return err
-	}
-
-	p.clusterManager = api.NewClusterClient(conn)
-	p.backupLocationManager = api.NewBackupLocationClient(conn)
-	p.cloudCredentialManager = api.NewCloudCredentialClient(conn)
-	p.backupManager = api.NewBackupClient(conn)
-	p.restoreManager = api.NewRestoreClient(conn)
-	p.backupScheduleManager = api.NewBackupScheduleClient(conn)
-	p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
-	p.organizationManager = api.NewOrganizationClient(conn)
-	p.licenseManager = api.NewLicenseClient(conn)
-	p.ruleManager = api.NewRulesClient(conn)
-
-	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
-
-	return err
+	return nil
 }
 
 func (p *portworx) GetServiceEndpoint(serviceName string, namespace string) (string, error) {
