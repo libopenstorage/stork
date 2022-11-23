@@ -145,6 +145,9 @@ func getOidcSecretName() string {
 
 func getKeycloakEndPoint(admin bool) (string, error) {
 	keycloakEndpoint := os.Getenv(PxCentralUIURL)
+	// This condition is added for cases when torpedo is not running as a pod in the cluster
+	// Since gRPC calls to pxcentral-keycloak-http:80 would fail while running from a VM or local machine using ginkgo CLI
+	// This condition will check if there is an Env variable set
 	if keycloakEndpoint != " " && len(keycloakEndpoint) > 0 {
 		if admin {
 			// admin url: http://pxcentral-keycloak-http:80/auth/realms/master
@@ -311,6 +314,7 @@ func GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
 	return roles, nil
 }
 
+// ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it
 func ValidateUserRole(userName string, role PxBackupRole) bool {
 	roleMapping, err := GetRolesForUser(userName)
 	if err != nil {

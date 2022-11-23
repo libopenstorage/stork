@@ -71,6 +71,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	})
 })
 
+// This is a sample test case to verify User/Group Management and role mapping
 var _ = Describe("{UserGroupManagement}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")

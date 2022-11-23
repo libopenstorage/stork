@@ -143,6 +143,9 @@ func (p *portworx) constructURL(ip string) string {
 
 func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	pxEndpoint := os.Getenv(backup_api_endpoint)
+	// This condition is added for cases when torpedo is not running as a pod in the cluster
+	// Since gRPC calls to backup pod would fail while running from a VM or local machine using ginkgo CLI
+	// This condition will check if there is an Env variable set
 	if pxEndpoint == " " || len(pxEndpoint) == 0 {
 		pxEndpoint = p.constructURL(endpoint)
 
