@@ -161,7 +161,6 @@ func triggerMigration(
 	return ctxs, preMigrationCtx
 }
 
-//
 // validateMigrationSummary validats the migration summary
 // currently we don't have an automated way to find out how many resources got deployed
 // through torpedo specs. For ex. a statefulset can have an inline PVC and that should

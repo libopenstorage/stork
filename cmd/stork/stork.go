@@ -300,18 +300,27 @@ func run(c *cli.Context) {
 	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: k8sClient.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: eventComponentName})
 
-	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
-	// In this way, even the stork extender code can use this cache, since the extender filter/process
-	// requests can land on any stork pod.
-	if err := cache.CreateSharedInformerCache(config); err != nil {
-		log.Fatalf("failed to setup shared informer cache: %v", err)
-	}
-
 	// Create operator-sdk manager that will manage all controllers.
 	// Setup the controller manager before starting any watches / other controllers
 	mgr, err := manager.New(config, manager.Options{})
 	if err != nil {
 		log.Fatalf("Setup controller manager: %v", err)
+	}
+
+	mgrCtx := context.Background()
+	go func() {
+		if err := mgr.Start(mgrCtx); err != nil {
+			log.Fatalf("Controller manager: %v", err)
+		}
+		// Context is closed. Shutdown
+		os.Exit(0)
+	}()
+
+	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
+	// In this way, even the stork extender code can use this cache, since the extender filter/process
+	// requests can land on any stork pod.
+	if err := cache.CreateSharedInformerCache(mgr); err != nil {
+		log.Fatalf("failed to setup shared informer cache: %v", err)
 	}
 
 	// Setup scheme for all stork resources
@@ -369,7 +378,7 @@ func run(c *cli.Context) {
 	}
 
 	runFunc := func(context.Context) {
-		runStork(mgr, d, recorder, c, qps, burst)
+		runStork(mgr, mgrCtx, d, recorder, c, qps, burst)
 	}
 
 	if c.BoolT("leader-elect") {
@@ -420,7 +429,7 @@ func displayLeader(name string) {
 	log.Infof("new leader detected, current leader: %s", name)
 }
 
-func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorder, c *cli.Context, qps float32, burst int) {
+func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorder record.EventRecorder, c *cli.Context, qps float32, burst int) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -539,7 +548,6 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 			log.Fatalf("Error initializing kdmp controller: %v", err)
 		}
 	}
-	ctx := context.Background()
 
 	go func() {
 		for {
@@ -571,9 +579,4 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 			ctx.Done()
 		}
 	}()
-
-	if err := mgr.Start(ctx); err != nil {
-		log.Fatalf("Controller manager: %v", err)
-	}
-	os.Exit(0)
 }
