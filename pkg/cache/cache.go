@@ -1,32 +1,14 @@
 package cache
 
 import (
+	"context"
 	"fmt"
-	stork "github.com/libopenstorage/stork/pkg/apis/stork"
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
-	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
-	restclient "k8s.io/client-go/rest"
-	kcache "k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sync"
-	"time"
-)
-
-const (
-	defaultResyncPeriod = 30 * time.Second
-)
-
-var (
-	scResource     = schema.GroupVersionResource{Group: storagev1.GroupName, Version: storagev1.SchemeGroupVersion.Version, Resource: "storageclasses"}
-	appRegResource = schema.GroupVersionResource{Group: stork.GroupName, Version: "v1alpha1", Resource: storkv1alpha1.ApplicationRegistrationResourcePlural}
 )
 
 // SharedInformerCache  is an eventually consistent cache. The cache interface
@@ -51,8 +33,7 @@ type SharedInformerCache interface {
 }
 
 type cache struct {
-	scInformer     kcache.SharedIndexInformer
-	appRegInformer kcache.SharedIndexInformer
+	client client.Client
 }
 
 var (
@@ -60,62 +41,15 @@ var (
 	sharedInformerCache *cache
 )
 
-func CreateSharedInformerCache(config *restclient.Config) error {
+func CreateSharedInformerCache(mgr manager.Manager) error {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 	if sharedInformerCache != nil {
 		return fmt.Errorf("shared informer cache already initialized")
 	}
 
-	dynInterface, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-	dynInformer := dynamicinformer.NewDynamicSharedInformerFactory(dynInterface, defaultResyncPeriod)
-	scInformer := dynInformer.ForResource(scResource).Informer()
-	appRegInformer := dynInformer.ForResource(appRegResource).Informer()
-
-	scInformer.AddEventHandler(kcache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			sc, ok := obj.(*storagev1.StorageClass)
-			if ok {
-				logrus.Infof("Added a new storage class to cache: %v (%v)", sc.Name, sc.Provisioner)
-			}
-		},
-	})
-
-	appRegInformer.AddEventHandler(kcache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			appReg, ok := obj.(*storkv1alpha1.ApplicationRegistration)
-			if ok {
-				logrus.Infof("Added a new application registration to cache: %v (%v)", appReg.Name, appReg.GroupVersionKind())
-			}
-		},
-	})
-
-	defer utilruntime.HandleCrash()
-
-	stopper := make(chan struct{})
-
-	go scInformer.Run(stopper)
-	go appRegInformer.Run(stopper)
-
-	// wait for the caches to synchronize before starting the worker
-	if !kcache.WaitForCacheSync(stopper, scInformer.HasSynced) {
-		err := fmt.Errorf("timed out waiting for caches to sync")
-		utilruntime.HandleError(err)
-		return err
-	}
-
-	if !kcache.WaitForCacheSync(stopper, appRegInformer.HasSynced) {
-		err := fmt.Errorf("timed out waiting for caches to sync")
-		utilruntime.HandleError(err)
-		return err
-	}
-
 	sharedInformerCache = &cache{
-		scInformer:     scInformer,
-		appRegInformer: appRegInformer,
+		client: mgr.GetClient(),
 	}
 	return nil
 }
@@ -128,45 +62,20 @@ func Instance() SharedInformerCache {
 
 // GetStorageClass returns the storage class if present in the cache.
 func (c *cache) GetStorageClass(storageClassName string) (*storagev1.StorageClass, error) {
-	obj, exists, err := c.scInformer.GetStore().GetByKey(storageClassName)
-	if err != nil {
+	sc := &storagev1.StorageClass{}
+	if err := c.client.Get(context.Background(), client.ObjectKey{Name: storageClassName}, sc); err != nil {
 		return nil, err
-	} else if !exists {
-		return nil, k8s_errors.NewNotFound(storagev1.Resource("storageclass"), storageClassName)
 	}
-	sc := storagev1.StorageClass{}
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse object into storage class")
-	}
-	if err := runtime.DefaultUnstructuredConverter.
-		FromUnstructured(unstructuredObj.UnstructuredContent(), &sc); err != nil {
-		return nil, fmt.Errorf("failed to parse object into storage class: %v", obj)
-	}
-
-	// Return a copy of the object
-	return sc.DeepCopy(), nil
+	return sc, nil
 }
 
 // ListStorageClasses returns a list of storage classes from the cache
 func (c *cache) ListStorageClasses() (*storagev1.StorageClassList, error) {
-	objList := c.scInformer.GetStore().List()
-	scList := storagev1.StorageClassList{}
-	for _, obj := range objList {
-		sc := storagev1.StorageClass{}
-		unstructuredObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse object into storage class")
-		}
-		if err := runtime.DefaultUnstructuredConverter.
-			FromUnstructured(unstructuredObj.UnstructuredContent(), &sc); err != nil {
-			return nil, fmt.Errorf("failed to parse object into storage class: %v", obj)
-		}
-
-		// Add a copy of the object to the list
-		scList.Items = append(scList.Items, *sc.DeepCopy())
+	scList := &storagev1.StorageClassList{}
+	if err := c.client.List(context.Background(), scList); err != nil {
+		return nil, err
 	}
-	return &scList, nil
+	return scList, nil
 }
 
 // GetStorageClassForPVC returns the storage class for the provided PVC if present in cache
@@ -186,41 +95,18 @@ func (c *cache) GetStorageClassForPVC(pvc *corev1.PersistentVolumeClaim) (*stora
 
 // GetApplicationRegistration returns the ApplicationRegistration CR from the cache
 func (c *cache) GetApplicationRegistration(name string) (*storkv1alpha1.ApplicationRegistration, error) {
-	obj, exists, err := c.appRegInformer.GetStore().GetByKey(name)
-	if err != nil {
+	appReg := &storkv1alpha1.ApplicationRegistration{}
+	if err := c.client.Get(context.Background(), client.ObjectKey{Name: name}, appReg); err != nil {
 		return nil, err
-	} else if !exists {
-		return nil, k8s_errors.NewNotFound(storkv1alpha1.Resource("applicationregistration"), name)
 	}
-	appReg := storkv1alpha1.ApplicationRegistration{}
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse object into application registration")
-	}
-	if err := runtime.DefaultUnstructuredConverter.
-		FromUnstructured(unstructuredObj.UnstructuredContent(), &appReg); err != nil {
-		return nil, fmt.Errorf("failed to parse object into application registration: %v", obj)
-	}
-	// Return a copy of the object
-	return appReg.DeepCopy(), nil
+	return appReg, nil
 }
 
 // ListApplicationRegistrations lists the application registration CRs from the cache
 func (c *cache) ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegistrationList, error) {
-	objList := c.appRegInformer.GetStore().List()
-	appRegList := storkv1alpha1.ApplicationRegistrationList{}
-	for _, obj := range objList {
-		appReg := storkv1alpha1.ApplicationRegistration{}
-		unstructuredObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse object into application registration")
-		}
-		if err := runtime.DefaultUnstructuredConverter.
-			FromUnstructured(unstructuredObj.UnstructuredContent(), &appReg); err != nil {
-			return nil, fmt.Errorf("failed to parse object into application registration: %v", obj)
-		}
-		// Add a copy of the object to the list
-		appRegList.Items = append(appRegList.Items, *appReg.DeepCopy())
+	appRegList := &storkv1alpha1.ApplicationRegistrationList{}
+	if err := c.client.List(context.Background(), appRegList); err != nil {
+		return nil, err
 	}
-	return &appRegList, nil
+	return appRegList, nil
 }
