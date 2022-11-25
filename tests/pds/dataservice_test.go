@@ -8,15 +8,25 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/torpedo/drivers/node"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
 )
 
+const (
+	defaultWaitRebootTimeout     = 5 * time.Minute
+	defaultWaitRebootRetry       = 10 * time.Second
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	defaultTestConnectionTimeout = 15 * time.Minute
+	defaultRebootTimeRange       = 5 * time.Minute
+)
+
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", "", nil)
+		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
 	})
 
 	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
@@ -115,7 +125,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("ScaleUPDataServices", "Deploys and Scales Up the dataservices", "", nil)
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
 	})
 
 	It("deploy Dataservices", func() {
@@ -278,7 +288,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("UpgradeDataServiceVersion", "Upgrades the dataservice version", "", nil)
+		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)
 	})
 
 	It("runs the dataservice version upgrade test", func() {
@@ -294,7 +304,7 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("UpgradeDataServiceImage", "Upgrades the dataservice image", "", nil)
+		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", nil, 0)
 	})
 
 	It("runs the dataservice build image upgrade test", func() {
@@ -311,7 +321,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeployDataServicesOnDemand", "Deploys DataServices", "", nil)
+		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", nil, 0)
 	})
 
 	It("Deploy DataservicesOnDemand", func() {
@@ -621,7 +631,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 var _ = Describe("{DeployMultipleNamespaces}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", "", nil)
+		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", nil, 0)
 	})
 
 	It("creates multiple namespaces, deploys in each namespace", func() {
@@ -682,7 +692,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 
 var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", "", nil)
+		StartTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", nil, 0)
 	})
 
 	It("Deploy Dataservices and delete namespace", func() {
@@ -812,7 +822,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 var _ = Describe("{RestartPXPods}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", "", nil)
+		StartTorpedoTest("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", nil, 0)
 	})
 
 	It("Deploy Dataservices", func() {
@@ -1067,3 +1077,114 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 	return cleanup
 }
+
+var _ = Describe("{RollingRebootNodes}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PDS: RollingRebootNodes", "Reboot node(s) while the data services will be running", nil, 0)
+	})
+
+	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				log.Infof("Deploying DataService %v ", ds.Name)
+				isDeploymentsDeleted = false
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				dash.VerifyFatal(err, nil, "Verifying data service deployment.")
+
+				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+
+				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+
+				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceDefaultAppConfigID,
+					int32(ds.Replicas),
+					serviceType,
+					dataServiceDefaultResourceTemplateID,
+					storageTemplateID,
+					ds.Version,
+					ds.Image,
+					namespace,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Step("Validate Storage Configurations", func() {
+					log.Infof("data service deployed %v ", ds.Name)
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					log.Infof("volume group %v ", storageOp.VolumeGroup)
+
+					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+				})
+
+				// TODO: Running workload for all datasevices
+				// JIRA: PA-403
+
+				Step("Reboot nodes", func() {
+					dash.Info("Rebooting all the nodes in rolling fashion.")
+					nodesToReboot := node.GetWorkerNodes()
+					for _, n := range nodesToReboot {
+						log.InfoD("reboot node: %s", n.Name)
+						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						log.Infof("wait for node: %s to be back up", n.Name)
+						err = Inst().N.TestConnection(n, node.ConnectionOpts{
+							Timeout:         defaultTestConnectionTimeout,
+							TimeBeforeRetry: defaultWaitRebootRetry,
+						})
+						if err != nil {
+							log.FailOnError(err, "Error while testing node status %v, err: %v", n.Name, err.Error())
+						}
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+				})
+
+				Step("Validate Deployments after nodes are up", func() {
+					log.Info("Validate Deployments after nodes are up")
+					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					log.Info("Deployments pods are up and healthy")
+				})
+
+				Step("Delete the deployment", func() {
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})

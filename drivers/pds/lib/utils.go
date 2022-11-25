@@ -126,7 +126,7 @@ const (
 	appConfigTemplateName = "QaDefault"
 	defaultRetryInterval  = 10 * time.Minute
 	duration              = 900
-	timeOut               = 5 * time.Minute
+	timeOut               = 15 * time.Minute
 	timeInterval          = 10 * time.Second
 	maxtimeInterval       = 30 * time.Second
 	envDsVersion          = "DS_VERSION"
@@ -646,6 +646,8 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running
+// TODO: Add explicit timeout param and update the relevant tests implementing ValidateDataServiceDeployment func.
+// JIRA: PA-401
 func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error {
 	var ss *v1.StatefulSet
 
