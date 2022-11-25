@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/utils"
@@ -74,6 +75,12 @@ const (
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
 	boundRetryInterval   = 5 * time.Second
+)
+
+// parallelWorkerFn is a function that is run by parallely by multiple goroutines/workers
+type parallelWorkerFn func(
+	<-chan runtime.Unstructured,
+	chan<- error,
 )
 
 // NewMigration creates a new instance of MigrationController.
@@ -1655,7 +1662,13 @@ func (m *MigrationController) applyResources(
 		}
 	}
 	var pvObjects, pvcObjects, updatedObjects []runtime.Unstructured
-	pvMapping := make(map[string]v1.ObjectReference)
+	// Creating a sync Map since we will have multiple goroutines writing
+	// different keys to the same Map. A sync.Map allows simulateneous writes
+	// and reads as long as they are being done on different unique keys.
+	// All our parallel workers, work on different PV objects which guarantees
+	// that no one will try to write into the map for the same key, where the key
+	// is pv.Spec.VolumeName
+	pvMapping := sync.Map{}
 	// collect pv,pvc separately
 	for _, o := range objects {
 		objectType, err := meta.TypeAccessor(o)
@@ -1671,290 +1684,366 @@ func (m *MigrationController) applyResources(
 			updatedObjects = append(updatedObjects, o)
 		}
 	}
-	// create/update pv object with updated policy
-	for _, obj := range pvObjects {
-		var pv v1.PersistentVolume
-		var err error
-		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pv); err != nil {
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error unmarshalling pv resource: %v", err))
-			continue
-		}
-		log.MigrationLog(migration).Infof("Applying %v %v", pv.Kind, pv.GetName())
-		if pv.GetAnnotations() == nil {
-			pv.Annotations = make(map[string]string)
-		}
-		pv.Annotations[StorkMigrationAnnotation] = "true"
-		pv.Annotations[StorkMigrationName] = migration.GetName()
-		pv.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
-		pv.Annotations = m.getParsedAnnotations(pv.Annotations, clusterPair)
-		pv.Labels = m.getParsedLabels(pv.Labels, clusterPair)
-		_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
-		if err != nil {
-			if err != nil && errors.IsAlreadyExists(err) {
-				var respPV *v1.PersistentVolume
-				respPV, err = adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
-				if err == nil {
-					// allow only annotation and reclaim policy update
-					// TODO: idle way should be to use Patch
-					if respPV.GetAnnotations() == nil {
-						respPV.Annotations = make(map[string]string)
-					}
-					respPV.Annotations = pv.Annotations
-					respPV.Spec.PersistentVolumeReclaimPolicy = pv.Spec.PersistentVolumeReclaimPolicy
-					respPV.ResourceVersion = ""
-					_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{})
-				}
+
+	updatePVPolicyWorker := func(
+		pvChan <-chan runtime.Unstructured,
+		errorChan chan<- error,
+	) {
+		handlePV := func(obj runtime.Unstructured) {
+			// Return nil on the error channel since we don't want to fail the migration of other objects.
+			defer func() { errorChan <- nil }()
+
+			var pv v1.PersistentVolume
+			var err error
+			if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pv); err != nil {
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error unmarshalling pv resource: %v", err))
+				return
 			}
-		}
-		if err != nil {
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", err))
-			// fail migrations since we were not able to update pv reclaim object
-			migration.Status.Stage = stork_api.MigrationStageFinal
-			migration.Status.FinishTimestamp = metav1.Now()
-			migration.Status.Status = stork_api.MigrationStatusFailed
-			return m.updateMigrationCR(context.TODO(), migration)
-		}
-		m.updateResourceStatus(
-			migration,
-			obj,
-			stork_api.MigrationStatusSuccessful,
-			"Resource migrated successfully")
-	}
-	// apply pvc objects
-	for _, obj := range pvcObjects {
-		var pvc v1.PersistentVolumeClaim
-		var err error
-		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pvc); err != nil {
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", err))
-			continue
-		}
-		objRef := v1.ObjectReference{
-			Name:      pvc.GetName(),
-			Namespace: pvc.GetNamespace(),
-		}
-		// skip if there is no change in pvc specs
-		objHash, err := hashstructure.Hash(obj, &hashstructure.HashOptions{})
-		if err != nil {
-			msg := fmt.Errorf("unable to generate hash for an object %v %v, err: %v", pvc.Kind, pvc.GetName(), err)
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", msg))
-			continue
-		}
-		resp, err := adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
-		if err == nil && resp != nil {
-			if hash, ok := resp.Annotations[resourcecollector.StorkResourceHash]; ok {
-				old, err := strconv.ParseUint(hash, 10, 64)
-				if err == nil && old == objHash {
-					log.MigrationLog(migration).Debugf("Skipping pvc update, no changes found since last migration %d/%d", old, objHash)
-					m.updateResourceStatus(
-						migration,
-						obj,
-						stork_api.MigrationStatusSuccessful,
-						"Resource migrated successfully")
-					objRef.UID = resp.GetUID()
-					pvMapping[pvc.Spec.VolumeName] = objRef
-					continue
-				}
+			log.MigrationLog(migration).Infof("Applying %v %v", pv.Kind, pv.GetName())
+			if pv.GetAnnotations() == nil {
+				pv.Annotations = make(map[string]string)
 			}
-		}
-		pvMapping[pvc.Spec.VolumeName] = objRef
-		deleteStart := metav1.Now()
-		isDeleted := false
-		err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Delete(context.TODO(), pvc.Name, metav1.DeleteOptions{})
-		if err != nil && !errors.IsNotFound(err) {
-			msg := fmt.Errorf("error deleting %v %v during migrate: %v", pvc.Kind, pvc.GetName(), err)
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", msg))
-			continue
-		} else {
-			for i := 0; i < deletedMaxRetries; i++ {
-				obj, err := adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
-				if err != nil && errors.IsNotFound(err) {
-					isDeleted = true
-					break
-				}
-				createTime := obj.GetCreationTimestamp()
-				if deleteStart.Before(&createTime) {
-					log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. Not retrying deletion, deleteStart time:[%v], create time:[%v]",
-						obj.GetName(), deleteStart, createTime)
-					break
-				}
-				log.MigrationLog(migration).Infof("Object %v still present, retrying in %v", pvc.GetName(), deletedRetryInterval)
-				time.Sleep(deletedRetryInterval)
-			}
-		}
-		if !isDeleted {
-			msg := fmt.Errorf("error in recreating pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", msg))
-			continue
-		}
-		if pvc.GetAnnotations() == nil {
-			pvc.Annotations = make(map[string]string)
-		}
-		pvc.Annotations[StorkMigrationAnnotation] = "true"
-		pvc.Annotations[StorkMigrationName] = migration.GetName()
-		pvc.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
-		pvc.Annotations[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
-		pvc.Annotations = m.getParsedAnnotations(pvc.Annotations, clusterPair)
-		pvc.Labels = m.getParsedLabels(pvc.Labels, clusterPair)
-		_, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Create(context.TODO(), &pvc, metav1.CreateOptions{})
-		if err != nil {
-			msg := fmt.Errorf("error in recreating pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", msg))
-			continue
-		}
-		m.updateResourceStatus(
-			migration,
-			obj,
-			stork_api.MigrationStatusSuccessful,
-			"Resource migrated successfully")
-	}
-	// revert pv objects reclaim policy
-	for _, obj := range pvObjects {
-		var pv v1.PersistentVolume
-		var pvc *v1.PersistentVolumeClaim
-		var err error
-		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pv); err != nil {
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", err))
-			continue
-		}
-		if pvcObj, ok := pvMapping[pv.Name]; ok {
-			pvc, err = adminClient.CoreV1().PersistentVolumeClaims(pvcObj.Namespace).Get(context.TODO(), pvcObj.Name, metav1.GetOptions{})
+			pv.Annotations[StorkMigrationAnnotation] = "true"
+			pv.Annotations[StorkMigrationName] = migration.GetName()
+			pv.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
+			pv.Annotations = m.getParsedAnnotations(pv.Annotations, clusterPair)
+			pv.Labels = m.getParsedLabels(pv.Labels, clusterPair)
+			_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
 			if err != nil {
-				msg := fmt.Errorf("error in retriving pvc info %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
+				if err != nil && errors.IsAlreadyExists(err) {
+					var respPV *v1.PersistentVolume
+					respPV, err = adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
+					if err == nil {
+						// allow only annotation and reclaim policy update
+						// TODO: idle way should be to use Patch
+						if respPV.GetAnnotations() == nil {
+							respPV.Annotations = make(map[string]string)
+						}
+						respPV.Annotations = pv.Annotations
+						respPV.Spec.PersistentVolumeReclaimPolicy = pv.Spec.PersistentVolumeReclaimPolicy
+						respPV.ResourceVersion = ""
+						_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{})
+					}
+				}
+			}
+			if err != nil {
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", err))
+				// fail migrations since we were not able to update pv reclaim object
+				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
+				migration.Status.Status = stork_api.MigrationStatusFailed
+				errorChan <- m.updateMigrationCR(context.TODO(), migration)
+			}
+			m.updateResourceStatus(
+				migration,
+				obj,
+				stork_api.MigrationStatusSuccessful,
+				"Resource migrated successfully")
+		}
+		// create/update pv object with updated policy
+		for obj := range pvChan {
+			handlePV(obj)
+		}
+	}
+
+	if err := m.parallelWorker(
+		updatePVPolicyWorker,
+		pvObjects,
+		true,
+	); err != nil {
+		// The parallel workers will have updated the migration object with an error status
+		log.MigrationLog(migration).Infof("Failed to update PV policies: %v", err)
+		return err
+	}
+
+	applyPVCObjectWorker := func(
+		pvcChan <-chan runtime.Unstructured,
+		errorChan chan<- error,
+	) {
+		handlePVC := func(obj runtime.Unstructured) {
+			// Return nil on the error channel since we don't want to fail the migration of other objects.
+			defer func() { errorChan <- nil }()
+
+			var pvc v1.PersistentVolumeClaim
+			var err error
+			if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pvc); err != nil {
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", err))
+				return
+			}
+			objRef := v1.ObjectReference{
+				Name:      pvc.GetName(),
+				Namespace: pvc.GetNamespace(),
+			}
+			// skip if there is no change in pvc specs
+			objHash, err := hashstructure.Hash(obj, &hashstructure.HashOptions{})
+			if err != nil {
+				msg := fmt.Errorf("unable to generate hash for an object %v %v, err: %v", pvc.Kind, pvc.GetName(), err)
 				m.updateResourceStatus(
 					migration,
 					obj,
 					stork_api.MigrationStatusFailed,
 					fmt.Sprintf("Error applying resource: %v", msg))
-				continue
+				return
 			}
-			if pvcObj.UID != pvc.GetUID() {
-				respPV, err := adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
-				if err != nil {
-					msg := fmt.Errorf("error in reading pv %s during migration: %v", pv.GetName(), err)
-					m.updateResourceStatus(
-						migration,
-						obj,
-						stork_api.MigrationStatusFailed,
-						fmt.Sprintf("Error applying resource: %v", msg))
-					continue
-				}
-				if respPV.Spec.ClaimRef == nil {
-					respPV.Spec.ClaimRef = &v1.ObjectReference{
-						Name:      pvc.GetName(),
-						Namespace: pvc.GetNamespace(),
+			resp, err := adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+			if err == nil && resp != nil {
+				if hash, ok := resp.Annotations[resourcecollector.StorkResourceHash]; ok {
+					old, err := strconv.ParseUint(hash, 10, 64)
+					if err == nil && old == objHash {
+						log.MigrationLog(migration).Debugf("Skipping pvc update, no changes found since last migration %d/%d", old, objHash)
+						m.updateResourceStatus(
+							migration,
+							obj,
+							stork_api.MigrationStatusSuccessful,
+							"Resource migrated successfully")
+						objRef.UID = resp.GetUID()
+						pvMapping.Store(pvc.Spec.VolumeName, objRef)
+						return
 					}
 				}
-				respPV.Spec.ClaimRef.UID = pvc.GetUID()
-				respPV.ResourceVersion = ""
-				if _, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
-					msg := fmt.Errorf("error in updating pvc UID in pv %s during migration: %v", pv.GetName(), err)
+			}
+			pvMapping.Store(pvc.Spec.VolumeName, objRef)
+			deleteStart := metav1.Now()
+			isDeleted := false
+			err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Delete(context.TODO(), pvc.Name, metav1.DeleteOptions{})
+			if err != nil && !errors.IsNotFound(err) {
+				msg := fmt.Errorf("error deleting %v %v during migrate: %v", pvc.Kind, pvc.GetName(), err)
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", msg))
+				return
+			} else {
+				for i := 0; i < deletedMaxRetries; i++ {
+					obj, err := adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+					if err != nil && errors.IsNotFound(err) {
+						isDeleted = true
+						break
+					}
+					createTime := obj.GetCreationTimestamp()
+					if deleteStart.Before(&createTime) {
+						log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. Not retrying deletion, deleteStart time:[%v], create time:[%v]",
+							obj.GetName(), deleteStart, createTime)
+						break
+					}
+					log.MigrationLog(migration).Infof("Object %v still present, retrying in %v", pvc.GetName(), deletedRetryInterval)
+					time.Sleep(deletedRetryInterval)
+				}
+			}
+			if !isDeleted {
+				msg := fmt.Errorf("error in recreating pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", msg))
+				return
+			}
+			if pvc.GetAnnotations() == nil {
+				pvc.Annotations = make(map[string]string)
+			}
+			pvc.Annotations[StorkMigrationAnnotation] = "true"
+			pvc.Annotations[StorkMigrationName] = migration.GetName()
+			pvc.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
+			pvc.Annotations[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
+			pvc.Annotations = m.getParsedAnnotations(pvc.Annotations, clusterPair)
+			pvc.Labels = m.getParsedLabels(pvc.Labels, clusterPair)
+			_, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Create(context.TODO(), &pvc, metav1.CreateOptions{})
+			if err != nil {
+				msg := fmt.Errorf("error in recreating pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", msg))
+				return
+			}
+			m.updateResourceStatus(
+				migration,
+				obj,
+				stork_api.MigrationStatusSuccessful,
+				"Resource migrated successfully")
+		}
+		// apply pvc objects
+		for obj := range pvcChan {
+			handlePVC(obj)
+		}
+	}
+
+	if err := m.parallelWorker(
+		applyPVCObjectWorker,
+		pvcObjects,
+		true,
+	); err != nil {
+		// The parallel workers will have updated the migration object with an error status
+		log.MigrationLog(migration).Infof("Failed to apply PVC objects: %v", err)
+	}
+
+	// revert pv objects reclaim policy
+	revertPVPolicyWorker := func(
+		pvChan <-chan runtime.Unstructured,
+		errorChan chan<- error,
+	) {
+		handlePV := func(obj runtime.Unstructured) {
+			// Return nil on the error channel since we don't want to fail the migration of other objects.
+			defer func() { errorChan <- nil }()
+			var pv v1.PersistentVolume
+			var pvc *v1.PersistentVolumeClaim
+			var err error
+			if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pv); err != nil {
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", err))
+				return
+			}
+			if pvcIntf, ok := pvMapping.Load(pv.Name); ok {
+				pvcObj, ok := pvcIntf.(v1.ObjectReference)
+				if !ok {
+					msg := fmt.Errorf("error in retriving pvc info %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
 					m.updateResourceStatus(
 						migration,
 						obj,
 						stork_api.MigrationStatusFailed,
 						fmt.Sprintf("Error applying resource: %v", msg))
-					continue
+					return
 				}
-				// wait for pvc object to be in bound state
-				isBound := false
-				for i := 0; i < deletedMaxRetries*2; i++ {
-					var resp *v1.PersistentVolumeClaim
-					resp, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+				pvc, err = adminClient.CoreV1().PersistentVolumeClaims(pvcObj.Namespace).Get(context.TODO(), pvcObj.Name, metav1.GetOptions{})
+				if err != nil {
+					msg := fmt.Errorf("error in retriving pvc info %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
+					m.updateResourceStatus(
+						migration,
+						obj,
+						stork_api.MigrationStatusFailed,
+						fmt.Sprintf("Error applying resource: %v", msg))
+					return
+				}
+				if pvcObj.UID != pvc.GetUID() {
+					respPV, err := adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
 					if err != nil {
-						msg := fmt.Errorf("error in retriving pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
+						msg := fmt.Errorf("error in reading pv %s during migration: %v", pv.GetName(), err)
 						m.updateResourceStatus(
 							migration,
 							obj,
 							stork_api.MigrationStatusFailed,
 							fmt.Sprintf("Error applying resource: %v", msg))
-						continue
+						return
 					}
-					if resp.Status.Phase == v1.ClaimBound {
-						isBound = true
-						break
+					if respPV.Spec.ClaimRef == nil {
+						respPV.Spec.ClaimRef = &v1.ObjectReference{
+							Name:      pvc.GetName(),
+							Namespace: pvc.GetNamespace(),
+						}
 					}
-					log.MigrationLog(migration).Infof("PVC Object %s not bound yet, retrying in %v", pvc.GetName(), deletedRetryInterval)
-					time.Sleep(boundRetryInterval)
-				}
-				if !isBound {
-					msg := fmt.Errorf("pvc %s/%s is not in bound state ", pvc.GetNamespace(), pvc.GetName())
-					m.updateResourceStatus(
-						migration,
-						obj,
-						stork_api.MigrationStatusFailed,
-						fmt.Sprintf("Error applying resource: %v", msg))
-					continue
+					respPV.Spec.ClaimRef.UID = pvc.GetUID()
+					respPV.ResourceVersion = ""
+					if _, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
+						msg := fmt.Errorf("error in updating pvc UID in pv %s during migration: %v", pv.GetName(), err)
+						m.updateResourceStatus(
+							migration,
+							obj,
+							stork_api.MigrationStatusFailed,
+							fmt.Sprintf("Error applying resource: %v", msg))
+						return
+					}
+					// wait for pvc object to be in bound state
+					isBound := false
+					for i := 0; i < deletedMaxRetries*2; i++ {
+						var resp *v1.PersistentVolumeClaim
+						resp, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+						if err != nil {
+							msg := fmt.Errorf("error in retriving pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
+							m.updateResourceStatus(
+								migration,
+								obj,
+								stork_api.MigrationStatusFailed,
+								fmt.Sprintf("Error applying resource: %v", msg))
+							return
+						}
+						if resp.Status.Phase == v1.ClaimBound {
+							isBound = true
+							break
+						}
+						log.MigrationLog(migration).Infof("PVC Object %s not bound yet, retrying in %v", pvc.GetName(), deletedRetryInterval)
+						time.Sleep(boundRetryInterval)
+					}
+					if !isBound {
+						msg := fmt.Errorf("pvc %s/%s is not in bound state ", pvc.GetNamespace(), pvc.GetName())
+						m.updateResourceStatus(
+							migration,
+							obj,
+							stork_api.MigrationStatusFailed,
+							fmt.Sprintf("Error applying resource: %v", msg))
+						return
+					}
 				}
 			}
-		}
-		respPV, err := adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
-		if err != nil {
-			msg := fmt.Errorf("error in reading pv %s during migration: %v", pv.GetName(), err)
+			respPV, err := adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
+			if err != nil {
+				msg := fmt.Errorf("error in reading pv %s during migration: %v", pv.GetName(), err)
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", msg))
+				return
+			}
+			// update pv's reclaim policy
+			if pv.Annotations != nil && pv.Annotations[PVReclaimAnnotation] != "" {
+				respPV.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimPolicy(pv.Annotations[PVReclaimAnnotation])
+			}
+			if migration.Spec.IncludeVolumes != nil && !*migration.Spec.IncludeVolumes {
+				respPV.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
+			}
+			respPV.ResourceVersion = ""
+			if _, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
+				msg := fmt.Errorf("error in updating pv %s during migration: %v", pv.GetName(), err)
+				m.updateResourceStatus(
+					migration,
+					obj,
+					stork_api.MigrationStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", msg))
+				return
+			}
 			m.updateResourceStatus(
 				migration,
 				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", msg))
-			continue
+				stork_api.MigrationStatusSuccessful,
+				"Resource migrated successfully")
 		}
-		// update pv's reclaim policy
-		if pv.Annotations != nil && pv.Annotations[PVReclaimAnnotation] != "" {
-			respPV.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimPolicy(pv.Annotations[PVReclaimAnnotation])
+		for obj := range pvChan {
+			handlePV(obj)
 		}
-		if migration.Spec.IncludeVolumes != nil && !*migration.Spec.IncludeVolumes {
-			respPV.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
-		}
-		respPV.ResourceVersion = ""
-		if _, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
-			msg := fmt.Errorf("error in updating pv %s during migration: %v", pv.GetName(), err)
-			m.updateResourceStatus(
-				migration,
-				obj,
-				stork_api.MigrationStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", msg))
-			continue
-		}
-		m.updateResourceStatus(
-			migration,
-			obj,
-			stork_api.MigrationStatusSuccessful,
-			"Resource migrated successfully")
+	}
+
+	if err := m.parallelWorker(
+		revertPVPolicyWorker,
+		pvObjects,
+		true,
+	); err != nil {
+		// The parallel workers will have updated the migration object with an error status
+		log.MigrationLog(migration).Infof("Failed to update PV policies: %v", err)
 	}
 
 	// apply remaining objects
-	worker := func(objectChan <-chan runtime.Unstructured, errorChan chan<- error) {
+	objectApplyWorker := func(
+		objectChan <-chan runtime.Unstructured,
+		errorChan chan<- error,
+	) {
 		for o := range objectChan {
 			metadata, err := meta.Accessor(o)
 			if err != nil {
@@ -2073,17 +2162,17 @@ func (m *MigrationController) applyResources(
 		}
 	}
 
-	return m.parallelWorker(worker, updatedObjects, true)
+	return m.parallelWorker(objectApplyWorker, updatedObjects, true)
 }
 
 func (m *MigrationController) parallelWorker(
-	worker func(<-chan runtime.Unstructured, chan<- error),
+	worker parallelWorkerFn,
 	objects []runtime.Unstructured,
 	shuffle bool,
 ) error {
 	numObjects := len(objects)
-	objectChan := make(chan runtime.Unstructured)
-	errorChan := make(chan error)
+	objectChan := make(chan runtime.Unstructured, numObjects)
+	errorChan := make(chan error, numObjects)
 
 	if shuffle {
 		// Shuffle Object order before applying so we can get parallelism between resource types
