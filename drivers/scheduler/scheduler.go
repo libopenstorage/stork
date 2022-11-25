@@ -108,6 +108,8 @@ type InitOptions struct {
 	PureSANType string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
+	//SecureApps identifies apps to be deployed with secure annotation in storage class
+	SecureApps []string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

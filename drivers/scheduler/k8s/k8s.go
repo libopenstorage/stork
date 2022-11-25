@@ -221,6 +221,7 @@ type K8s struct {
 	PureSANType                      string
 	RunCSISnapshotAndRestoreManyTest bool
 	helmValuesConfigMapName          string
+	secureApps                       []string
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -260,6 +261,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.PureVolumes = schedOpts.PureVolumes
 	k.PureSANType = schedOpts.PureSANType
 	k.RunCSISnapshotAndRestoreManyTest = schedOpts.RunCSISnapshotAndRestoreManyTest
+	k.secureApps = schedOpts.SecureApps
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -1275,6 +1277,16 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 	return nsObj.(*corev1.Namespace), nil
 }
 
+func (k *K8s) isSecureEnabled(appName string, secureApps []string) bool {
+
+	for _, name := range secureApps {
+		if name == appName {
+			return true
+		}
+	}
+	return false
+}
+
 func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *spec.AppSpec,
 	options scheduler.ScheduleOptions) (interface{}, error) {
 
@@ -1289,7 +1301,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			}
 		}
 
-		err = k.addSecurityAnnotation(spec, configMap)
+		err = k.addSecurityAnnotation(spec, configMap, app)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
 		}
@@ -1487,7 +1499,7 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 			}
 		}
 
-		err = k.addSecurityAnnotation(specObj, configMap)
+		err = k.addSecurityAnnotation(specObj, configMap, app)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
 		}
@@ -1510,8 +1522,9 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 	return nil, nil
 }
 
-func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMap) error {
+func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMap, app *spec.AppSpec) error {
 	// log.Debugf("Config Map details: %v", configMap.Data)
+
 	secretNameKeyFlag := false
 	secretNamespaceKeyFlag := false
 	encryptionFlag := false
@@ -1526,32 +1539,40 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 	}
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
-		if obj.Parameters == nil {
-			obj.Parameters = make(map[string]string)
-		}
-		if encryptionFlag {
-			obj.Parameters[encryptionName] = "true"
-		}
-		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
-			if secretNameKeyFlag {
-				obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-				obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-				obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
-			}
-			if secretNamespaceKeyFlag {
-				obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-				obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-				obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
-			}
-		} else {
-			if secretNameKeyFlag {
-				obj.Parameters[secretName] = configMap.Data[secretNameKey]
-			}
-			if secretNamespaceKeyFlag {
-				obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
+		//secure-apps list is provided for which volumes should be encrypted
+		if len(k.secureApps) > 0 {
+			if k.isSecureEnabled(app.Key, k.secureApps) {
+
+				if obj.Parameters == nil {
+					obj.Parameters = make(map[string]string)
+				}
+				if encryptionFlag {
+					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
+					obj.Parameters[encryptionName] = "true"
+				}
+				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
+					if secretNameKeyFlag {
+						obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+						obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+						obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+					}
+					if secretNamespaceKeyFlag {
+						obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+						obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+						obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+					}
+				} else {
+					if secretNameKeyFlag {
+						obj.Parameters[secretName] = configMap.Data[secretNameKey]
+					}
+					if secretNamespaceKeyFlag {
+						obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
+					}
+				}
 			}
 		}
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
@@ -1561,6 +1582,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		if secretNamespaceKeyFlag {
 			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 		}
+
 	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
 		if obj.Metadata.Annotations == nil {
 			obj.Metadata.Annotations = make(map[string]string)
@@ -1737,7 +1759,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				}
 			}
 
-			err = k.addSecurityAnnotation(obj, configMap)
+			err = k.addSecurityAnnotation(obj, configMap, app)
 			if err != nil {
 				return nil, fmt.Errorf("failed to add annotations to core object: %v", err)
 			}
@@ -3349,7 +3371,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 
-			err = k.addSecurityAnnotation(specObj, configMap)
+			err = k.addSecurityAnnotation(specObj, configMap, ctx.App)
 			if err != nil {
 				return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
 			}
@@ -4052,7 +4074,7 @@ func (k *K8s) createMigrationObjects(
 				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
 			}
 		}
-		err = k.addSecurityAnnotation(specObj, configMap)
+		err = k.addSecurityAnnotation(specObj, configMap, app)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
 		}

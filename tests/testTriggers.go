@@ -4047,8 +4047,9 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	stepLog = "validate all apps after pool resize using resize-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4105,8 +4106,9 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 	stepLog = "validate all apps after pool resize using resize-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4166,8 +4168,9 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	stepLog = "validate all apps after pool resize using add-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4222,8 +4225,9 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog = "validate all apps after pool resize using add-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4386,9 +4390,10 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 		stepLog = "validate all apps after upgrade"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			errorChan := make(chan error, errorChannelSize)
 			for _, ctx := range *contexts {
 				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx)
+				ValidateContext(ctx, &errorChan)
 				if strings.Contains(ctx.App.Key, fastpathAppName) {
 					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 					UpdateOutcome(event, err)
@@ -5569,8 +5574,9 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 				stepLog = "validate all apps after deletion"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
+					errorChan := make(chan error, errorChannelSize)
 					ctx.SkipVolumeValidation = true
-					ValidateContext(ctx)
+					ValidateContext(ctx, &errorChan)
 				})
 			}
 		}
