@@ -268,15 +268,17 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					isDeploymentsDeleted = true
 				})
 
-				Step("Delete the worload generating deployments", func() {
-					if ds.Name == "Cassandra" || ds.Name == "PostgreSQL" {
-						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
-						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-					} else {
-						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
-						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+				Step("Delete the workload generating deployments", func() {
+					if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper) {
+						if ds.Name == cassandra || ds.Name == postgresql {
+							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+						} else {
+							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+							err = pdslib.DeleteK8sPods(pod.Name, namespace)
+						}
+						Expect(err).NotTo(HaveOccurred())
 					}
-					Expect(err).NotTo(HaveOccurred())
 				})
 			}
 		})
@@ -617,13 +619,15 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		})
 
 		defer func() {
-			Step("Delete the worload generating deployments", func() {
-				if dataservice == "Cassandra" || dataservice == "PostgreSQL" {
-					err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-				} else {
-					err = pdslib.DeleteK8sPods(pod.Name, namespace)
+			Step("Delete the workload generating deployments", func() {
+				if !(dataservice == mysql || dataservice == kafka || dataservice == zookeeper) {
+					if dataservice == cassandra || dataservice == postgresql {
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else {
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+					}
+					Expect(err).NotTo(HaveOccurred())
 				}
-				Expect(err).NotTo(HaveOccurred())
 			})
 		}()
 	})
@@ -915,12 +919,14 @@ var _ = Describe("{RestartPXPods}", func() {
 
 				defer func() {
 					Step("Delete the workload generating deployments", func() {
-						if ds.Name == "Cassandra" || ds.Name == "PostgreSQL" {
-							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-						} else {
-							err = pdslib.DeleteK8sPods(pod.Name, namespace)
+						if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper) {
+							if ds.Name == cassandra || ds.Name == postgresql {
+								err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+							} else {
+								err = pdslib.DeleteK8sPods(pod.Name, namespace)
+							}
+							Expect(err).NotTo(HaveOccurred())
 						}
-						Expect(err).NotTo(HaveOccurred())
 					})
 				}()
 
