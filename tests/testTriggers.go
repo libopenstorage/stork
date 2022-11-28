@@ -5971,6 +5971,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 			currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
+				return
 			}
 			bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
 			if bkp_create_err != nil {
@@ -5979,6 +5980,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(taskNamePrefix+"-backup", currbkNamespace, timeout)
 			if bkp_comp_err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup successful failed with %v", bkp_comp_err))
+				return
 			}
 			dash.Infof("backup successful, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
 		}
