@@ -5958,8 +5958,6 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 			*contexts = append(*contexts, appContexts...)
 			ValidateApplications(*contexts)
 			for _, ctx := range appContexts {
-				// Override default App readiness time out of 5 mins with 10 mins
-				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				backupNamespaces = append(backupNamespaces, namespace)
 			}
