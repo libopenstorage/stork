@@ -131,6 +131,7 @@ const (
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
 	appListCliFlag                       = "app-list"
+	secureAppsCliFlag                    = "secure-apps"
 	logLocationCliFlag                   = "log-location"
 	logLevelCliFlag                      = "log-level"
 	scaleFactorCliFlag                   = "scale-factor"
@@ -375,6 +376,7 @@ func InitInstance() {
 		PureSANType:                      Inst().PureSANType,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
+		SecureApps:                       Inst().SecureAppList,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
@@ -1636,34 +1638,38 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
 			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			log.FailOnError(err, "Failed to get portworx pod restart count")
+			//Using fatal verification will abort longevity runs
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+			}
 
 			// Validate portworx pod restart count after test
 			for pod, value := range pxPodRestartCountMap {
 				n, err := node.GetNodeByIP(pod.Status.HostIP)
 				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
 				if n.PxPodRestartCount != value {
-					log.Errorf("Portworx pods restart many times in a node: [%s]", n.Name)
+					dash.VerifySafely(value, n.PxPodRestartCount, fmt.Sprintf("Portworx pods restart many times in a node: [%s]", n.Name))
 					if Inst().PortworxPodRestartCheck {
 						log.Fatalf("portworx pods restart [%d] times", value)
 					}
 				}
-				log.Infof("Portworx pods restart count: [%d] matching with expected count: [%d]", value, n.PxPodRestartCount)
 			}
 
 			// Validate portworx operator pod check
 			pxLabel[labelNameKey] = portworxOperatorName
 			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			log.FailOnError(err, "Failed to get portworx operator pod restart count")
+			//Using fatal verification will abort longevity runs
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+			}
 			for _, v := range pxPodRestartCountMap {
 				if v > 0 {
-					log.Errorf("Portworx operator pods restarted many times: [%d]", v)
+					dash.VerifySafely(v, 0, fmt.Sprintf("Portworx operator pods restarted many times: [%d]", v))
 					if Inst().PortworxPodRestartCheck {
 						log.Fatalf("portworx operator pods restart [%d] times", v)
 					}
 				}
 			}
-			log.Info("Portworx operator pod not restarted during this test")
 		})
 	})
 }
@@ -3842,6 +3848,7 @@ type Torpedo struct {
 	M                                   monitor.Driver
 	SpecDir                             string
 	AppList                             []string
+	SecureAppList                       []string
 	LogLoc                              string
 	LogLevel                            string
 	Logger                              *logrus.Logger
@@ -3883,7 +3890,8 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -3947,6 +3955,7 @@ func ParseFlags() {
 		"Endpoint version which will be used for checking version after upgrade storage driver")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
+	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
@@ -3997,6 +4006,19 @@ func ParseFlags() {
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
 		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+	}
+
+	secureAppList := make([]string, 0)
+
+	if secureAppsCSV == "all" {
+		secureAppList = append(secureAppList, appList...)
+	}
+
+	if len(secureAppsCSV) > 0 {
+		apl, err := splitCsv(secureAppsCSV)
+		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", secureAppsCSV))
+		secureAppList = append(secureAppList, apl...)
+		log.Infof("Secure apps : %+v", secureAppList)
 	}
 
 	sched.Init(time.Second)
@@ -4100,6 +4122,7 @@ func ParseFlags() {
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
+				SecureAppList:                       secureAppList,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,

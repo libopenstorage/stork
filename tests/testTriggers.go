@@ -3,11 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -20,6 +15,13 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
+	"github.com/portworx/torpedo/pkg/aututils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"container/ring"
 
@@ -377,6 +379,8 @@ const (
 	AsyncDR = "asyncdr"
 	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
 	AsyncDRVolumeOnly = "asyncdrvolumeonly"
+	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
+	StorkApplicationBackup = "storkapplicationbackup"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
 	// AddDrive performs drive add for on-prem cluster
@@ -4047,8 +4051,9 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	stepLog = "validate all apps after pool resize using resize-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4105,8 +4110,9 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 	stepLog = "validate all apps after pool resize using resize-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4166,8 +4172,9 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	stepLog = "validate all apps after pool resize using add-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4222,8 +4229,9 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog = "validate all apps after pool resize using add-disk operation"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		errorChan := make(chan error, errorChannelSize)
 		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+			ValidateContext(ctx, &errorChan)
 			if strings.Contains(ctx.App.Key, fastpathAppName) {
 				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 				UpdateOutcome(event, err)
@@ -4386,9 +4394,10 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 		stepLog = "validate all apps after upgrade"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			errorChan := make(chan error, errorChannelSize)
 			for _, ctx := range *contexts {
 				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx)
+				ValidateContext(ctx, &errorChan)
 				if strings.Contains(ctx.App.Key, fastpathAppName) {
 					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 					UpdateOutcome(event, err)
@@ -5569,8 +5578,9 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 				stepLog = "validate all apps after deletion"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
+					errorChan := make(chan error, errorChannelSize)
 					ctx.SkipVolumeValidation = true
-					ValidateContext(ctx)
+					ValidateContext(ctx, &errorChan)
 				})
 			}
 		}
@@ -5899,6 +5909,81 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		}
 	}
 	updateMetrics(*event)
+}
+
+func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	dash.Infof("Stork Appplication Backup triggered at: %v", time.Now())
+	defer endLongevityTest()
+	startLongevityTest(StorkApplicationBackup)
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := ChaosMap[StorkApplicationBackup]
+
+	var (
+		s3SecretName     = "s3secret"
+		backupNamespaces []string
+		timeout          = 5 * time.Minute
+		taskNamePrefix   = "stork-app-backup-"
+	)
+
+	Step(fmt.Sprintf("Deploy applications for for backup, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			dash.Errorf("Failed to write kubeconfig: %v", err)
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			dash.Errorf("Failed to Set source kubeconfig: %v", err)
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			dash.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				namespace := GetAppNamespace(ctx, taskName)
+				backupNamespaces = append(backupNamespaces, namespace)
+			}
+		}
+		dash.Infof("Backup applications, present in namespaces - %v", backupNamespaces)
+		dash.Infof("Start backup application")
+		for i, currbkNamespace := range backupNamespaces {
+			taskNamePrefix = taskNamePrefix + fmt.Sprintf("%d", i)
+			currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
+				return
+			}
+			bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
+			if bkp_create_err != nil {
+				UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
+			}
+			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(taskNamePrefix+"-backup", currbkNamespace, timeout)
+			if bkp_comp_err != nil {
+				UpdateOutcome(event, fmt.Errorf("backup successful failed with %v", bkp_comp_err))
+				return
+			}
+			dash.Infof("backup successful, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+		}
+		updateMetrics(*event)
+	})
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
