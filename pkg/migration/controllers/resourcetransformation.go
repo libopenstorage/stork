@@ -219,13 +219,18 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 		return nil
 	}
 
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+
 	for _, spec := range transform.Spec.Objects {
 		group, version, kind, err := getGVK(spec.Resource)
 		if err != nil {
 			return fmt.Errorf("invalid resource type should be in format <group>/<version>/<kind>, actual: %s", spec.Resource)
 		}
 		resource := metav1.APIResource{
-			Name:       strings.ToLower(inflect.Pluralize(kind)),
+			Name:       strings.ToLower(ruleset.Pluralize(strings.ToLower(kind))),
 			Kind:       kind,
 			Version:    version,
 			Namespaced: true,
@@ -267,7 +272,7 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 					Specs:            spec,
 				}
 				if err := resourcecollector.TransformResources(object, []stork_api.TransformResourceInfo{*resInfo}, metadata.GetName(), metadata.GetNamespace()); err != nil {
-					log.TransformLog(transform).Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
+					log.TransformLog(transform).Errorf("Unable to apply patch path %s during validation on resource kind : %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
 					resInfo.Status = stork_api.ResourceTransformationStatusFailed
 					resInfo.Reason = err.Error()
 					return err
@@ -277,7 +282,7 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 					return fmt.Errorf("unable to cast object to unstructured: %v", object)
 				}
 				resource := &metav1.APIResource{
-					Name:       inflect.Pluralize(strings.ToLower(kind)),
+					Name:       strings.ToLower(ruleset.Pluralize(strings.ToLower(kind))),
 					Namespaced: len(metadata.GetNamespace()) > 0,
 				}
 				dynamicClient := localInterface.Resource(

@@ -143,16 +143,18 @@ func (m *Driver) ProvisionVolume(
 	replicaIndexes []int,
 	size uint64,
 	labels map[string]string,
+	needsAntiHyperconvergence bool,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
 		return fmt.Errorf("volume %v already exists", volumeName)
 	}
 
 	volume := &storkvolume.Info{
-		VolumeID:   volumeName,
-		VolumeName: volumeName,
-		Size:       size,
-		Labels:     labels,
+		VolumeID:                  volumeName,
+		VolumeName:                volumeName,
+		Size:                      size,
+		Labels:                    labels,
+		NeedsAntiHyperconvergence: needsAntiHyperconvergence,
 	}
 
 	for i := 0; i < len(replicaIndexes); i++ {
@@ -319,6 +321,11 @@ func (m *Driver) UpdateMigratedPersistentVolumeSpec(
 // GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
 func (m *Driver) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
 	return nil, nil
+}
+
+// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+func (a *Driver) GetCSIPodPrefix() (string, error) {
+	return "px-csi-ext", nil
 }
 
 func init() {

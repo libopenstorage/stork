@@ -156,6 +156,8 @@ const (
 	restoreNamePrefix = "in-place-restore-"
 	restoreTaskPrefix = "restore-"
 
+	csiPodNamePrefix = "px-csi-ext"
+
 	// Annotation to skip checking if the backup is being done to the same
 	// BackupLocationName
 	skipBackupLocationNameCheckAnnotation = "portworx.io/skip-backup-location-name-check"
@@ -498,6 +500,7 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 	info := &storkvolume.Info{}
 	info.VolumeID = vols[0].Id
+
 	info.VolumeName = vols[0].Locator.Name
 	for _, rset := range vols[0].ReplicaSets {
 		info.DataNodes = append(info.DataNodes, rset.Nodes...)
@@ -519,8 +522,9 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 	for k, v := range vols[0].Locator.GetVolumeLabels() {
 		info.Labels[k] = v
 	}
-
+	info.NeedsAntiHyperconvergence = vols[0].Spec.Sharedv4 && vols[0].Spec.Sharedv4ServiceSpec != nil
 	info.VolumeSourceRef = vols[0]
+
 	return info, nil
 }
 
@@ -4073,6 +4077,11 @@ func (p *portworx) CleanupRestoreResources(*storkapi.ApplicationRestore) error {
 // GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
 func (p *portworx) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
 	return p.getVirtLauncherPatches(podNamespace, pod)
+}
+
+// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+func (a *portworx) GetCSIPodPrefix() (string, error) {
+	return csiPodNamePrefix, nil
 }
 
 func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {

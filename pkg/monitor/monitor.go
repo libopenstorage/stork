@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +37,7 @@ var (
 	// HealthCounter for pods which are rescheduled by stork monitor
 	HealthCounter = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "stork_pods_rescheduled_total",
-		Help: "The total number of pods reschduler by stork pod monitor",
+		Help: "The total number of pods rescehduled by stork pod monitor",
 	})
 )
 
@@ -125,7 +126,6 @@ func (m *Monitor) podMonitor() error {
 		}
 
 		podUnknownState := false
-
 		if pod.Status.Reason == node.NodeUnreachablePodReason {
 			podUnknownState = true
 		} else if pod.ObjectMeta.DeletionTimestamp != nil {
@@ -144,22 +144,27 @@ func (m *Monitor) podMonitor() error {
 			}
 		}
 
+		var msg string
 		if podUnknownState {
-			owns, err := m.doesDriverOwnPodVolumes(pod)
-			if err != nil || !owns {
-				return nil
+			csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
+			if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
+				msg = "Force deleting csi pod as it's in unknown state."
+				storklog.PodLog(pod).Infof(msg)
+			} else {
+				owns, err := m.doesDriverOwnPodVolumes(pod)
+				if err != nil || !owns {
+					return nil
+				}
+
+				msg = "Force deleting pod as it's in unknown state."
+				storklog.PodLog(pod).Infof(msg)
+
+				// delete volume attachments if the node is down for this pod
+				err = m.cleanupVolumeAttachmentsByPod(pod)
+				if err != nil {
+					storklog.PodLog(pod).Errorf("Error cleaning up volume attachments: %v", err)
+				}
 			}
-
-			msg := "Force deleting pod as it's in unknown state."
-			storklog.PodLog(pod).Infof(msg)
-
-			// delete volume attachments if the node is down for this pod
-
-			err = m.cleanupVolumeAttachmentsByPod(pod)
-			if err != nil {
-				storklog.PodLog(pod).Errorf("Error cleaning up volume attachments: %v", err)
-			}
-
 			// force delete the pod
 			m.Recorder.Event(pod, v1.EventTypeWarning, node.NodeUnreachablePodReason, msg)
 			err = core.Instance().DeletePods([]v1.Pod{*pod}, true)
@@ -248,16 +253,22 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	}
 
 	for _, pod := range pods.Items {
-		owns, err := m.doesDriverOwnPodVolumes(&pod)
-		if err != nil || !owns {
-			continue
-		}
+		var msg string
+		csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
+		if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
+			msg = fmt.Sprintf("Deleting csi pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
 
+		} else {
+			msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			owns, err := m.doesDriverOwnPodVolumes(&pod)
+			if err != nil || !owns {
+				continue
+			}
+		}
 		if m.isSameNode(pod.Spec.NodeName, node) {
-			msg := fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
 			storklog.PodLog(&pod).Infof(msg)
 			m.Recorder.Event(&pod, v1.EventTypeWarning, storageDriverOfflineReason, msg)
-			err = core.Instance().DeletePods([]v1.Pod{pod}, true)
+			err := core.Instance().DeletePods([]v1.Pod{pod}, true)
 			if err != nil {
 				storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
 				continue

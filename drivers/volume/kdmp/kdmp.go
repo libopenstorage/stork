@@ -630,7 +630,8 @@ func (k *kdmp) getRestorePVCs(
 				delete(pvc.Annotations, bindCompletedKey)
 				delete(pvc.Annotations, boundByControllerKey)
 				delete(pvc.Annotations, storageClassKey)
-				delete(pvc.Annotations, storageProvisioner)
+				delete(pvc.Annotations, k8shelper.AnnBetaStorageProvisioner)
+				delete(pvc.Annotations, k8shelper.AnnStorageProvisioner)
 				delete(pvc.Annotations, storageNodeAnnotation)
 				pvc.Annotations[KdmpAnnotation] = StorkAnnotation
 			}
@@ -1011,6 +1012,11 @@ func (k *kdmp) getSnapshotClassName(backup *storkapi.ApplicationBackup) string {
 // GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
 func (k *kdmp) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
 	return nil, nil
+}
+
+// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+func (a *kdmp) GetCSIPodPrefix() (string, error) {
+	return "", &errors.ErrNotSupported{}
 }
 
 func init() {

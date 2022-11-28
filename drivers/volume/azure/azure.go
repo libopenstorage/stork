@@ -679,6 +679,11 @@ func (a *azure) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSON
 	return nil, nil
 }
 
+// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+func (a *azure) GetCSIPodPrefix() (string, error) {
+	return "", &errors.ErrNotSupported{}
+}
+
 func init() {
 	a := &azure{}
 	err := a.Init(nil)

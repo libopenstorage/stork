@@ -312,6 +312,10 @@ done:
 
 func TestExtender(t *testing.T) {
 	t.Run("setup", setup)
+	t.Run("pxCSIExtPodNoDriverTest", pxCSIExtPodNoDriverTest)
+	t.Run("pxCSIExtPodDriverTest", pxCSIExtPodDriverTest)
+	t.Run("pxCSIExtPodDegradedNodesTest", pxCSIExtPodDegradedNodesTest)
+	t.Run("pxCSIExtPodOfflinePxNodesTest", pxCSIExtPodOfflinePxNodesTest)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("noDriverVolumeTest", noDriverVolumeTest)
 	t.Run("WFFCVolumeTest", WFFCVolumeTest)
@@ -335,7 +339,155 @@ func TestExtender(t *testing.T) {
 	t.Run("restorePVCTest", restorePVCTest)
 	t.Run("preferLocalNodeTest", preferLocalNodeTest)
 	t.Run("extenderMetricsTest", extenderMetricsTest)
+	t.Run("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest)
+	t.Run("preferRemoteNodeOnlyFailedSchedulingTest", preferRemoteNodeOnlyFailedSchedulingTest)
+	t.Run("preferRemoteNodeOnlyAntiHyperConvergenceTest", preferRemoteNodeOnlyAntiHyperConvergenceTest)
+	t.Run("antiHyperConvergenceTest", antiHyperConvergenceTest)
+	t.Run("offlineNodesAntiHyperConvergenceTest", offlineNodesAntiHyperConvergenceTest)
+	t.Run("multiVolumeAntiHyperConvergenceTest", multiVolumeAntiHyperConvergenceTest)
+	t.Run("multiVolume2AntiHyperConvergenceTest", multiVolume2AntiHyperConvergenceTest)
+	t.Run("multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest", multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest)
+	t.Run("multiVolumeSkipAllVolumeScoringTest", multiVolumeSkipAllVolumeScoringTest)
+	t.Run("multiVolumeSkipHyperConvergedVolumesScoringTest", multiVolumeSkipHyperConvergedVolumesScoringTest)
+	t.Run("multiVolumeWithDegradedNodesAntiHyperConvergenceTest", multiVolumeWithDegradedNodesAntiHyperConvergenceTest)
+	t.Run("disableHyperConvergenceTest", disableHyperConvergenceTest)
+	t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
+	t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
 	t.Run("teardown", teardown)
+}
+
+// Send scheduler request for px-csi-ext pod with volume driver disabled
+// filter response should return all the input nodes
+// prioritize response should return all nodes with defaultScore
+func pxCSIExtPodNoDriverTest(t *testing.T) {
+	pod := newPod("px-csi-ext-foo", nil)
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{defaultScore, defaultScore, defaultScore},
+		prioritizeResponse)
+}
+
+// Send scheduler request for px-csi-ext pod with PX online on all nodes
+// filter response should return all the input nodes
+// prioritize response should return all nodes with nodePriorityScore
+func pxCSIExtPodDriverTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("px-csi-ext-foo", nil)
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore, nodePriorityScore, nodePriorityScore},
+		prioritizeResponse)
+}
+
+// Send scheduler request for px-csi-ext pod with a node in degraded state
+// filter response should return all the input nodes
+// prioritize response should return all nodes giving lower score to degraded node
+func pxCSIExtPodDegradedNodesTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("px-csi-ext-foo", nil)
+
+	if err := driver.UpdateNodeStatus(2, volume.NodeDegraded); err != nil {
+		t.Fatalf("Error setting node status to Degraded: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore * (degradedNodeScorePenaltyPercentage / 100), nodePriorityScore, nodePriorityScore},
+		prioritizeResponse)
+}
+
+// Send scheduler request for px-csi-ext pod with PX offline on one node
+// filter response should return all the input nodes except node with PX offline
+// prioritize response should give 0 score to offline PX node
+func pxCSIExtPodOfflinePxNodesTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("px-csi-ext-foo", nil)
+
+	if err := driver.UpdateNodeStatus(2, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Degraded: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{nodePriorityScore, nodePriorityScore, 0, nodePriorityScore, nodePriorityScore},
+		prioritizeResponse)
 }
 
 // Send requests for a pod that doesn't have any PVCs.
@@ -439,7 +591,7 @@ func WFFCVolumeTest(t *testing.T) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
 	driver.AddPVC(pvcClaim)
 	provNodes := []int{}
-	if err := driver.ProvisionVolume("WFFCVol", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("WFFCVol", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -491,7 +643,7 @@ func WFFCMultiVolumeTest(t *testing.T) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume1)
 	driver.AddPVC(pvcClaim1)
 	provNodes := []int{}
-	if err := driver.ProvisionVolume("WFFCVol1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("WFFCVol1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -511,7 +663,7 @@ func WFFCMultiVolumeTest(t *testing.T) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume2)
 	driver.AddPVC(pvcClaim2)
 	provNodes = []int{1}
-	if err := driver.ProvisionVolume("normalVol", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("normalVol", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -553,7 +705,7 @@ func noVolumeNodeTest(t *testing.T) {
 	pod := newPod("noVolumeNode", map[string]bool{"noVolumeNode": false})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("noVolumeNode", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("noVolumeNode", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, requestNodes)
@@ -595,7 +747,7 @@ func noDriverNodeTest(t *testing.T) {
 	pod := newPod("noDriverNode", map[string]bool{"noDriverNode": false})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("noDriverNode", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("noDriverNode", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, requestNodes)
@@ -624,7 +776,7 @@ func singleVolumeTest(t *testing.T) {
 
 	pod := newPod("singleVolume", map[string]bool{"singleVolume": false})
 
-	if err := driver.ProvisionVolume("singleVolume", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("singleVolume", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -670,11 +822,11 @@ func multipleVolumeTest(t *testing.T) {
 	pod := newPod("doubleVolumePod", map[string]bool{"volume1": false, "volume2": false})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("volume2", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("volume2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -722,11 +874,11 @@ func multipleVolumeSkipTest(t *testing.T) {
 	pod := newPod("doubleVolumeSkipPod", map[string]bool{"included-volume": false, "excluded-volume": true})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("included-volume", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("included-volume", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("excluded-volume", provNodes, 1, map[string]string{skipScoringLabel: "true"}); err != nil {
+	if err := driver.ProvisionVolume("excluded-volume", provNodes, 1, map[string]string{skipScoringLabel: "true"}, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -775,11 +927,11 @@ func multipleVolumeDegradedTest(t *testing.T) {
 	pod := newPod("doubleVolumeSkipPod", map[string]bool{"vol1": false, "vol2": true})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("vol1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("vol1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("vol2", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("vol2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -826,7 +978,7 @@ func driverErrorTest(t *testing.T) {
 
 	pod := newPod("driverErrorPod", map[string]bool{"driverErrorTest": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -871,7 +1023,7 @@ func driverNodeErrorStateTest(t *testing.T) {
 
 	pod := newPod("driverErrorPod", map[string]bool{"driverNodeErrorTest": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("driverNodeErrorTest", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("driverNodeErrorTest", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -921,11 +1073,11 @@ func zoneTest(t *testing.T) {
 
 	pod := newPod("zoneTest", map[string]bool{"zoneVolume1": false, "zoneVolume2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("zoneVolume1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("zoneVolume1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("zoneVolume2", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("zoneVolume2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -973,11 +1125,11 @@ func zoneDegradedNodeTest(t *testing.T) {
 
 	pod := newPod("zoneDegradedNodeTest", map[string]bool{"zoneVol1": false, "zoneVol2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("zoneVol1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("zoneVol1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("zoneVol2", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("zoneVol2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	if err := driver.UpdateNodeStatus(0, volume.NodeDegraded); err != nil {
@@ -1028,11 +1180,11 @@ func regionTest(t *testing.T) {
 
 	pod := newPod("regionTest", map[string]bool{"regionVolume1": false, "regionVolume2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("regionVolume1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("regionVolume1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("regionVolume2", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("regionVolume2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1079,11 +1231,11 @@ func regionDegradedNodeTest(t *testing.T) {
 
 	pod := newPod("regionDegradedNodeTest", map[string]bool{"regionVol1": false, "regionVol2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("regionVol1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("regionVol1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("regionVol2", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("regionVol2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1129,7 +1281,7 @@ func nodeNameTest(t *testing.T) {
 
 	pod := newPod("nodeNameTest", map[string]bool{"nodeNameTest": false})
 
-	if err := driver.ProvisionVolume("nodeNameTest", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("nodeNameTest", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -1170,7 +1322,7 @@ func ipTest(t *testing.T) {
 
 	pod := newPod("ipTest", map[string]bool{"ipTest": false})
 
-	if err := driver.ProvisionVolume("ipTest", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("ipTest", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -1229,7 +1381,7 @@ func noReplicasTest(t *testing.T) {
 	pod := newPod("noReplicasTest", map[string]bool{"noReplicasTest": false})
 
 	provNodes := []int{0}
-	if err := driver.ProvisionVolume("noReplicasTest", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("noReplicasTest", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	if err := driver.UpdateNodeStatus(0, volume.NodeOffline); err != nil {
@@ -1321,7 +1473,7 @@ func preferLocalNodeTest(t *testing.T) {
 	pod := newPod("preferLocalNodeTest", map[string]bool{"preferLocalNodeTest": false})
 
 	provNodes := []int{0}
-	if err := driver.ProvisionVolume("preferLocalNodeTest", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("preferLocalNodeTest", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1348,7 +1500,7 @@ func extenderMetricsTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 	// check if pod is hyper-Converged
-	if err := driver.ProvisionVolume("metric-vol-1", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("metric-vol-1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	pod := newPod("HyperPodTest", map[string]bool{"metric-vol-1": false})
@@ -1360,14 +1512,14 @@ func extenderMetricsTest(t *testing.T) {
 	require.NoError(t, err, "failed to create pod")
 
 	time.Sleep(3 * time.Second)
-	require.Equal(t, testutil.ToFloat64(HyperConvergedPodsCounter), float64(1), "hyperconverged_pods_total not matched")
+	require.Equal(t, testutil.ToFloat64(HyperConvergedPodsCounter), float64(1), "hyperConverged_pods_total not matched")
 
 	// Semi-Hyper converged pod metrics
-	if err := driver.ProvisionVolume("metric-vol-2", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("metric-vol-2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes2 := []int{1, 2}
-	if err := driver.ProvisionVolume("metric-vol-3", provNodes2, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("metric-vol-3", provNodes2, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	semiHyperPod := newPod("SemiPodTest", map[string]bool{"metric-vol-2": false, "metric-vol-3": false})
@@ -1379,10 +1531,10 @@ func extenderMetricsTest(t *testing.T) {
 	require.NoError(t, err, "failed to create pod")
 
 	time.Sleep(3 * time.Second)
-	require.Equal(t, testutil.ToFloat64(SemiHyperConvergePodsCounter), float64(1), "semi_hyperconverged_pods_total not matched")
+	require.Equal(t, testutil.ToFloat64(SemiHyperConvergePodsCounter), float64(1), "semi_hyperConverged_pods_total not matched")
 
 	// non-hyper converged pod metrics
-	if err := driver.ProvisionVolume("non-metric-vol", provNodes, 1, nil); err != nil {
+	if err := driver.ProvisionVolume("non-metric-vol", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	nonHyperPod := newPod("NonHyperPodTest", map[string]bool{"non-metric-vol": false})
@@ -1394,5 +1546,578 @@ func extenderMetricsTest(t *testing.T) {
 	require.NoError(t, err, "failed to create pod")
 
 	time.Sleep(3 * time.Second)
-	require.Equal(t, testutil.ToFloat64(NonHyperConvergePodsCounter), float64(1), "non_hyperconverged_pods_total not matched")
+	require.Equal(t, testutil.ToFloat64(NonHyperConvergePodsCounter), float64(1), "non_hyperConverged_pods_total not matched")
+}
+
+// Apply preferRemoteNodeOnly parameter to a hyperconverged service volume
+// preferRemoteNodeOnly should get ignored and all nodes should be returned in the filter response
+func preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", map[string]bool{"preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest": false})
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", provNodes, 6, map[string]string{preferRemoteNodeOnlyParameter: "true"}, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+}
+
+// Apply preferRemoteNodeOnly parameter to antiHyperConverged volume and make sure volume is present on all the nodes
+// preferRemoteNodeOnly should get honored and filter api should fail since unable to find a valid node
+func preferRemoteNodeOnlyFailedSchedulingTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(3, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("preferRemoteNodeOnlyFailedSchedulingTest", map[string]bool{"preferRemoteNodeOnlyFailedSchedulingTest": false})
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("preferRemoteNodeOnlyFailedSchedulingTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	_, err := sendFilterRequest(pod, nodes)
+	require.Error(t, err, "Expected error since scheduling on local node is not allowed with preferRemoteNodeOnly")
+}
+
+// Apply preferRemoteNodeOnly parameter to antiHyperConverged volumes volume
+// preferRemoteNodeOnly should get honored and filter api should return non replica nodes
+func preferRemoteNodeOnlyAntiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("preferRemoteNodeOnlyAntiHyperConvergenceTest", map[string]bool{"preferRemoteNodeOnlyAntiHyperConvergenceTest": false})
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("preferRemoteNodeOnlyAntiHyperConvergenceTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{3, 4, 5}, filterResponse)
+
+	if err = driver.UpdateNodeStatus(3, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Offline: %v", err)
+	}
+	filterResponse, err = sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{4, 5}, filterResponse)
+
+	if err := driver.UpdateNodeStatus(4, volume.NodeDegraded); err != nil {
+		t.Fatalf("Error setting node status to NodeDegraded: %v", err)
+	}
+	if err := driver.UpdateNodeStatus(5, volume.NodeDegraded); err != nil {
+		t.Fatalf("Error setting node status to NodeDegraded: %v", err)
+	}
+	filterResponse, err = sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{4, 5}, filterResponse)
+}
+
+// Use a antiHyperConverged volumes volume such that there are non replica nodes available
+// Higher scores should be given to the non antiHyperConverged volumes volume nodes
+func antiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("sharedV4ServiceAntiHyperConverged", map[string]bool{"sharedV4ServiceAntiHyperConverged": false})
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("sharedV4ServiceAntiHyperConverged", provNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{defaultScore,
+			defaultScore,
+			defaultScore,
+			nodePriorityScore,
+			nodePriorityScore,
+			nodePriorityScore},
+		prioritizeResponse)
+}
+
+// Offline nodes should not be returned in filter response for pods using antiHyperConverged volumes volumes
+func offlineNodesAntiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("offlineNodesAntiHyperConvergenceTest", map[string]bool{"offlineNodesAntiHyperConvergenceTest": false})
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("offlineNodesAntiHyperConvergenceTest", provNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	if err := driver.UpdateNodeStatus(0, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Offline: %v", err)
+	}
+
+	if err := driver.UpdateNodeStatus(3, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Offline: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{1, 2, 4, 5}, filterResponse)
+}
+
+// Deploy both anti hyperconverged regular volumes
+// Verify antihyperconvereged nodes take higher score
+func multiVolumeAntiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("multiVolumeAntiHyperConvergenceTest", map[string]bool{"HyperConvergedVolumes": false, "sharedV4Svc": false})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("HyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	sharedV4SvcProvNodes := []int{3, 4, 5}
+	if err := driver.ProvisionVolume("sharedV4Svc", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{2 * nodePriorityScore,
+			2 * nodePriorityScore,
+			2 * nodePriorityScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Deploy both antihyperconverged and regular volumes
+// Verify antihyperconvereged nodes take higher score
+func multiVolume2AntiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("multiVolumeAntiHyperConvergenceTest", map[string]bool{"HyperConvergedVolumes2": false, "sharedV4Svc2": false})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("HyperConvergedVolumes2", regularVolumeProvNodes, 3, nil, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	sharedV4SvcProvNodes := []int{2, 3, 4}
+	if err := driver.ProvisionVolume("sharedV4Svc2", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{2 * nodePriorityScore,
+			2 * nodePriorityScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			nodePriorityScore},
+		prioritizeResponse)
+}
+
+// Deploy both anti hyperconveged volume and regular volumes
+// Verify antihyperconvereged nodes take higher score
+// preferRemoteNodeOnly parameter enabled
+func multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	filteredNodes := &v1.NodeList{}
+	filteredNodes.Items = append(filteredNodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	filteredNodes.Items = append(filteredNodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	filteredNodes.Items = append(filteredNodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("multiVolumeAntiHyperConvergenceTest", map[string]bool{"HyperConvergedVolumes3": false, "sharedV4Svc3": false})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("HyperConvergedVolumes3", regularVolumeProvNodes, 3, nil, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	sharedV4SvcProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("sharedV4Svc3", sharedV4SvcProvNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, filteredNodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		filteredNodes,
+		[]float64{
+			nodePriorityScore,
+			nodePriorityScore,
+			nodePriorityScore},
+		prioritizeResponse)
+}
+
+// Verify skipSchedulerScoring is honored for antihyperconvegence volume pods
+func multiVolumeSkipHyperConvergedVolumesScoringTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("multiVolumeSkipHyperConvergedVolumesScoringTest", map[string]bool{"HyperConvergedVolumesMultiSkip": true, "sharedV4SvcMultiSkip": true})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("HyperConvergedVolumesMultiSkip", regularVolumeProvNodes, 3, map[string]string{skipScoringLabel: "true"}, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	sharedV4SvcProvNodes := []int{3, 4, 5}
+	if err := driver.ProvisionVolume("sharedV4SvcMultiSkip", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			nodePriorityScore,
+			nodePriorityScore,
+			nodePriorityScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Verify skipSchedulerScoring is honored for a pod using both regular and antihyperconverged volumes
+func multiVolumeSkipAllVolumeScoringTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("multiVolumeSkipAllVolumeScoringTest", map[string]bool{"HyperConvergedVolumesSkip": true, "sharedV4SvcMultiVolumeSkip": true})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("HyperConvergedVolumesSkip", regularVolumeProvNodes, 3, map[string]string{skipScoringLabel: "true"}, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	sharedV4SvcProvNodes := []int{3, 4, 5}
+	if err := driver.ProvisionVolume("sharedV4SvcMultiVolumeSkip", sharedV4SvcProvNodes, 3, map[string]string{skipScoringLabel: "true"}, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Verify anti hyperconverged works with multi volumes with degraded nodes
+func multiVolumeWithDegradedNodesAntiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("multiVolumeWithDegradedNodesAntiHyperConvergenceTest", map[string]bool{"degradedNodesHyperConvergedVolumes": false, "degradedNodeSharedV4Svc": false})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("degradedNodesHyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	sharedV4SvcProvNodes := []int{3, 4, 5}
+	if err := driver.ProvisionVolume("degradedNodeSharedV4Svc", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	if err := driver.UpdateNodeStatus(3, volume.NodeDegraded); err != nil {
+		t.Fatalf("Error setting node status to Offline: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{2 * nodePriorityScore,
+			2 * nodePriorityScore,
+			2 * nodePriorityScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Verify disableHyperconvergenceAnnotation is honored
+func disableHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("multiVolumeDisableHyperConvergedTest", map[string]bool{"multiVolumeDisableHyperConvergedTest": false})
+	pod.Annotations[preferLocalNodeOnlyAnnotation] = "true"
+	pod.Annotations[disableHyperconvergenceAnnotation] = "true"
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("multiVolumeDisableHyperConvergedTest", provNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Verify preferLocalNodeOnly is honored
+func preferLocalNodeWithHyperConvergedVolumesTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("preferLocalNodeWithHyperConvergedVolumesTest", map[string]bool{"preferLocalNodeWithHyperConvergedVolumesTest": false})
+	pod.Annotations[preferLocalNodeOnlyAnnotation] = "true"
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("preferLocalNodeWithHyperConvergedVolumesTest", provNodes, 3, nil, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2}, filterResponse)
+}
+
+// Verify preferLocalNodeOnly is ignored for antihyperconverged volumes
+func preferLocalNodeIgnoredWithAntiHyperConvergenceTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "b", "zone2"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack2", "b", "zone2"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", map[string]bool{"preferLocalNodeIgnoredWithAntiHyperConvergenceTest": false})
+	pod.Annotations[preferLocalNodeOnlyAnnotation] = "true"
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", provNodes, 3, nil, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
 }
