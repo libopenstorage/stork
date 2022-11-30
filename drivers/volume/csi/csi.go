@@ -311,6 +311,10 @@ func (c *csi) OwnsPVCForBackup(
 	crBackupType string,
 	blType storkapi.BackupLocationType,
 ) bool {
+	// For CSI volume and backuplocation type is NFS, It will default to kdmp
+	if blType == storkapi.BackupLocationNFS {
+		return false
+	}
 	if cmBackupType == storkapi.ApplicationBackupGeneric || crBackupType == storkapi.ApplicationBackupGeneric {
 		// If user has forced the backupType in config map or applicationbackup CR, default to generic always
 		return false
