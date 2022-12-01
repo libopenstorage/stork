@@ -2022,9 +2022,8 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	}
 	time.Sleep(time.Minute * 2)
 	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-	dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup taken")
 	log.FailOnError(err, "Inspecting the backup taken")
-
+	dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup taken")
 }
 
 func GetNodesForBackup(backupName string, bkpNamespace string,
@@ -2123,9 +2122,8 @@ func CreateRestore(restoreName string, backupName string,
 	}
 	time.Sleep(time.Minute * 3)
 	resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-	dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess, "Verifying restore")
 	log.FailOnError(err, "Verifying restore")
-
+	dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess, "Verifying restore")
 }
 
 // TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
