@@ -60,7 +60,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		Step("Check the status of backup pods", func() {
 			log.InfoD("Check the status of backup pods")
 			status := ValidateBackupCluster()
-			dash.VerifyFatal(status, true, "Backup Cluster Verification successful?")
+			log.FailOnError(status, true, "Backup Cluster Verification successful?")
 		})
 		//Will add CRD verification here
 	})
@@ -149,12 +149,12 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		for i := 0; i < len(app_list); i++ {
 			if Contains(post_rule_app, app_list[i]) {
 				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
-					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+					log.FailOnError(ok, true, "Post Rule details mentioned for the apps")
 				}
 			}
 			if Contains(pre_rule_app, app_list[i]) {
 				if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
-					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+					log.FailOnError(ok, true, "Pre Rule details mentioned for the apps")
 				}
 			}
 		}
@@ -191,12 +191,12 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 
 		Step("Creating rules for backup", func() {
-			dash.Info("Creating pre rule for deployed apps")
+			log.InfoD("Creating pre rule for deployed apps")
 			pre_rule_status, pre_rule_uid = CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
-			dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
-			dash.Info("Creating post rule for deployed apps")
+			log.FailOnError(pre_rule_status, true, "Verifying pre rule for backup")
+			log.InfoD("Creating post rule for deployed apps")
 			post_rule_status, post_rule_uid = CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
-			dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
+			log.FailOnError(post_rule_status, true, "Verifying Post rule for backup")
 		})
 
 		Step("Creating bucket,backup location and cloud setting", func() {
@@ -219,27 +219,27 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.InfoD("Creating backup interval schedule policy")
 			interval_schedule_policy_info := CreateIntervalSchedulePolicy(5, 15, 2)
 			interval_policy_status := Backupschedulepolicy("interval", uuid.New(), orgID, interval_schedule_policy_info)
-			dash.VerifyFatal(interval_policy_status, nil, "Creating interval schedule policy")
+			log.FailOnError(interval_policy_status, nil, "Creating interval schedule policy")
 
 			log.InfoD("Creating backup daily schedule policy")
 			daily_schedule_policy_info := CreateDailySchedulePolicy(1, "9:00AM", 2)
 			daily_policy_status := Backupschedulepolicy("daily", uuid.New(), orgID, daily_schedule_policy_info)
-			dash.VerifyFatal(daily_policy_status, nil, "Creating daily schedule policy")
+			log.FailOnError(daily_policy_status, nil, "Creating daily schedule policy")
 
 			log.InfoD("Creating backup weekly schedule policy")
 			weekly_schedule_policy_info := CreateWeeklySchedulePolicy(1, Friday, "9:10AM", 2)
 			weekly_policy_status := Backupschedulepolicy("weekly", uuid.New(), orgID, weekly_schedule_policy_info)
-			dash.VerifyFatal(weekly_policy_status, nil, "Creating weekly schedule policy")
+			log.FailOnError(weekly_policy_status, nil, "Creating weekly schedule policy")
 
 			log.InfoD("Creating backup monthly schedule policy")
 			monthly_schedule_policy_info := CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
 			monthly_policy_status := Backupschedulepolicy("monthly", uuid.New(), orgID, monthly_schedule_policy_info)
-			dash.VerifyFatal(monthly_policy_status, nil, "Creating monthly schedule policy")
+			log.FailOnError(monthly_policy_status, nil, "Creating monthly schedule policy")
 		})
 
 		Step("Register cluster for backup", func() {
 			cluster_status, cluster_uid = RegisterBackupCluster(orgID, "", "")
-			dash.VerifyFatal(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			log.FailOnError(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
 
 		Step("Taking backup of applications", func() {
@@ -262,7 +262,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		policy_list := []string{"interval", "daily", "weekly", "monthly"}
 		defer EndTorpedoTest()
 		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list, policy_list)
-		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
+		log.FailOnError(teardown_status, true, "Testcase teardown status")
 	})
 })
 
@@ -1941,7 +1941,7 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 	Step(fmt.Sprintf("Create cluster [%s-%s] in org [%s]",
 		clusterName, provider, orgID), func() {
 		kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-		dash.VerifyFatal(err, nil, "Fetching kubeconfig path for source cluster")
+		log.FailOnError(err, nil, "Fetching kubeconfig path for source cluster")
 		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
 			kubeconfigPath, orgID, "", "")
 	})
@@ -2001,10 +2001,10 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	}
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	log.FailOnError(err, nil, "Fetching px-central-admin ctx")
 
 	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
-	dash.VerifyFatal(err, nil, "Taking backup of applications")
+	log.FailOnError(err, nil, "Taking backup of applications")
 
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
@@ -2022,7 +2022,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	}
 	time.Sleep(time.Minute * 2)
 	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-	dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup taken")
+	log.FailOnError(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup taken")
 
 }
 
@@ -2093,7 +2093,7 @@ func CreateRestore(restoreName string, backupName string,
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	ctx, err := backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	log.FailOnError(err, nil, "Fetching px-central-admin ctx")
 	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
 	for _, bkp = range curBackups.GetBackups() {
 		if bkp.Name == backupName {
@@ -2115,14 +2115,14 @@ func CreateRestore(restoreName string, backupName string,
 		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
-	dash.VerifyFatal(err, nil, "Creating restore")
+	log.FailOnError(err, nil, "Creating restore")
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
 	}
 	time.Sleep(time.Minute * 3)
 	resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-	dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess, "Verifying restore")
+	log.FailOnError(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess, "Verifying restore")
 
 }
 
