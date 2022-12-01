@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -64,37 +64,38 @@ var _ = Describe("{Longevity}", func() {
 		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
-		AppTaskDown:          TriggerAppTaskDown,
-		AppTasksDown:         TriggerAppTasksDown,
-		AddDrive:             TriggerAddDrive,
-		CoreChecker:          TriggerCoreChecker,
-		CloudSnapShot:        TriggerCloudSnapShot,
-		LocalSnapShot:        TriggerLocalSnapShot,
-		DeleteLocalSnapShot:  TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:       TriggerPoolResizeDisk,
-		PoolAddDisk:          TriggerPoolAddDisk,
-		UpgradeStork:         TriggerUpgradeStork,
-		VolumesDelete:        TriggerVolumeDelete,
-		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
-		AutoFsTrim:           TriggerAutoFsTrim,
-		UpdateVolume:         TriggerVolumeUpdate,
-		RestartManyVolDriver: TriggerRestartManyVolDriver,
-		RebootManyNodes:      TriggerRebootManyNodes,
-		NodeDecommission:     TriggerNodeDecommission,
-		NodeRejoin:           TriggerNodeRejoin,
-		CsiSnapShot:          TriggerCsiSnapShot,
-		CsiSnapRestore:       TriggerCsiSnapRestore,
-		RelaxedReclaim:       TriggerRelaxedReclaim,
-		Trashcan:             TriggerTrashcan,
-		KVDBFailover:         TriggerKVDBFailover,
-		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
-		AsyncDR:              TriggerAsyncDR,
-		AsyncDRVolumeOnly:    TriggerAsyncDRVolumeOnly,
-		RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
-		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
-		AddDiskAndReboot:     TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:  TriggerPoolResizeDiskAndReboot,
-		AutopilotRebalance:   TriggerAutopilotPoolRebalance,
+		AppTaskDown:            TriggerAppTaskDown,
+		AppTasksDown:           TriggerAppTasksDown,
+		AddDrive:               TriggerAddDrive,
+		CoreChecker:            TriggerCoreChecker,
+		CloudSnapShot:          TriggerCloudSnapShot,
+		LocalSnapShot:          TriggerLocalSnapShot,
+		DeleteLocalSnapShot:    TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:         TriggerPoolResizeDisk,
+		PoolAddDisk:            TriggerPoolAddDisk,
+		UpgradeStork:           TriggerUpgradeStork,
+		VolumesDelete:          TriggerVolumeDelete,
+		UpgradeVolumeDriver:    TriggerUpgradeVolumeDriver,
+		AutoFsTrim:             TriggerAutoFsTrim,
+		UpdateVolume:           TriggerVolumeUpdate,
+		RestartManyVolDriver:   TriggerRestartManyVolDriver,
+		RebootManyNodes:        TriggerRebootManyNodes,
+		NodeDecommission:       TriggerNodeDecommission,
+		NodeRejoin:             TriggerNodeRejoin,
+		CsiSnapShot:            TriggerCsiSnapShot,
+		CsiSnapRestore:         TriggerCsiSnapRestore,
+		RelaxedReclaim:         TriggerRelaxedReclaim,
+		Trashcan:               TriggerTrashcan,
+		KVDBFailover:           TriggerKVDBFailover,
+		ValidateDeviceMapper:   TriggerValidateDeviceMapperCleanup,
+		AsyncDR:                TriggerAsyncDR,
+		AsyncDRVolumeOnly:      TriggerAsyncDRVolumeOnly,
+		StorkApplicationBackup: TriggerStorkApplicationBackup,
+		RestartKvdbVolDriver:   TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:    TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:       TriggerPoolAddDiskAndReboot,
+		ResizeDiskAndReboot:    TriggerPoolResizeDiskAndReboot,
+		AutopilotRebalance:     TriggerAutopilotPoolRebalance,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -112,26 +113,24 @@ var _ = Describe("{Longevity}", func() {
 	})
 
 	It("has to schedule app and introduce test triggers", func() {
-		dash.Info("schedule apps and start test triggers")
+		log.InfoD("schedule apps and start test triggers")
 		watchLog := fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
 			configMapNS, testTriggersConfigMap)
 
 		Step(watchLog, func() {
-			dash.Info(watchLog)
+			log.InfoD(watchLog)
 			err := watchConfigMap()
 			if err != nil {
-				log.Error(err)
+				log.Fatalf(fmt.Sprintf("%v", err))
 			}
-			dash.VerifyFatal(err, nil, "Validate config map watch set")
 		})
 
 		if pureTopologyEnabled {
 			var err error
 			labels, err = SetTopologyLabelsOnNodes()
 			if err != nil {
-				log.Error(err)
+				log.Fatalf(fmt.Sprintf("%v", err))
 			}
-			dash.VerifyFatal(err, nil, "Validate set topology labels")
 			Inst().TopologyLabels = labels
 		}
 
@@ -142,24 +141,24 @@ var _ = Describe("{Longevity}", func() {
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
-				dash.Infof("Registering trigger: [%v]", triggerType)
+				log.InfoD("Registering trigger: [%v]", triggerType)
 				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
-		dash.Infof("Finished registering test triggers")
+		log.InfoD("Finished registering test triggers")
 		if Inst().MinRunTimeMins != 0 {
-			dash.Infof("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
+			log.InfoD("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
 
 		Step("Register email trigger", func() {
 			for triggerType, triggerFunc := range emailTriggerFunction {
-				dash.Infof("Registering email trigger: [%v]", triggerType)
+				log.InfoD("Registering email trigger: [%v]", triggerType)
 				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
 				wg.Add(1)
 			}
 		})
-		dash.Infof("Finished registering email trigger")
+		log.InfoD("Finished registering email trigger")
 
 		CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
@@ -193,7 +192,7 @@ func testTrigger(wg *sync.WaitGroup,
 	for {
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-			dash.Infof("Longevity Tests timed out with timeout %d  minutes", minRunTime)
+			log.InfoD("Longevity Tests timed out with timeout %d  minutes", minRunTime)
 			break
 		}
 
@@ -216,9 +215,9 @@ func testTrigger(wg *sync.WaitGroup,
 			   // If trigger is non-disruptive then just check if no other disruptive trigger is running or not
 			   // and release the lock immidiately so that other non-disruptive triggers can happen.
 				triggerLoc.Lock()
-				logrus.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
+				log.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
 				triggerLoc.Unlock()
-				logrus.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
+				log.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
 			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
@@ -262,15 +261,15 @@ func emailEventTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			dash.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			log.InfoD("Waiting for lock for trigger [%s]\n", triggerType)
 			emailTriggerLock.Lock()
-			dash.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			log.InfoD("Successfully taken lock for trigger [%s]\n", triggerType)
 
 			triggerFunc()
-			dash.Infof("Trigger Function completed for [%s]\n", triggerType)
+			log.InfoD("Trigger Function completed for [%s]\n", triggerType)
 
 			emailTriggerLock.Unlock()
-			dash.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+			log.InfoD("Successfully released lock for trigger [%s]\n", triggerType)
 
 			lastInvocationTime = time.Now().Local()
 
@@ -349,6 +348,7 @@ func populateDisruptiveTriggers() {
 		HAIncreaseAndReboot:             true,
 		AddDiskAndReboot:                true,
 		ResizeDiskAndReboot:             true,
+		VolumeCreatePxRestart:           true,
 	}
 }
 
@@ -498,10 +498,10 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 			}
 			switch key {
 			case k8s.TopologyZoneK8sNodeLabel:
-				dash.Infof("Setting node: [%s] Topology Zone to: [%s]", n.Name, value)
+				log.InfoD("Setting node: [%s] Topology Zone to: [%s]", n.Name, value)
 				n.TopologyZone = value
 			case k8s.TopologyRegionK8sNodeLabel:
-				dash.Infof("Setting node: [%s] Topology Region to: [%s]", n.Name, value)
+				log.InfoD("Setting node: [%s] Topology Region to: [%s]", n.Name, value)
 				n.TopologyRegion = value
 			}
 		}
@@ -510,7 +510,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	}
 
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
-	logrus.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
+	log.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
 
 	if err := deletePXPods(volumeDriverNamespace); err != nil {
 		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)
@@ -592,11 +592,13 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
+	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
+	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -739,6 +741,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDRVolumeOnly][3] = 21 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][2] = 24 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][1] = 27 * baseInterval
+
+	triggerInterval[StorkApplicationBackup][10] = 1 * baseInterval
+	triggerInterval[StorkApplicationBackup][9] = 3 * baseInterval
+	triggerInterval[StorkApplicationBackup][8] = 6 * baseInterval
+	triggerInterval[StorkApplicationBackup][7] = 9 * baseInterval
+	triggerInterval[StorkApplicationBackup][6] = 12 * baseInterval
+	triggerInterval[StorkApplicationBackup][5] = 15 * baseInterval
+	triggerInterval[StorkApplicationBackup][4] = 18 * baseInterval
+	triggerInterval[StorkApplicationBackup][3] = 21 * baseInterval
+	triggerInterval[StorkApplicationBackup][2] = 24 * baseInterval
+	triggerInterval[StorkApplicationBackup][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
 
@@ -1079,6 +1092,17 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance][2] = 24 * baseInterval
 	triggerInterval[AutopilotRebalance][1] = 27 * baseInterval
 
+	triggerInterval[VolumeCreatePxRestart][10] = 1 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][9] = 2 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][8] = 3 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][7] = 4 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][6] = 5 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][5] = 6 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][4] = 7 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][3] = 8 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][2] = 9 * baseInterval
+	triggerInterval[VolumeCreatePxRestart][1] = 10 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1209,11 +1233,13 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
 	triggerInterval[AsyncDRVolumeOnly][0] = 0
+	triggerInterval[StorkApplicationBackup][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0
 	triggerInterval[ResizeDiskAndReboot][0] = 0
 	triggerInterval[AutopilotRebalance][0] = 0
+	triggerInterval[VolumeCreatePxRestart][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

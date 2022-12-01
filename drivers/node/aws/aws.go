@@ -2,10 +2,6 @@ package aws
 
 import (
 	"fmt"
-	"os"
-	"strings"
-	"time"
-
 	aws_pkg "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -13,7 +9,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
+	"os"
+	"strings"
+	"time"
 )
 
 const (
@@ -77,7 +76,7 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
-	logrus.Infof("Got Insatacne id:%v", instanceID)
+	log.Infof("Got Insatacne id:%v", instanceID)
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
@@ -97,11 +96,11 @@ func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 			aws_pkg.String(instanceID),
 		},
 	}
-	logrus.Infof("sendCommandInput:%+v", sendCommandInput)
+	log.Infof("sendCommandInput:%+v", sendCommandInput)
 	sendCommandOutput, err := a.svcSsm.SendCommand(sendCommandInput)
-	logrus.Infof("sendCommandOutput:%+v", sendCommandOutput)
+	log.Infof("sendCommandOutput:%+v", sendCommandOutput)
 	if err != nil {
-		logrus.Infof("sendCommandOutput Err:%+v", err)
+		log.Infof("sendCommandOutput Err:%+v", err)
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),

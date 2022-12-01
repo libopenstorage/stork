@@ -2,11 +2,13 @@ package tests
 
 import (
 	"fmt"
+	opsapi "github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -32,7 +34,6 @@ var _ = Describe("{SetupTeardown}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
 		}
-
 		ValidateApplications(contexts)
 
 		opts := make(map[string]bool)
@@ -61,7 +62,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 
 	stepLog := "has to schedule apps and stop volume driver on app nodes"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -76,7 +77,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 					Inst().V.String(), appNode.Name)
 				Step(stepLog,
 					func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						StopVolDriverAndWait([]node.Node{appNode})
 					})
 
@@ -84,13 +85,13 @@ var _ = Describe("{VolumeDriverDown}", func() {
 					Inst().V.String(), appNode.Name)
 				Step(stepLog,
 					func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						StartVolDriverAndWait([]node.Node{appNode})
 					})
 
 				stepLog = "Giving few seconds for volume driver to stabilize"
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					time.Sleep(20 * time.Second)
 				})
 
@@ -130,7 +131,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 
 	stepLog := "has to schedule apps and stop volume driver on nodes where volumes are attached"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -141,7 +142,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 
 		stepLog = "get nodes where app is running and restart volume driver"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				appNodes, err := Inst().S.GetNodesForApp(ctx)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Verify Get nodes for app %s", ctx.App.Key))
@@ -162,13 +163,13 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 
 					stepLog = "Giving few seconds for volume driver to stabilize"
 					Step(stepLog, func() {
-						dash.Info("Giving few seconds for volume driver to stabilize")
+						log.InfoD("Giving few seconds for volume driver to stabilize")
 						time.Sleep(20 * time.Second)
 					})
 
 					stepLog = fmt.Sprintf("validate app %s", ctx.App.Key)
 					Step(stepLog, func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						ValidateContext(ctx)
 					})
 				}
@@ -202,7 +203,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 
 	stepLog := "has to schedule apps and crash volume driver on app nodes"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -213,13 +214,13 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 
 		stepLog = "crash volume driver in all nodes"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, appNode := range node.GetStorageDriverNodes() {
 				stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
 					Inst().V.String(), appNode.Name)
 				Step(stepLog,
 					func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						CrashVolDriverAndWait([]node.Node{appNode})
 					})
 			}
@@ -251,7 +252,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 	stepLog := "has to schedule apps, stop volume driver on app nodes and destroy apps"
 
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -264,10 +265,10 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 
 		stepLog = "get nodes for all apps in test and bounce volume driver"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				appNodes, err := Inst().S.GetNodesForApp(ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify get nodes for the app %s", ctx.App.Key))
+				log.FailOnError(err, "Failed to get nodes for the app %s", ctx.App.Key)
 				appNode := appNodes[r.Intn(len(appNodes))]
 				stepLog = fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 					Inst().V.String(), ctx.App.Key, appNode)
@@ -281,20 +282,20 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					dash.VerifyFatal(err, nil, "Verify App delete")
 					stepLog = "wait for few seconds for app destroy to trigger"
 					Step(stepLog, func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						time.Sleep(10 * time.Second)
 					})
 				})
 
 				stepLog = "restarting volume driver"
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					StartVolDriverAndWait([]node.Node{appNode})
 				})
 
 				stepLog = fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key)
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verify App %s deletion", ctx.App.Key))
 				})
@@ -322,7 +323,7 @@ var _ = Describe("{AppTasksDown}", func() {
 
 	stepLog := "has to schedule app and delete app tasks"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 
@@ -334,7 +335,7 @@ var _ = Describe("{AppTasksDown}", func() {
 
 		stepLog = "delete all application tasks"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			// Add interval based sleep here to check what time we will exit out of this delete task loop
 			minRunTime := Inst().MinRunTimeMins
 			timeout := (minRunTime) * 60
@@ -360,6 +361,9 @@ var _ = Describe("{AppTasksDown}", func() {
 					stepLog = fmt.Sprintf("delete tasks for app: %s", ctx.App.Key)
 					Step(stepLog, func() {
 						err = Inst().S.DeleteTasks(ctx, nil)
+						if err != nil {
+							PrintDescribeContext(ctx)
+						}
 						dash.VerifyFatal(err, nil, fmt.Sprintf("validate delete tasks for app: %s", ctx.App.Key))
 					})
 
@@ -372,6 +376,9 @@ var _ = Describe("{AppTasksDown}", func() {
 						stepLog = fmt.Sprintf("delete tasks for app: %s", ctx.App.Key)
 						Step(stepLog, func() {
 							err = Inst().S.DeleteTasks(ctx, nil)
+							if err != nil {
+								PrintDescribeContext(ctx)
+							}
 							dash.VerifyFatal(err, nil, fmt.Sprintf("validate delete tasks for app: %s", ctx.App.Key))
 						})
 
@@ -379,7 +386,7 @@ var _ = Describe("{AppTasksDown}", func() {
 					}
 					stepLog = fmt.Sprintf("Sleeping for given duration %d", frequency)
 					Step(stepLog, func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						d := time.Duration(frequency)
 						time.Sleep(time.Minute * d)
 					})
@@ -412,7 +419,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 
 	stepLog := "has to scale up and scale down the app"
 	It(stepLog, func() {
-		dash.Info("has to scale up and scale down the app")
+		log.InfoD("has to scale up and scale down the app")
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -423,13 +430,13 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 
 		stepLog = "Scale up and down all app"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				stepLog = fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes()))
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-					dash.VerifyFatal(err, nil, "Validate get application scale up factor map ")
+					log.FailOnError(err, "Failed to get application scale up factor map")
 					//Scaling up by number of storage-nodes
 					workerStorageNodes := int32(len(node.GetStorageNodes()))
 					for name, scale := range applicationScaleUpMap {
@@ -444,7 +451,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 
 				stepLog = "Giving few seconds for scaled up applications to stabilize"
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					time.Sleep(10 * time.Second)
 				})
 
@@ -452,9 +459,9 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 
 				stepLog = fmt.Sprintf("scale down app %s by 1", ctx.App.Key)
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
-					dash.VerifyFatal(err, nil, "Validate get application scale down factor map ")
+					log.FailOnError(err, "Failed to get application scale down factor map")
 
 					for name, scale := range applicationScaleDownMap {
 						applicationScaleDownMap[name] = scale - 1
@@ -465,7 +472,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 
 				stepLog = "Giving few seconds for scaled up applications to stabilize"
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					time.Sleep(10 * time.Second)
 				})
 
@@ -499,11 +506,11 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 
 	stepLog := "has to cordon all nodes but one, deploy and destroy app"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		stepLog = "Cordon all nodes but one"
 
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			nodes := node.GetWorkerNodes()
 			for _, node := range nodes[1:] {
 				err := Inst().S.DisableSchedulingOnNode(node)
@@ -513,7 +520,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 		})
 		stepLog = "Deploy applications"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			contexts = make([]*scheduler.Context, 0)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -524,7 +531,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 		})
 		stepLog = "Destroy apps"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForDestroy] = false
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = false
@@ -569,26 +576,25 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 
 	stepLog := "has to cordon all storage nodes, deploy and destroy app"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		stepLog = "Cordon all storage nodes"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			nodes := node.GetNodes()
 			storageNodes := node.GetStorageNodes()
 			if len(nodes) == len(storageNodes) {
 				stepLog = "No storageless nodes detected. Skipping.."
-				dash.Warn(stepLog)
+				log.Warn(stepLog)
 				Skip(stepLog)
 			}
 			for _, n := range storageNodes {
 				err := Inst().S.DisableSchedulingOnNode(n)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate disable scheduling on node %s", n.Name))
-				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 		stepLog = "Deploy applications"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 
 			contexts = make([]*scheduler.Context, 0)
 
@@ -600,14 +606,13 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 		})
 		stepLog = "Destroy apps"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForDestroy] = false
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = false
 			for _, ctx := range contexts {
 				err := Inst().S.Destroy(ctx, opts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate App %s detroy init", ctx.App.Key))
-
 			}
 		})
 		Step("Validate destroy", func() {
@@ -655,9 +660,9 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			daemonSets, err := k8sApps.ListDaemonSets("kube-system", metav1.ListOptions{
 				LabelSelector: "name=portworx",
 			})
-			dash.VerifyFatal(err, nil, "validate get daemon sets list")
-			dash.VerifyFatal(len(daemonSets) > 0, true, "validate daemon sets list")
-			dash.VerifyFatal(daemonSets[0].Spec.Template.Spec.Containers, "", "validate daemon set container is not empty")
+			log.FailOnError(err, "Failed to get daemon sets list")
+			dash.VerifyFatal(len(daemonSets) > 0, true, "Daemon sets returned?")
+			dash.VerifyFatal(len(daemonSets[0].Spec.Template.Spec.Containers) > 0, true, "Daemon set container is not empty?")
 			usingVault := false
 			for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
 				if container.Name == portworxContainerName {
@@ -671,13 +676,12 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			}
 			if !usingVault {
 				skipLog := fmt.Sprintf("Skip test for not using %s or %s ", vaultSecretProvider, vaultTransitSecretProvider)
-				dash.Warn(skipLog)
+				log.Warn(skipLog)
 				Skip(skipLog)
 			}
 		} else {
 			spec, err := Inst().V.GetStorageCluster()
-			dash.VerifyFatal(err, nil, "Validate Get storage cluster")
-			Expect(err).ToNot(HaveOccurred())
+			log.FailOnError(err, "Failed to get storage cluster")
 			if *spec.Spec.SecretsProvider != vaultSecretProvider &&
 				*spec.Spec.SecretsProvider != vaultTransitSecretProvider {
 				Skip(fmt.Sprintf("Skip test for not using %s or %s ", vaultSecretProvider, vaultTransitSecretProvider))
@@ -696,7 +700,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 		stepLog := "has to run secrets login for vault or vault-transit"
 
 		It(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			contexts = make([]*scheduler.Context, 0)
 			n := node.GetWorkerNodes()[0]
 			if provider == vaultTransitSecretProvider {
@@ -711,5 +715,88 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	AfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VolumeCreatePXRestart}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeCreatePXRestart", "Validate restart PX while create and attach", nil, 0)
+
+	})
+	contexts := make([]*scheduler.Context, 0)
+
+	stepLog := "Validate volume attachment when px is restarting"
+	It(stepLog, func() {
+		var createdVolIDs map[string]string
+		var err error
+		volCreateCount := 10
+		stepLog := "Create multiple volumes , attached and restart PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stNodes := node.GetStorageNodes()
+			index := rand.Intn(len(stNodes))
+			selectedNode := stNodes[index]
+
+			log.InfoD("Creating and attaching %d volumes on node %s", volCreateCount, selectedNode.Name)
+
+			wg := new(sync.WaitGroup)
+			wg.Add(1)
+			go func(appNode node.Node) {
+				createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
+				if err != nil {
+					log.Fatalf("Error while creating volumes. Err: %v", err)
+				}
+			}(selectedNode)
+			time.Sleep(2 * time.Second)
+			wg.Add(1)
+			go func(appNode node.Node) {
+				defer wg.Done()
+				stepLog = fmt.Sprintf("restart volume driver %s on node: %s", Inst().V.String(), appNode.Name)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = Inst().V.RestartDriver(appNode, nil)
+					log.FailOnError(err, "Error while restarting volume driver")
+
+				})
+			}(selectedNode)
+			wg.Wait()
+
+		})
+
+		stepLog = "Validate the created volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for vol, volPath := range createdVolIDs {
+				cVol, err := Inst().V.InspectVolume(vol)
+				if err == nil {
+					dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
+					dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
+				} else {
+					log.Fatalf("Error while inspecting volume %s. Err: %v", vol, err)
+				}
+			}
+		})
+
+		stepLog = "Deleting the created volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for vol := range createdVolIDs {
+				log.Infof("Detaching and deleting volume: %s", vol)
+				err := Inst().V.DetachVolume(vol)
+				if err == nil {
+					err = Inst().V.DeleteVolume(vol)
+				}
+				log.FailOnError(err, "Error while deleting volume %s", vol)
+
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

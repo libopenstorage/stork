@@ -1,12 +1,12 @@
 package prometheus
 
 import (
+	"github.com/portworx/torpedo/pkg/log"
 	"net/http"
 
 	"github.com/portworx/torpedo/drivers/monitor"
 	prometheus "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 )
 
 type Prom struct {
@@ -132,7 +132,7 @@ func (p *Prom) Init(jobName string, jobType string) error {
 	p.jobName = jobName
 	p.jobType = jobType
 	http.Handle("/metrics", promhttp.Handler())
-	logrus.Infof("Starting http service on port: %s", p.port)
+	log.Infof("Starting http service on port: %s", p.port)
 	go http.ListenAndServe(p.port, nil)
 	return nil
 }

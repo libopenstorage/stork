@@ -2,19 +2,17 @@ package jirautils
 
 import (
 	"bytes"
+	"github.com/portworx/torpedo/pkg/log"
 	"net/http"
 	"time"
 
 	jira "github.com/andygrunwald/go-jira"
-	logInstance "github.com/portworx/torpedo/pkg/log"
-	"github.com/sirupsen/logrus"
 	"github.com/trivago/tgo/tcontainer"
 )
 
 var (
 	client                     *jira.Client
 	isJiraConnectionSuccessful bool
-	log                        *logrus.Logger
 
 	//AccountID for bug assignment
 	AccountID string
@@ -151,8 +149,4 @@ func getProjects() {
 
 		log.Infof("%s: %s\n", project.Key, project.Name)
 	}
-}
-
-func init() {
-	log = logInstance.GetLogInstance()
 }

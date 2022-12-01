@@ -2,8 +2,6 @@ package schedops
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
-
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -15,7 +13,7 @@ import (
 // Driver is the interface for portworx operations under various schedulers
 type Driver interface {
 	// Init initializes the sched-ops
-	Init(logger *logrus.Logger)
+	Init()
 	//GetKubernetesVersion returns kubernetes version
 	GetKubernetesVersion() (*version.Info, error)
 	// StartPxOnNode enables portworx service on given node

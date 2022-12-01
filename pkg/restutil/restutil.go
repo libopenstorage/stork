@@ -3,7 +3,6 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
-	logInstance "github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -13,7 +12,7 @@ import (
 	"time"
 )
 
-//Auth basic auth details for API
+// Auth basic auth details for API
 type Auth struct {
 	Username string
 	Password string
@@ -23,9 +22,7 @@ const (
 	defaultRestTimeOut = 10 * time.Second
 )
 
-var log *logrus.Logger
-
-//Get rest get call
+// Get rest get call
 func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error) {
 
 	respBody, respStatusCode, err := getResponse(http.MethodGet, url, nil, auth, headers)
@@ -35,7 +32,7 @@ func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error)
 	return respBody, respStatusCode, nil
 }
 
-//POST rest post call
+// POST rest post call
 func POST(url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
 
 	respBody, respStatusCode, err := getResponse(http.MethodPost, url, payload, auth, headers)
@@ -46,7 +43,7 @@ func POST(url string, payload interface{}, auth *Auth, headers map[string]string
 
 }
 
-//PUT rest put call
+// PUT rest put call
 func PUT(url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
 
 	respBody, respStatusCode, err := getResponse(http.MethodPut, url, payload, auth, headers)
@@ -57,7 +54,7 @@ func PUT(url string, payload interface{}, auth *Auth, headers map[string]string)
 
 }
 
-//DELETE rest delete call
+// DELETE rest delete call
 func DELETE(url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
 	respBody, respStatusCode, err := getResponse(http.MethodDelete, url, payload, auth, headers)
 	if err != nil {
@@ -73,17 +70,17 @@ func validateURL(url string) error {
 }
 
 func getResponse(httpMethod, url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
-	log = logInstance.GetLogInstance()
+
 	var err error
 	err = validateURL(url)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	log.Tracef("%s: %s", httpMethod, url)
+	logrus.Debugf("%s: %s", httpMethod, url)
 	var req *http.Request
 	if payload != nil {
-		log.Tracef("Payload: %s", payload)
+		logrus.Debugf("Payload: %s", payload)
 		var j []byte
 		j, err = json.Marshal(payload)
 
@@ -109,7 +106,7 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 	if err != nil {
 		return nil, 0, err
 	}
-	log.Tracef("Response Status Code: %d", resp.StatusCode)
+	logrus.Debugf("Response Status Code: %d", resp.StatusCode)
 	respBody, err := getBody(resp.Body)
 	if err != nil {
 		return nil, 0, err
@@ -155,6 +152,6 @@ func getBody(rBody io.ReadCloser) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Response: %s", string(respBody))
+	logrus.Debugf("Response: %s", string(respBody))
 	return respBody, nil
 }

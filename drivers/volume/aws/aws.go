@@ -2,11 +2,10 @@ package aws
 
 import (
 	"fmt"
-
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -24,7 +23,6 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 type aws struct {
 	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
-	log *logrus.Logger
 }
 
 func (d *aws) String() string {
@@ -39,9 +37,8 @@ func (d *aws) RefreshDriverEndpoints() error {
 	return nil
 }
 
-func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
-	d.log = logger
-	d.log.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
+	log.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {

@@ -2,19 +2,18 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/libopenstorage/openstorage/pkg/mount"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/sirupsen/logrus"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -197,7 +196,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 	AfterEach(func() {
 		Step("destroy apps", func() {
 			if CurrentGinkgoTestDescription().Failed {
-				logrus.Info("not destroying apps because the test failed\n")
+				log.Info("not destroying apps because the test failed\n")
 				return
 			}
 			for _, ctx := range contexts {

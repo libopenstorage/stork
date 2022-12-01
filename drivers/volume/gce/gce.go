@@ -2,11 +2,11 @@ package gce
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -24,16 +24,14 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 type gce struct {
 	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
-	log *logrus.Logger
 }
 
 func (d *gce) String() string {
 	return string(GceStorage)
 }
 
-func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
-	d.log = logger
-	d.log.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
+	log.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,12 +34,12 @@ const (
 	pxbRestPort           = 10001
 	defaultPxbServicePort = 10002
 	pxbServiceName        = "px-backup"
-	pxbNamespace          = "px-backup"
 	schedulerDriverName   = "k8s"
 	nodeDriverName        = "ssh"
 	volumeDriverName      = "pxd"
 	licFeatureName        = "BackupNodeCount"
 	enumerateBatchSize    = 100
+	backup_api_endpoint   = "BACKUP_API_ENDPOINT"
 )
 
 type portworx struct {
@@ -110,7 +111,7 @@ func getKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, err
 func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error {
 	var err error
 
-	logrus.Infof("using portworx backup driver under scheduler: %v", schedulerDriverName)
+	log.Infof("using portworx backup driver under scheduler: %v", schedulerDriverName)
 
 	p.nodeDriver, err = node.Get(nodeDriverName)
 	if err != nil {
@@ -128,7 +129,7 @@ func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volum
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
-	if err = p.setDriver(pxbServiceName, pxbNamespace); err != nil {
+	if err = p.setDriver(pxbServiceName, backup.GetPxBackupNamespace()); err != nil {
 		return fmt.Errorf("Error setting px-backup endpoint: %v", err)
 	}
 
@@ -141,34 +142,41 @@ func (p *portworx) constructURL(ip string) string {
 }
 
 func (p *portworx) testAndSetEndpoint(endpoint string) error {
-	pxEndpoint := p.constructURL(endpoint)
-	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
-	if err != nil {
-		logrus.Errorf("unable to get grpc connection: %v", err)
-		return err
+	pxEndpoint := os.Getenv(backup_api_endpoint)
+	// This condition is added for cases when torpedo is not running as a pod in the cluster
+	// Since gRPC calls to backup pod would fail while running from a VM or local machine using ginkgo CLI
+	// This condition will check if there is an Env variable set
+	if pxEndpoint == " " || len(pxEndpoint) == 0 {
+		pxEndpoint = p.constructURL(endpoint)
+
+		conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+		if err != nil {
+			log.Errorf("unable to get grpc connection: %v", err)
+			return err
+		}
+
+		p.healthManager = api.NewHealthClient(conn)
+		_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
+		if err != nil {
+			log.Errorf("HealthManager API error: %v", err)
+			return err
+		}
+
+		p.clusterManager = api.NewClusterClient(conn)
+		p.backupLocationManager = api.NewBackupLocationClient(conn)
+		p.cloudCredentialManager = api.NewCloudCredentialClient(conn)
+		p.backupManager = api.NewBackupClient(conn)
+		p.restoreManager = api.NewRestoreClient(conn)
+		p.backupScheduleManager = api.NewBackupScheduleClient(conn)
+		p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
+		p.organizationManager = api.NewOrganizationClient(conn)
+		p.licenseManager = api.NewLicenseClient(conn)
+		p.ruleManager = api.NewRulesClient(conn)
+
+		log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 	}
 
-	p.healthManager = api.NewHealthClient(conn)
-	_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
-	if err != nil {
-		logrus.Errorf("HealthManager API error: %v", err)
-		return err
-	}
-
-	p.clusterManager = api.NewClusterClient(conn)
-	p.backupLocationManager = api.NewBackupLocationClient(conn)
-	p.cloudCredentialManager = api.NewCloudCredentialClient(conn)
-	p.backupManager = api.NewBackupClient(conn)
-	p.restoreManager = api.NewRestoreClient(conn)
-	p.backupScheduleManager = api.NewBackupScheduleClient(conn)
-	p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
-	p.organizationManager = api.NewOrganizationClient(conn)
-	p.licenseManager = api.NewLicenseClient(conn)
-	p.ruleManager = api.NewRulesClient(conn)
-
-	logrus.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
-
-	return err
+	return nil
 }
 
 func (p *portworx) GetServiceEndpoint(serviceName string, namespace string) (string, error) {
@@ -339,7 +347,7 @@ func (p *portworx) WaitForBackupLocationDeletion(
 		}
 		currentStatus := inspectBlResp.GetBackupLocation().GetBackupLocationInfo().GetStatus().GetStatus()
 		if currentStatus == api.BackupLocationInfo_StatusInfo_Invalid {
-			logrus.Infof("in invalid state")
+			log.Infof("in invalid state")
 			blError = fmt.Errorf("backup location is [%v] is in [%s] state",
 				req.GetName(), currentStatus)
 			return nil, false, blError
@@ -408,14 +416,14 @@ func (p *portworx) GetVolumeBackupIDs(
 	getBackupIDfromStork := func() (interface{}, bool, error) {
 		storkApplicationBackupCR, err = storkClient.GetApplicationBackup(storkApplicationBackupCRName, namespace)
 		if err != nil {
-			logrus.Warnf("failed to get application backup CR [%s], Error:[%v]", storkApplicationBackupCRName, err)
+			log.Warnf("failed to get application backup CR [%s], Error:[%v]", storkApplicationBackupCRName, err)
 			return false, true, err
 		}
-		logrus.Debugf("GetVolumeBackupIDs storkApplicationBackupCR: [%+v]\n", storkApplicationBackupCR)
+		log.Debugf("GetVolumeBackupIDs storkApplicationBackupCR: [%+v]\n", storkApplicationBackupCR)
 		if len(storkApplicationBackupCR.Status.Volumes) > 0 {
 			isComplete := true
 			for _, backupVolume := range storkApplicationBackupCR.Status.Volumes {
-				logrus.Debugf("Volume [%v] has backup ID: [%v]\n", backupVolume.Volume, backupVolume.BackupID)
+				log.Debugf("Volume [%v] has backup ID: [%v]\n", backupVolume.Volume, backupVolume.BackupID)
 				if !strings.Contains(backupVolume.BackupID, "/") {
 					isComplete = false
 				}
@@ -439,11 +447,11 @@ func (p *portworx) GetVolumeBackupIDs(
 	}
 
 	for _, backupVolume := range storkApplicationBackupCR.Status.Volumes {
-		logrus.Debugf("For backupVolume [%+v] with Status [%v] while getting backup id: [%+v]", backupVolume, backupVolume.Status, backupVolume.BackupID)
+		log.Debugf("For backupVolume [%+v] with Status [%v] while getting backup id: [%+v]", backupVolume, backupVolume.Status, backupVolume.BackupID)
 		if backupVolume.Status == "InProgress" && backupVolume.BackupID != "" {
 			volumeBackupIDs = append(volumeBackupIDs, backupVolume.BackupID)
 		} else {
-			logrus.Debugf("Status of backup of volume [+%v] is [%s]. BackupID: [%+v] Reason: [%+v]",
+			log.Debugf("Status of backup of volume [+%v] is [%s]. BackupID: [%+v] Reason: [%+v]",
 				backupVolume, backupVolume.Status, backupVolume.BackupID, backupVolume.Reason)
 		}
 	}
@@ -919,7 +927,7 @@ func (p *portworx) WaitForBackupRunning(
 	var backupErr error
 
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("WaitForBackupRunning inspect backup state for %s", req.Name)
+		log.Debugf("WaitForBackupRunning inspect backup state for %s", req.Name)
 		resp, err := p.backupManager.Inspect(ctx, req)
 
 		if err != nil {
@@ -962,7 +970,7 @@ func (p *portworx) WaitForRestoreRunning(
 	var backupErr error
 
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("WaitForRestoreRunning inspect backup state for %s", req.Name)
+		log.Debugf("WaitForRestoreRunning inspect backup state for %s", req.Name)
 		resp, err := p.restoreManager.Inspect(ctx, req)
 
 		if err != nil {

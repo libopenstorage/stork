@@ -9,8 +9,13 @@ if [ -z "${ENABLE_DASH}" ]; then
 fi
 
 if [ -z "${DASH_UID}" ]; then
-    DASH_UID="0"
+    if [ -e /build.properties ]; then
+      DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
+    else
+      DASH_UID="0"
+    fi
 fi
+
 
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
@@ -434,6 +439,7 @@ spec:
             "--",
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
+            "--secure-apps", "$SECURE_APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
             "--backup-driver", "$BACKUP_DRIVER",
@@ -482,7 +488,6 @@ spec:
             "--testset-id=$DASH_UID",
             "--branch=$BRANCH",
             "--product=$PRODUCT",
-            "--pds-parameter-json=$PDS_PARAMETER_JSON",
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "$APP_DESTROY_TIMEOUT_ARG",
@@ -582,6 +587,8 @@ spec:
       value: "${PDS_CLIENT_SECRET}"
     - name: PDS_CLIENT_ID
       value: "${PDS_CLIENT_ID}"
+    - name: PDS_PARAM_CM
+      value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
     - name: CLUSTER_TYPE

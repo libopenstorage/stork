@@ -2,6 +2,7 @@ package s3utils
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -50,7 +50,7 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 
 	// TODO: add separate function to return cred object based on type
 	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
-	if id == ""{
+	if id == "" {
 		id = os.Getenv("AWS_ACCESS_KEY_ID")
 	}
 	expect(id).NotTo(equal(""),
@@ -108,7 +108,7 @@ func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]
 	S3Client := s3.New(sess)
 	bucket := os.Getenv("DIAGS_BUCKET")
 	prefix := fmt.Sprintf("%s/%s/%s", clusterID, nodeName, GetTimeStamp(getPreviousFolder))
-	logrus.Debugf("Looking for files under folder %s", prefix)
+	log.Debugf("Looking for files under folder %s", prefix)
 	input := &s3.ListObjectsInput{
 		Bucket: &bucket,
 		Prefix: &prefix,

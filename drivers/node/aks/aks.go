@@ -1,6 +1,7 @@
 package aks
 
 import (
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"time"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/libopenstorage/cloudops/azure"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -54,7 +54,7 @@ func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 	totalClusterSize := perZoneCount * int64(len(zones))
 	err = a.ops.SetInstanceGroupSize(a.instanceGroup, totalClusterSize, timeout)
 	if err != nil {
-		logrus.Errorf("failed to set size of node pool %s. Error: %v", a.instanceGroup, err)
+		log.Errorf("failed to set size of node pool %s. Error: %v", a.instanceGroup, err)
 		return err
 	}
 
@@ -64,7 +64,7 @@ func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 func (a *aks) GetASGClusterSize() (int64, error) {
 	nodeCount, err := a.ops.GetInstanceGroupSize(a.instanceGroup)
 	if err != nil {
-		logrus.Errorf("failed to get size of node pool %s. Error: %v", a.instanceGroup, err)
+		log.Errorf("failed to get size of node pool %s. Error: %v", a.instanceGroup, err)
 		return 0, err
 	}
 

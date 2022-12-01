@@ -6,7 +6,7 @@ import (
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	log "github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 // DataServiceDeployment struct
@@ -162,7 +162,7 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 	return dsModel, err
 }
 
-//UpdateDeployment func
+// UpdateDeployment func
 func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID string,
 	appConfigOverride map[string]string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi

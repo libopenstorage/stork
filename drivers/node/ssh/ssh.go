@@ -2,15 +2,6 @@ package ssh
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"io/ioutil"
-	"net"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
-
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -19,11 +10,19 @@ import (
 	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	volumedriver "github.com/portworx/torpedo/drivers/volume"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/log"
 	ssh_pkg "golang.org/x/crypto/ssh"
+	"io/ioutil"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"net"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -52,7 +51,6 @@ type SSH struct {
 	specDir          string
 	execPodNamespace string
 	// TODO keyPath-based ssh
-	log *logrus.Logger
 }
 
 var (
@@ -70,13 +68,13 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	file := keypath
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {
-		logrus.Errorf("failed to read ssh key file. Cause: %s", err.Error())
+		log.Errorf("failed to read ssh key file. Cause: %s", err.Error())
 		return nil, err
 	}
 
 	pubkey, err := ssh_pkg.ParsePrivateKey(buf)
 	if err != nil {
-		logrus.Errorf("failed to parse private key. Cause: %s", err.Error())
+		log.Errorf("failed to parse private key. Cause: %s", err.Error())
 		return nil, err
 	}
 
@@ -90,7 +88,7 @@ func (s *SSH) IsUsingSSH() bool {
 
 // IsNodeRebootedInGivenTimeRange return true if node rebooted in given time range
 func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duration) (bool, error) {
-	s.log.Infof("Checking the uptime for a node %s", n.SchedulerNodeName)
+	log.Infof("Checking the uptime for a node %s", n.SchedulerNodeName)
 	uptimeCmd := "sudo uptime -s"
 
 	t := func() (interface{}, bool, error) {
@@ -129,7 +127,7 @@ func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duratio
 
 // GetDeviceMapperCount return device mapper count in a node
 func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, error) {
-	s.log.Infof("Getting the current devicemapper devices counts in a node %s", n.SchedulerNodeName)
+	log.Infof("Getting the current devicemapper devices counts in a node %s", n.SchedulerNodeName)
 	devMappCmd := "sudo multipath -ll 2>&1|grep dm-|wc -l"
 
 	t := func() (interface{}, bool, error) {
@@ -152,14 +150,13 @@ func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, e
 	if err != nil {
 		return -1, err
 	}
-	s.log.Infof("Currently [%v] device mapped to a node: [%v]", count, n.Name)
+	log.Infof("Currently [%v] device mapped to a node: [%v]", count, n.Name)
 	return count, nil
 }
 
 // Init initializes SSH node driver
 func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	var err error
-	s.log = nodeOpts.Logger
 	s.specDir = nodeOpts.SpecDir
 
 	execPodNamespace, err := getExecPodNamespace()
@@ -296,7 +293,7 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 
 // RebootNode reboots given node
 func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
-	s.log.Infof("Rebooting node %s", n.SchedulerNodeName)
+	log.Infof("Rebooting node %s", n.SchedulerNodeName)
 	rebootCmd := "sudo reboot"
 	if options.Force {
 		rebootCmd = rebootCmd + " -f"
@@ -332,22 +329,22 @@ func (s *SSH) InjectNetworkError(nodes []node.Node, errorInjectionType string, o
 	if errorInjectionType == "delay" {
 		cmd = fmt.Sprintf("%s %s  %s %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem delay ",
 			delayInMillisescond, delayInMillisescond)
-		s.log.Infof("Delay %v ", delayInMillisescond)
+		log.Infof("Delay %v ", delayInMillisescond)
 	} else if errorInjectionType == "drop" {
 		cmd = fmt.Sprintf("%s %s  %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem loss",
 			dropInPercentage)
-		s.log.Infof("DropPercentage %v ", dropInPercentage)
+		log.Infof("DropPercentage %v ", dropInPercentage)
 	} else {
 		return fmt.Errorf("Invalid network error injection type %v", errorInjectionType)
 	}
-	s.log.Infof("Error injection type %v ", errorInjectionType)
-	s.log.Infof("Operation type %v ", operationType)
+	log.Infof("Error injection type %v ", errorInjectionType)
+	log.Infof("Operation type %v ", operationType)
 	connectionOps := node.ConnectionOpts{
 		Timeout:         10 * time.Second,
 		TimeBeforeRetry: 10 * time.Second,
 	}
 	for _, n := range nodes {
-		s.log.Infof("Error injection on Node name : %s of type : %s ", n.Name, errorInjectionType)
+		log.Infof("Error injection on Node name : %s of type : %s ", n.Name, errorInjectionType)
 		t := func() (interface{}, bool, error) {
 			out, err := s.doCmd(n, connectionOps, cmd, true)
 			return out, true, err
@@ -365,7 +362,7 @@ func (s *SSH) InjectNetworkError(nodes []node.Node, errorInjectionType string, o
 
 // CrashNode crashes given node
 func (s *SSH) CrashNode(n node.Node, options node.CrashNodeOpts) error {
-	s.log.Infof("Crashing node %s", n.SchedulerNodeName)
+	log.Infof("Crashing node %s", n.SchedulerNodeName)
 	crashCmd := "echo c > /proc/sysrq-trigger"
 
 	t := func() (interface{}, bool, error) {
@@ -569,7 +566,7 @@ func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error)
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
 	if err != nil {
-		s.log.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+		log.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
 	var debugPod *v1.Pod
@@ -593,10 +590,10 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 	var debugPod *v1.Pod
 	t := func() (interface{}, bool, error) {
 		if debugPod == nil {
-			logrus.Debugf("Finding the debug pod to run command on node %s", n.Name)
+			log.Debugf("Finding the debug pod to run command on node %s", n.Name)
 			allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
 			if err != nil {
-				logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+				log.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 				return nil, true, err
 			}
 			for _, pod := range allPodsForNode.Items {
@@ -613,7 +610,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 			}
 		}
 		cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
-		s.log.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
+		log.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if !ignoreErr && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
@@ -731,7 +728,7 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 	return file, nil
 }
 
-//GetBlockDrives returns the block drives on the node
+// GetBlockDrives returns the block drives on the node
 func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
 	drives := make(map[string]*node.BlockDrive)
 	driveCmd := fmt.Sprintf("sudo /bin/lsblk -P -s -d -p -o NAME,SIZE,MOUNTPOINT,FSTYPE,TYPE")
