@@ -5836,7 +5836,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 	chaosLevel := ChaosMap[AsyncDRVolumeOnly]
 	var (
 		migrationNamespaces   []string
-		taskNamePrefix        = "async-dr-vol-only-mig"
+		taskNamePrefix        = "adr-vonly"
 		allMigrations         []*storkapi.Migration
 		includeResourcesFlag  = false
 		startApplicationsFlag = false
@@ -5856,7 +5856,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		}
 		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			log.InfoD("Task name %s\n", taskName)
 			appContexts := ScheduleApplications(taskName)
 			*contexts = append(*contexts, appContexts...)
