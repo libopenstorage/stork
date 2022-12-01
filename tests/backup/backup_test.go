@@ -128,9 +128,20 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		app_list = Inst().AppList
 	)
 	var contexts []*scheduler.Context
+	labelSelectores := make(map[string]string)
 	var CloudCredUID_list []string
 	var appContexts []*scheduler.Context
-
+	var backup_location_name string
+	var bkpNamespaces []string
+	var cluster_uid string
+	var cluster_status api.ClusterInfo_StatusInfo_Status
+	bkpNamespaces = make([]string, 0)
+	var pre_rule_uid string
+	var post_rule_uid string
+	var pre_rule_status bool
+	var post_rule_status bool
+	var namespaceMapping map[string]string
+	namespaceMapping = make(map[string]string)
 	providers := getProviders()
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
@@ -153,6 +164,11 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)
 			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
 		}
 	})
 	It("Basic Backup Creation", func() {
@@ -176,18 +192,19 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
-			pre_rule_status := CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
+			pre_rule_status, pre_rule_uid = CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
 			dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
 			log.InfoD("Creating post rule for deployed apps")
-			post_rule_status := CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
+			post_rule_status, post_rule_uid = CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
 			dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
 		})
+
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
 				CredName := fmt.Sprintf("%s-%s", "cred", provider)
-				backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
+				backup_location_name = fmt.Sprintf("%s-%s", "location", provider)
 				CloudCredUID = uuid.New()
 				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
 				BackupLocationUID = uuid.New()
@@ -197,6 +214,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
 			}
 		})
+
 		Step("Creating backup schedule policies", func() {
 			log.InfoD("Creating backup interval schedule policy")
 			interval_schedule_policy_info := CreateIntervalSchedulePolicy(5, 15, 2)
@@ -218,14 +236,27 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			monthly_policy_status := Backupschedulepolicy("monthly", uuid.New(), orgID, monthly_schedule_policy_info)
 			dash.VerifyFatal(monthly_policy_status, nil, "Creating monthly schedule policy")
 		})
+
 		Step("Register cluster for backup", func() {
-			CloudCredUID = uuid.New()
-			CreateCloudCredential("azure", "azureaccount", CloudCredUID, orgID)
-			// To create cloud clustre
-			RegisterBackupCluster(orgID, "azure", CloudCredUID)
-			//To create on prem cluster
-			RegisterBackupCluster(orgID, "", "")
+			cluster_status, cluster_uid = RegisterBackupCluster(orgID, "", "")
+			dash.VerifyFatal(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
+
+		Step("Taking backup of applications", func() {
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
+					labelSelectores, orgID, cluster_uid, "backup-pre-rule", pre_rule_uid, "backup-post-rule", post_rule_uid)
+			}
+		})
+
+		Step("Restoring the backed up application", func() {
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				CreateRestore("test-restore", backupName, namespaceMapping, destinationClusterName, orgID)
+			}
+		})
+
 	})
 	JustAfterEach(func() {
 		policy_list := []string{"interval", "daily", "weekly", "monthly"}
@@ -304,7 +335,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				sourceClusterName, namespace, backupName), func() {
 				CreateBackup(backupName,
 					sourceClusterName, backupLocationName, BackupLocationUID,
-					[]string{namespace}, labelSelectores, orgID)
+					[]string{namespace}, labelSelectores, orgID, "", "", "", "", "")
 			})
 		}
 
@@ -1028,7 +1059,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 
 			Step(fmt.Sprintf("Create Backup [%s]", BackupName), func() {
 				CreateBackup(BackupName, sourceClusterName, backupLocationName, BackupLocationUID,
-					[]string{bkpNamespace}, labelSelectors, OrgID)
+					[]string{bkpNamespace}, labelSelectors, OrgID, "", "", "", "", "")
 			})
 
 			triggerFn := func() (bool, error) {
@@ -1910,7 +1941,7 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 	Step(fmt.Sprintf("Create cluster [%s-%s] in org [%s]",
 		clusterName, provider, orgID), func() {
 		kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-		dash.VerifyFatal(err, nil, "Fetching kubeconfig path for source cluster")
+		log.FailOnError(err, "Fetching kubeconfig path for source cluster")
 		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
 			kubeconfigPath, orgID, "", "")
 	})
@@ -1937,35 +1968,62 @@ func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string
 
 // CreateBackup creates backup
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
-	namespaces []string, labelSelectors map[string]string, orgID string) {
+	namespaces []string, labelSelectors map[string]string, orgID string, uid string, pre_rule_name string,
+	pre_rule_uid string, post_rule_name string, post_rule_uid string) {
 
-	Step(fmt.Sprintf("Create backup [%s] in org [%s] from cluster [%s]",
-		backupName, orgID, clusterName), func() {
+	var bkp *api.BackupObject
+	var bkp_uid string
+	backupDriver := Inst().Backup
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  uid,
+		},
+		PreExecRuleRef: &api.ObjectRef{
+			Name: pre_rule_name,
+			Uid:  pre_rule_uid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: post_rule_name,
+			Uid:  post_rule_uid,
+		},
+	}
+	//ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err,  "Fetching px-central-admin ctx")
 
-		backupDriver := Inst().Backup
-		bkpCreateRequest := &api.BackupCreateRequest{
-			CreateMetadata: &api.CreateMetadata{
-				Name:  backupName,
-				OrgId: orgID,
-			},
-			BackupLocationRef: &api.ObjectRef{
-				Name: bLocation,
-				Uid:  bLocationUID,
-			},
-			Cluster:        clusterName,
-			Namespaces:     namespaces,
-			LabelSelectors: labelSelectors,
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	log.FailOnError(err, "Taking backup of applications")
+
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkp_uid = bkp.Uid
+			break
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to create backup [%s] in org [%s]. Error: [%v]",
-				backupName, orgID, err))
-	})
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkp_uid,
+		OrgId: orgID,
+	}
+	time.Sleep(time.Minute * 2)
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	log.FailOnError(err, "Inspecting the backup taken")
+	dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup taken")
 }
 
 func GetNodesForBackup(backupName string, bkpNamespace string,
@@ -2028,30 +2086,44 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 func CreateRestore(restoreName string, backupName string,
 	namespaceMapping map[string]string, clusterName string, orgID string) {
 
-	Step(fmt.Sprintf("Create restore [%s] in org [%s] on cluster [%s]",
-		restoreName, orgID, clusterName), func() {
-
-		backupDriver := Inst().Backup
-		createRestoreReq := &api.RestoreCreateRequest{
-			CreateMetadata: &api.CreateMetadata{
-				Name:  restoreName,
-				OrgId: orgID,
-			},
-			Backup:           backupName,
-			Cluster:          clusterName,
-			NamespaceMapping: namespaceMapping,
+	var bkp *api.BackupObject
+	var bkp_uid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup needed to be restored")
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkp_uid = bkp.Uid
+			break
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
-				restoreName, orgID, clusterName, err))
-		// TODO: validate createClusterResponse also
-	})
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:           backupName,
+		Cluster:          clusterName,
+		NamespaceMapping: namespaceMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkp_uid,
+		},
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	log.FailOnError(err, "Creating restore")
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	time.Sleep(time.Minute * 3)
+	resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+	log.FailOnError(err, "Verifying restore")
+	dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess, "Verifying restore")
 }
 
 // TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
