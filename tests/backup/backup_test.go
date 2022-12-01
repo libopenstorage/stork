@@ -188,11 +188,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
-			// To create cloud cluster
-			//CloudCredUID = uuid.New()
-			//CreateCloudCredential("azure", "azureaccount", CloudCredUID, orgID)
-			//RegisterBackupCluster(orgID, "azure", CloudCredUID)
-			//To create on prem cluster
 			cluster_status, cluster_uid = RegisterBackupCluster(orgID, "", "")
 			dash.VerifyFatal(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
@@ -202,9 +197,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
 					labelSelectores, orgID, cluster_uid, "backup-pre-rule", pre_rule_uid, "backup-post-rule", post_rule_uid)
-				//If backup is taken without pre/post rule
-				//CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
-				//	labelSelectores, orgID, cluster_uid, "", "", "", "")
 			}
 		})
 
