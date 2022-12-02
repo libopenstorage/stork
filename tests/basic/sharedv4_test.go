@@ -33,7 +33,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-
+		StartTorpedoTest("Sharedv4Functional", "Functional Test for Sharedv4", nil, testrailID)
 		// Set up all apps
 		contexts = nil
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -206,6 +206,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

@@ -50,6 +50,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 		wantAllAfterSuiteActions = false
 	})
 	JustBeforeEach(func() {
+		StartTorpedoTest("MigrateDeployment", "Migration of application to destination cluster", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var (
@@ -140,6 +141,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

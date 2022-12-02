@@ -694,6 +694,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 		testrailID = 82774
 		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82774
 		JustBeforeEach(func() {
+			StartTorpedoTest("RunSecretsLogin", "Test secrets login for vaults", nil, 0)
 			runID = testrailuttils.AddRunsToMilestone(testrailID)
 		})
 

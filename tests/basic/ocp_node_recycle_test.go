@@ -26,6 +26,9 @@ var _ = Describe("{RecycleOCPNode}", func() {
 		wantAllAfterSuiteActions = false
 		wantAfterSuiteSystemCheck = true
 	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("RecycleOCPNode", "Test drives and pools after recyling a node", nil, 0)
+	})
 
 	It("Validing the drives and pools after recyling a node", func() {
 		Step("Get the storage and storageless nodes and delete them", func() {
@@ -86,5 +89,8 @@ var _ = Describe("{RecycleOCPNode}", func() {
 			// Validating the apps after recycling the Storage node
 			ValidateApplications(contexts)
 		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })

@@ -13,6 +13,9 @@ import (
 var _ = Describe("{UpgradeCluster}", func() {
 	var contexts []*scheduler.Context
 
+	JustAfterEach(func() {
+		StartTorpedoTest("UpgradeCluster", "Upgrade cluster test", nil, 0)
+	})
 	It("upgrade scheduler and ensure everything is running fine", func() {
 		contexts = make([]*scheduler.Context, 0)
 
@@ -53,6 +56,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })

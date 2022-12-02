@@ -46,7 +46,9 @@ var autopilotruleBasicTestCases = []apapi.AutopilotRule{
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
-
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sPvcBasic}", testSuiteName), "Perform basic scenarios with Autopilot", nil, 0)
+	})
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
@@ -104,6 +106,9 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
@@ -111,6 +116,9 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 // driver and validates PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), "Perform basic scenarios with Autopilot and restart volume driver ", nil, 0)
+	})
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -190,9 +198,15 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), "Restart Autopilot test", nil, 0)
+	})
 	It("has to start IO workloads, create rules that resize pools based on capacity, restart autopilot and validate pools have been resized once", func() {
 		var contexts []*scheduler.Context
 
@@ -284,10 +298,16 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This test is used for performing upgrade autopilot when autopilot rules in ActionInProgress state
 var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), "Upgrade Autopilot test", nil, 0)
+	})
 	It("has to start IO workloads, create rules that resize pools based on capacity, upgrade autopilot and validate pools have been resized once", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -374,12 +394,18 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // sizes of storage pools by adding new disks to the nodes where volumes reside
 var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sPoolExpand}", testSuiteName), "Pool expansion test on autopilot", nil, 0)
+	})
 	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandAddDisk", testSuiteName))
@@ -486,10 +512,16 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 		})
 
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // Restart Volume driver during resize pool with add-disk option
 var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), "Pool expansion and volume driver restart test on autopilot", nil, 0)
+	})
 	It("has to restart portworx during resize pool with add-disk , validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandRestartVolDriver", testSuiteName))
@@ -544,12 +576,18 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName)
 		})
 
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes and sizes of storage pools
 var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), "PVC and Pool expand test on autopilot", nil, 0)
+	})
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 
@@ -638,9 +676,15 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sEvents}", testSuiteName), "Events test on autopilot", nil, 0)
+	})
 	It("has to fill up the volume completely, resize the volumes, validate events and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sEvents", testSuiteName))
@@ -693,9 +737,15 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), "Pool Resize Failure test on autopilot", nil, 0)
+	})
 	It("create rules with incorrect scale percentage value, wait for failed event, update incorrect value and validate pools", func() {
 		var contexts []*scheduler.Context
 
@@ -760,9 +810,15 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), "Create volume and rebalance test on autopilot", nil, 0)
+	})
 	It("has to create couple volumes on the same pool, run rebalance, validate rebalance and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceProvMean", testSuiteName))
@@ -825,9 +881,15 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), "validate rebalance on autopilot", nil, 0)
+	})
 	It("has to create couple volumes on the same pool, run rebalance, validate rebalance and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceUsageMean", testSuiteName))
@@ -883,9 +945,15 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRestartAutoPilotRebalance}", testSuiteName), "restart autopilot and rebalance test", nil, 0)
+	})
 	It("has to start IO workloads, create rules that rebalance pools, restart autopilot and validate pools have been rebalanced", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilotRebalance", testSuiteName))
@@ -986,9 +1054,15 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), fu
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), "Rebalance and resize PVC at same time on autopilot", nil, 0)
+	})
 	It("has to run rebalance and resize PVC at the same time, validate rebalance, PVC sizes and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceProvsMeanAndPvc", testSuiteName))
@@ -1083,6 +1157,9 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This testsuite is used for performing rebalance scenarios and pool resize with Autopilot rules where it
@@ -1090,6 +1167,9 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 // rebalalnce and sizes of storage pools
 // NOTE: this test is using volumes with replicaset is 3 and make sure that you have at least 4 nodes to do rebalance
 var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName), "rebalance and resize pools", nil, 0)
+	})
 	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
@@ -1167,9 +1247,15 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 			}
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), "Rebalance Update and delete volume test on autopilot", nil, 0)
+	})
 	It("has to create couple volumes on the same pool, update and delete autopilot rule, run rebalance, validate rebalance and teardown apps", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceUpdateDelete", testSuiteName))
 		var contexts []*scheduler.Context
@@ -1236,9 +1322,15 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), func()
 		})
 
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), "Rebalance with approval test on autopilot", nil, 0)
+	})
 	It("has to run rebalance and wait for approval, approve the rule, run rebalance, validate rebalance and teardown apps", func() {
 		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
 
@@ -1350,6 +1442,9 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func()
 			Inst().S.DeleteAutopilotRule(apRule.Name)
 		})
 
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })
 

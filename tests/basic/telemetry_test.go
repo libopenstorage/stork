@@ -98,6 +98,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("DiagsTelemetryPxctlHealthyStatus", "Validate telemetry health", nil, testrailID)
 		if !isTelemetryOperatorEnabled {
 			Skip("Skip test because telemetry is not enabled...")
 		}
@@ -118,6 +119,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -128,6 +130,7 @@ var _ = Describe("{DiagsBasic}", func() {
 
 	BeforeEach(func() {
 		oneTimeInit()
+		StartTorpedoTest("DiagsBasic", "Perform basic test on diags", nil, 0)
 	})
 
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
@@ -154,6 +157,7 @@ var _ = Describe("{DiagsBasic}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
@@ -161,14 +165,15 @@ var _ = Describe("{DiagsBasic}", func() {
 // This test performs basic diags collection and validates them on S3 bucket
 var _ = Describe("{DiagsCCMOnS3}", func() {
 	var testrailIDs = []int{54917, 54912, 54910}
-
 	BeforeEach(func() {
+
 		oneTimeInit()
 	})
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
 	var runIDs []int
 	JustBeforeEach(func() {
+		StartTorpedoTest("DiagsCCMOnS3", "Validate telemetry pushed to s3", nil, 0)
 		for _, testRailID := range testrailIDs {
 			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailID))
 		}
@@ -209,6 +214,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		for i, testRailID := range testrailIDs {
 			AfterEachTest(contexts, testRailID, runIDs[i])
 		}
@@ -226,6 +232,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("ProfileOnlyDiags", "Validate telemtry for profile only diags", nil, testrailID)
 	})
 	var contexts []*scheduler.Context
 	var diagsFiles []string
@@ -328,6 +335,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -337,9 +345,9 @@ var _ = Describe("{DiagsClusterWide}", func() {
 	var testrailID = 54916
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54916
 	var runID int
-
 	BeforeEach(func() {
 		oneTimeInit()
+		StartTorpedoTest("DiagsClusterWide", "Validate cluster wide diags", nil, testrailID)
 	})
 
 	JustBeforeEach(func() {
@@ -383,6 +391,7 @@ var _ = Describe("{DiagsClusterWide}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -392,6 +401,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 	var contexts []*scheduler.Context
 
 	BeforeEach(func() {
+		StartTorpedoTest("DiagsAsyncBasic", "Async diags collection test", nil, 0)
 		oneTimeInit()
 	})
 
@@ -425,6 +435,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
@@ -449,6 +460,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 	})
 
 	JustBeforeEach(func() {
+		StartTorpedoTest("DiagsAutoStorage", "Diags auto storage test", nil, 0)
 		for _, testRailID := range testProcNmsTestRailIDs {
 			runIDs[testRailID] = testrailuttils.AddRunsToMilestone(testRailID)
 		}
@@ -542,6 +554,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		testRailID := testProcNmsTestRailIDs[pxProcessNm]
 		AfterEachTest(contexts, testRailID, runIDs[testRailID])
 	})
@@ -562,6 +575,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("DiagsOnStoppedPXnode", "Diags test on a node where PX is stopped", nil, 0)
 		if !isTelemetryOperatorEnabled {
 			Skip("Skip test because telemetry is not enabled...")
 		}
@@ -617,6 +631,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -633,6 +648,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("DiagsSpecificNode", "Diags test on a specific node", nil, testrailID)
 		if !isTelemetryOperatorEnabled {
 			Skip("Skip test because telemetry is not enabled...")
 		}
@@ -682,6 +698,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

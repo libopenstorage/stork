@@ -61,6 +61,9 @@ func deleteCloudsnapCredential() {
 // This test performs basic tests making sure Pure direct access are running as expected
 var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("PureVolumeCRUDWithSDK", "Test pure volumes on applications, run CRUD", nil, 0)
+	})
 
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
@@ -80,6 +83,7 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
@@ -87,6 +91,9 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 // This test performs basic tests making sure Pure direct access volumes are running as expected
 var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("PureVolumeCRUDWithPXCTL", "Test pure volumes on applications, run CRUD using pxctl", nil, 0)
+	})
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		contexts = make([]*scheduler.Context, 0)
@@ -104,6 +111,7 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })

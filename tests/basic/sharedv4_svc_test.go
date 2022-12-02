@@ -39,7 +39,9 @@ const (
 var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 	var contexts []*scheduler.Context
 	var nodeReplicaMap map[string]bool
-
+	JustBeforeEach(func() {
+		StartTorpedoTest("Sharedv4SvcPodRestart", "Validate failover Test", nil, 0)
+	})
 	It("has to setup, validate, failover, make sure pods on old and new server got restarted, and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 
@@ -214,6 +216,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 	AfterEach(func() {
@@ -238,7 +241,7 @@ var _ = Describe("{PVCAccessModeFunctional}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-
+		StartTorpedoTest("PVCAccessModeFunctional", "PVC access mode functional Test", nil, testrailID)
 		// save the original custom app configs
 		origCustomAppConfigs = make(map[string]scheduler.AppConfig)
 		for appName, customAppConfig := range Inst().CustomAppConfig {
@@ -337,6 +340,7 @@ var _ = Describe("{PVCAccessModeFunctional}", func() {
 	})
 
 	AfterEach(func() {
+		defer EndTorpedoTest()
 		Step("destroy apps", func() {
 			if CurrentGinkgoTestDescription().Failed {
 				log.Info("not destroying apps because the test failed\n")
@@ -481,7 +485,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-
+		StartTorpedoTest("Sharedv4SvcFunctional", "Sharedv4 Svc Functional Test", nil, testrailID)
 		// Set up all apps
 		contexts = nil
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1283,6 +1287,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

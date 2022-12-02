@@ -341,6 +341,9 @@ func annotateMonitor(context *scheduler.Context, releaseName string) {
 // This test performs basic test of installing px-central with helm
 // px-license-server and px-minotor will be installed after px-central is validated
 var _ = Describe("{InstallCentral}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("InstallCentral", "InstallCentral Test", nil, 0)
+	})
 	It("has to setup, validate and teardown apps", func() {
 		//var context *scheduler.Context
 
@@ -384,11 +387,17 @@ var _ = Describe("{InstallCentral}", func() {
 		//	destroyPxcentral(context)
 		//})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This test installs px-central from release repo then upgrade using staging repo
 // testing 1.2.3 -> 1.3.0 multi charts to single chart upgrade
 var _ = Describe("{UpgradeCentralSingle}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeCentralSingle", "UpgradeCentralSingle Test", nil, 0)
+	})
 	It("has to setup, upgrade, validate and teardown apps", func() {
 		var context *scheduler.Context
 
@@ -488,9 +497,15 @@ var _ = Describe("{UpgradeCentralSingle}", func() {
 			destroyPxcentral(context)
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{InstallCentralWithoutBackup}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("InstallCentralWithoutBackup", "InstallCentralWithoutBackup Test", nil, 0)
+	})
 	It("has to setup, validate and teardown apps", func() {
 		var context *scheduler.Context
 
@@ -507,5 +522,8 @@ var _ = Describe("{InstallCentralWithoutBackup}", func() {
 		Step("destroy apps", func() {
 			destroyPxcentral(context)
 		})
+	})
+	JustBeforeEach(func() {
+		EndTorpedoTest()
 	})
 })
