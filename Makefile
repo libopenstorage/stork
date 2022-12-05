@@ -90,8 +90,8 @@ DOCK_BUILD_CNT	:= golang:1.18.3
 docker-build:
 	@echo "Building using docker"
 	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
-		/bin/bash -c "cd /go/src/github.com/libopenstorage/stork; apt update || true && apt install go-md2man awscli -y; make -j 2 && make test && make container && \
-		make integration-test && make integration-test-container"
+		/bin/bash -c "cd /go/src/github.com/libopenstorage/stork; apt update || true && apt install go-md2man awscli -y; make -j 2 && make test && \
+		make integration-test"
 
 gocyclo:
 	GO111MODULE=off go get -u github.com/fzipp/gocyclo
