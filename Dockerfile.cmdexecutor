@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/rhel7-atomic
+FROM registry.access.redhat.com/ubi8-minimal:latest
 MAINTAINER Portworx Inc. <support@portworx.com>
 
 LABEL name="openstorage/cmdexecutor" \
