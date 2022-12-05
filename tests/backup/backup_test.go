@@ -280,6 +280,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 	volumeParams := make(map[string]map[string]string)
 
 	BeforeEach(func() {
+		StartTorpedoTest("BackupCreateKillStorkRestore", "Validate Backup Create and Kill Stork and Restore", nil, 0)
 		wantAllAfterSuiteActions = false
 	})
 
@@ -462,6 +463,9 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			TearDownBackupRestore(bkpNamespaces, bkpNamespaces)
 		})
 	})
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This performs scale test of px-backup and kills stork in the middle of
@@ -481,6 +485,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 
 	BeforeEach(func() {
 		wantAllAfterSuiteActions = false
+		StartTorpedoTest("MultiProviderBackupKillStork", "Performs scale test of px-backup and kills stork in the middle", nil, 0)
 	})
 
 	It("has to connect and check the backup setup", func() {
@@ -984,6 +989,9 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 			}
 		})
 	})
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 func killStork() {
@@ -1015,6 +1023,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 
 	BeforeEach(func() {
 		wantAllAfterSuiteActions = false
+		StartTorpedoTest("BackupCrashVolDriver", "crashes volume driver (PX) while backup is in progress", nil, 0)
 	})
 
 	It("has to complete backup and restore", func() {
@@ -1175,6 +1184,9 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			TearDownBackupRestore(bkpNamespaces, bkpNamespaces)
 		})
 	})
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{BackupRestoreSimultaneous}", func() {
@@ -1195,6 +1207,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 
 	BeforeEach(func() {
 		wantAllAfterSuiteActions = false
+		StartTorpedoTest("BackupRestoreSimultaneous", "Backup Restore Simultaneously", nil, 0)
 	})
 
 	It("has to perform simultaneous backups and restores", func() {
@@ -1401,6 +1414,9 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			}
 		})
 	})
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{BackupRestoreOverPeriod}", func() {
@@ -1425,6 +1441,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 
 	BeforeEach(func() {
 		wantAllAfterSuiteActions = false
+		StartTorpedoTest("BackupRestoreOverPeriod", "Backup and Restore Over a period of time", nil, 0)
 	})
 
 	It("has to connect and check the backup setup", func() {
@@ -1644,6 +1661,9 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 			log.Infof("%d/%d restores succeeded.", successfulRestores, numRestores)
 		})
 	})
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
@@ -1669,6 +1689,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 
 	BeforeEach(func() {
 		wantAllAfterSuiteActions = false
+		StartTorpedoTest("BackupRestoreOverPeriodSimultaneous", "BackupRestoreOverPeriodSimultaneous", nil, 0)
 	})
 
 	It("has to connect and check the backup setup", func() {
@@ -1912,6 +1933,9 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
+	})
+	AfterEach(func() {
+		EndTorpedoTest()
 	})
 })
 
