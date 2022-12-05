@@ -142,7 +142,7 @@ px-statfs:
 	@echo "Building px_statfs.so"
 	@cd drivers/volume/portworx/px-statfs && gcc -g -shared -fPIC -o $(BIN)/px_statfs.so px_statfs.c -ldl -D__USE_LARGEFILE64
 
-container: help
+container: 
 	@echo "Building container: docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile . "
 	sudo docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile .
 
