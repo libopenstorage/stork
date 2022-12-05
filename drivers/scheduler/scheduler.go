@@ -75,6 +75,9 @@ type AppConfig struct {
 	CustomArgs           []string `yaml:"custom_args"`
 	StorageClassSharedv4 string   `yaml:"storage_class_sharedv4"`
 	PVCAccessMode        string   `yaml:"pvc_access_mode"`
+	Repl                 string   `yaml:"repl"`
+	Fs                   string   `yaml:"fs"`
+	AggregationLevel     string   `yaml:"aggregation_level"`
 }
 
 // InitOptions initialization options
