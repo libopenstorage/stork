@@ -126,7 +126,7 @@ const (
 	appConfigTemplateName = "QaDefault"
 	defaultRetryInterval  = 10 * time.Minute
 	duration              = 900
-	timeOut               = 15 * time.Minute
+	timeOut               = 20 * time.Minute
 	timeInterval          = 10 * time.Second
 	maxtimeInterval       = 30 * time.Second
 	envDsVersion          = "DS_VERSION"
@@ -996,7 +996,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	case redis:
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
-		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster"
+		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster --user ${PDS_USER}"
 		pod, err = CreateRedisWorkload(deploymentName, redisStressImage, dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
 			log.Errorf("An Error Occured while creating redis workload %v", err)
@@ -1097,7 +1097,7 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 	}
 	err = ValidateDataServiceDeployment(deployment, namespace)
 	if err != nil {
-		return nil, nil, nil, err
+		return deployment, nil, nil, err
 	}
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, nil
 }

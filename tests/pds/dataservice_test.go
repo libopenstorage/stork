@@ -45,7 +45,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+				deployment, _, _, err = pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
@@ -60,15 +60,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 					namespace,
 				)
 				Expect(err).NotTo(HaveOccurred())
-
-				defer func() {
-					if !isDeploymentsDeleted {
-						Step("Delete created deployments")
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}()
 
 				Step("Validate Storage Configurations", func() {
 					log.Infof("data service deployed %v ", ds.Name)
@@ -115,10 +106,27 @@ var _ = Describe("{DeletePDSPods}", func() {
 					Expect(err).NotTo(HaveOccurred())
 					log.InfoD("Deployments pods are up and healthy")
 				})
+
+				Step("Delete Deployments", func() {
+					log.InfoD("Deleting DataService %v ", ds.Name)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					isDeploymentsDeleted = true
+				})
 			}
 		})
 	})
 	JustAfterEach(func() {
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 })
@@ -131,7 +139,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	It("deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper {
+				if ds.Name == zookeeper {
+					log.Warnf("Scaling of nodes is not supported for %v dataservice ", ds.Name)
 					continue
 				}
 				log.InfoD("Deploying DataService %v ", ds.Name)
@@ -145,7 +154,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.Infof("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -162,15 +171,6 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					namespace,
 				)
 				Expect(err).NotTo(HaveOccurred())
-
-				defer func() {
-					if !isDeploymentsDeleted {
-						Step("Delete created deployments")
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}()
 
 				Step("Validate Storage Configurations", func() {
 					log.Infof("data service deployed %v ", ds.Name)
@@ -284,6 +284,15 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 })
@@ -300,6 +309,15 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 })
@@ -316,6 +334,15 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 })
@@ -343,7 +370,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+				deployment, _, _, err = pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
@@ -358,15 +385,6 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 					namespace,
 				)
 				Expect(err).NotTo(HaveOccurred())
-
-				defer func() {
-					if !isDeploymentsDeleted {
-						Step("Delete created deployments")
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}()
 
 				Step("Validate Storage Configurations", func() {
 					log.Infof("data service deployed %v ", ds.Name)
@@ -404,6 +422,15 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 })
@@ -503,7 +530,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 		log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
-		deployment, _, dataServiceVersionBuildMap, err := pdslib.DeployDataServices(dataservice, projectID,
+		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
 			deploymentTargetID,
 			dnsZone,
 			deploymentName,
@@ -518,16 +545,6 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			namespace,
 		)
 		Expect(err).NotTo(HaveOccurred())
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				log.InfoD("Deleting DataService %v ", dataservice)
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-			}
-		}()
 
 		Step("Validate Storage Configurations", func() {
 			log.Infof("data service deployed %v ", dataservice)
@@ -606,9 +623,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
 			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
 			Expect(config.Spec.Nodes).Should(Equal(replicas))
-			for version, build := range dataServiceVersionBuildMap {
-				Expect(config.Spec.Version).Should(Equal(version + "-" + build[0]))
-			}
+			Expect(config.Spec.Version).Should(Equal(dsVersion + "-" + dsBuild))
 		})
 
 		Step("Delete Deployments", func() {
@@ -650,13 +665,18 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 			Expect(err).NotTo(HaveOccurred())
 			namespaces = append(namespaces, ns)
 		}
+		isNamespacesDeleted = false
 
 		defer func() {
-			for _, namespace := range namespaces {
-				log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
-				log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
-				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
-				Expect(err).NotTo(HaveOccurred())
+			if !isNamespacesDeleted {
+				Step("Delete created namespaces", func() {
+					for _, namespace := range namespaces {
+						log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+						log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
+						err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
+						Expect(err).NotTo(HaveOccurred())
+					}
+				})
 			}
 		}()
 
@@ -686,6 +706,16 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 				}
 			})
 
+			Step("Delete created namespaces", func() {
+				for _, namespace := range namespaces {
+					log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+					log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
+					err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
+					Expect(err).NotTo(HaveOccurred())
+				}
+				isNamespacesDeleted = true
+			})
+
 		})
 	})
 
@@ -704,6 +734,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 		nname := "test-namespace-0"
 		_, err := pdslib.CreateK8sPDSNamespace(nname)
 		Expect(err).NotTo(HaveOccurred())
+		isNamespacesDeleted = false
 		log.Infof("Created namespace: %v", nname)
 		log.InfoD("Created namespace: %v", nname)
 
@@ -753,15 +784,6 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				)
 				Expect(err).NotTo(HaveOccurred())
 
-				defer func() {
-					if !isDeploymentsDeleted {
-						Step("Delete created deployments")
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}()
-
 				Step("Validate Storage Configurations", func() {
 
 					log.Infof("data service deployed %v ", ds)
@@ -805,6 +827,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			Step("Verify that the namespace was deleted", func() {
 				err := pdslib.ValidateK8sNamespaceDeleted(nname)
 				Expect(err).NotTo(HaveOccurred())
+				isNamespacesDeleted = true
 			})
 
 			Step("Verify created deployments have been deleted", func() {
@@ -820,6 +843,22 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
+		defer func() {
+			if !isNamespacesDeleted {
+				err := pdslib.DeleteK8sPDSNamespace("test-namespace-0")
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 })
@@ -860,15 +899,6 @@ var _ = Describe("{RestartPXPods}", func() {
 					namespace,
 				)
 				Expect(err).NotTo(HaveOccurred())
-
-				defer func() {
-					if !isDeploymentsDeleted {
-						Step("Delete created deployments")
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}()
 
 				Step("Validate Storage Configurations", func() {
 					log.Infof("data service deployed %v ", ds.Name)
@@ -1013,6 +1043,16 @@ var _ = Describe("{RestartPXPods}", func() {
 	})
 
 	JustAfterEach(func() {
+		//TODO: Write a wrapper method for defer func
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 
@@ -1078,9 +1118,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 			cleanup = append(cleanup, deployment.GetId())
 
 		})
-
 	}
-
 	return cleanup
 }
 
@@ -1092,8 +1130,8 @@ var _ = Describe("{RollingRebootNodes}", func() {
 	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				log.Infof("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
+				log.Infof("Deploying DataService %v ", ds.Name)
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				dash.VerifyFatal(err, nil, "Verifying data service deployment.")
 
@@ -1186,11 +1224,22 @@ var _ = Describe("{RollingRebootNodes}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					Expect(err).NotTo(HaveOccurred())
 					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					isDeploymentsDeleted = true
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
+
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
 		defer EndTorpedoTest()
 	})
 })
