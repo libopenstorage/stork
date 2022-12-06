@@ -1402,7 +1402,7 @@ func WaitForMigration(migrationList []*v1alpha1.Migration) error {
 				return "", false, err
 			}
 			if mig.Status.Status != v1alpha1.MigrationStatusSuccessful {
-				logrus.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
+				logrus.Infof("Migration %s in namespace %s is pending: %v", m.Name, m.Namespace, mig.Status.Status)
 				isComplete = false
 			}
 		}

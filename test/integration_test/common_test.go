@@ -26,6 +26,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -152,10 +153,11 @@ var backupLocationPath string
 var genericCsiConfigMap string
 var externalTest bool
 var storkVersionCheck bool
+var storkVersion string
+var pxVersion string
 var cloudDeletionValidate bool
 var isInternalLBAws bool
 var pxNamespace string
-var storkVersion string
 var testrailHostname string
 var testrailUsername string
 var testrailPassword string
@@ -275,11 +277,19 @@ func setup() error {
 			return fmt.Errorf("stork version not found in configmap: %s", cmName)
 		}
 		storkVersion = getStorkVersion(ver)
+		utils.StorkVersion = ver
+
 		if storkVersionCheck == true {
 			if getStorkVersion(ver) != getStorkVersion(version.Version) {
 				return fmt.Errorf("stork version mismatch, found: %s, expected: %s", getStorkVersion(ver), getStorkVersion(version.Version))
 			}
 		}
+	}
+	stc, err := operator.Instance().ListStorageClusters("kube-system")
+	if err != nil {
+		logrus.Warnf("failed to list PX storage cluster during setup: %v, probably a daemonset install for portworx", err)
+	} else {
+		utils.PortworxVersion = oputils.GetPortworxVersion(&stc.Items[0]).Original()
 	}
 
 	isInternalLBAws, err = strconv.ParseBool(os.Getenv(internalLBAws))
