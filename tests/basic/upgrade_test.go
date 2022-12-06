@@ -52,7 +52,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
 					continue
 				}
-				log.Fatalf("Adding block drive(s) failed. ERR: %v", err)
+				log.FailOnError(err, "Adding block drive(s) failed.")
 			}
 		}
 		log.InfoD("Scheduling applications and validating")

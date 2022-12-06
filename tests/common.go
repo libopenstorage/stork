@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
+	"math/rand"
 	"net/http"
 	"regexp"
 
@@ -4836,56 +4837,96 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 // ValidatePoolRebalance checks rebalnce state of pools if running
 func ValidatePoolRebalance() error {
 	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+	if err != nil {
+		return err
+	}
 
-	if err == nil {
+	for _, job := range rebalanceJobs {
+		jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
 
-		for _, job := range rebalanceJobs {
-			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+		if err != nil {
+			return err
+		}
 
-			if err == nil {
+		previousDone := uint64(0)
+		jobState := jobResponse.GetJob().GetState()
+		if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+			return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+		}
 
-				previousDone := uint64(0)
-				jobState := jobResponse.GetJob().GetState()
-				if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
-					return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+		if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+			log.InfoD("Job %v is in paused/pending state", job.GetId())
+		}
+
+		if jobState == opsapi.StorageRebalanceJobState_DONE {
+			log.InfoD("Job %v is in DONE state", job.GetId())
+		}
+
+		if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+			log.InfoD("Job %v is in Running state", job.GetId())
+
+			currentDone, total := getReblanceWorkSummary(jobResponse)
+			//checking for rebalance progress
+			for currentDone < total && previousDone < currentDone {
+				time.Sleep(2 * time.Minute)
+				log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+				jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+				if err != nil {
+					return err
 				}
+				previousDone = currentDone
+				currentDone, total = getReblanceWorkSummary(jobResponse)
+			}
 
-				if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
-					log.InfoD("Job %v is in paused/pending state", job.GetId())
-				}
-
-				if jobState == opsapi.StorageRebalanceJobState_DONE {
-					log.InfoD("Job %v is in DONE state", job.GetId())
-				}
-
-				if jobState == opsapi.StorageRebalanceJobState_RUNNING {
-					log.InfoD("Job %v is in Running state", job.GetId())
-
-					currentDone, total := getReblanceWorkSummary(jobResponse)
-					//checking for rebalance progress
-					for currentDone < total && previousDone < currentDone {
-						time.Sleep(2 * time.Minute)
-						log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
-						jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
-						if err != nil {
-							return err
-						}
-						previousDone = currentDone
-						currentDone, total = getReblanceWorkSummary(jobResponse)
-					}
-
-					if previousDone == currentDone {
-						return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
-					}
-					if currentDone == total {
-						log.InfoD("Rebalance for job %v completed,", job.GetId())
-					}
-
-				}
-
+			if previousDone == currentDone {
+				return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
+			}
+			if currentDone == total {
+				log.InfoD("Rebalance for job %v completed,", job.GetId())
 			}
 		}
 	}
+
+	var pools map[string]*opsapi.StoragePool
+	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+	log.FailOnError(err, "error getting pools list")
+
+	for _, pool := range pools {
+
+		if pool == nil {
+			return fmt.Errorf("pool value is nil")
+		}
+		currentLastMsg := ""
+		f := func() (interface{}, bool, error) {
+			expandedPool, err := GetStoragePoolByUUID(pool.Uuid)
+			if err != nil {
+				return nil, true, fmt.Errorf("error getting pool by using id %s", pool.Uuid)
+			}
+
+			if expandedPool == nil {
+				return nil, false, fmt.Errorf("expanded pool value is nil")
+			}
+			if expandedPool.LastOperation != nil {
+				log.Infof("Pool Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
+					return nil, false, fmt.Errorf("Pool is failed state. Error: %s", expandedPool.LastOperation)
+				}
+				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
+					if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") || strings.Contains(expandedPool.LastOperation.Msg, "rebalance is running") {
+						if currentLastMsg == expandedPool.LastOperation.Msg {
+							return nil, false, fmt.Errorf("pool reblance is not progressing")
+						} else {
+							currentLastMsg = expandedPool.LastOperation.Msg
+							return nil, true, nil
+						}
+					}
+				}
+			}
+			return nil, false, nil
+		}
+		_, err = task.DoRetryWithTimeout(f, time.Minute*180, time.Minute*2)
+	}
+
 	return err
 }
 
@@ -5103,4 +5144,53 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		count--
 	}
 	return createdVolIDs, nil
+}
+
+//GetPoolIDWithIOs returns the pools with IOs happening
+func GetPoolIDWithIOs(pools map[string]*opsapi.StoragePool) (string, error) {
+	// pick a  pool doing some IOs from a pools list
+	for _, pool := range pools {
+		currentUsedSize := pool.Used
+		time.Sleep(3 * time.Second)
+		updatedPool, err := GetStoragePoolByUUID(pool.Uuid)
+		if err != nil {
+			return "", err
+		}
+		newUsedSize := updatedPool.Used
+		if currentUsedSize != newUsedSize {
+			return pool.Uuid, nil
+		}
+	}
+	return "", fmt.Errorf("no pools have IOs running")
+}
+
+//GetRandomNodeWithPoolIOs returns node with IOs running
+func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
+	// pick a storage node with pool having IOs
+	for _, stNode := range stNodes {
+		pools := stNode.Pools
+		for _, pool := range pools {
+			time.Sleep(3 * time.Second)
+			updatedPool, err := GetStoragePoolByUUID(pool.Uuid)
+			if err != nil {
+				return node.Node{}, err
+			}
+			if pool.Used != updatedPool.Used {
+				return stNode, nil
+			}
+		}
+	}
+	return node.Node{}, fmt.Errorf("no node with IOs running identified")
+}
+
+func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
+	// pick a random storageless node
+	randomIndex := rand.Intn(len(slNodes))
+	for _, slNode := range slNodes {
+		if randomIndex == 0 {
+			return slNode
+		}
+		randomIndex--
+	}
+	return node.Node{}
 }
