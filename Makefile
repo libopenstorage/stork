@@ -25,7 +25,7 @@ GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
                                    grep -v 'externalversions' | \
                                    grep -v 'versioned' | \
                                    grep -v 'generated' | \
-								   grep -v 'hack')
+                                   grep -v 'hack')
 
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
@@ -55,49 +55,67 @@ vendor-update:
 vendor:
 	go mod vendor
 
-lint:
-	GO111MODULE=off go get -u golang.org/x/lint/golint
-	for file in $(GO_FILES); do \
+# TOOLS build rules
+#
+$(GOPATH)/bin/golint:
+	GOFLAGS="" go install golang.org/x/lint/golint@latest
+
+$(GOPATH)/bin/staticcheck:
+	GOFLAGS="" go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
+
+$(GOPATH)/bin/errcheck:
+	GOFLAGS="" go install github.com/kisielk/errcheck@latest
+
+$(GOPATH)/bin/gocyclo:
+	GOFLAGS="" go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+
+$(GOPATH)/bin/revive:
+	GOFLAGS="" go install github.com/mgechev/revive@latest
+
+# Static checks
+#
+lint: $(GOPATH)/bin/golint
+	# golint check ...
+	@for file in $(GO_FILES); do \
 		echo "running lint on ${file}" \
-		golint $${file}; \
+		$(GOPATH)/bin/golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
 			exit 1; \
 		fi; \
 	done
 
 vet:
-	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
-		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
-	          go vet $(PKGS); \
-	          go vet -tags unittest $(PKGS); \
-	          go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test"
+	# go-vet checks ...
+	@go vet $(PKGS)
+	@go vet -tags unittest $(PKGS)
+	@go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
-staticcheck:
-	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
-		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
-			  go install honnef.co/go/tools/cmd/staticcheck@v0.3.3; \
-			  staticcheck $(PKGS); \
-			  staticcheck -tags integrationtest test/integration_test/*.go;staticcheck -tags unittest $(PKGS)"
+staticcheck: $(GOPATH)/bin/staticcheck
+	# staticcheck checks ...
+	@$(GOPATH)/bin/staticcheck $(PKGS)
+	@$(GOPATH)/bin/staticcheck -tags integrationtest test/integration_test/*.go
+	@$(GOPATH)/bin/staticcheck -tags unittest $(PKGS)
 
-errcheck:
-	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
-		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
-	          GO111MODULE=off go get -u github.com/kisielk/errcheck; \
-	          errcheck -verbose -blank $(PKGS); \
-	          errcheck -verbose -blank -tags unittest $(PKGS); \
-	          errcheck -verbose -blank -tags integrationtest /go/src/github.com/libopenstorage/stork/test/integration_test"
+errcheck: $(GOPATH)/bin/errcheck
+	# errcheck checks ...
+	@$(GOPATH)/bin/errcheck -blank $(PKGS)
+	@$(GOPATH)/bin/errcheck -blank -tags unittest $(PKGS)
+	@$(GOPATH)/bin/errcheck -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
 check-fmt:
-	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
-		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
-			  diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES));"
+	# gofmt check ...
+	@bash -c "diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES))"
 
 do-fmt:
-	 gofmt -s -w $(GO_FILES)
+	gofmt -s -w $(GO_FILES)
 
-gocyclo:
-	GO111MODULE=off go get -u github.com/fzipp/gocyclo
-	gocyclo -over 15 $(GO_FILES)
+gocyclo: $(GOPATH)/bin/gocyclo
+	# gocyclo check ...
+	@$(GOPATH)/bin/gocyclo -over 15 $(GO_FILES)
+
+revive: $(GOPATH)/bin/revive
+	# revive check ...
+	@$(GOPATH)/bin/revive -formatter friendly --exclude ./vendor/... ./...
 
 pretest: check-fmt vet errcheck staticcheck
 
