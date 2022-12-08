@@ -19,6 +19,7 @@ require (
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
 	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
+	github.com/ktrysmt/go-bitbucket v0.9.55
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
@@ -39,7 +40,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.9.0
-	github.com/stretchr/testify v1.7.2-0.20220317124727-77977386932a
+	github.com/stretchr/testify v1.8.1
 	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
@@ -57,13 +58,14 @@ require (
 )
 
 replace (
-	// Misc dependencies
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 	github.com/docker/distribution => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
 	github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20190717161051-705d9623b7c1+incompatible
 	github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
 	github.com/heptio/ark => github.com/heptio/ark v1.0.0
 	github.com/heptio/velero => github.com/heptio/velero v1.0.0
+	// Misc dependencies
+	github.com/ktrysmt/go-bitbucket => github.com/portworx/go-bitbucket v0.0.0-20221102234725-954b1ca9d61d
 	//github.com/docker/docker => github.com/moby/moby v17.12.0-ce-rc1.0.20200618181300-9dc6525e6118+incompatible
 
 	// PX dependencies
