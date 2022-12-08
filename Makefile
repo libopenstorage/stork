@@ -142,16 +142,21 @@ px-statfs:
 	@echo "Building px_statfs.so"
 	@cd drivers/volume/portworx/px-statfs && gcc -g -shared -fPIC -o $(BIN)/px_statfs.so px_statfs.c -ldl -D__USE_LARGEFILE64
 
-container: 
+container: help
 	@echo "Building container: docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile . "
 	sudo docker build --pull --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile .
 
 	@echo "Building container: docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor ."
 	sudo docker build --pull --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor .
 
-help:
+help: help.1 help-cmdexecutor.1
+
+help.1:
 	@echo "Updating help file"
 	go-md2man -in help.md -out help.1
+
+help-cmdexecutor.1:
+	@echo "Updating cmdexecutor help file"
 	go-md2man -in help-cmdexecutor.md -out help-cmdexecutor.1
 
 deploy:
