@@ -3,12 +3,13 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -91,6 +92,7 @@ var _ = Describe("{Longevity}", func() {
 		AsyncDR:                TriggerAsyncDR,
 		AsyncDRVolumeOnly:      TriggerAsyncDRVolumeOnly,
 		StorkApplicationBackup: TriggerStorkApplicationBackup,
+		StorkAppBkpVolResize:   TriggerStorkAppBkpVolResize,
 		RestartKvdbVolDriver:   TriggerRestartKvdbVolDriver,
 		HAIncreaseAndReboot:    TriggerHAIncreaseAndReboot,
 		AddDiskAndReboot:       TriggerPoolAddDiskAndReboot,
@@ -593,6 +595,7 @@ func populateIntervals() {
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
+	triggerInterval[StorkAppBkpVolResize] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
@@ -752,6 +755,17 @@ func populateIntervals() {
 	triggerInterval[StorkApplicationBackup][3] = 21 * baseInterval
 	triggerInterval[StorkApplicationBackup][2] = 24 * baseInterval
 	triggerInterval[StorkApplicationBackup][1] = 27 * baseInterval
+
+	triggerInterval[StorkAppBkpVolResize][10] = 1 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][9] = 3 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][8] = 6 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][7] = 9 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][6] = 12 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][5] = 15 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][4] = 18 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][3] = 21 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][2] = 24 * baseInterval
+	triggerInterval[StorkAppBkpVolResize][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
 
@@ -1234,6 +1248,7 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][0] = 0
 	triggerInterval[AsyncDRVolumeOnly][0] = 0
 	triggerInterval[StorkApplicationBackup][0] = 0
+	triggerInterval[StorkAppBkpVolResize][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0
