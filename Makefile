@@ -115,7 +115,7 @@ integration-test:
 
 integration-test-container:
 	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
-	@cd test/integration_test && sudo docker build --tag $(STORK_TEST_IMG) -f Dockerfile .
+	@cd test/integration_test && sudo docker build --pull --tag $(STORK_TEST_IMG) -f Dockerfile .
 
 integration-test-deploy:
 	sudo docker push $(STORK_TEST_IMG)
@@ -144,10 +144,10 @@ px-statfs:
 
 container: 
 	@echo "Building container: docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile . "
-	sudo docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile .
+	sudo docker build --pull --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile .
 
 	@echo "Building container: docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor ."
-	sudo docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor .
+	sudo docker build --pull --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor .
 
 help:
 	@echo "Updating help file"
