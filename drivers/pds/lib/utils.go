@@ -687,7 +687,6 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		}
 		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
-
 	})
 	return err
 }

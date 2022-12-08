@@ -156,7 +156,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 				log.Infof("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+				deployment, _, _, err = pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
@@ -223,6 +223,12 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
+				})
+
+				Step("Validate Deployments before scale up", func() {
+					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					log.Info("Deployments pods are up and healthy")
 				})
 
 				Step("Scaling up the dataservice replicas", func() {
