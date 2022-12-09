@@ -229,30 +229,29 @@ func stopDriverCsiPodFailoverTest(t *testing.T) {
 	require.NoError(t, err, "Failed to get csi pods")
 
 	nodeNameMap := node.GetNodesByName()
-	nonCsiNodeAlreadyFound := false
 
+	// To be enabled after KubeSchedulerConfiguration fix is integrated in operator
 	// Get all nodes where CSI pods are running
-	isCsiPodNode := make(map[string]bool)
+	/*isCsiPodNode := make(map[string]bool)
 	for _, csiPod := range csiPods.Items {
 		isCsiPodNode[csiPod.Spec.NodeName] = true
 	}
 
-	// Make sure to stop px on all the non csi nodes expect one
+	Make sure to stop px on all the non csi nodes expect one
+	nonCsiNodeAlreadyFound := false
 	logrus.Infof("Stopping PX on all non CSI pods except one for failover verification")
 	for nodeName, schedNode := range nodeNameMap {
 		if _, ok := isCsiPodNode[nodeName]; !ok {
-			if nonCsiNodeAlreadyFound && schedNode.IsStorageDriverInstalled {
-				err = volumeDriver.StopDriver([]node.Node{schedNode}, false, nil)
-				require.NoError(t, err, "Error stopping driver on node %+v", nodeNameMap[nodeName])
-				defer func() {
-					err := volumeDriver.StartDriver(nodeNameMap[nodeName])
-					require.NoError(t, err, "Error starting driver on node %+v", nodeName)
-				}()
-			} else {
-				nonCsiNodeAlreadyFound = true
+			if schedNode.IsStorageDriverInstalled {
+				if nonCsiNodeAlreadyFound {
+					err = volumeDriver.StopDriver([]node.Node{schedNode}, false, nil)
+					require.NoError(t, err, "Error stopping driver on node %+v", nodeNameMap[nodeName])
+				} else {
+					nonCsiNodeAlreadyFound = true
+				}
 			}
 		}
-	}
+	}*/
 
 	podToFailover := csiPods.Items[0]
 	nodeName := podToFailover.Spec.NodeName
@@ -261,15 +260,15 @@ func stopDriverCsiPodFailoverTest(t *testing.T) {
 	logrus.Infof("Stopping PX on node = %v where px pod %v is running", nodeName, podToFailover.Name)
 	err = volumeDriver.StopDriver([]node.Node{nodeNameMap[nodeName]}, false, nil)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
-	defer func() {
-		err := volumeDriver.StartDriver(nodeNameMap[nodeName])
-		require.NoError(t, err, "Error starting driver on node %+v", nodeName)
-	}()
+
 	time.Sleep(nodeOfflineTimeout)
 
 	// Verify CSI pods are running on online nodes after failover
 	logrus.Infof("Checking if all CSI pods are running on online PX nodes after failover")
 	verifyCsiPodsRunningOnOnlineNode(t)
+
+	err = volumeDriver.StartDriver(nodeNameMap[nodeName])
+	require.NoError(t, err, "Error re-starting driver on Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
 }
 
 func verifyCsiPodsRunningOnOnlineNode(t *testing.T) {
