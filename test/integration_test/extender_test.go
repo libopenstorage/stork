@@ -299,10 +299,6 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 		if schedNode.IsStorageDriverInstalled {
 			err = core.Instance().CordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
 			require.NoError(t, err, "Error cordorning k8s node for stork test pod")
-			defer func() {
-				err = core.Instance().UnCordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
-				require.NoError(t, err, "Error uncordorning k8s node for stork test pod")
-			}()
 		}
 	}
 
@@ -322,6 +318,12 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 	require.Error(t, err, "Expected an error while scheduling the pod")
 
 	destroyAndWait(t, ctxs)
+
+	// Uncordon all the nodes after test
+	nodeNameMap := node.GetNodesByName()
+	for _, schedNode := range nodeNameMap {
+		core.Instance().UnCordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
+	}
 }
 
 func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []string) {
