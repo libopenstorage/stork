@@ -155,8 +155,11 @@ container: help
 
 help:
 	@echo "Updating help file"
-	go-md2man -in help.md -out help.1
-	go-md2man -in help-cmdexecutor.md -out help-cmdexecutor.1
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
+           /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
+                apt-get update -y && apt-get install -y go-md2man; \
+                go-md2man -in help.md -out help.1; \
+                go-md2man -in help-cmdexecutor.md -out help-cmdexecutor.1;"
 
 deploy:
 	sudo docker push $(STORK_IMG)
