@@ -444,7 +444,7 @@ github.com/json-iterator/go
 github.com/jstemmer/go-junit-report
 github.com/jstemmer/go-junit-report/formatter
 github.com/jstemmer/go-junit-report/parser
-# github.com/ktrysmt/go-bitbucket v0.9.55 => github.com/portworx/go-bitbucket v0.0.0-20221102234725-954b1ca9d61d
+# github.com/ktrysmt/go-bitbucket v0.9.55 => github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253
 github.com/ktrysmt/go-bitbucket
 # github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1

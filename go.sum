@@ -1415,6 +1415,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611/go.mod h1:4hklRW/4DQpLqkcXcjtNprbH2tz/sJaNtqinfPWl/LA=
 github.com/portworx/go-bitbucket v0.0.0-20221102234725-954b1ca9d61d h1:oVPcYJa53FJdDaXCcR7aouQTBue/6RntCri1P3ZN/cc=
 github.com/portworx/go-bitbucket v0.0.0-20221102234725-954b1ca9d61d/go.mod h1:y5wrrDHCGUFAtuC43GyLBeFigq7rwrh4HqeDOOyZT+A=
+github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253 h1:Y+ns0zcEOXx790cGGCI117ZosBHix3OXZK4Z0oSaNpg=
+github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253/go.mod h1:y5wrrDHCGUFAtuC43GyLBeFigq7rwrh4HqeDOOyZT+A=
 github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149/go.mod h1:nb5AupP/63ByyqAYfZ+E32LDEnP0PjgH6w+yKXxWIgE=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=

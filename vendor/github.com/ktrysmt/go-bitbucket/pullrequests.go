@@ -10,6 +10,16 @@ type PullRequests struct {
 	c *Client
 }
 
+// APIv1Merge implements Pull Request Merge API for BitBucket server API 1.0
+func (p *PullRequests) APIv1Merge(po *PullRequestsOptions) (interface{}, error) {
+	data, err := p.buildPullRequestBody(po)
+	if err != nil {
+		return nil, err
+	}
+	urlStr := fmt.Sprintf("%s/rest/api/1.0/projects/%s/repos/%s/pull-requests/%s/merge?version=%d", p.c.GetApiBaseURL(), po.ProjectKey, po.RepoSlug, po.ID, po.Version)
+	return p.c.execute("POST", urlStr, data)
+}
+
 // APIv1Create implements BitBucket Server API
 func (p *PullRequests) APIv1Create(po *PullRequestsOptions) (interface{}, error) {
 	// more details here https://developer.atlassian.com/server/bitbucket/rest/v803/api-group-projects/#api-projects-projectkey-repos-repositoryslug-pull-requests-post
