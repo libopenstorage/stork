@@ -5914,10 +5914,10 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 }
 
 func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	log.Infof("Stork Appplication Backup triggered at: %v", time.Now())
 	defer endLongevityTest()
 	startLongevityTest(StorkApplicationBackup)
 	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork Appplication Backup triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -5940,19 +5940,19 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 		taskNamePrefix   = "stork-app-backup-"
 	)
 
-	Step(fmt.Sprintf("Deploy applications for for backup, with frequency: %v", chaosLevel), func() {
+	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
 
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("unable to write kubeconfigs, getting error %v", err))
+			return
 		}
-
 		err = SetSourceKubeConfig()
 		if err != nil {
-			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("getting error in setting source kubeconfig %v", err))
+			return
 		}
-		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			log.Infof("Task name %s\n", taskName)
@@ -5982,17 +5982,17 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 				UpdateOutcome(event, fmt.Errorf("backup successful failed with %v", bkp_comp_err))
 				return
 			}
-			log.Infof("backup successful, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+			log.InfoD("backup successful, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
 		}
 		updateMetrics(*event)
 	})
 }
 
 func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	log.Infof("Stork Appplication Backup triggered at: %v", time.Now())
 	defer endLongevityTest()
 	startLongevityTest(StorkAppBkpVolResize)
 	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork Appplication Backup with volume resize triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -6016,17 +6016,18 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 		requestedVols  []*volume.Volume
 	)
 
-	Step(fmt.Sprintf("Deploy applications for for backup, with frequency: %v", chaosLevel), func() {
+	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
 
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("unable to write kubeconfigs, getting error %v", err))
+			return
 		}
-
 		err = SetSourceKubeConfig()
 		if err != nil {
-			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("getting error in setting source kubeconfig %v", err))
+			return
 		}
 		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -6075,7 +6076,7 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 						}
 					}
 				}
-				log.Infof("backup successful and volume resize injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+				log.InfoD("backup successful and volume resize injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
 			}
 			updateMetrics(*event)
 		}
