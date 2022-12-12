@@ -322,7 +322,8 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 	// Uncordon all the nodes after test
 	nodeNameMap := node.GetNodesByName()
 	for _, schedNode := range nodeNameMap {
-		core.Instance().UnCordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
+		err = core.Instance().UnCordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error uncordorning k8s node for stork test pod")
 	}
 }
 
