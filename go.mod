@@ -65,7 +65,7 @@ replace (
 	github.com/heptio/ark => github.com/heptio/ark v1.0.0
 	github.com/heptio/velero => github.com/heptio/velero v1.0.0
 	// Misc dependencies
-	github.com/ktrysmt/go-bitbucket => github.com/portworx/go-bitbucket v0.0.0-20221102234725-954b1ca9d61d
+	github.com/ktrysmt/go-bitbucket => github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253
 	//github.com/docker/docker => github.com/moby/moby v17.12.0-ce-rc1.0.20200618181300-9dc6525e6118+incompatible
 
 	// PX dependencies
