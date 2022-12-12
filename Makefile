@@ -13,6 +13,8 @@ STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
 CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
+DOCK_BUILD_CNT  := golang:1.19.1
+
 ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork' | grep -v 'hack')
 endif
@@ -64,24 +66,31 @@ lint:
 	done
 
 vet:
-	go vet $(PKGS)
-	go vet -tags unittest $(PKGS)
-	go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
+	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
+	          go vet $(PKGS); \
+	          go vet -tags unittest $(PKGS); \
+	          go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test"
 
 staticcheck:
-	GOFLAGS="" go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
-	staticcheck $(PKGS)
-	staticcheck -tags integrationtest test/integration_test/*.go
-	staticcheck -tags unittest $(PKGS)
+	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
+		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
+			  go install honnef.co/go/tools/cmd/staticcheck@v0.3.3; \
+			  staticcheck $(PKGS); \
+			  staticcheck -tags integrationtest test/integration_test/*.go;staticcheck -tags unittest $(PKGS)"
 
 errcheck:
-	GO111MODULE=off go get -u github.com/kisielk/errcheck
-	errcheck -verbose -blank $(PKGS)
-	errcheck -verbose -blank -tags unittest $(PKGS)
-	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
+	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
+	          GO111MODULE=off go get -u github.com/kisielk/errcheck; \
+	          errcheck -verbose -blank $(PKGS); \
+	          errcheck -verbose -blank -tags unittest $(PKGS); \
+	          errcheck -verbose -blank -tags integrationtest /go/src/github.com/libopenstorage/stork/test/integration_test"
 
 check-fmt:
-	bash -c "diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES))"
+	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
+		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
+			  diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES));"
 
 do-fmt:
 	 gofmt -s -w $(GO_FILES)
@@ -108,6 +117,8 @@ integration-test:
 
 integration-test-container:
 	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
+	@rm -rf test/integration_test/stork-specs && mkdir -p test/integration_test/stork-specs
+	@cp -r specs/* test/integration_test/stork-specs
 	@cd test/integration_test && sudo docker build --tag $(STORK_TEST_IMG) -f Dockerfile .
 
 integration-test-deploy:
@@ -144,8 +155,11 @@ container: help
 
 help:
 	@echo "Updating help file"
-	go-md2man -in help.md -out help.1
-	go-md2man -in help-cmdexecutor.md -out help-cmdexecutor.1
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
+           /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
+                apt-get update -y && apt-get install -y go-md2man; \
+                go-md2man -in help.md -out help.1; \
+                go-md2man -in help-cmdexecutor.md -out help-cmdexecutor.1;"
 
 deploy:
 	sudo docker push $(STORK_IMG)
