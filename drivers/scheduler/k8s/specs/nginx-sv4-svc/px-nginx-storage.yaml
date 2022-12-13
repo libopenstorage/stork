@@ -15,6 +15,7 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
   sharedv4: "true"
+  nodiscard: "true"
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim

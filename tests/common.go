@@ -7,13 +7,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
 	"regexp"
-
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
 	"google.golang.org/grpc/codes"
@@ -5038,6 +5038,26 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
+}
+
+// enableAutoFSTrim on supported PX version.
+func EnableAutoFSTrim() {
+	nodes := node.GetWorkerNodes()
+	pxVersion, err := Inst().V.GetPxVersionOnNode(nodes[0])
+	log.FailOnError(err, "Is autofstrim supported on the cluster ?")
+	log.Infof("PX version %s", pxVersion)
+	pxVersionList := []string{}
+	pxVersionList = strings.Split(pxVersion, ".")
+	majorVer, err := strconv.Atoi(pxVersionList[0])
+	minorVer, err := strconv.Atoi(pxVersionList[1])
+	if majorVer < 2 || (majorVer == 2 && minorVer < 10) {
+		log.Warnf("Auto FSTrim cannot be enabled on PX version %s", pxVersion)
+	} else {
+		err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+			"--auto-fstrim": "on"})
+		log.FailOnError(err, "Autofstrim is enabled on the cluster ?")
+		log.Infof("Auto FSTrim enabled on the cluster")
+	}
 }
 
 // EndTorpedoTest ends the logging for torpedo test

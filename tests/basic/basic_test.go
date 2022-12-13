@@ -1,8 +1,8 @@
 package tests
 
 import (
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
+        "github.com/portworx/torpedo/pkg/aetosutil"
+        "github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 	"time"
@@ -52,6 +52,7 @@ var _ = BeforeSuite(func() {
 	log.Infof("Init instance")
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)
+	EnableAutoFSTrim()
 })
 
 var _ = AfterSuite(func() {

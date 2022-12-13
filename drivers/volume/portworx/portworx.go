@@ -15,6 +15,7 @@ import (
 	"path"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -3760,6 +3761,41 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	}
 	log.Debugf("Successfully updated Cluster Options")
 	return nil
+}
+
+//GetClusterOpts get all cluster options
+func (d *portworx) GetClusterOpts(n node.Node, options []string) (map[string]string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+	cmd := fmt.Sprintf("%s cluster options list -j  json", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pxctl cluster options. cause: %v", err)
+	}
+	var data = map[string]interface{}{}
+	err = json.Unmarshal([]byte(out), &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal pxctl cluster options. cause: %v", err)
+	}
+	sort.Strings(options)
+	var options_map = make(map[string]string)
+	//Values can be string, array or map
+	for key, val := range data {
+		index := sort.SearchStrings(options, key)
+		if index < len(options) && options[index] == key {
+			options_map[key] = fmt.Sprint(val)
+		}
+	}
+	//Make sure required options are available
+	for _, option := range options {
+		if _, ok := options_map[option]; !ok {
+			return nil, fmt.Errorf("Failed to find option : %v", option)
+		}
+	}
+	return options_map, nil
 }
 
 func (d *portworx) SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error {

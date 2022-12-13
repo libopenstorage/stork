@@ -5,4 +5,5 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
    repl: "3"
+   nodiscard: "true"
 allowVolumeExpansion: true

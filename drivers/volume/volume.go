@@ -272,6 +272,9 @@ type Driver interface {
 	//SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, clusterOpts map[string]string) error
 
+	//GetClusterOpts gets cluster options
+	GetClusterOpts(n node.Node, options []string) (map[string]string, error)
+
 	//SetClusterOptsWithConfirmation sets cluster options and confirm it
 	SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error
 

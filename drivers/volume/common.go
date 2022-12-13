@@ -666,6 +666,14 @@ func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) er
 	}
 }
 
+//GetClusterOpts gets cluster options
+func (d *DefaultDriver) GetClusterOpts(n node.Node, options []string) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetClusterOpts()",
+	}
+}
+
 // SetClusterOptsWithConfirmation sets cluster options and confirm it
 func (d *DefaultDriver) SetClusterOptsWithConfirmation(n node.Node, rtOpts map[string]string) error {
 	return &errors.ErrNotSupported{

@@ -14,6 +14,7 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
   sharedv4: "true"
+  nodiscard: "true"
   mount_options: "nodiscard=true"
   nodiscard: "true"
 allowVolumeExpansion: true
