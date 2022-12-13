@@ -66,7 +66,7 @@ lint:
 	done
 
 vet:
-	  docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+	  docker run --privileged --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
 	          go vet $(PKGS); \
 	          go vet -tags unittest $(PKGS); \
