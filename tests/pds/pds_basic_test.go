@@ -24,6 +24,7 @@ const (
 	cassandra               = "Cassandra"
 	redis                   = "Redis"
 	rabbitmq                = "RabbitMQ"
+	mongodb                 = "MongoDB"
 	mysql                   = "MySQL"
 	kafka                   = "Kafka"
 	zookeeper               = "ZooKeeper"
