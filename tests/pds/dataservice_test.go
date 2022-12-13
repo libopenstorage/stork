@@ -275,7 +275,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the workload generating deployments", func() {
-					if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper) {
+					if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper || ds.Name == mongodb) {
 						if ds.Name == cassandra || ds.Name == postgresql {
 							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
 							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
@@ -641,7 +641,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 		defer func() {
 			Step("Delete the workload generating deployments", func() {
-				if !(dataservice == mysql || dataservice == kafka || dataservice == zookeeper) {
+				if !(dataservice == mysql || dataservice == kafka || dataservice == zookeeper || dataservice == mongodb) {
 					if dataservice == cassandra || dataservice == postgresql {
 						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 					} else {
@@ -955,7 +955,7 @@ var _ = Describe("{RestartPXPods}", func() {
 
 				defer func() {
 					Step("Delete the workload generating deployments", func() {
-						if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper) {
+						if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper || ds.Name == mongodb) {
 							if ds.Name == cassandra || ds.Name == postgresql {
 								err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 							} else {
