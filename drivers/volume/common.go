@@ -892,10 +892,18 @@ func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
 }
 
 // AddCloudDrive add drives to the node using PXCTL
-func (d *DefaultDriver) AddCloudDrive(n *node.Node, deviceSpec string) error {
+func (d *DefaultDriver) AddCloudDrive(n *node.Node, deviceSpec string, poolID int32) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "AddCloudDrive()",
+	}
+}
+
+// GetPoolsUsedSize returns map of pool id and current used size
+func (d *DefaultDriver) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPoolsUsedSize()",
 	}
 }
 

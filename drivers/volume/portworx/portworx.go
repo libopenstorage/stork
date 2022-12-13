@@ -4397,7 +4397,7 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 	if drivePath == nil || len(drivePath) == 0 {
 		log.Infof("Adding all the available drives")
 		for _, drv := range eligibleDrives {
-			err := addDrive(*n, drv.Path, d)
+			err := addDrive(*n, drv.Path, -1, d)
 			if err != nil {
 				return err
 			}
@@ -4410,7 +4410,7 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		for _, drvPath := range drivePath {
 			drv, ok := eligibleDrives[drvPath]
 			if ok {
-				err := addDrive(*n, drv.Path, d)
+				err := addDrive(*n, drv.Path, -1, d)
 				if err != nil {
 					return err
 				}
@@ -4428,18 +4428,21 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 }
 
 // AddCloudDrive add cloud drives to the node using PXCTL
-func (d *portworx) AddCloudDrive(n *node.Node, deviceSpec string) error {
+func (d *portworx) AddCloudDrive(n *node.Node, deviceSpec string, poolID int32) error {
 	log.Infof("Adding Cloud drive on %s with spec %s", n.Name, deviceSpec)
-	err := addDrive(*n, deviceSpec, d)
+	err := addDrive(*n, deviceSpec, poolID, d)
 	return err
 }
 
-func addDrive(n node.Node, drivePath string, d *portworx) error {
+func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 
 	driveAddFlag := fmt.Sprintf("-d %s", drivePath)
 
 	if strings.Contains(drivePath, "size") {
 		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
+		if poolID != -1 {
+			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
+		}
 	}
 
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
@@ -4510,6 +4513,47 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 		return nil
 	}
 	return fmt.Errorf("failed to  add drive for path %s in node %s, status: %+v, err: %v", drivePath, n.Name, addDriveStatus, err)
+
+}
+
+//GetPoolsUsedSize returns map of pool id and current used size
+func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
+
+	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"Used\"'", d.getPxctlPath(*n))
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var usedSize string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		line = strings.Trim(line, ",")
+		if strings.Contains(line, "uuid") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+			poolId = strings.ReplaceAll(poolId, "\"", "")
+		}
+		if strings.Contains(line, "Used") {
+			usedSize = strings.Split(line, ":")[1]
+			usedSize = strings.Trim(usedSize, " ")
+			usedSize = strings.ReplaceAll(usedSize, "\"", "")
+		}
+		if poolId != "" && usedSize != "" {
+			poolsData[poolId] = usedSize
+			poolId = ""
+			usedSize = ""
+		}
+	}
+	return poolsData, nil
 
 }
 

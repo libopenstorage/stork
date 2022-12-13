@@ -362,7 +362,10 @@ type Driver interface {
 	AddBlockDrives(n *node.Node, drivePath []string) error
 
 	// AddCloudDrive add cloud drives to the node using PXCTL
-	AddCloudDrive(n *node.Node, devcieSpec string) error
+	AddCloudDrive(n *node.Node, devcieSpec string, poolID int32) error
+
+	// GetPoolsUsedSize returns map of pool id and current used size
+	GetPoolsUsedSize(n *node.Node) (map[string]string, error)
 
 	// GetRebalanceJobs returns the list of rebalance jobs
 	GetRebalanceJobs() ([]*api.StorageRebalanceJob, error)

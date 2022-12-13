@@ -2019,7 +2019,7 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	log.Debugf("contexts: %v", contexts)
+	log.Debugf("contexts: %v", &contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
@@ -3480,62 +3480,93 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					if !nExist {
 						newReplID = nID
 						newReplNode = node
-						break
+						poolsUsedSize, err := Inst().V.GetPoolsUsedSize(&newReplNode)
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
+						pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
+						for p, u := range poolsUsedSize {
+							listPool := pools[p]
+							usedSize, err := strconv.ParseUint(u, 10, 64)
+							if err != nil {
+								UpdateOutcome(event, err)
+								return
+							}
+							freeSize := listPool.TotalSize - usedSize
+							vol, err := Inst().V.InspectVolume(v.ID)
+							if err != nil {
+								UpdateOutcome(event, err)
+								return
+							}
+							if freeSize >= vol.Usage {
+								break
+							}
+						}
 					}
 				}
-				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-					Inst().V.String(), ctx.App.Key, v)
-				Step(stepLog,
-					func() {
-						log.InfoD(stepLog)
-						if strings.Contains(ctx.App.Key, fastpathAppName) {
-							defer Inst().S.RemoveLabelOnNode(newReplNode, k8s.NodeType)
-							Inst().S.AddLabelOnNode(newReplNode, k8s.NodeType, k8s.FastpathNodeType)
+				if newReplID != "" {
 
-						}
-						log.InfoD("Increasing repl with target node  [%v]", newReplID)
-						err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
-						if err != nil {
-							log.Errorf("There is an error increasing repl [%v]", err.Error())
-							UpdateOutcome(event, err)
-						}
-					})
-
-				if err == nil {
-					stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
-						newReplNode.Hostname)
+					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v)
 					Step(stepLog,
 						func() {
 							log.InfoD(stepLog)
-							log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
-							time.Sleep(10 * time.Second)
-
-							err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
-								Force: true,
-								ConnectionOpts: node.ConnectionOpts{
-									Timeout:         1 * time.Minute,
-									TimeBeforeRetry: 5 * time.Second,
-								},
-							})
-							if err != nil {
-								log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-								UpdateOutcome(event, err)
-							}
-
-							err = validateReplFactorUpdate(v, currRep+1)
-							if err != nil {
-								err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
-								log.Error(err)
-								UpdateOutcome(event, err)
-							} else {
-								dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
-							}
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
-								err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+								defer Inst().S.RemoveLabelOnNode(newReplNode, k8s.NodeType)
+								Inst().S.AddLabelOnNode(newReplNode, k8s.NodeType, k8s.FastpathNodeType)
+
+							}
+							log.InfoD("Increasing repl with target node  [%v]", newReplID)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
+							if err != nil {
+								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
-								err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
 							}
 						})
+
+					if err == nil {
+						stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+							newReplNode.Hostname)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
+								time.Sleep(10 * time.Second)
+
+								err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
+									Force: true,
+									ConnectionOpts: node.ConnectionOpts{
+										Timeout:         1 * time.Minute,
+										TimeBeforeRetry: 5 * time.Second,
+									},
+								})
+								if err != nil {
+									log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+									UpdateOutcome(event, err)
+								}
+
+								err = validateReplFactorUpdate(v, currRep+1)
+								if err != nil {
+									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
+									log.Error(err)
+									UpdateOutcome(event, err)
+								} else {
+									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									UpdateOutcome(event, err)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+								}
+							})
+					}
+				} else {
+					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
 				}
 			} else {
 				log.Error(err)
@@ -4917,7 +4948,7 @@ func ValidatePoolRebalance() error {
 							return nil, false, fmt.Errorf("pool reblance is not progressing")
 						} else {
 							currentLastMsg = expandedPool.LastOperation.Msg
-							return nil, true, nil
+							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 						}
 					}
 				}
@@ -5098,7 +5129,7 @@ func RegisterBackupCluster(orgID string, cloud_name string, uid string) (api.Clu
 	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
 	log.FailOnError(err, "Cluster Object nil")
 	clusterObj := clusterResp.GetCluster()
-  return clusterObj.Status.Status, clusterObj.Uid
+	return clusterObj.Status.Status, clusterObj.Uid
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -5147,37 +5178,64 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 }
 
 //GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs(pools map[string]*opsapi.StoragePool) (string, error) {
+func GetPoolIDWithIOs() (string, error) {
 	// pick a  pool doing some IOs from a pools list
-	for _, pool := range pools {
-		currentUsedSize := pool.Used
-		time.Sleep(3 * time.Second)
-		updatedPool, err := GetStoragePoolByUUID(pool.Uuid)
-		if err != nil {
+	var selectedPool *opsapi.StoragePool
+	var err error
+	stNodes := node.GetStorageNodes()
+	for _, stNode := range stNodes {
+		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
+		if err != nil && !strings.Contains(err.Error(), "no pools have IOs running") {
 			return "", err
 		}
-		newUsedSize := updatedPool.Used
-		if currentUsedSize != newUsedSize {
-			return pool.Uuid, nil
+		if selectedPool != nil {
+			return selectedPool.Uuid, nil
 		}
 	}
+
 	return "", fmt.Errorf("no pools have IOs running")
+}
+
+// GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
+func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
+
+	poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+	if err != nil {
+		return nil, err
+	}
+
+	time.Sleep(5 * time.Second)
+
+	poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range poolsDataBfr {
+		if v2, ok := poolsDataAfr[k]; ok {
+			if v2 != v {
+				selectedPool, err := GetStoragePoolByUUID(k)
+				if err != nil {
+					return nil, err
+				}
+				return selectedPool, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no pools have IOs running")
 }
 
 //GetRandomNodeWithPoolIOs returns node with IOs running
 func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
 	// pick a storage node with pool having IOs
 	for _, stNode := range stNodes {
-		pools := stNode.Pools
-		for _, pool := range pools {
-			time.Sleep(3 * time.Second)
-			updatedPool, err := GetStoragePoolByUUID(pool.Uuid)
-			if err != nil {
-				return node.Node{}, err
-			}
-			if pool.Used != updatedPool.Used {
-				return stNode, nil
-			}
+		pool, err := GetPoolWithIOsInGivenNode(stNode)
+		if err != nil && !strings.Contains(err.Error(), "no pools have IOs running") {
+			return node.Node{}, err
+		}
+		if pool != nil {
+			return stNode, nil
 		}
 	}
 	return node.Node{}, fmt.Errorf("no node with IOs running identified")
