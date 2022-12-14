@@ -347,7 +347,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		for _, ns := range migration.Spec.Namespaces {
 			_, err := core.Instance().GetNamespace(ns)
 			if err != nil {
-				if *migration.Spec.SkipDeletedNamespaces {
+				if migration.Spec.SkipDeletedNamespaces != nil && *migration.Spec.SkipDeletedNamespaces {
 					// Instead of throwing an error here check for the SkipDeletedNamespaces  flag
 					// and based on that either throw an error or continue for deleted namespaces
 					migration.Status.Status = stork_api.MigrationStatusInitial
