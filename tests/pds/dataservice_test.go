@@ -293,6 +293,14 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	})
 })
 
+var _ = Describe("{TestTPCCDhruv}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("TestTPCCDhruv", "Runs TPC-C Workload on Postgres Deployment", nil, 0)
+	})
+	pdslib.CreatepostgresqlTpccWorkload("", "V5C1MSGd87BXZb881Lfl2lKGPlt4crHXsUJQHTk3", "pg-dhruv-test-xqz93n-ns1.portworx.pds-dns.io",
+		"", "", "", "", "", "dhruv-depl", "ns1")
+})
+
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)

@@ -135,6 +135,7 @@ const (
 	redis                 = "Redis"
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
+	postgresqlTpccImage   = "pwxbuild/pds-postgres:tpcc-v2"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 	postgresql            = "PostgreSQL"
@@ -812,6 +813,84 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 	}
 	pdsPassword := dataServicePassword.GetPassword()
 	return pdsPassword, nil
+}
+
+func CreatepostgresqlTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbName string,
+	timeToRun string, numOfThreads string, numOfCustomers string, numOfWarehouses string,
+	deploymentName string, namespace string) (*v1.Deployment, error) {
+	if dbUser == "" {
+		dbUser = "pds"
+	}
+	if dbName == "" {
+		dbName = "pds"
+	}
+	if timeToRun == "" {
+		timeToRun = "600"
+	}
+	if numOfThreads == "" {
+		numOfThreads = "64"
+	}
+	if numOfCustomers == "" {
+		numOfCustomers = "5"
+	}
+	if numOfWarehouses == "" {
+		numOfWarehouses = "5"
+	}
+	var replicas int32 = 1
+	deploymentSpec := &v1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: deploymentName + "-",
+			Namespace:    namespace,
+		},
+		Spec: v1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": deploymentName},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": deploymentName},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "pg-tpcc-run",
+							Image: postgresqlTpccImage,
+							Command: []string{"/bin/sh", "-C", "tpcc-run.sh", dbUser, pdsPassword, dnsEndpoint, dbName,
+								timeToRun, numOfThreads, numOfCustomers, numOfWarehouses, "run"},
+							WorkingDir: "/sysbench-tpcc",
+						},
+					},
+					InitContainers: []corev1.Container{
+						{
+							Name:  "pg-tpcc-prepare",
+							Image: postgresqlTpccImage,
+							Command: []string{"/bin/sh", "-C", "tpcc-run.sh", dbUser, pdsPassword, dnsEndpoint, dbName,
+								timeToRun, numOfThreads, numOfCustomers, numOfWarehouses, "prepare"},
+							WorkingDir:      "/sysbench-tpcc",
+							ImagePullPolicy: corev1.PullAlways,
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyAlways,
+				},
+			},
+		},
+	}
+	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	if err != nil {
+		log.Errorf("An Error Occured while creating deployment %v", err)
+		return nil, err
+	}
+	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
+	if err != nil {
+		log.Errorf("An Error Occured while validating the pod %v", err)
+		return nil, err
+	}
+
+	//TODO: Remove static sleep and verify the injected data
+	time.Sleep(2 * time.Minute)
+
+	return deployment, err
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
