@@ -30,6 +30,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -755,6 +756,13 @@ func (k *kdmp) StartRestore(
 		if _, err := kdmpShedOps.Instance().CreateVolumeBackup(volBackup); err != nil {
 			logrus.Errorf("unable to create volumebackup CR: %v", err)
 			return nil, err
+		}
+		capacity := pvc.Status.Capacity[v1.ResourceName(v1.ResourceStorage)]
+		currSize := capacity.Value()
+		logrus.Infof("kdmp ---> pvc name %v - current size %v - snapshot size %v", pvc.Name, currSize, bkpvInfo.TotalSize)
+		if int64(bkpvInfo.TotalSize) > currSize {
+			logrus.Infof("kdmp ---> updating the pvc size with snapshot size - pvc name %v - current size %v - snapshot size %v", pvc.Name, currSize, bkpvInfo.TotalSize)
+			pvc.Spec.Resources.Requests[v1.ResourceStorage] = *resource.NewQuantity(int64(bkpvInfo.TotalSize), resource.BinarySI)
 		}
 
 		pvc.Namespace = restoreNamespace

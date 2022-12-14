@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers"
@@ -394,7 +393,6 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 	case stork_api.ApplicationBackupStageFinal:
-		logrus.Infof("the size of the applicatiobackup CR %v", unsafe.Sizeof(backup))
 		// Do Nothing
 		return nil
 	default:
