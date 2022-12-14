@@ -1171,8 +1171,9 @@ func (a *ApplicationRestoreController) applyResources(
 			return err
 		}
 	}
-
+	count := 0
 	for _, o := range objects {
+		count++
 		metadata, err := meta.Accessor(o)
 		if err != nil {
 			return err
@@ -1183,7 +1184,7 @@ func (a *ApplicationRestoreController) applyResources(
 		}
 
 		log.ApplicationRestoreLog(restore).Infof("Applying %v %v/%v", objectType.GetKind(), metadata.GetNamespace(), metadata.GetName())
-		retained := false
+		// retained := false
 
 		err = a.resourceCollector.ApplyResource(
 			a.dynamicInterface,
@@ -1194,35 +1195,47 @@ func (a *ApplicationRestoreController) applyResources(
 				log.ApplicationRestoreLog(restore).Errorf("Error deleting %v %v during restore: %v", objectType.GetKind(), metadata.GetName(), err)
 			case storkapi.ApplicationRestoreReplacePolicyRetain:
 				log.ApplicationRestoreLog(restore).Warningf("Error deleting %v %v during restore, ReplacePolicy set to Retain: %v", objectType.GetKind(), metadata.GetName(), err)
-				retained = true
+				// retained = true
 				err = nil
 			}
 		}
+		/*
 
-		if err != nil {
-			if err := a.updateResourceStatus(
-				restore,
-				o,
-				storkapi.ApplicationRestoreStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", err)); err != nil {
-				return err
+			if err != nil {
+				if err := a.updateResourceStatus(
+					restore,
+					o,
+					storkapi.ApplicationRestoreStatusFailed,
+					fmt.Sprintf("Error applying resource: %v", err)); err != nil {
+					return err
+				}
+			} else if retained {
+				if err := a.updateResourceStatus(
+					restore,
+					o,
+					storkapi.ApplicationRestoreStatusRetained,
+					"Resource restore skipped as it was already present and ReplacePolicy is set to Retain"); err != nil {
+					return err
+				}
+			} else {
+				if err := a.updateResourceStatus(
+					restore,
+					o,
+					storkapi.ApplicationRestoreStatusSuccessful,
+					"Resource restored successfully"); err != nil {
+					return err
+				}
 			}
-		} else if retained {
-			if err := a.updateResourceStatus(
-				restore,
-				o,
-				storkapi.ApplicationRestoreStatusRetained,
-				"Resource restore skipped as it was already present and ReplacePolicy is set to Retain"); err != nil {
-				return err
+		*/
+		if count == 2000 {
+			logrus.Infof("sivakumar hit 2000 resources.. So updating the CR")
+			restore.Status.LastUpdateTimestamp = metav1.Now()
+			// Store the new status
+			err = a.client.Update(context.TODO(), restore)
+			if err != nil {
+				logrus.Infof("sivakumar -- updated for 2000 res failed %v", err)
 			}
-		} else {
-			if err := a.updateResourceStatus(
-				restore,
-				o,
-				storkapi.ApplicationRestoreStatusSuccessful,
-				"Resource restored successfully"); err != nil {
-				return err
-			}
+			count = 0
 		}
 	}
 	return nil

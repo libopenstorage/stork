@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers"
@@ -35,7 +36,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
+	// "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -393,6 +394,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 	case stork_api.ApplicationBackupStageFinal:
+		logrus.Infof("the size of the applicatiobackup CR %v", unsafe.Sizeof(backup))
 		// Do Nothing
 		return nil
 	default:
@@ -1195,40 +1197,42 @@ func (a *ApplicationBackupController) backupResources(
 			}
 		}
 	}
-	if backup.Status.Resources == nil {
-		// Save the collected resources infos in the status
-		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
-		for _, obj := range allObjects {
-			metadata, err := meta.Accessor(obj)
+	/*
+		if backup.Status.Resources == nil {
+			// Save the collected resources infos in the status
+			resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
+			for _, obj := range allObjects {
+				metadata, err := meta.Accessor(obj)
+				if err != nil {
+					return err
+				}
+
+				resourceInfo := &stork_api.ApplicationBackupResourceInfo{
+					ObjectInfo: stork_api.ObjectInfo{
+						Name:      metadata.GetName(),
+						Namespace: metadata.GetNamespace(),
+					},
+				}
+				gvk := obj.GetObjectKind().GroupVersionKind()
+				resourceInfo.Kind = gvk.Kind
+				resourceInfo.Group = gvk.Group
+				// core Group doesn't have a name, so override it
+				if resourceInfo.Group == "" {
+					resourceInfo.Group = "core"
+				}
+				resourceInfo.Version = gvk.Version
+				resourceInfos = append(resourceInfos, resourceInfo)
+			}
+			backup.Status.Resources = resourceInfos
+			backup.Status.LastUpdateTimestamp = metav1.Now()
+			// Store the new status
+			err = a.client.Update(context.TODO(), backup)
 			if err != nil {
 				return err
 			}
-
-			resourceInfo := &stork_api.ApplicationBackupResourceInfo{
-				ObjectInfo: stork_api.ObjectInfo{
-					Name:      metadata.GetName(),
-					Namespace: metadata.GetNamespace(),
-				},
-			}
-			gvk := obj.GetObjectKind().GroupVersionKind()
-			resourceInfo.Kind = gvk.Kind
-			resourceInfo.Group = gvk.Group
-			// core Group doesn't have a name, so override it
-			if resourceInfo.Group == "" {
-				resourceInfo.Group = "core"
-			}
-			resourceInfo.Version = gvk.Version
-			resourceInfos = append(resourceInfos, resourceInfo)
+			return nil
 		}
-		backup.Status.Resources = resourceInfos
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		// Store the new status
-		err = a.client.Update(context.TODO(), backup)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
+	*/
 
 	// Do any additional preparation for the resources if required
 	if err = a.prepareResources(backup, allObjects); err != nil {
