@@ -148,35 +148,33 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	// This condition will check if there is an Env variable set
 	if pxEndpoint == " " || len(pxEndpoint) == 0 {
 		pxEndpoint = p.constructURL(endpoint)
-
-		conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
-		if err != nil {
-			log.Errorf("unable to get grpc connection: %v", err)
-			return err
-		}
-
-		p.healthManager = api.NewHealthClient(conn)
-		_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
-		if err != nil {
-			log.Errorf("HealthManager API error: %v", err)
-			return err
-		}
-
-		p.clusterManager = api.NewClusterClient(conn)
-		p.backupLocationManager = api.NewBackupLocationClient(conn)
-		p.cloudCredentialManager = api.NewCloudCredentialClient(conn)
-		p.backupManager = api.NewBackupClient(conn)
-		p.restoreManager = api.NewRestoreClient(conn)
-		p.backupScheduleManager = api.NewBackupScheduleClient(conn)
-		p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
-		p.organizationManager = api.NewOrganizationClient(conn)
-		p.licenseManager = api.NewLicenseClient(conn)
-		p.ruleManager = api.NewRulesClient(conn)
-
-		log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
+	}
+	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	if err != nil {
+		log.Errorf("unable to get grpc connection: %v", err)
+		return err
+	}
+	p.healthManager = api.NewHealthClient(conn)
+	_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
+	if err != nil {
+		log.Errorf("HealthManager API error: %v", err)
+		return err
 	}
 
-	return nil
+	p.clusterManager = api.NewClusterClient(conn)
+	p.backupLocationManager = api.NewBackupLocationClient(conn)
+	p.cloudCredentialManager = api.NewCloudCredentialClient(conn)
+	p.backupManager = api.NewBackupClient(conn)
+	p.restoreManager = api.NewRestoreClient(conn)
+	p.backupScheduleManager = api.NewBackupScheduleClient(conn)
+	p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
+	p.organizationManager = api.NewOrganizationClient(conn)
+	p.licenseManager = api.NewLicenseClient(conn)
+	p.ruleManager = api.NewRulesClient(conn)
+
+	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
+
+	return err
 }
 
 func (p *portworx) GetServiceEndpoint(serviceName string, namespace string) (string, error) {
