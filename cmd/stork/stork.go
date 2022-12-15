@@ -449,7 +449,7 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 	if err := os.Setenv(common.BurstRate, strconv.Itoa(burst)); err != nil {
 		log.Fatalf("Error setting Burst Rate: %v", err)
 	}
-	if err := os.Setenv(common.QPSRate, strconv.Itoa(qps)); err != nil {
+	if err := os.Setenv(common.QPSRate, strconv.Itoa(int(qps))); err != nil {
 		log.Fatalf("Error setting Burst Rate: %v", err)
 	}
 	adminNamespace := c.String("admin-namespace")
