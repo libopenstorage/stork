@@ -112,6 +112,7 @@ test:
 	done
 
 integration-test:
+	@echo "CBT demo:"
 	@echo "Building stork integration tests"
 	@cd test/integration_test && GOOS=linux go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test
 
@@ -129,6 +130,7 @@ codegen:
 	(GOFLAGS="" hack/update-codegen.sh)
 
 stork:
+	@echo "CBT demo:"
 	@echo "Building the stork binary"
 	@cd cmd/stork && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
