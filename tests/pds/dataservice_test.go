@@ -300,10 +300,10 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 
 	It("Deploy , Validate and start TPCC Workload", func() {
 		for _, ds := range params.DataServiceToTest {
-			// if ds.Name == "PostgreSQL" {
-			// 	log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-			// 	deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
-			// }
+			if ds.Name == "PostgreSQL" {
+				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			}
 			if ds.Name == "MySQL" {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
 				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
