@@ -880,16 +880,16 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		dbUser = "pds"
 	}
 	if timeToRun == "" {
-		timeToRun = "60"
+		timeToRun = "600"
 	}
 	if numOfThreads == "" {
 		numOfThreads = "64"
 	}
 	if numOfCustomers == "" {
-		numOfCustomers = "2"
+		numOfCustomers = "5"
 	}
 	if numOfWarehouses == "" {
-		numOfWarehouses = "1"
+		numOfWarehouses = "5"
 	}
 
 	var replicas int32 = 1
@@ -937,17 +937,17 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
-	totalTime, err := strconv.Atoi(timeToRun)
-	newTimeOut := time.Duration(totalTime*2) * time.Second // Multiplying by 2 to have both prepare and run containers executed
+	timeAskedToRun, err := strconv.Atoi(timeToRun)
+	totalNumCust, err := strconv.Atoi(numOfCustomers)
+	totalNumWarehouses, err := strconv.Atoi(numOfWarehouses)
+	totalTime := timeAskedToRun + (totalNumCust * totalNumWarehouses * 60)
+	newTimeOut := time.Duration(totalTime) * time.Second // Multiplying by 2 to have both prepare and run containers executed
 	err = k8sApps.ValidateDeployment(deployment, newTimeOut, timeInterval)
 	if err != nil {
 		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
-
-	//TODO: Remove static sleep and verify the injected data
-	time.Sleep(5 * time.Minute)
-
+	
 	return deployment, err
 }
 
