@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
@@ -5043,21 +5042,33 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 // enableAutoFSTrim on supported PX version.
 func EnableAutoFSTrim() {
 	nodes := node.GetWorkerNodes()
-	pxVersion, err := Inst().V.GetPxVersionOnNode(nodes[0])
-	log.FailOnError(err, "Is autofstrim supported on the cluster ?")
-	log.Infof("PX version %s", pxVersion)
-	pxVersionList := []string{}
-	pxVersionList = strings.Split(pxVersion, ".")
-	majorVer, err := strconv.Atoi(pxVersionList[0])
-	minorVer, err := strconv.Atoi(pxVersionList[1])
-	if majorVer < 2 || (majorVer == 2 && minorVer < 10) {
-		log.Warnf("Auto FSTrim cannot be enabled on PX version %s", pxVersion)
-	} else {
-		err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
-			"--auto-fstrim": "on"})
-		log.FailOnError(err, "Autofstrim is enabled on the cluster ?")
-		log.Infof("Auto FSTrim enabled on the cluster")
+	var isPXNodeAvailable bool
+	for _, pxNode := range nodes {
+		isPxInstalled, err := Inst().V.IsPxInstalled(pxNode)
+		if err != nil {
+			log.Debugf("Could not get PX status on %s", pxNode.Name)
+		}
+		if isPxInstalled {
+			isPXNodeAvailable = true
+			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
+			log.FailOnError(err, "Unable to get pxversion on node %s",pxNode.Name)
+			log.Infof("PX version %s", pxVersion)
+			pxVersionList := []string{}
+			pxVersionList = strings.Split(pxVersion, ".")
+			majorVer, err := strconv.Atoi(pxVersionList[0])
+			minorVer, err := strconv.Atoi(pxVersionList[1])
+			if majorVer < 2 || (majorVer == 2 && minorVer < 10) {
+				log.Warnf("Auto FSTrim cannot be enabled on PX version %s", pxVersion)
+			} else {
+				err = Inst().V.SetClusterOpts(pxNode, map[string]string{
+					"--auto-fstrim": "on"})
+				log.FailOnError(err, "Autofstrim is enabled on the cluster ?")
+				log.Infof("Auto FSTrim enabled on the cluster")
+			}
+			break
+		}
 	}
+	dash.VerifyFatal(isPXNodeAvailable, true, "No PX node available in the cluster")
 }
 
 // EndTorpedoTest ends the logging for torpedo test
