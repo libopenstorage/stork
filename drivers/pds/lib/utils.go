@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/portworx/torpedo/pkg/log"
 
 	state "net/http"
@@ -143,6 +143,7 @@ const (
 	postgresql            = "PostgreSQL"
 	cassandra             = "Cassandra"
 	rabbitmq              = "RabbitMQ"
+	mysql                 = "MySQL"
 	pxLabel               = "pds.portworx.com/available"
 	defaultParams         = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap    = "pds-params"
@@ -829,20 +830,20 @@ func setupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 	defer db.Close() // defer close till main function executes
 	// Execute Commands to set MySQL password for removing shared object file
 	log.Info("Trying to set global read only as False")
-	_, err := db.Execute("SET GLOBAL read_only=0;")
+	_, err = db.Exec("SET GLOBAL read_only=0;")
 	if err != nil {
 		log.Error("Could not execute command to set read_only mode as 0. Exiting.")
 		return "", err
 	}
 	log.Info("Trying to change user password")
-	changePwdCmd = fmt.Sprintf("ALTER USER '%v' IDENTIFIED WITH mysql_native_password BY 'password';", dbUser)
-	_, err := db.Exec(changePwdCmd)
+	changePwdCmd := fmt.Sprintf("ALTER USER '%v' IDENTIFIED WITH mysql_native_password BY 'password';", dbUser)
+	_, err = db.Exec(changePwdCmd)
 	if err != nil {
 		log.Error("Could not execute command to set a new password. Exiting.")
 		return "", err
 	}
 	log.Info("Trying to create tpcc database")
-	_, err := db.Exec("Create database tpcc;")
+	_, err = db.Exec("Create database tpcc;")
 	if err != nil {
 		log.Error("Could not execute command to create a new DB for TPCC schema. Exiting.")
 		return "", err
@@ -854,13 +855,14 @@ func setupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 func CreateTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbName string,
 	timeToRun string, numOfThreads string, numOfCustomers string, numOfWarehouses string,
 	deploymentName string, namespace string, dataServiceName string) (*v1.Deployment, error) {
+	var fileToRun string
 	if dataServiceName == "postgresql" {
 		dbName = "pds"
-		fileToRun := "tpcc-pg-run.sh"
+		fileToRun = "tpcc-pg-run.sh"
 	}
 	if dataServiceName == "mysql" {
 		dbName = "tpcc"
-		fileToRun := "tpcc-mysql-run.sh"
+		fileToRun = "tpcc-mysql-run.sh"
 	}
 	if dbUser == "" {
 		dbUser = "pds"

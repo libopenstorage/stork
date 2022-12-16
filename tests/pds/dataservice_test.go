@@ -297,8 +297,8 @@ var _ = Describe("{testmysqlDB}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("testmysqlDB", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
 	})
-	pwd, err := pdslib.setupMysqlDatabaseForTpcc("pds", "qIn4pBdzjc3vr3QxKYuw8ZZRH25ai4i0P8D0kkWY", "my-dhruv-1-k58c90-ns1.portworx.pds-dns.io")
-}
+	pdslib.setupMysqlDatabaseForTpcc("pds", "qIn4pBdzjc3vr3QxKYuw8ZZRH25ai4i0P8D0kkWY", "my-dhruv-1-k58c90-ns1.portworx.pds-dns.io")
+})
 
 var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 	JustBeforeEach(func() {
