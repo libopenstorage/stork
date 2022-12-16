@@ -72,7 +72,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
-							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 							log.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
 							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Set volume  %s repl factor successful ?", v.Name))
 						})
@@ -101,7 +101,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 								MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, true)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true)
 							log.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
 							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Repl factor set succesfully on volume  %s repl", v.Name))
 						})
@@ -315,7 +315,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							}
 
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
-							err = Inst().V.SetReplicationFactor(v, currRep-1, updateReplicaSet, true)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, updateReplicaSet, nil, true)
 							log.FailOnError(err, "Failed to set repl factor")
 							dash.VerifyFatal(err == nil, true, "Repl factor set successfully?")
 						})
@@ -365,7 +365,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 								MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, true)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, nil, true)
 							log.FailOnError(err, "Failed to set vol %s repl factor", v.Name)
 							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Vol %s repl factor set as expected?", v.Name))
 						})

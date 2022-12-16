@@ -1582,7 +1582,7 @@ func setHALevel(vol *volume.Volume, haLevel int64) {
 	}
 
 	log.Infof("setting HA level to 2 on volume %s", vol.ID)
-	err = Inst().V.SetReplicationFactor(vol, haLevel, nil, true)
+	err = Inst().V.SetReplicationFactor(vol, haLevel, nil, nil, true)
 	Expect(err).NotTo(HaveOccurred())
 
 	log.Infof("validating successful update of HA level on volume %s", vol.ID)

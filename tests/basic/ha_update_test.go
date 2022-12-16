@@ -94,7 +94,7 @@ func performHaIncreaseRebootTest(testName string) {
 							opts := volume.Options{
 								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 							}
-							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true, opts)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
 						}
 					}

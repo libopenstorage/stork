@@ -693,7 +693,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 							}
 							rep := currRep
 							for rep > 1 {
-								err = Inst().V.SetReplicationFactor(v, rep-1, nil, true, opts)
+								err = Inst().V.SetReplicationFactor(v, rep-1, nil, nil, true, opts)
 								if err != nil {
 									log.Errorf("There is an error decreasing repl [%v]", err.Error())
 									UpdateOutcome(event, err)
@@ -814,7 +814,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							if err != nil {
 								log.Infof("Replica Set before ha-increase : %+v", replSets[0].Nodes)
 							}
-							err = Inst().V.SetReplicationFactor(v, expRF, nil, true, opts)
+							err = Inst().V.SetReplicationFactor(v, expRF, nil, nil, true, opts)
 							if err != nil {
 								log.Errorf("There is a error setting repl [%v]", err.Error())
 							}
@@ -936,7 +936,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							if err != nil {
 								log.Infof("Replica Set before ha-decrease : %+v", replSets[0].Nodes)
 							}
-							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true, opts)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 							if err != nil {
 								log.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}

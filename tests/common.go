@@ -3522,7 +3522,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
-							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
@@ -3550,7 +3550,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									UpdateOutcome(event, err)
 								}
 
-								err = validateReplFactorUpdate(v, currRep+1)
+								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
 									log.Error(err)
@@ -3561,7 +3561,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
-									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
 					}
@@ -3615,7 +3615,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								UpdateOutcome(event, err)
 							}
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, false)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
@@ -3637,7 +3637,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										UpdateOutcome(event, err)
 									}
 								}
-								err = validateReplFactorUpdate(v, currRep+1)
+								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
 									log.Error(err)
@@ -3648,7 +3648,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
-									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							}
 						} else {
@@ -3682,7 +3682,7 @@ func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
 	return nil, err
 }
 
-func validateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
+func ValidateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
 	t := func() (interface{}, bool, error) {
 		err := Inst().V.WaitForReplicationToComplete(v, expaectedReplFactor, validateReplicationUpdateTimeout)
 		if err != nil {
@@ -5205,60 +5205,68 @@ func GetPoolIDWithIOs() (string, error) {
 	stNodes := node.GetStorageNodes()
 	for _, stNode := range stNodes {
 		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
-		if err != nil && !strings.Contains(err.Error(), "no pools have IOs running") {
-			return "", err
-		}
 		if selectedPool != nil {
 			return selectedPool.Uuid, nil
 		}
 	}
 
-	return "", fmt.Errorf("no pools have IOs running")
+	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
 func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 
-	poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-	if err != nil {
-		return nil, err
-	}
+	var selectedPool *opsapi.StoragePool
 
-	time.Sleep(5 * time.Second)
+	t := func() (interface{}, bool, error) {
+		poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+		if err != nil {
+			return nil, false, err
+		}
 
-	poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-	if err != nil {
-		return nil, err
-	}
+		time.Sleep(10 * time.Second)
 
-	for k, v := range poolsDataBfr {
-		if v2, ok := poolsDataAfr[k]; ok {
-			if v2 != v {
-				selectedPool, err := GetStoragePoolByUUID(k)
-				if err != nil {
-					return nil, err
+		poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+		if err != nil {
+			return nil, false, err
+		}
+
+		for k, v := range poolsDataBfr {
+			if v2, ok := poolsDataAfr[k]; ok {
+				if v2 != v {
+					selectedPool, err = GetStoragePoolByUUID(k)
+					if err != nil {
+						return nil, false, err
+					}
 				}
-				return selectedPool, nil
 			}
 		}
+		if selectedPool == nil {
+			return nil, true, fmt.Errorf("no pools have IOs running")
+		}
+
+		return nil, false, nil
 	}
 
-	return nil, fmt.Errorf("no pools have IOs running")
+	_, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultCmdTimeout)
+	if err != nil {
+		return nil, err
+	}
+	return selectedPool, nil
 }
 
 //GetRandomNodeWithPoolIOs returns node with IOs running
 func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
 	// pick a storage node with pool having IOs
+	var err error
+	var pool *opsapi.StoragePool
 	for _, stNode := range stNodes {
-		pool, err := GetPoolWithIOsInGivenNode(stNode)
-		if err != nil && !strings.Contains(err.Error(), "no pools have IOs running") {
-			return node.Node{}, err
-		}
+		pool, err = GetPoolWithIOsInGivenNode(stNode)
 		if pool != nil {
 			return stNode, nil
 		}
 	}
-	return node.Node{}, fmt.Errorf("no node with IOs running identified")
+	return node.Node{}, fmt.Errorf("no node with IOs running identified,err: %v", err)
 }
 
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {

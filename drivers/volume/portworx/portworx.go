@@ -2245,7 +2245,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 	return replFactor, nil
 }
 
-func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, waitForUpdateToFinish bool, opts ...torpedovolume.Options) error {
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, poolsToBeUpdated []string, waitForUpdateToFinish bool, opts ...torpedovolume.Options) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	var replicationUpdateTimeout time.Duration
 	if len(opts) > 0 {
@@ -2269,8 +2269,11 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		if len(nodesToBeUpdated) > 0 {
 			replicaSet = &api.ReplicaSet{Nodes: nodesToBeUpdated}
 			log.Infof("Updating ReplicaSet of node(s): %v", nodesToBeUpdated)
-		} else {
-			log.Infof("Nodes not passed, random node will be choosen")
+		}
+
+		if len(poolsToBeUpdated) > 0 {
+			replicaSet.PoolUuids = append(replicaSet.PoolUuids, poolsToBeUpdated...)
+			log.Infof("Updating ReplicaSet of pool: %v", poolsToBeUpdated)
 		}
 
 		volumeSpecUpdate := &api.VolumeSpecUpdate{
