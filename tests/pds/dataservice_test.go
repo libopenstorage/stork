@@ -293,17 +293,28 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	})
 })
 
-var _ = Describe("{TestTPCCDhruv}", func() {
+var _ = Describe("{testmysqlDB}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("TestTPCCDhruv", "Runs TPC-C Workload on Postgres Deployment", nil, 0)
+		StartTorpedoTest("testmysqlDB", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
+	})
+	pwd, err := pdslib.setupMysqlDatabaseForTpcc("pds", "qIn4pBdzjc3vr3QxKYuw8ZZRH25ai4i0P8D0kkWY", "my-dhruv-1-k58c90-ns1.portworx.pds-dns.io")
+}
+
+var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
 	})
 
-	// pdslib.CreatepostgresqlTpccWorkload("", "V5C1MSGd87BXZb881Lfl2lKGPlt4crHXsUJQHTk3", "pg-dhruv-test-xqz93n-ns1.portworx.pds-dns.io",
-	// 	"", "", "", "", "", "dhruv-depl", "ns1")
 	It("Deploy , Validate and start TPCC Workload", func() {
 		for _, ds := range params.DataServiceToTest {
-			log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-			deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			if ds.Name == "PostgreSQL" {
+				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			}
+			if ds.Name == "MySQL" {
+				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			}
 		}
 	})
 	JustAfterEach(func() {
@@ -376,12 +387,16 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 
 		Step("Running TPCC Workloads - ", func() {
 			if dataservice == postgresql {
-				deploymentName := "pgload"
+				deploymentName := "PostgresTpcc"
+				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			if dataservice == mysql {
+				deploymentName := "MySQLTpcc"
 				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
-
 		Step("Delete Deployments", func() {
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
 			Expect(err).NotTo(HaveOccurred())
