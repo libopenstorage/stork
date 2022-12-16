@@ -297,9 +297,112 @@ var _ = Describe("{TestTPCCDhruv}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("TestTPCCDhruv", "Runs TPC-C Workload on Postgres Deployment", nil, 0)
 	})
-	pdslib.CreatepostgresqlTpccWorkload("", "V5C1MSGd87BXZb881Lfl2lKGPlt4crHXsUJQHTk3", "pg-dhruv-test-xqz93n-ns1.portworx.pds-dns.io",
-		"", "", "", "", "", "dhruv-depl", "ns1")
+
+	// pdslib.CreatepostgresqlTpccWorkload("", "V5C1MSGd87BXZb881Lfl2lKGPlt4crHXsUJQHTk3", "pg-dhruv-test-xqz93n-ns1.portworx.pds-dns.io",
+	// 	"", "", "", "", "", "dhruv-depl", "ns1")
+	It("Deploy , Validate and start TPCC Workload", func() {
+		for _, ds := range params.DataServiceToTest {
+			log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+			deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+		}
+	})
+	JustAfterEach(func() {
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
+		defer EndTorpedoTest()
+	})
 })
+
+func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) {
+	Step("Deploy and Validate Data Service and run TPCC Workload", func() {
+		isDeploymentsDeleted = false
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
+		Expect(err).NotTo(HaveOccurred())
+
+		log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+
+		log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+		log.InfoD("Deploying DataService %v ", dataservice)
+		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+			deploymentTargetID,
+			dnsZone,
+			deploymentName,
+			namespaceID,
+			dataServiceDefaultAppConfigID,
+			replicas,
+			serviceType,
+			dataServiceDefaultResourceTemplateID,
+			storageTemplateID,
+			Version,
+			Image,
+			namespace,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Step("Validate Storage Configurations", func() {
+			log.Infof("data service deployed %v ", dataservice)
+			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+			Expect(err).NotTo(HaveOccurred())
+			log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+			log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+			log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+			log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+			log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+			log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+			log.Infof("volume group %v ", storageOp.VolumeGroup)
+
+			Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+			Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+			Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+			Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+			Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+			repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+			Expect(config.Spec.Nodes).Should(Equal(replicas))
+		})
+
+		Step("Running TPCC Workloads - ", func() {
+			if dataservice == postgresql {
+				deploymentName := "pgload"
+				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("Delete Deployments", func() {
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			isDeploymentsDeleted = true
+		})
+
+		defer func() {
+			Step("Delete the workload generating deployments", func() {
+				if !(dataservice == mysql || dataservice == kafka || dataservice == zookeeper || dataservice == mongodb) {
+					if dataservice == cassandra || dataservice == postgresql {
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else {
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+					}
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+		}()
+	})
+}
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {

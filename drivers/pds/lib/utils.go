@@ -881,7 +881,9 @@ func CreatepostgresqlTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint
 		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
-	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
+	totalTime, err := strconv.Atoi(timeToRun)
+	newTimeOut := time.Duration(totalTime*2) * time.Second // Multiplying by 2 to have both prepare and run containers executed
+	err = k8sApps.ValidateDeployment(deployment, newTimeOut, timeInterval)
 	if err != nil {
 		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
@@ -1094,6 +1096,38 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 	time.Sleep(1 * time.Minute)
 
 	return pod, nil
+}
+
+func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (*corev1.Pod, *v1.Deployment, error) {
+	var dep *v1.Deployment
+	var pod *corev1.Pod
+	var dbUser, timeToRun, numOfCustomers, numOfThreads, numOfWarehouses string
+
+	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
+	if err != nil {
+		log.Errorf("An Error Occured while getting connection info %v", err)
+		return nil, nil, err
+	}
+	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
+
+	pdsPassword, err := GetDeploymentCredentials(deploymentID)
+	if err != nil {
+		log.Errorf("An Error Occured while getting credentials info %v", err)
+		return nil, nil, err
+	}
+
+	switch dataServiceName {
+	case postgresql:
+		dbName := "pds"
+		dep, err = CreatepostgresqlTpccWorkload(dbUser, pdsPassword, dnsEndpoint, dbName,
+			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
+			deploymentName, namespace)
+		if err != nil {
+			log.Errorf("An Error Occured while creating postgresql workload %v", err)
+			return nil, nil, err
+		}
+	}
+	return pod, dep, nil
 }
 
 // CreateDataServiceWorkloads func
