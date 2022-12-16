@@ -1529,6 +1529,8 @@ func (m *MigrationController) applyResources(
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
 	// create CRD on destination cluster
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {

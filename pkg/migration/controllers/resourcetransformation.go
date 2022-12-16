@@ -223,6 +223,8 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
 
 	for _, spec := range transform.Spec.Objects {
 		group, version, kind, err := getGVK(spec.Resource)
