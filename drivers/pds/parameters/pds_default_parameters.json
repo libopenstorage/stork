@@ -11,8 +11,8 @@
     },
     {
       "Name": "MySQL",
-      "Version": "8.0.30",
-      "Image": "a7bc638",
+      "Version": "8.0.31",
+      "Image": "033c060",
       "Replicas": 3,
       "ScaleReplicas": 6,
       "OldVersion": "8.0.30",

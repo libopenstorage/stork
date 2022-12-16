@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/portworx/torpedo/pkg/log"
 
 	state "net/http"
@@ -137,7 +135,7 @@ const (
 	redis                 = "Redis"
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
-	postgresqlTpccImage   = "pwxbuild/pds-tpcc-automation:v1"
+	pdsTpccImage          = "pwxbuild/pds-tpcc-automation:v1"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 	postgresql            = "PostgreSQL"
@@ -818,49 +816,63 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 	return pdsPassword, nil
 }
 
-func setupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string) (string, error) {
-	sqlConnectionCmd := fmt.Sprintf("%v:%v@tcp(%v:6446)", dbUser, pdsPassword, dnsEndpoint)
-	// Get DB Connection object
-	log.Info("Trying to fetch DB Connection Object")
-	db, err := sql.Open("mysql", sqlConnectionCmd)
-	if err != nil {
-		log.Error("Could not open DB Connection to MySQL. Exiting.")
-		return "", err
+func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) (*v1.Deployment, error) {
+	var replicas int32 = 1
+	deploymentName := "configure-mysql-for-tpcc"
+	log.Info("Trying to configure Mysql deployment for TPCC Workload")
+	deploymentSpec := &v1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: deploymentName + "-",
+			Namespace:    namespace,
+		},
+		Spec: v1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": deploymentName},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": deploymentName},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            "mysql-configuration",
+							Image:           pdsTpccImage,
+							Command:         []string{"/bin/sh", "-C", "setup-mysql-for-tpcc.sh", dbUser, pdsPassword, dnsEndpoint},
+							WorkingDir:      "/sysbench-tpcc",
+							ImagePullPolicy: corev1.PullAlways,
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyAlways,
+				},
+			},
+		},
 	}
-	defer db.Close() // defer close till main function executes
-	// Execute Commands to set MySQL password for removing shared object file
-	log.Info("Trying to set global read only as False")
-	_, err = db.Exec("SET GLOBAL read_only=0;")
+	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		log.Error("Could not execute command to set read_only mode as 0. Exiting.")
-		return "", err
+		log.Errorf("An Error Occured while creating deployment %v", err)
+		return nil, err
 	}
-	log.Info("Trying to change user password")
-	changePwdCmd := fmt.Sprintf("ALTER USER '%v' IDENTIFIED WITH mysql_native_password BY 'password';", dbUser)
-	_, err = db.Exec(changePwdCmd)
-	if err != nil {
-		log.Error("Could not execute command to set a new password. Exiting.")
-		return "", err
-	}
-	log.Info("Trying to create tpcc database")
-	_, err = db.Exec("Create database tpcc;")
-	if err != nil {
-		log.Error("Could not execute command to create a new DB for TPCC schema. Exiting.")
-		return "", err
-	}
-	return "password", err
+
+	//Static sleep to let DB changes settle in
+	time.Sleep(1 * time.Minute)
+
+	DeleteK8sDeployments(deployment.Name, namespace)
+	log.Info("MySQL Deployment successfully configured for TPCC Workload")
+	return deployment, err
 
 }
 
-func CreateTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbName string,
+func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbName string,
 	timeToRun string, numOfThreads string, numOfCustomers string, numOfWarehouses string,
 	deploymentName string, namespace string, dataServiceName string) (*v1.Deployment, error) {
 	var fileToRun string
-	if dataServiceName == "postgresql" {
+	if dataServiceName == postgresql {
 		dbName = "pds"
 		fileToRun = "tpcc-pg-run.sh"
 	}
-	if dataServiceName == "mysql" {
+	if dataServiceName == mysql {
 		dbName = "tpcc"
 		fileToRun = "tpcc-mysql-run.sh"
 	}
@@ -879,6 +891,7 @@ func CreateTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, d
 	if numOfWarehouses == "" {
 		numOfWarehouses = "1"
 	}
+
 	var replicas int32 = 1
 	deploymentSpec := &v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -898,7 +911,7 @@ func CreateTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, d
 					Containers: []corev1.Container{
 						{
 							Name:  "tpcc-run",
-							Image: postgresqlTpccImage,
+							Image: pdsTpccImage,
 							Command: []string{"/bin/sh", "-C", fileToRun, dbUser, pdsPassword, dnsEndpoint, dbName,
 								timeToRun, numOfThreads, numOfCustomers, numOfWarehouses, "run"},
 							WorkingDir: "/sysbench-tpcc",
@@ -907,7 +920,7 @@ func CreateTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, d
 					InitContainers: []corev1.Container{
 						{
 							Name:  "tpcc-prepare",
-							Image: postgresqlTpccImage,
+							Image: pdsTpccImage,
 							Command: []string{"/bin/sh", "-C", fileToRun, dbUser, pdsPassword, dnsEndpoint, dbName,
 								timeToRun, numOfThreads, numOfCustomers, numOfWarehouses, "prepare"},
 							WorkingDir:      "/sysbench-tpcc",
@@ -933,7 +946,7 @@ func CreateTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, d
 	}
 
 	//TODO: Remove static sleep and verify the injected data
-	time.Sleep(2 * time.Minute)
+	time.Sleep(5 * time.Minute)
 
 	return deployment, err
 }
@@ -1162,7 +1175,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	switch dataServiceName {
 	case postgresql:
 		dbName := "pds"
-		dep, err = CreateTpccWorkload(dbUser, pdsPassword, dnsEndpoint, dbName,
+		dep, err = RunTpccWorkload(dbUser, pdsPassword, dnsEndpoint, dbName,
 			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
 			deploymentName, namespace, dataServiceName)
 		if err != nil {
@@ -1171,12 +1184,12 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		}
 	case mysql:
 		dbName := "tpcc"
-		new_db_pwd, err := setupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint)
+		_, err = SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
 		if err != nil {
 			log.Errorf("Something went wrong and DB Couldn't be prepared for TPCC workload. Exiting.")
 			return nil, nil, err
 		}
-		dep, err = CreateTpccWorkload(dbUser, new_db_pwd, dnsEndpoint, dbName,
+		dep, err = RunTpccWorkload(dbUser, "password", dnsEndpoint, dbName,
 			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
 			deploymentName, namespace, dataServiceName)
 		if err != nil {

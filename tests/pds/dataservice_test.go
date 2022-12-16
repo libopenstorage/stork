@@ -293,13 +293,6 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	})
 })
 
-var _ = Describe("{testmysqlDB}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("testmysqlDB", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
-	})
-	pdslib.setupMysqlDatabaseForTpcc("pds", "qIn4pBdzjc3vr3QxKYuw8ZZRH25ai4i0P8D0kkWY", "my-dhruv-1-k58c90-ns1.portworx.pds-dns.io")
-})
-
 var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
@@ -307,10 +300,10 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 
 	It("Deploy , Validate and start TPCC Workload", func() {
 		for _, ds := range params.DataServiceToTest {
-			if ds.Name == "PostgreSQL" {
-				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
-			}
+			// if ds.Name == "PostgreSQL" {
+			// 	log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+			// 	deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			// }
 			if ds.Name == "MySQL" {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
 				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
@@ -387,12 +380,12 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 
 		Step("Running TPCC Workloads - ", func() {
 			if dataservice == postgresql {
-				deploymentName := "PostgresTpcc"
+				deploymentName := "pg-tpcc"
 				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				Expect(err).NotTo(HaveOccurred())
 			}
 			if dataservice == mysql {
-				deploymentName := "MySQLTpcc"
+				deploymentName := "my-tpcc"
 				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				Expect(err).NotTo(HaveOccurred())
 			}
