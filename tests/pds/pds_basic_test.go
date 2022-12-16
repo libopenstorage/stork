@@ -79,28 +79,28 @@ var _ = BeforeSuite(func() {
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		params, err = pdslib.ReadParams(pdsparams)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Failed to read params from json file")
 		infraParams := params.InfraToTest
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
-		log.Infof("DeploymentTargetID %v ", deploymentTargetID)
-		Expect(err).NotTo(HaveOccurred())
+		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
+		log.FailOnError(err, "Failed on SetupPDSTest method")
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
 		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
-		Expect(err).NotTo(HaveOccurred())
-		log.Infof("storageTemplateID %v", storageTemplateID)
+		log.FailOnError(err, "Failed while getting storage template ID")
+		log.InfoD("storageTemplateID %v", storageTemplateID)
 	})
 
 	Step("Create/Get Namespace and NamespaceID", func() {
 		namespace = params.InfraToTest.Namespace
-		isavailabbe, err := pdslib.CheckNamespace(namespace)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(isavailabbe).To(BeTrue())
+		isavailable, err := pdslib.CheckNamespace(namespace)
+		log.FailOnError(err, "Error while Create/Get Namespaces")
+		dash.VerifyFatal(bool(true), isavailable, "Namespace is not available for pds to deploy data services")
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(namespaceID).NotTo(BeEmpty())
+		log.FailOnError(err, "Error while getting namespace id")
+		dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")
 	})
 })
 
