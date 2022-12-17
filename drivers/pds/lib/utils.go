@@ -880,16 +880,16 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		dbUser = "pds"
 	}
 	if timeToRun == "" {
-		timeToRun = "600"
+		timeToRun = "120"
 	}
 	if numOfThreads == "" {
 		numOfThreads = "64"
 	}
 	if numOfCustomers == "" {
-		numOfCustomers = "5"
+		numOfCustomers = "4"
 	}
 	if numOfWarehouses == "" {
-		numOfWarehouses = "5"
+		numOfWarehouses = "2"
 	}
 
 	var replicas int32 = 1
@@ -941,13 +941,13 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	totalNumCust, err := strconv.Atoi(numOfCustomers)
 	totalNumWarehouses, err := strconv.Atoi(numOfWarehouses)
 	totalTime := timeAskedToRun + (totalNumCust * totalNumWarehouses * 60)
-	newTimeOut := time.Duration(totalTime) * time.Second // Multiplying by 2 to have both prepare and run containers executed
+	newTimeOut := time.Duration(totalTime) * time.Second 
 	err = k8sApps.ValidateDeployment(deployment, newTimeOut, timeInterval)
 	if err != nil {
 		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
-	
+
 	return deployment, err
 }
 
