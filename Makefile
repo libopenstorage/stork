@@ -119,6 +119,10 @@ revive: $(GOPATH)/bin/revive
 
 pretest: check-fmt vet errcheck staticcheck
 
+docker-pretest:
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
+	  make -C /go/src/github.com/libopenstorage/stork check-fmt vet errcheck staticcheck
+
 test:
 	echo "" > coverage.txt
 	for pkg in $(PKGS);	do \
