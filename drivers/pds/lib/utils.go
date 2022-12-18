@@ -816,6 +816,8 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 	return pdsPassword, nil
 }
 
+// This module sets up MySQL Database for Running TPCC. There is some specific requirement that needs to be 
+// done for MySQL before running MySQL. 
 func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) bool {
 	log.Info("Trying to configure Mysql deployment for TPCC Workload")
 	podSpec := &corev1.Pod{
@@ -856,7 +858,7 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 	//reinitializing the pods
 	newPods = append(newPods, newPodList.Items...)
 
-	//validate deployment pods are up and running after deletion
+	// Validate if MySQL pod is configured successfully or not for running TPCC
 	for _, pod := range newPods {
 		log.Infof("pds system pod name %v", pod.Name)
 		if strings.Contains(pod.Name, "configure-mysql") {
@@ -874,34 +876,35 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 	return false
 }
 
+// This module creates TPCC Schema for a given Deployment and then Runs TPCC Workload
 func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbName string,
 	timeToRun string, numOfThreads string, numOfCustomers string, numOfWarehouses string,
 	deploymentName string, namespace string, dataServiceName string) (*v1.Deployment, error) {
 	var fileToRun string
 	if dataServiceName == postgresql {
 		dbName = "pds"
-		fileToRun = "tpcc-pg-run.sh"
+		fileToRun = "tpcc-pg-run.sh" // file to run in case of Postgres workload
 	}
 	if dataServiceName == mysql {
 		dbName = "tpcc"
-		fileToRun = "tpcc-mysql-run.sh"
+		fileToRun = "tpcc-mysql-run.sh" // File to run in case of MySQL workload
 	}
 	if dbUser == "" {
 		dbUser = "pds"
 	}
 	if timeToRun == "" {
-		timeToRun = "120"
+		timeToRun = "120" // Default time to run is 2 minutes
 	}
 	if numOfThreads == "" {
-		numOfThreads = "64"
+		numOfThreads = "64" // Default threads is 64
 	}
 	if numOfCustomers == "" {
-		numOfCustomers = "4"
+		numOfCustomers = "4" // Default number of customer and districts is 4
 	}
 	if numOfWarehouses == "" {
-		numOfWarehouses = "2"
+		numOfWarehouses = "2" // Default number of warehouses to simulate is 2
 	}
-
+	// Create a Deployment to Prepare and Run TPCC Workload
 	var replicas int32 = 1
 	deploymentSpec := &v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -948,6 +951,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
+	// Waiting for total time asked to run + Time taken to prepare schema for the given TPCC Workload paramets
 	timeAskedToRun, err := strconv.Atoi(timeToRun)
 	totalNumCust, err := strconv.Atoi(numOfCustomers)
 	totalNumWarehouses, err := strconv.Atoi(numOfWarehouses)
@@ -1165,6 +1169,7 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 	return pod, nil
 }
 
+// This function prepares a deployment for running TPCC Workload
 func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
@@ -1184,6 +1189,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	}
 
 	switch dataServiceName {
+	// For a Postgres workload, simply create schema and run the TPCC Workload for default time
 	case postgresql:
 		dbName := "pds"
 		dep, err = RunTpccWorkload(dbUser, pdsPassword, dnsEndpoint, dbName,
@@ -1193,6 +1199,8 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 			log.Errorf("An Error Occured while creating postgresql TPCC workload %v", err)
 			return nil, nil, err
 		}
+	// For MySQL workload, first setup the deployment to run TPCC, then wait for MySQL to be available,
+	// Create TPCC Schema and then run it. 
 	case mysql:
 		dbName := "tpcc"
 		var wasMysqlConfigured bool

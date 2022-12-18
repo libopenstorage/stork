@@ -324,6 +324,8 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 	})
 })
 
+// This module deploys a data service, validates it, Prepares the data service with 4 districts and 2 warehouses
+// and runs TPCC Workload for a default time of 2 minutes
 func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) {
 	Step("Deploy and Validate Data Service and run TPCC Workload", func() {
 		isDeploymentsDeleted = false
