@@ -816,52 +816,62 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 	return pdsPassword, nil
 }
 
-func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) (*v1.Deployment, error) {
-	var replicas int32 = 1
-	deploymentName := "configure-mysql-for-tpcc"
+func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) bool {
 	log.Info("Trying to configure Mysql deployment for TPCC Workload")
-	deploymentSpec := &v1.Deployment{
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: deploymentName + "-",
+			GenerateName: "configure-mysql",
 			Namespace:    namespace,
 		},
-		Spec: v1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": deploymentName},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": deploymentName},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:            "mysql-configuration",
-							Image:           pdsTpccImage,
-							Command:         []string{"/bin/sh", "-C", "setup-mysql-for-tpcc.sh", dbUser, pdsPassword, dnsEndpoint},
-							WorkingDir:      "/sysbench-tpcc",
-							ImagePullPolicy: corev1.PullAlways,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyAlways,
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:            "configure-mysql",
+					Image:           pdsTpccImage,
+					Command:         []string{"/bin/sh", "-C", "setup-mysql-for-tpcc.sh", dbUser, pdsPassword, dnsEndpoint},
+					WorkingDir:      "/sysbench-tpcc",
+					ImagePullPolicy: corev1.PullAlways,
 				},
 			},
+			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
-	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	_, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
-		log.Errorf("An Error Occured while creating deployment %v", err)
-		return nil, err
+		log.Errorf("An Error Occured while creating %v", err)
+		return false
 	}
 
 	//Static sleep to let DB changes settle in
-	time.Sleep(1 * time.Minute)
+	time.Sleep(30 * time.Second)
+	var newPods []corev1.Pod
+	newPodList, err := GetPods(namespace)
+	if err != nil {
+		return false
+	}
+	//reinitializing the pods
+	newPods = append(newPods, newPodList.Items...)
 
-	DeleteK8sDeployments(deployment.Name, namespace)
-	log.Info("MySQL Deployment successfully configured for TPCC Workload")
-	return deployment, err
-
+	//validate deployment pods are up and running after deletion
+	for _, pod := range newPods {
+		log.Infof("pds system pod name %v", pod.Name)
+		if strings.Contains(pod.Name, "configure-mysql") {
+			for _, c := range pod.Status.ContainerStatuses {
+				if c.State.Terminated.ExitCode == 0 && c.State.Terminated.Reason == "Completed" {
+					fmt.Println("Successfully Configured Mysql for TPCC Run. Exiting")
+					DeleteK8sPods(pod.Name, namespace)
+					return true
+				} else {
+					DeleteK8sPods(pod.Name, namespace)
+				}
+			}
+		}
+	}
+	return false
 }
 
 func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbName string,
@@ -932,6 +942,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 			},
 		},
 	}
+	log.Info("Going to Trigger TPCC Workload for the Deployment")
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
 		log.Errorf("An Error Occured while creating deployment %v", err)
@@ -941,7 +952,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	totalNumCust, err := strconv.Atoi(numOfCustomers)
 	totalNumWarehouses, err := strconv.Atoi(numOfWarehouses)
 	totalTime := timeAskedToRun + (totalNumCust * totalNumWarehouses * 60)
-	newTimeOut := time.Duration(totalTime) * time.Second 
+	newTimeOut := time.Duration(totalTime) * time.Second
 	err = k8sApps.ValidateDeployment(deployment, newTimeOut, timeInterval)
 	if err != nil {
 		log.Errorf("An Error Occured while validating the pod %v", err)
@@ -1184,8 +1195,20 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		}
 	case mysql:
 		dbName := "tpcc"
-		_, err = SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
-		if err != nil {
+		var wasMysqlConfigured bool
+		// Wait for 30 minutes for MySQL Deployment to come up - This is happening in few Target Clusters for MySQL
+		for i := 1; i <= 20; i++ {
+			wasMysqlConfigured := SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
+			if wasMysqlConfigured {
+				log.Info("MySQL Deployment is successfully configured to run for TPCC Workload. Starting TPCC Workload Now.")
+				break
+			} else {
+				log.Info("MySQL deployment is not yet configured for TPCC. It may still be starting up or there could be some error")
+				log.Info("Waiting for some more time to see if it can be reached within 30 minutes")
+				time.Sleep(1 * time.Minute)
+			}
+		}
+		if !wasMysqlConfigured {
 			log.Errorf("Something went wrong and DB Couldn't be prepared for TPCC workload. Exiting.")
 			return nil, nil, err
 		}

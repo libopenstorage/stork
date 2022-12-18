@@ -386,8 +386,6 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			}
 			if dataservice == mysql {
 				deploymentName := "my-tpcc"
-				// static sleep of 20 minutes as mysql is causing some dns issues as of now. We will change it later to polling of connection status
-				time.Sleep(20 * time.Minute)
 				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				Expect(err).NotTo(HaveOccurred())
 			}
