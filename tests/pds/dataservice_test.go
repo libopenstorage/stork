@@ -383,13 +383,17 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		Step("Running TPCC Workloads - ", func() {
 			if dataservice == postgresql {
 				deploymentName := "pg-tpcc"
-				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
-				Expect(err).NotTo(HaveOccurred())
+				tpccRunResult := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				if !tpccRunResult {
+					Expect(err).NotTo(HaveOccurred())
+				}
 			}
 			if dataservice == mysql {
 				deploymentName := "my-tpcc"
-				pod, dep, err = pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
-				Expect(err).NotTo(HaveOccurred())
+				tpccRunResult := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				if !tpccRunResult {
+					Expect(err).NotTo(HaveOccurred())
+				}
 			}
 		})
 		Step("Delete Deployments", func() {
@@ -398,19 +402,6 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
 			isDeploymentsDeleted = true
 		})
-
-		defer func() {
-			Step("Delete the workload generating deployments", func() {
-				if !(dataservice == mysql || dataservice == kafka || dataservice == zookeeper || dataservice == mongodb) {
-					if dataservice == cassandra || dataservice == postgresql {
-						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-					} else {
-						err = pdslib.DeleteK8sPods(pod.Name, namespace)
-					}
-					Expect(err).NotTo(HaveOccurred())
-				}
-			})
-		}()
 	})
 }
 
