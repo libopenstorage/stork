@@ -110,6 +110,57 @@ var _ = Describe("{DeletePDSPods}", func() {
 	})
 })
 
+var _ = Describe("{Enable/DisableNamespace}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+	})
+
+	It("enable/disable namespace multiple times by giving labels to the namespace", func() {
+		Step("Enable/Disable PDS Namespace", func() {
+			pdsNamespace := "test-ns"
+			testns, _, err := pdslib.CreatePDSNamespace(pdsNamespace)
+			log.FailOnError(err, "Error while creating pds namespace")
+			log.InfoD("PDS Namespace created %v", testns)
+
+			defer func() {
+				err := pdslib.DeletePDSNamespace(pdsNamespace)
+				log.FailOnError(err, "Error while deleting namespace")
+			}()
+
+			// Modifies the namespace multiple times
+			for index := 0; index < 5; index++ {
+				nsLables := map[string]string{
+					pdsNamespaceLabel: "true",
+				}
+				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				log.FailOnError(err, "Error while updating pds namespace")
+				log.Infof("PDS Namespace Updated %v", testns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "available")
+				log.FailOnError(err, "Error while validating pds namespace")
+
+				nsLables = map[string]string{
+					pdsNamespaceLabel: "false",
+				}
+				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				log.FailOnError(err, "Error while updating pds namespace")
+				log.Infof("PDS Namespace Updated %v", testns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "unavailable")
+				log.FailOnError(err, "Error while validating pds namespace")
+
+			}
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+
+})
+
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
@@ -229,6 +280,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
 		defer func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
@@ -237,8 +290,6 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
-
-		defer EndTorpedoTest()
 	})
 })
 

@@ -28,6 +28,7 @@ const (
 	mysql                   = "MySQL"
 	kafka                   = "Kafka"
 	zookeeper               = "ZooKeeper"
+	pdsNamespaceLabel       = "pds.portworx.com/available"
 )
 
 var (
@@ -95,7 +96,7 @@ var _ = BeforeSuite(func() {
 
 	Step("Create/Get Namespace and NamespaceID", func() {
 		namespace = params.InfraToTest.Namespace
-		isavailable, err := pdslib.CheckNamespace(namespace)
+		_, isavailable, err := pdslib.CreatePDSNamespace(namespace)
 		log.FailOnError(err, "Error while Create/Get Namespaces")
 		dash.VerifyFatal(bool(true), isavailable, "Namespace is not available for pds to deploy data services")
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
