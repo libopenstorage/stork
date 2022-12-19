@@ -8,11 +8,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-var dash *aetosutil.Dashboard
 
 const (
 	configMapName                          = "secret-configmap"
@@ -28,7 +26,7 @@ func CreateBackupLocation(
 	namespace string,
 	secretName string,
 ) (*storkv1.BackupLocation, error) {
-	dash.Infof("Using backup location type as %v", backupLocationType)
+	log.Infof("Using backup location type as %v", backupLocationType)
 	secretObj, err := core.Instance().GetSecret(secretName, "default")
 	if err != nil {
 		return nil, fmt.Errorf("secret %v is not present in default namespace", secretName)
@@ -106,4 +104,20 @@ func WaitForAppBackupCompletion(name, namespace string, timeout time.Duration) e
 	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, applicationBackupScheduleRetryInterval)
 	return err
 
+}
+
+func WaitForAppBackupToStart(name, namespace string, timeout time.Duration) error {
+	getAppBackup := func() (interface{}, bool, error) {
+		appBackup, err := storkops.Instance().GetApplicationBackup(name, namespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		if appBackup.Status.Status != storkv1.ApplicationBackupStatusInProgress {
+			return "", true, fmt.Errorf("App backups %s in %s has not started yet.Retrying Status: %s", name, namespace, appBackup.Status.Status)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, applicationBackupScheduleRetryInterval)
+	return err
 }
