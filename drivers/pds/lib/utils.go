@@ -900,10 +900,10 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		numOfThreads = "64" // Default threads is 64
 	}
 	if numOfCustomers == "" {
-		numOfCustomers = "4" // Default number of customer and districts is 4
+		numOfCustomers = "2" // Default number of customer and districts is 4
 	}
 	if numOfWarehouses == "" {
-		numOfWarehouses = "2" // Default number of warehouses to simulate is 2
+		numOfWarehouses = "1" // Default number of warehouses to simulate is 2
 	}
 	// Create a Deployment to Prepare and Run TPCC Workload
 	var replicas int32 = 1
@@ -993,8 +993,12 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 				for _, c := range pod.Status.ContainerStatuses {
 					if int32(c.RestartCount) != 0 {
 						flag = true
+						if c.State.Terminated != nil && c.State.Terminated.ExitCode != 0 && c.State.Terminated.Reason != "Completed" {
+							log.Errorf("Something went wrong and Run Container Exited abruptly. Leaving the TPCC deployment as is - pls check manually")
+							return false
+						}
+						break
 					}
-
 				}
 			}
 		}
@@ -1237,7 +1241,11 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		wasTpccRunSuccessful := RunTpccWorkload(dbUser, pdsPassword, dnsEndpoint, dbName,
 			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
 			deploymentName, namespace, dataServiceName)
-		return wasTpccRunSuccessful, errors.New("Tpcc run failed. This could be a bug - please check manually")
+		if !wasTpccRunSuccessful {
+			return wasTpccRunSuccessful, errors.New("Tpcc run failed. This could be a bug - please check manually")
+		} else {
+			return wasTpccRunSuccessful, nil
+		}
 	// For MySQL workload, first setup the deployment to run TPCC, then wait for MySQL to be available,
 	// Create TPCC Schema and then run it.
 	case mysql:
