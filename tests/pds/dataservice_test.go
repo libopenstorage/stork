@@ -332,13 +332,13 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
 		Expect(err).NotTo(HaveOccurred())
 
-		log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-		log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
 		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
 			deploymentTargetID,
@@ -357,40 +357,22 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		Expect(err).NotTo(HaveOccurred())
 
 		Step("Validate Storage Configurations", func() {
-			log.Infof("data service deployed %v ", dataservice)
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-			Expect(err).NotTo(HaveOccurred())
-			log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-			log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-			log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-			log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-			log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-			log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-			log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-			Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-			Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-			Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-			Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-			Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-			repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-			Expect(config.Spec.Nodes).Should(Equal(replicas))
+			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 		})
 
 		Step("Running TPCC Workloads - ", func() {
 			if dataservice == postgresql {
 				deploymentName := "pg-tpcc"
-				tpccRunResult := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				tpccRunResult, err := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				if !tpccRunResult {
 					Expect(err).NotTo(HaveOccurred())
 				}
 			}
 			if dataservice == mysql {
 				deploymentName := "my-tpcc"
-				tpccRunResult := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				tpccRunResult, err := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				if !tpccRunResult {
 					Expect(err).NotTo(HaveOccurred())
 				}

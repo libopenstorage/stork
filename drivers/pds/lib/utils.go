@@ -819,7 +819,7 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 // This module sets up MySQL Database for Running TPCC. There is some specific requirement that needs to be
 // done for MySQL before running MySQL.
 func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) bool {
-	log.Info("Trying to configure Mysql deployment for TPCC Workload")
+	log.InfoD("Trying to configure Mysql deployment for TPCC Workload")
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
@@ -844,12 +844,12 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 	}
 	_, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
-		log.Errorf("An Error Occured while creating %v", err)
+		log.ErrorD("An Error Occured while creating %v", err)
 		return false
 	}
 
 	//Static sleep to let DB changes settle in
-	time.Sleep(30 * time.Second)
+	time.Sleep(20 * time.Second)
 	var newPods []corev1.Pod
 	newPodList, err := GetPods(namespace)
 	if err != nil {
@@ -860,11 +860,11 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 
 	// Validate if MySQL pod is configured successfully or not for running TPCC
 	for _, pod := range newPods {
-		log.Infof("pds system pod name %v", pod.Name)
+		log.InfoD("pds system pod name %v", pod.Name)
 		if strings.Contains(pod.Name, "configure-mysql") {
 			for _, c := range pod.Status.ContainerStatuses {
 				if c.State.Terminated.ExitCode == 0 && c.State.Terminated.Reason == "Completed" {
-					fmt.Println("Successfully Configured Mysql for TPCC Run. Exiting")
+					log.InfoD("Successfully Configured Mysql for TPCC Run. Exiting")
 					DeleteK8sPods(pod.Name, namespace)
 					return true
 				} else {
@@ -948,7 +948,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	log.Info("Going to Trigger TPCC Workload for the Deployment")
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("An Error Occured while creating deployment %v", err)
+		log.ErrorD("An Error Occured while creating deployment %v", err)
 		return false
 	}
 
@@ -956,11 +956,11 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	flag := false
 	// Hard sleep for 10 seconds for deployment to come up
 	time.Sleep(10 * time.Second)
-	for i := 1; i <= 100; i++ {
+	for i := 1; i <= 200; i++ {
 		newPods := GetNewPods(namespace)
 		for _, pod := range newPods {
 			if strings.Contains(pod.Name, deployment.Name) {
-				log.Info("Will check for status of Init Container Once......")
+				log.InfoD("Will check for status of Init Container Once......")
 				for _, c := range pod.Status.InitContainerStatuses {
 					if c.State.Terminated != nil {
 						flag = true
@@ -969,15 +969,15 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 			}
 		}
 		if flag {
-			log.Info("TPCC Schema Prepared successfully. Moving ahead to run the TPCC Workload now.....")
+			log.InfoD("TPCC Schema Prepared successfully. Moving ahead to run the TPCC Workload now.....")
 			break
 		} else {
-			log.Info("Init Container is still running means TPCC Schema is being prepared. Will wait for further 1 minute.....")
-			time.Sleep(1 * time.Minute)
+			log.InfoD("Init Container is still running means TPCC Schema is being prepared. Will wait for further 30 Seconds.....")
+			time.Sleep(30 * time.Second)
 		}
 	}
 	if !flag {
-		log.Error("TPCC Schema couldn't be prepared in 100 minutes. Timing Out. Please check manually.")
+		log.ErrorD("TPCC Schema couldn't be prepared in 100 minutes. Timing Out. Please check manually.")
 		return false
 	}
 	flag = false
@@ -985,7 +985,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		newPods := GetNewPods(namespace)
 		for _, pod := range newPods {
 			if strings.Contains(pod.Name, deployment.Name) {
-				log.Infof("Waiting for TPCC Workload Container to finish")
+				log.InfoD("Waiting for TPCC Workload Container to finish")
 				for _, c := range pod.Status.ContainerStatuses {
 					if int32(c.RestartCount) != 0 {
 						flag = true
@@ -995,10 +995,10 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 			}
 		}
 		if flag {
-			log.Info("TPCC Workload run finished. Finishing this Test Case")
+			log.InfoD("TPCC Workload run finished. Finishing this Test Case")
 			break
 		} else {
-			log.Info("TPCC Workload is still running. Will wait for further 1 minute to check again.....")
+			log.InfoD("TPCC Workload is still running. Will wait for further 1 minute to check again.....")
 			time.Sleep(1 * time.Minute)
 		}
 	}
@@ -1222,20 +1222,19 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 }
 
 // This function prepares a deployment for running TPCC Workload
-func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) bool {
+func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (bool, error) {
 	var dbUser, timeToRun, numOfCustomers, numOfThreads, numOfWarehouses string
 
 	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
 	if err != nil {
-		log.Errorf("An Error Occured while getting connection info %v", err)
-		return false
+		log.ErrorD("An Error Occured while getting connection info %v", err)
+		return false, err
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
-
 	pdsPassword, err := GetDeploymentCredentials(deploymentID)
 	if err != nil {
-		log.Errorf("An Error Occured while getting credentials info %v", err)
-		return false
+		log.ErrorD("An Error Occured while getting credentials info %v", err)
+		return false, err
 	}
 
 	switch dataServiceName {
@@ -1245,34 +1244,33 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		wasTpccRunSuccessful := RunTpccWorkload(dbUser, pdsPassword, dnsEndpoint, dbName,
 			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
 			deploymentName, namespace, dataServiceName)
-		return wasTpccRunSuccessful
+		return wasTpccRunSuccessful, nil
 	// For MySQL workload, first setup the deployment to run TPCC, then wait for MySQL to be available,
 	// Create TPCC Schema and then run it.
 	case mysql:
 		dbName := "tpcc"
 		var wasMysqlConfigured bool
-		// Wait for 30 minutes for MySQL Deployment to come up - This is happening in few Target Clusters for MySQL
-		for i := 1; i <= 20; i++ {
+		for i := 1; i <= 40; i++ {
 			wasMysqlConfigured := SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
 			if wasMysqlConfigured {
-				log.Info("MySQL Deployment is successfully configured to run for TPCC Workload. Starting TPCC Workload Now.")
+				log.InfoD("MySQL Deployment is successfully configured to run for TPCC Workload. Starting TPCC Workload Now.")
 				break
 			} else {
-				log.Info("MySQL deployment is not yet configured for TPCC. It may still be starting up or there could be some error")
-				log.Info("Waiting for some more time to see if it can be reached within 30 minutes")
-				time.Sleep(1 * time.Minute)
+				log.InfoD("MySQL deployment is not yet configured for TPCC. It may still be starting up or there could be some error")
+				log.InfoD("Waiting for some more time to see if it can be reached within 30 minutes")
+				time.Sleep(30 * time.Second)
 			}
 		}
 		if !wasMysqlConfigured {
-			log.Errorf("Something went wrong and DB Couldn't be prepared for TPCC workload. Exiting.")
+			log.ErrorD("Something went wrong and DB Couldn't be prepared for TPCC workload. Exiting.")
 			return wasMysqlConfigured
 		}
 		wasTpccRunSuccessful := RunTpccWorkload(dbUser, "password", dnsEndpoint, dbName,
 			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
 			deploymentName, namespace, dataServiceName)
-		return wasTpccRunSuccessful
+		return wasTpccRunSuccessful, nil
 	}
-	return false
+	return false, nil
 }
 
 // CreateDataServiceWorkloads func
