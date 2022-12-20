@@ -2,6 +2,7 @@ package lib
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
@@ -956,8 +957,10 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	flag := false
 	// Hard sleep for 10 seconds for deployment to come up
 	time.Sleep(10 * time.Second)
+	var newPods []corev1.Pod
 	for i := 1; i <= 200; i++ {
-		newPods, err := GetPods(namespace)
+		newPodList, _ := GetPods(namespace)
+		newPods = append(newPods, newPodList.Items...)
 		for _, pod := range newPods {
 			if strings.Contains(pod.Name, deployment.Name) {
 				log.InfoD("Will check for status of Init Container Once......")
@@ -982,7 +985,8 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	}
 	flag = false
 	for i := 1; i <= int((timeAskedToRun+300)/60); i++ {
-		newPods, err := GetPods(namespace)
+		newPodList, _ := GetPods(namespace)
+		newPods = append(newPods, newPodList.Items...)
 		for _, pod := range newPods {
 			if strings.Contains(pod.Name, deployment.Name) {
 				log.InfoD("Waiting for TPCC Workload Container to finish")
