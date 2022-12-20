@@ -136,7 +136,7 @@ const (
 	redis                 = "Redis"
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
-	pdsTpccImage          = "pwxbuild/pds-tpcc-automation:v1"
+	pdsTpccImage          = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 	postgresql            = "PostgreSQL"
