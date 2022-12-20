@@ -844,7 +844,7 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 	}
 	_, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
-		log.ErrorD("An Error Occured while creating %v", err)
+		log.Errorf("An Error Occured while creating %v", err)
 		return false
 	}
 
@@ -948,7 +948,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	log.Info("Going to Trigger TPCC Workload for the Deployment")
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		log.ErrorD("An Error Occured while creating deployment %v", err)
+		log.Errorf("An Error Occured while creating deployment %v", err)
 		return false
 	}
 
@@ -977,7 +977,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		}
 	}
 	if !flag {
-		log.ErrorD("TPCC Schema couldn't be prepared in 100 minutes. Timing Out. Please check manually.")
+		log.Errorf("TPCC Schema couldn't be prepared in 100 minutes. Timing Out. Please check manually.")
 		return false
 	}
 	flag = false
@@ -1227,13 +1227,13 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 
 	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
 	if err != nil {
-		log.ErrorD("An Error Occured while getting connection info %v", err)
+		log.Errorf("An Error Occured while getting connection info %v", err)
 		return false, err
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 	pdsPassword, err := GetDeploymentCredentials(deploymentID)
 	if err != nil {
-		log.ErrorD("An Error Occured while getting credentials info %v", err)
+		log.Errorf("An Error Occured while getting credentials info %v", err)
 		return false, err
 	}
 
@@ -1262,8 +1262,8 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 			}
 		}
 		if !wasMysqlConfigured {
-			log.ErrorD("Something went wrong and DB Couldn't be prepared for TPCC workload. Exiting.")
-			return wasMysqlConfigured
+			log.Errorf("Something went wrong and DB Couldn't be prepared for TPCC workload. Exiting.")
+			return wasMysqlConfigured, nil
 		}
 		wasTpccRunSuccessful := RunTpccWorkload(dbUser, "password", dnsEndpoint, dbName,
 			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
