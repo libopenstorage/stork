@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
@@ -18,6 +19,7 @@ import (
 )
 
 const (
+	pdsNamespace            = "pds-system"
 	deploymentName          = "qa"
 	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
 	postgresql              = "PostgreSQL"
@@ -61,6 +63,7 @@ var (
 	isNamespacesDeleted                     bool
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
+	k8sCore                                 = core.Instance()
 )
 
 func TestDataService(t *testing.T) {

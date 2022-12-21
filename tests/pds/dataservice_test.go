@@ -3,6 +3,7 @@ package tests
 import (
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -107,6 +108,108 @@ var _ = Describe("{DeletePDSPods}", func() {
 		}()
 
 		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{RestartPDSagentPod}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPDSagentPod", "Restart pds agent pods and validate if its coming back online and dataserices are not affected", nil, 0)
+	})
+
+	It("Restart pds pods and validate if its coming back online and dataserices are not affected", func() {
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				log.InfoD("Deploying DataService %v ", ds.Name)
+				isDeploymentsDeleted = false
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting resource template")
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+
+				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceDefaultAppConfigID,
+					int32(ds.Replicas),
+					serviceType,
+					dataServiceDefaultResourceTemplateID,
+					storageTemplateID,
+					ds.Version,
+					ds.Image,
+					namespace,
+				)
+				log.FailOnError(err, "Error while deploying data services")
+
+				Step("Validate Storage Configurations", func() {
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+				})
+
+				Step("Delete pods from pds-system namespace", func() {
+					log.InfoD("Getting PDS System Pods")
+					agentPod := pdslib.GetPDSAgentPods(pdsNamespace)
+
+					var wg sync.WaitGroup
+					wg.Add(2)
+					go func() {
+						defer wg.Done()
+						log.InfoD("Deleting PDS agent Pods")
+						err = pdslib.DeleteK8sPods(agentPod.Name, pdsNamespace)
+						log.FailOnError(err, "Error while deleting pods")
+					}()
+
+					go func() {
+						defer wg.Done()
+						log.InfoD("Validating the dataservice deployment during pds-agent pod downtime")
+						err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+						log.FailOnError(err, "Error while validating dataservice during pds-agent downtime")
+					}()
+
+					wg.Wait()
+
+					log.Infof("Getting new PDS agent Pod")
+					agentPod = pdslib.GetPDSAgentPods(pdsNamespace)
+
+					log.InfoD("Validating new PDS agent Pod")
+					err = k8sCore.ValidatePod(&agentPod, 5*time.Minute, 10*time.Second)
+					log.FailOnError(err, "pds agent pod failed to comeup")
+				})
+
+				Step("Validate Deployments after pods are up", func() {
+					log.InfoD("Validate Deployments after pds pods are up")
+					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					log.FailOnError(err, "Error while validating data services")
+					log.InfoD("Deployments pods are up and healthy")
+				})
+
+				Step("Delete Deployments", func() {
+					log.InfoD("Deleting DataService %v ", ds.Name)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					isDeploymentsDeleted = true
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}()
 	})
 })
 

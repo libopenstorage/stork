@@ -2,8 +2,8 @@
   "DataServiceToTest": [
     {
       "Name": "PostgreSQL",
-      "Version": "14.5",
-      "Image": "25852e0",
+      "Version": "14.6",
+      "Image": "27ff6b0",
       "Replicas": 3,
       "ScaleReplicas": 6,
       "OldVersion": "14.4",
@@ -11,8 +11,8 @@
     },
     {
       "Name": "MySQL",
-      "Version": "8.0.30",
-      "Image": "a7bc638",
+      "Version": "8.0.31",
+      "Image": "033c060",
       "Replicas": 3,
       "ScaleReplicas": 6,
       "OldVersion": "8.0.30",
@@ -37,13 +37,6 @@
       "OldImage": "862425e"
     },
     {
-      "Name": "Redis",
-      "Version": "7.0.4",
-      "Image": "212733c",
-      "Replicas": 6,
-      "ScaleReplicas": 8
-    },
-    {
       "Name": "Cassandra",
       "Version": "4.0.6",
       "Image": "f888127",
@@ -59,6 +52,13 @@
       "Replicas": 3,
       "OldVersion": "3.7.1",
       "OldImage": "d8f144f"
+    },
+    {
+      "Name": "Redis",
+      "Version": "7.0.5",
+      "Image": "87fe164",
+      "Replicas": 6,
+      "ScaleReplicas": 8
     }
   ],
   "InfraToTest": {

@@ -155,6 +155,7 @@ var (
 	deployment                            *pds.ModelsDeployment
 	apiClient                             *pds.APIClient
 	ns                                    *corev1.Namespace
+	pdsAgentpod                           corev1.Pod
 	err                                   error
 	isavailable                           bool
 	isTemplateavailable                   bool
@@ -722,13 +723,14 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		log.Errorf("An Error Occured while getting statefulsets %v", err)
 		return err
 	}
-	//validate the statefulset deployed in the namespace
+	//validate the statefulset deployed in the k8s namespace
 	err = k8sApps.ValidateStatefulSet(ss, timeOut)
 	if err != nil {
 		log.Errorf("An Error Occured while validating statefulsets %v", err)
 		return err
 	}
 
+	//validate the deployments in pds
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
@@ -1489,9 +1491,25 @@ func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
 
 }
 
+//DeleteK8sPDSNamespace deletes the pdsnamespace
 func DeleteK8sPDSNamespace(nname string) error {
 	err := k8sCore.DeleteNamespace(nname)
 	return err
+}
+
+//GetPDSAgentPods returns the pds agent pod
+func GetPDSAgentPods(pdsNamespace string) corev1.Pod {
+	log.InfoD("Get agent pod from %v namespace", pdsNamespace)
+	podList, err := GetPods(pdsNamespace)
+	log.FailOnError(err, "Error while getting pods")
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, "pds-agent") {
+			log.Infof("%v", pod.Name)
+			pdsAgentpod = pod
+			break
+		}
+	}
+	return pdsAgentpod
 }
 
 func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
