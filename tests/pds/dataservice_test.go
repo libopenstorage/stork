@@ -352,7 +352,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			Image,
 			namespace,
 		)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Error while deploying data services")
 
 		Step("Validate Storage Configurations", func() {
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
