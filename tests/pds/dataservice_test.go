@@ -315,8 +315,8 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -335,8 +335,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
@@ -365,25 +364,28 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		Step("Running TPCC Workloads - ", func() {
 			if dataservice == postgresql {
 				deploymentName := "pg-tpcc"
-				tpccRunResult, err := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				if !tpccRunResult {
-					Expect(err).NotTo(HaveOccurred())
+					dash.VerifyFatal(tpccRunResult, true, "Validating if Postgres TPCC Run was successful or not")
 				}
 			}
 			if dataservice == mysql {
 				deploymentName := "my-tpcc"
-				tpccRunResult, err := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				if !tpccRunResult {
-					Expect(err).NotTo(HaveOccurred())
+					dash.VerifyFatal(tpccRunResult, true, "Validating if MySQL TPCC Run was successful or not")
 				}
 			}
 		})
+
 		Step("Delete Deployments", func() {
+			log.InfoD("Deleting DataService")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			isDeploymentsDeleted = true
 		})
+
 	})
 }
 

@@ -995,6 +995,13 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 						flag = true
 						if c.State.Terminated != nil && c.State.Terminated.ExitCode != 0 && c.State.Terminated.Reason != "Completed" {
 							log.Errorf("Something went wrong and Run Container Exited abruptly. Leaving the TPCC deployment as is - pls check manually")
+							log.InfoD("Printing TPCC Deployment Describe Status here .....")
+							depStatus, err := k8sApps.DescribeDeployment(deployment.Name, namespace)
+							if err != nil {
+								log.Errorf("Could not print TPCC Deployment status due to some reason. Please check manually.")
+								return false
+							}
+							log.InfoD("%+v\n", *depStatus)
 							return false
 						}
 						break
@@ -1259,7 +1266,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 				break
 			} else {
 				log.InfoD("MySQL deployment is not yet configured for TPCC. It may still be starting up or there could be some error")
-				log.InfoD("Waiting for some more time to see if it can be reached within 30 minutes")
+				log.InfoD("Waiting for 30 seconds to retry if MySQL deployment can be configured or not")
 				time.Sleep(30 * time.Second)
 			}
 		}
