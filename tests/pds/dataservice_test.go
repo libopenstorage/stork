@@ -300,17 +300,19 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 
 	It("Deploy , Validate and start TPCC Workload", func() {
 		for _, ds := range params.DataServiceToTest {
-			if ds.Name == "PostgreSQL" {
+			if ds.Name == postgresql {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
 				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
 			}
-			if ds.Name == "MySQL" {
+			if ds.Name == mysql {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
 				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
 			}
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
 		defer func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
@@ -319,8 +321,6 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
-
-		defer EndTorpedoTest()
 	})
 })
 
