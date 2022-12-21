@@ -396,6 +396,101 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	})
 })
 
+var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
+	})
+
+	It("Deploy , Validate and start TPCC Workload", func() {
+		for _, ds := range params.DataServiceToTest {
+			if ds.Name == postgresql {
+				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			}
+			if ds.Name == mysql {
+				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			}
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}()
+	})
+})
+
+// This module deploys a data service, validates it, Prepares the data service with 4 districts and 2 warehouses
+// and runs TPCC Workload for a default time of 2 minutes
+func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) {
+	Step("Deploy and Validate Data Service and run TPCC Workload", func() {
+		isDeploymentsDeleted = false
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
+		log.FailOnError(err, "Error while getting resource template")
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+		log.InfoD("Deploying DataService %v ", dataservice)
+		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+			deploymentTargetID,
+			dnsZone,
+			deploymentName,
+			namespaceID,
+			dataServiceDefaultAppConfigID,
+			replicas,
+			serviceType,
+			dataServiceDefaultResourceTemplateID,
+			storageTemplateID,
+			Version,
+			Image,
+			namespace,
+		)
+		log.FailOnError(err, "Error while deploying data services")
+
+		Step("Validate Storage Configurations", func() {
+			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+		})
+
+		Step("Running TPCC Workloads - ", func() {
+			if dataservice == postgresql {
+				deploymentName := "pg-tpcc"
+				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				if !tpccRunResult {
+					dash.VerifyFatal(tpccRunResult, true, "Validating if Postgres TPCC Run was successful or not")
+				}
+			}
+			if dataservice == mysql {
+				deploymentName := "my-tpcc"
+				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				if !tpccRunResult {
+					dash.VerifyFatal(tpccRunResult, true, "Validating if MySQL TPCC Run was successful or not")
+				}
+			}
+		})
+
+		Step("Delete Deployments", func() {
+			log.InfoD("Deleting DataService")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			isDeploymentsDeleted = true
+		})
+
+	})
+}
+
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)
