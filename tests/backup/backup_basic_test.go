@@ -1,10 +1,11 @@
 package tests
 
 import (
-	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -65,7 +66,6 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
-	defer dash.TestCaseEnd()
 })
 
 func TestMain(m *testing.M) {

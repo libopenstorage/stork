@@ -3,12 +3,14 @@ package log
 import (
 	"bytes"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/onsi/gomega"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
@@ -218,7 +220,7 @@ func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 func Fatalf(format string, args ...interface{}) {
 	dash.Fatal(format, args...)
-	tpLog.Fatalf(format, args...)
+	tpLog.Errorf(format, args...)
 }
 
 func Errorf(format string, args ...interface{}) {
@@ -269,6 +271,7 @@ func Panicf(format string, args ...interface{}) {
 func FailOnError(err error, description string, args ...interface{}) {
 	if err != nil {
 		Fatalf("%v. Err: %v", fmt.Sprintf(description, args...), err)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 }
 

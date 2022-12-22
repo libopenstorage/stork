@@ -3,9 +3,6 @@ package aetosutil
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/onsi/gomega"
-	rest "github.com/portworx/torpedo/pkg/restutil"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"reflect"
@@ -15,6 +12,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/onsi/gomega"
+	rest "github.com/portworx/torpedo/pkg/restutil"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -400,7 +401,6 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	if d.IsEnabled {
 		d.verify(res)
 	}
-	d.TestSetEnd()
 }
 
 // VerifyFatal verify test and abort operation upon failure

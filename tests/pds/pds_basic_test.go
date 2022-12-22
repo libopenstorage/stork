@@ -110,7 +110,6 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
-	defer dash.TestCaseEnd()
 })
 
 func TestMain(m *testing.M) {
