@@ -3663,7 +3663,11 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			// Dump depStatus
-			buf.WriteString(fmt.Sprintf("%+v\n", *depStatus))
+			depStatusString := "nil"
+			if depStatus != nil {
+				depStatusString = fmt.Sprintf("%+v", *depStatus)
+			}
+			buf.WriteString(fmt.Sprintf("Status: %s\n", depStatusString))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Deployment", obj.Name)))
 			pods, _ := k8sApps.GetDeploymentPods(obj)
 			for _, pod := range pods {
@@ -3680,7 +3684,11 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			// Dump ssetStatus
-			buf.WriteString(fmt.Sprintf("%+v\n", *ssetStatus))
+			ssetStatusString := "nil"
+			if ssetStatus != nil {
+				ssetStatusString = fmt.Sprintf("%+v", *ssetStatus)
+			}
+			buf.WriteString(fmt.Sprintf("Status: %s\n", ssetStatusString))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "StatefulSet", obj.Name)))
 			pods, _ := k8sApps.GetStatefulSetPods(obj)
 			for _, pod := range pods {
@@ -3697,7 +3705,11 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			// Dump service status
-			buf.WriteString(fmt.Sprintf("%+v\n", *svcStatus))
+			svcStatusString := "nil"
+			if svcStatus != nil {
+				svcStatusString = fmt.Sprintf("%+v", *svcStatus)	
+			}
+			buf.WriteString(fmt.Sprintf("Status: %s\n", svcStatusString))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Service", obj.Name)))
 			buf.WriteString(insertLineBreak("END Service"))
 		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
@@ -3710,7 +3722,11 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			// Dump persistent volume claim status
-			buf.WriteString(fmt.Sprintf("%+v\n", *pvcStatus))
+			pvcStatusString := "nil"
+			if pvcStatus != nil {
+				pvcStatusString = fmt.Sprintf("%+v", *pvcStatus)	
+			}
+			buf.WriteString(fmt.Sprintf("Status: %s\n", pvcStatusString))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "PersistentVolumeClaim", obj.Name)))
 			buf.WriteString(insertLineBreak("END PersistentVolumeClaim"))
 		} else if obj, ok := specObj.(*storageapi.StorageClass); ok {
