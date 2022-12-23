@@ -39,6 +39,7 @@ type BackupLocationItem struct {
 	S3Config           *S3Config     `json:"s3Config,omitempty"`
 	AzureConfig        *AzureConfig  `json:"azureConfig,omitempty"`
 	GoogleConfig       *GoogleConfig `json:"googleConfig,omitempty"`
+	NfsConfig          *NfsConfig    `json:"nfsConfig,omitempty"`
 	SecretConfig       string        `json:"secretConfig"`
 	Sync               bool          `json:"sync"`
 	RepositoryPassword string        `json:"repositoryPassword"`
@@ -60,18 +61,6 @@ type ClusterItem struct {
 	Sync               bool          `json:"sync"`
 }
 
-// ClusterType is the type of the cluster
-type ClusterType string
-
-const (
-	// AWSCluster type represents the cluster has aws volumes
-	AWSCluster ClusterType = "aws"
-	// GCPCluster type represents the cluster has gcp volumes
-	GCPCluster ClusterType = "gcp"
-	// AzureCluster type represents the cluster has azure volumes
-	AzureCluster ClusterType = "azure"
-)
-
 // BackupLocationType is the type of the backup location
 type BackupLocationType string
 
@@ -82,6 +71,20 @@ const (
 	BackupLocationAzure BackupLocationType = "azure"
 	// BackupLocationGoogle stores the backup in Google Cloud Storage
 	BackupLocationGoogle BackupLocationType = "google"
+	// BackupLocationNFS stores the backup in NFS backed Storage
+	BackupLocationNFS BackupLocationType = "nfs"
+)
+
+// ClusterType is the type of the cluster
+type ClusterType string
+
+const (
+	// AWSCluster type represents the cluster has aws volumes
+	AWSCluster ClusterType = "aws"
+	// GCPCluster type represents the cluster has gcp volumes
+	GCPCluster ClusterType = "gcp"
+	// AzureCluster type represents the cluster has azure volumes
+	AzureCluster ClusterType = "azure"
 )
 
 // S3Config speficies the config required to connect to an S3-compliant
@@ -116,6 +119,12 @@ type GoogleConfig struct {
 	AccountKey string `json:"accountKey"`
 }
 
+type NfsConfig struct {
+	ServerAddr  string `json:"serverAddr"`
+	SubPath     string `json:"subPath"`
+	MountOption string `json:"mountOption"`
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // BackupLocationList is a list of ApplicationBackups
@@ -147,9 +156,33 @@ func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 		return bl.getMergedAzureConfig(client)
 	case BackupLocationGoogle:
 		return bl.getMergedGoogleConfig(client)
+	case BackupLocationNFS:
+		return bl.getMergedNfsConfig(client)
 	default:
 		return fmt.Errorf("Invalid BackupLocation type %v", bl.Location.Type)
 	}
+}
+
+func (bl *BackupLocation) getMergedNfsConfig(client kubernetes.Interface) error {
+	if bl.Location.NfsConfig == nil {
+		bl.Location.NfsConfig = &NfsConfig{}
+	}
+	if bl.Location.SecretConfig != "" {
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(bl.Location.SecretConfig, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
+		}
+		if val, ok := secretConfig.Data["serverAddr"]; ok && val != nil {
+			bl.Location.NfsConfig.ServerAddr = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["subPath"]; ok && val != nil {
+			bl.Location.NfsConfig.SubPath = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["mountOption"]; ok && val != nil {
+			bl.Location.NfsConfig.MountOption = strings.TrimSuffix(string(val), "\n")
+		}
+	}
+	return nil
 }
 
 func (bl *BackupLocation) getMergedS3Config(client kubernetes.Interface) error {
