@@ -215,10 +215,18 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 
 	retList := make([]corev1.Pod, 0)
 	for _, p := range pods.Items {
+		logrus.Infof("getPodsUsingPVCWithListOptions - pod name selected ---> %v", p.Name)
 		for _, v := range p.Spec.Volumes {
 			if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == pvcName {
-				retList = append(retList, p)
-				break
+				for _, container := range p.Spec.Containers {
+					for _, mount := range container.VolumeMounts {
+						if mount.Name == v.Name {
+							logrus.Infof("getPodsUsingPVCWithListOptions - pod name appened to list ---> %v", p.Name)
+							retList = append(retList, p)
+							break
+						}
+					}
+				}
 			}
 		}
 	}
