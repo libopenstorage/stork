@@ -762,7 +762,7 @@ func (k *kdmp) StartRestore(
 		logrus.Infof("kdmp ---> pvc name %v - current size %v - snapshot size %v", pvc.Name, currSize, bkpvInfo.TotalSize)
 		if int64(bkpvInfo.TotalSize) > currSize {
 			logrus.Infof("kdmp ---> updating the pvc size with snapshot size - pvc name %v - current size %v - snapshot size %v", pvc.Name, currSize, bkpvInfo.TotalSize)
-			pvc.Spec.Resources.Requests[v1.ResourceStorage] = *resource.NewQuantity(int64(bkpvInfo.TotalSize), resource.BinarySI)
+			pvc.Spec.Resources.Requests[v1.ResourceStorage] = *resource.NewQuantity(int64(bkpvInfo.TotalSize*2), resource.BinarySI)
 		}
 
 		pvc.Namespace = restoreNamespace
