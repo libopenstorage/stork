@@ -213,7 +213,7 @@ func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.
 func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api.ApplicationBackup) error {
 	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
-		return fmt.Errorf("error getting backup location path: %v", err)
+		return fmt.Errorf("createBackupLocationPath - error getting backup location path: %v", err)
 	}
 	// For NFS skip creating path
 	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
@@ -1162,7 +1162,7 @@ func IsNFSBackuplocationType(
 ) (bool, error) {
 	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
-		return false, fmt.Errorf("error getting backup location path for backup [%v/%v]: %v", backup.Namespace, backup.Name, err)
+		return false, fmt.Errorf("IsNFSBackuplocationType - error getting backup location path for backup [%v/%v]: %v", backup.Namespace, backup.Name, err)
 	}
 	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
 		return true, nil
@@ -1370,7 +1370,7 @@ func (a *ApplicationBackupController) backupResources(
 				}
 				backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 				if err != nil {
-					return fmt.Errorf("error getting backup location path: %v", err)
+					return fmt.Errorf("sivakumar 1 - error getting backup location path: %v", err)
 				}
 				destination := &kdmpapi.ResourceExportObjectReference{
 					// TODO: .GetBackupLocation is not returning APIVersion and kind.

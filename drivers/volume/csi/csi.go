@@ -447,6 +447,7 @@ func (c *csi) ensureVolumeSnapshotClassCreated(snapshotClassCreatedForDriver map
 	return snapshotClassCreatedForDriver, nil
 }
 
+/*
 // backupStorageClasses backs up all storage classes needed to restore the backup PVCs
 func (c *csi) backupStorageClasses(storageClasses []*storagev1.StorageClass, backup *storkapi.ApplicationBackup) error {
 	scBytes, err := json.Marshal(storageClasses)
@@ -461,7 +462,7 @@ func (c *csi) backupStorageClasses(storageClasses []*storagev1.StorageClass, bac
 
 	return nil
 }
-
+*/
 func (c *csi) cancelBackupDuringStartFailure(backup *storkapi.ApplicationBackup, volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo) {
 	backup.Status.Volumes = volumeBackupInfos
 	err := c.CancelBackup(backup)
@@ -476,8 +477,8 @@ func (c *csi) StartBackup(
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-	var storageClasses []*storagev1.StorageClass
-	storageClassAdded := make(map[string]bool)
+	// var storageClasses []*storagev1.StorageClass
+	// storageClassAdded := make(map[string]bool)
 	log.ApplicationBackupLog(backup).Debugf("started CSI backup: %v", backup.Name)
 	for _, pvc := range pvcs {
 		if pvc.DeletionTimestamp != nil {
@@ -511,29 +512,31 @@ func (c *csi) StartBackup(
 
 		volumeInfo.Options[optCSIDriverName] = csiDriverName
 		volumeInfo.BackupID = string(vsName)
+		/*
+			sc, err := core.Instance().GetStorageClassForPVC(&pvc)
+			if err != nil {
+				c.cancelBackupDuringStartFailure(backup, volumeInfos)
+				return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
+			}
 
-		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
+			// only add one instance of a storageclass
+			if !storageClassAdded[sc.Name] {
+				sc.Kind = "StorageClass"
+				sc.APIVersion = "storage.k8s.io/v1"
+				sc.ResourceVersion = ""
+				storageClasses = append(storageClasses, sc)
+				storageClassAdded[sc.Name] = true
+			}
+		*/
+	}
+	/*
+		// Backup the storage class
+		err := c.backupStorageClasses(storageClasses, backup)
 		if err != nil {
 			c.cancelBackupDuringStartFailure(backup, volumeInfos)
-			return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
+			return nil, fmt.Errorf("failed to backup storage classes: %v", err)
 		}
-
-		// only add one instance of a storageclass
-		if !storageClassAdded[sc.Name] {
-			sc.Kind = "StorageClass"
-			sc.APIVersion = "storage.k8s.io/v1"
-			sc.ResourceVersion = ""
-			storageClasses = append(storageClasses, sc)
-			storageClassAdded[sc.Name] = true
-		}
-	}
-
-	// Backup the storage class
-	err := c.backupStorageClasses(storageClasses, backup)
-	if err != nil {
-		c.cancelBackupDuringStartFailure(backup, volumeInfos)
-		return nil, fmt.Errorf("failed to backup storage classes: %v", err)
-	}
+	*/
 
 	return volumeInfos, nil
 }
