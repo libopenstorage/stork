@@ -688,7 +688,12 @@ func (p *portworx) GetClusterID() (string, error) {
 	return cluster.Id, nil
 }
 
-func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool {
+	// For portworx volume and backuplocation type is NFS, we will not own.
+	// It will default to kdmp
+	if blType == storkapi.BackupLocationNFS {
+		return false
+	}
 	return p.IsSupportedPVC(coreOps, pvc, true)
 }
 
