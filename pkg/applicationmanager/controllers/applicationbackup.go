@@ -238,6 +238,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			}
 			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller.
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
+			logrus.Infof("sivakumar ---- Calling cleanupResources .....")
 			err = a.cleanupResources(backup)
 			if err != nil {
 				return err
@@ -1633,6 +1634,7 @@ func IsResourceTypePVC(backup *stork_api.ApplicationBackup) bool {
 func (a *ApplicationBackupController) cleanupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
+	logrus.Infof("sivakumar -------> Entering cleanupResources .............")
 	drivers := a.getDriversForBackup(backup)
 	for driverName := range drivers {
 

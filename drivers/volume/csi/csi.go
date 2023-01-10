@@ -14,7 +14,7 @@ import (
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
+	// "github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -311,10 +311,12 @@ func (c *csi) OwnsPVCForBackup(
 	crBackupType string,
 	blType storkapi.BackupLocationType,
 ) bool {
-	// For CSI volume and backuplocation type is NFS, It will default to kdmp
-	if blType == storkapi.BackupLocationNFS {
-		return false
-	}
+	/*
+		// For CSI volume and backuplocation type is NFS, It will default to kdmp
+		if blType == storkapi.BackupLocationNFS {
+			return false
+		}
+	*/
 	if cmBackupType == storkapi.ApplicationBackupGeneric || crBackupType == storkapi.ApplicationBackupGeneric {
 		// If user has forced the backupType in config map or applicationbackup CR, default to generic always
 		return false
@@ -545,6 +547,7 @@ func (c *csi) getBackupSnapshotName(pvc *v1.PersistentVolumeClaim, backup *stork
 	return fmt.Sprintf("%s-%s-%s", snapshotBackupPrefix, getUIDLastSection(backup.UID), getUIDLastSection(pvc.UID))
 }
 
+/*
 // uploadObject uploads the given data to the backup location specified in the backup object
 func (c *csi) uploadObject(
 	backup *storkapi.ApplicationBackup,
@@ -632,6 +635,7 @@ func (c *csi) uploadCSIBackupObject(
 
 	return nil
 }
+*/
 
 func (c *csi) getRestoreUIDLabelSelector(restore *storkapi.ApplicationRestore) string {
 	return fmt.Sprintf("%s=%s", restoreUIDLabel, string(restore.GetUID()))
@@ -943,14 +947,17 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		vsMapLen = len(vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot))
 		vsContentMapLen = len(vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent))
 	}
-	// if all have finished, add all VolumeSnapshot and VolumeSnapshotContent to objectstore
-	if !anyInProgress && vsContentMapLen > 0 && vsMapLen > 0 {
-		err := c.uploadCSIBackupObject(backup, vsMap, vsContentMap, vsClassMap)
-		if err != nil {
-			return nil, err
+	logrus.Infof("sivakumar -- anyInProgress %v - vsMapLen %v - vsContentMapLen %v", anyInProgress, vsMapLen, vsContentMapLen)
+	/*
+		// if all have finished, add all VolumeSnapshot and VolumeSnapshotContent to objectstore
+		if !anyInProgress && vsContentMapLen > 0 && vsMapLen > 0 {
+			err := c.uploadCSIBackupObject(backup, vsMap, vsContentMap, vsClassMap)
+			if err != nil {
+				return nil, err
+			}
+			log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", vsMapLen, vsContentMapLen)
 		}
-		log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", vsMapLen, vsContentMapLen)
-	}
+	*/
 
 	return volumeInfos, nil
 }
@@ -1831,7 +1838,7 @@ func mapSnapshotInfoStatus(status snapshotter.Status) storkapi.ApplicationBackup
 func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 	var vsMap interface{}
 	var vsContentMap interface{}
-
+	logrus.Infof("sivakumar ------->>>>> Entering CleanupBackupResources .............. ")
 	if c.v1SnapshotRequired {
 		vsMap = make(map[string]*kSnapshotv1.VolumeSnapshot)
 		vsContentMap = make(map[string]*kSnapshotv1.VolumeSnapshotContent)
