@@ -26,7 +26,7 @@ rules:
     resources: ["endpoints"]
     verbs: ["delete", "get", "patch", "update"]
   - apiGroups: [""]
-    resources: ["nodes","namespaces"]
+    resources: ["nodes"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods"]
@@ -99,29 +99,30 @@ spec:
       containers:
       - command:
         - /usr/local/bin/kube-scheduler
-        - --bind-address=0.0.0.0
-        - --config=/etc/kubernetes/stork-config.yaml
-        image: k8s.gcr.io/kube-scheduler-amd64:<kube_version>
+        - --address=0.0.0.0
+        - --leader-elect=true
+        - --scheduler-name=stork
+        - --policy-configmap=stork-config
+        - --policy-configmap-namespace=kube-system
+        - --lock-object-name=stork-scheduler
+        image: gcr.io/google_containers/kube-scheduler-amd64:<kube_version>
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 10259
-            scheme: HTTPS
+            port: 10251
+            scheme: HTTP
           initialDelaySeconds: 15
         name: stork-scheduler
         readinessProbe:
           httpGet:
             path: /healthz
-            port: 10259
-            scheme: HTTPS
+            port: 10251
+            scheme: HTTP
         resources:
           requests:
             cpu: '0.1'
         securityContext:
           privileged: false
-        volumeMounts:
-        - mountPath: /etc/kubernetes
-          name: scheduler-config
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -134,7 +135,3 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       hostPID: false
       serviceAccountName: stork-scheduler-account
-      volumes:
-      - configMap:
-          name: stork-config
-        name: scheduler-config
