@@ -167,11 +167,35 @@ case $i in
 esac
 done
 
-sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /stork-specs/stork-deployment.yaml
+stork_deployment_spec=""
+stork_scheduler_spec=""
+stork_scheduler_image=""
+kube_version=$(kubectl version --output=json | jq -r ".serverVersion.gitVersion")
+
+# K8 versions are of the form v<k8_major_version>.<k8_minor_version>.<k8_patch_version>
+A="$(echo $kube_version | cut -d'.' -f1)"
+k8_major_version="$(echo $A | cut -d'v' -f2)"
+k8_minor_version="$(echo $kube_version | cut -d'.' -f2)"
+
+echo "k8_major_version = $k8_major_version"
+echo "k8_minor_version = $k8_minor_version"
+
+if [ "$k8_major_version" -ge "1" ] && [ "$k8_minor_version" -ge "23" ]; then
+    echo "Kube Scheduler Configuration will be used to deploy stork scheduler since K8s version is >= 1.23.0"
+    stork_deployment_spec="stork-deployment"
+    stork_scheduler_spec="stork-scheduler"
+else
+    echo "Policy will be used to deploy stork scheduler since K8s version is < 1.23.0"
+    stork_deployment_spec="stork-deployment-deprecated"
+    stork_scheduler_spec="stork-scheduler-deprecated"
+fi
+
+sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g' /stork-specs/$stork_deployment_spec".yaml"
+sed -i 's/<kube_version>/'"$kube_version"'/g' /stork-specs/$stork_scheduler_spec".yaml"
 
 # Replace volume driver in stork
 if [ "$volume_driver" != "pxd" ] ; then
-	sed -i 's/- --driver=pxd//g' /stork-specs/stork-deployment.yaml
+	sed -i 's/- --driver=pxd//g' /stork-specs/$stork_deployment_spec".yaml"
 fi
 
 # For integration test mock times
@@ -179,7 +203,7 @@ kubectl delete cm stork-mock-time  -n kube-system || true
 kubectl create cm stork-mock-time  -n kube-system --from-literal=time=""
 
 echo "Creating stork deployment"
-kubectl apply -f /stork-specs/stork-deployment.yaml
+kubectl apply -f /stork-specs/$stork_deployment_spec".yaml"
 
 # Turn on test mode
 kubectl set env deploy/stork -n kube-system TEST_MODE="true"
@@ -197,6 +221,24 @@ fi
 if [ "$volume_driver" = "azure" ] ; then
     echo "For azure backups add environment variables to stork from existing k8s secret px-azure"
     kubectl -n  kube-system set env --from=secret/$cloud_secret deploy/stork
+fi
+
+if [ "$k8_major_version" -ge "1" ] && [ "$k8_minor_version" -ge "23" ]; then
+	echo "Creating stork scheduler deployment"
+	kubectl apply -f /stork-specs/$stork_scheduler_spec".yaml"
+    # Delete the stork scheduler pods to make sure we are waiting for the status from the new pods
+    kubectl delete pods -n kube-system -l name=stork-scheduler
+
+	echo "Waiting for stork-scheduler to be in running state"
+	for i in $(seq 1 100) ; do
+		replicas=$(kubectl get deployment -n kube-system stork-scheduler -o json | jq ".status.readyReplicas")
+		if [ "$replicas" = "3" ]; then
+			break
+		else
+			echo "Stork scheduler is not ready yet"
+			sleep 10
+		fi
+	done
 fi
 
 # Delete the pods to make sure we are waiting for the status from the
