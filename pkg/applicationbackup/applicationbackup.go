@@ -31,16 +31,16 @@ func CreateBackupLocation(
 	if err != nil {
 		return nil, fmt.Errorf("secret %v is not present in default namespace", secretName)
 	}
-	// copy secret to the app namespace
-	newSecretObj := secretObj.DeepCopy()
-	newSecretObj.Namespace = namespace
-	newSecretObj.ResourceVersion = ""
-	_, err = core.Instance().CreateSecret(newSecretObj)
+	_, err = core.Instance().GetSecret(secretName, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy secret %v in required namespace %v", secretName, namespace)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("secret %v is not getting created  in default namespace", secretName)
+		// copy secret to the app namespace
+		newSecretObj := secretObj.DeepCopy()
+		newSecretObj.Namespace = namespace
+		newSecretObj.ResourceVersion = ""
+		_, err = core.Instance().CreateSecret(newSecretObj)
+		if err != nil {
+			return nil, fmt.Errorf("secret %v is not getting created in %v namespace", secretName, namespace)
+		}
 	}
 	backupLocation := &storkv1.BackupLocation{
 		ObjectMeta: meta.ObjectMeta{
@@ -114,7 +114,7 @@ func WaitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 		}
 
 		if appBackup.Status.Status != storkv1.ApplicationBackupStatusInProgress {
-			return "", true, fmt.Errorf("App backups %s in %s has not started yet.Retrying Status: %s", name, namespace, appBackup.Status.Status)
+			return "", true, fmt.Errorf("app backups %s in %s has not started yet.Retrying Status: %s", name, namespace, appBackup.Status.Status)
 		}
 		return "", false, nil
 	}
