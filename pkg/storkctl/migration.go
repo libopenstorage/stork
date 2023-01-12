@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -782,7 +782,7 @@ func waitForMigration(name, namespace string, ioStreams genericclioptions.IOStre
 	var err error
 
 	log.SetFlags(0)
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 	heading := fmt.Sprintf("%s\t\t%-20s", stage, status)
 	printMsg(heading, ioStreams.Out)
 	t := func() (interface{}, bool, error) {
@@ -823,7 +823,7 @@ func validateMigrationFromFile(migrSpec, namespace string) error {
 	if err != nil {
 		return fmt.Errorf("error opening file %v: %v", migrSpec, err)
 	}
-	data, err := ioutil.ReadAll(bufio.NewReader(file))
+	data, err := io.ReadAll(bufio.NewReader(file))
 	if err != nil {
 		return fmt.Errorf("error reading file %v: %v", migrSpec, err)
 	}

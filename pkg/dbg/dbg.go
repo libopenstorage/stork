@@ -2,7 +2,6 @@ package dbg
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path"
@@ -61,7 +60,7 @@ func generateFilename(name string, dir string, suffix string) string {
 
 func changeLogLevel() {
 	var level string
-	data, err := ioutil.ReadFile(logLevelFile)
+	data, err := os.ReadFile(logLevelFile)
 	if err != nil {
 		level = "info"
 	} else {
@@ -109,7 +108,7 @@ func dumpGoMemoryTrace() {
 func dumpGoProfile(filename string) {
 	trace := make([]byte, stackTraceSize)
 	len := runtime.Stack(trace, true)
-	if err := ioutil.WriteFile(filename, trace[:len], 0644); err != nil {
+	if err := os.WriteFile(filename, trace[:len], 0644); err != nil {
 		logrus.Errorf("Error dumping goroutines: %v", err)
 	}
 }
