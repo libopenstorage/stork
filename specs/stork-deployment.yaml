@@ -8,22 +8,124 @@ data:
   # of Kubernetes, so please update those as required. The requirement to manually specify this
   # list will go away with Kubernetes v1.10 where it will use the defaults if nothing is
   # specified.
-  policy.cfg: |-
-    {
-      "kind": "Policy",
-      "apiVersion": "v1",
-      "extenders": [
-        {
-          "urlPrefix": "http://stork-service.kube-system.svc.cluster.local:8099",
-          "apiVersion": "v1beta1",
-          "filterVerb": "filter",
-          "prioritizeVerb": "prioritize",
-          "weight": 5,
-          "enableHttps": false,
-          "nodeCacheCapable": false
-        }
-      ]
-    }
+ stork-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    clientConnection:
+      acceptContentTypes: ""
+      burst: 100
+      contentType: application/vnd.kubernetes.protobuf
+      kubeconfig: ""
+      qps: 50
+    enableContentionProfiling: true
+    enableProfiling: true
+    extenders:
+    - filterVerb: filter
+      httpTimeout: 5m0s
+      prioritizeVerb: prioritize
+      urlPrefix: http://stork-service.kube-system:8099
+      weight: 5
+    kind: KubeSchedulerConfiguration
+    leaderElection:
+      leaderElect: true
+      leaseDuration: 15s
+      renewDeadline: 10s
+      resourceLock: leases
+      resourceName: stork-scheduler
+      resourceNamespace: kube-system
+      retryPeriod: 2s
+    parallelism: 16
+    percentageOfNodesToScore: 0
+    podInitialBackoffSeconds: 1
+    podMaxBackoffSeconds: 10
+    profiles:
+    - pluginConfig:
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: DefaultPreemptionArgs
+          minCandidateNodesAbsolute: 100
+          minCandidateNodesPercentage: 10
+        name: DefaultPreemption
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          hardPodAffinityWeight: 1
+          kind: InterPodAffinityArgs
+        name: InterPodAffinity
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: NodeAffinityArgs
+        name: NodeAffinity
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: NodeResourcesBalancedAllocationArgs
+          resources:
+          - name: cpu
+            weight: 1
+          - name: memory
+            weight: 1
+        name: NodeResourcesBalancedAllocation
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: NodeResourcesFitArgs
+          scoringStrategy:
+            resources:
+            - name: cpu
+              weight: 1
+            - name: memory
+              weight: 1
+            type: LeastAllocated
+        name: NodeResourcesFit
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          defaultingType: System
+          kind: PodTopologySpreadArgs
+        name: PodTopologySpread
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          bindTimeoutSeconds: 600
+          kind: VolumeBindingArgs
+        name: VolumeBinding
+      plugins:
+        bind: {}
+        filter: {}
+        multiPoint:
+          enabled:
+          - name: PrioritySort
+          - name: NodeUnschedulable
+          - name: NodeName
+          - name: TaintToleration
+            weight: 3
+          - name: NodeAffinity
+            weight: 2
+          - name: NodePorts
+          - name: NodeResourcesFit
+            weight: 1
+          - name: VolumeRestrictions
+          - name: EBSLimits
+          - name: GCEPDLimits
+          - name: NodeVolumeLimits
+          - name: AzureDiskLimits
+          - name: VolumeBinding
+          - name: VolumeZone
+          - name: PodTopologySpread
+            weight: 2
+          - name: InterPodAffinity
+            weight: 2
+          - name: DefaultPreemption
+          - name: NodeResourcesBalancedAllocation
+            weight: 1
+          - name: ImageLocality
+            weight: 1
+          - name: DefaultBinder
+        permit: {}
+        postBind: {}
+        postFilter: {}
+        preBind: {}
+        preFilter: {}
+        preScore: {}
+        queueSort: {}
+        reserve: {}
+        score: {}
+      schedulerName: stork
 ---
 apiVersion: v1
 kind: ServiceAccount
