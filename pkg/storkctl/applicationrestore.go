@@ -2,7 +2,7 @@ package storkctl
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"time"
 
@@ -233,7 +233,7 @@ func waitForApplicationRestore(name, namespace string, ioStreams genericclioptio
 	var err error
 
 	log.SetFlags(0)
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 	heading := fmt.Sprintf("%s\t\t%-20s", stage, status)
 	printMsg(heading, ioStreams.Out)
 	t := func() (interface{}, bool, error) {

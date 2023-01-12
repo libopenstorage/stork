@@ -2,7 +2,7 @@ package storkctl
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"strconv"
 	"time"
@@ -283,7 +283,7 @@ func waitForDomainUpdate(name string) string {
 	var msg string
 
 	log.SetFlags(0)
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 	t := func() (interface{}, bool, error) {
 		cds, err := storkops.Instance().GetClusterDomainUpdate(name)
 		if err != nil {

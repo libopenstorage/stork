@@ -393,7 +393,7 @@ func run(c *cli.Context) {
 			EventRecorder: recorder,
 		}
 		resourceLock, err := resourcelock.New(
-			resourcelock.ConfigMapsResourceLock,
+			resourcelock.ConfigMapsLeasesResourceLock,
 			lockObjectNamespace,
 			lockObjectName,
 			k8sClient.CoreV1(),

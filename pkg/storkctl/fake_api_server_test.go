@@ -6,7 +6,6 @@ package storkctl
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,5 +21,5 @@ func defaultHeader() http.Header {
 }
 
 func objBody(codec runtime.Codec, obj runtime.Object) io.ReadCloser {
-	return ioutil.NopCloser(bytes.NewReader([]byte(runtime.EncodeOrDie(codec, obj))))
+	return io.NopCloser(bytes.NewReader([]byte(runtime.EncodeOrDie(codec, obj))))
 }
