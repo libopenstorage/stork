@@ -65,7 +65,7 @@ type ClusterPluginInterface interface {
 	GetSelectorLabels() map[string]string
 	// SetDefaultsOnStorageCluster sets the driver specific defaults on the storage
 	// cluster spec if they are not set
-	SetDefaultsOnStorageCluster(*corev1.StorageCluster)
+	SetDefaultsOnStorageCluster(*corev1.StorageCluster) error
 	// UpdateStorageClusterStatus update the status of storage cluster
 	UpdateStorageClusterStatus(*corev1.StorageCluster) error
 	// DeleteStorage is going to uninstall and delete the storage service based on
