@@ -38,6 +38,7 @@ func TestExtender(t *testing.T) {
 	t.Run("driverNodeErrorTest", driverNodeErrorTest)
 	t.Run("antihyperconvergenceTest", antihyperconvergenceTest)
 	t.Run("antihyperconvergenceTestPreferRemoteOnlyTest", antihyperconvergenceTestPreferRemoteOnlyTest)
+	t.Run("equalPodSpreadTest", equalPodSpreadTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -359,4 +360,38 @@ func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []st
 	for _, appNode := range appNodes {
 		require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
 	}
+}
+
+func equalPodSpreadTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("equal-pod-spread-test",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"postgres"},
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	logrus.Infof("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 3, len(volumeNames), "Should have only 3 volumes")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 3, len(scheduledNodes), "apps should have been deployed on 3 separate nodes, but got scheduled on only %d nodes",
+		len(scheduledNodes))
+
+	scheduledNodesMap := make(map[string]bool)
+	for _, node := range scheduledNodes {
+		if _, ok := scheduledNodesMap[node.Name]; !ok {
+			scheduledNodesMap[node.Name] = true
+		}
+	}
+	require.Equal(t, 3, len(scheduledNodesMap), "App should be scheduled on 3 nodes, pod spread not achieved.")
+
+	logrus.Infof("Verifying that volume replicase are spread equally across worker nodes")
+
+	logrus.Info("Deleting apps created by the test")
+	destroyAndWait(t, ctxs)
 }
