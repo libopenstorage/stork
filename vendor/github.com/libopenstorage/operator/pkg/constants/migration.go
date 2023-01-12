@@ -28,4 +28,7 @@ const (
 	PhaseAwaitingApproval = "AwaitingMigrationApproval"
 	// PhaseMigrationInProgress status when migration is in progress
 	PhaseMigrationInProgress = "MigrationInProgress"
+
+	// PortworxDaemonSetName name of portworx DaemonSet
+	PortworxDaemonSetName = "portworx"
 )

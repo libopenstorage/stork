@@ -72,7 +72,7 @@ func (c *Client) DeleteGroupSnapshot(name, namespace string) error {
 }
 
 // ValidateGroupSnapshot checks if the group snapshot with given name and namespace is in ready state
-//  If retry is true, the validation will be retried with given timeout and retry internal
+// If retry is true, the validation will be retried with given timeout and retry internal
 func (c *Client) ValidateGroupSnapshot(name, namespace string, retry bool, timeout, retryInterval time.Duration) error {
 	if err := c.initClient(); err != nil {
 		return err
