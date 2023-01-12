@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -127,7 +127,7 @@ func (a *azure) getMetadata() (map[string]string, error) {
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("error querying Azure metadata: Code %d returned for url %s", resp.StatusCode, req.URL)
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error querying Azure metadata: %v", err)
 	}

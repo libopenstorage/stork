@@ -3,7 +3,7 @@ package storkctl
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"reflect"
@@ -124,7 +124,7 @@ func getStringData(fileName string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error opening file %v: %v", fileName, err)
 	}
-	data, err := ioutil.ReadAll(bufio.NewReader(file))
+	data, err := io.ReadAll(bufio.NewReader(file))
 	if err != nil {
 		return "", fmt.Errorf("error reading file %v: %v", fileName, err)
 	}

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -195,7 +195,7 @@ func sendFilterRequest(
 		}
 	}()
 	if resp.StatusCode != http.StatusOK {
-		contents, err := ioutil.ReadAll(resp.Body)
+		contents, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -227,7 +227,7 @@ func sendPrioritizeRequest(
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		contents, err := ioutil.ReadAll(resp.Body)
+		contents, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}

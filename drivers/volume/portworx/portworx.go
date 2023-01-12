@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path"
@@ -4138,7 +4137,7 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 
 func (p *portworx) createStatfsConfigMap(cmNamespace string) error {
 	soPath := path.Join(statfsSODirInStork, statfsSOName)
-	statfsSOContents, err := ioutil.ReadFile(soPath)
+	statfsSOContents, err := os.ReadFile(soPath)
 	if err != nil {
 		logrus.Errorf("Failed to read %s: %v", soPath, err)
 		return err
