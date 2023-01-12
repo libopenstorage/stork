@@ -6,7 +6,6 @@ package integrationtest
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
@@ -380,7 +379,7 @@ func dumpRemoteKubeConfig(configObject string) error {
 		return fmt.Errorf(configErr)
 	}
 	// dump to remoteFilePath
-	return ioutil.WriteFile(remoteFilePath, []byte(config), 0644)
+	return os.WriteFile(remoteFilePath, []byte(config), 0644)
 }
 
 func dumpKubeConfigPath(configObject string, path string) error {
@@ -395,7 +394,7 @@ func dumpKubeConfigPath(configObject string, path string) error {
 		return fmt.Errorf(configErr)
 	}
 	// dump to remoteFilePath
-	return ioutil.WriteFile(path, []byte(config), 0644)
+	return os.WriteFile(path, []byte(config), 0644)
 }
 
 func setRemoteConfig(kubeConfig string) error {

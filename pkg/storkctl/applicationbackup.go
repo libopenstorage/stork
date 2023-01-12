@@ -2,7 +2,7 @@ package storkctl
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"time"
 
@@ -241,7 +241,7 @@ func waitForApplicationBackup(name, namespace string, ioStreams genericclioption
 	var err error
 
 	log.SetFlags(0)
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 	heading := fmt.Sprintf("%s\t\t%-20s", stage, status)
 	printMsg(heading, ioStreams.Out)
 	t := func() (interface{}, bool, error) {
