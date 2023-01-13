@@ -106,7 +106,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		storageNodes := node.GetStorageNodes()
-
 		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		log.FailOnError(err, "Cloud drive installation failed")
@@ -127,10 +126,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		}
 
 		ValidateApplications(contexts)
-		currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
-		if err != nil {
-			log.Warnf(fmt.Sprintf("error getting driver version, err %v", err))
-		}
 		var timeBeforeUpgrade time.Time
 		var timeAfterUpgrade time.Time
 
@@ -143,8 +138,12 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					log.Warnf("error getting driver version, Err: %v", err)
+				}
 				timeBeforeUpgrade = time.Now()
-				err := Inst().V.UpgradeDriver(upgradeHop)
+				err = Inst().V.UpgradeDriver(upgradeHop)
 				timeAfterUpgrade = time.Now()
 				dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
 
@@ -167,7 +166,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				}
 				updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
 				if err != nil {
-					log.Warnf(fmt.Sprintf("error getting driver version, err %v", err))
+					log.Warnf("error getting driver version, Err: %v", err)
 				}
 				majorVersion := strings.Split(currPXVersion, "-")[0]
 				statsData := make(map[string]string)
