@@ -143,6 +143,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	var namespaceMapping map[string]string
 	namespaceMapping = make(map[string]string)
 	providers := getProviders()
+	bucket_name := getBucketName()
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not ")
@@ -202,9 +203,9 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
 			for _, provider := range providers {
-				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
+				bucketName := fmt.Sprintf("%s-%s", provider, bucket_name[0])
 				CredName := fmt.Sprintf("%s-%s", "cred", provider)
-				backup_location_name = fmt.Sprintf("%s-%s", "location", provider)
+				backup_location_name = fmt.Sprintf("%s-%s-bl", provider, bucket_name[0])
 				CloudCredUID = uuid.New()
 				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
 				BackupLocationUID = uuid.New()
@@ -1974,6 +1975,11 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 func getProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
 	return strings.Split(providersStr, ",")
+}
+
+func getBucketName() []string{
+	bucketName := os.Getenv("BUCKET_NAME")
+	return strings.Split(bucketName, ",")
 }
 
 func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string, error) {
