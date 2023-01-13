@@ -12,7 +12,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -67,7 +66,7 @@ var _ = Describe("{UpgradeStork}", func() {
 					k8sApps := apps.Instance()
 
 					storkDeploy, err := k8sApps.GetDeployment(storkDeploymentName, storkDeploymentNamespace)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error getting stork deployment spec")
 
 					err = k8sApps.ValidateDeployment(storkDeploy, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
 					dash.VerifyFatal(err, nil, "Stork deployment successful?")
@@ -106,12 +105,32 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		log.InfoD("upgrade volume driver and ensure everything is running fine")
 		contexts = make([]*scheduler.Context, 0)
 
+		storageNodes := node.GetStorageNodes()
+
+		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		log.FailOnError(err, "Cloud drive installation failed")
+
+		if !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				err := Inst().V.AddBlockDrives(&storageNode, nil)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				log.FailOnError(err, "Adding block drive(s) failed.")
+			}
+		}
+
 		log.InfoD("Scheduling applications and validating")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
+		currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		if err != nil {
+			log.Warnf(fmt.Sprintf("error getting driver version, err %v", err))
+		}
 		var timeBeforeUpgrade time.Time
 		var timeAfterUpgrade time.Time
 
@@ -138,6 +157,25 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					log.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
 					dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
 				}
+				upgradeStatus := "PASS"
+				if durationInMins <= expectedUpgradeTime {
+					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				} else {
+					log.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
+					dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
+					upgradeStatus = "FAIL"
+				}
+				updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					log.Warnf(fmt.Sprintf("error getting driver version, err %v", err))
+				}
+				majorVersion := strings.Split(currPXVersion, "-")[0]
+				statsData := make(map[string]string)
+				statsData["fromVersion"] = currPXVersion
+				statsData["toVersion"] = updatedPXVersion
+				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+				statsData["status"] = upgradeStatus
+				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
 
 				// Validate Apps after volume driver upgrade
 				ValidateApplications(contexts)

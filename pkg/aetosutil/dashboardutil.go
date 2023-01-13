@@ -119,6 +119,14 @@ type comment struct {
 	ResultType  string `json:"type"`
 }
 
+type stats struct {
+	Name      string            `json:"name"`
+	Product   string            `json:"product"`
+	StatsType string            `json:"statsType"`
+	Version   string            `json:"version"`
+	Data      map[string]string `json:"data"`
+}
+
 // TestSetBegin start testset and push data to dashboard DB
 func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 	dashURL := "Dash is disabled"
@@ -184,7 +192,7 @@ func (d *Dashboard) TestSetEnd() {
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Failed to end TestSet, Resp : %s", string(resp))
 		}
-		logrus.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
+		logrus.Infof("Dashboard URL : %s", fmt.Sprintf("%s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID))
 	}
 }
 
@@ -512,4 +520,27 @@ func Get() *Dashboard {
 		}
 	}
 	return dash
+}
+
+func (d *Dashboard) UpdateStats(name, product, statType, version string, dashStats map[string]string) {
+	if d.IsEnabled {
+
+		dashStats["dash-url"] = fmt.Sprintf("%s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
+		st := stats{
+			Name:      name,
+			Product:   product,
+			StatsType: statType,
+			Version:   version,
+			Data:      dashStats,
+		}
+
+		statsURL := fmt.Sprintf("%s/stats", DashBoardBaseURL)
+
+		resp, respStatusCode, err := rest.POST(statsURL, st, nil, nil)
+		if err != nil {
+			logrus.Errorf("Error in updating stats to dashboard, Cause: %v", err)
+		} else if respStatusCode != http.StatusOK {
+			logrus.Errorf("Error updating the stats, resp : %s", string(resp))
+		}
+	}
 }

@@ -14,7 +14,7 @@ import (
 var _ = Describe("{UpgradeCluster}", func() {
 	var contexts []*scheduler.Context
 
-	JustAfterEach(func() {
+	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeCluster", "Upgrade cluster test", nil, 0)
 	})
 	It("upgrade scheduler and ensure everything is running fine", func() {
