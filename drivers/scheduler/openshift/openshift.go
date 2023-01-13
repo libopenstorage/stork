@@ -2,7 +2,6 @@ package openshift
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -24,6 +23,7 @@ import (
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -519,7 +519,6 @@ func downloadOCP4Client(ocpVersion string) error {
 
 // workaround for https://portworx.atlassian.net/browse/PWX-20465
 func fixOCPClusterStorageOperator(version string) error {
-
 	parsedVersion, err := getParsedVersion(version)
 	if err != nil {
 		return err
@@ -721,7 +720,6 @@ func (k *openshift) deleteAMachine(nodeName string) error {
 
 // Method to recycling OCP node
 func (k *openshift) RecycleNode(n node.Node) error {
-
 	// Check if node is valid before proceeding for delete a node
 	var worker []node.Node = node.GetWorkerNodes()
 	var delNode *api.StorageNode
@@ -737,7 +735,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 			return err
 		}
 
-		if delNode, err = volDriver.GetPxNode(&n); err != nil {
+		if delNode, err = volDriver.GetDriverNode(&n); err != nil {
 			return err
 		}
 

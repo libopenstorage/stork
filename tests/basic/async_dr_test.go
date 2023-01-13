@@ -3,10 +3,11 @@ package tests
 import (
 	//"context"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -20,6 +21,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
+
 	//appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -111,13 +113,13 @@ var _ = Describe("{MigrateDeployment}", func() {
 		includeResourcesFlag = false
 		for i, currMigNamespace := range migrationNamespaces {
 			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)
-			currMig, create_mig_err := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+			currMig, createMigErr := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 			allMigrations = append(allMigrations, currMig)
-			log.FailOnError(create_mig_err, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
+			log.FailOnError(createMigErr, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
 			err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 			dash.VerifyFatal(err, nil, "Migration successful?")
-			resp, get_mig_err := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)
-			dash.VerifyFatal(get_mig_err, nil, "Received migration response?")
+			resp, getMigErr := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)
+			dash.VerifyFatal(getMigErr, nil, "Received migration response?")
 			dash.VerifyFatal(resp.Status.Summary.NumberOfMigratedResources == 0, true, "Validate no resources migrated")
 		}
 

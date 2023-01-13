@@ -3,7 +3,6 @@ package linstor
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	lclient "github.com/LINBIT/golinstor/client"
@@ -13,7 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -121,14 +120,6 @@ func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 
 	log.Debugf("LINSTOR is fully operational on node: %s", n.Name)
 	return nil
-}
-
-func (d *linstor) ValidateStorageCluster(endpointURL, endpointVersion string) error {
-	// TODO: Add implementation
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ValidateStorageCluster()",
-	}
 }
 
 func init() {

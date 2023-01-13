@@ -2,11 +2,11 @@ package gce
 
 import (
 	"fmt"
+
 	"github.com/portworx/torpedo/pkg/log"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/errors"
 )
 
 const (
@@ -44,14 +44,6 @@ func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDrive
 		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
 	}
 	return nil
-}
-
-func (d *gce) ValidateStorageCluster(endpointURL, endpointVersion string) error {
-	// TODO: Add implementation
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ValidateStorageCluster()",
-	}
 }
 
 func init() {

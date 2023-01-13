@@ -2,11 +2,12 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"path"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
@@ -72,7 +73,7 @@ func oneTimeInit() {
 	log.Infof("Checking telemetry status...")
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
-		spec, err := Inst().V.GetStorageCluster()
+		spec, err := Inst().V.GetDriver()
 		Expect(err).ToNot(HaveOccurred())
 		if spec.Spec.Monitoring != nil && spec.Spec.Monitoring.Telemetry != nil && spec.Spec.Monitoring.Telemetry.Enabled {
 			log.Infof("Telemetry is operator enabled.")
@@ -246,7 +247,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 		contexts = make([]*scheduler.Context, 0)
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
-			pxInstalled, err = Inst().V.IsPxInstalled(currNode)
+			pxInstalled, err = Inst().V.IsDriverInstalled(currNode)
 			if err != nil {
 				log.Debugf("Could not get PX status on %s", currNode.Name)
 			}

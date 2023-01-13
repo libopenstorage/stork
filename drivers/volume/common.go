@@ -187,11 +187,11 @@ func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 
 }
 
-// IsPxInstalled checks for Px to be installed on a node
-func (d *DefaultDriver) IsPxInstalled(n node.Node) (bool, error) {
+// IsDriverInstalled checks for driver to be installed on a node
+func (d *DefaultDriver) IsDriverInstalled(n node.Node) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "IsPxInstalled()",
+		Operation: "IsDriverInstalled()",
 	}
 }
 
@@ -397,13 +397,21 @@ func (d *DefaultDriver) WaitDriverUpOnNode(n node.Node, timeout time.Duration) e
 	}
 }
 
-// GetPxNodes returns current PX nodes in the cluster
-func (d *DefaultDriver) GetPxNodes() ([]*api.StorageNode, error) {
+// GetDriverNodes returns current driver nodes in the cluster
+func (d *DefaultDriver) GetDriverNodes() ([]*api.StorageNode, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetPxNodes()",
+		Operation: "GetDriverNodes()",
 	}
 
+}
+
+// GetDriverNode return api.Storage Node
+func (d *DefaultDriver) GetDriverNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDriverNode()",
+	}
 }
 
 // WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
@@ -466,15 +474,24 @@ func (d *DefaultDriver) StartDriver(n node.Node) error {
 }
 
 // UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
-func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
+func (d *DefaultDriver) UpgradeDriver(endpointVersion string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpgradeDriver()",
 	}
 }
 
+// ValidateDriver validates driver components
+func (d *DefaultDriver) ValidateDriver(endpointVersion string, autoUpdateComponents bool) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDriver()",
+	}
+}
+
 // UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
-func (d *DefaultDriver) UpgradeStork(endpointURL string, endpointVersion string) error {
+func (d *DefaultDriver) UpgradeStork(endpointVersion string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpgradeDriver()",
@@ -714,14 +731,6 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 	}
 }
 
-// GetPxNode return api.Storage Node
-func (d *DefaultDriver) GetPxNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
-	return &api.StorageNode{}, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetPxNode()",
-	}
-}
-
 // Contains return
 func (d *DefaultDriver) Contains(nodes []*api.StorageNode, n *api.StorageNode) bool {
 	return false
@@ -787,32 +796,16 @@ func (d *DefaultDriver) RunSecretsLogin(n node.Node, secretType string) error {
 	}
 }
 
-// GetStorageCluster returns the StorageCluster object
-func (d *DefaultDriver) GetStorageCluster() (*v1.StorageCluster, error) {
+// GetDriver returns driver object
+func (d *DefaultDriver) GetDriver() (*v1.StorageCluster, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetStorageCluster()",
+		Operation: "GetDriver()",
 	}
 }
 
-// UpdateStorageClusterImage update storage cluster image version
-func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "UpdateStorageClusterImage()",
-	}
-}
-
-// GetPXStorageCluster returns portworx storage cluster
-func (d *DefaultDriver) GetPXStorageCluster() (*v1.StorageCluster, error) {
-	return nil, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetPXStorageCluster()",
-	}
-}
-
-// GetPxVersionOnNode retruns PxVersion on the given node
-func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
+// GetDriverVersionOnNode retruns PxVersion on the given node
+func (d *DefaultDriver) GetDriverVersionOnNode(n node.Node) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPxVersionOnNode()",

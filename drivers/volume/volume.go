@@ -158,17 +158,14 @@ type Driver interface {
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
 
-	// UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
-	UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error
+	// UpgradeDriver upgrades the volume driver using the given endpointVersion
+	UpgradeDriver(endpointVersion string) error
 
-	// UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
-	UpgradeStork(endpointURL string, endpointVersion string) error
+	// UpgradeStork upgrades the stork driver using the given endpointVersion
+	UpgradeStork(endpointVersion string) error
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
-
-	// GetPxNodes returns current PX nodes in the cluster
-	GetPxNodes() ([]*api.StorageNode, error)
 
 	// RecoverDriver will recover a volume driver from a failure/storage down state.
 	// This could be used by a volume driver to recover itself from any underlying storage
@@ -184,17 +181,23 @@ type Driver interface {
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
 
+	// GetDriverNode returns api.StorageNode
+	GetDriverNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
+
+	// GetPDriverNodes returns current driver nodes in the cluster
+	GetDriverNodes() ([]*api.StorageNode, error)
+
+	//GetDriverVersionOnNode get PXVersion on the given node
+	GetDriverVersionOnNode(n node.Node) (string, error)
+
 	// RefreshDriverEndpoints refreshes volume driver endpoint
 	RefreshDriverEndpoints() error
 
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
-	//IsPxInstalled checks for Px to be installed on a node
-	IsPxInstalled(n node.Node) (bool, error)
-
-	//GetPxVersionOnNode get PXVersion on the given node
-	GetPxVersionOnNode(n node.Node) (string, error)
+	//IsDriverInstalled checks for driver to be installed on a node
+	IsDriverInstalled(n node.Node) (bool, error)
 
 	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
@@ -286,26 +289,21 @@ type Driver interface {
 
 	//UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
+
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
-
-	//IsOperatorBasedInstall returns if px is operator based
-	IsOperatorBasedInstall() (bool, error)
 
 	// RunSecretsLogin runs secrets login using pxctl
 	RunSecretsLogin(n node.Node, secretType string) error
 
-	// GetStorageCluster returns the storageCluster object
-	GetStorageCluster() (*v1.StorageCluster, error)
+	// GetDriverCluster returns the StorageCluster object
+	GetDriver() (*v1.StorageCluster, error)
 
-	//UpdateStorageClusterImage update storage cluster image version
-	UpdateStorageClusterImage(string) error
+	//IsOperatorBasedInstall returns if px is operator based
+	IsOperatorBasedInstall() (bool, error)
 
-	//GetPXStorageCluster returns portworx storage cluster
-	GetPXStorageCluster() (*v1.StorageCluster, error)
-
-	// ValidateStorageCluster validates all the storage cluster components
-	ValidateStorageCluster(endpointURL, endpointVersion string) error
+	// ValidateDriver validates all driver components
+	ValidateDriver(endpointVersion string, autoUpdateComponents bool) error
 
 	// ExpandPool resizes a pool of a given ID
 	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
@@ -315,9 +313,6 @@ type Driver interface {
 
 	//GetStorageSpec get the storage spec used to deploy portworx
 	GetStorageSpec() (*pxapi.StorageSpec, error)
-
-	// GetPxNode return api.StorageNode
-	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
 
 	// GetStoragelessNodes return list of storageless nodes
 	GetStoragelessNodes() ([]*api.StorageNode, error)

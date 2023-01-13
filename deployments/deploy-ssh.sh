@@ -75,6 +75,10 @@ if [ -z "${UPGRADE_ENDPOINT_VERSION}" ]; then
     UPGRADE_ENDPOINT_VERSION=""
 fi
 
+if [ -z "${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" ]; then
+    UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
+fi
+
 if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
     ENABLE_STORK_UPGRADE=false
 fi
@@ -457,6 +461,7 @@ spec:
             "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
+            "--upgrade-storage-driver-endpoint-list=$UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",

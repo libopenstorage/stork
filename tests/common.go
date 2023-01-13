@@ -7,13 +7,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
 	"regexp"
+
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"github.com/sirupsen/logrus"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -140,6 +141,7 @@ const (
 	hyperConvergedFlag                   = "hyper-converged"
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
+	upgradeStorageDriverEndpointListFlag = "upgrade-storage-driver-endpoint-list"
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
@@ -2296,82 +2298,6 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 	wg.Wait()
 }
 
-// UpgradePxStorageCluster perform storage cluster upgrade
-func UpgradePxStorageCluster() (bool, error) {
-	log.InfoD("Initiating operator based install upgrade")
-	operatorTag, err := getOperatorLatestVersion()
-
-	if err != nil {
-		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
-	}
-	operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-	log.InfoD("OCI-Monitor Image: %s", operatorImage)
-
-	err = Inst().V.UpdateStorageClusterImage(operatorImage)
-	if err != nil {
-		return false, fmt.Errorf("error updating storage cluster image. Cause: %v", err)
-	}
-	expectedVersion := operatorTag
-	checkTag := false
-	if strings.Contains(operatorImage, "-") {
-		expectedTag := strings.Split(operatorImage, "_")[1]
-		expectedVersion = fmt.Sprintf("%v-%v", Inst().StorageDriverUpgradeEndpointVersion, expectedTag)
-		checkTag = true
-	}
-
-	log.InfoD("Expected PX version %s", expectedVersion)
-
-	nodes := node.GetStorageDriverNodes()
-	nodesUpgradeMap := make(map[string]bool)
-	nodesMap := make(map[string]node.Node)
-
-	for _, n := range nodes {
-		nodesUpgradeMap[n.Name] = false
-		nodesMap[n.Name] = n
-
-	}
-	isUpgradeDone := false
-	waitCount := 2 * len(nodes)
-	for {
-		isNodeUpgraded := true
-		for k, v := range nodesMap {
-			if !nodesUpgradeMap[k] {
-				t := func() (interface{}, bool, error) {
-
-					pxVersion, err := Inst().V.GetPxVersionOnNode(v)
-					if err != nil {
-						return pxVersion, true, err
-					}
-					return pxVersion, false, nil
-				}
-				versionVal, err := task.DoRetryWithTimeout(t, defaultTimeout, 10*time.Second)
-				if err != nil {
-					return false, fmt.Errorf("error getting PX version for node %s. Cause: %v", k, err)
-				}
-				pxVersion := fmt.Sprintf("%v", versionVal)
-				log.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
-
-				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
-					log.InfoD("Node %s successfully upgraded to version %s", k, pxVersion)
-					nodesUpgradeMap[k] = true
-				}
-			}
-		}
-		for _, val := range nodesUpgradeMap {
-			isNodeUpgraded = isNodeUpgraded && val
-		}
-
-		if isNodeUpgraded || waitCount == 0 {
-			isUpgradeDone = isNodeUpgraded
-			break
-		}
-		log.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
-		time.Sleep(2 * time.Minute)
-		waitCount--
-	}
-	return isUpgradeDone, nil
-}
-
 // CreateBackupGetErr creates backup without ending the test if it errors
 func CreateBackupGetErr(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string) (err error) {
@@ -3886,6 +3812,7 @@ type Torpedo struct {
 	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
+	UpgradeStorageDriverEndpointList    string
 	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
@@ -3931,6 +3858,7 @@ func ParseFlags() {
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
+	var upgradeStorageDriverEndpointList string
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
@@ -3984,6 +3912,7 @@ func ParseFlags() {
 		"Endpoint URL link which will be used for upgrade storage driver")
 	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
 		"Endpoint version which will be used for checking version after upgrade storage driver")
+	flag.StringVar(&upgradeStorageDriverEndpointList, upgradeStorageDriverEndpointListFlag, "", "Comma separated list of Spec Generator URLs for performing upgrade hops for StorageCluster")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
@@ -4151,6 +4080,7 @@ func ParseFlags() {
 				ChaosLevel:                          chaosLevel,
 				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
+				UpgradeStorageDriverEndpointList:    upgradeStorageDriverEndpointList,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				SecureAppList:                       secureAppList,
@@ -5015,9 +4945,9 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	}
 
 	if !IsOperatorBasedInstall {
-		return deviceSpecs, fmt.Errorf("it is not operator based install,cannot get device spec")
+		return deviceSpecs, fmt.Errorf("it is not operator based install, cannot get device spec")
 	}
-	stc, err := Inst().V.GetStorageCluster()
+	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return deviceSpecs, err
 	}
@@ -5044,14 +4974,14 @@ func EnableAutoFSTrim() {
 	nodes := node.GetWorkerNodes()
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
-		isPxInstalled, err := Inst().V.IsPxInstalled(pxNode)
+		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
 		if err != nil {
 			log.Debugf("Could not get PX status on %s", pxNode.Name)
 		}
 		if isPxInstalled {
 			isPXNodeAvailable = true
-			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
-			log.FailOnError(err, "Unable to get pxversion on node %s",pxNode.Name)
+			pxVersion, err := Inst().V.GetDriverVersionOnNode(pxNode)
+			log.FailOnError(err, "Unable to get pxversion on node %s", pxNode.Name)
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}
 			pxVersionList = strings.Split(pxVersion, ".")

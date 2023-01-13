@@ -2,11 +2,12 @@ package tests
 
 import (
 	"fmt"
-	opsapi "github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"sync"
 	"time"
+
+	opsapi "github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -680,7 +681,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 				Skip(skipLog)
 			}
 		} else {
-			spec, err := Inst().V.GetStorageCluster()
+			spec, err := Inst().V.GetDriver()
 			log.FailOnError(err, "Failed to get storage cluster")
 			if *spec.Spec.SecretsProvider != vaultSecretProvider &&
 				*spec.Spec.SecretsProvider != vaultTransitSecretProvider {

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	. "github.com/onsi/ginkgo"
@@ -38,7 +39,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 			})
 
 			Step("validate storage components", func() {
-				err := Inst().V.ValidateStorageCluster(Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion))
+				Expect(err).NotTo(HaveOccurred())
+				err = Inst().V.ValidateDriver(u.String(), true)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

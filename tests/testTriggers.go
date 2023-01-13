@@ -3,10 +3,8 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
-	"net/http"
 	"os"
 	"os/exec"
 	"reflect"
@@ -2416,7 +2414,7 @@ func TriggerEmailReporter() {
 				pxStatus = status.String()
 			}
 
-			pxVersion, err := Inst().V.GetPxVersionOnNode(n)
+			pxVersion, err := Inst().V.GetDriverVersionOnNode(n)
 			if err != nil {
 				pxVersion = pxVersionError
 			}
@@ -2445,23 +2443,16 @@ func TriggerEmailReporter() {
 		log.Errorf("Failed to prepare email body. Error: [%v]", err)
 	}
 
-	emailSub := subject
-	stc, err := Inst().V.GetPXStorageCluster()
-	if err == nil {
-		emailSub = stc.GetName()
-	}
-
 	emailDetails := &email.Email{
-		Subject:        emailSub,
+		Subject:        subject,
 		Content:        content,
 		From:           from,
 		To:             EmailRecipients,
 		SendGridAPIKey: SendGridEmailAPIKey,
 	}
 
-	err = emailDetails.SendEmail()
-	if err != nil {
-		log.Errorf("Failed to send out email, because of Error: %q", err)
+	if err := emailDetails.SendEmail(); err != nil {
+		log.Errorf("Failed to send out email, Err: %q", err)
 	}
 }
 
@@ -4369,75 +4360,38 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 	setMetrics(*event)
 
-	stepLog := "upgrade volume driver to the latest version"
+	stepLog := "upgrade volume driver"
 	context(stepLog, func() {
-		stepLog = "start the volume driver upgrade"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
-			if IsOperatorBasedInstall {
-				status, err := UpgradePxStorageCluster()
-				if status {
-					log.InfoD("Volume Driver upgrade is successful")
-				} else {
-					log.Error("Volume Driver upgrade failed")
-					UpdateOutcome(event, err)
-				}
-
-			} else {
-				log.InfoD("Initiating Daemon set based install upgrade")
-				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
-					Inst().StorageDriverUpgradeEndpointVersion,
-					Inst().EnableStorkUpgrade)
+		if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+			log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+		}
+		for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+			stepLog = "start the volume driver upgrade"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := Inst().V.UpgradeDriver(upgradeHop)
 				if err != nil {
-					log.InfoD("Error upgrading: %v", err.Error())
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
 				}
 				UpdateOutcome(event, err)
 
-			}
-
-		})
-		stepLog = "validate all apps after upgrade"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			errorChan := make(chan error, errorChannelSize)
-			for _, ctx := range *contexts {
-				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx, &errorChan)
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-					UpdateOutcome(event, err)
+			})
+			stepLog = "validate all apps after upgrade"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				errorChan := make(chan error, errorChannelSize)
+				for _, ctx := range *contexts {
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx, &errorChan)
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
 				}
-			}
-		})
+			})
+		}
 	})
 	updateMetrics(*event)
-}
-
-func getOperatorLatestVersion() (string, error) {
-	url := fmt.Sprintf("%s/%s/version", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-	log.Infof("URL is : %v", url)
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("failed to send GET request to %s, Err: %v", url, err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %+v", resp.Body)
-	}
-
-	// Convert response body to string
-	bodyString := string(bodyBytes)
-	for _, line := range strings.Split(bodyString, "\n") {
-		if strings.Contains(line, "version:") {
-			operatorTag := strings.Split(strings.TrimSpace(line), ": ")[1]
-			return operatorTag, nil
-		}
-	}
-	return Inst().StorageDriverUpgradeEndpointVersion, nil
-
 }
 
 // TriggerUpgradeStork peforms upgrade of the stork
@@ -4463,10 +4417,14 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 	stepLog := "Upgrading stork to latest version based on the compatible PX and storage driver upgrade version "
 	Step(stepLog,
 		func() {
-			log.InfoD(stepLog)
-			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
-				Inst().StorageDriverUpgradeEndpointVersion)
-			UpdateOutcome(event, err)
+			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+				log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+			}
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				log.InfoD(stepLog)
+				err := Inst().V.UpgradeStork(upgradeHop)
+				UpdateOutcome(event, err)
+			}
 
 		})
 	updateMetrics(*event)
@@ -5065,7 +5023,7 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							log.Errorf("Error refreshing node registry, Error : %v", err)
 							return "", true, err
 						}
-						latestNodes, err := Inst().V.GetPxNodes()
+						latestNodes, err := Inst().V.GetDriverNodes()
 						if err != nil {
 							log.Errorf("Error getting px nodes, Error : %v", err)
 							return "", true, err
@@ -5627,7 +5585,7 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 		for _, n := range node.GetWorkerNodes() {
 			log.InfoD("Validating the node: %v", n.Name)
 			expectedDevMapperCount := 0
-			storageNode, err := Inst().V.GetPxNode(&n)
+			storageNode, err := Inst().V.GetDriverNode(&n)
 			if err != nil {
 				log.Error(err.Error())
 				UpdateOutcome(event, err)

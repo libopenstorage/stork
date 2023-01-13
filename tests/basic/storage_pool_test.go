@@ -2,15 +2,17 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
@@ -927,10 +929,9 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 				if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
 					if currentLastMsg == expandedPool.LastOperation.Msg {
 						return nil, false, fmt.Errorf("pool reblance is not progressing")
-					} else {
-						currentLastMsg = expandedPool.LastOperation.Msg
-						return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 					}
+					currentLastMsg = expandedPool.LastOperation.Msg
+					return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 				}
 				return nil, true, fmt.Errorf("waiting for pool status to update")
 			}
@@ -1634,7 +1635,7 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 
 		nodesWithMultiDrives := make([]node.Node, 0)
 		for _, n := range stNodes {
-			pxNode, err := Inst().V.GetPxNode(&n)
+			pxNode, err := Inst().V.GetDriverNode(&n)
 			log.FailOnError(err, "Error getting PX node")
 			log.Infof("PX node %s , Disks:%+v", pxNode.Hostname, pxNode.Disks)
 			if len(pxNode.Disks) > minDiskCount {
