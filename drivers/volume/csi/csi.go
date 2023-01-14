@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	_ "github.com/portworx/kdmp/pkg/executor"
 )
 
 const (
