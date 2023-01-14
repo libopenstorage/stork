@@ -563,7 +563,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			//	s3 + kdmp = legacy code path
 			//	BL NFS + EBS/GKE/Azure = legacy code path
 			//	s3 + EBS/GKE/Azure = legacy code path
-			if !nfs || (nfs && driverName != volume.KDMPDriverName) {
+			if !nfs {
 				existingRestoreVolInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 				if err != nil {
 					return err
@@ -641,7 +641,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				}
 			}
 			// Check whether ResourceExport is present or not
-			if nfs && driverName == volume.KDMPDriverName {
+			if nfs {
 				err = a.client.Update(context.TODO(), restore)
 				if err != nil {
 					time.Sleep(retrySleep)
