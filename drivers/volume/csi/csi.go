@@ -1214,6 +1214,7 @@ func (c *csi) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
 	restore *storkapi.ApplicationRestore,
 	resources []runtime.Unstructured,
+	storageClassBytes []byte,
 ) ([]runtime.Unstructured, error) {
 	return c.getRestoreStorageClasses(backup, resources)
 }

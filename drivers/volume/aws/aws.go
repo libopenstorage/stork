@@ -421,6 +421,7 @@ func (a *aws) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
 	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
+	[]byte,
 ) ([]runtime.Unstructured, error) {
 	return nil, nil
 }

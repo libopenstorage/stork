@@ -367,6 +367,15 @@ func (l *linstor) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool 
 	return false
 }
 
+func (l *linstor) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
+}
+
 func (l *linstor) OwnsPV(pv *v1.PersistentVolume) bool {
 	provisioner := ""
 	// Check the annotation in the PV for the provisioner

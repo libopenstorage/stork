@@ -583,7 +583,11 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						return err
 					}
 				}
-				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects)
+				storageClassesBytes, err := a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
+				if err != nil {
+					return err
+				}
+				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects, storageClassesBytes)
 				if err != nil {
 					log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
 					return err
@@ -735,49 +739,55 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					case kdmpapi.ResourceExportStatusInProgress:
 						return nil
 					case kdmpapi.ResourceExportStatusSuccessful:
-						backupVolInfos := convertResourceVolInfoToAppBkpVolInfo(resourceExport.VolumesInfo)
-						existingRestoreVolInfos := convertResourceVolInfoToAppRestoreVolInfo(resourceExport.ExistingVolumesInfo)
-						restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
-						restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, nil)
+						/*
+							backupVolInfos := convertResourceVolInfoToAppBkpVolInfo(resourceExport.VolumesInfo)
+							existingRestoreVolInfos := convertResourceVolInfoToAppRestoreVolInfo(resourceExport.ExistingVolumesInfo)
+							restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
+							restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, nil)
+						*/
+						/* SIVA: For now, using resourceExport.ExistingVolumesInfo. Need to add seperate variable for restoreVolumeInfo */
+						restoreVolumeInfos = convertResourceVolInfoToAppRestoreVolInfo(resourceExport.ExistingVolumesInfo)
 					default:
 						logrus.Infof("%s still valid re CR[%v]stage not available", funct, crName)
 						return nil
 					}
 				}
 			}
-			if sErr != nil {
-				logrus.Infof("%s sErr: %v", funct, sErr)
-				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", sErr)
-				log.ApplicationRestoreLog(restore).Errorf(message)
-				if _, ok := sErr.(*volume.ErrStorageProviderBusy); ok {
-					msg := fmt.Sprintf("Volume restores are in progress. Restores are failing for some volumes"+
-						" since the storage provider is busy. Restore will be retried. Error: %v", sErr)
+			/*
+				if sErr != nil {
+					logrus.Infof("%s sErr: %v", funct, sErr)
+					message := fmt.Sprintf("Error starting Application Restore for volumes: %v", sErr)
+					log.ApplicationRestoreLog(restore).Errorf(message)
+					if _, ok := sErr.(*volume.ErrStorageProviderBusy); ok {
+						msg := fmt.Sprintf("Volume restores are in progress. Restores are failing for some volumes"+
+							" since the storage provider is busy. Restore will be retried. Error: %v", sErr)
+						a.recorder.Event(restore,
+							v1.EventTypeWarning,
+							string(storkapi.ApplicationRestoreStatusInProgress),
+							msg)
+
+						log.ApplicationRestoreLog(restore).Errorf(msg)
+						// Update the restore status even for failed restores when storage is busy
+						_, updateErr := a.updateRestoreCRInVolumeStage(
+							namespacedName,
+							storkapi.ApplicationRestoreStatusInProgress,
+							storkapi.ApplicationRestoreStageVolumes,
+							msg,
+							restoreVolumeInfos,
+						)
+						if updateErr != nil {
+							logrus.Warnf("failed to update restore status: %v", updateErr)
+						}
+						return err
+					}
 					a.recorder.Event(restore,
 						v1.EventTypeWarning,
-						string(storkapi.ApplicationRestoreStatusInProgress),
-						msg)
-
-					log.ApplicationRestoreLog(restore).Errorf(msg)
-					// Update the restore status even for failed restores when storage is busy
-					_, updateErr := a.updateRestoreCRInVolumeStage(
-						namespacedName,
-						storkapi.ApplicationRestoreStatusInProgress,
-						storkapi.ApplicationRestoreStageVolumes,
-						msg,
-						restoreVolumeInfos,
-					)
-					if updateErr != nil {
-						logrus.Warnf("failed to update restore status: %v", updateErr)
-					}
+						string(storkapi.ApplicationRestoreStatusFailed),
+						message)
+					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
 					return err
 				}
-				a.recorder.Event(restore,
-					v1.EventTypeWarning,
-					string(storkapi.ApplicationRestoreStatusFailed),
-					message)
-				_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
-				return err
-			}
+			*/
 			restoreCompleteList = append(restoreCompleteList, restoreVolumeInfos...)
 			logrus.Tracef("restoreCompleteList %+v", restoreCompleteList)
 		}
