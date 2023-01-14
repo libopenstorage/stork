@@ -1224,12 +1224,13 @@ func (c *csi) downloadObject(
 	namespace string,
 	objectName string,
 ) ([]byte, error) {
+	funct := "downloadObject"
 	var data []byte
 	restoreLocation, err := storkops.Instance().GetBackupLocation(backupLocation, namespace)
 	if err != nil {
 		return nil, err
 	}
-	if restoreLocation.Location.Type == stork_api.BackupLocationNFS {
+	if restoreLocation.Location.Type == storkapi.BackupLocationNFS {
 		// NFS backuplocation type.
 		repo, err := executor.ParseCloudCred()
 		if err != nil {
