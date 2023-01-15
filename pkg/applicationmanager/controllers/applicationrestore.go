@@ -428,6 +428,7 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 	return restore, nil
 }
 
+/*
 func convertResourceVolInfoToAppBkpVolInfo(
 	volInfo []*kdmpapi.ResourceBackupVolumeInfo,
 ) (resVolInfo []*storkapi.ApplicationBackupVolumeInfo) {
@@ -454,6 +455,7 @@ func convertResourceVolInfoToAppBkpVolInfo(
 
 	return restoreVolumeInfos
 }
+*/
 
 func convertResourceVolInfoToAppRestoreVolInfo(
 	volInfo []*kdmpapi.ResourceRestoreVolumeInfo,
@@ -554,7 +556,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	if len(restore.Status.Volumes) != pvcCount {
 		// Here backupVolumeInfoMappings is framed based on driver name mapping, hence startRestore()
 		// gets called once per driver
-		var sErr error
+		// var sErr error
 		for driverName, vInfos := range backupVolumeInfoMappings {
 			restoreVolumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 			backupVolInfos := vInfos
@@ -639,10 +641,12 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					}
 				}
 				restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
+				var sErr error
 				restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, preRestoreObjects)
 				if err != nil {
 					return err
 				}
+				logrus.Infof("sivakumar -- sErr %v", sErr)
 			}
 			// Check whether ResourceExport is present or not
 			if nfs {
