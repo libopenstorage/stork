@@ -20,7 +20,6 @@ const (
 	clusterName              = "tp-cluster"
 	restoreNamePrefix        = "tp-restore"
 	configMapName            = "kubeconfigs"
-	sourceClusterName        = "source-cluster"
 	destinationClusterName   = "destination-cluster"
 	backupLocationName       = "tp-blocation"
 	appReadinessTimeout      = 10 * time.Minute
@@ -39,12 +38,8 @@ var (
 	wantAfterSuiteSystemCheck     bool = false
 	wantAfterSuiteValidateCleanup bool = false
 	// User should keep updating the below 3 datas
-	pre_rule_app   = []string{"cassandra", "postgres"}
-	post_rule_app  = []string{"cassandra"}
-	app_parameters = map[string]map[string]string{
-		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
-		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";", "background": "false", "run_in_single_pod": "false"},
-	}
+	pre_rule_app  = []string{"cassandra", "postgres"}
+	post_rule_app = []string{"cassandra"}
 )
 
 func TestBasic(t *testing.T) {

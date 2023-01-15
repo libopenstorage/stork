@@ -1092,6 +1092,252 @@ func (p *portworx) GetBackupUID(ctx context.Context, orgID, backupName string) (
 	return backupUID, nil
 }
 
+var (
+	CreatePreRule  = false
+	CreatePostRule = false
+	// AppParameters be updated by user for each new app required
+	AppParameters = map[string]map[string]string{
+		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- " +
+			"keyspace1;", "background": "false", "runInSinglePod": "false"},
+		"postgres": {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";",
+			"post_action_list": "echo 'dummy'", "background": "false", "runInSinglePod": "false"},
+	}
+)
+
+func (p *portworx) CreateRuleForBackup(ruleName string, orgID string, appList []string, prePostFlag string,
+	ps map[string]map[string]string) (bool, string, error) {
+	var podSelector []map[string]string
+	var actionValue []string
+	var container []string
+	var background []bool
+	var runInSinglePod []bool
+	var rulesInfo api.RulesInfo
+	var uid string
+	for i := 0; i < len(appList); i++ {
+		if prePostFlag == "pre" {
+			CreatePreRule = true
+			if _, ok := AppParameters[appList[i]]["pre_action_list"]; ok {
+				podSelector = append(podSelector, ps[appList[i]])
+				actionValue = append(actionValue, AppParameters[appList[i]]["pre_action_list"])
+				backgroundVal, _ := strconv.ParseBool(AppParameters[appList[i]]["background"])
+				background = append(background, backgroundVal)
+				podVal, _ := strconv.ParseBool(AppParameters[appList[i]]["runInSinglePod"])
+				runInSinglePod = append(runInSinglePod, podVal)
+				// Here user has to set env for each app container if required in the format container-<app name>
+				// This is for the optional parameter 'Container' for creating rules
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				container = append(container, os.Getenv(containerName))
+			} else {
+				log.Infof("Pre rule not required for this application")
+			}
+		} else {
+			CreatePostRule = true
+			if _, ok := AppParameters[appList[i]]["post_action_list"]; ok {
+				podSelector = append(podSelector, ps[appList[i]])
+				actionValue = append(actionValue, AppParameters[appList[i]]["post_action_list"])
+				backgroundVal, _ := strconv.ParseBool(AppParameters[appList[i]]["background"])
+				background = append(background, backgroundVal)
+				podVal, _ := strconv.ParseBool(AppParameters[appList[i]]["runInSinglePod"])
+				runInSinglePod = append(runInSinglePod, podVal)
+				// Here user has to set env for each app container if required in the format container-<app name>
+				// This is for the optional parameter 'Container' for creating rules
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				container = append(container, os.Getenv(containerName))
+			} else {
+				log.Infof("Post rule not required for this application")
+			}
+		}
+	}
+	totalRules := len(actionValue)
+	if totalRules == 0 {
+		log.Info("Rules not required for the apps")
+		return true, "", nil
+	}
+
+	rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalRules)
+	for i := 0; i < totalRules; i++ {
+		ruleAction := api.RulesInfo_Action{Background: background[i], RunInSinglePod: runInSinglePod[i],
+			Value: actionValue[i]}
+		var actions = []*api.RulesInfo_Action{&ruleAction}
+		rulesInfoRuleItem[i].PodSelector = podSelector[i]
+		rulesInfoRuleItem[i].Actions = actions
+		rulesInfoRuleItem[i].Container = container[i]
+		rulesInfo.Rules = append(rulesInfo.Rules, &rulesInfoRuleItem[i])
+	}
+	RuleCreateReq := &api.RuleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  ruleName,
+			OrgId: orgID,
+		},
+		RulesInfo: &rulesInfo,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+		return false, "", err
+	}
+
+	_, err = p.CreateRule(ctx, RuleCreateReq)
+	if err != nil {
+		log.Errorf("Failed to create backup rules: [%v]", err)
+		return false, "", err
+	}
+	log.Infof("Validate rules for backup")
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	ruleList, err := p.EnumerateRule(ctx, RuleEnumerateReq)
+	for i := 0; i < len(ruleList.Rules); i++ {
+		if ruleList.Rules[i].Metadata.Name == ruleName {
+			uid = ruleList.Rules[i].Metadata.Uid
+			break
+		}
+	}
+	RuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Uid:   uid,
+	}
+	_, err1 := p.InspectRule(ctx, RuleInspectReq)
+	if err1 != nil {
+		log.Errorf("Failed to validate the created rule with Error: [%v]", err)
+		return false, uid, err1
+	}
+	return true, uid, nil
+}
+
+func (p *portworx) CreateIntervalSchedulePolicy(retain int64, min int64, incrCount uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Interval: &api.SchedulePolicyInfo_IntervalPolicy{
+			Retain:  retain,
+			Minutes: min,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incrCount,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func (p *portworx) CreateDailySchedulePolicy(retain int64, time string, incrCount uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Daily: &api.SchedulePolicyInfo_DailyPolicy{
+			Retain: retain,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incrCount,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func (p *portworx) CreateWeeklySchedulePolicy(retain int64, day backup.Weekday, time string, incrCount uint64) *api.SchedulePolicyInfo {
+
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Weekly: &api.SchedulePolicyInfo_WeeklyPolicy{
+			Retain: retain,
+			Day:    string(day),
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incrCount,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func (p *portworx) CreateMonthlySchedulePolicy(retain int64, date int64, time string, incrCount uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Monthly: &api.SchedulePolicyInfo_MonthlyPolicy{
+			Retain: retain,
+			Date:   date,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incrCount,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error {
+	log.InfoD("Create Backup Schedule Policy")
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+		return err
+	}
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			Uid:   uid,
+			OrgId: orgId,
+		},
+		SchedulePolicy: schedulePolicyInfo,
+	}
+	_, err = p.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		log.Errorf("Error in creating schedule policy is +%v", err)
+		return err
+	}
+	return nil
+}
+
+func (p *portworx) RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string) {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+	clusterResp, err := p.InspectCluster(ctx, clusterReq)
+	log.FailOnError(err, "Cluster Object nil")
+	clusterObj := clusterResp.GetCluster()
+	return clusterObj.Status.Status, clusterObj.Uid
+}
+
+func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error) {
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	rule_list, err := p.EnumerateRule(ctx, RuleEnumerateReq)
+	if err != nil {
+		log.Errorf("Failed to enumerate rules with error: [%v]", err)
+		return "", err
+	}
+	for i := 0; i < len(rule_list.Rules); i++ {
+		if rule_list.Rules[i].Metadata.Name == ruleName {
+			ruleUid := rule_list.Rules[i].Metadata.Uid
+			return ruleUid, nil
+		}
+	}
+	return "", nil
+}
+
+func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+		return err
+	}
+	ruleUid, err := p.GetRuleUid(orgID, ctx, ruleName)
+	if err != nil {
+		log.Errorf("Failed to get rule UID: [%v]", err)
+		return err
+	}
+	if ruleUid != "" {
+		RuleDeleteReq := &api.RuleDeleteRequest{
+			Name:  ruleName,
+			OrgId: orgID,
+			Uid:   ruleUid,
+		}
+		_, err = p.DeleteRule(ctx, RuleDeleteReq)
+		if err != nil {
+			log.Errorf("Failed to delete rule: [%v]", err)
+			return err
+		}
+	}
+	return nil
+}
+
 func init() {
 	backup.Register(driverName, &portworx{})
 }
