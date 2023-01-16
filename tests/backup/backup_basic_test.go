@@ -69,6 +69,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)
 	StartTorpedoTest("Setup buckets:", "Creating one generic bucket to be used in all cases", nil, 0)
+	defer EndTorpedoTest()
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()
 	bucket_name := getBucketName()
@@ -76,11 +77,12 @@ var _ = BeforeSuite(func() {
 		bucketName := fmt.Sprintf("%s-%s", provider, bucket_name[0])
 		CreateBucket(provider, bucketName)
 		}
-	defer EndTorpedoTest()
 })
 
 var _ = AfterSuite(func() {
 	StartTorpedoTest("Cleanup buckets:", "Removing buckets", nil, 0)
+	defer EndTorpedoTest()
+	defer dash.TestSetEnd()
 	// Cleanup all bucket after suite
 	providers := getProviders()
 	bucket_name := getBucketName()
@@ -90,8 +92,7 @@ var _ = AfterSuite(func() {
 				DeleteBucket(provider, bucketName)
 		}
 	}
-	defer EndTorpedoTest()
-	defer dash.TestSetEnd()
+	
 })
 
 func TestMain(m *testing.M) {
