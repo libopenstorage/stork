@@ -68,6 +68,7 @@ var _ = BeforeSuite(func() {
 	log.Infof("Init instance")
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)
+	StartTorpedoTest("Setup buckets:", "Creating one generic bucket to be used in all cases", nil, 0)
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()
 	bucket_name := getBucketName()
@@ -87,6 +88,7 @@ var _ = AfterSuite(func() {
 				DeleteBucket(provider, bucketName)
 		}
 	}
+	defer EndTorpedoTest()
 	defer dash.TestSetEnd()
 })
 
