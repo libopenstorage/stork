@@ -122,6 +122,9 @@ type Cluster interface {
 
 	// RegisterBackupCluster registers backup cluster
 	RegisterBackupCluster(orgID, cloudName, uid string) (api.ClusterInfo_StatusInfo_Status, string)
+
+	// ValidateBackupCluster validates if backup pods are up or not
+	ValidateBackupCluster() error
 }
 
 // BLocation obj interface
