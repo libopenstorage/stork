@@ -1303,7 +1303,7 @@ func clonePvcDestTest(t *testing.T) {
 		clonedPVC, err := core.Instance().CreatePersistentVolumeClaim(clonedPVCSpec)
 		require.NoError(t, err, fmt.Sprintf("Failed to clone PVC from source PVC %s: %s", originalPVCName, err))
         err = core.Instance().ValidatePersistentVolumeClaim(clonedPVC.Name, waitPvcBound, waitPvcRetryInterval)
-        require.NoError(t, err, fmt.Sprintf("Cloned PVC %s not bound.", clonedPVC.Name))
+        require.NoError(t, err, fmt.Sprintf("Cloned PVC %s is not bound.", clonedPVC.Name))
 		logrus.Infof("Successfully clone PVC %s", clonedPVC.Name)
 	}
 	time.Sleep(1 * time.Minute)
