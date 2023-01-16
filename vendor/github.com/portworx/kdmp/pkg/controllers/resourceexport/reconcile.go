@@ -106,6 +106,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 
 	switch resourceExport.Status.Stage {
 	case kdmpapi.ResourceExportStageInitial:
+		logrus.Infof("sivakumar - kdmpapi.ResourceExportStageInitial stage")
 		// Create ResourceBackup CR
 		err = createResourceBackup(resourceExport.Name, resourceExport.Namespace)
 		if err != nil {
@@ -142,10 +143,11 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		}
 		return false, c.updateStatus(resourceExport, updateData)
 	case kdmpapi.ResourceExportStageInProgress:
+		logrus.Infof("sivakumar -- kdmpapi.ResourceExportStageInProgress stage")
 
 		// Read the job status and move the reconciler to next state
 		progress, err := driver.JobStatus(resourceExport.Status.TransferID)
-		logrus.Tracef("%s job progress: %v", funct, progress)
+		logrus.Infof("%s job progress: %v", funct, progress)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to get %s job status: %s", resourceExport.Status.TransferID, err)
 			updateData := updateResourceExportFields{
@@ -154,6 +156,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			}
 			return false, c.updateStatus(resourceExport, updateData)
 		}
+		logrus.Infof("sivakumar -- progress.Status %v", progress.Status)
 		if progress.Status == batchv1.JobFailed {
 			updateData := updateResourceExportFields{
 				stage:  kdmpapi.ResourceExportStageFinal,
@@ -187,9 +190,10 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			}
 			return false, c.updateStatus(resourceExport, updateData)
 		}
-
+		logrus.Infof("sivakumar --- progress.State %v", progress.State)
 		switch progress.State {
 		case drivers.JobStateFailed:
+			logrus.Infof("sivakumar -- drivers.JobStateFailed state case")
 			errMsg := fmt.Sprintf("%s transfer job failed: %s", resourceExport.Status.TransferID, progress.Reason)
 			// If a job has failed it means it has tried all possible retires and given up.
 			// In such a scenario we need to fail DE CR and move to clean up stage
@@ -201,6 +205,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			}
 			return true, c.updateStatus(resourceExport, updateData)
 		case drivers.JobStateCompleted:
+			logrus.Infof("sivakumar -- drivers.JobStateCompleted case")
 			// Go for clean up with success state
 			updateData := updateResourceExportFields{
 				stage:               kdmpapi.ResourceExportStageFinal,

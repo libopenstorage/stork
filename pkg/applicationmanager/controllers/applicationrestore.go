@@ -405,7 +405,7 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 			}
 			return restore, nil
 		}
-		logrus.Infof("Updating restore  %s/%s in stage/stagus: %s/%s to volume stage", restore.Namespace, restore.Name, restore.Status.Stage, restore.Status.Status)
+		logrus.Infof("Updating restore  %s/%s in stage/stagus: %s/%s to volume stage volumeInfos %+v", restore.Namespace, restore.Name, restore.Status.Stage, restore.Status.Status, volumeInfos)
 		restore.Status.Status = status
 		restore.Status.Stage = stage
 		restore.Status.Reason = reason
@@ -591,7 +591,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				}
 				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects, storageClassesBytes)
 				if err != nil {
-					log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
+					log.ApplicationRestoreLog(restore).Errorf("siva1 - Error getting PreRestore Resources: %v", err)
 					return err
 				}
 
@@ -793,7 +793,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				}
 			*/
 			restoreCompleteList = append(restoreCompleteList, restoreVolumeInfos...)
-			logrus.Tracef("restoreCompleteList %+v", restoreCompleteList)
+			logrus.Infof("sivakumar ----- restoreCompleteList %+v", restoreCompleteList)
 		}
 		restore, err = a.updateRestoreCRInVolumeStage(
 			namespacedName,

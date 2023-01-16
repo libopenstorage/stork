@@ -1181,14 +1181,15 @@ func (c *csi) UpdateMigratedPersistentVolumeSpec(
 	return pv, nil
 }
 
-func (c *csi) getRestoreStorageClasses(backup *storkapi.ApplicationBackup, resources []runtime.Unstructured) ([]runtime.Unstructured, error) {
+func (c *csi) getRestoreStorageClasses(backup *storkapi.ApplicationBackup, resources []runtime.Unstructured, storageClassesBytes []byte) ([]runtime.Unstructured, error) {
 	storageClasses := make([]storagev1.StorageClass, 0)
-	storageClassesBytes, err := c.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, storageClassesObjectName)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(storageClassesBytes, &storageClasses)
+	/*
+		storageClassesBytes, err := c.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, storageClassesObjectName)
+		if err != nil {
+			return nil, err
+		}
+	*/
+	err := json.Unmarshal(storageClassesBytes, &storageClasses)
 	if err != nil {
 		return nil, err
 	}
@@ -1216,7 +1217,7 @@ func (c *csi) GetPreRestoreResources(
 	resources []runtime.Unstructured,
 	storageClassBytes []byte,
 ) ([]runtime.Unstructured, error) {
-	return c.getRestoreStorageClasses(backup, resources)
+	return c.getRestoreStorageClasses(backup, resources, storageClassBytes)
 }
 
 func (c *csi) downloadObject(
