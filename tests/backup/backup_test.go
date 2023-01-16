@@ -42,12 +42,10 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 		DeleteRestore(RestoreName, OrgID)
 	}
 
-	provider := GetProvider()
 	DeleteCluster(destinationClusterName, OrgID)
 	DeleteCluster(sourceClusterName, OrgID)
 	DeleteBackupLocation(backupLocationName, OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	DeleteBucket(provider, BucketName)
 }
 
 // This testcase verifies if the backup pods are in Ready state or not
@@ -143,7 +141,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	var namespaceMapping map[string]string
 	namespaceMapping = make(map[string]string)
 	providers := getProviders()
-	bucket_name := getBucketName()
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not ")
@@ -202,6 +199,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
+			bucket_name := getBucketName()
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", provider, bucket_name[0])
 				CredName := fmt.Sprintf("%s-%s", "cred", provider)
@@ -209,7 +207,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				CloudCredUID = uuid.New()
 				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
 				BackupLocationUID = uuid.New()
-				CreateBucket(provider, bucketName)
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
 				time.Sleep(time.Minute * 1)
 				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
@@ -1975,11 +1972,6 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 func getProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
 	return strings.Split(providersStr, ",")
-}
-
-func getBucketName() []string{
-	bucketName := os.Getenv("BUCKET_NAME")
-	return strings.Split(bucketName, ",")
 }
 
 func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string, error) {
