@@ -76,9 +76,11 @@ var _ = BeforeSuite(func() {
 		bucketName := fmt.Sprintf("%s-%s", provider, bucket_name[0])
 		CreateBucket(provider, bucketName)
 		}
+	defer EndTorpedoTest()
 })
 
 var _ = AfterSuite(func() {
+	StartTorpedoTest("Cleanup buckets:", "Removing buckets", nil, 0)
 	// Cleanup all bucket after suite
 	providers := getProviders()
 	bucket_name := getBucketName()
