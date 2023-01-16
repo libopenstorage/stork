@@ -34,6 +34,8 @@ const (
 	migrationRetryInterval = 10 * time.Second
 	migrationRetryTimeout  = 5 * time.Minute
 	rabbitmqNamespace      = "rabbitmq-operator-migration"
+	waitPvcBound         = 120 * time.Second
+    waitPvcRetryInterval = 5 * time.Second
 )
 
 func TestMigration(t *testing.T) {
@@ -1297,15 +1299,11 @@ func clonePvcDestTest(t *testing.T) {
 		originalPVCName := pvc.Name
 		clonedPVCName := originalPVCName + "-clone"
 		clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, clonedPVCName, originalPVCName, sc_src_name)
-		if err != nil {
-			logrus.Errorf("Failed to build cloned PVC Spec: %s", err)
-			return
-		}
+	    require.NoError(t, err, fmt.Sprintf("Failed to build cloned PVC Spec: %s", err))
 		clonedPVC, err := core.Instance().CreatePersistentVolumeClaim(clonedPVCSpec)
-		if err != nil {
-			logrus.Errorf("Failed to clone PVC from source PVC %s: %s", originalPVCName, err)
-			return
-		}
+		require.NoError(t, err, fmt.Sprintf("Failed to clone PVC from source PVC %s: %s", originalPVCName, err))
+        err = core.Instance().ValidatePersistentVolumeClaim(clonedPVC.Name, waitPvcBound, waitPvcRetryInterval)
+        require.NoError(t, err, fmt.Sprintf("Cloned PVC %s not bound.", clonedPVC.Name))
 		logrus.Infof("Successfully clone PVC %s", clonedPVC.Name)
 	}
 	time.Sleep(1 * time.Minute)
