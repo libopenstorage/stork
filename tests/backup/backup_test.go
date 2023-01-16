@@ -62,8 +62,8 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
 			log.InfoD("Check the status of backup pods")
-			status := ValidateBackupCluster()
-			dash.VerifyFatal(status, true, "Backup Cluster Verification successful?")
+			err := Inst().Backup.ValidateBackupCluster()
+			dash.VerifyFatal(err, nil, "Backup Cluster Verification successful")
 		})
 	})
 	JustAfterEach(func() {
@@ -143,16 +143,23 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	var namespaceMapping map[string]string
 	namespaceMapping = make(map[string]string)
 	providers := getProviders()
+	timestamp := strconv.Itoa(int(time.Now().Unix()))
+	PreRuleName := fmt.Sprintf("%s-%s", "backup-pre-rule", timestamp)
+	PostRuleName := fmt.Sprintf("%s-%s", "backup-post-rule", timestamp)
+	intervalName := fmt.Sprintf("%s-%s", "interval", timestamp)
+	dailyName := fmt.Sprintf("%s-%s", "daily", timestamp)
+	weeklyName := fmt.Sprintf("%s-%s", "weekly", timestamp)
+	monthlyName := fmt.Sprintf("%s-%s", "monthly", timestamp)
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not ")
 		for i := 0; i < len(appList); i++ {
-			if Contains(post_rule_app, appList[i]) {
+			if Contains(postRuleApp, appList[i]) {
 				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
 				}
 			}
-			if Contains(pre_rule_app, appList[i]) {
+			if Contains(preRuleApp, appList[i]) {
 				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
 				}
@@ -172,9 +179,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		}
 	})
 	It("Basic Backup Creation", func() {
-		timestamp := strconv.Itoa(int(time.Now().Unix()))
-		PreRuleName := fmt.Sprintf("%s-%s", "backup-pre-rule", timestamp)
-		PostRuleName := fmt.Sprintf("%s-%s", "backup-post-rule", timestamp)
 		Step("Validate applications and get their labels", func() {
 			ValidateApplications(contexts)
 			log.Infof("Create list of pod selector for the apps deployed")
@@ -198,22 +202,17 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.InfoD("Creating pre rule for deployed apps")
 			preRuleStatus, preRuleUid, err = Inst().Backup.CreateRuleForBackup(PreRuleName, "default", appList,
 				"pre", ps)
-			if err != nil {
-				log.FailOnError(err, "Creating pre rule for deployed apps failed")
-			}
+			log.FailOnError(err, "Creating pre rule for deployed apps failed")
 			dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 			log.InfoD("Creating post rule for deployed apps")
 			postRuleStatus, postRuleUid, err = Inst().Backup.CreateRuleForBackup(PostRuleName, "default", appList,
 				"post", ps)
-			if err != nil {
-				log.FailOnError(err, "Creating post rule for deployed apps failed")
-			}
+			log.FailOnError(err, "Creating post rule for deployed apps failed")
 			dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 		})
 
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
-			//snapShotClassName := PureSnapShotClass + "." + timestamp
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s-%s", "bucket", provider, timestamp)
 				CredName := fmt.Sprintf("%s-%s-%s", "cred", provider, timestamp)
@@ -231,25 +230,21 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Creating backup schedule policies", func() {
 			log.InfoD("Creating backup interval schedule policy")
-			intervalName := fmt.Sprintf("%s-%s", "interval", timestamp)
 			intervalSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
 			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(intervalName, uuid.New(), orgID, intervalSchedulePolicyInfo)
 			dash.VerifyFatal(intervalPolicyStatus, nil, "Creating interval schedule policy")
 
 			log.InfoD("Creating backup daily schedule policy")
-			dailyName := fmt.Sprintf("%s-%s", "daily", timestamp)
 			dailySchedulePolicyInfo := Inst().Backup.CreateDailySchedulePolicy(1, "9:00AM", 2)
 			dailyPolicyStatus := Inst().Backup.BackupSchedulePolicy(dailyName, uuid.New(), orgID, dailySchedulePolicyInfo)
 			dash.VerifyFatal(dailyPolicyStatus, nil, "Creating daily schedule policy")
 
 			log.InfoD("Creating backup weekly schedule policy")
-			weeklyName := fmt.Sprintf("%s-%s", "weekly", timestamp)
 			weeklySchedulePolicyInfo := Inst().Backup.CreateWeeklySchedulePolicy(1, backup.Friday, "9:10AM", 2)
 			weeklyPolicyStatus := Inst().Backup.BackupSchedulePolicy(weeklyName, uuid.New(), orgID, weeklySchedulePolicyInfo)
 			dash.VerifyFatal(weeklyPolicyStatus, nil, "Creating weekly schedule policy")
 
 			log.InfoD("Creating backup monthly schedule policy")
-			monthlyName := fmt.Sprintf("%s-%s", "monthly", timestamp)
 			monthlySchedulePolicyInfo := Inst().Backup.CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
 			monthlyPolicyStatus := Inst().Backup.BackupSchedulePolicy(monthlyName, uuid.New(), orgID, monthlySchedulePolicyInfo)
 			dash.VerifyFatal(monthlyPolicyStatus, nil, "Creating monthly schedule policy")
@@ -264,7 +259,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				CreateBackup(backupName, SourceClusterName, backupLocation, BackupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, PreRuleName, preRuleUid, PreRuleName, postRuleUid)
+					labelSelectors, orgID, clusterUid, PreRuleName, preRuleUid, PostRuleName, postRuleUid)
 			}
 		})
 		Step("Restoring the backed up application", func() {
@@ -275,14 +270,22 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		policyList := []string{"interval", "daily", "weekly", "monthly"}
+		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
 		defer EndTorpedoTest()
-		teardownStatus := TeardownForTestcase(contexts, providers, CloudCredUIDList, policyList)
+		// Have added an independent function for deleting rules,policy.
+		// Likewise will split TeardownForTestcase function for each object deletion
+		err := Inst().Backup.DeleteRuleForBackup(orgID, PreRuleName)
+		dash.VerifyFatal(err, nil, "Deleting pre backup rules")
+		err = Inst().Backup.DeleteRuleForBackup(orgID, PostRuleName)
+		dash.VerifyFatal(err, nil, "Deleting post backup rules")
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifyFatal(err, nil, "Deleting backup schedule policies")
+		teardownStatus := TeardownForTestcase(contexts, providers, CloudCredUIDList)
 		dash.VerifyFatal(teardownStatus, true, "Testcase teardown status")
 	})
 })
 
-func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
+func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string) bool {
 	var flag bool = true
 	log.InfoD("Deleting the deployed apps after the testcase")
 	for i := 0; i < len(contexts); i++ {
@@ -295,39 +298,6 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 	}
-	log.InfoD("Deleting backup rules created")
-	RuleEnumerateReq := &api.RuleEnumerateRequest{
-		OrgId: orgID,
-	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
-	if create_post_rule == true {
-		for i := 0; i < len(rule_list.Rules); i++ {
-			if rule_list.Rules[i].Metadata.Name == "backup-post-rule" {
-				postRuleUid = rule_list.Rules[i].Metadata.Uid
-				break
-			}
-		}
-		post_rule_delete_status := DeleteRuleForBackup(orgID, "backup-post-rule", postRuleUid)
-		if post_rule_delete_status != true {
-			flag = false
-		}
-		dash.VerifySafely(post_rule_delete_status, true, fmt.Sprintf("Verifying Post rule deletion for backup"))
-	}
-	if create_pre_rule == true {
-		for i := 0; i < len(rule_list.Rules); i++ {
-			if rule_list.Rules[i].Metadata.Name == "backup-pre-rule" {
-				preRuleUid = rule_list.Rules[i].Metadata.Uid
-				break
-			}
-		}
-		pre_rule_delete_status := DeleteRuleForBackup(orgID, "backup-pre-rule", preRuleUid)
-		if pre_rule_delete_status != true {
-			flag = false
-		}
-		dash.VerifySafely(pre_rule_delete_status, true, fmt.Sprintf("Verifying Pre rule deletion for backup"))
-	}
 	log.InfoD("Deleting bucket,backup location and cloud setting")
 	for i, provider := range providers {
 		backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
@@ -336,28 +306,6 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		CredName := fmt.Sprintf("%s-%s", "cred", provider)
 		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
 		DeleteBackupLocation(backup_location_name, orgID)
-	}
-	log.InfoD("Deleting schedule policies")
-	sched_policy_map := make(map[string]string)
-	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
-		OrgId: orgID,
-	}
-	schedule_policy_list, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
-	log.FailOnError(err, "Failed to get list of schedule policies")
-	for i := 0; i < len(schedule_policy_list.SchedulePolicies); i++ {
-		sched_policy_map[schedule_policy_list.SchedulePolicies[i].Metadata.Name] = schedule_policy_list.SchedulePolicies[i].Metadata.Uid
-	}
-	for i := 0; i < len(policy_list); i++ {
-		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
-			OrgId: orgID,
-			Name:  policy_list[i],
-			Uid:   sched_policy_map[policy_list[i]],
-		}
-		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
-		if err != nil {
-			flag = false
-		}
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
 	}
 	DeleteCluster(destinationClusterName, OrgID)
 	DeleteCluster(SourceClusterName, OrgID)
@@ -2124,7 +2072,6 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 			Uid:  postRuleUid,
 		},
 	}
-
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"regexp"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -261,21 +260,8 @@ const (
 var pxRuntimeOpts string
 
 const (
-	post_install_hook_pod = "pxcentral-post-install-hook"
-	quick_maintenance_pod = "quick-maintenance-repo"
-	full_maintenance_pod  = "full-maintenance-repo"
-	taskNamePrefix        = "backupcreaterestore"
-	orgID                 = "default"
-)
-
-var (
-	// User should keep updating the below 3 datas
-	pre_rule_app   = []string{"cassandra", "postgres"}
-	post_rule_app  = []string{"cassandra"}
-	app_parameters = map[string]map[string]string{
-		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
-		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";", "background": "false", "run_in_single_pod": "false"},
-	}
+	taskNamePrefix = "backupcreaterestore"
+	orgID          = "default"
 )
 
 var (
@@ -2795,32 +2781,23 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
-	expect(kubeconfigs).NotTo(equal(""),
-		"KUBECONFIGS Environment variable should not be empty")
-
+	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	expect(len(kubeconfigList)).Should(beNumerically(">=", 2), "At least minimum two kubeconfigs required")
-
+	dash.VerifyFatal(len(kubeconfigList) >= 2, true, "Getting the minimum number of kubeconfigs required")
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
-
+	dash.VerifyFatal(err, nil, "Getting the kubeconfigs from the configmap")
 	// Register source cluster with backup driver
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", SourceClusterName, orgID), func() {
 		srcClusterConfigPath, err := GetSourceClusterConfigPath()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
-
+		dash.VerifyFatal(err, nil, "Getting kubeconfig path for source cluster")
 		log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
 		CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
 	})
-
 	// Register destination cluster with backup driver
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", destinationClusterName, orgID), func() {
 		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+		dash.VerifyFatal(err, nil, "Getting kubeconfig path for destination cluster")
 		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
 		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
 	})
@@ -4522,60 +4499,6 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	}
 
 	return pool, nil
-}
-
-func ValidateBackupCluster() bool {
-	flag := false
-	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
-	ns := backup.GetPxBackupNamespace()
-	pods, err := core.Instance().GetPods(ns, labelSelectors)
-	if err != nil {
-		log.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
-			err)
-		return false
-	}
-	for _, pod := range pods.Items {
-		log.Infof("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
-		bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
-		if err != nil {
-			log.Errorf("Error: %v Occured while getting the pxcentral-post-install-hook pod details", err)
-			return false
-		}
-		container_list := bkp_pod.Status.ContainerStatuses
-		for i := 0; i < len(container_list); i++ {
-			status := container_list[i].State.Terminated.Reason
-			if status == "Completed" {
-				log.Infof("pxcentral-post-install-hook pod is in completed state")
-				flag = true
-				break
-			}
-		}
-	}
-	if flag == false {
-		return false
-	}
-	bkp_pods, err := core.Instance().GetPods(ns, nil)
-	for _, pod := range bkp_pods.Items {
-		matched, _ := regexp.MatchString(post_install_hook_pod, pod.GetName())
-		if !matched {
-			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
-			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
-			if !(equal || equal1) {
-				log.Infof("Checking if all the containers are up or not")
-				res := core.Instance().IsPodRunning(pod)
-				if !res {
-					log.Errorf("All the containers of pod %sare not Up", pod)
-					return false
-				}
-				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
-				if err != nil {
-					log.Errorf("An Error: %v  Occured while validating the pod %s", err, pod)
-					return false
-				}
-			}
-		}
-	}
-	return true
 }
 
 // ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it

@@ -38,8 +38,8 @@ var (
 	wantAfterSuiteSystemCheck     bool = false
 	wantAfterSuiteValidateCleanup bool = false
 	// User should keep updating the below 3 datas
-	pre_rule_app  = []string{"cassandra", "postgres"}
-	post_rule_app = []string{"cassandra"}
+	preRuleApp  = []string{"cassandra", "postgres"}
+	postRuleApp = []string{"cassandra"}
 )
 
 func TestBasic(t *testing.T) {

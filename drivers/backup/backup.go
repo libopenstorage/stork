@@ -257,6 +257,9 @@ type SchedulePolicy interface {
 
 	// BackupSchedulePolicy creates backup schedule policy
 	BackupSchedulePolicy(name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error
+
+	// DeleteBackupSchedulePolicy deletes the list of schedule policies
+	DeleteBackupSchedulePolicy(orgID string, policyList []string) error
 }
 
 // ScheduleBackup interface
