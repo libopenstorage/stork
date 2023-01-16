@@ -17,6 +17,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -359,6 +360,26 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 	}
 	for k, v := range options {
 		backup.Spec.Options[k] = v
+	}
+
+	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
+		namespaces, err := core.Instance().ListNamespaces(labelSelector)
+		if err != nil {
+			errMsg := fmt.Sprintf("error listing namespaces with label selectors: %v, error: %v", labelSelector, err)
+			logrus.Errorf("%s: %v", funct, errMsg)
+			return fmt.Errorf("%v", errMsg)
+		}
+		// There should be an error incase of no namespaces ??
+		if len(namespaces.Items) == 0 {
+			errMsg := fmt.Sprintf("no namespaces with label selectors: %v", labelSelector)
+			logrus.Errorf("%s: %v", funct, errMsg)
+			return fmt.Errorf("%v", errMsg)
+		}
+		var selectedNamespaces []string
+		for _, namespace := range namespaces.Items {
+			selectedNamespaces = append(selectedNamespaces, namespace.Name)
+		}
+		backup.Spec.Namespaces = selectedNamespaces
 	}
 
 	log.ApplicationBackupScheduleLog(backupSchedule).Infof("Starting backup %v", backupName)
