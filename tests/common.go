@@ -2703,7 +2703,7 @@ func SetupBackup(testName string) {
 	CreateBucket(provider, BucketName)
 	CreateOrganization(OrgID)
 	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
-	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID)
+	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
 	CreateSourceAndDestClusters(OrgID, "", "")
 }
 
@@ -2803,10 +2803,10 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 }
 
 // CreateBackupLocation creates backup location
-func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string) {
+func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) {
 	switch provider {
 	case drivers.ProviderAws:
-		createS3BackupLocation(name, uid, credName, credUID, bucketName, orgID)
+		createS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
 		createAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	}
@@ -2856,9 +2856,9 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 }
 
 // createS3BackupLocation creates backup location
-func createS3BackupLocation(name string, uid, cloudCred string, cloudCredUID, bucketName string, orgID string) {
+func createS3BackupLocation(name string, uid, cloudCred string, cloudCredUID, bucketName string, orgID string, encryptionKey string) {
 	Step(fmt.Sprintf("Create S3 backup location [%s] in org [%s]", name, orgID), func() {
-		CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID)
+		CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey)
 	})
 }
 
@@ -2946,14 +2946,14 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 }
 
 // CreateS3BackupLocation creates backuplocation for S3
-func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
+func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
 	//inspReq := &api.CloudCredentialInspectRequest{Name: cloudCred, Uid: cloudCredUID, OrgId: orgID, IncludeSecrets: true}
 	//credCtx, err := backup.GetAdminCtxFromSecret()
 	//obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	encryptionKey := "torpedo"
+	//encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,

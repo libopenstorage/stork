@@ -3,6 +3,16 @@ package tests
 import (
 	"context"
 	"fmt"
+	"math/rand"
+
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
@@ -14,13 +24,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/log"
-	"os"
-	"path"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	. "github.com/portworx/torpedo/tests"
 
@@ -204,8 +207,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				BackupLocationUID = uuid.New()
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
 				time.Sleep(time.Minute * 1)
-				CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID,
-					bucketName, orgID)
+				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID, "")
 			}
 		})
 		Step("Creating backup schedule policies", func() {
@@ -560,7 +562,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 				CreateBucket(provider, bucketName)
 				CreateOrganization(orgID)
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
-				CreateBackupLocation(provider, backupLocation, providerUID[provider], CredName, CloudCredUID, BucketName, orgID)
+				CreateBackupLocation(provider, backupLocation, providerUID[provider], CredName, CloudCredUID, BucketName, orgID, "")
 				CreateProviderClusterObject(provider, kubeconfigList, CredName, orgID)
 			}
 		})
@@ -1989,6 +1991,111 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 }*/
+
+func generate_encryption_key() string {
+	var lower = []byte("abcdefghijklmnopqrstuvwxyz")
+	var upper = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	var number = []byte("0123456789")
+	var special = []byte("~=+%^*/()[]{}/!@#$?|")
+	allChar := append(lower, upper...)
+	allChar = append(allChar, number...)
+	allChar = append(allChar, special...)
+
+	b := make([]byte, 12)
+	// select 1 upper, 1 lower, 1 number and 1 special
+	b[0] = lower[rand.Intn(len(lower))]
+	b[1] = upper[rand.Intn(len(upper))]
+	b[2] = number[rand.Intn(len(number))]
+	b[3] = special[rand.Intn(len(special))]
+	for i := 4; i < 12; i++ {
+		// randomly select 1 character from given charset
+		b[i] = allChar[rand.Intn(len(allChar))]
+	}
+
+	//shuffle character
+	rand.Shuffle(len(b), func(i, j int) {
+		b[i], b[j] = b[j], b[i]
+	})
+
+	return string(b)
+}
+
+// This test cases creates a backup location with encryption
+var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
+	var contexts []*scheduler.Context
+	var appContexts []*scheduler.Context
+	var bkpNamespaces []string
+	var backup_location_name string
+	var CloudCredUID string
+	var cluster_uid string
+	var CredName string
+	var restorename string
+	var cluster_status api.ClusterInfo_StatusInfo_Status
+	providers := getProviders()
+	bucket_name := getBucketName()
+	JustBeforeEach(func() {
+		log.Infof("No pre-setup required for this testcase")
+		StartTorpedoTest("Backup: BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 0)
+	})
+	It("Creating backup location and cloud setting", func() {
+		log.InfoD("Creating bucket,backup location and cloud setting")
+		CredName = fmt.Sprintf("%s-%s", "cred", providers[0])
+		backup_location_name = fmt.Sprintf("%s-%s", "location", providers[0])
+		CloudCredUID = uuid.New()
+		BackupLocationUID = uuid.New()
+		encryptionkey := generate_encryption_key()
+		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
+		time.Sleep(time.Minute * 1)
+		CreateBackupLocation(providers[0], backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucket_name[0], orgID, encryptionkey)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+
+		Step("Register cluster for backup", func() {
+			cluster_status, cluster_uid = RegisterBackupCluster(orgID, "", "")
+			dash.VerifyFatal(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		})
+
+		Step("Taking backup of applications", func() {
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
+					nil, orgID, cluster_uid, "", "", "", "")
+			}
+		})
+
+		Step("Restoring the backed up application", func() {
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				restorename = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+				CreateRestore(restorename, backupName, nil, destinationClusterName, orgID)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.Infof("Cleanup started")
+		DeleteRestore(restorename, orgID)
+		for _, namespace := range bkpNamespaces {
+			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+			backupUID := getBackupUID(orgID, backupName)
+			DeleteBackup(backupName, backupUID, orgID)
+		}
+		DeleteBackupLocation(backup_location_name, orgID)
+		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		log.Infof("Cleanup done")
+	})
+
+})
 
 // createS3BackupLocation creates backup location
 func createGkeBackupLocation(name string, cloudCred string, orgID string) {
