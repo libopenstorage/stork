@@ -45,12 +45,10 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 		DeleteRestore(RestoreName, OrgID)
 	}
 
-	provider := GetProvider()
 	DeleteCluster(destinationClusterName, OrgID)
 	DeleteCluster(SourceClusterName, OrgID)
 	DeleteBackupLocation(backupLocationName, OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	DeleteBucket(provider, BucketName)
 }
 
 // This testcase verifies if the backup pods are in Ready state or not
@@ -213,14 +211,14 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
+			bucket_name := getBucketName()
 			for _, provider := range providers {
-				bucketName := fmt.Sprintf("%s-%s-%s", "bucket", provider, timestamp)
-				CredName := fmt.Sprintf("%s-%s-%s", "cred", provider, timestamp)
-				backupLocation = fmt.Sprintf("%s-%s-%s", "location", provider, timestamp)
+				bucketName := fmt.Sprintf("%s-%s", provider, bucket_name[0])
+				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				backupLocation = fmt.Sprintf("%s-%s-bl", provider, bucket_name[0])
 				CloudCredUID = uuid.New()
 				CloudCredUIDList = append(CloudCredUIDList, CloudCredUID)
 				BackupLocationUID = uuid.New()
-				CreateBucket(provider, bucketName)
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
 				time.Sleep(time.Minute * 1)
 				CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID,

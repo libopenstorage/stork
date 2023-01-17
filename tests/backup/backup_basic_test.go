@@ -4,9 +4,10 @@ import (
 	"os"
 	"testing"
 	"time"
+	"strings"
+	"fmt"
 
 	"github.com/portworx/torpedo/pkg/log"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -42,6 +43,11 @@ var (
 	postRuleApp = []string{"cassandra"}
 )
 
+func getBucketName() []string{
+	bucketName := os.Getenv("BUCKET_NAME")
+	return strings.Split(bucketName, ",")
+}
+
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -57,10 +63,31 @@ var _ = BeforeSuite(func() {
 	log.Infof("Init instance")
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)
+	StartTorpedoTest("Setup buckets:", "Creating one generic bucket to be used in all cases", nil, 0)
+	defer EndTorpedoTest()
+	// Create the first bucket from the list to be used as generic bucket
+	providers := getProviders()
+	bucket_name := getBucketName()
+	for _, provider := range providers {
+		bucketName := fmt.Sprintf("%s-%s", provider, bucket_name[0])
+		CreateBucket(provider, bucketName)
+		}
 })
 
 var _ = AfterSuite(func() {
+	StartTorpedoTest("Cleanup buckets:", "Removing buckets", nil, 0)
+	defer EndTorpedoTest()
 	defer dash.TestSetEnd()
+	// Cleanup all bucket after suite
+	providers := getProviders()
+	bucket_name := getBucketName()
+	for _, provider := range providers{
+		for _, BucketName := range bucket_name{
+				bucketName := fmt.Sprintf("%s-%s", provider, BucketName)
+				DeleteBucket(provider, bucketName)
+		}
+	}
+	
 })
 
 func TestMain(m *testing.M) {
