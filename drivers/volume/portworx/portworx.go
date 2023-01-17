@@ -3831,7 +3831,7 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	return nil
 }
 
-//GetClusterOpts get all cluster options
+// GetClusterOpts get all cluster options
 func (d *portworx) GetClusterOpts(n node.Node, options []string) (map[string]string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -4582,7 +4582,7 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 	return fmt.Errorf("failed to  add drive for path [%s] on node [%s], Status: %+v, Err: %v", drivePath, n.Name, addDriveStatus, err)
 }
 
-//GetPoolsUsedSize returns map of pool id and current used size
+// GetPoolsUsedSize returns map of pool id and current used size
 func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"Used\"'", d.getPxctlPath(*n))
 

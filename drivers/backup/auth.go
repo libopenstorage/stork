@@ -184,8 +184,8 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 
 // GetPxBackupNamespace returns namespace of px-backup deployment.
 func GetPxBackupNamespace() string {
-	ns := os.Getenv(pxBackupNamespace)
-	if ns == "" {
+	ns, present := os.LookupEnv(pxBackupNamespace)
+	if !(present) {
 		return AdminTokenSecretNamespace
 	}
 	return ns
@@ -735,7 +735,7 @@ func UpdatePxBackupAdminSecret() error {
 		return err
 	}
 
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return err
 	}
@@ -756,7 +756,7 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 		return nil, err
 	}
 
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return nil, err
 	}
@@ -778,7 +778,7 @@ func GetAdminTokenFromSecret() (string, error) {
 		return "", err
 	}
 
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return "", err
 	}
