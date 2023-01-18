@@ -973,6 +973,51 @@ func (d *portworx) ExitMaintenance(n node.Node) error {
 	return nil
 }
 
+func (d *portworx) EnterPoolMaintenance(n node.Node) error {
+	cmd := fmt.Sprintf("pxctl sv pool maintenance -e -y")
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error when entering pool maintenance on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("Enter pool maintenance %s", out)
+	return nil
+}
+
+func (d *portworx) ExitPoolMaintenance(n node.Node) error {
+	cmd := fmt.Sprintf("pxctl sv pool maintenance -x -y")
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error when exiting pool maintenance on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("Exit pool maintenance %s", out)
+	return nil
+}
+
+func (d *portworx) RecoverPool(n node.Node) error {
+
+	if err := d.EnterPoolMaintenance(n); err != nil {
+		return err
+	}
+
+	if err := d.ExitPoolMaintenance(n); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1485,7 +1530,8 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	stopFn := func() error {
 		var err error
 		for _, n := range nodes {
-			log.Infof("Stopping volume driver on node [%s]", n.Name)
+
+			log.InfoD("Stopping volume driver on [%s].", n.Name)
 			if force {
 				pxCrashCmd := "sudo pkill -9 px-storage"
 				_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
@@ -2449,7 +2495,7 @@ func (d *portworx) getContext() context.Context {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
-	log.Infof("Starting volume driver on %s.", n.Name)
+	log.InfoD("Starting volume driver on %s.", n.Name)
 	err := d.schedOps.StartPxOnNode(n)
 	if err != nil {
 		return err
@@ -2869,7 +2915,20 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 }
 
 func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
-	nodeResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+
+	f := func() (interface{}, bool, error) {
+		nodeResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+		if err != nil {
+			if isNodeNotFound(err) {
+				return nil, false, err
+			}
+			return nil, true, err
+		}
+
+		return nodeResponse, false, nil
+	}
+	resp, err := task.DoRetryWithTimeout(f, 5*time.Minute, 1*time.Minute)
+
 	if err != nil {
 		if isNodeNotFound(err) {
 			apiSt := api.Status_STATUS_NONE
@@ -2880,6 +2939,8 @@ func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 			Cause: fmt.Sprintf("Failed to check status on node [%s], Err: %v", n.Name, err),
 		}
 	}
+	nodeResponse := resp.(*api.SdkNodeInspectResponse)
+
 	return &nodeResponse.Node.Status, nil
 }
 

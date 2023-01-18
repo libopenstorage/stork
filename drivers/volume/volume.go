@@ -178,6 +178,17 @@ type Driver interface {
 	// ExitMaintenance exits the given node from maintenance mode
 	ExitMaintenance(n node.Node) error
 
+	// RecoverPool will recover a pool from a failure/storage down state.
+	// This could be used by a pool to recover itself from any underlying storage
+	// failure.
+	RecoverPool(n node.Node) error
+
+	// EnterPoolMaintenance puts pools in the given node in maintenance mode
+	EnterPoolMaintenance(n node.Node) error
+
+	// ExitPoolMaintenance exits pools in the given node from maintenance mode
+	ExitPoolMaintenance(n node.Node) error
+
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
 

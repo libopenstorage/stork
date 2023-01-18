@@ -14,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -4407,7 +4406,7 @@ func WaitForExpansionToStart(poolID string) error {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}
 
-			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS || expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
 				// storage pool resize has been triggered
 				log.InfoD("Pool %s expansion started", poolID)
 				return nil, true, nil
@@ -4711,7 +4710,8 @@ func EnableAutoFSTrim() {
 		if isPxInstalled {
 			isPXNodeAvailable = true
 			pxVersion, err := Inst().V.GetDriverVersionOnNode(pxNode)
-			log.FailOnError(err, "Unable to get pxversion on node %s", pxNode.Name)
+
+			log.FailOnError(err, "Unable to get driver version on node [%s]", pxNode.Name)
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}
 			pxVersionList = strings.Split(pxVersion, ".")
@@ -4809,7 +4809,7 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 			return nil, false, err
 		}
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(30 * time.Second)
 
 		poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
 		if err != nil {

@@ -221,6 +221,32 @@ func (d *DefaultDriver) ExitMaintenance(n node.Node) error {
 	}
 }
 
+// RecoverPool will recover a pool from a failure/storage down state.
+// This could be used by a pool driver to recover itself from any underlying storage
+// failure.
+func (d *DefaultDriver) RecoverPool(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RecoverPool()",
+	}
+}
+
+// EnterPoolMaintenance puts pools on the given node in maintenance mode
+func (d *DefaultDriver) EnterPoolMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnterPoolMaintenance()",
+	}
+}
+
+// ExitPoolMaintenance exits pools on the given node from maintenance mode
+func (d *DefaultDriver) ExitPoolMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExitPoolMaintenance()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{

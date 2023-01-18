@@ -4523,7 +4523,8 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							}
 
 							log.InfoD("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
-							StartVolDriverAndWait([]node.Node{*n})
+							errorChan := make(chan error, errorChannelSize)
+							StartVolDriverAndWait([]node.Node{*n}, &errorChan)
 							Inst().S.EnableSchedulingOnNode(*n)
 
 						}
