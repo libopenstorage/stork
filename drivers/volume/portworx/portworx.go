@@ -2596,7 +2596,7 @@ func configurePxReleaseManifestEnvVars(origEnvVarList []corev1.EnvVar, specGenUR
 	return newEnvVarList, nil
 }
 
-//getPxEndpointVersionFromUrl gets PX endpoint from the Spec Generator URL
+// getPxEndpointVersionFromUrl gets PX endpoint from the Spec Generator URL
 func getPxEndpointVersionFromUrl(specGenUrl string) (string, error) {
 	u, err := url.Parse(specGenUrl)
 	if err != nil {

@@ -4782,7 +4782,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
-//GetPoolIDWithIOs returns the pools with IOs happening
+// GetPoolIDWithIOs returns the pools with IOs happening
 func GetPoolIDWithIOs() (string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var selectedPool *opsapi.StoragePool
@@ -4840,7 +4840,7 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 	return selectedPool, nil
 }
 
-//GetRandomNodeWithPoolIOs returns node with IOs running
+// GetRandomNodeWithPoolIOs returns node with IOs running
 func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
 	// pick a storage node with pool having IOs
 	var err error

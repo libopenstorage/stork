@@ -36,7 +36,7 @@ var (
 func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	for _, bkpNamespace := range bkpNamespaces {
 		BackupName := fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespace)
-		backupUID := getBackupUID(OrgID, BackupName)
+		backupUID := getBackupUID(BackupName, OrgID)
 		DeleteBackup(BackupName, backupUID, OrgID)
 	}
 	for _, restoreNamespace := range restoreNamespaces {
@@ -304,40 +304,25 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 }
 
 var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
-	var (
-		ps       = make(map[string]map[string]string)
-		app_list = Inst().AppList
-	)
+	numberOfUsers := 30
+	numberOfGroups := 3
+	groupSize := 10
+	numberOfBackups := 9
+	users := make([]string, 0)
+	groups := make([]string, 0)
+	backupNames := make([]string, 0)
 	var contexts []*scheduler.Context
-	labelSelectores := make(map[string]string)
-	var CloudCredUID_list []string
+	labelSelectors := make(map[string]string)
+	var CloudCredUidList []string
 	var appContexts []*scheduler.Context
-	var backup_location_name string
 	var bkpNamespaces []string
-	var cluster_uid string
-	var cluster_status api.ClusterInfo_StatusInfo_Status
+	var clusterUid string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
-	backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-	//var pre_rule_uid string
-	//var post_rule_uid string
-	//var pre_rule_status bool
-	//var post_rule_status bool
 	providers := getProviders()
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: ShareBackupWithUsersAndGroups", "Sharing individual backup with users and groups", nil, 0)
-		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not ")
-		for i := 0; i < len(app_list); i++ {
-			if Contains(post_rule_app, app_list[i]) {
-				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
-					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
-				}
-			}
-			if Contains(pre_rule_app, app_list[i]) {
-				if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
-					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
-				}
-			}
-		}
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -351,98 +336,114 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			}
 		}
 	})
-	It("Basic Backup Creation", func() {
+	It("Sharing individual backup with users and groups", func() {
 		Step("Validate applications and get their labels", func() {
 			ValidateApplications(contexts)
 			log.Infof("Create list of pod selector for the apps deployed")
-			for _, ctx := range appContexts {
-				for _, specObj := range ctx.App.SpecList {
-					if obj, ok := specObj.(*appsapi.Deployment); ok {
-						if Contains(app_list, obj.Name) {
-							ps[obj.Name] = obj.Spec.Template.Labels
-						}
-					} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-						if Contains(app_list, obj.Name) {
-							ps[obj.Name] = obj.Spec.Template.Labels
-						}
-					}
-				}
-			}
 		})
 
 		Step("Create Users", func() {
-			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", "Password1")
-			log.FailOnError(err, "Failed to create user")
-		})
-		Step("Create Groups", func() {
-			err := backup.AddGroup("testgroup1")
-			log.FailOnError(err, "Failed to create group")
-		})
-		Step("Add users to group", func() {
-			err := backup.AddGroupToUser("testuser1", "testgroup1")
-			log.FailOnError(err, "Failed to assign group to user")
-		})
-		Step("Assign role to groups", func() {
-			err := backup.AddRoleToGroup("testgroup1", backup.ApplicationOwner, "testing from torpedo")
-			log.FailOnError(err, "Failed to assign group to user")
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("testuser%v", i)
+				firstName := fmt.Sprintf("FirstName%v", i)
+				lastName := fmt.Sprintf("LastName%v", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+				log.FailOnError(err, "Failed to create user - %s", userName)
+				users = append(users, userName)
+			}
 		})
 
-		//Step("Creating rules for backup", func() {
-		//	log.InfoD("Creating pre rule for deployed apps")
-		//	pre_rule_status, pre_rule_uid = CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
-		//	log.Infof("Pre rule created with ID - %v", pre_rule_uid)
-		//	dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
-		//	log.InfoD("Creating post rule for deployed apps")
-		//	post_rule_status, post_rule_uid = CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
-		//	log.Infof("Post rule created with ID - %v", post_rule_uid)
-		//	dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
-		//})
+		Step("Create Groups", func() {
+			for i := 1; i <= numberOfGroups; i++ {
+				groupName := fmt.Sprintf("testGroup%v", i)
+				err := backup.AddGroup(groupName)
+				log.FailOnError(err, "Failed to create group - %v", groupName)
+				groups = append(groups, groupName)
+			}
+		})
+
+		Step("Add users to group", func() {
+			for i := 0; i < len(users); i++ {
+				groupIndex := i / groupSize
+				err := backup.AddGroupToUser(users[i], groups[groupIndex])
+				log.FailOnError(err, "Failed to assign group to user")
+			}
+
+			// Print the groups
+			for _, group := range groups {
+				usersOfGroup, err := backup.GetMembersOfGroup(group)
+				log.FailOnError(err, "Error fetching members of the group - %v", group)
+				log.Infof("Group %v contains the following users - \n%v", group, usersOfGroup)
+			}
+		})
 
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
 			for _, provider := range providers {
-				bucketName := fmt.Sprintf("%s-%s-%v", "autogenerated-bucket", provider, time.Now().Unix())
+				bucketName := getBucketName()
 				CredName := fmt.Sprintf("%s-%s", "cred", provider)
-				backup_location_name = fmt.Sprintf("%s-%s", "location", provider)
 				CloudCredUID = uuid.New()
-				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
+				CloudCredUidList = append(CloudCredUidList, CloudCredUID)
 				BackupLocationUID = uuid.New()
-				CreateBucket(provider, bucketName)
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
 				time.Sleep(time.Minute * 1)
-				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
+				CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, bucketName[0], orgID)
 			}
 		})
 
 		Step("Register cluster for backup", func() {
-			cluster_status, cluster_uid = RegisterBackupCluster(orgID, "", "")
-			dash.VerifyFatal(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			clusterStatus, clusterUid = RegisterBackupCluster(orgID, "", "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
 
 		Step("Taking backup of applications", func() {
 			for _, namespace := range bkpNamespaces {
-				CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
-					labelSelectores, orgID, cluster_uid, "", "", "", "")
+				for i := 0; i < numberOfBackups; i++ {
+					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+					CreateBackup(backupName, sourceClusterName, backupLocationName, BackupLocationUID, []string{namespace},
+						labelSelectors, orgID, clusterUid, "", "", "", "")
+					backupNames = append(backupNames, backupName)
+				}
 			}
 		})
 
 		Step("Sharing backup with user", func() {
-			ShareBackup(backupName, []string{"testgroup1"}, []string{"testuser1"}, FullAccess)
+			backupsToBeSharedWithEachGroup := 3
+			for i, backupName := range backupNames {
+				groupIndex := i / backupsToBeSharedWithEachGroup
+				switch groupIndex {
+				case 0:
+					ShareBackup(backupName, []string{groups[groupIndex]}, nil, ViewOnlyAccess)
+				case 1:
+					ShareBackup(backupName, []string{groups[groupIndex]}, nil, RestoreAccess)
+				case 2:
+					ShareBackup(backupName, []string{groups[groupIndex]}, nil, FullAccess)
+				default:
+					ShareBackup(backupName, []string{groups[0]}, nil, ViewOnlyAccess)
+				}
+			}
 		})
-
-		//Step("Restoring the backed up application", func() {
-		//	for _, namespace := range bkpNamespaces {
-		//		backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-		//		CreateRestore("test-restore", backupName, namespaceMapping, destinationClusterName, orgID)
-		//	}
-		//})
-
 	})
 	JustAfterEach(func() {
-		policy_list := []string{"interval", "daily", "weekly", "monthly"}
+		log.Infof("Waiting for 2 minutes")
+		time.Sleep(time.Minute * 2)
+		log.Infof("Waiting done")
 		defer EndTorpedoTest()
-		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list, policy_list)
-		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
+		for _, backupName := range backupNames {
+			backupUID := getBackupUID(backupName, orgID)
+			DeleteBackup(backupName, backupUID, orgID)
+		}
+		DeleteBackupLocation(backupLocationName, orgID)
+		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		for _, userName := range users {
+			backup.DeleteUser(userName)
+		}
+		for _, groupName := range groups {
+			backup.DeleteGroup(groupName)
+		}
+		DeleteCluster(sourceClusterName, orgID)
+		DeleteCluster(destinationClusterName, orgID)
 	})
 })
 
@@ -524,7 +525,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			// setup task to delete stork pods as soon as it starts doing backup
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				backupUID := getBackupUID(orgID, backupName)
+				backupUID := getBackupUID(backupName, orgID)
 				req := &api.BackupInspectRequest{
 					Name:  backupName,
 					OrgId: orgID,
@@ -842,7 +843,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 							provider, Inst().InstanceID)
 
 						// Wait until all backups/restores start running
-						backupUID := getBackupUID(orgID, backupName)
+						backupUID := getBackupUID(backupName, orgID)
 						req := &api.BackupInspectRequest{
 							Name:  backupName,
 							OrgId: orgID,
@@ -1072,7 +1073,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 							Step(fmt.Sprintf("Delete backup full name %s:%s:%s",
 								clusterName, namespace, backupName), func() {
 								backupDriver := Inst().Backup
-								backupUID := getBackupUID(orgID, backupName)
+								backupUID := getBackupUID(backupName, orgID)
 								bkpDeleteRequest := &api.BackupDeleteRequest{
 									Name:  backupName,
 									OrgId: orgID,
@@ -1252,7 +1253,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			})
 
 			triggerFn := func() (bool, error) {
-				backupUID := getBackupUID(OrgID, BackupName)
+				backupUID := getBackupUID(BackupName, OrgID)
 				backupInspectReq := &api.BackupInspectRequest{
 					Name:  BackupName,
 					OrgId: OrgID,
@@ -2247,15 +2248,6 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	bkp_uid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-	//bkpEnumerateReq := &api.BackupEnumerateRequest{
-	//	OrgId: orgID}
-	//curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	//for _, bkp = range curBackups.GetBackups() {
-	//	if bkp.Name == backupName {
-	//		bkp_uid = bkp.Uid
-	//		break
-	//	}
-	//}
 	log.Infof("Backup UID for %s - %s", backupName, bkp_uid)
 
 	for _, groupName := range groupNames {
@@ -2263,7 +2255,6 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 		log.FailOnError(err, "Error fetching group ID")
 		groupIDs = append(groupIDs, groupID)
 	}
-	log.Infof("groupIDs -- %v", groupIDs)
 
 	for _, userName := range userNames {
 		userID, err := backup.FetchIDOfUser(userName)
@@ -2273,17 +2264,7 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 
 	groupBackupShareAccessConfigs := make([]*api.BackupShare_AccessConfig, 0)
 
-	//for _, groupID := range groupIDs {
-	//	log.Infof("looping for groupID -- %v", groupID)
-	//	groupBackupShareAccessConfig := &api.BackupShare_AccessConfig{
-	//		Id:     groupID,
-	//		Access: api.BackupShare_AccessType(accessLevel),
-	//	}
-	//	groupBackupShareAccessConfigs = append(groupBackupShareAccessConfigs, groupBackupShareAccessConfig)
-	//}
-
 	for _, groupName := range groupNames {
-		log.Infof("looping for groupName -- %v", groupName)
 		groupBackupShareAccessConfig := &api.BackupShare_AccessConfig{
 			Id:     groupName,
 			Access: api.BackupShare_AccessType(accessLevel),
@@ -2311,10 +2292,8 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 		Uid: bkp_uid,
 	}
 
-	log.Infof("shareBackupRequest -- \n %v", shareBackupRequest)
-
 	_, err = backupDriver.UpdateBackupShare(ctx, shareBackupRequest)
-	log.FailOnError(err, "Sharing backup failed")
+	log.FailOnError(err, "Sharing backup failed with request -\n%v", shareBackupRequest)
 
 }
 
@@ -2324,7 +2303,7 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 	var nodes []node.Node
 	backupDriver := Inst().Backup
 
-	backupUID := getBackupUID(orgID, backupName)
+	backupUID := getBackupUID(backupName, orgID)
 	backupInspectReq := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
@@ -2421,7 +2400,7 @@ func CreateRestore(restoreName string, backupName string,
 // TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
 func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	for _, backupName := range backups {
-		backupUID := getBackupUID(OrgID, backupName)
+		backupUID := getBackupUID(backupName, OrgID)
 		DeleteBackup(backupName, backupUID, OrgID)
 	}
 	for _, restoreName := range restores {
@@ -2468,13 +2447,13 @@ func CreateRestoreGetErr(restoreName string, backupName string,
 	return err
 }
 
-func getBackupUID(orgID, backupName string) string {
+func getBackupUID(backupName, orgID string) string {
 	backupDriver := Inst().Backup
 	ctx, err := backup.GetAdminCtxFromSecret()
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 			err))
-	backupUID, err := backupDriver.GetBackupUID(ctx, orgID, backupName)
+	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to get backup uid for org %s backup %s ctx: [%v]",
 			orgID, backupName, err))
