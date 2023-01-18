@@ -2494,9 +2494,9 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
-				sourceClusterName, namespace, backupName), func() {
+				SourceClusterName, namespace, backupName), func() {
 				err = CreateBackupGetErr(backupName,
-					sourceClusterName, backupLocationName, BackupLocationUID,
+					SourceClusterName, backupLocationName, BackupLocationUID,
 					[]string{namespace}, labelSelectors, OrgID)
 				if err != nil {
 					bkpNamespaceErrors[namespace] = err
@@ -2685,8 +2685,8 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			bkpNames = append(bkpNames, namespace)
-			log.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
-			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
+			log.Infof("Create backup full name %s:%s:%s", SourceClusterName, namespace, backupName)
+			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
 				[]string{namespace}, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"ConfigMap"}
@@ -3032,7 +3032,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 			for _, ns := range nsList.Items {
 				namespaces = append(namespaces, ns.Name)
 			}
-			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
+			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
 				namespaces, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"PersistentVolumeClaim"}
@@ -3224,7 +3224,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 	})
 	Step(fmt.Sprintf("Backup using label [%s=%s]", labelKey, labelValue), func() {
 		labelSelectors[labelKey] = labelValue
-		backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
+		backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
 			namespaces, labelSelectors, OrgID)
 		backupCreateRequest.Name = backupName
 		err = CreateBackupFromRequest(backupName, OrgID, backupCreateRequest)
@@ -3464,9 +3464,9 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	bkpError := false
 	Step("Backup a single namespace", func() {
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
-			sourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
+			SourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				sourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationName, BackupLocationUID,
 				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
@@ -3552,9 +3552,9 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 	bkpError := false
 	Step("Backup a single namespace", func() {
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
-			sourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
+			SourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				sourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationName, BackupLocationUID,
 				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
@@ -3687,9 +3687,9 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 	backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, "deleteBackupPod", backupCounter)
 	Step("Backup all namespaces", func() {
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
-			sourceClusterName, "all", backupName), func() {
+			SourceClusterName, "all", backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				sourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationName, BackupLocationUID,
 				[]string{"*"}, labelSelectors, OrgID)
 			UpdateOutcome(event, err)
 		})
@@ -3770,9 +3770,9 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 	backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, "scaleMongo", backupCounter)
 	Step("Backup all namespaces", func() {
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
-			sourceClusterName, "all", backupName), func() {
+			SourceClusterName, "all", backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				sourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationName, BackupLocationUID,
 				[]string{"*"}, labelSelectors, OrgID)
 			UpdateOutcome(event, err)
 		})

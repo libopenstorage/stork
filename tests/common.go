@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"regexp"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -150,7 +149,7 @@ const (
 	csiGenericDriverConfigMapFlag        = "csi-generic-driver-config-map"
 	licenseExpiryTimeoutHoursFlag        = "license_expiry_timeout_hours"
 	meteringIntervalMinsFlag             = "metering_interval_mins"
-	sourceClusterName                    = "source-cluster"
+	SourceClusterName                    = "source-cluster"
 	destinationClusterName               = "destination-cluster"
 	backupLocationName                   = "tp-blocation"
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
@@ -261,23 +260,8 @@ const (
 var pxRuntimeOpts string
 
 const (
-	post_install_hook_pod = "pxcentral-post-install-hook"
-	quick_maintenance_pod = "quick-maintenance-repo"
-	full_maintenance_pod  = "full-maintenance-repo"
-	taskNamePrefix        = "backupcreaterestore"
-	orgID                 = "default"
-)
-
-var (
-	create_pre_rule  = false
-	create_post_rule = false
-	// User should keep updating the below 3 datas
-	pre_rule_app   = []string{"cassandra", "postgres"}
-	post_rule_app  = []string{"cassandra"}
-	app_parameters = map[string]map[string]string{
-		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
-		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";", "background": "false", "run_in_single_pod": "false"},
-	}
+	taskNamePrefix = "backupcreaterestore"
+	orgID          = "default"
 )
 
 var (
@@ -2315,7 +2299,7 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 				Name: bLocation,
 				Uid:  bLocationUID,
 			},
-			Cluster:        sourceClusterName,
+			Cluster:        SourceClusterName,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
@@ -2340,7 +2324,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 	var ctx context1.Context
 	labelSelectors := make(map[string]string)
 	Step(fmt.Sprintf("Create scheduled backup %s of namespaces %v on cluster %s in organization %s",
-		backupScheduleNamePrefix+backupScheduleName, namespaces, sourceClusterName, OrgID), func() {
+		backupScheduleNamePrefix+backupScheduleName, namespaces, SourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
 
 		// Create a schedule policy
@@ -2384,7 +2368,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 
 			ReclaimPolicy: api.BackupScheduleInfo_Delete,
 			// Name of Cluster
-			Cluster: sourceClusterName,
+			Cluster: SourceClusterName,
 			// Label selectors to choose resources
 			LabelSelectors: labelSelectors,
 
@@ -2581,7 +2565,7 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 	var ctx context1.Context
 
 	Step(fmt.Sprintf("Inspect scheduled backup %s of all namespaces on cluster %s in organization %s",
-		backupScheduleNamePrefix, sourceClusterName, OrgID), func() {
+		backupScheduleNamePrefix, SourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
 
 		bkpScheduleInspectRequest := &api.BackupScheduleInspectRequest{
@@ -2797,32 +2781,23 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
-	expect(kubeconfigs).NotTo(equal(""),
-		"KUBECONFIGS Environment variable should not be empty")
-
+	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	expect(len(kubeconfigList)).Should(beNumerically(">=", 2), "At least minimum two kubeconfigs required")
-
+	dash.VerifyFatal(len(kubeconfigList) >= 2, true, "Getting the minimum number of kubeconfigs required")
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
-
+	dash.VerifyFatal(err, nil, "Getting the kubeconfigs from the configmap")
 	// Register source cluster with backup driver
-	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", sourceClusterName, orgID), func() {
+	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", SourceClusterName, orgID), func() {
 		srcClusterConfigPath, err := GetSourceClusterConfigPath()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
-
-		log.Infof("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
-		CreateCluster(sourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
+		dash.VerifyFatal(err, nil, "Getting kubeconfig path for source cluster")
+		log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
+		CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
 	})
-
 	// Register destination cluster with backup driver
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", destinationClusterName, orgID), func() {
 		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+		dash.VerifyFatal(err, nil, "Getting kubeconfig path for destination cluster")
 		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
 		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
 	})
@@ -3130,7 +3105,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 	var ctx context1.Context
 
 	Step(fmt.Sprintf("Delete scheduled backup %s of all namespaces on cluster %s in organization %s",
-		backupScheduleName, sourceClusterName, OrgID), func() {
+		backupScheduleName, SourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
 
 		bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
@@ -3150,7 +3125,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 			return
 		}
 
-		clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: sourceClusterName, IncludeSecrets: true}
+		clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: SourceClusterName, IncludeSecrets: true}
 		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 		if err != nil {
 			return
@@ -3680,7 +3655,7 @@ func TearDownBackupRestoreAll() {
 	}
 	provider := GetProvider()
 	DeleteCluster(destinationClusterName, OrgID)
-	DeleteCluster(sourceClusterName, OrgID)
+	DeleteCluster(SourceClusterName, OrgID)
 	DeleteBackupLocation(backupLocationName, OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
@@ -4526,60 +4501,6 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	return pool, nil
 }
 
-func ValidateBackupCluster() bool {
-	flag := false
-	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
-	ns := backup.GetPxBackupNamespace()
-	pods, err := core.Instance().GetPods(ns, labelSelectors)
-	if err != nil {
-		log.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
-			err)
-		return false
-	}
-	for _, pod := range pods.Items {
-		log.Infof("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
-		bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
-		if err != nil {
-			log.Errorf("Error: %v Occured while getting the pxcentral-post-install-hook pod details", err)
-			return false
-		}
-		container_list := bkp_pod.Status.ContainerStatuses
-		for i := 0; i < len(container_list); i++ {
-			status := container_list[i].State.Terminated.Reason
-			if status == "Completed" {
-				log.Infof("pxcentral-post-install-hook pod is in completed state")
-				flag = true
-				break
-			}
-		}
-	}
-	if flag == false {
-		return false
-	}
-	bkp_pods, err := core.Instance().GetPods(ns, nil)
-	for _, pod := range bkp_pods.Items {
-		matched, _ := regexp.MatchString(post_install_hook_pod, pod.GetName())
-		if !matched {
-			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
-			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
-			if !(equal || equal1) {
-				log.Infof("Checking if all the containers are up or not")
-				res := core.Instance().IsPodRunning(pod)
-				if !res {
-					log.Errorf("All the containers of pod %sare not Up", pod)
-					return false
-				}
-				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
-				if err != nil {
-					log.Errorf("An Error: %v  Occured while validating the pod %s", err, pod)
-					return false
-				}
-			}
-		}
-	}
-	return true
-}
-
 // ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it
 func ValidateUserRole(userName string, role backup.PxBackupRole) (bool, error) {
 	roleMapping, err := backup.GetRolesForUser(userName)
@@ -4594,20 +4515,6 @@ func ValidateUserRole(userName string, role backup.PxBackupRole) (bool, error) {
 	return true, nil
 }
 
-func DeleteRuleForBackup(orgID string, name string, uid string) bool {
-	log.InfoD("Delete rule for backup")
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	RuleDeleteReq := &api.RuleDeleteRequest{
-		Name:  name,
-		OrgId: orgID,
-		Uid:   uid,
-	}
-	_, err = Inst().Backup.DeleteRule(ctx, RuleDeleteReq)
-	log.FailOnError(err, "Failed to delete backup Rule")
-	return true
-}
-
 func Contains(app_list []string, app string) bool {
 	for _, v := range app_list {
 		if v == app {
@@ -4615,183 +4522,6 @@ func Contains(app_list []string, app string) bool {
 		}
 	}
 	return false
-}
-
-func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_post_flag string,
-	ps map[string]map[string]string) (bool, string) {
-	pod_selector := []map[string]string{}
-	action_value := []string{}
-	container := []string{}
-	background := []bool{}
-	run_in_single_pod := []bool{}
-	var rulesinfo api.RulesInfo
-	var uid string
-	for i := 0; i < len(app_list); i++ {
-		if pre_post_flag == "pre" {
-			create_pre_rule = true
-			if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
-				pod_selector = append(pod_selector, ps[app_list[i]])
-				action_value = append(action_value, app_parameters[app_list[i]]["pre_action_list"])
-				background_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["background"])
-				background = append(background, background_val)
-				pod_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["run_in_single_pod"])
-				run_in_single_pod = append(run_in_single_pod, pod_val)
-				// Here user has to set env for each app container if required in the format container<app name> eg: containersql
-				container_name := fmt.Sprintf("%s-%s", "container", app_list[i])
-				container = append(container, os.Getenv(container_name))
-			} else {
-				log.Infof("Pre rule not required for this application")
-			}
-		} else {
-			create_post_rule = true
-			if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
-				pod_selector = append(pod_selector, ps[app_list[i]])
-				action_value = append(action_value, app_parameters[app_list[i]]["post_action_list"])
-				background_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["background"])
-				background = append(background, background_val)
-				pod_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["run_in_single_pod"])
-				run_in_single_pod = append(run_in_single_pod, pod_val)
-				// Here user has to set env for each app container if required in the format container<app name> eg: containersql
-				container_name := fmt.Sprintf("%s-%s", "container", app_list[i])
-				container = append(container, os.Getenv(container_name))
-			} else {
-				log.Infof("Post rule not required for this application")
-			}
-		}
-	}
-	total_rules := len(action_value)
-	if total_rules == 0 {
-		log.Info("Rules not required for the apps")
-		return true, ""
-	}
-
-	rulesinfo_ruleitem := make([]api.RulesInfo_RuleItem, total_rules)
-	for i := 0; i < total_rules; i++ {
-		rule_action := api.RulesInfo_Action{Background: background[i], RunInSinglePod: run_in_single_pod[i], Value: action_value[i]}
-		var actions []*api.RulesInfo_Action = []*api.RulesInfo_Action{&rule_action}
-		rulesinfo_ruleitem[i].PodSelector = pod_selector[i]
-		rulesinfo_ruleitem[i].Actions = actions
-		rulesinfo_ruleitem[i].Container = container[i]
-		rulesinfo.Rules = append(rulesinfo.Rules, &rulesinfo_ruleitem[i])
-	}
-	RuleCreateReq := &api.RuleCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  rule_name,
-			OrgId: orgID,
-		},
-		RulesInfo: &rulesinfo,
-	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	_, err = Inst().Backup.CreateRule(ctx, RuleCreateReq)
-	log.FailOnError(err, "Failed to create backup rules")
-	log.InfoD("Validate rules for backup")
-	RuleEnumerateReq := &api.RuleEnumerateRequest{
-		OrgId: orgID,
-	}
-	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
-	for i := 0; i < len(rule_list.Rules); i++ {
-		if rule_list.Rules[i].Metadata.Name == rule_name {
-			uid = rule_list.Rules[i].Metadata.Uid
-			break
-		}
-	}
-	RuleInspectReq := &api.RuleInspectRequest{
-		OrgId: orgID,
-		Name:  rule_name,
-		Uid:   uid,
-	}
-	_, err1 := Inst().Backup.InspectRule(ctx, RuleInspectReq)
-	if err1 != nil {
-		log.Errorf("Failed to validate the created rule with Error: [%v]", err)
-		return false, uid
-	}
-	return true, uid
-}
-
-func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
-	var flag bool = true
-	log.InfoD("Deleting the deployed apps after the testcase")
-	for i := 0; i < len(contexts); i++ {
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-		err := Inst().S.Destroy(contexts[i], opts)
-		if err != nil {
-			flag = false
-		}
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-	}
-	log.InfoD("Deleting backup rules created")
-	RuleEnumerateReq := &api.RuleEnumerateRequest{
-		OrgId: orgID,
-	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
-	if create_post_rule == true {
-		for i := 0; i < len(rule_list.Rules); i++ {
-			if rule_list.Rules[i].Metadata.Name == "backup-post-rule" {
-				post_rule_uid = rule_list.Rules[i].Metadata.Uid
-				break
-			}
-		}
-		post_rule_delete_status := DeleteRuleForBackup(orgID, "backup-post-rule", post_rule_uid)
-		if post_rule_delete_status != true {
-			flag = false
-		}
-		dash.VerifySafely(post_rule_delete_status, true, fmt.Sprintf("Verifying Post rule deletion for backup"))
-	}
-	if create_pre_rule == true {
-		for i := 0; i < len(rule_list.Rules); i++ {
-			if rule_list.Rules[i].Metadata.Name == "backup-pre-rule" {
-				pre_rule_uid = rule_list.Rules[i].Metadata.Uid
-				break
-			}
-		}
-		pre_rule_delete_status := DeleteRuleForBackup(orgID, "backup-pre-rule", pre_rule_uid)
-		if pre_rule_delete_status != true {
-			flag = false
-		}
-		dash.VerifySafely(pre_rule_delete_status, true, fmt.Sprintf("Verifying Pre rule deletion for backup"))
-	}
-	log.InfoD("Deleting bucket,backup location and cloud setting")
-	for i, provider := range providers {
-		backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
-		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
-		DeleteBucket(provider, bucketName)
-		CredName := fmt.Sprintf("%s-%s", "cred", provider)
-		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
-		DeleteBackupLocation(backup_location_name, orgID)
-	}
-	log.InfoD("Deleting schedule policies")
-	sched_policy_map := make(map[string]string)
-	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
-		OrgId: orgID,
-	}
-	schedule_policy_list, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
-	log.FailOnError(err, "Failed to get list of schedule policies")
-	for i := 0; i < len(schedule_policy_list.SchedulePolicies); i++ {
-		sched_policy_map[schedule_policy_list.SchedulePolicies[i].Metadata.Name] = schedule_policy_list.SchedulePolicies[i].Metadata.Uid
-	}
-	for i := 0; i < len(policy_list); i++ {
-		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
-			OrgId: orgID,
-			Name:  policy_list[i],
-			Uid:   sched_policy_map[policy_list[i]],
-		}
-		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
-		if err != nil {
-			flag = false
-		}
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
-	}
-	DeleteCluster(destinationClusterName, OrgID)
-	DeleteCluster(sourceClusterName, OrgID)
-	if flag == false {
-		return false
-	}
-	return true
 }
 
 // ValidatePoolRebalance checks rebalnce state of pools if running
@@ -5005,92 +4735,6 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
-}
-
-func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
-	log.InfoD("Create Backup Schedule Policy")
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  name,
-			Uid:   uid,
-			OrgId: orgid,
-		},
-		SchedulePolicy: schedule_policy_info,
-	}
-	_, err = Inst().Backup.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
-	if err != nil {
-		log.Errorf(" \n\n eeror in schel policy is +%v", err)
-		return err
-	}
-	return nil
-}
-
-func CreateIntervalSchedulePolicy(retain int64, min int64, incr_count uint64) *api.SchedulePolicyInfo {
-	SchedulePolicy := &api.SchedulePolicyInfo{
-		Interval: &api.SchedulePolicyInfo_IntervalPolicy{
-			Retain:  retain,
-			Minutes: min,
-			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
-				Count: incr_count,
-			},
-		},
-	}
-	return SchedulePolicy
-}
-
-func CreateDailySchedulePolicy(retain int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
-	SchedulePolicy := &api.SchedulePolicyInfo{
-		Daily: &api.SchedulePolicyInfo_DailyPolicy{
-			Retain: retain,
-			Time:   time,
-			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
-				Count: incr_count,
-			},
-		},
-	}
-	return SchedulePolicy
-}
-
-func CreateWeeklySchedulePolicy(retain int64, day Weekday, time string, incr_count uint64) *api.SchedulePolicyInfo {
-
-	SchedulePolicy := &api.SchedulePolicyInfo{
-		Weekly: &api.SchedulePolicyInfo_WeeklyPolicy{
-			Retain: retain,
-			Day:    string(day),
-			Time:   time,
-			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
-				Count: incr_count,
-			},
-		},
-	}
-	return SchedulePolicy
-}
-
-func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
-	SchedulePolicy := &api.SchedulePolicyInfo{
-		Monthly: &api.SchedulePolicyInfo_MonthlyPolicy{
-			Retain: retain,
-			Date:   date,
-			Time:   time,
-			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
-				Count: incr_count,
-			},
-		},
-	}
-	return SchedulePolicy
-}
-
-func RegisterBackupCluster(orgID string, cloud_name string, uid string) (api.ClusterInfo_StatusInfo_Status, string) {
-	CreateSourceAndDestClusters(orgID, cloud_name, uid)
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: sourceClusterName, IncludeSecrets: true}
-	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-	log.FailOnError(err, "Cluster Object nil")
-	clusterObj := clusterResp.GetCluster()
-	return clusterObj.Status.Status, clusterObj.Uid
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {

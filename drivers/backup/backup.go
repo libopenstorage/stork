@@ -15,6 +15,18 @@ type Image struct {
 	Version string
 }
 
+type Weekday string
+
+const (
+	Monday    Weekday = "Mon"
+	Tuesday           = "Tue"
+	Wednesday         = "Wed"
+	Thursday          = "Thu"
+	Friday            = "Fri"
+	Saturday          = "Sat"
+	Sunday            = "Sun"
+)
+
 // Driver for backup
 type Driver interface {
 	// Org interface
@@ -92,7 +104,7 @@ type Cluster interface {
 	// EnumerateCluster enumerates the cluster objects
 	EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error)
 
-	// InsepctCluster describes a cluster
+	// InspectCluster describes a cluster
 	InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error)
 
 	// DeleteCluster deletes a cluster object
@@ -107,6 +119,12 @@ type Cluster interface {
 		timeout time.Duration,
 		timeBeforeRetry time.Duration,
 	) error
+
+	// RegisterBackupCluster registers backup cluster
+	RegisterBackupCluster(orgID, cloudName, uid string) (api.ClusterInfo_StatusInfo_Status, string)
+
+	// ValidateBackupCluster validates if backup pods are up or not
+	ValidateBackupCluster() error
 }
 
 // BLocation obj interface
@@ -224,6 +242,24 @@ type SchedulePolicy interface {
 
 	// UpdateOwnershiSchedulePolicy updating ownership of schedule policy
 	UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error)
+
+	// CreateIntervalSchedulePolicy creates interval schedule policy object
+	CreateIntervalSchedulePolicy(retain int64, min int64, incrCount uint64) *api.SchedulePolicyInfo
+
+	// CreateDailySchedulePolicy creates daily schedule policy object
+	CreateDailySchedulePolicy(retain int64, time string, incrCount uint64) *api.SchedulePolicyInfo
+
+	// CreateWeeklySchedulePolicy creates weekly schedule policy object
+	CreateWeeklySchedulePolicy(retain int64, day Weekday, time string, incrCount uint64) *api.SchedulePolicyInfo
+
+	// CreateMonthlySchedulePolicy creates monthly schedule policy object
+	CreateMonthlySchedulePolicy(retain int64, date int64, time string, incrCount uint64) *api.SchedulePolicyInfo
+
+	// BackupSchedulePolicy creates backup schedule policy
+	BackupSchedulePolicy(name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error
+
+	// DeleteBackupSchedulePolicy deletes the list of schedule policies
+	DeleteBackupSchedulePolicy(orgID string, policyList []string) error
 }
 
 // ScheduleBackup interface
@@ -285,6 +321,15 @@ type Rule interface {
 
 	// UpdateOwnershipRule update ownership of rule
 	UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error)
+
+	// CreateRuleForBackup creates backup rule
+	CreateRuleForBackup(ruleName string, orgID string, appList []string, prePostFlag string, ps map[string]map[string]string) (bool, string, error)
+
+	// DeleteRuleForBackup deletes backup rule
+	DeleteRuleForBackup(orgID string, ruleName string) error
+
+	// GetRuleUid fetches uid for the given rule
+	GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error)
 }
 
 var backupDrivers = make(map[string]Driver)

@@ -1,8 +1,8 @@
 package tests
 
 import (
-        "github.com/portworx/torpedo/pkg/aetosutil"
-        "github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 	"time"
