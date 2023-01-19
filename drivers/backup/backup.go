@@ -323,7 +323,7 @@ type Rule interface {
 	UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error)
 
 	// CreateRuleForBackup creates backup rule
-	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, error, string)
+	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
 
 	// DeleteRuleForBackup deletes backup rule
 	DeleteRuleForBackup(orgID string, ruleName string) error

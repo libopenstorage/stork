@@ -179,17 +179,17 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				preRuleStatus, err, ruleName := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
-				preRuleNameList = append(preRuleNameList, ruleName)
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
 				log.FailOnError(err, "Creating pre rule for deployed apps failed")
 				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
+				preRuleNameList = append(preRuleNameList, ruleName)
 			}
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				postRuleStatus, err, ruleName := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
-				postRuleNameList = append(postRuleNameList, ruleName)
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
 				log.FailOnError(err, "Creating post rule for deployed apps failed")
 				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
+				postRuleNameList = append(postRuleNameList, ruleName)
 			}
 		})
 		Step("Creating bucket,backup location and cloud setting", func() {
@@ -240,7 +240,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 			postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 			for _, namespace := range bkpNamespaces {
-				log.Info(" This is ns", namespace)
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				CreateBackup(backupName, SourceClusterName, backupLocation, BackupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
@@ -258,10 +257,12 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		defer EndTorpedoTest()
 		for _, ruleName := range preRuleNameList {
 			err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+			err = fmt.Errorf("failed to delete pre rule %s with error %v", ruleName, err)
 			dash.VerifySafely(err, nil, "Deleting  backup rules")
 		}
 		for _, ruleName := range postRuleNameList {
 			err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+			err = fmt.Errorf("failed to delete post rule %s with error %v", ruleName, err)
 			dash.VerifySafely(err, nil, "Deleting  backup rules")
 		}
 		err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
@@ -287,7 +288,6 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	}
 	log.InfoD("Deleting bucket,backup location and cloud setting")
 	for i, provider := range providers {
-		//backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
 		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
 		DeleteBucket(provider, bucketName)
 		CredName := fmt.Sprintf("%s-%s", "cred", provider)

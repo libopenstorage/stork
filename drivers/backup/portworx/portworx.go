@@ -1124,7 +1124,7 @@ var (
 	}
 )
 
-func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, error, string) {
+func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error) {
 	var podSelector []map[string]string
 	var actionValue []string
 	var container []string
@@ -1170,7 +1170,7 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 	totalRules := len(actionValue)
 	if totalRules == 0 {
 		log.Info("Rules not required for the apps")
-		return true, nil, ""
+		return true, "", nil
 	}
 	timestamp := strconv.Itoa(int(time.Now().Unix()))
 	ruleName := fmt.Sprintf("%s-%s-rule-%s", appName, prePostFlag, timestamp)
@@ -1194,13 +1194,13 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-		return false, err, ruleName
+		return false, ruleName, err
 	}
 
 	_, err = p.CreateRule(ctx, RuleCreateReq)
 	if err != nil {
 		err = fmt.Errorf("Failed to create backup rules: [%v]", err)
-		return false, err, ruleName
+		return false, ruleName, err
 	}
 	log.Infof("Validate rules for backup")
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
@@ -1221,9 +1221,9 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 	_, err = p.InspectRule(ctx, RuleInspectReq)
 	if err != nil {
 		err = fmt.Errorf("Failed to validate the created rule with Error: [%v]", err)
-		return false, err, ruleName
+		return false, ruleName, err
 	}
-	return true, nil, ruleName
+	return true, ruleName, nil
 }
 
 func (p *portworx) CreateIntervalSchedulePolicy(retain int64, min int64, incrCount uint64) *api.SchedulePolicyInfo {
