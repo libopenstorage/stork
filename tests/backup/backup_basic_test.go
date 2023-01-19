@@ -1,17 +1,17 @@
 package tests
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
-	"strings"
-	"fmt"
 
-	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -34,16 +34,15 @@ const (
 var (
 	// enable all the after suite actions
 	wantAllAfterSuiteActions bool = true
-
 	// selectively enable after suite actions by setting wantAllAfterSuiteActions to false and setting these to true
 	wantAfterSuiteSystemCheck     bool = false
 	wantAfterSuiteValidateCleanup bool = false
-	// User should keep updating the below 3 datas
+	// User should keep updating preRuleApp, postRuleApp
 	preRuleApp  = []string{"cassandra", "postgres"}
 	postRuleApp = []string{"cassandra"}
 )
 
-func getBucketName() []string{
+func getBucketName() []string {
 	bucketName := os.Getenv("BUCKET_NAME")
 	return strings.Split(bucketName, ",")
 }
@@ -67,11 +66,11 @@ var _ = BeforeSuite(func() {
 	defer EndTorpedoTest()
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()
-	bucket_name := getBucketName()
+	bucketNames := getBucketName()
 	for _, provider := range providers {
-		bucketName := fmt.Sprintf("%s-%s", provider, bucket_name[0])
+		bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
 		CreateBucket(provider, bucketName)
-		}
+	}
 })
 
 var _ = AfterSuite(func() {
@@ -80,14 +79,14 @@ var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	// Cleanup all bucket after suite
 	providers := getProviders()
-	bucket_name := getBucketName()
-	for _, provider := range providers{
-		for _, BucketName := range bucket_name{
-				bucketName := fmt.Sprintf("%s-%s", provider, BucketName)
-				DeleteBucket(provider, bucketName)
+	bucketNames := getBucketName()
+	for _, provider := range providers {
+		for _, BucketName := range bucketNames {
+			bucketName := fmt.Sprintf("%s-%s", provider, BucketName)
+			DeleteBucket(provider, bucketName)
 		}
 	}
-	
+
 })
 
 func TestMain(m *testing.M) {
