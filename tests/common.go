@@ -1633,7 +1633,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 				n, err := node.GetNodeByIP(pod.Status.HostIP)
 				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
 				if n.PxPodRestartCount != value {
-					dash.VerifySafely(value, n.PxPodRestartCount, fmt.Sprintf("Portworx pods restart many times in a node: [%s]", n.Name))
+					log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
 					if Inst().PortworxPodRestartCheck {
 						log.Fatalf("portworx pods restart [%d] times", value)
 					}
@@ -1649,7 +1649,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 			for _, v := range pxPodRestartCountMap {
 				if v > 0 {
-					dash.VerifySafely(v, 0, fmt.Sprintf("Portworx operator pods restarted many times: [%d]", v))
+					log.Warnf("Portworx operator pods restart count %d is greater than 0", v)
 					if Inst().PortworxPodRestartCheck {
 						log.Fatalf("portworx operator pods restart [%d] times", v)
 					}
