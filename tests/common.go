@@ -2949,9 +2949,6 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
-	//inspReq := &api.CloudCredentialInspectRequest{Name: cloudCred, Uid: cloudCredUID, OrgId: orgID, IncludeSecrets: true}
-	//credCtx, err := backup.GetAdminCtxFromSecret()
-	//obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -2962,8 +2959,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 		BackupLocation: &api.BackupLocationInfo{
 			Path:          bucketName,
 			EncryptionKey: encryptionKey,
-			// CloudCredential: "foo",
-			// CloudCredential: cloudCred,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,

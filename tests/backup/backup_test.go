@@ -2020,7 +2020,7 @@ func generateEncryptionKey() string {
 	return string(b)
 }
 
-// This test cases creates a backup location with encryption
+// This test case creates a backup location with encryption
 var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var contexts []*scheduler.Context
 	var appContexts []*scheduler.Context
@@ -2032,19 +2032,20 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var restoreName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 0)
+		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 0)
 	})
 	It("Creating cloud account and backup location", func() {
 		log.InfoD("Creating cloud account and backup location")
 		providers := getProviders()
-		bucketName := getBucketName()
+		bucketNames := getBucketName()
+		bucketName = fmt.Sprintf("%s-%s", providers[0], bucketNames[0])
 		CredName = fmt.Sprintf("%s-%s", "cred", providers[0])
 		backupLocationName = fmt.Sprintf("%s-%s", "location", providers[0])
 		CloudCredUID = uuid.New()
 		BackupLocationUID = uuid.New()
 		encryptionKey := generateEncryptionKey()
 		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
-		CreateBackupLocation(providers[0], backupLocationName, BackupLocationUID, CredName, CloudCredUID, bucketName[0], orgID, encryptionKey)
+		CreateBackupLocation(providers[0], backupLocationName, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID, encryptionKey)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
