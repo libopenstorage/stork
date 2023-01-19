@@ -793,7 +793,7 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	if token == "" {
 		return nil, fmt.Errorf("admin token is empty")
 	}
-	log.Infof("Token from Admin secret: %v", token)
+	log.Debugf("Token from Admin secret: %v", token)
 	ctx := GetCtxWithToken(token)
 
 	return ctx, nil
@@ -815,7 +815,7 @@ func GetAdminTokenFromSecret() (string, error) {
 	if token == "" {
 		return "", fmt.Errorf("admin token is empty")
 	}
-	log.Infof("Token from Admin secret: %v", token)
+	log.Debugf("Token from Admin secret: %v", token)
 
 	return token, nil
 }

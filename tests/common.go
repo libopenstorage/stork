@@ -2708,7 +2708,7 @@ func SetupBackup(testName string) {
 }
 
 // DeleteBackup deletes backup
-func DeleteBackup(backupName string, backupUID string, orgID string) {
+func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) {
 
 	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
 		backupName, orgID), func() {
@@ -2719,12 +2719,8 @@ func DeleteBackup(backupName string, backupUID string, orgID string) {
 			OrgId: orgID,
 			Uid:   backupUID,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
+		_, err := backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
+		log.FailOnError(err, "Failed to delete backup with request - %c", bkpDeleteRequest)
 		// Best effort cleanup, dont fail test, if deletion fails
 		//expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
@@ -2753,19 +2749,20 @@ func DeleteCluster(name string, orgID string) {
 }
 
 // DeleteBackupLocation deletes backuplocation
-func DeleteBackupLocation(name string, orgID string) {
+func DeleteBackupLocation(name string, backupLocationUID string, orgID string) {
 	Step(fmt.Sprintf("Delete backup location [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
 		bLocationDeleteReq := &api.BackupLocationDeleteRequest{
-			Name:  name,
-			OrgId: orgID,
+			Name:          name,
+			OrgId:         orgID,
+			DeleteBackups: true,
+			Uid:           backupLocationUID,
 		}
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		_, err = backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+		log.FailOnError(err, "Failed to delete backup location with request - [%v]", bLocationDeleteReq)
 		// Best effort cleanup, dont fail test, if deletion fails
 		//expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup location [%s] in org [%s]", name, orgID))
@@ -3628,7 +3625,7 @@ func TearDownBackupRestoreAll() {
 	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	backups := enumBkpResponse.GetBackups()
 	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID)
+		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID, ctx)
 	}
 
 	log.Infof("Enumerating restores")
@@ -3655,7 +3652,7 @@ func TearDownBackupRestoreAll() {
 	provider := GetProvider()
 	DeleteCluster(destinationClusterName, OrgID)
 	DeleteCluster(SourceClusterName, OrgID)
-	DeleteBackupLocation(backupLocationName, OrgID)
+	DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }
@@ -4864,4 +4861,24 @@ func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
 		randomIndex--
 	}
 	return node.Node{}
+}
+
+func Waiter(task func() bool, taskDescription string, timeoutPeriod int, intervalPeriod int, timeUnit time.Duration) {
+	timeout := time.After(time.Duration(timeoutPeriod) * timeUnit)
+	interval := time.Tick(time.Duration(intervalPeriod) * timeUnit)
+	for {
+		select {
+		case <-timeout:
+			log.Infof("[%s] timed out after waiting for %s", taskDescription, time.Duration(timeoutPeriod)*timeUnit)
+			return
+		case <-interval:
+			start := time.Now()
+			if task() {
+				log.Infof("[%s] completed in %v", taskDescription, time.Since(start))
+				return
+			} else {
+				log.Infof("Waiting %s for [%s] to complete", time.Duration(intervalPeriod)*timeUnit, taskDescription)
+			}
+		}
+	}
 }

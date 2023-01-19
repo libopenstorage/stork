@@ -37,7 +37,9 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	for _, bkpNamespace := range bkpNamespaces {
 		BackupName := fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespace)
 		backupUID := getBackupUID(BackupName, OrgID)
-		DeleteBackup(BackupName, backupUID, OrgID)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		DeleteBackup(BackupName, backupUID, OrgID, ctx)
 	}
 	for _, restoreNamespace := range restoreNamespaces {
 		RestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, restoreNamespace)
@@ -46,7 +48,8 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 
 	DeleteCluster(destinationClusterName, OrgID)
 	DeleteCluster(SourceClusterName, OrgID)
-	DeleteBackupLocation(backupLocationName, OrgID)
+	// Need to add backup location UID for Delete Backup Location call
+	DeleteBackupLocation(backupLocationName, "", OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 }
 
@@ -241,8 +244,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
 				CreateBackup(backupName, SourceClusterName, backupLocation, BackupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
 			}
 		})
 		Step("Restoring the backed up application", func() {
@@ -292,7 +297,8 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		DeleteBucket(provider, bucketName)
 		CredName := fmt.Sprintf("%s-%s", "cred", provider)
 		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
-		DeleteBackupLocation(backupLocation, orgID)
+		// Need to add backup location UID for Delete Backup Location call
+		DeleteBackupLocation(backupLocation, "", orgID)
 	}
 	DeleteCluster(destinationClusterName, OrgID)
 	DeleteCluster(SourceClusterName, OrgID)
@@ -313,6 +319,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	backupNames := make([]string, 0)
 	var contexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
+	var backupLocationUID string
+	var customBucketName string
+	var cloudCredUID string
 	var CloudCredUidList []string
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
@@ -322,7 +331,8 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	providers := getProviders()
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: ShareBackupWithUsersAndGroups", "Sharing individual backup with users and groups", nil, 0)
+		StartTorpedoTest("Backup: Share large number of backups",
+			"Share large number of backups with multiple users and groups with View only, Restore and Full Access", nil, 82934)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -336,114 +346,188 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			}
 		}
 	})
-	It("Sharing individual backup with users and groups", func() {
+	It("Share large number of backups", func() {
 		Step("Validate applications and get their labels", func() {
 			ValidateApplications(contexts)
 			log.Infof("Create list of pod selector for the apps deployed")
 		})
 
 		Step("Create Users", func() {
+			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
 				userName := fmt.Sprintf("testuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
-				err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-				log.FailOnError(err, "Failed to create user - %s", userName)
-				users = append(users, userName)
+				wg.Add(1)
+				go func(userName, firstName, lastName, email string) {
+					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					users = append(users, userName)
+					wg.Done()
+				}(userName, firstName, lastName, email)
 			}
+			wg.Wait()
 		})
 
 		Step("Create Groups", func() {
+			var wg sync.WaitGroup
 			for i := 1; i <= numberOfGroups; i++ {
 				groupName := fmt.Sprintf("testGroup%v", i)
-				err := backup.AddGroup(groupName)
-				log.FailOnError(err, "Failed to create group - %v", groupName)
-				groups = append(groups, groupName)
+				wg.Add(1)
+				go func(groupName string) {
+					err := backup.AddGroup(groupName)
+					log.FailOnError(err, "Failed to create group - %v", groupName)
+					groups = append(groups, groupName)
+					wg.Done()
+				}(groupName)
 			}
+			wg.Wait()
 		})
 
 		Step("Add users to group", func() {
+			var wg sync.WaitGroup
 			for i := 0; i < len(users); i++ {
 				groupIndex := i / groupSize
-				err := backup.AddGroupToUser(users[i], groups[groupIndex])
-				log.FailOnError(err, "Failed to assign group to user")
+				wg.Add(1)
+				go func(i, groupIndex int) {
+					err := backup.AddGroupToUser(users[i], groups[groupIndex])
+					log.FailOnError(err, "Failed to assign group to user")
+					wg.Done()
+				}(i, groupIndex)
 			}
+			wg.Wait()
 
 			// Print the groups
 			for _, group := range groups {
 				usersOfGroup, err := backup.GetMembersOfGroup(group)
 				log.FailOnError(err, "Error fetching members of the group - %v", group)
-				log.Infof("Group %v contains the following users - \n%v", group, usersOfGroup)
+				log.Infof("Group [%v] contains the following users: \n%v", group, usersOfGroup)
 			}
 		})
 
-		Step("Creating bucket,backup location and cloud setting", func() {
-			log.InfoD("Creating bucket,backup location and cloud setting")
+		Step("Adding Credentials and Registering Backup Location", func() {
+			log.InfoD("Creating bucket, backup location and cloud setting")
 			for _, provider := range providers {
-				bucketName := getBucketName()
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
-				CloudCredUID = uuid.New()
-				CloudCredUidList = append(CloudCredUidList, CloudCredUID)
-				BackupLocationUID = uuid.New()
-				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				customBucketName = fmt.Sprintf("%s-%v", getBucketName()[0], time.Now().Unix())
+				CreateBucket(provider, customBucketName)
+				cloudCredUID = uuid.New()
+				CloudCredUidList = append(CloudCredUidList, cloudCredUID)
+				backupLocationUID = uuid.New()
+				CreateCloudCredential(provider, CredName, cloudCredUID, orgID)
 				time.Sleep(time.Minute * 1)
-				CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, bucketName[0], orgID)
+				CreateBackupLocation(provider, backupLocationName, backupLocationUID, CredName, cloudCredUID, customBucketName, orgID)
 			}
 		})
 
-		Step("Register cluster for backup", func() {
-			clusterStatus, clusterUid = RegisterBackupCluster(orgID, "", "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		Step("Register source and destination cluster for backup", func() {
+			CreateSourceAndDestClusters(orgID, "", "")
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster status")
 		})
 
 		Step("Taking backup of applications", func() {
+			var sem = make(chan struct{}, 10)
+			var wg sync.WaitGroup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
+					sem <- struct{}{}
+					time.Sleep(1 * time.Second)
 					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-					CreateBackup(backupName, sourceClusterName, backupLocationName, BackupLocationUID, []string{namespace},
-						labelSelectors, orgID, clusterUid, "", "", "", "")
 					backupNames = append(backupNames, backupName)
+					wg.Add(1)
+					go func(backupName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						defer func() { <-sem }()
+						CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
+							labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+					}(backupName)
 				}
+				wg.Wait()
 			}
+			log.Infof("List of backups - %v", backupNames)
 		})
 
-		Step("Sharing backup with user", func() {
+		Step("Sharing backup with groups", func() {
 			backupsToBeSharedWithEachGroup := 3
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for i, backupName := range backupNames {
 				groupIndex := i / backupsToBeSharedWithEachGroup
 				switch groupIndex {
 				case 0:
-					ShareBackup(backupName, []string{groups[groupIndex]}, nil, ViewOnlyAccess)
+					ShareBackup(backupName, []string{groups[groupIndex]}, nil, ViewOnlyAccess, ctx)
 				case 1:
-					ShareBackup(backupName, []string{groups[groupIndex]}, nil, RestoreAccess)
+					ShareBackup(backupName, []string{groups[groupIndex]}, nil, RestoreAccess, ctx)
 				case 2:
-					ShareBackup(backupName, []string{groups[groupIndex]}, nil, FullAccess)
+					ShareBackup(backupName, []string{groups[groupIndex]}, nil, FullAccess, ctx)
 				default:
-					ShareBackup(backupName, []string{groups[0]}, nil, ViewOnlyAccess)
+					ShareBackup(backupName, []string{groups[0]}, nil, ViewOnlyAccess, ctx)
 				}
 			}
 		})
+
+		Step("Share Backup with Full access to a user of View Only access group and Validate", func() {
+			//TODO: Add validation logic
+		})
+
+		Step("Share Backup with View Only access to a user of Full access group and Validate", func() {
+			//TODO: Add validation logic
+		})
+
+		Step("Share Backup with Restore access to a user of View Only access group and Validate", func() {
+			//TODO: Add validation logic
+		})
+
+		Step("Validate Restore access for a user of Restore group", func() {
+			//TODO: Add validation logic
+		})
+
+		Step("Validate that user with View Only and Restore access cannot delete the backup", func() {
+			//TODO: Add validation logic
+		})
 	})
 	JustAfterEach(func() {
-		log.Infof("Waiting for 2 minutes")
-		time.Sleep(time.Minute * 2)
-		log.Infof("Waiting done")
+		var wg sync.WaitGroup
 		defer EndTorpedoTest()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		backupDriver := Inst().Backup
 		for _, backupName := range backupNames {
-			backupUID := getBackupUID(backupName, orgID)
-			DeleteBackup(backupName, backupUID, orgID)
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			DeleteBackup(backupName, backupUID, orgID, ctx)
 		}
-		DeleteBackupLocation(backupLocationName, orgID)
-		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		DeleteBackupLocation(backupLocationName, backupLocationUID, orgID)
+		time.Sleep(time.Minute * 2)
+		DeleteCloudCredential(CredName, orgID, cloudCredUID)
 		for _, userName := range users {
-			backup.DeleteUser(userName)
+			wg.Add(1)
+			go func(userName string) {
+				defer wg.Done()
+				err := backup.DeleteUser(userName)
+				log.FailOnError(err, "Error deleting user %v", userName)
+			}(userName)
 		}
+		wg.Wait()
 		for _, groupName := range groups {
-			backup.DeleteGroup(groupName)
+			wg.Add(1)
+			go func(groupName string) {
+				defer wg.Done()
+				err := backup.DeleteGroup(groupName)
+				log.FailOnError(err, "Error deleting user %v", groupName)
+			}(groupName)
 		}
-		DeleteCluster(sourceClusterName, orgID)
+		wg.Wait()
+		DeleteCluster(SourceClusterName, orgID)
 		DeleteCluster(destinationClusterName, orgID)
+		for _, provider := range providers {
+			DeleteBucket(provider, customBucketName)
+		}
+
 	})
 })
 
@@ -515,9 +599,11 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 				SourceClusterName, namespace, backupName), func() {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
 				CreateBackup(backupName,
 					SourceClusterName, backupLocationName, BackupLocationUID,
-					[]string{namespace}, labelSelectores, orgID, "", "", "", "", "")
+					[]string{namespace}, labelSelectores, orgID, "", "", "", "", "", ctx)
 			})
 		}
 
@@ -1164,7 +1250,8 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 				clusterName := fmt.Sprintf("%s-%s", clusterName, provider)
 
 				DeleteCluster(clusterName, orgID)
-				DeleteBackupLocation(backupLocation, orgID)
+				// Need to add backup location UID for Delete Backup Location call
+				DeleteBackupLocation(backupLocation, "", orgID)
 				DeleteCloudCredential(CredName, orgID, CloudCredUID)
 				DeleteBucket(provider, bucketName)
 			}
@@ -1248,8 +1335,10 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			BackupName := fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespace)
 
 			Step(fmt.Sprintf("Create Backup [%s]", BackupName), func() {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
 				CreateBackup(BackupName, SourceClusterName, backupLocationName, BackupLocationUID,
-					[]string{bkpNamespace}, labelSelectors, OrgID, "", "", "", "", "")
+					[]string{bkpNamespace}, labelSelectors, OrgID, "", "", "", "", "", ctx)
 			})
 
 			triggerFn := func() (bool, error) {
@@ -2174,9 +2263,8 @@ func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string
 // CreateBackup creates backup
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string) {
+	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) {
 
-	var bkp *api.BackupObject
 	var bkpUid string
 	backupDriver := Inst().Backup
 	bkpCreateRequest := &api.BackupCreateRequest{
@@ -2204,29 +2292,36 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 			Uid:  postRuleUid,
 		},
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
-	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
-	log.FailOnError(err, "Taking backup of applications")
+	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	log.FailOnError(err, "Failed to take backup with request -\n%v", bkpCreateRequest)
 
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	for _, bkp = range curBackups.GetBackups() {
-		if bkp.Name == backupName {
-			bkpUid = bkp.Uid
-			break
+	backupSuccessCheck := func() bool {
+		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  backupName,
+			Uid:   bkpUid,
+			OrgId: orgID,
 		}
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
+		actual := resp.GetBackup().GetStatus().Status
+		expected := api.BackupInfo_StatusInfo_Success
+		return actual == expected
 	}
+
+	Waiter(backupSuccessCheck, "Backup Success Check for "+backupName, 10, 1, time.Minute)
+
+	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+	log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
 		Uid:   bkpUid,
 		OrgId: orgID,
 	}
-	time.Sleep(time.Minute * 2)
 	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 	log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
-	dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup taken")
+	dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup success for - "+resp.GetBackup().GetName())
 }
 
 type BackupAccess int32
@@ -2237,18 +2332,14 @@ const (
 	FullAccess                  = 3
 )
 
-func ShareBackup(backupName string, groupNames []string, userNames []string, accessLevel BackupAccess) {
-	//var bkp *api.BackupObject
-	var bkp_uid string
+func ShareBackup(backupName string, groupNames []string, userNames []string, accessLevel BackupAccess, ctx context.Context) {
+	var bkpUid string
 	backupDriver := Inst().Backup
 	groupIDs := make([]string, 0)
 	userIDs := make([]string, 0)
 
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
-
-	bkp_uid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-	log.Infof("Backup UID for %s - %s", backupName, bkp_uid)
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	log.Infof("Backup UID for %s - %s", backupName, bkpUid)
 
 	for _, groupName := range groupNames {
 		groupID, err := backup.FetchIDOfGroup(groupName)
@@ -2289,7 +2380,7 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 			Groups:        groupBackupShareAccessConfigs,
 			Collaborators: userBackupShareAccessConfigs,
 		},
-		Uid: bkp_uid,
+		Uid: bkpUid,
 	}
 
 	_, err = backupDriver.UpdateBackupShare(ctx, shareBackupRequest)
@@ -2401,7 +2492,9 @@ func CreateRestore(restoreName string, backupName string,
 func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	for _, backupName := range backups {
 		backupUID := getBackupUID(backupName, OrgID)
-		DeleteBackup(backupName, backupUID, OrgID)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		DeleteBackup(backupName, backupUID, OrgID, ctx)
 	}
 	for _, restoreName := range restores {
 		DeleteRestore(restoreName, OrgID)
@@ -2409,7 +2502,8 @@ func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	provider := GetProvider()
 	DeleteCluster(destinationClusterName, OrgID)
 	DeleteCluster(SourceClusterName, OrgID)
-	DeleteBackupLocation(backupLocationName, OrgID)
+	// Need to add backup location UID for Delete Backup Location call
+	DeleteBackupLocation(backupLocationName, "", OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }

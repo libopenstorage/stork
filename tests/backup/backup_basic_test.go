@@ -1,17 +1,17 @@
 package tests
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
-	"strings"
-	"fmt"
 
-	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
 
