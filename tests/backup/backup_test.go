@@ -1992,7 +1992,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 	})
 }*/
 
-func generate_encryption_key() string {
+func generateEncryptionKey() string {
 	var lower = []byte("abcdefghijklmnopqrstuvwxyz")
 	var upper = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	var number = []byte("0123456789")
@@ -2025,28 +2025,26 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var contexts []*scheduler.Context
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
-	var backup_location_name string
+	var backupLocationName string
 	var CloudCredUID string
-	var cluster_uid string
+	var clusterUid string
 	var CredName string
-	var restorename string
-	var cluster_status api.ClusterInfo_StatusInfo_Status
-	providers := getProviders()
-	bucket_name := getBucketName()
+	var restoreName string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	JustBeforeEach(func() {
-		log.Infof("No pre-setup required for this testcase")
 		StartTorpedoTest("Backup: BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 0)
 	})
-	It("Creating backup location and cloud setting", func() {
-		log.InfoD("Creating bucket,backup location and cloud setting")
+	It("Creating cloud account and backup location", func() {
+		log.InfoD("Creating cloud account and backup location")
+		providers := getProviders()
+		bucketName := getBucketName()
 		CredName = fmt.Sprintf("%s-%s", "cred", providers[0])
-		backup_location_name = fmt.Sprintf("%s-%s", "location", providers[0])
+		backupLocationName = fmt.Sprintf("%s-%s", "location", providers[0])
 		CloudCredUID = uuid.New()
 		BackupLocationUID = uuid.New()
-		encryptionkey := generate_encryption_key()
+		encryptionKey := generateEncryptionKey()
 		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
-		time.Sleep(time.Minute * 1)
-		CreateBackupLocation(providers[0], backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucket_name[0], orgID, encryptionkey)
+		CreateBackupLocation(providers[0], backupLocationName, BackupLocationUID, CredName, CloudCredUID, bucketName[0], orgID, encryptionKey)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2061,38 +2059,37 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		}
 
 		Step("Register cluster for backup", func() {
-			cluster_status, cluster_uid = RegisterBackupCluster(orgID, "", "")
-			dash.VerifyFatal(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			clusterStatus, clusterUid = RegisterBackupCluster(orgID, "", "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
 
 		Step("Taking backup of applications", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
-					nil, orgID, cluster_uid, "", "", "", "")
+				CreateBackup(backupName, sourceClusterName, backupLocationName, BackupLocationUID, []string{namespace},
+					nil, orgID, clusterUid, "", "", "", "")
 			}
 		})
 
 		Step("Restoring the backed up application", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				restorename = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
-				CreateRestore(restorename, backupName, nil, destinationClusterName, orgID)
+				restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+				CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID)
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		log.Infof("Cleanup started")
-		DeleteRestore(restorename, orgID)
+		log.Infof("Deleting backup, restore and backup location, cloud account")
+		DeleteRestore(restoreName, orgID)
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 			backupUID := getBackupUID(orgID, backupName)
 			DeleteBackup(backupName, backupUID, orgID)
 		}
-		DeleteBackupLocation(backup_location_name, orgID)
+		DeleteBackupLocation(backupLocationName, orgID)
 		DeleteCloudCredential(CredName, orgID, CloudCredUID)
-		log.Infof("Cleanup done")
 	})
 
 })

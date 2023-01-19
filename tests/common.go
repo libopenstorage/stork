@@ -2953,7 +2953,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	//credCtx, err := backup.GetAdminCtxFromSecret()
 	//obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	//encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
