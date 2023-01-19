@@ -755,7 +755,7 @@ func (k *kdmp) StartRestore(
 		}
 		volBackup.Spec.Repository = fmt.Sprintf("%s/%s-%s/", prefixRepo, volumeInfo.SourceNamespace, bkpvInfo.PersistentVolumeClaim)
 		volBackup.Status.SnapshotID = bkpvInfo.BackupID
-		if _, err := kdmpShedOps.Instance().CreateVolumeBackup(volBackup); err != nil {
+		if _, err := kdmpShedOps.Instance().CreateVolumeBackup(volBackup); err != nil && !k8serror.IsAlreadyExists(err) {
 			logrus.Errorf("unable to create volumebackup CR: %v", err)
 			return nil, err
 		}
@@ -806,7 +806,7 @@ func (k *kdmp) StartRestore(
 			APIVersion: "v1",
 		}
 		logrus.Tracef("%s de cr name [%v/%v]", funct, dataExport.Namespace, dataExport.Name)
-		if _, err := kdmpShedOps.Instance().CreateDataExport(dataExport); err != nil {
+		if _, err := kdmpShedOps.Instance().CreateDataExport(dataExport); err != nil && !k8serror.IsAlreadyExists(err) {
 			logrus.Errorf("failed to create DataExport CR: %v", err)
 			return volumeInfos, err
 		}
