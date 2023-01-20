@@ -1,230 +1,228 @@
 #!/bin/bash -x
 
 if [ -n "${VERBOSE}" ]; then
-    VERBOSE="--v"
+  VERBOSE="--v"
 fi
 
 if [ -z "${ENABLE_DASH}" ]; then
-    ENABLE_DASH=true
+  ENABLE_DASH=true
 fi
 
 if [ -z "${DASH_UID}" ]; then
-    if [ -e /build.properties ]; then
-      DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
-    else
-      DASH_UID="0"
-    fi
+  if [ -e /build.properties ]; then
+    DASH_UID=$(cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+')
+  else
+    DASH_UID="0"
+  fi
 fi
 
-
 if [ -z "${SCALE_FACTOR}" ]; then
-    SCALE_FACTOR="10"
+  SCALE_FACTOR="10"
 fi
 
 if [ -z "${VOLUME_PROVIDER}" ]; then
-    VOLUME_PROVIDER="none"
+  VOLUME_PROVIDER="none"
 fi
 
 if [ -z "${OBJECT_STORE_PROVIDER}" ]; then
-    OBJECT_STORE_PROVIDER="aws"
+  OBJECT_STORE_PROVIDER="aws"
 fi
 
 if [ -z "${SPEC_DIR}" ]; then
-    SPEC_DIR="../drivers/scheduler/k8s/specs"
+  SPEC_DIR="../drivers/scheduler/k8s/specs"
 fi
 
 if [ -z "${SCHEDULER}" ]; then
-    SCHEDULER="k8s"
+  SCHEDULER="k8s"
 fi
 
 if [ -z "${LOGLEVEL}" ]; then
-    LOGLEVEL="debug"
+  LOGLEVEL="debug"
 fi
 
 if [ -z "${CHAOS_LEVEL}" ]; then
-    CHAOS_LEVEL="5"
+  CHAOS_LEVEL="5"
 fi
 
 if [ -z "${MIN_RUN_TIME}" ]; then
-    MIN_RUN_TIME="0"
+  MIN_RUN_TIME="0"
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+  FAIL_FAST="--failFast"
 else
-    FAIL_FAST="-keepGoing"
+  FAIL_FAST="-keepGoing"
 fi
 
 SKIP_ARG=""
 if [ -n "$SKIP_TESTS" ]; then
-    skipRegex=$(echo $SKIP_TESTS | sed -e 's/,/}|{/g')
-    SKIP_ARG="--skip={$skipRegex}"
+  skipRegex=$(echo $SKIP_TESTS | sed -e 's/,/}|{/g')
+  SKIP_ARG="--skip={$skipRegex}"
 fi
 
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
-    focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
-    FOCUS_ARG="--focus={$focusRegex}"
+  focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
+  FOCUS_ARG="--ginkgo.focus=$focusRegex"
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then
-    UPGRADE_ENDPOINT_URL=""
+  UPGRADE_ENDPOINT_URL=""
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_VERSION}" ]; then
-    UPGRADE_ENDPOINT_VERSION=""
+  UPGRADE_ENDPOINT_VERSION=""
 fi
 
 if [ -z "${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" ]; then
-    UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
+  UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
 fi
 
 if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
-    ENABLE_STORK_UPGRADE=false
+  ENABLE_STORK_UPGRADE=false
 fi
 
 if [ -z "${IS_PURE_VOLUMES}" ]; then
-    IS_PURE_VOLUMES=false
+  IS_PURE_VOLUMES=false
 fi
 
 if [ -z "${PURE_FA_CLONE_MANY_TEST}" ]; then
-    PURE_FA_CLONE_MANY_TEST=false
+  PURE_FA_CLONE_MANY_TEST=false
 fi
 
 if [ -z "${PURE_SAN_TYPE}" ]; then
-    PURE_SAN_TYPE=ISCSI
+  PURE_SAN_TYPE=ISCSI
 fi
 
 if [ -n "${PROVISIONER}" ]; then
-    PROVISIONER="$PROVISIONER"
+  PROVISIONER="$PROVISIONER"
 fi
 
 if [ -z "${STORAGE_DRIVER}" ]; then
-    STORAGE_DRIVER="pxd"
+  STORAGE_DRIVER="pxd"
 fi
 
 if [ -z "${MAX_STORAGE_NODES_PER_AZ}" ]; then
-    MAX_STORAGE_NODES_PER_AZ="2"
+  MAX_STORAGE_NODES_PER_AZ="2"
 fi
 
 if [ -z "${PROVISIONER}" ]; then
-    PROVISIONER="portworx"
+  PROVISIONER="portworx"
 fi
 
 if [ -z "${IS_HYPER_CONVERGED}" ]; then
-    IS_HYPER_CONVERGED=true
+  IS_HYPER_CONVERGED=true
 fi
 
 CONFIGMAP=""
 if [ -n "${CONFIG_MAP}" ]; then
-    CONFIGMAP="${CONFIG_MAP}"
+  CONFIGMAP="${CONFIG_MAP}"
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
-    TORPEDO_IMG="portworx/torpedo:latest"
-    echo "Using default torpedo image: ${TORPEDO_IMG}"
+  TORPEDO_IMG="portworx/torpedo:latest"
+  echo "Using default torpedo image: ${TORPEDO_IMG}"
 fi
 
 if [ -z "${TIMEOUT}" ]; then
-    TIMEOUT="720h0m0s"
-    echo "Using default timeout of ${TIMEOUT}"
+  TIMEOUT="720h0m0s"
+  echo "Using default timeout of ${TIMEOUT}"
 fi
 
 if [ -z "$DRIVER_START_TIMEOUT" ]; then
-    DRIVER_START_TIMEOUT="10m0s"
-    echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
+  DRIVER_START_TIMEOUT="10m0s"
+  echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
 fi
 
 if [ -z "$SECRET_TYPE" ]; then
-    SECRET_TYPE="k8s"
-    echo "Using default secret type of ${SECRET_TYPE}"
+  SECRET_TYPE="k8s"
+  echo "Using default secret type of ${SECRET_TYPE}"
 fi
 
 APP_DESTROY_TIMEOUT_ARG=""
 if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
-    APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
+  APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
 fi
 
 if [ -z "$LICENSE_EXPIRY_TIMEOUT_HOURS" ]; then
-    LICENSE_EXPIRY_TIMEOUT_HOURS="1h0m0s"
-    echo "Using default license expiry timeout of ${LICENSE_EXPIRY_TIMEOUT_HOURS}"
+  LICENSE_EXPIRY_TIMEOUT_HOURS="1h0m0s"
+  echo "Using default license expiry timeout of ${LICENSE_EXPIRY_TIMEOUT_HOURS}"
 fi
 
 if [ -z "$METERING_INTERVAL_MINS" ]; then
-    METERING_INTERVAL_MINS="10m0s"
-    echo "Using default metering of ${METERING_INTERVAL_MINS}"
+  METERING_INTERVAL_MINS="10m0s"
+  echo "Using default metering of ${METERING_INTERVAL_MINS}"
 fi
 
 if [ -z "$STORAGENODE_RECOVERY_TIMEOUT" ]; then
-    STORAGENODE_RECOVERY_TIMEOUT="35m0s"
-    echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
+  STORAGENODE_RECOVERY_TIMEOUT="35m0s"
+  echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
 fi
 
 AZURE_TENANTID=""
 if [ -n "$AZURE_TENANT_ID" ]; then
-    AZURE_TENANTID="${AZURE_TENANT_ID}"
+  AZURE_TENANTID="${AZURE_TENANT_ID}"
 fi
 
 AZURE_CLIENTID=""
 if [ -n "$AZURE_CLIENT_ID" ]; then
-    AZURE_CLIENTID="${AZURE_CLIENT_ID}"
+  AZURE_CLIENTID="${AZURE_CLIENT_ID}"
 fi
 
 AZURE_CLIENTSECRET=""
 if [ -n "$AZURE_CLIENT_SECRET" ]; then
-    AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
+  AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
 CSI_GENERIC_CONFIGMAP=""
 if [ -n "${CSI_GENERIC_DRIVER_CONFIGMAP}" ]; then
-    CSI_GENERIC_CONFIGMAP="${CSI_GENERIC_DRIVER_CONFIGMAP}"
+  CSI_GENERIC_CONFIGMAP="${CSI_GENERIC_DRIVER_CONFIGMAP}"
 fi
 
 if [ -z "$AWS_REGION" ]; then
-    AWS_REGION="us-east-1"
-    echo "Using default AWS_REGION of ${AWS_REGION}"
+  AWS_REGION="us-east-1"
+  echo "Using default AWS_REGION of ${AWS_REGION}"
 fi
 
 if [ -z "$TORPEDO_JOB_TYPE"]; then
-    TORPEDO_JOB_TYPE="functional"
+  TORPEDO_JOB_TYPE="functional"
 fi
 
 if [ -z "$TORPEDO_JOB_NAME"]; then
-    TORPEDO_JOB_NAME="torpedo-daily-job"
+  TORPEDO_JOB_NAME="torpedo-daily-job"
 fi
 
-for i in $@
-do
-case $i in
-	--backup-driver)
-	BACKUP_DRIVER=$2
-	shift
-	shift
-	;;
-esac
+for i in $@; do
+  case $i in
+  --backup-driver)
+    BACKUP_DRIVER=$2
+    shift
+    shift
+    ;;
+  esac
 done
 
 echo "checking if we need to override test suite: ${TEST_SUITE}"
 
 if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]]; then
-    TEST_SUITE='"bin/basic.test"'
+  TEST_SUITE='"bin/basic.test"'
 fi
 
 echo "Using test suite: ${TEST_SUITE}"
 
 if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
-    AUTOPILOT_UPGRADE_VERSION=""
+  AUTOPILOT_UPGRADE_VERSION=""
 fi
 
 kubectl delete secret torpedo
 kubectl delete pod torpedo
-state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
 timeout=0
 while [ "$state" == "Terminating" -a $timeout -le 600 ]; do
   echo "Terminating torpedo..."
   sleep 1
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
-  timeout=$[$timeout+1]
+  state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+  timeout=$(($timeout + 1))
 done
 
 if [ $timeout -gt 600 ]; then
@@ -236,24 +234,24 @@ TORPEDO_CUSTOM_PARAM_VOLUME=""
 TORPEDO_CUSTOM_PARAM_MOUNT=""
 CUSTOM_APP_CONFIG_PATH=""
 if [ -n "${CUSTOM_APP_CONFIG}" ]; then
-    kubectl create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
-    CUSTOM_APP_CONFIG_PATH="/mnt/torpedo/custom_app_config.yml"
-    TORPEDO_CUSTOM_PARAM_VOLUME="{ \"name\": \"custom-app-config-volume\", \"configMap\": { \"name\": \"custom-app-config\", \"items\": [{\"key\": \"custom_app_config.yml\", \"path\": \"custom_app_config.yml\"}] } }"
-    TORPEDO_CUSTOM_PARAM_MOUNT="{ \"name\": \"custom-app-config-volume\", \"mountPath\": \"${CUSTOM_APP_CONFIG_PATH}\", \"subPath\": \"custom_app_config.yml\" }"
+  kubectl create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
+  CUSTOM_APP_CONFIG_PATH="/mnt/torpedo/custom_app_config.yml"
+  TORPEDO_CUSTOM_PARAM_VOLUME="{ \"name\": \"custom-app-config-volume\", \"configMap\": { \"name\": \"custom-app-config\", \"items\": [{\"key\": \"custom_app_config.yml\", \"path\": \"custom_app_config.yml\"}] } }"
+  TORPEDO_CUSTOM_PARAM_MOUNT="{ \"name\": \"custom-app-config-volume\", \"mountPath\": \"${CUSTOM_APP_CONFIG_PATH}\", \"subPath\": \"custom_app_config.yml\" }"
 fi
 
 TORPEDO_SSH_KEY_VOLUME=""
 TORPEDO_SSH_KEY_MOUNT=""
 if [ -n "${TORPEDO_SSH_KEY}" ]; then
-    kubectl create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
-    TORPEDO_SSH_KEY_VOLUME="{ \"name\": \"ssh-key-volume\", \"secret\": { \"secretName\": \"key4torpedo\", \"defaultMode\": 256 }}"
-    TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
+  kubectl create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
+  TORPEDO_SSH_KEY_VOLUME="{ \"name\": \"ssh-key-volume\", \"secret\": { \"secretName\": \"key4torpedo\", \"defaultMode\": 256 }}"
+  TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
 
 ORACLE_API_KEY_VOLUME=""
 if [ -n "${ORACLE_API_KEY}" ]; then
-    ORACLE_API_KEY_VOLUME="{ \"name\": \"oracle-api-key-volume\", \"secret\": { \"secretName\": \"key4oracle\", \"defaultMode\": 256 }}"
-    ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
+  ORACLE_API_KEY_VOLUME="{ \"name\": \"oracle-api-key-volume\", \"secret\": { \"secretName\": \"key4oracle\", \"defaultMode\": 256 }}"
+  ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
 fi
 
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
@@ -271,44 +269,44 @@ fi
 
 if [ -n "${PROVIDERS}" ]; then
   echo "Create configs for providers",${PROVIDERS}
-  for i in ${PROVIDERS//,/ };do
-     if [ "${i}" == "aws" ]; then
+  for i in ${PROVIDERS//,/ }; do
+    if [ "${i}" == "aws" ]; then
       VOLUMES="${VOLUMES},${AWS_VOLUME}"
       VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
-     fi
+    fi
   done
 fi
 
 if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
-    VOLUMES="${VOLUMES},${TORPEDO_SSH_KEY_VOLUME}"
+  VOLUMES="${VOLUMES},${TORPEDO_SSH_KEY_VOLUME}"
 fi
 
 VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
 
 if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
-    VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
+  VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
 fi
 
 if [ -n "${ORACLE_API_KEY_MOUNT}" ]; then
-    VOLUME_MOUNTS="${VOLUME_MOUNTS},${ORACLE_API_KEY_MOUNT}"
+  VOLUME_MOUNTS="${VOLUME_MOUNTS},${ORACLE_API_KEY_MOUNT}"
 fi
 
 if [ -n "${ORACLE_API_KEY_VOLUME}" ]; then
-    VOLUMES="${VOLUMES},${ORACLE_API_KEY_VOLUME}"
+  VOLUMES="${VOLUMES},${ORACLE_API_KEY_VOLUME}"
 fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_VOLUME}" ]; then
-    VOLUMES="${VOLUMES},${TORPEDO_CUSTOM_PARAM_VOLUME}"
+  VOLUMES="${VOLUMES},${TORPEDO_CUSTOM_PARAM_VOLUME}"
 fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
-    VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
+  VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
 fi
 
 BUSYBOX_IMG="busybox"
 if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
-    BUSYBOX_IMG="${INTERNAL_DOCKER_REGISTRY}/busybox"
-    TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
+  BUSYBOX_IMG="${INTERNAL_DOCKER_REGISTRY}/busybox"
+  TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
@@ -316,36 +314,36 @@ FROM_FILE=""
 CLUSTER_CONFIGS=""
 echo "Create kubeconfig configmap",${KUBECONFIGS}
 if [ -n "${KUBECONFIGS}" ]; then
-  for i in ${KUBECONFIGS//,/ };do
-     FROM_FILE="${FROM_FILE} --from-file=${i}"
-     if [[ -z ${CLUSTER_CONFIGS} ]]; then
-       CLUSTER_CONFIGS="`basename ${i}`"
-     else
-       CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
-     fi
+  for i in ${KUBECONFIGS//,/ }; do
+    FROM_FILE="${FROM_FILE} --from-file=${i}"
+    if [[ -z ${CLUSTER_CONFIGS} ]]; then
+      CLUSTER_CONFIGS="$(basename ${i})"
+    else
+      CLUSTER_CONFIGS="${CLUSTER_CONFIGS},$(basename ${i})"
+    fi
   done
   kubectl create configmap kubeconfigs ${FROM_FILE}
 fi
 
 K8S_VENDOR_KEY=""
 if [ -z "${NODE_DRIVER}" ]; then
-    NODE_DRIVER="ssh"
+  NODE_DRIVER="ssh"
 fi
 if [ -n "${K8S_VENDOR}" ]; then
-    case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
-        aks)
-            NODE_DRIVER="aks"
-            ;;
-        oracle)
-            NODE_DRIVER="oracle"
-            ;;
-    esac
+  case "$K8S_VENDOR" in
+  gke)
+    NODE_DRIVER="gke"
+    ;;
+  aks)
+    NODE_DRIVER="aks"
+    ;;
+  oracle)
+    NODE_DRIVER="oracle"
+    ;;
+  esac
 fi
 
-cat > torpedo.yaml <<EOF
+cat >torpedo.yaml <<EOF
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -619,7 +617,7 @@ if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE
   echo "Adding Docker registry secret ..."
   auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
   secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
-  cat >> torpedo.yaml <<EOF
+  cat >>torpedo.yaml <<EOF
 ---
 apiVersion: v1
 kind: Secret
@@ -646,9 +644,9 @@ function describe_pod_then_exit {
   exit 1
 }
 
-for i in $(seq 1 900) ; do
+for i in $(seq 1 900); do
   printf .
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+  state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
   if [ "$state" == "Error" ]; then
     echo "Error: Torpedo finished with $state state"
     describe_pod_then_exit
