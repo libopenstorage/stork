@@ -198,6 +198,9 @@ type Backup interface {
 
 	// GetBackupUID returns uid of the given backup in an organization
 	GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error)
+
+	// UpdateBackupShare updates backupshare of existing backup object
+	UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error)
 }
 
 // Restore object interface

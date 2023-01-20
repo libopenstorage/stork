@@ -126,7 +126,7 @@ const (
 	k8sNodeReadyTimeout    = 5 * time.Minute
 	volDirCleanupTimeout   = 5 * time.Minute
 	k8sObjectCreateTimeout = 2 * time.Minute
-	k8sPodCreateTimeout = 4 * time.Minute
+	k8sPodCreateTimeout    = 4 * time.Minute
 	k8sDestroyTimeout      = 5 * time.Minute
 	// FindFilesOnWorkerTimeout timeout for find files on worker
 	FindFilesOnWorkerTimeout = 1 * time.Minute
@@ -3708,7 +3708,7 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			// Dump service status
 			svcStatusString := "nil"
 			if svcStatus != nil {
-				svcStatusString = fmt.Sprintf("%+v", *svcStatus)	
+				svcStatusString = fmt.Sprintf("%+v", *svcStatus)
 			}
 			buf.WriteString(fmt.Sprintf("Status: %s\n", svcStatusString))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Service", obj.Name)))
@@ -3725,7 +3725,7 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			// Dump persistent volume claim status
 			pvcStatusString := "nil"
 			if pvcStatus != nil {
-				pvcStatusString = fmt.Sprintf("%+v", *pvcStatus)	
+				pvcStatusString = fmt.Sprintf("%+v", *pvcStatus)
 			}
 			buf.WriteString(fmt.Sprintf("Status: %s\n", pvcStatusString))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "PersistentVolumeClaim", obj.Name)))

@@ -385,6 +385,10 @@ func (p *portworx) DeleteBackup(ctx context.Context, req *api.BackupDeleteReques
 	return p.backupManager.Delete(ctx, req)
 }
 
+func (p *portworx) UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error) {
+	return p.backupManager.UpdateBackupShare(ctx, req)
+}
+
 // GetVolumeBackupIDs returns backup IDs of volumes
 func (p *portworx) GetVolumeBackupIDs(
 	ctx context.Context,
@@ -1072,16 +1076,14 @@ func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnersh
 	return p.ruleManager.UpdateOwnership(ctx, req)
 }
 
-func (p *portworx) GetBackupUID(ctx context.Context, orgID, backupName string) (string, error) {
+func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {
 	var backupUID string
 	var totalBackups int
 	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
 	for {
 		enumerateRsp, err := p.EnumerateBackup(ctx, bkpEnumerateReq)
-		if err != nil {
-			return backupUID, fmt.Errorf("Failed to enumerate backups for org %s ctx: [%v]", orgID, err)
-		}
+		log.FailOnError(err, "Failed to enumerate backups for org %s ctx: [%v]\n Backup enumerate request: [%v]", orgID, err, bkpEnumerateReq)
 		for _, backup := range enumerateRsp.GetBackups() {
 			if backup.GetName() == backupName {
 				return backup.GetUid(), nil

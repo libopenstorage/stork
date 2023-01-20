@@ -302,7 +302,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
 }
 
-//ValidateNamespaces validates the namespace is available for pds
+// ValidateNamespaces validates the namespace is available for pds
 func ValidateNamespaces(deploymentTargetID string, ns string, status string) error {
 	isavailable = false
 	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
@@ -325,13 +325,13 @@ func ValidateNamespaces(deploymentTargetID string, ns string, status string) err
 	return waitErr
 }
 
-//DeletePDSNamespace deletes the given namespace
+// DeletePDSNamespace deletes the given namespace
 func DeletePDSNamespace(namespace string) error {
 	err := k8sCore.DeleteNamespace(namespace)
 	return err
 }
 
-//UpdatePDSNamespce updates the namespace
+// UpdatePDSNamespce updates the namespace
 func UpdatePDSNamespce(name string, nsLables map[string]string) (*corev1.Namespace, error) {
 	nsSpec := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
@@ -1756,13 +1756,13 @@ func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
 
 }
 
-//DeleteK8sPDSNamespace deletes the pdsnamespace
+// DeleteK8sPDSNamespace deletes the pdsnamespace
 func DeleteK8sPDSNamespace(nname string) error {
 	err := k8sCore.DeleteNamespace(nname)
 	return err
 }
 
-//GetPDSAgentPods returns the pds agent pod
+// GetPDSAgentPods returns the pds agent pod
 func GetPDSAgentPods(pdsNamespace string) corev1.Pod {
 	log.InfoD("Get agent pod from %v namespace", pdsNamespace)
 	podList, err := GetPods(pdsNamespace)
