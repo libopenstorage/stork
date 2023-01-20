@@ -207,7 +207,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				BackupLocationUID = uuid.New()
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
 				time.Sleep(time.Minute * 1)
-				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID, "")
+				CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID, "")
 			}
 		})
 		Step("Creating backup schedule policies", func() {
@@ -2059,20 +2059,24 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			}
 		}
 
-		Step("Register cluster for backup", func() {
-			clusterStatus, clusterUid = RegisterBackupCluster(orgID, "", "")
+		Step("Register clusters for backup", func() {
+			log.InfoD("Register clusters for backup")
+			CreateSourceAndDestClusters(orgID, "", "")
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
 
 		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				CreateBackup(backupName, sourceClusterName, backupLocationName, BackupLocationUID, []string{namespace},
+				CreateBackup(backupName, SourceClusterName, backupLocationName, BackupLocationUID, []string{namespace},
 					nil, orgID, clusterUid, "", "", "", "")
 			}
 		})
 
 		Step("Restoring the backed up application", func() {
+			log.InfoD("Restoring the backed up application")
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
