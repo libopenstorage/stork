@@ -1479,6 +1479,7 @@ func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volu
 				return nil, true, err
 			}
 			for _, vol := range vols {
+				fmt.Printf("vol id is %s\n", vol.ID)
 				appVol, err := Inst().V.InspectVolume(vol.ID)
 				if err != nil {
 					return nil, true, err
@@ -1493,7 +1494,7 @@ func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volu
 		}
 		return nil, true, fmt.Errorf("error getting volume with size atleast %d GiB used", size)
 	}
-	_, err := task.DoRetryWithTimeout(f, 15*time.Minute, retryTimeout)
+	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, retryTimeout)
 	return volSelected, err
 }
 
