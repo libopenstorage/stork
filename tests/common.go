@@ -4865,3 +4865,31 @@ func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
 	}
 	return node.Node{}
 }
+
+// GetPoolIDsFromVolName returns list of pool IDs associated with a given volume name
+func GetPoolIDsFromVolName(volName string) ([]string, error) {
+	var poolUuids []string
+	volDetails, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+	for _, each := range volDetails.ReplicaSets {
+		for _, uuids := range each.PoolUuids {
+			if len(poolUuids) == 0 {
+				poolUuids = append(poolUuids, uuids)
+			} else {
+				isPresent := false
+				for i := 0; i < len(poolUuids); i++ {
+					if uuids == poolUuids[i] {
+						isPresent = true
+					}
+				}
+				if isPresent == false {
+					poolUuids = append(poolUuids, uuids)
+				}
+			}
+		}
+
+	}
+	return poolUuids, err
+}
