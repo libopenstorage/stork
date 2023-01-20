@@ -74,9 +74,9 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	StartTorpedoTest("Cleanup buckets", "Removing buckets", nil, 0)
-	defer EndTorpedoTest()
+	StartTorpedoTest("CleanupBuckets", "Removing buckets", nil, 0)
 	defer dash.TestSetEnd()
+	defer EndTorpedoTest()
 	// Cleanup all bucket after suite
 	providers := getProviders()
 	bucketNames := getBucketName()
