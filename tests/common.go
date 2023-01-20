@@ -4862,23 +4862,3 @@ func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
 	}
 	return node.Node{}
 }
-
-func Waiter(task func() bool, taskDescription string, timeoutPeriod int, intervalPeriod int, timeUnit time.Duration) {
-	timeout := time.After(time.Duration(timeoutPeriod) * timeUnit)
-	interval := time.Tick(time.Duration(intervalPeriod) * timeUnit)
-	for {
-		select {
-		case <-timeout:
-			log.Infof("[%s] timed out after waiting for %s", taskDescription, time.Duration(timeoutPeriod)*timeUnit)
-			return
-		case <-interval:
-			start := time.Now()
-			if task() {
-				log.Infof("[%s] completed in %v", taskDescription, time.Since(start))
-				return
-			} else {
-				log.Infof("Waiting %s for [%s] to complete", time.Duration(intervalPeriod)*timeUnit, taskDescription)
-			}
-		}
-	}
-}
