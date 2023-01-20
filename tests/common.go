@@ -3656,7 +3656,7 @@ func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
 		switch provider {
 		case drivers.ProviderAws:
-			CreateS3Bucket(bucketName)
+			CreateS3Bucket(bucketName, false, 0, "")
 		case drivers.ProviderAzure:
 			CreateAzureBucket(bucketName)
 		}
@@ -3664,7 +3664,7 @@ func CreateBucket(provider string, bucketName string) {
 }
 
 // CreateS3Bucket creates bucket in S3
-func CreateS3Bucket(bucketName string) {
+func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objectLockMode string) error {
 	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -3679,9 +3679,18 @@ func CreateS3Bucket(bucketName string) {
 
 	S3Client := s3.New(sess)
 
-	_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
-	})
+	if retainCount > 0 && objectLock == true {
+		// Create object locked bucket
+		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(bucketName),
+			ObjectLockEnabledForBucket: aws.Bool(true),
+		})
+	}else {
+		// Create standard bucket
+		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	}
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to create bucket [%v]. Error: [%v]", bucketName, err))
 
@@ -3690,6 +3699,21 @@ func CreateS3Bucket(bucketName string) {
 	})
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
+
+	if retainCount > 0 && objectLock == true {
+		// Update ObjectLockConfigureation to bucket
+		enabled := "Enabled"
+		_, err = S3Client.PutObjectLockConfiguration(&s3.PutObjectLockConfigurationInput{
+			Bucket: aws.String(bucketName),
+			ObjectLockConfiguration: &s3.ObjectLockConfiguration{
+				ObjectLockEnabled: aws.String(enabled),
+				Rule: &s3.ObjectLockRule{
+					DefaultRetention: &s3.DefaultRetention{
+							Days: aws.Int64(retainCount),
+							Mode: aws.String(objectLockMode)}}}})
+		err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+	}
+	return err
 }
 
 // CreateAzureBucket creates bucket in Azure
