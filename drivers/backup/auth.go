@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -1085,4 +1086,25 @@ func processHTTPRequest(
 	}()
 
 	return ioutil.ReadAll(httpResponse.Body)
+}
+
+func GetNonAdminCtx(username, password string) (context.Context, error) {
+	token, err := GetToken(username, password)
+	if err != nil {
+		return nil, err
+	}
+	ctx := GetCtxWithToken(token)
+	return ctx, nil
+}
+
+func GetRandomUserFromGroup(groupName string) (string, error) {
+	fn := "GetRandomUserFromGroup"
+	users, err := GetMembersOfGroup(groupName)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return "", err
+	}
+	rand.Seed(time.Now().Unix())
+	userName := users[rand.Intn(len(users))]
+	return userName, nil
 }

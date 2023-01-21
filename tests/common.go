@@ -206,6 +206,7 @@ const (
 // Backup constants
 const (
 	BackupNamePrefix                  = "tp-backup"
+	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -2662,7 +2663,7 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 }
 
 // DeleteRestore creates restore
-func DeleteRestore(restoreName string, orgID string) {
+func DeleteRestore(restoreName string, orgID string, ctx context1.Context) {
 
 	Step(fmt.Sprintf("Delete restore [%s] in org [%s]",
 		restoreName, orgID), func() {
@@ -2675,15 +2676,9 @@ func DeleteRestore(restoreName string, orgID string) {
 			OrgId: orgID,
 			Name:  restoreName,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.DeleteRestore(ctx, deleteRestoreReq)
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to delete restore [%s] in org [%s]. Error: [%v]",
-				restoreName, orgID, err))
+		_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
+		log.FailOnError(err, "Failed to delete restore [%s] in org [%s]",
+			restoreName, orgID)
 		// TODO: validate createClusterResponse also
 	})
 }
@@ -2704,11 +2699,15 @@ func SetupBackup(testName string) {
 	CreateOrganization(OrgID)
 	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
 	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
-	CreateSourceAndDestClusters(OrgID, "", "")
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+	CreateSourceAndDestClusters(OrgID, "", "", ctx)
 }
 
 // DeleteBackup deletes backup
-func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) {
+func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
+	var err error
+	var backupDeleteResponse *api.BackupDeleteResponse
 
 	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
 		backupName, orgID), func() {
@@ -2718,17 +2717,17 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 			OrgId: orgID,
 			Uid:   backupUID,
 		}
-		_, err := backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
-		log.FailOnError(err, "Failed to delete backup with request - %c", bkpDeleteRequest)
+		backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 		// Best effort cleanup, dont fail test, if deletion fails
 		//expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
 		// TODO: validate createClusterResponse also
 	})
+	return backupDeleteResponse, err
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
-func DeleteCluster(name string, orgID string) {
+func DeleteCluster(name string, orgID string, ctx context1.Context) {
 
 	Step(fmt.Sprintf("Delete cluster [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
@@ -2772,7 +2771,7 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string) {
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
+func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ctx context1.Context) {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -2787,14 +2786,14 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 		srcClusterConfigPath, err := GetSourceClusterConfigPath()
 		dash.VerifyFatal(err, nil, "Getting kubeconfig path for source cluster")
 		log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-		CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
+		CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid, ctx)
 	})
 	// Register destination cluster with backup driver
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", destinationClusterName, orgID), func() {
 		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 		dash.VerifyFatal(err, nil, "Getting kubeconfig path for destination cluster")
 		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
+		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid, ctx)
 	})
 }
 
@@ -2809,7 +2808,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 }
 
 // CreateCluster creates/registers cluster with px-backup
-func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string) {
+func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) {
 	var clusterCreateReq *api.ClusterCreateRequest
 
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", name, orgID), func() {
@@ -2839,8 +2838,6 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
 			}
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
@@ -3629,7 +3626,7 @@ func TearDownBackupRestoreAll() {
 	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
 	restores := enumRestoreResponse.GetRestores()
 	for _, restore := range restores {
-		DeleteRestore(restore.GetName(), OrgID)
+		DeleteRestore(restore.GetName(), OrgID, ctx)
 	}
 
 	for _, bkp := range backups {
@@ -3643,8 +3640,8 @@ func TearDownBackupRestoreAll() {
 			RetrySeconds*time.Second)
 	}
 	provider := GetProvider()
-	DeleteCluster(destinationClusterName, OrgID)
-	DeleteCluster(SourceClusterName, OrgID)
+	DeleteCluster(destinationClusterName, OrgID, ctx)
+	DeleteCluster(SourceClusterName, OrgID, ctx)
 	DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
