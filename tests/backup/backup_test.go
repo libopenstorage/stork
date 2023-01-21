@@ -2518,6 +2518,106 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 
 })
 
+var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
+	var contexts []*scheduler.Context
+	var appContexts []*scheduler.Context
+	var bkpNamespaces []string
+	var backupNames []string
+	var restoreNames []string
+	var backupLocationNames []string
+	var CloudCredUID string
+	var BackupLocationUID string
+	var BackupLocation1UID string
+	var clusterUid string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	providers := getProviders()
+	bucketNames := getBucketName()
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encypted backups", nil, 0)
+	})
+	It("Creating bucket, encrypted and non-encrypted backup location", func() {
+		log.InfoD("Creating bucket, encrypted and non-encrypted backup location")
+		bucketName = fmt.Sprintf("%s-%s", providers[0], bucketNames[0])
+		encryptionBucketName := fmt.Sprintf("%s-%s-%s", providers[0], bucketNames[0], "encryptionbucket")
+		backupLocationName := fmt.Sprintf("%s-%s", "location", providers[0])
+		backupLocationNames = append(backupLocationNames, backupLocationName)
+		backupLocationName = fmt.Sprintf("%s-%s", "encryption-location", providers[0])
+		backupLocationNames = append(backupLocationNames, backupLocationName)
+		CloudCredUID = uuid.New()
+		BackupLocationUID = uuid.New()
+		BackupLocation1UID = uuid.New()
+		encryptionkey := "px-b@ckup-@utomat!on"
+		CreateBucket(providers[0], encryptionBucketName)
+		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
+		CreateBackupLocation(providers[0], backupLocationNames[0], BackupLocationUID, CredName, CloudCredUID, bucketName, orgID, "")
+		CreateBackupLocation(providers[0], backupLocationNames[1], BackupLocation1UID, CredName, CloudCredUID, encryptionBucketName, orgID, encryptionkey)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+		Step("Register cluster for backup", func() {
+			log.InfoD("Register clusters for backup")
+			CreateSourceAndDestClusters(orgID, "", "")
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		})
+
+		Step("Taking encrypted and non-encrypted backups", func() {
+			log.InfoD("Taking encrypted and no-encrypted backups")
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupNames = append(backupNames, backupName)
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				CreateBackup(backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, []string{namespace},
+					nil, orgID, clusterUid, "", "", "", "", ctx)
+				encryptionbackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, namespace)
+				backupNames = append(backupNames, encryptionbackupName)
+				CreateBackup(encryptionbackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, []string{namespace},
+					nil, orgID, clusterUid, "", "", "", "", ctx)
+			}
+		})
+
+		Step("Restoring encrypted and no-encrypted backups", func() {
+			log.InfoD("Restoring encrypted and no-encrypted backups")
+			restorename := fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[0])
+			restoreNames = append(restoreNames, restorename)
+			CreateRestore(restorename, backupNames[0], nil, destinationClusterName, orgID)
+			time.Sleep(time.Minute * 5)
+			restorename = fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[1])
+			restoreNames = append(restoreNames, restorename)
+			CreateRestore(restorename, backupNames[1], nil, destinationClusterName, orgID)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Deleting Restores, Backups and Backuplocations, cloud account")
+		for _, restore := range restoreNames {
+			DeleteRestore(restore, orgID)
+		}
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, backupName := range backupNames {
+			backupUID := getBackupUID(backupName, orgID)
+			DeleteBackup(backupName, backupUID, orgID, ctx)
+		}
+		DeleteBackupLocation(backupLocationNames[0], BackupLocationUID, orgID)
+		DeleteBackupLocation(backupLocationNames[1], BackupLocation1UID, orgID)
+		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		encryptionBucketName := fmt.Sprintf("%s-%s-%s", providers[0], bucketNames[0], "encryptionbucket")
+		DeleteBucket(providers[0], encryptionBucketName)
+	})
+
+})
+
 // createS3BackupLocation creates backup location
 func createGkeBackupLocation(name string, cloudCred string, orgID string) {
 	Step(fmt.Sprintf("Create GKE backup location [%s] in org [%s]", name, orgID), func() {

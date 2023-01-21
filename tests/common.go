@@ -2712,7 +2712,6 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 
 	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
 		backupName, orgID), func() {
-
 		backupDriver := Inst().Backup
 		bkpDeleteRequest := &api.BackupDeleteRequest{
 			Name:  backupName,
