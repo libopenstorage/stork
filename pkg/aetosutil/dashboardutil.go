@@ -309,6 +309,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		testCase.TestRailID = testRailID
 
 		// Check for common env variables and add as tags
+		testCase.Tags["torpedo"] = "true"
 		if os.Getenv("JOB_NAME") != "" {
 			testCase.Tags["JOB_NAME"] = os.Getenv("JOB_NAME")
 		}

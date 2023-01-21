@@ -1827,11 +1827,11 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					log.Errorf("an error occurred, collecting bundle")
+					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
+					// Collect Support Bundle only once
 					CollectSupport()
-					dash.VerifySafely(file == "", true, fmt.Sprintf("Core generated on node %s, Core Path: %s", n.Name, file))
+					log.Fatalf("Core generated, please check logs for more details")
 				}
-				log.FailOnError(err, "Error occurred while checking for core on node %s", n.Name)
 			}
 		})
 	})
@@ -2712,7 +2712,6 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 
 	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
 		backupName, orgID), func() {
-
 		backupDriver := Inst().Backup
 		bkpDeleteRequest := &api.BackupDeleteRequest{
 			Name:  backupName,
@@ -3185,7 +3184,7 @@ func GetSourceClusterConfigPath() (string, error) {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
 		return "", fmt.Errorf(`Failed to get source config path.
-				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
 	log.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
@@ -3202,7 +3201,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
 		return "", fmt.Errorf(`Failed to get source config path.
-				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
 	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
@@ -3656,7 +3655,7 @@ func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
 		switch provider {
 		case drivers.ProviderAws:
-			CreateS3Bucket(bucketName)
+			CreateS3Bucket(bucketName, false, 0, "")
 		case drivers.ProviderAzure:
 			CreateAzureBucket(bucketName)
 		}
@@ -3664,7 +3663,7 @@ func CreateBucket(provider string, bucketName string) {
 }
 
 // CreateS3Bucket creates bucket in S3
-func CreateS3Bucket(bucketName string) {
+func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objectLockMode string) error {
 	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -3679,9 +3678,18 @@ func CreateS3Bucket(bucketName string) {
 
 	S3Client := s3.New(sess)
 
-	_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
-	})
+	if retainCount > 0 && objectLock == true {
+		// Create object locked bucket
+		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket:                     aws.String(bucketName),
+			ObjectLockEnabledForBucket: aws.Bool(true),
+		})
+	} else {
+		// Create standard bucket
+		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	}
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to create bucket [%v]. Error: [%v]", bucketName, err))
 
@@ -3690,6 +3698,21 @@ func CreateS3Bucket(bucketName string) {
 	})
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
+
+	if retainCount > 0 && objectLock == true {
+		// Update ObjectLockConfigureation to bucket
+		enabled := "Enabled"
+		_, err = S3Client.PutObjectLockConfiguration(&s3.PutObjectLockConfigurationInput{
+			Bucket: aws.String(bucketName),
+			ObjectLockConfiguration: &s3.ObjectLockConfiguration{
+				ObjectLockEnabled: aws.String(enabled),
+				Rule: &s3.ObjectLockRule{
+					DefaultRetention: &s3.DefaultRetention{
+						Days: aws.Int64(retainCount),
+						Mode: aws.String(objectLockMode)}}}})
+		err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+	}
+	return err
 }
 
 // CreateAzureBucket creates bucket in Azure
