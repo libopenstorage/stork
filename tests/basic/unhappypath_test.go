@@ -41,7 +41,10 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("NetworkErrorInjection", "Verify stability of the system when there is a network error", nil, testrailID)
+		tags := map[string]string{
+			"networkErrorInjection": "true",
+		}
+		StartTorpedoTest("NetworkErrorInjection", "Verify stability of the system when there is a network error", tags, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

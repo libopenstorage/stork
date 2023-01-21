@@ -28,6 +28,7 @@ var _ = Describe("{UpgradeStork}", func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["upgradeStork"] = "true"
 		StartTorpedoTest("UpgradeStork", "Validating Stork upgrade", upgradeHopsList, 0)
 		log.InfoD("Stork upgrade hops list [%s]", upgradeHopsList)
 	})
@@ -96,6 +97,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["upgradeVolumeDriver"] = "true"
 		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", upgradeHopsList, 0)
 		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
 	})
