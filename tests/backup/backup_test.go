@@ -2350,7 +2350,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 
 })
 
-var _ = Describe("{BackupRestoreWithAndWithoutEncryption}", func() {
+var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var contexts []*scheduler.Context
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
@@ -2365,10 +2365,10 @@ var _ = Describe("{BackupRestoreWithAndWithoutEncryption}", func() {
 	providers := getProviders()
 	bucketNames := getBucketName()
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRestoreWithAndWithoutEncryption", "Creating BackupLoactions with and without Encryption Keys", nil, 0)
+		StartTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encypted backups", nil, 0)
 	})
-	It("Creating bucket,backup location and cloud setting", func() {
-		log.InfoD("Creating bucket,backup location")
+	It("Creating bucket, encrypted and non-encrypted backup location", func() {
+		log.InfoD("Creating bucket, encrypted and non-encrypted backup location")
 		bucketName = fmt.Sprintf("%s-%s", providers[0], bucketNames[0])
 		encryptionBucketName := fmt.Sprintf("%s-%s-%s", providers[0], bucketNames[0], "encryptionbucket")
 		backupLocationName := fmt.Sprintf("%s-%s", "location", providers[0])
@@ -2402,7 +2402,8 @@ var _ = Describe("{BackupRestoreWithAndWithoutEncryption}", func() {
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
 
-		Step("Taking backup of applications", func() {
+		Step("Taking encrypted and non-encrypted backups", func() {
+			log.InfoD("Taking encrypted and no-encrypted backups")
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				backupNames = append(backupNames, backupName)
@@ -2417,7 +2418,8 @@ var _ = Describe("{BackupRestoreWithAndWithoutEncryption}", func() {
 			}
 		})
 
-		Step("Restoring the backed up application", func() {
+		Step("Restoring encrypted and no-encrypted backups", func() {
+			log.InfoD("Restoring encrypted and no-encrypted backups")
 			restorename := fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[0])
 			restoreNames = append(restoreNames, restorename)
 			CreateRestore(restorename, backupNames[0], nil, destinationClusterName, orgID)
@@ -2429,6 +2431,7 @@ var _ = Describe("{BackupRestoreWithAndWithoutEncryption}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		log.InfoD("Deleting Restores, Backups and Backuplocations, cloud account")
 		for _, restore := range restoreNames {
 			DeleteRestore(restore, orgID)
 		}
