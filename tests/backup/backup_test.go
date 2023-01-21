@@ -566,7 +566,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BackupAlternatingBetweenLockedAndUnlockedBucket", "Deploying backup", nil, 0)
+		StartTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBucket", "Deploying backup", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -615,14 +615,13 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			}
 		})
 
-		Step("Creating cloud credentials", func(){
+		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			for _, provider := range providers {
 				CredName := fmt.Sprintf("%s-%s", "cred", provider)
 				CloudCredUID = uuid.New()
 				CloudCredUIDMap[CloudCredUID] = CredName
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
-				time.Sleep(time.Minute * 1)
 			}
 		})
 
@@ -639,7 +638,6 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
 					BackupLocationUID = uuid.New()
 					BackupLocationMap[BackupLocationUID] = backupLocation
-					time.Sleep(time.Minute * 1)
 					CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID,
 						bucketName, orgID, "")
 				}
@@ -656,7 +654,6 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 				backupLocation = fmt.Sprintf("%s-%s-unlockedbucket", provider, bucketNames[0])
 				BackupLocationUID = uuid.New()
 				BackupLocationMap[BackupLocationUID] = backupLocation
-				time.Sleep(time.Minute * 1)
 				CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID,
 					bucketName, orgID, "")
 			}
@@ -670,7 +667,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 
 		Step("Taking backup of application to locked and unlocked bucket", func() {
 			for _, namespace := range bkpNamespaces {
-				for backupLocationUID, backupLocationName := range BackupLocationMap{
+				for backupLocationUID, backupLocationName := range BackupLocationMap {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					dash.VerifyFatal(err, nil, "Getting context")
 					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
@@ -683,9 +680,9 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			}
 		})
 		Step("Restoring the backups application", func() {
-			for _, _ = range bkpNamespaces {
-				for _, backupName := range backupList{
-					CreateRestore(fmt.Sprintf("%s-restore",backupName), backupName, nil, SourceClusterName, orgID)
+			for range bkpNamespaces {
+				for _, backupName := range backupList {
+					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID)
 				}
 			}
 		})
@@ -702,13 +699,13 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		}
 
 		log.InfoD("Deleting backup location and cloud setting")
-		for backupLocationUID, backupLocationName := range BackupLocationMap{
+		for backupLocationUID, backupLocationName := range BackupLocationMap {
 			DeleteBackupLocation(backupLocationName, backupLocationUID, orgID)
 		}
 		// Need sleep as it takes some time for
 		time.Sleep(time.Minute * 1)
-		for CloudCredUID, CredName := range CloudCredUIDMap{
-				DeleteCloudCredential(CredName, orgID, CloudCredUID)	
+		for CloudCredUID, CredName := range CloudCredUIDMap {
+				DeleteCloudCredential(CredName, orgID, CloudCredUID)
 		}
 		DeleteCluster(destinationClusterName, OrgID)
 		DeleteCluster(SourceClusterName, OrgID)
