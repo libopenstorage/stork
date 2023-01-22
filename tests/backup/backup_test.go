@@ -1829,7 +1829,7 @@ func killStork() {
 }
 
 
-// This test restart volume driver (PX) while backup is in progress
+// This test restarts volume driver (PX) while backup is in progress
 var _ = Describe("{BackupRestartPX}", func() {
 	var (
 		appList = Inst().AppList
@@ -1842,13 +1842,14 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var appContexts []*scheduler.Context
 	var backupLocation string
 	var backupLocationUID string
+	var cloudCredUID string
+	backupLocationMap := make(map[string]string)
 	var bkpNamespaces []string
-	var backupName string
 	var clusterUid string
+	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
-	ctx, _ := backup.GetAdminCtxFromSecret()
-	providers := getProviders()
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupRestartPX", "Deploying backup", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
@@ -1901,15 +1902,17 @@ var _ = Describe("{BackupRestartPX}", func() {
 
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
+			providers := getProviders()
 			for _, provider := range providers {
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
-				CloudCredUID = uuid.New()
-				CloudCredUIDMap[CloudCredUID] = CredName
-				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredUID = uuid.New()
+				CloudCredUIDMap[cloudCredUID] = CredName
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
 			}
 		})
 
 		Step("Register cluster for backup", func() {
+			ctx, _ := backup.GetAdminCtxFromSecret()
 			CreateSourceAndDestClusters(orgID, "", "", ctx)
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
@@ -1918,12 +1921,14 @@ var _ = Describe("{BackupRestartPX}", func() {
 		Step("Creating backup location", func() {
 			log.InfoD("Creating backup location")
 			bucketNames := getBucketName()
+			providers := getProviders()
 			for _, provider := range providers {
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocationUID = uuid.New()
-				CreateBackupLocation(provider, backupLocation, backupLocationUID, CredName, CloudCredUID,
+				backupLocationMap[backupLocationUID]= backupLocation
+				CreateBackupLocation(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID,
 					bucketName, orgID, "")
 			}
 		})
@@ -1941,11 +1946,12 @@ var _ = Describe("{BackupRestartPX}", func() {
 		})
 
 		storageNodes := node.GetWorkerNodes()
-		Step(fmt.Sprintf("Restart volume driver %s on node [%v] before backup [%s] starts",
-		  Inst().V.String(), storageNodes[0].Name, backupName), func() {
-		  // Just restart storage driver on one of the node where volume backup is in progress
-		  Inst().V.RestartDriver(storageNodes[1], nil)
-		})
+		Step(fmt.Sprintf("Restart volume driver nodes starts"), func() {
+			for index, _ := range storageNodes {
+				// Just restart storage driver on one of the node where volume backup is in progress
+				Inst().V.RestartDriver(storageNodes[index], nil)
+				}
+			})
 
 		Step("Check if backup is successful when the PX restart happened", func() {
 			var bkpUid string
@@ -1995,15 +2001,8 @@ JustAfterEach(func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 	}
 
-	log.InfoD("Deleting backup location and cloud setting")
-	DeleteBackupLocation(backupLocation, backupLocationUID, orgID)
-	// Need sleep as it takes some time for
-	time.Sleep(time.Minute * 2)
-	for CloudCredUID, CredName := range CloudCredUIDMap {
-			DeleteCloudCredential(CredName, orgID, CloudCredUID)
-	}
-	DeleteCluster(destinationClusterName, orgID,ctx)
-	DeleteCluster(SourceClusterName, orgID, ctx)
+	log.InfoD("Deleting backup location, cloud creds and clusters")
+	DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID)
 	})
 
 })
@@ -3097,7 +3096,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup success for - "+resp.GetBackup().GetName())
 }
 
-// CreateBackupWithoutCheck creates backup withou waiting for success
+// CreateBackupWithoutCheck creates backup without waiting for success
 func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) {
