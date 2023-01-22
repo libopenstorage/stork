@@ -1851,7 +1851,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRestartPX", "Deploying backup", nil, 0)
+		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -1947,6 +1947,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 
 		storageNodes := node.GetWorkerNodes()
 		Step(fmt.Sprintf("Restart volume driver nodes starts"), func() {
+			log.InfoD("Restart PX on nodes")
 			for index, _ := range storageNodes {
 				// Just restart storage driver on one of the node where volume backup is in progress
 				Inst().V.RestartDriver(storageNodes[index], nil)
@@ -1954,6 +1955,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 			})
 
 		Step("Check if backup is successful when the PX restart happened", func() {
+			log.InfoD("Check if backup is successful post px restarts")
 			var bkpUid string
 			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
