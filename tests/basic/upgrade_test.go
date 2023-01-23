@@ -108,6 +108,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		storageNodes := node.GetStorageNodes()
+		numOfNodes := len(node.GetStorageDriverNodes())
+
 		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		log.FailOnError(err, "Cloud drive installation failed")
@@ -172,6 +174,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				}
 				majorVersion := strings.Split(currPXVersion, "-")[0]
 				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
 				statsData["fromVersion"] = currPXVersion
 				statsData["toVersion"] = updatedPXVersion
 				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)

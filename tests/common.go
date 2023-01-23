@@ -131,6 +131,7 @@ const (
 	specDirCliFlag                       = "spec-dir"
 	appListCliFlag                       = "app-list"
 	secureAppsCliFlag                    = "secure-apps"
+	repl1AppsCliFlag                     = "repl1-apps"
 	logLocationCliFlag                   = "log-location"
 	logLevelCliFlag                      = "log-level"
 	scaleFactorCliFlag                   = "scale-factor"
@@ -3834,7 +3835,7 @@ type Torpedo struct {
 func ParseFlags() {
 	var err error
 
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -3901,6 +3902,7 @@ func ParseFlags() {
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
+	flag.StringVar(&repl1AppsCSV, repl1AppsCliFlag, "", "Comma-separated list of apps to deploy with repl 1 volumes. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
@@ -3957,13 +3959,26 @@ func ParseFlags() {
 
 	if secureAppsCSV == "all" {
 		secureAppList = append(secureAppList, appList...)
-	}
-
-	if len(secureAppsCSV) > 0 {
+	} else if len(secureAppsCSV) > 0 {
 		apl, err := splitCsv(secureAppsCSV)
 		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", secureAppsCSV))
 		secureAppList = append(secureAppList, apl...)
 		log.Infof("Secure apps : %+v", secureAppList)
+		//Adding secure apps as part of app list for deployment
+		appList = append(appList, secureAppList...)
+	}
+
+	repl1AppList := make([]string, 0)
+
+	if repl1AppsCSV == "all" {
+		repl1AppList = append(repl1AppList, appList...)
+	} else if len(repl1AppsCSV) > 0 {
+		apl, err := splitCsv(repl1AppsCSV)
+		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
+		repl1AppList = append(repl1AppList, apl...)
+		log.Infof("volume repl 1  apps : %+v", secureAppList)
+		//Adding repl 1 apps as part of app list for deployment
+		appList = append(appList, repl1AppList...)
 	}
 
 	sched.Init(time.Second)
@@ -3992,6 +4007,16 @@ func ParseFlags() {
 				log.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
 			}
 			log.Infof("Parsed custom app config file: %+v", customAppConfig)
+		}
+		if len(repl1AppList) > 0 {
+			for _, app := range repl1AppList {
+				if appConfig, ok := customAppConfig[app]; ok {
+					appConfig.Repl = "1"
+				} else {
+					var config = scheduler.AppConfig{Repl: "1"}
+					customAppConfig[app] = config
+				}
+			}
 		}
 		log.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {

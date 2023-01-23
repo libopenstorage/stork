@@ -5,8 +5,8 @@ metadata:
    name: px-postgres-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  {{ if .Replicas }}
-  repl: "{{ .Replicas }}"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
   {{ else }}
   repl: "3"{{ end }}
   priority_io: "high"

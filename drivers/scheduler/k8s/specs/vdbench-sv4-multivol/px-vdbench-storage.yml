@@ -5,7 +5,10 @@ metadata:
   name: vdbench-sc-sv4
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "3"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
   sharedv4: "true"
   sharedv4_svc_type: ""
   nodiscard: "true"

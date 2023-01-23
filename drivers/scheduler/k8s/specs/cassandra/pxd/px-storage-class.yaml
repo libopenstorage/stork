@@ -4,6 +4,9 @@ metadata:
   name: portworx-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
   priority_io: "high"
   snap_schedule: "periodic=60,5"

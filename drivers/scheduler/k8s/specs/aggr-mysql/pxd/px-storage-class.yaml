@@ -5,7 +5,10 @@ metadata:
   name: mysql-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "3"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
   priority_io: "high"
   io_profile: "db"
 allowVolumeExpansion: true
@@ -18,7 +21,10 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   fs: "ext4"
   block_size: "512b"
-  repl: "2"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "2"{{ end }}
   aggregation_level: "2"
   io_profile: "random"
   priority_io: "high"

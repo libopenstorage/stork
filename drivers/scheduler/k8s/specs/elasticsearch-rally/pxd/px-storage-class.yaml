@@ -4,5 +4,8 @@ metadata:
     name: elasticsearch-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   repl: "3"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
 allowVolumeExpansion: true

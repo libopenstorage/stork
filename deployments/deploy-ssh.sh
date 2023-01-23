@@ -444,6 +444,7 @@ spec:
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
             "--secure-apps", "$SECURE_APP_LIST",
+            "--repl1-apps", "$REPL1_APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
             "--backup-driver", "$BACKUP_DRIVER",

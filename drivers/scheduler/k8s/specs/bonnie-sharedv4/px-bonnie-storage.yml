@@ -5,7 +5,10 @@ metadata:
   name: bonnie-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "3"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
   priority_io: "high"
   sharedv4: "true"
   nodiscard: "true"

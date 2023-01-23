@@ -5,7 +5,10 @@ metadata:
   name: fio-sc-trim
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "2"{{ end }}
   priority_io: "high"
   io_profile: "db_remote"
   nodiscard: "true"
@@ -18,7 +21,10 @@ metadata:
   name: fio-log-trim
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
   priority_io: "high"
   io_profile: "db_remote"
   nodiscard: "true"

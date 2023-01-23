@@ -5,7 +5,10 @@ metadata:
   name: fio-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  {{ if .Repl }}
+  repl : "{{ .Repl }}"
+  {{ else }}
+  repl: "2"{{ end }}
   priority_io: "high"
   io_profile: "db_remote"
 allowVolumeExpansion: true
@@ -17,7 +20,10 @@ metadata:
   name: fio-log
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "2"{{ end }}
   priority_io: "high"
   io_profile: "db_remote"
 allowVolumeExpansion: true
