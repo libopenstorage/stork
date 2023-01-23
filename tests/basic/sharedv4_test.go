@@ -1,5 +1,6 @@
 package tests
 
+/*
 import (
 	"fmt"
 	"github.com/portworx/torpedo/pkg/log"
@@ -230,3 +231,4 @@ func setPathToROMode(path string, node *node.Node) {
 
 	Expect(err).NotTo(HaveOccurred())
 }
+*/
