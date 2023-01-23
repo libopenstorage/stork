@@ -327,7 +327,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		return err
 	}
 
-	nfs, err := IsNFSBackuplocationType(backup)
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type")
 	}
@@ -631,7 +631,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	namespacedName.Namespace = restore.Namespace
 	namespacedName.Name = restore.Name
 	restoreCompleteList := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
-	nfs, err := IsNFSBackuplocationType(backup)
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type")
 		return err
@@ -1554,7 +1554,7 @@ func (a *ApplicationRestoreController) restoreResources(
 		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
 		return err
 	}
-	nfs, err := IsNFSBackuplocationType(backup)
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type: %v", err)
 		return err

@@ -6,7 +6,9 @@ import (
 
 	"github.com/aquilax/truncate"
 	"github.com/libopenstorage/stork/drivers"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -166,4 +168,17 @@ func GetShortUID(uid string) string {
 		return ""
 	}
 	return uid[0:7]
+}
+
+func IsNFSBackuplocationType(
+	namespace, name string,
+) (bool, error) {
+	backupLocation, err := storkops.Instance().GetBackupLocation(name, namespace)
+	if err != nil {
+		return false, fmt.Errorf("error getting backup location path for backup [%v/%v]: %v", namespace, name, err)
+	}
+	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
+		return true, nil
+	}
+	return false, nil
 }
