@@ -1349,7 +1349,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ShareBackupsAndClusterWithUser",
 			"Share backup to user with full access and try to duplicate the backup from the shared user", nil, 82943)
-		log.InfoD("Deploy applications")
+		log.InfoD("Deploy applications need fot taking backup")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -1378,7 +1378,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 			log.FailOnError(err, "Failed to create user - %s", userName)
 		})
-		Step("Creating bucket,backup location and cloud setting", func() {
+		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
 			bucketNames := getBucketName()
 			providers := getProviders()
@@ -1411,7 +1411,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
 		})
 		Step("Create  backup from the shared user with FullAccess", func() {
-			log.InfoD(" Validating if user with  FullAccess cannot duplicate backup shared but can create new backup")
+			log.InfoD("Validating if user with  FullAccess cannot duplicate backup shared but can create new backup")
 			// User with FullAccess cannot duplicate will be validated through UI only
 			ctxNonAdmin, err = backup.GetNonAdminCtx(userName, "Password1")
 			log.FailOnError(err, "Fetching user ctx")
@@ -1430,14 +1430,14 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		log.Infof(" Deleting backup created by px-central-admin")
+		log.Infof("Deleting backup created by px-central-admin")
 		backupDriver := Inst().Backup
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, "Getting backup UID")
 		DeleteBackup(backupName, backupUID, orgID, ctx)
 		// TODO: Remove time.Sleep: PA-509
 		time.Sleep(time.Minute * 3)
-		log.Infof(" Deleting backup created by user")
+		log.Infof("Deleting backup created by user")
 		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
 		dash.VerifySafely(err, nil, "Getting backup UID of user")
 		DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
