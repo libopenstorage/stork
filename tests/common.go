@@ -3708,7 +3708,9 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 					DefaultRetention: &s3.DefaultRetention{
 						Days: aws.Int64(retainCount),
 						Mode: aws.String(objectLockMode)}}}})
-		err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+					if err != nil{
+						err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+					}
 	}
 	return err
 }
