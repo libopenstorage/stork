@@ -21,6 +21,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -475,10 +476,18 @@ func (c *csi) StartBackup(
 	backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	funct := "StartBackup:"
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	var storageClasses []*storagev1.StorageClass
 	storageClassAdded := make(map[string]bool)
 	log.ApplicationBackupLog(backup).Debugf("started CSI backup: %v", backup.Name)
+
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
+	if err != nil {
+		logrus.Errorf("%v error in checking backuplocation type: %v", funct, err)
+		return nil, err
+	}
+
 	for _, pvc := range pvcs {
 		if pvc.DeletionTimestamp != nil {
 			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
@@ -511,28 +520,33 @@ func (c *csi) StartBackup(
 
 		volumeInfo.Options[optCSIDriverName] = csiDriverName
 		volumeInfo.BackupID = string(vsName)
+		if !nfs {
+			// In the case of nfs backuplocation type, uploading of storageclass.json will
+			// happen as part of resource exexutor job as part of resource stage.
+			sc, err := core.Instance().GetStorageClassForPVC(&pvc)
+			if err != nil {
+				c.cancelBackupDuringStartFailure(backup, volumeInfos)
+				return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
+			}
 
-		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
-		if err != nil {
-			c.cancelBackupDuringStartFailure(backup, volumeInfos)
-			return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
-		}
-
-		// only add one instance of a storageclass
-		if !storageClassAdded[sc.Name] {
-			sc.Kind = "StorageClass"
-			sc.APIVersion = "storage.k8s.io/v1"
-			sc.ResourceVersion = ""
-			storageClasses = append(storageClasses, sc)
-			storageClassAdded[sc.Name] = true
+			// only add one instance of a storageclass
+			if !storageClassAdded[sc.Name] {
+				sc.Kind = "StorageClass"
+				sc.APIVersion = "storage.k8s.io/v1"
+				sc.ResourceVersion = ""
+				storageClasses = append(storageClasses, sc)
+				storageClassAdded[sc.Name] = true
+			}
 		}
 	}
-
-	// Backup the storage class
-	err := c.backupStorageClasses(storageClasses, backup)
-	if err != nil {
-		c.cancelBackupDuringStartFailure(backup, volumeInfos)
-		return nil, fmt.Errorf("failed to backup storage classes: %v", err)
+	if !nfs {
+		// In the case of nfs backuplocation type, uploading of storageclass.json will
+		// happen as part of resource exexutor job as part of resource stage.
+		err := c.backupStorageClasses(storageClasses, backup)
+		if err != nil {
+			c.cancelBackupDuringStartFailure(backup, volumeInfos)
+			return nil, fmt.Errorf("failed to backup storage classes: %v", err)
+		}
 	}
 
 	return volumeInfos, nil
@@ -948,7 +962,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		}
 		log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", vsMapLen, vsContentMapLen)
 	}
-
 	return volumeInfos, nil
 }
 
