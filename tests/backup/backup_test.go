@@ -1390,7 +1390,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
 				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
-				// TODO: Remove time.Sleep
+				// TODO: Remove time.Sleep: PA-509
 				time.Sleep(time.Minute * 4)
 				CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
 			}
@@ -1435,7 +1435,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, "Getting backup UID")
 		DeleteBackup(backupName, backupUID, orgID, ctx)
-		// TODO: Remove time.Sleep
+		// TODO: Remove time.Sleep: PA-509
 		time.Sleep(time.Minute * 3)
 		log.Infof(" Deleting backup created by user")
 		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
