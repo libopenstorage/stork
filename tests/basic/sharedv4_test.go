@@ -1,12 +1,12 @@
 package tests
 
-/*
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/pkg/mount"
 	. "github.com/onsi/ginkgo"
@@ -231,4 +231,3 @@ func setPathToROMode(path string, node *node.Node) {
 
 	Expect(err).NotTo(HaveOccurred())
 }
-*/
