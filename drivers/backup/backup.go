@@ -111,6 +111,9 @@ type Cluster interface {
 	// DeleteCluster deletes a cluster object
 	DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error)
 
+	// ClusterUpdateBackupShare updates ownership details for backup share at cluster
+	ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error)
+
 	// WaitForClusterDeletion waits for cluster to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	WaitForClusterDeletion(

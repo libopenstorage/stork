@@ -255,6 +255,10 @@ func (p *portworx) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequ
 	return p.clusterManager.Delete(ctx, req)
 }
 
+func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error) {
+	return p.clusterManager.UpdateBackupShare(ctx, req)
+}
+
 // WaitForClusterDeletion waits for cluster to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForClusterDeletion(

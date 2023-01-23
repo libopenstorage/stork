@@ -670,6 +670,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.InfoD("Share Backup with Full access to a user of View Only access group and Validate")
 			// Get user from the view access group
 			username, err := backup.GetRandomUserFromGroup(groups[0])
+			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
 			log.Infof("Sharing backup with user - %s", username)
 
 			// Get Admin Context - needed to share backup and get backup UID
@@ -682,7 +683,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Register Source and Destination cluster
@@ -714,6 +715,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.InfoD("Share Backup with View Only access to a user of Full access group and Validate")
 			// Get user from the view access group
 			username, err := backup.GetRandomUserFromGroup(groups[2])
+			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[2])
 			log.Infof("Sharing backup with user - %s", username)
 
 			// Get Admin Context - needed to share backup and get backup UID
@@ -726,7 +728,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Register Source and Destination cluster
@@ -748,6 +750,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.InfoD("Share Backup with Restore access to a user of View Only access group and Validate")
 			// Get user from the view only access group
 			username, err := backup.GetRandomUserFromGroup(groups[0])
+			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
 			log.Infof("Sharing backup with user - %s", username)
 
 			// Get Admin Context - needed to share backup and get backup UID
@@ -760,7 +763,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Register Source and Destination cluster
@@ -791,10 +794,11 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.InfoD("Validate Restore access for a user of Restore group")
 			// Get user from the restore access group
 			username, err := backup.GetRandomUserFromGroup(groups[1])
+			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[1])
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Register Source and Destination cluster
@@ -818,10 +822,11 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.InfoD("Validate that user with View Only access cannot restore or delete the backup")
 			// Get user from the view only access group
 			username, err := backup.GetRandomUserFromGroup(groups[0])
+			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Register Source and Destination cluster
@@ -831,10 +836,8 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			err = CreateRestore(restoreName, backupNames[4], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[4], restoreName)
-
-			// Restore validation to make sure that the user with cannot restore
-			log.InfoD("Restoring of backup [%s] was not possible", backupNames[4])
+			// Restore validation to make sure that the user with View Access cannot restore
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
 
 			// Get Admin Context - needed to get backup UID
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -851,7 +854,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		})
 	})
 	JustAfterEach(func() {
-
+		defer EndTorpedoTest()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -861,7 +864,6 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
 		var wg sync.WaitGroup
-		defer EndTorpedoTest()
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
@@ -872,6 +874,494 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			}(userName)
 		}
 		wg.Wait()
+
+		log.Infof("Cleaning up groups")
+		for _, groupName := range groups {
+			wg.Add(1)
+			go func(groupName string) {
+				defer wg.Done()
+				err := backup.DeleteGroup(groupName)
+				log.FailOnError(err, "Error deleting user %v", groupName)
+			}(groupName)
+		}
+		wg.Wait()
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		log.Infof("Deleting registered clusters for admin context")
+		DeleteCluster(SourceClusterName, orgID, ctx)
+		DeleteCluster(destinationClusterName, orgID, ctx)
+
+		log.Infof("Deleting registered clusters for non-admin context")
+		for _, ctxNonAdmin := range userContexts {
+			DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+		}
+
+		backupDriver := Inst().Backup
+		for _, backupName := range backupNames {
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			log.Infof("About to delete backup - %s", backupName)
+			DeleteBackup(backupName, backupUID, orgID, ctx)
+		}
+
+		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
+		DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID)
+
+		log.Infof("Cleaning up buckets")
+		for _, provider := range providers {
+			DeleteBucket(provider, customBucketName)
+		}
+
+		log.Infof("Cleaning cloud credential")
+		//TODO: Eliminate time.Sleep
+		time.Sleep(time.Minute * 3)
+		DeleteCloudCredential(credName, orgID, cloudCredUID)
+	})
+})
+
+var _ = Describe("{CancelClusterBackupShare}", func() {
+	numberOfUsers := 10
+	numberOfGroups := 1
+	groupSize := 10
+	numberOfBackups := 6
+	users := make([]string, 0)
+	groups := make([]string, 0)
+	backupNames := make([]string, 0)
+	userContexts := make([]context.Context, 0)
+	var contexts []*scheduler.Context
+	labelSelectors := make(map[string]string)
+	var backupLocationUID string
+	var customBucketName string
+	var cloudCredUID string
+	var CloudCredUidList []string
+	var appContexts []*scheduler.Context
+	var bkpNamespaces []string
+	var clusterUid string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	var customBackupLocationName string
+	var credName string
+	var chosenUser string
+	individualUser := "autogenerated-user"
+	bkpNamespaces = make([]string, 0)
+	providers := getProviders()
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CancelClusterBackupShare",
+			"Share all backups at cluster level with a user group and revoke it and validate", nil, 82935)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Share all backups at cluster level with a user group and revoke it and validate", func() {
+		Step("Validate applications and get their labels", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(contexts)
+		})
+
+		Step("Create Users", func() {
+			log.InfoD("Creating %d users to be added to the group", numberOfUsers)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("testuser%v", i)
+				firstName := fmt.Sprintf("FirstName%v", i)
+				lastName := fmt.Sprintf("LastName%v", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				wg.Add(1)
+				go func(userName, firstName, lastName, email string) {
+					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					users = append(users, userName)
+					wg.Done()
+				}(userName, firstName, lastName, email)
+			}
+			wg.Wait()
+
+			log.InfoD("Creating a user with username - [%s] who is not part of any group", individualUser)
+			firstName := "autogenerated-firstname"
+			lastName := "autogenerated-last name"
+			email := "autogenerated-email@cnbu.com"
+			err := backup.AddUser(individualUser, firstName, lastName, email, "Password1")
+			log.FailOnError(err, "Failed to create user - %s", individualUser)
+		})
+
+		Step("Create Groups", func() {
+			log.InfoD("Creating %d groups", numberOfGroups)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfGroups; i++ {
+				groupName := fmt.Sprintf("testGroup%v", i)
+				wg.Add(1)
+				go func(groupName string) {
+					err := backup.AddGroup(groupName)
+					log.FailOnError(err, "Failed to create group - %v", groupName)
+					groups = append(groups, groupName)
+					wg.Done()
+				}(groupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Add users to group", func() {
+			log.InfoD("Adding users to groups")
+			var wg sync.WaitGroup
+			for i := 0; i < len(users); i++ {
+				groupIndex := i / groupSize
+				wg.Add(1)
+				go func(i, groupIndex int) {
+					err := backup.AddGroupToUser(users[i], groups[groupIndex])
+					log.FailOnError(err, "Failed to assign group to user")
+					wg.Done()
+				}(i, groupIndex)
+			}
+			wg.Wait()
+
+			// Print the groups
+			for _, group := range groups {
+				usersOfGroup, err := backup.GetMembersOfGroup(group)
+				log.FailOnError(err, "Error fetching members of the group - %v", group)
+				log.Infof("Group [%v] contains the following users: \n%v", group, usersOfGroup)
+			}
+		})
+
+		Step("Adding Credentials and Registering Backup Location", func() {
+			log.InfoD("Creating bucket, cloud credentials and backup location")
+			for _, provider := range providers {
+				customBucketName = fmt.Sprintf("%s-%v", getBucketName()[0], time.Now().Unix())
+				CreateBucket(provider, customBucketName)
+				cloudCredUID = uuid.New()
+				CloudCredUidList = append(CloudCredUidList, cloudCredUID)
+				backupLocationUID = uuid.New()
+				credName = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
+				CreateCloudCredential(provider, credName, cloudCredUID, orgID)
+				log.InfoD("Created Cloud Credentials with name - %s", credName)
+				//TODO: Eliminate time.Sleep
+				time.Sleep(time.Minute * 1)
+				customBackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
+				CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, customBucketName, orgID, "")
+				log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
+			}
+		})
+
+		Step("Register source and destination cluster for backup", func() {
+			log.InfoD("Registering Source and Destination clusters and verifying the status")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster status")
+		})
+
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			var sem = make(chan struct{}, 10)
+			var wg sync.WaitGroup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				for i := 0; i < numberOfBackups; i++ {
+					sem <- struct{}{}
+					time.Sleep(3 * time.Second)
+					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+					backupNames = append(backupNames, backupName)
+					wg.Add(1)
+					go func(backupName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						defer func() { <-sem }()
+						CreateBackup(backupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
+							labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+					}(backupName)
+				}
+				wg.Wait()
+			}
+			log.Infof("List of backups - %v", backupNames)
+		})
+
+		Step("Share all backups with Full Access in source cluster with a group and a user who is not part of the group", func() {
+			log.InfoD("Share all backups with Full Access in source cluster with a group and a user who is not part of the group")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = ClusterUpdateBackupShare(SourceClusterName, []string{groups[0]}, []string{individualUser}, FullAccess, true, ctx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+		})
+
+		Step("Validate Full Access of backups shared at cluster level", func() {
+			log.InfoD("Validate Full Access of backups shared at cluster level for a user of a group")
+			// Get user from group
+			var err error
+			chosenUser, err = backup.GetRandomUserFromGroup(groups[0])
+			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
+			log.Infof("User chosen to validate full access - %s", chosenUser)
+
+			// Get Admin Context - needed to share backup and get backup UID
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			// Get user context
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", chosenUser)
+			userContexts = append(userContexts, ctxNonAdmin)
+
+			// Register Source and Destination cluster
+			log.InfoD("Registering Source and Destination clusters from user context")
+			CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+
+			// Start Restore
+			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreName, backupNames[5], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[5], restoreName)
+
+			// Restore validation to make sure that the user with Full Access can restore
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[5], restoreName)
+			log.Infof("About to delete restore - %s", restoreName)
+			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+
+			// Get Backup UID
+			backupDriver := Inst().Backup
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[5], orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[5])
+
+			// Delete backup to confirm that the user has Full Access
+			backupDeleteResponse, err := DeleteBackup(backupNames[5], backupUID, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupNames[5], chosenUser)
+			dash.VerifyFatal(backupDeleteResponse.String(), "",
+				fmt.Sprintf("Verifying backup [%s] deletion is successful by user [%s]", backupNames[5], chosenUser))
+
+			// Now validating with individual user who is not part of any group
+			// Get user context
+			log.InfoD("Validate Full Access of backups shared at cluster level for an individual user - %s", individualUser)
+			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", individualUser)
+			userContexts = append(userContexts, ctxNonAdmin)
+
+			// Register Source and Destination cluster
+			log.InfoD("Registering Source and Destination clusters from user context")
+			CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+
+			// Start Restore
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreName, backupNames[4], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[4], restoreName)
+
+			// Restore validation to make sure that the user with Full Access can restore
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[4], restoreName)
+			log.Infof("About to delete restore - %s", restoreName)
+			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+
+			// Get Backup UID
+			backupUID, err = backupDriver.GetBackupUID(ctx, backupNames[4], orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[4])
+
+			// Delete backup to confirm that the user has Full Access
+			backupDeleteResponse, err = DeleteBackup(backupNames[4], backupUID, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupNames[4], individualUser)
+			dash.VerifyFatal(backupDeleteResponse.String(), "",
+				fmt.Sprintf("Verifying backup [%s] deletion is successful by user [%s]", backupNames[4], individualUser))
+		})
+
+		Step("Share all backups with Restore Access in source cluster with a group and a user who is not part of the group", func() {
+			log.InfoD("Share all backups with Full Access in source cluster with a group and a user who is not part of the group")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = ClusterUpdateBackupShare(SourceClusterName, []string{groups[0]}, []string{"autogenerated-user"}, RestoreAccess, true, ctx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+		})
+
+		Step("Validate Restore Access of backups shared at cluster level", func() {
+			log.InfoD("Validate Restore Access of backups shared at cluster level")
+			log.Infof("User chosen to validate restore access - %s", chosenUser)
+
+			// Get Admin Context - needed to share backup and get backup UID
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			// Get user context
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", chosenUser)
+
+			// Start Restore
+			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreName, backupNames[3], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[3], restoreName)
+
+			// Restore validation to make sure that the user with Restore Access can restore
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[3], restoreName)
+			log.Infof("About to delete restore - %s", restoreName)
+			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+
+			// Get Backup UID
+			backupDriver := Inst().Backup
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[3], orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[3])
+
+			// Delete backup to confirm that the user cannot delete the backup
+			_, err = DeleteBackup(backupNames[3], backupUID, orgID, ctxNonAdmin)
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
+
+			// Now validating with individual user who is not part of any group
+			// Get user context
+			log.InfoD("Validate Restore Access of backups shared at cluster level for an individual user - %s", individualUser)
+			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", individualUser)
+
+			// Start Restore
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreName, backupNames[2], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[2], restoreName)
+
+			// Restore validation to make sure that the user with Restore Access can restore
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[2], restoreName)
+			log.Infof("About to delete restore - %s", restoreName)
+			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+
+			// Get Backup UID
+			backupUID, err = backupDriver.GetBackupUID(ctx, backupNames[2], orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[2])
+
+			// Delete backup to confirm that the user cannot delete the backup
+			_, err = DeleteBackup(backupNames[2], backupUID, orgID, ctxNonAdmin)
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
+		})
+
+		Step("Share all backups with View Only Access in source cluster with a group and a user who is not part of the group", func() {
+			log.InfoD("Share all backups with View Only Access in source cluster with a group and a user who is not part of the group")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = ClusterUpdateBackupShare(SourceClusterName, []string{groups[0]}, []string{individualUser}, ViewOnlyAccess, true, ctx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+		})
+
+		Step("Validate View Only Access of backups shared at cluster level", func() {
+			log.InfoD("Validate View Only Access of backups shared at cluster level")
+			log.Infof("User chosen to validate view only access - %s", chosenUser)
+
+			// Get Admin Context - needed to share backup and get backup UID
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			// Get user context
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", chosenUser)
+
+			// Start Restore
+			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreName, backupNames[1], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+
+			// Restore validation to make sure that the user with View Access cannot restore
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
+
+			// Get Backup UID
+			backupDriver := Inst().Backup
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[1], orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[1])
+
+			// Delete backup to confirm that the user cannot delete the backup
+			_, err = DeleteBackup(backupNames[1], backupUID, orgID, ctxNonAdmin)
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
+
+			// Now validating with individual user who is not part of any group
+			// Get user context
+			log.InfoD("Validate View Only Access of backups shared at cluster level for an individual user - %s", individualUser)
+			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", individualUser)
+
+			// Start Restore
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreName, backupNames[1], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+
+			// Restore validation to make sure that the user with View Access cannot restore
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
+
+			// Get Backup UID
+			backupUID, err = backupDriver.GetBackupUID(ctx, backupNames[1], orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[1])
+
+			// Delete backup to confirm that the user cannot delete the backup
+			_, err = DeleteBackup(backupNames[1], backupUID, orgID, ctxNonAdmin)
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
+
+		})
+
+		Step("Revoke all the shared backups in source cluster", func() {
+			log.InfoD("Share all backups with View Only Access in source cluster with a group and a user who is not part of the group")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = ClusterUpdateBackupShare(SourceClusterName, []string{groups[0]}, []string{individualUser}, ViewOnlyAccess, false, ctx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+		})
+
+		Step("Validate that no groups or users have access to backups shared at cluster level", func() {
+			log.InfoD("Validate no groups or users have access to backups shared at cluster level")
+			log.Infof("User chosen to validate no access - %s", chosenUser)
+
+			// Enumerate all the backups available to the user
+			userBackups, err := GetAllBackupsForUser(chosenUser, "Password1")
+			log.FailOnError(err, "Failed to get all backups for user - [%s]", chosenUser)
+			log.Infof("Backups user [%s] has access to - %v", chosenUser, userBackups)
+			log.InfoD("Checking backups user [%s] has after revoking", chosenUser)
+			noAccessCheck := func() (interface{}, bool, error) {
+				if len(userBackups) > 0 {
+					return "", true, fmt.Errorf("Waiting for all backup access - [%v] to be revoked for user = [%s]",
+						userBackups, chosenUser)
+				}
+				return "", false, nil
+			}
+			task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			dash.VerifyFatal(len(userBackups), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", chosenUser))
+
+			// Now validating with individual user who is not part of any group
+			// Get user context
+			log.InfoD("Validate no access of backups shared at cluster level for an individual user - %s", individualUser)
+			userBackups1, err := GetAllBackupsForUser(individualUser, "Password1")
+			log.FailOnError(err, "Failed to get all backups for user - [%s]", individualUser)
+			log.Infof("Backups user [%s] has access to - %v", individualUser, userBackups1)
+			log.InfoD("Checking backups user [%s] has after revoking", individualUser)
+			noAccessCheck = func() (interface{}, bool, error) {
+				if len(userBackups1) > 0 {
+					return "", true, fmt.Errorf("Waiting for all backup access - [%v] to be revoked for user = [%s]",
+						userBackups1, individualUser)
+				}
+				return "", false, nil
+			}
+			task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", individualUser))
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Deleting the deployed apps after the testcase")
+		for i := 0; i < len(contexts); i++ {
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			err := Inst().S.Destroy(contexts[i], opts)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+		}
+		var wg sync.WaitGroup
+		log.Infof("Cleaning up users")
+		for _, userName := range users {
+			wg.Add(1)
+			go func(userName string) {
+				defer wg.Done()
+				err := backup.DeleteUser(userName)
+				log.FailOnError(err, "Error deleting user %v", userName)
+			}(userName)
+		}
+		wg.Wait()
+		err := backup.DeleteUser(individualUser)
+		log.FailOnError(err, "Error deleting user %v", individualUser)
 
 		log.Infof("Cleaning up groups")
 		for _, groupName := range groups {
@@ -3721,6 +4211,7 @@ const (
 	FullAccess                  = 3
 )
 
+// ShareBackup provides access to the mentioned groups or/add users
 func ShareBackup(backupName string, groupNames []string, userNames []string, accessLevel BackupAccess, ctx context.Context) error {
 	var bkpUid string
 	backupDriver := Inst().Backup
@@ -3728,6 +4219,7 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	userIDs := make([]string, 0)
 
 	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	log.FailOnError(err, "Failed to get backup UID for [%s]", backupName)
 	log.Infof("Backup UID for %s - %s", backupName, bkpUid)
 
 	for _, groupName := range groupNames {
@@ -3775,6 +4267,92 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	_, err = backupDriver.UpdateBackupShare(ctx, shareBackupRequest)
 	return err
 
+}
+
+// ClusterUpdateBackupShare shares all backup with the users and/or groups provided for a given cluster
+// addUsersOrGroups - provide true if the mentioned users/groups needs to be added
+// addUsersOrGroups - provide false if the mentioned users/groups needs to be deleted or removed
+func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames []string, accessLevel BackupAccess, addUsersOrGroups bool, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	groupIDs := make([]string, 0)
+	userIDs := make([]string, 0)
+	_, clusterUID := backupDriver.RegisterBackupCluster(orgID, SourceClusterName, "")
+
+	for _, groupName := range groupNames {
+		groupID, err := backup.FetchIDOfGroup(groupName)
+		log.FailOnError(err, "Error fetching group ID")
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		log.FailOnError(err, "Error fetching user ID")
+		userIDs = append(userIDs, userID)
+	}
+
+	groupBackupShareAccessConfigs := make([]*api.BackupShare_AccessConfig, 0)
+
+	for _, groupName := range groupNames {
+		groupBackupShareAccessConfig := &api.BackupShare_AccessConfig{
+			Id:     groupName,
+			Access: api.BackupShare_AccessType(accessLevel),
+		}
+		groupBackupShareAccessConfigs = append(groupBackupShareAccessConfigs, groupBackupShareAccessConfig)
+	}
+
+	userBackupShareAccessConfigs := make([]*api.BackupShare_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userBackupShareAccessConfig := &api.BackupShare_AccessConfig{
+			Id:     userID,
+			Access: api.BackupShare_AccessType(accessLevel),
+		}
+		userBackupShareAccessConfigs = append(userBackupShareAccessConfigs, userBackupShareAccessConfig)
+	}
+
+	backupShare := &api.BackupShare{
+		Groups:        groupBackupShareAccessConfigs,
+		Collaborators: userBackupShareAccessConfigs,
+	}
+
+	var clusterBackupShareUpdateRequest *api.ClusterBackupShareUpdateRequest
+
+	if addUsersOrGroups {
+		clusterBackupShareUpdateRequest = &api.ClusterBackupShareUpdateRequest{
+			OrgId:          orgID,
+			Name:           clusterName,
+			AddBackupShare: backupShare,
+			DelBackupShare: nil,
+			Uid:            clusterUID,
+		}
+	} else {
+		clusterBackupShareUpdateRequest = &api.ClusterBackupShareUpdateRequest{
+			OrgId:          orgID,
+			Name:           clusterName,
+			AddBackupShare: nil,
+			DelBackupShare: backupShare,
+			Uid:            clusterUID,
+		}
+	}
+
+	_, err := backupDriver.ClusterUpdateBackupShare(ctx, clusterBackupShareUpdateRequest)
+	return err
+}
+
+func GetAllBackupsForUser(username, password string) ([]string, error) {
+	var bkp *api.BackupObject
+	backupNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	log.FailOnError(err, "Fetching %s ctx", username)
+
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	for _, bkp = range curBackups.GetBackups() {
+		backupNames = append(backupNames, bkp.GetName())
+	}
+	return backupNames, err
 }
 
 func GetNodesForBackup(backupName string, bkpNamespace string,
