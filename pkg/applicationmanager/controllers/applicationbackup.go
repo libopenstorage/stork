@@ -1157,19 +1157,6 @@ func (a *ApplicationBackupController) uploadMetadata(
 	return a.uploadObject(backup, metadataObjectName, jsonBytes)
 }
 
-func IsNFSBackuplocationType(
-	backup *stork_api.ApplicationBackup,
-) (bool, error) {
-	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
-	if err != nil {
-		return false, fmt.Errorf("error getting backup location path for backup [%v/%v]: %v", backup.Namespace, backup.Name, err)
-	}
-	if backupLocation.Location.Type == stork_api.BackupLocationNFS {
-		return true, nil
-	}
-	return false, nil
-}
-
 func getResourceExportCRName(opsPrefix, crUID, ns string) string {
 	name := fmt.Sprintf("%s-%s-%s", opsPrefix, utils.GetShortUID(crUID), ns)
 	name = utils.GetValidLabel(name)
@@ -1181,7 +1168,7 @@ func (a *ApplicationBackupController) backupResources(
 ) error {
 	var err error
 	var resourceTypes []metav1.APIResource
-	nfs, err := IsNFSBackuplocationType(backup)
+	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type: %v", err)
 		return err
