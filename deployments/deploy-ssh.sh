@@ -61,11 +61,9 @@ if [ -n "$SKIP_TESTS" ]; then
 fi
 
 FOCUS_ARG=""
-GINKGO_FOCUS=""
 if [ -n "$FOCUS_TESTS" ]; then
   focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
   FOCUS_ARG="--focus={$focusRegex}"
-  GINKGO_FOCUS="--ginkgo.focus=$focusRegex"
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then
@@ -496,7 +494,6 @@ spec:
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "$APP_DESTROY_TIMEOUT_ARG",
-            "$GINKGO_FOCUS"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
