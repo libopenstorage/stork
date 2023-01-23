@@ -849,6 +849,33 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 	return groups, nil
 }
 
+func GetAllUsers() ([]KeycloakUserRepresentation, error) {
+	fn := "GetAllGroups"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	method := "GET"
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	var users []KeycloakUserRepresentation
+	err = json.Unmarshal(response, &users)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	return users, nil
+}
+
 // GetMembersOfGroup fetches all available members of the group
 func GetMembersOfGroup(group string) ([]string, error) {
 	fn := "GetMembersOfGroup"

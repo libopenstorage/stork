@@ -143,6 +143,110 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 })
 
+// This is to create multiple users and groups
+var _ = Describe("{CreateMultipleUserAndGroup}", func() {
+	numberOfUsers := 20
+	numberOfGroups := 10
+	users := make([]string, 0)
+	groups := make([]string, 0)
+	groupNotCreated := make([]string, 0)
+	userNotCreated := make([]string, 0)
+
+	JustBeforeEach(func() {
+		wantAllAfterSuiteActions = false
+		StartTorpedoTest("CreateMultipleUserAndGroup", "Creation of multiple users and groups", nil, 0)
+	})
+	It("Create multiple users and Group", func() {
+
+		Step("Create Groups", func() {
+			log.InfoD("Creating %d groups", numberOfGroups)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfGroups; i++ {
+				groupName := fmt.Sprintf("testGroup%v", i)
+				wg.Add(1)
+				go func(groupName string) {
+					err := backup.AddGroup(groupName)
+					log.FailOnError(err, "Failed to create group - %v", groupName)
+					groups = append(groups, groupName)
+					wg.Done()
+				}(groupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Create Users", func() {
+			log.InfoD("Creating %d users", numberOfUsers)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("testuser%v", i)
+				firstName := fmt.Sprintf("FirstName%v", i)
+				lastName := fmt.Sprintf("LastName%v", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				wg.Add(1)
+				go func(userName, firstName, lastName, email string) {
+					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					users = append(users, userName)
+					wg.Done()
+				}(userName, firstName, lastName, email)
+			}
+			wg.Wait()
+		})
+
+		//This loops through the groups that we have created againts the groups fetched and checks if group is present
+
+		Step("Validate Group", func() {
+			createdgroups, err := backup.GetAllGroups()
+			log.Info("created group ", createdgroups)
+			log.FailOnError(err, "Failed to get group")
+			for _, group := range groups {
+				found := false
+				for _, createdgroup := range createdgroups {
+					if strings.Contains(createdgroup.Name, group) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					groupNotCreated = append(groupNotCreated, group)
+				}
+			}
+			dash.VerifyFatal(len(groupNotCreated), 0, "Group Creation Verification successful")
+
+		})
+
+		Step("Validate User", func() {
+			createdusers, err := backup.GetAllUsers()
+			log.Info("created users", createdusers)
+			log.FailOnError(err, "Failed to get group")
+			log.InfoD("Validate %v users", createdusers)
+
+			//This loops through the users that we have created againts the users fetched and checks if user is present
+
+			for _, user := range users {
+				found := false
+				for _, createduser := range createdusers {
+					if strings.Contains(createduser.Name, user) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					userNotCreated = append(userNotCreated, user)
+				}
+			}
+			dash.VerifyFatal(len(userNotCreated), 0, "User Creation Verification successful")
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.Infof("No cleanup required for this testcase")
+	})
+
+})
+
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (
