@@ -219,7 +219,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 
 		Step("Validate User", func() {
 			createdusers, err := backup.GetAllUsers()
-			log.Info("created group ", createdusers)
+			log.Info("created user ", createdusers)
 			log.FailOnError(err, "Failed to get user")
 			responseMap := make(map[string]bool)
 			for _, ctreateduser := range createdusers {
