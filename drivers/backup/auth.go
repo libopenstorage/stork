@@ -979,9 +979,10 @@ func DeleteMultipleGroup(groups []string) error {
 	for _, group := range groups {
 		wg.Add(1)
 		go func(group string) {
+			defer wg.Done()
 			err := DeleteGroup(group)
 			log.FailOnError(err, "Failed to create group - %v", group)
-			wg.Done()
+			
 		}(group)
 		log.Infof("Deleted Group - %s", group)
 	}
@@ -997,9 +998,10 @@ func DeleteMultipleUsers(users []string) error {
 	for _, user := range users {
 		wg.Add(1)
 		go func(user string) {
+			defer wg.Done()
 			err := DeleteUser(user)
 			log.FailOnError(err, "Failed to create group - %v", user)
-			wg.Done()
+			
 		}(user)
 		log.Infof("Deleted User - %s", user)
 	}
