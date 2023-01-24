@@ -275,12 +275,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Taking backup of applications", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
-			preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-			log.FailOnError(err, "Error getting UID for pre-rule - [%s]", preRuleNameList[0])
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, "", "", ctx)
+					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, "Verifying backup creation")
 			}
 		})

@@ -1127,6 +1127,13 @@ var (
 			"container":         {"", ""},
 		},
 		},
+		"postgres-backup": {"pre": {"pre_action_list": {"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";"},
+			"background":        {"false"},
+			"runInSinglePod":    {"false"},
+			"pod_selector_list": {"app=postgres"},
+			"container":         {"", ""},
+		},
+		},
 	}
 )
 
