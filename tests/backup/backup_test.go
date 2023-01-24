@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -25,9 +26,8 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/portworx/torpedo/tests"
 
@@ -275,8 +275,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Taking backup of applications", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
-			preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-			log.FailOnError(err, "Error getting UID for role")
+			preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+			log.FailOnError(err, "Error getting UID for pre-rule - [%s]", preRuleNameList[0])
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
@@ -681,8 +681,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Share backup with the user
-			err = ShareBackup(backupNames[0], nil, []string{username}, FullAccess, ctx)
-			log.FailOnError(err, "Failed to share backup %s", backupNames[0])
+			backupName := backupNames[0]
+			err = ShareBackup(backupName, nil, []string{username}, FullAccess, ctx)
+			log.FailOnError(err, "Failed to share backup %s", backupName)
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
@@ -695,22 +696,22 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[0], restoreName)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
-			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[0], restoreName)
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
 			DeleteRestore(restoreName, orgID, ctxNonAdmin)
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[0], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[0])
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user has Full Access
-			backupDeleteResponse, err := DeleteBackup(backupNames[0], backupUID, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupNames[0], username)
+			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupName, username)
 			dash.VerifyFatal(backupDeleteResponse.String(), "", "Verifying backup deletion is successful")
 		})
 
@@ -726,8 +727,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Share backup with the user
-			err = ShareBackup(backupNames[1], nil, []string{username}, ViewOnlyAccess, ctx)
-			log.FailOnError(err, "Failed to share backup %s", backupNames[1])
+			backupName := backupNames[6]
+			err = ShareBackup(backupName, nil, []string{username}, ViewOnlyAccess, ctx)
+			log.FailOnError(err, "Failed to share backup %s", backupName)
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
@@ -740,11 +742,11 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[1], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[1])
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
-			_, err = DeleteBackup(backupNames[1], backupUID, orgID, ctxNonAdmin)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			log.Infof("Error message - %s", err.Error())
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 		})
@@ -761,8 +763,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Share backup with the user
-			err = ShareBackup(backupNames[2], nil, []string{username}, RestoreAccess, ctx)
-			log.FailOnError(err, "Failed to share backup %s", backupNames[2])
+			backupName := backupNames[1]
+			err = ShareBackup(backupName, nil, []string{username}, RestoreAccess, ctx)
+			log.FailOnError(err, "Failed to share backup %s", backupName)
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
@@ -775,21 +778,21 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[2], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[2], restoreName)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with can restore
-			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[2], restoreName)
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
 			DeleteRestore(restoreName, orgID, ctxNonAdmin)
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[2], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[2])
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
-			_, err = DeleteBackup(backupNames[2], backupUID, orgID, ctxNonAdmin)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 		})
 
@@ -804,21 +807,34 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
+			// Get Admin Context - needed to share backup and get backup UID
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
 
 			// Start Restore
+			backupName := backupNames[3]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[3], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[3], restoreName)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with can restore
-			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[3], restoreName)
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
 			DeleteRestore(restoreName, orgID, ctxNonAdmin)
 			log.InfoD("Deleting Restore [%s] was successful", restoreName)
 
+			// Get Backup UID
+			backupDriver := Inst().Backup
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+
+			// Delete backup to confirm that the user cannot delete the backup
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 		})
 
 		Step("Validate that user with View Only access cannot restore or delete the backup", func() {
@@ -837,10 +853,11 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
 
 			// Start Restore
+			backupName := backupNames[2]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[4], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
 			// Restore validation to make sure that the user with View Access cannot restore
-			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 
 			// Get Admin Context - needed to get backup UID
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -848,11 +865,11 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[4], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[4])
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
-			_, err = DeleteBackup(backupNames[4], backupUID, orgID, ctxNonAdmin)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 		})
 	})
@@ -1121,25 +1138,26 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
 
 			// Start Restore
+			backupName := backupNames[5]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[5], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[5], restoreName)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
-			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[5], restoreName)
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
 			DeleteRestore(restoreName, orgID, ctxNonAdmin)
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[5], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[5])
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user has Full Access
-			backupDeleteResponse, err := DeleteBackup(backupNames[5], backupUID, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupNames[5], chosenUser)
+			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupName, chosenUser)
 			dash.VerifyFatal(backupDeleteResponse.String(), "",
-				fmt.Sprintf("Verifying backup [%s] deletion is successful by user [%s]", backupNames[5], chosenUser))
+				fmt.Sprintf("Verifying backup [%s] deletion is successful by user [%s]", backupName, chosenUser))
 
 			// Now validating with individual user who is not part of any group
 			// Get user context
@@ -1153,24 +1171,25 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
 
 			// Start Restore
+			backupName = backupNames[4]
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[4], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[4], restoreName)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
-			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[4], restoreName)
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
 			DeleteRestore(restoreName, orgID, ctxNonAdmin)
 
 			// Get Backup UID
-			backupUID, err = backupDriver.GetBackupUID(ctx, backupNames[4], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[4])
+			backupUID, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user has Full Access
-			backupDeleteResponse, err = DeleteBackup(backupNames[4], backupUID, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupNames[4], individualUser)
+			backupDeleteResponse, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupName, individualUser)
 			dash.VerifyFatal(backupDeleteResponse.String(), "",
-				fmt.Sprintf("Verifying backup [%s] deletion is successful by user [%s]", backupNames[4], individualUser))
+				fmt.Sprintf("Verifying backup [%s] deletion is successful by user [%s]", backupName, individualUser))
 		})
 
 		Step("Share all backups with Restore Access in source cluster with a group and a user who is not part of the group", func() {
@@ -1194,22 +1213,23 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 
 			// Start Restore
+			backupName := backupNames[3]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[3], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[3], restoreName)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Restore Access can restore
-			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[3], restoreName)
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
 			DeleteRestore(restoreName, orgID, ctxNonAdmin)
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[3], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[3])
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
-			_, err = DeleteBackup(backupNames[3], backupUID, orgID, ctxNonAdmin)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 			// Now validating with individual user who is not part of any group
@@ -1219,21 +1239,22 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.FailOnError(err, "Fetching %s ctx", individualUser)
 
 			// Start Restore
+			backupName = backupNames[2]
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[2], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[2], restoreName)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Restore Access can restore
-			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[2], restoreName)
+			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
 			DeleteRestore(restoreName, orgID, ctxNonAdmin)
 
 			// Get Backup UID
-			backupUID, err = backupDriver.GetBackupUID(ctx, backupNames[2], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[2])
+			backupUID, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
-			_, err = DeleteBackup(backupNames[2], backupUID, orgID, ctxNonAdmin)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 		})
 
@@ -1258,19 +1279,20 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 
 			// Start Restore
+			backupName := backupNames[1]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[1], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[1], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[1])
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
-			_, err = DeleteBackup(backupNames[1], backupUID, orgID, ctxNonAdmin)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 			// Now validating with individual user who is not part of any group
@@ -1281,17 +1303,17 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 
 			// Start Restore
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[1], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
 
 			// Get Backup UID
-			backupUID, err = backupDriver.GetBackupUID(ctx, backupNames[1], orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[1])
+			backupUID, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
-			_, err = DeleteBackup(backupNames[1], backupUID, orgID, ctxNonAdmin)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 		})
@@ -3767,17 +3789,17 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 // This testcase verifies resize after the volume is restored from a backup
 var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	var (
-		appList           = Inst().AppList
-		backupName        string
-		contexts          []*scheduler.Context
-		preRuleNameList   []string
-		postRuleNameList  []string
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		restoreName       string
-		namespaceMapping   map[string]string
+		appList          = Inst().AppList
+		backupName       string
+		contexts         []*scheduler.Context
+		preRuleNameList  []string
+		postRuleNameList []string
+		appContexts      []*scheduler.Context
+		bkpNamespaces    []string
+		clusterUid       string
+		clusterStatus    api.ClusterInfo_StatusInfo_Status
+		restoreName      string
+		namespaceMapping map[string]string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -3897,27 +3919,27 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			var err error
 			for _, ctx := range contexts {
 				var appVolumes []*volume.Volume
-		    log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
-		    appVolumes, err = Inst().S.GetVolumes(ctx)
-		    log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
-		    dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+				log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+				dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
 				var requestedVols []*volume.Volume
 				log.InfoD(fmt.Sprintf("Increase volume size %s on app %s's volumes: %v",
 					Inst().V.String(), ctx.App.Key, appVolumes))
-					requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
+				requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
 				log.FailOnError(err, "Volume resize successful ?")
 				log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
 					ctx.App.Key, appVolumes))
-					for _, v := range requestedVols {
-						// Need to pass token before validating volume
-			      params := make(map[string]string)
-						if Inst().ConfigMap != "" {
-			        params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-			        log.FailOnError(err, "Failed to get token from configMap")
-						}
-						err := Inst().V.ValidateUpdateVolume(v, params)
-			      dash.VerifyFatal(err, nil, "Validate volume update successful?")
+				for _, v := range requestedVols {
+					// Need to pass token before validating volume
+					params := make(map[string]string)
+					if Inst().ConfigMap != "" {
+						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+						log.FailOnError(err, "Failed to get token from configMap")
 					}
+					err := Inst().V.ValidateUpdateVolume(v, params)
+					dash.VerifyFatal(err, nil, "Validate volume update successful?")
+				}
 			}
 		})
 
@@ -3939,25 +3961,25 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		}
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		DeleteCloudAccounts(BackupLocationMap, CredName, CloudCredUID)
-		})
+	})
 })
 
 // This testcase verifies resize after same original volume is restored from a backup stored in a locked bucket
 var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 	var (
-		appList           = Inst().AppList
-		backupName        string
-		contexts          []*scheduler.Context
-		preRuleNameList   []string
-		postRuleNameList  []string
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		backupList        []string
-		beforeSize        int
-		podsListBefore     []int
-		podListAfter       []int
+		appList          = Inst().AppList
+		backupName       string
+		contexts         []*scheduler.Context
+		preRuleNameList  []string
+		postRuleNameList []string
+		appContexts      []*scheduler.Context
+		bkpNamespaces    []string
+		clusterUid       string
+		clusterStatus    api.ClusterInfo_StatusInfo_Status
+		backupList       []string
+		beforeSize       int
+		podsListBefore   []int
+		podListAfter     []int
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -4073,7 +4095,7 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
 				})
-				Step("Getting size before resize", func(){
+				Step("Getting size before resize", func() {
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					log.FailOnError(err, "Unable to fetch the pod list")
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
@@ -4096,39 +4118,40 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 						var requestedVols []*volume.Volume
 						log.InfoD(fmt.Sprintf("Increase volume size %s on app %s's volumes: %v",
 							Inst().V.String(), ctx.App.Key, appVolumes))
-							requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
-							log.FailOnError(err, "Volume resize successful ?")
-							log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
-								ctx.App.Key, appVolumes))
-								for _, v := range requestedVols {
-									// Need to pass token before validating volume
-									params := make(map[string]string)
-									if Inst().ConfigMap != "" {
-										params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-										log.FailOnError(err, "Failed to get token from configMap")
-									}
-									err := Inst().V.ValidateUpdateVolume(v, params)
-									dash.VerifyFatal(err, nil, "Validate volume update successful?")
-								}
+						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
+						log.FailOnError(err, "Volume resize successful ?")
+						log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+							ctx.App.Key, appVolumes))
+						for _, v := range requestedVols {
+							// Need to pass token before validating volume
+							params := make(map[string]string)
+							if Inst().ConfigMap != "" {
+								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+								log.FailOnError(err, "Failed to get token from configMap")
 							}
-						})
-						Step("Getting size after resize", func(){
-							log.InfoD("Checking volume size after resize")
-							pods, err := core.Instance().GetPods(namespace, labelSelectors)
-							log.FailOnError(err, "Unable to fetch the pod list")
-							srcClusterConfigPath, err := GetSourceClusterConfigPath()
-							log.FailOnError(err, "Getting kubeconfig path for source cluster")
-							for _, pod := range pods.Items {
-								afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath)
-								log.FailOnError(err, "Unable to mount size")
-								podListAfter = append(podListAfter, afterSize)
-							}
-							for i := 0; i < len(podListAfter); i++ {
-							dash.VerifyFatal(podListAfter[i] > podsListBefore[i], true, "Volume size different")}
-						})
+							err := Inst().V.ValidateUpdateVolume(v, params)
+							dash.VerifyFatal(err, nil, "Validate volume update successful?")
+						}
 					}
-				}
-			})
+				})
+				Step("Getting size after resize", func() {
+					log.InfoD("Checking volume size after resize")
+					pods, err := core.Instance().GetPods(namespace, labelSelectors)
+					log.FailOnError(err, "Unable to fetch the pod list")
+					srcClusterConfigPath, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "Getting kubeconfig path for source cluster")
+					for _, pod := range pods.Items {
+						afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath)
+						log.FailOnError(err, "Unable to mount size")
+						podListAfter = append(podListAfter, afterSize)
+					}
+					for i := 0; i < len(podListAfter); i++ {
+						dash.VerifyFatal(podListAfter[i] > podsListBefore[i], true, "Volume size different")
+					}
+				})
+			}
+		}
+	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -4142,10 +4165,10 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 		}
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		DeleteCloudAccounts(BackupLocationMap, CredName, CloudCredUID)
-		})
+	})
 })
 
-//Restore backup from encrypted and non-encrypted backups
+// Restore backup from encrypted and non-encrypted backups
 var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var contexts []*scheduler.Context
 	var appContexts []*scheduler.Context
@@ -4633,6 +4656,7 @@ func CreateRestore(restoreName string, backupName string,
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	log.Debugf("Enumerate backup response -\n%v", curBackups)
 	for _, bkp = range curBackups.GetBackups() {
 		if bkp.Name == backupName {
 			bkpUid = bkp.Uid
@@ -4749,14 +4773,14 @@ func getBackupUID(backupName, orgID string) string {
 	return backupUID
 }
 
-func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string) (int, error){
+func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string) (int, error) {
 	var number int
 	ret, err := kubectlExec([]string{podname, "-n", namespace, "--kubeconfig=", kubeconfigfile, " -- /bin/df"})
 	if err != nil {
 		return 0, err
 	}
-  for _, line := range strings.SplitAfter(ret, "\n") {
-		if strings.Contains(line, "pxd"){
+	for _, line := range strings.SplitAfter(ret, "\n") {
+		if strings.Contains(line, "pxd") {
 			ret = strings.Fields(line)[3]
 		}
 	}
@@ -4767,7 +4791,7 @@ func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string
 	return number, nil
 }
 
-func kubectlExec(arguments []string) (string, error){
+func kubectlExec(arguments []string) (string, error) {
 	if len(arguments) == 0 {
 		return "", fmt.Errorf("no arguments supplied for kubectl command")
 	}

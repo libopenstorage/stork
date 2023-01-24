@@ -2843,9 +2843,11 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
 		_, err = backupDriver.CreateCluster(ctx, clusterCreateReq)
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to create cluster [%s] in org [%s]. Error : [%v]",
-				name, orgID, err))
+		if err != nil && strings.Contains(err.Error(), "creation failed as it already exists") {
+			log.Infof("Cluster [%s] in org [%s] is already created")
+			return
+		}
+		log.FailOnError(err, "Failed to create cluster [%s] in org [%s]. Error : [%v]", name, orgID, err)
 	})
 }
 
@@ -3708,9 +3710,9 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 					DefaultRetention: &s3.DefaultRetention{
 						Days: aws.Int64(retainCount),
 						Mode: aws.String(objectLockMode)}}}})
-					if err != nil{
-						err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
-					}
+		if err != nil {
+			err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+		}
 	}
 	return err
 }
