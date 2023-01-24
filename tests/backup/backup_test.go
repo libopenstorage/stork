@@ -209,7 +209,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				if _, key := responseMap[group]; !key {
 					groupNotCreated = group
 					err = fmt.Errorf("Group Name not created - [%s]", group)
-					log.FailOnError(err, "Failed to craete the group")
+					log.FailOnError(err, "Failed to create the group")
 					break
 				}
 
