@@ -226,7 +226,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				responseMap[ctreateduser.Name] = true
 			}
 			for _, user := range users {
-				if _, key := responseMap[user]; !key {
+				if _, ok := responseMap[user]; !ok {
 					userNotCreated = user
 					err = fmt.Errorf("User Name not created - [%s]", user)
 					log.FailOnError(err, "Failed to create the user")
