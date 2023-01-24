@@ -925,7 +925,7 @@ func clusterPairFailuresTest(t *testing.T) {
 			SpecList: []interface{}{},
 		}}
 
-	badTokenInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "")
+	badTokenInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsEks(), false)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	// Change token value to an incorrect token
@@ -946,7 +946,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 
-	badIPInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "")
+	badIPInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsEks(), false)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	badIPInfo[clusterIP] = "0.0.0.0"
@@ -967,7 +967,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 
-	badPortInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "")
+	badPortInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsEks(), false)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	badPortInfo[clusterPort] = "0000"
