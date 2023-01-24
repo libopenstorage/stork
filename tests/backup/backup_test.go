@@ -193,7 +193,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 			wg.Wait()
 		})
 
-		//loop iterates through the group names slice and checks if the group name is present in the response map using map[key]
+		//iterates through the group names slice and checks if the group name is present in the response map using map[key]
 		//to get the value and key to check whether the it is present or not.
 		//If it's not found, it prints the group name not found in struct slice and exit.
 
@@ -206,7 +206,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				responseMap[ctreatedgroup.Name] = true
 			}
 			for _, group := range groups {
-				if _, key := responseMap[group]; !key {
+				if _, ok := responseMap[group]; !ok {
 					groupNotCreated = group
 					err = fmt.Errorf("Group Name not created - [%s]", group)
 					log.FailOnError(err, "Failed to create the group")
