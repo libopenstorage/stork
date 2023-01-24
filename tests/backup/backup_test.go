@@ -242,7 +242,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.Infof("Cleanup started")
-		err := backup.DeleteMultipleGroup(groups)
+		err := backup.DeleteMultipleGroups(groups)
 		log.FailOnError(err, "Failed to delete group(s)")
 		err = backup.DeleteMultipleUsers(users)
 		log.FailOnError(err, "Failed to delete user(s)")
