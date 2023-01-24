@@ -144,17 +144,17 @@ var _ = Describe("{UserGroupManagement}", func() {
 })
 
 // This is to create multiple users and groups
-var _ = Describe("{CreateMultipleUserAndGroup}", func() {
+var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 	numberOfUsers := 20
 	numberOfGroups := 10
 	users := make([]string, 0)
 	groups := make([]string, 0)
-	groupNotCreated := make([]string, 0)
-	userNotCreated := make([]string, 0)
+	var groupNotCreated string
+	var userNotCreated string
 
 	JustBeforeEach(func() {
 		wantAllAfterSuiteActions = false
-		StartTorpedoTest("CreateMultipleUserAndGroup", "Creation of multiple users and groups", nil, 0)
+		StartTorpedoTest("CreateMultipleUsersAndGroups", "Creation of multiple users and groups", nil, 58032)
 	})
 	It("Create multiple users and Group", func() {
 
@@ -193,56 +193,61 @@ var _ = Describe("{CreateMultipleUserAndGroup}", func() {
 			wg.Wait()
 		})
 
-		//This loops through the groups that we have created againts the groups fetched and checks if group is present
+		//loop iterates through the group names slice and checks if the group name is present in the response map using map[key]
+		//to get the value and key to check whether the it is present or not.
+		//If it's not found, it prints the group name not found in struct slice and exit.
 
 		Step("Validate Group", func() {
 			createdgroups, err := backup.GetAllGroups()
 			log.Info("created group ", createdgroups)
 			log.FailOnError(err, "Failed to get group")
-			for _, group := range groups {
-				found := false
-				for _, createdgroup := range createdgroups {
-					if strings.Contains(createdgroup.Name, group) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					groupNotCreated = append(groupNotCreated, group)
-				}
+			responseMap := make(map[string]bool)
+			for _, ctreatedgroup := range createdgroups {
+				responseMap[ctreatedgroup.Name] = true
 			}
-			dash.VerifyFatal(len(groupNotCreated), 0, "Group Creation Verification successful")
+			for _, group := range groups {
+				if _, key := responseMap[group]; !key {
+					groupNotCreated = group
+					err = fmt.Errorf("Group Name not created - [%s]", group)
+					log.FailOnError(err, "Failed to craete the group")
+					break
+				}
 
+			}
+			dash.VerifyFatal(groupNotCreated, "", "Group Creation Verification successful")
 		})
 
 		Step("Validate User", func() {
 			createdusers, err := backup.GetAllUsers()
-			log.Info("created users", createdusers)
-			log.FailOnError(err, "Failed to get group")
-			log.InfoD("Validate %v users", createdusers)
-
-			//This loops through the users that we have created againts the users fetched and checks if user is present
-
-			for _, user := range users {
-				found := false
-				for _, createduser := range createdusers {
-					if strings.Contains(createduser.Name, user) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					userNotCreated = append(userNotCreated, user)
-				}
+			log.Info("created group ", createdusers)
+			log.FailOnError(err, "Failed to get user")
+			responseMap := make(map[string]bool)
+			for _, ctreateduser := range createdusers {
+				responseMap[ctreateduser.Name] = true
 			}
-			dash.VerifyFatal(len(userNotCreated), 0, "User Creation Verification successful")
+			for _, user := range users {
+				if _, key := responseMap[user]; !key {
+					userNotCreated = user
+					err = fmt.Errorf("User Name not created - [%s]", user)
+					log.FailOnError(err, "Failed to create the user")
+					break
+				}
 
+			}
+			dash.VerifyFatal(userNotCreated, "", "User Creation Verification successful")
 		})
 
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		log.Infof("No cleanup required for this testcase")
+		log.Infof("Cleanup started")
+		err := backup.DeleteMultipleGroup(groups)
+		log.FailOnError(err, "Failed to delete group(s)")
+		err = backup.DeleteMultipleUsers(users)
+		log.FailOnError(err, "Failed to delete user(s)")
+		log.Infof("Cleanup done")
+
 	})
 
 })

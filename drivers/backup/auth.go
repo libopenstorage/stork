@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
@@ -968,6 +969,42 @@ func DeleteGroup(group string) error {
 		return err
 	}
 	log.Infof("Deleted Group - %s", group)
+	return nil
+}
+
+// Deletes Multiple groups
+func DeleteMultipleGroup(groups []string) error {
+
+	var wg sync.WaitGroup
+	for _, group := range groups {
+		wg.Add(1)
+		go func(group string) {
+			err := DeleteGroup(group)
+			log.FailOnError(err, "Failed to create group - %v", group)
+			wg.Done()
+		}(group)
+		log.Infof("Deleted Group - %s", group)
+	}
+	wg.Wait()
+
+	return nil
+}
+
+// Deletes Multiple users
+func DeleteMultipleUsers(users []string) error {
+
+	var wg sync.WaitGroup
+	for _, user := range users {
+		wg.Add(1)
+		go func(user string) {
+			err := DeleteUser(user)
+			log.FailOnError(err, "Failed to create group - %v", user)
+			wg.Done()
+		}(user)
+		log.Infof("Deleted User - %s", user)
+	}
+	wg.Wait()
+
 	return nil
 }
 
