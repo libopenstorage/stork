@@ -146,6 +146,117 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 })
 
+// This is to create multiple users and groups
+var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
+	numberOfUsers := 20
+	numberOfGroups := 10
+	users := make([]string, 0)
+	groups := make([]string, 0)
+	var groupNotCreated string
+	var userNotCreated string
+
+	JustBeforeEach(func() {
+		wantAllAfterSuiteActions = false
+		StartTorpedoTest("CreateMultipleUsersAndGroups", "Creation of multiple users and groups", nil, 58032)
+	})
+	It("Create multiple users and Group", func() {
+
+		Step("Create Groups", func() {
+			log.InfoD("Creating %d groups", numberOfGroups)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfGroups; i++ {
+				groupName := fmt.Sprintf("testGroup%v", i)
+				wg.Add(1)
+				go func(groupName string) {
+					defer wg.Done()
+					err := backup.AddGroup(groupName)
+					log.FailOnError(err, "Failed to create group - %v", groupName)
+					groups = append(groups, groupName)
+					
+				}(groupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Create Users", func() {
+			log.InfoD("Creating %d users", numberOfUsers)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("testuser%v", i)
+				firstName := fmt.Sprintf("FirstName%v", i)
+				lastName := fmt.Sprintf("LastName%v", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				wg.Add(1)
+				go func(userName, firstName, lastName, email string) {
+					defer wg.Done()
+					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					users = append(users, userName)
+					
+				}(userName, firstName, lastName, email)
+			}
+			wg.Wait()
+		})
+
+		//iterates through the group names slice and checks if the group name is present in the response map using map[key]
+		//to get the value and key to check whether the it is present or not.
+		//If it's not found, it prints the group name not found in struct slice and exit.
+
+		Step("Validate Group", func() {
+			createdgroups, err := backup.GetAllGroups()
+			log.Info("created group ", createdgroups)
+			log.FailOnError(err, "Failed to get group")
+			responseMap := make(map[string]bool)
+			for _, ctreatedgroup := range createdgroups {
+				responseMap[ctreatedgroup.Name] = true
+			}
+			for _, group := range groups {
+				if _, ok := responseMap[group]; !ok {
+					groupNotCreated = group
+					err = fmt.Errorf("Group Name not created - [%s]", group)
+					log.FailOnError(err, "Failed to create the group")
+					break
+				}
+
+			}
+			dash.VerifyFatal(groupNotCreated, "", "Group Creation Verification successful")
+		})
+
+		Step("Validate User", func() {
+			createdusers, err := backup.GetAllUsers()
+			log.Info("created user ", createdusers)
+			log.FailOnError(err, "Failed to get user")
+			responseMap := make(map[string]bool)
+			for _, ctreateduser := range createdusers {
+				responseMap[ctreateduser.Name] = true
+			}
+			for _, user := range users {
+				if _, ok := responseMap[user]; !ok {
+					userNotCreated = user
+					err = fmt.Errorf("User Name not created - [%s]", user)
+					log.FailOnError(err, "Failed to create the user")
+					break
+				}
+
+			}
+			dash.VerifyFatal(userNotCreated, "", "User Creation Verification successful")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.Infof("Cleanup started")
+		err := backup.DeleteMultipleGroups(groups)
+		log.FailOnError(err, "Failed to delete group(s)")
+		err = backup.DeleteMultipleUsers(users)
+		log.FailOnError(err, "Failed to delete user(s)")
+		log.Infof("Cleanup done")
+
+	})
+
+})
+
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (

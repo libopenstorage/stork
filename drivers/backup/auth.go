@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
@@ -849,6 +850,33 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 	return groups, nil
 }
 
+func GetAllUsers() ([]KeycloakUserRepresentation, error) {
+	fn := "GetAllGroups"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	method := "GET"
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	var users []KeycloakUserRepresentation
+	err = json.Unmarshal(response, &users)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	return users, nil
+}
+
 // GetMembersOfGroup fetches all available members of the group
 func GetMembersOfGroup(group string) ([]string, error) {
 	fn := "GetMembersOfGroup"
@@ -941,6 +969,44 @@ func DeleteGroup(group string) error {
 		return err
 	}
 	log.Infof("Deleted Group - %s", group)
+	return nil
+}
+
+// Deletes Multiple groups
+func DeleteMultipleGroups(groups []string) error {
+
+	var wg sync.WaitGroup
+	for _, group := range groups {
+		wg.Add(1)
+		go func(group string) {
+			defer wg.Done()
+			err := DeleteGroup(group)
+			log.FailOnError(err, "Failed to create group - %v", group)
+			
+		}(group)
+		log.Infof("Deleted Group - %s", group)
+	}
+	wg.Wait()
+
+	return nil
+}
+
+// Deletes Multiple users
+func DeleteMultipleUsers(users []string) error {
+
+	var wg sync.WaitGroup
+	for _, user := range users {
+		wg.Add(1)
+		go func(user string) {
+			defer wg.Done()
+			err := DeleteUser(user)
+			log.FailOnError(err, "Failed to create group - %v", user)
+			
+		}(user)
+		log.Infof("Deleted User - %s", user)
+	}
+	wg.Wait()
+
 	return nil
 }
 
