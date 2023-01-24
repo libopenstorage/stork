@@ -23,6 +23,8 @@ external_test_pod=false
 stork_test_version_check=false
 kube_scheduler_version="v1.21.0"
 cloud_deletion_validation=true
+internal_aws_lb=false
+px_namespace="kube-system"
 for i in "$@"
 do
 case $i in
@@ -164,6 +166,17 @@ case $i in
         shift
         shift
         ;;		
+    --internal_aws_lb)
+        echo "Flag to check if AWS loadbalancer is of type Internal: $2"
+        internal_aws_lb=$2
+        shift
+        shift
+        ;;		
+    --px_namespace)
+        echo "Flag to indicate namespace PX has been deployed in: $2"
+        px_namespace=$2
+        shift
+        shift
 esac
 done
 
@@ -293,7 +306,16 @@ sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-t
 
 # Add AWS creds to stork-test pod
 sed -i 's/'aws_access_key_id'/'"$aws_id"'/g' /testspecs/stork-test-pod.yaml
-sed -i 's/'aws_secret_access_key'/'"$aws_key"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's|'aws_secret_access_key'|'"$aws_key"'|g' /testspecs/stork-test-pod.yaml
+
+if [ "$internal_aws_lb" = "true" ] ; then
+	sed -i 's/'internal_aws_lb'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
+else 
+	sed -i 's/'internal_aws_lb'/'\""false"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+# Overwrite namespace where PX has been installed
+sed -i 's|'px_namespace'|'"$px_namespace"'|g' /testspecs/stork-test-pod.yaml
 
 if [ "$volume_driver" != "" ] ; then
 	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml
