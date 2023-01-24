@@ -165,10 +165,11 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
 				go func(groupName string) {
+					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
 					groups = append(groups, groupName)
-					wg.Done()
+					
 				}(groupName)
 			}
 			wg.Wait()
@@ -184,10 +185,11 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					wg.Done()
+					
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
