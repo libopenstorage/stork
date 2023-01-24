@@ -973,7 +973,7 @@ func DeleteGroup(group string) error {
 }
 
 // Deletes Multiple groups
-func DeleteMultipleGroup(groups []string) error {
+func DeleteMultipleGroups(groups []string) error {
 
 	var wg sync.WaitGroup
 	for _, group := range groups {
