@@ -2329,10 +2329,11 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+				defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					wg.Done()
+					
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -2421,7 +2422,6 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 			}(backupName)
 		}
 		wg.Wait()
-		defer EndTorpedoTest()
 		log.Infof("Deleting restore created by users")
 		for userContext, restoreName := range userRestoreContext {
 			DeleteRestore(restoreName, orgID, userContext)
