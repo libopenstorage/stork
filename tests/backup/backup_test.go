@@ -25,14 +25,11 @@ import (
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/portworx/torpedo/tests"
 
-	appsapi "k8s.io/api/apps/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -2293,762 +2290,6 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	})
 })
 
-// This test performs basic test of starting an application, backing it up and killing stork while
-// performing backup.
-var _ = Describe("{BackupCreateKillStorkRestore}", func() {
-	var (
-		contexts         []*scheduler.Context
-		bkpNamespaces    []string
-		namespaceMapping map[string]string
-		taskNamePrefix   = "backupcreaterestore"
-	)
-	labelSelectores := make(map[string]string)
-	namespaceMapping = make(map[string]string)
-	volumeParams := make(map[string]map[string]string)
-
-	BeforeEach(func() {
-		StartTorpedoTest("BackupCreateKillStorkRestore", "Validate Backup Create and Kill Stork and Restore", nil, 0)
-		wantAllAfterSuiteActions = false
-	})
-
-	It("has to connect and check the backup setup", func() {
-		Step("Setup backup", func() {
-			// Set cluster context to cluster where torpedo is running
-			SetClusterContext("")
-			SetupBackup(taskNamePrefix)
-		})
-
-		sourceClusterConfigPath, err := GetSourceClusterConfigPath()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
-
-		SetClusterContext(sourceClusterConfigPath)
-
-		Step("Deploy applications", func() {
-			contexts = make([]*scheduler.Context, 0)
-			bkpNamespaces = make([]string, 0)
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-				log.Infof("Task name %s\n", taskName)
-				appContexts := ScheduleApplications(taskName)
-				contexts = append(contexts, appContexts...)
-				for _, ctx := range appContexts {
-					// Override default App readiness time out of 5 mins with 10 mins
-					ctx.ReadinessTimeout = appReadinessTimeout
-					namespace := GetAppNamespace(ctx, taskName)
-					bkpNamespaces = append(bkpNamespaces, namespace)
-				}
-			}
-
-			// Skip volume validation until other volume providers are implemented.
-			for _, ctx := range contexts {
-				ctx.SkipVolumeValidation = true
-			}
-
-			ValidateApplications(contexts)
-			for _, ctx := range contexts {
-				for vol, params := range GetVolumeParameters(ctx) {
-					volumeParams[vol] = params
-				}
-			}
-		})
-
-		log.Info("Wait for IO to proceed\n")
-		time.Sleep(time.Minute * 5)
-
-		// TODO(stgleb): Add multi-namespace backup when ready in px-backup
-		for _, namespace := range bkpNamespaces {
-			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
-				SourceClusterName, namespace, backupName), func() {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-				err = CreateBackup(backupName,
-					SourceClusterName, backupLocationName, BackupLocationUID,
-					[]string{namespace}, labelSelectores, orgID, "", "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, "Verifying backup creation")
-			})
-		}
-
-		Step("Kill stork during backup", func() {
-			// setup task to delete stork pods as soon as it starts doing backup
-			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				backupUID := getBackupUID(backupName, orgID)
-				req := &api.BackupInspectRequest{
-					Name:  backupName,
-					OrgId: orgID,
-					Uid:   backupUID,
-				}
-
-				log.Infof("backup %s wait for running", backupName)
-				err := Inst().Backup.WaitForBackupRunning(context.Background(),
-					req, BackupRestoreCompletionTimeoutMin*time.Minute,
-					RetrySeconds*time.Second)
-
-				if err != nil {
-					log.Warnf("backup %s wait for running err %v",
-						backupName, err)
-					continue
-				} else {
-					break
-				}
-			}
-
-			ctx := &scheduler.Context{
-				App: &spec.AppSpec{
-					SpecList: []interface{}{
-						&appsapi.Deployment{
-							ObjectMeta: meta_v1.ObjectMeta{
-								Name:      storkDeploymentName,
-								Namespace: storkDeploymentNamespace,
-							},
-						},
-					},
-				},
-			}
-			log.Infof("Execute task for killing stork")
-			err := Inst().S.DeleteTasks(ctx, nil)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		for _, namespace := range bkpNamespaces {
-			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-			Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
-				err := Inst().Backup.WaitForBackupCompletion(
-					context.Background(),
-					backupName, orgID,
-					BackupRestoreCompletionTimeoutMin*time.Minute,
-					RetrySeconds*time.Second)
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]",
-						backupName, err))
-			})
-		}
-
-		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, map[string]bool{
-					SkipClusterScopedObjects:                    true,
-					scheduler.OptionsWaitForResourceLeakCleanup: true,
-					scheduler.OptionsWaitForDestroy:             true,
-				})
-			}
-		})
-
-		destClusterConfigPath, err := GetDestinationClusterConfigPath()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
-
-		SetClusterContext(destClusterConfigPath)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		for _, namespace := range bkpNamespaces {
-			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
-			Step(fmt.Sprintf("Create restore %s:%s:%s from backup %s:%s:%s",
-				destinationClusterName, namespace, restoreName,
-				SourceClusterName, namespace, backupName), func() {
-				CreateRestore(restoreName, backupName, namespaceMapping,
-					destinationClusterName, orgID, ctx)
-			})
-		}
-
-		for _, namespace := range bkpNamespaces {
-			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
-			Step(fmt.Sprintf("Wait for restore %s:%s to complete",
-				namespace, restoreName), func() {
-
-				err := Inst().Backup.WaitForRestoreCompletion(context.Background(), restoreName, orgID,
-					BackupRestoreCompletionTimeoutMin*time.Minute,
-					RetrySeconds*time.Second)
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to wait for restore [%s] to complete. Error: [%v]",
-						restoreName, err))
-			})
-		}
-
-		// Change namespaces to restored apps only after backed up apps are cleaned up
-		// to avoid switching back namespaces to backup namespaces
-		Step("Validate Restored applications", func() {
-			destClusterConfigPath, err := GetDestinationClusterConfigPath()
-			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
-
-			SetClusterContext(destClusterConfigPath)
-
-			// Populate contexts
-			for _, ctx := range contexts {
-				ctx.SkipClusterScopedObject = true
-				ctx.SkipVolumeValidation = true
-			}
-			ValidateRestoredApplications(contexts, volumeParams)
-		})
-
-		Step("teardown all restored apps", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, nil)
-			}
-		})
-
-		Step("teardown backup objects", func() {
-			TearDownBackupRestore(bkpNamespaces, bkpNamespaces)
-		})
-	})
-	AfterEach(func() {
-		EndTorpedoTest()
-	})
-})
-
-// This performs scale test of px-backup and kills stork in the middle of
-// backup process.
-var _ = Describe("{MultiProviderBackupKillStork}", func() {
-	var (
-		kubeconfigs    string
-		kubeconfigList []string
-	)
-
-	contexts := make(map[string][]*scheduler.Context)
-	bkpNamespaces := make(map[string][]string)
-	labelSelectores := make(map[string]string)
-	namespaceMapping := make(map[string]string)
-	taskNamePrefix := "backup-multi-provider"
-	providerUID := make(map[string]string)
-
-	BeforeEach(func() {
-		wantAllAfterSuiteActions = false
-		StartTorpedoTest("MultiProviderBackupKillStork", "Performs scale test of px-backup and kills stork in the middle", nil, 0)
-	})
-
-	It("has to connect and check the backup setup", func() {
-		providers := getProviders()
-
-		Step("Setup backup", func() {
-			kubeconfigs = os.Getenv("KUBECONFIGS")
-
-			if len(kubeconfigs) == 0 {
-				Expect(kubeconfigs).NotTo(BeEmpty(),
-					fmt.Sprintf("KUBECONFIGS %s must not be empty", kubeconfigs))
-			}
-
-			kubeconfigList = strings.Split(kubeconfigs, ",")
-			// Validate user has provided at least 1 kubeconfig for cluster
-			if len(kubeconfigList) == 0 {
-				Expect(kubeconfigList).NotTo(BeEmpty(),
-					fmt.Sprintf("kubeconfigList %v must have at least one", kubeconfigList))
-			}
-
-			// Set cluster context to cluster where torpedo is running
-			SetClusterContext("")
-			DumpKubeconfigs(kubeconfigList)
-
-			for _, provider := range providers {
-				log.Infof("Run Setup backup with object store provider: %s", provider)
-				orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-					provider, Inst().InstanceID)
-				bucketName = fmt.Sprintf("%s-%s-%s", BucketNamePrefix, provider, Inst().InstanceID)
-				CredName := fmt.Sprintf("%s-%s", CredName, provider)
-				CloudCredUID = uuid.New()
-				backupLocation = fmt.Sprintf("%s-%s", backupLocationName, provider)
-				providerUID[provider] = uuid.New()
-
-				CreateBucket(provider, bucketName)
-				CreateOrganization(orgID)
-				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
-				CreateBackupLocation(provider, backupLocation, providerUID[provider], CredName, CloudCredUID, BucketName, orgID, "")
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-				CreateProviderClusterObject(provider, kubeconfigList, CredName, orgID, ctx)
-			}
-		})
-
-		// Moment in time when tests should finish
-		end := time.Now().Add(time.Duration(Inst().MinRunTimeMins) * time.Minute)
-
-		for time.Now().Before(end) {
-			Step("Deploy applications", func() {
-				for _, provider := range providers {
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					log.Infof("Set context to %s", providerClusterConfigPath)
-					SetClusterContext(providerClusterConfigPath)
-
-					providerContexts := make([]*scheduler.Context, 0)
-					providerNamespaces := make([]string, 0)
-
-					// Rescan specs for each provider to reload provider specific specs
-					log.Infof("Rescan specs for provider %s", provider)
-					err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to rescan specs from %s for storage provider %s. Error: [%v]",
-							Inst().SpecDir, provider, err))
-
-					log.Infof("Start deploy applications for provider %s", provider)
-					for i := 0; i < Inst().GlobalScaleFactor; i++ {
-						taskName := fmt.Sprintf("%s-%s-%d", taskNamePrefix, provider, i)
-						log.Infof("Task name %s\n", taskName)
-						appContexts := ScheduleApplications(taskName)
-						providerContexts = append(providerContexts, appContexts...)
-
-						for _, ctx := range appContexts {
-							namespace := GetAppNamespace(ctx, taskName)
-							providerNamespaces = append(providerNamespaces, namespace)
-						}
-					}
-
-					contexts[provider] = providerContexts
-					bkpNamespaces[provider] = providerNamespaces
-				}
-			})
-
-			Step("Validate applications", func() {
-				for _, provider := range providers {
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					SetClusterContext(providerClusterConfigPath)
-
-					// In case of non-portworx volume provider skip volume validation until
-					// other volume providers are implemented.
-					for _, ctx := range contexts[provider] {
-						ctx.SkipVolumeValidation = true
-						ctx.ReadinessTimeout = BackupRestoreCompletionTimeoutMin * time.Minute
-					}
-
-					log.Infof("validate applications for provider %s", provider)
-					ValidateApplications(contexts[provider])
-				}
-			})
-
-			log.Info("Wait for IO to proceed\n")
-			time.Sleep(time.Minute * 5)
-
-			// Perform all backup operations concurrently
-			// TODO(stgleb): Add multi-namespace backup when ready in px-backup
-			for _, provider := range providers {
-				providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-				SetClusterContext(providerClusterConfigPath)
-
-				ctx, _ := context.WithTimeout(context.Background(),
-					BackupRestoreCompletionTimeoutMin*time.Minute)
-				errChan := make(chan error)
-				for _, namespace := range bkpNamespaces[provider] {
-					go func(provider, namespace string) {
-						clusterName := fmt.Sprintf("%s-%s", clusterName, provider)
-						backupLocation := fmt.Sprintf("%s-%s", backupLocationName, provider)
-						backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, provider,
-							namespace)
-						orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-							provider, Inst().InstanceID)
-						// NOTE: We don't use CreateBackup/Restore method here since it has ginkgo assertion
-						// which must be called inside of goroutine with GinkgoRecover https://onsi.github.io/ginkgo/#marking-specs-as-failed
-						Step(fmt.Sprintf("Create backup full name %s:%s:%s in organization %s",
-							clusterName, namespace, backupName, orgID), func() {
-							backupDriver := Inst().Backup
-							bkpCreateRequest := &api.BackupCreateRequest{
-								CreateMetadata: &api.CreateMetadata{
-									Name:  backupName,
-									OrgId: orgID,
-								},
-								BackupLocation: backupLocation,
-								Cluster:        clusterName,
-								Namespaces:     []string{namespace},
-								LabelSelectors: labelSelectores,
-							}
-							//ctx, err := backup.GetPxCentralAdminCtx()
-							ctx, err := backup.GetAdminCtxFromSecret()
-							Expect(err).NotTo(HaveOccurred(),
-								fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-									err))
-							_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
-							errChan <- err
-						})
-					}(provider, namespace)
-				}
-
-				for i := 0; i < len(bkpNamespaces[provider]); i++ {
-					select {
-					case <-ctx.Done():
-						Expect(ctx.Err()).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to complete backup for provider %s cluster. Error: [%v]", provider, ctx.Err()))
-					case err := <-errChan:
-						Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to complete backup for provider %s cluster. Error: [%v]", provider, err))
-					}
-				}
-			}
-
-			Step("Kill stork during backup", func() {
-				for provider, providerNamespaces := range bkpNamespaces {
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					SetClusterContext(providerClusterConfigPath)
-
-					log.Infof("Kill stork during backup for provider %s", provider)
-					// setup task to delete stork pods as soon as it starts doing backup
-					for _, namespace := range providerNamespaces {
-						backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, provider, namespace)
-						orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-							provider, Inst().InstanceID)
-
-						// Wait until all backups/restores start running
-						backupUID := getBackupUID(backupName, orgID)
-						req := &api.BackupInspectRequest{
-							Name:  backupName,
-							OrgId: orgID,
-							Uid:   backupUID,
-						}
-
-						log.Infof("backup %s wait for running", backupName)
-						err := Inst().Backup.WaitForBackupRunning(context.Background(),
-							req, BackupRestoreCompletionTimeoutMin*time.Minute,
-							RetrySeconds*time.Second)
-
-						Expect(err).NotTo(HaveOccurred())
-					}
-					killStork()
-				}
-			})
-
-			// wait until all backups are completed, there is no need to parallel here
-			for provider, namespaces := range bkpNamespaces {
-				providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-				SetClusterContext(providerClusterConfigPath)
-
-				for _, namespace := range namespaces {
-					backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, provider, namespace)
-					orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-						provider, Inst().InstanceID)
-					Step(fmt.Sprintf("Wait for backup %s to complete in organization %s",
-						backupName, orgID), func() {
-						err := Inst().Backup.WaitForBackupCompletion(
-							context.Background(),
-							backupName, orgID,
-							BackupRestoreCompletionTimeoutMin*time.Minute,
-							RetrySeconds*time.Second)
-						Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]",
-								backupName, err))
-					})
-				}
-			}
-
-			Step("teardown all applications on source cluster before switching context to destination cluster", func() {
-				for _, provider := range providers {
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					log.Infof("Set config to %s", providerClusterConfigPath)
-					SetClusterContext(providerClusterConfigPath)
-
-					for _, ctx := range contexts[provider] {
-						TearDownContext(ctx, map[string]bool{
-							SkipClusterScopedObjects:                    true,
-							scheduler.OptionsWaitForResourceLeakCleanup: true,
-							scheduler.OptionsWaitForDestroy:             true,
-						})
-					}
-				}
-			})
-
-			for provider := range bkpNamespaces {
-				providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-				SetClusterContext(providerClusterConfigPath)
-
-				ctx, _ := context.WithTimeout(context.Background(),
-					BackupRestoreCompletionTimeoutMin*time.Minute)
-				errChan := make(chan error)
-				for _, namespace := range bkpNamespaces[provider] {
-					go func(provider, namespace string) {
-						clusterName := fmt.Sprintf("%s-%s", clusterName, provider)
-						backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, provider, namespace)
-						restoreName := fmt.Sprintf("%s-%s-%s", restoreNamePrefix, provider, namespace)
-						orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-							provider, Inst().InstanceID)
-						Step(fmt.Sprintf("Create restore full name %s:%s:%s in organization %s",
-							clusterName, namespace, backupName, orgID), func() {
-							// NOTE: We don't use CreateBackup/Restore method here since it has ginkgo assertion
-							// which must be called inside of gorutuine with GinkgoRecover https://onsi.github.io/ginkgo/#marking-specs-as-failed
-							backupDriver := Inst().Backup
-							createRestoreReq := &api.RestoreCreateRequest{
-								CreateMetadata: &api.CreateMetadata{
-									Name:  restoreName,
-									OrgId: orgID,
-								},
-								Backup:           backupName,
-								Cluster:          clusterName,
-								NamespaceMapping: namespaceMapping,
-							}
-							//ctx, err := backup.GetPxCentralAdminCtx()
-							ctx, err := backup.GetAdminCtxFromSecret()
-							Expect(err).NotTo(HaveOccurred(),
-								fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-									err))
-							_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
-
-							errChan <- err
-						})
-					}(provider, namespace)
-				}
-
-				for i := 0; i < len(bkpNamespaces[provider]); i++ {
-					select {
-					case <-ctx.Done():
-						Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to complete backup for provider %s cluster. Error: [%v]", provider, ctx.Err()))
-					case err := <-errChan:
-						Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to complete backup for provider %s cluster. Error: [%v]", provider, err))
-					}
-				}
-			}
-
-			Step("Kill stork during restore", func() {
-				for provider, providerNamespaces := range bkpNamespaces {
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					SetClusterContext(providerClusterConfigPath)
-
-					log.Infof("Kill stork during restore for provider %s", provider)
-					// setup task to delete stork pods as soon as it starts doing backup
-					for _, namespace := range providerNamespaces {
-						restoreName := fmt.Sprintf("%s-%s-%s", restoreNamePrefix, provider, namespace)
-						orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-							provider, Inst().InstanceID)
-
-						// Wait until all backups/restores start running
-						req := &api.RestoreInspectRequest{
-							Name:  restoreName,
-							OrgId: orgID,
-						}
-
-						log.Infof("restore %s wait for running", restoreName)
-						err := Inst().Backup.WaitForRestoreRunning(context.Background(),
-							req, BackupRestoreCompletionTimeoutMin*time.Minute,
-							RetrySeconds*time.Second)
-
-						Expect(err).NotTo(HaveOccurred())
-					}
-					log.Infof("Kill stork task")
-					killStork()
-				}
-			})
-
-			for provider, providerNamespaces := range bkpNamespaces {
-				providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-				SetClusterContext(providerClusterConfigPath)
-
-				for _, namespace := range providerNamespaces {
-					restoreName := fmt.Sprintf("%s-%s-%s", restoreNamePrefix, provider, namespace)
-					orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-						provider, Inst().InstanceID)
-					Step(fmt.Sprintf("Wait for restore %s:%s to complete",
-						namespace, restoreName), func() {
-						err := Inst().Backup.WaitForRestoreCompletion(context.Background(),
-							restoreName, orgID,
-							BackupRestoreCompletionTimeoutMin*time.Minute,
-							RetrySeconds*time.Second)
-						Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to wait for restore [%s] to complete. Error: [%v]",
-								restoreName, err))
-					})
-				}
-			}
-
-			// Change namespaces to restored apps only after backed up apps are cleaned up
-			// to avoid switching back namespaces to backup namespaces
-			Step("Validate Restored applications", func() {
-				// Populate contexts
-				for _, provider := range providers {
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					SetClusterContext(providerClusterConfigPath)
-
-					for _, ctx := range contexts[provider] {
-						ctx.SkipClusterScopedObject = true
-						ctx.SkipVolumeValidation = true
-						ctx.ReadinessTimeout = BackupRestoreCompletionTimeoutMin * time.Minute
-
-						err := Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
-						Expect(err).NotTo(HaveOccurred())
-					}
-
-					ValidateApplications(contexts[provider])
-				}
-			})
-
-			Step("teardown all restored apps", func() {
-				for _, provider := range providers {
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					SetClusterContext(providerClusterConfigPath)
-
-					for _, ctx := range contexts[provider] {
-						TearDownContext(ctx, map[string]bool{
-							scheduler.OptionsWaitForResourceLeakCleanup: true,
-							scheduler.OptionsWaitForDestroy:             true,
-						})
-					}
-				}
-			})
-
-			Step("teardown backup and restore objects", func() {
-				for provider, providerNamespaces := range bkpNamespaces {
-					log.Infof("teardown backup and restore objects for provider %s", provider)
-					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-					Expect(err).NotTo(HaveOccurred(),
-						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					SetClusterContext(providerClusterConfigPath)
-
-					ctx, _ := context.WithTimeout(context.Background(),
-						BackupRestoreCompletionTimeoutMin*time.Minute)
-					errChan := make(chan error)
-
-					for _, namespace := range providerNamespaces {
-						go func(provider, namespace string) {
-							clusterName := fmt.Sprintf("%s-%s", clusterName, provider)
-							backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, provider, namespace)
-							orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-								provider, Inst().InstanceID)
-							Step(fmt.Sprintf("Delete backup full name %s:%s:%s",
-								clusterName, namespace, backupName), func() {
-								backupDriver := Inst().Backup
-								backupUID := getBackupUID(backupName, orgID)
-								bkpDeleteRequest := &api.BackupDeleteRequest{
-									Name:  backupName,
-									OrgId: orgID,
-									Uid:   backupUID,
-								}
-								//	ctx, err = backup.GetPxCentralAdminCtx()
-								ctx, err = backup.GetAdminCtxFromSecret()
-								Expect(err).NotTo(HaveOccurred(),
-									fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-										err))
-								_, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
-
-								ctx, _ := context.WithTimeout(context.Background(),
-									BackupRestoreCompletionTimeoutMin*time.Minute)
-
-								if err = backupDriver.WaitForBackupDeletion(ctx, backupName, orgID,
-									BackupRestoreCompletionTimeoutMin*time.Minute,
-									RetrySeconds*time.Second); err != nil {
-									errChan <- err
-									return
-								}
-
-								errChan <- err
-							})
-						}(provider, namespace)
-
-						go func(provider, namespace string) {
-							clusterName := fmt.Sprintf("%s-%s", clusterName, provider)
-							restoreName := fmt.Sprintf("%s-%s-%s", restoreNamePrefix, provider, namespace)
-							orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
-								provider, Inst().InstanceID)
-							Step(fmt.Sprintf("Delete restore full name %s:%s:%s",
-								clusterName, namespace, restoreName), func() {
-								backupDriver := Inst().Backup
-								deleteRestoreReq := &api.RestoreDeleteRequest{
-									OrgId: orgID,
-									Name:  restoreName,
-								}
-								//ctx, err = backup.GetPxCentralAdminCtx()
-								ctx, err = backup.GetAdminCtxFromSecret()
-								Expect(err).NotTo(HaveOccurred(),
-									fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-										err))
-								_, err = backupDriver.DeleteRestore(ctx, deleteRestoreReq)
-
-								ctx, _ := context.WithTimeout(context.Background(),
-									BackupRestoreCompletionTimeoutMin*time.Minute)
-
-								log.Infof("Wait for restore %s is deleted", restoreName)
-								if err = backupDriver.WaitForRestoreDeletion(ctx, restoreName, orgID,
-									BackupRestoreCompletionTimeoutMin*time.Minute,
-									RetrySeconds*time.Second); err != nil {
-									errChan <- err
-									return
-								}
-
-								errChan <- err
-							})
-						}(provider, namespace)
-					}
-
-					for i := 0; i < len(providerNamespaces)*2; i++ {
-						select {
-						case <-ctx.Done():
-							Expect(err).NotTo(HaveOccurred(),
-								fmt.Sprintf("Failed to complete backup for provider %s cluster. Error: [%v]", provider, ctx.Err()))
-						case err := <-errChan:
-							Expect(err).NotTo(HaveOccurred(),
-								fmt.Sprintf("Failed to complete backup for provider %s cluster. Error: [%v]", provider, err))
-						}
-					}
-				}
-			})
-		}
-
-		Step("teardown backup objects for test", func() {
-			for _, provider := range providers {
-				providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-				SetClusterContext(providerClusterConfigPath)
-
-				log.Infof("Run Setup backup with object store provider: %s", provider)
-				orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix), provider, Inst().InstanceID)
-				bucketName := fmt.Sprintf("%s-%s-%s", BucketNamePrefix, provider, Inst().InstanceID)
-				CredName := fmt.Sprintf("%s-%s", CredName, provider)
-				backupLocation := fmt.Sprintf("%s-%s", backupLocationName, provider)
-				clusterName := fmt.Sprintf("%s-%s", clusterName, provider)
-
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-				DeleteCluster(clusterName, orgID, ctx)
-				// Need to add backup location UID for Delete Backup Location call
-				DeleteBackupLocation(backupLocation, "", orgID)
-				DeleteCloudCredential(CredName, orgID, CloudCredUID)
-				DeleteBucket(provider, bucketName)
-			}
-		})
-	})
-	AfterEach(func() {
-		EndTorpedoTest()
-	})
-})
-
-func killStork() {
-	ctx := &scheduler.Context{
-		App: &spec.AppSpec{
-			SpecList: []interface{}{
-				&appsapi.Deployment{
-					ObjectMeta: meta_v1.ObjectMeta{
-						Name:      storkDeploymentName,
-						Namespace: storkDeploymentNamespace,
-					},
-				},
-			},
-		},
-	}
-	log.Infof("Execute task for killing stork")
-	err := Inst().S.DeleteTasks(ctx, nil)
-	Expect(err).NotTo(HaveOccurred())
-}
-
 // This test restarts volume driver (PX) while backup is in progress
 var _ = Describe("{BackupRestartPX}", func() {
 	var (
@@ -3979,6 +3220,251 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 	})
 })
 
+// This test performs basic test of starting an application, backing it up and killing stork while
+// performing backup and restores.
+var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
+	var (
+		appList = Inst().AppList
+	)
+	var preRuleNameList []string
+	var postRuleNameList []string
+	var contexts []*scheduler.Context
+	labelSelectors := make(map[string]string)
+	CloudCredUIDMap := make(map[string]string)
+	var appContexts []*scheduler.Context
+	var backupLocation string
+	var backupLocationUID string
+	var cloudCredUID string
+	backupLocationMap := make(map[string]string)
+	var bkpNamespaces []string
+	var clusterUid string
+	var cloudCredName string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	bkpNamespaces = make([]string, 0)
+
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Strok when backups and restores in progress", nil, 0)
+		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
+		for i := 0; i < len(appList); i++ {
+			if Contains(postRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+				}
+			}
+			if Contains(preRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+				}
+			}
+		}
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Kill Stork when backup and restore in-progress", func() {
+		Step("Validate applications", func() {
+			ValidateApplications(contexts)
+		})
+
+		Step("Creating rules for backup", func() {
+			log.InfoD("Creating pre rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				log.FailOnError(err, "Creating pre rule for deployed apps failed")
+				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
+				preRuleNameList = append(preRuleNameList, ruleName)
+			}
+			log.InfoD("Creating post rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				log.FailOnError(err, "Creating post rule for deployed apps failed")
+				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
+				postRuleNameList = append(postRuleNameList, ruleName)
+			}
+		})
+
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredUID = uuid.New()
+				CloudCredUIDMap[cloudCredUID] = CredName
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+			}
+		})
+
+		Step("Register cluster for backup", func() {
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		})
+
+		Step("Creating backup location", func() {
+			log.InfoD("Creating backup location")
+			bucketNames := getBucketName()
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
+				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				CreateBackupLocation(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID,
+					bucketName, orgID, "")
+			}
+		})
+
+		Step("Start backup of application to bucket", func() {
+			for _, namespace := range bkpNamespaces {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				dash.VerifyFatal(err, nil, "Getting context")
+				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				CreateBackupWithoutCheck(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
+					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
+			}
+		})
+
+		Step("Kill stork when backup in progress", func() {
+			log.InfoD("Kill stork when backup in progress")
+			storkLabel := make(map[string]string)
+			storkLabel["name"] = "stork"
+			storkNamespace := getPXNamespace()
+			pods, err := core.Instance().GetPods(storkNamespace, storkLabel)
+			dash.VerifyFatal(err, nil, "Killing Stork pods")
+			for _, pod := range pods.Items {
+				err := core.Instance().DeletePod(pod.GetName(), storkNamespace, false)
+				log.FailOnError(err, fmt.Sprintf("Failed to kill stork pod [%s]", pod.GetName()))
+			}
+		})
+
+		Step("Check if backup is successful when the stork restart happened", func() {
+			log.InfoD("Check if backup is successful post stork restarts")
+			var bkpUid string
+			backupDriver := Inst().Backup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupSuccessCheck := func() (interface{}, bool, error) {
+					bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   bkpUid,
+						OrgId: orgID,
+					}
+					resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+					log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
+					actual := resp.GetBackup().GetStatus().Status
+					expected := api.BackupInfo_StatusInfo_Success
+					if actual != expected {
+						return "", true, fmt.Errorf("backup status expected was [%s] but got [%s]", expected, actual)
+					}
+					return "", false, nil
+				}
+				task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+				bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+				backupInspectRequest := &api.BackupInspectRequest{
+					Name:  backupName,
+					Uid:   bkpUid,
+					OrgId: orgID,
+				}
+				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+				log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
+				dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup success for - "+resp.GetBackup().GetName())
+			}
+		})
+		Step("Validate applications", func() {
+			ValidateApplications(contexts)
+		})
+		Step("Restoring the backups application", func() {
+			for _, namespace := range bkpNamespaces {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				CreateRestoreWithoutCheck(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+			}
+		})
+		Step("Kill stork when restore in-progress", func() {
+			log.InfoD("Kill stork when restore in-progress")
+			storkLabel := make(map[string]string)
+			storkLabel["name"] = "stork"
+			storkNamespace := getPXNamespace()
+			pods, err := core.Instance().GetPods(storkNamespace, storkLabel)
+			dash.VerifyFatal(err, nil, "Killing Stork pods")
+			for _, pod := range pods.Items {
+				err := core.Instance().DeletePod(pod.GetName(), storkNamespace, false)
+				log.FailOnError(err, fmt.Sprintf("Failed to kill stork pod [%s]", pod.GetName()))
+			}
+		})
+		Step("Check if restore is successful when the stork restart happened", func() {
+			log.InfoD("Check if restore is successful post stork restarts")
+			backupDriver := Inst().Backup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				restoreName := fmt.Sprintf("%s-restore", backupName)
+				restoreSuccessCheck := func() (interface{}, bool, error) {
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  restoreName,
+						OrgId: orgID,
+					}
+					resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+					restoreResponseStatus := resp.GetRestore().GetStatus()
+					log.FailOnError(err, "Failed verifying restore for - %s", restoreName)
+					actual := restoreResponseStatus.GetStatus()
+					expected := api.RestoreInfo_StatusInfo_PartialSuccess
+					if actual != expected {
+						log.Infof("Restore status - %s", restoreResponseStatus)
+						log.InfoD("Status of %s - [%s]", restoreName, restoreResponseStatus.GetStatus())
+						return "", true, fmt.Errorf("restore status expected was [%s] but got [%s]", expected, actual)
+					}
+          return "", false, nil
+				}
+				task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+				restoreInspectRequest := &api.RestoreInspectRequest {
+					Name:  restoreName,
+					OrgId: orgID,
+				}
+				resp, _ := backupDriver.InspectRestore(ctx, restoreInspectRequest)
+				dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess , "Inspecting the Restore success for - "+resp.GetRestore().GetName())
+			}
+		})
+		Step("Validate applications", func() {
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Deleting the deployed apps after the testcase")
+		for i := 0; i < len(contexts); i++ {
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			err := Inst().S.Destroy(contexts[i], opts)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+		}
+
+		log.InfoD("Deleting backup location, cloud creds and clusters")
+		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID)
+	})
+})
+
 // TODO: There is no delete org API
 /*func DeleteOrganization(orgID string) {
 	Step(fmt.Sprintf("Delete organization [%s]", orgID), func() {
@@ -4623,6 +4109,15 @@ func getProviders() []string {
 	return strings.Split(providersStr, ",")
 }
 
+// getPXNamespace fetches px namespace from env else sends backup kube-system
+func getPXNamespace() string {
+	namespace := os.Getenv("PX_NAMESPACE")
+	if namespace != "" {
+		return namespace
+	}
+	return storkDeploymentNamespace
+}
+
 func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string, error) {
 	log.Infof("Get kubeconfigPath from list %v and provider %s",
 		kubeconfigs, provider)
@@ -5048,6 +4543,44 @@ func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	DeleteBackupLocation(backupLocationName, "", OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
+}
+
+// CreateRestoreWithoutCheck creates restore without waiting for completion
+func CreateRestoreWithoutCheck(restoreName string, backupName string,
+	namespaceMapping map[string]string, clusterName string, orgID string, ctx context.Context) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup needed to be restored")
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	log.Debugf("Enumerate backup response -\n%v", curBackups)
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:           backupName,
+		Cluster:          clusterName,
+		NamespaceMapping: namespaceMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+	}
+	_, err := backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateRestoreGetErr creates restore
