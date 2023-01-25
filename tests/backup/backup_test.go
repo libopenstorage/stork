@@ -1032,10 +1032,10 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 })
 
 var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
-	numberOfUsers := getEnv(usersToBeCreated, "200").(int)
-	numberOfGroups := getEnv(groupsToBeCreated, "100").(int)
-	groupSize := getEnv(maxUsersInGroup, "2").(int)
-	numberOfBackups := getEnv(maxBackupsToBeCreated, "100").(int)
+	numberOfUsers, _ := strconv.Atoi(getEnv(usersToBeCreated, "200"))
+	numberOfGroups, _ := strconv.Atoi(getEnv(groupsToBeCreated, "100"))
+	groupSize, _ := strconv.Atoi(getEnv(maxUsersInGroup, "2"))
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "100"))
 	timeBetweenConsecutiveBackups := 4 * time.Second
 	users := make([]string, 0)
 	groups := make([]string, 0)
@@ -5325,7 +5325,7 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteBackupLocation(backupLocationName, "", OrgID)
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 }
-func getEnv(environmentVariable string, defaultValue string) interface{} {
+func getEnv(environmentVariable string, defaultValue string) string {
 	value, present := os.LookupEnv(environmentVariable)
 	if !present {
 		value = defaultValue
