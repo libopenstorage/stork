@@ -16,19 +16,24 @@ import (
 )
 
 const (
-	storkDeploymentName      = "stork"
-	storkDeploymentNamespace = "kube-system"
-	clusterName              = "tp-cluster"
-	restoreNamePrefix        = "tp-restore"
-	configMapName            = "kubeconfigs"
-	destinationClusterName   = "destination-cluster"
-	backupLocationName       = "tp-blocation"
-	appReadinessTimeout      = 10 * time.Minute
-	defaultRetryInterval     = 10 * time.Second
-	enumerateBatchSize       = 100
-	taskNamePrefix           = "backupcreaterestore"
-	orgID                    = "default"
-	defaultTimeout           = 5 * time.Minute
+	storkDeploymentName                       = "stork"
+	storkDeploymentNamespace                  = "kube-system"
+	clusterName                               = "tp-cluster"
+	restoreNamePrefix                         = "tp-restore"
+	configMapName                             = "kubeconfigs"
+	destinationClusterName                    = "destination-cluster"
+	backupLocationName                        = "tp-blocation"
+	appReadinessTimeout                       = 10 * time.Minute
+	defaultRetryInterval                      = 10 * time.Second
+	enumerateBatchSize                        = 100
+	taskNamePrefix                            = "backupcreaterestore"
+	orgID                                     = "default"
+	defaultTimeout                            = 5 * time.Minute
+	usersToBeCreated                          = "USERS_TO_CREATE"
+	groupsToBeCreated                         = "GROUPS_TO_CREATE"
+	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
+	maxBackupsToBeCreated                     = "MAX_BACKUPS"
+	maxWaitPeriodForBackupCompletionInMinutes = 20
 )
 
 var (
