@@ -50,6 +50,12 @@ type userRoleAccess struct {
 	context  context.Context
 }
 
+var backupAccessKeyValue = map[BackupAccess]string{
+	0: "ViewOnlyAccess",
+	1: "RestoreAccess",
+	2: "FullAccess",
+}
+
 // This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
@@ -4902,7 +4908,7 @@ func ValidateSharedBackupWithUsers(key userRoleAccess, backupName string, restor
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 	log.InfoD("Registering Source and Destination clusters from user context")
 	CreateSourceAndDestClusters(orgID, "", "", key.context)
-	log.InfoD("Validating if user [%s] with access [%v] and [%v] role can restore and delete backup or not", key.user, key.accesses, key.roles)
+	log.InfoD("Validating if user [%s] with access [%v] and [%v] role can restore and delete backup or not", key.user, backupAccessKeyValue[key.accesses], key.roles)
 	backupDriver := Inst().Backup
 	switch key.accesses {
 	case ViewOnlyAccess:
