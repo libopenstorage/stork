@@ -3599,7 +3599,6 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	var (
 		appList          = Inst().AppList
-		backupName       string
 		contexts         []*scheduler.Context
 		preRuleNameList  []string
 		postRuleNameList []string
@@ -3716,7 +3715,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
 				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
 				dash.VerifyFatal(err, nil, "Restore failed")
@@ -3774,7 +3773,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 })
 
 // This testcase verifies resize after same original volume is restored from a backup stored in a locked bucket
-var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
+var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	var (
 		appList          = Inst().AppList
 		backupName       string
