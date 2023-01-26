@@ -1773,15 +1773,16 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		Step("Validate that no groups or users have access to backups shared at cluster level", func() {
 			log.InfoD("Validate no groups or users have access to backups shared at cluster level")
 			log.Infof("User chosen to validate no access - %s", chosenUser)
-
-			// Enumerate all the backups available to the user
-			userBackups, err := GetAllBackupsForUser(chosenUser, "Password1")
-			log.FailOnError(err, "Failed to get all backups for user - [%s]", chosenUser)
-			log.Infof("Backups user [%s] has access to - %v", chosenUser, userBackups)
 			log.InfoD("Checking backups user [%s] has after revoking", chosenUser)
+			var userBackups []string
+			var err error
 			noAccessCheck := func() (interface{}, bool, error) {
+				// Enumerate all the backups available to the user
+				userBackups, err = GetAllBackupsForUser(chosenUser, "Password1")
+				log.FailOnError(err, "Failed to get all backups for user - [%s]", chosenUser)
+				log.Infof("Backups user [%s] has access to - %v", chosenUser, userBackups)
 				if len(userBackups) > 0 {
-					return "", true, fmt.Errorf("Waiting for all backup access - [%v] to be revoked for user = [%s]",
+					return "", true, fmt.Errorf("waiting for all backup access - [%v] to be revoked for user = [%s]",
 						userBackups, chosenUser)
 				}
 				return "", false, nil
@@ -2684,11 +2685,11 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
-				defer wg.Done()
+					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					
+
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()

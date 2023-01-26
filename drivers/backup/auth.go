@@ -982,7 +982,7 @@ func DeleteMultipleGroups(groups []string) error {
 			defer wg.Done()
 			err := DeleteGroup(group)
 			log.FailOnError(err, "Failed to create group - %v", group)
-			
+
 		}(group)
 		log.Infof("Deleted Group - %s", group)
 	}
@@ -1001,7 +1001,7 @@ func DeleteMultipleUsers(users []string) error {
 			defer wg.Done()
 			err := DeleteUser(user)
 			log.FailOnError(err, "Failed to create group - %v", user)
-			
+
 		}(user)
 		log.Infof("Deleted User - %s", user)
 	}
