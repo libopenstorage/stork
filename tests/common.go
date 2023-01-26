@@ -4064,11 +4064,40 @@ func ParseFlags() {
 			}
 		}
 
+		/*
+			Get TestSetID based on below precedence
+			1. Check if user has passed in command line and use
+			2. Check if user has set it has an env variable and use
+			3. Check if build.properties available with TestSetID
+			4. If not present create a new one
+		*/
 		val, ok := os.LookupEnv("DASH_UID")
-		if ok {
+		if testsetID != 0 {
+			dash.TestSetID = testsetID
+		} else if ok && (val != "" && val != "0") {
 			testsetID, err = strconv.Atoi(val)
+			log.Infof(fmt.Sprintf("Using TestSetID: %s set as enviornment variable", val))
 			if err != nil {
 				log.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
+			}
+		} else {
+			fileName := "/build.properties"
+			readFile, err := os.Open(fileName)
+			if err == nil {
+				fileScanner := bufio.NewScanner(readFile)
+				fileScanner.Split(bufio.ScanLines)
+				for fileScanner.Scan() {
+					line := fileScanner.Text()
+					if strings.Contains(line, "DASH_UID") {
+						testsetToUse := strings.Split(line, "=")[1]
+						log.Infof("Using TestSetID: %s found in build.properties", testsetToUse)
+						dash.TestSetID, err = strconv.Atoi(testsetToUse)
+						if err != nil {
+							log.Errorf("Error in getting DASH_UID variable, %v", err)
+						}
+						break
+					}
+				}
 			}
 		}
 		if testsetID != 0 {
