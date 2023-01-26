@@ -237,7 +237,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 
 })
 
-// Validate that user can't delete shared backup without adding cluster
+// Validate that use can't duplicate a shared backup with registering the cluster
 var _ = Describe("{DuplicateSharedBackup}", func() {
 	userName := "testuser1"
 	firstName := "firstName"
@@ -336,16 +336,17 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 
 			// Validate that backups are shared with user
 			log.Infof("Validating that backups are shared with %s user", userName)
-			userBackups1, _ := GetAllBackupsForUser(userName, password)
-			dash.VerifyFatal(len(userBackups1), numberOfBackups, fmt.Sprintf("Validating that user [%s] has access to all shared backups", userName))
+			userBackups1, err := GetAllBackupsForUser(userName, password)
+			log.FailOnError(err, "Not able to fetch backup for user %s", userName)
+			dash.VerifyFatal(len(userBackups1), numberOfBackups, fmt.Sprintf("Validating that user [%s] has access to all shared backups [%v]", userName, userBackups1))
 
 			//to duplicate shared backup internally it calls create backup api
 			log.Infof("Duplicate shared backup")
 			err = CreateBackup(backupName, SourceClusterName, BackupLocationName, backupLocationUID, []string{bkpNamespaces[0]},
 				nil, orgID, clusterUid, "", "", "", "", ctxNonAdmin)
 			log.Infof("user not able to duplicate shared backup without adding cluster with err - %v", err)
-			dash.VerifyFatal(strings.Contains(err.Error(), "NotFound desc = failed to retrieve cluster [source-cluster]: object not found"), true, "Verifying that shared backup can't be duplicated without adding cluster")
-
+			errMessage := fmt.Sprintf("NotFound desc = failed to retrieve cluster [%s]: object not found", SourceClusterName)
+			dash.VerifyFatal(strings.Contains(err.Error(), errMessage), true, "Verifying that shared backup can't be duplicated without adding cluster")
 		})
 
 	})
