@@ -2808,7 +2808,6 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	email := "testuser1@cnbu.com"
 	password := "Password1"
 	numberOfBackups := 20
-	users := make([]string, 0)
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
 	var contexts []*scheduler.Context
@@ -2823,8 +2822,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var credName string
 	bkpNamespaces = make([]string, 0)
-	providers := getProviders()
-	buckets := getBucketName()
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteSharedBackup",
 			"Share backup with multiple users and delete the backup", nil, 82937)
@@ -2842,6 +2840,8 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		}
 	})
 	It("Validate shared backups are deleted from owner of backup ", func() {
+		providers := getProviders()
+		buckets := getBucketName()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
@@ -2850,6 +2850,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		})
 		Step("Create Users", func() {
 			err = backup.AddUser(userName, firstName, lastName, email, password)
+			dash.VerifyFatal(err, nil, "Verifying user creation")
 
 		})
 		Step("Adding Credentials and Registering Backup Location", func() {
@@ -2911,10 +2912,9 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		})
 
 		Step("Delete Shared Backups from user", func() {
-
 			log.InfoD("register the Source and destination clutser of non-pxadmin")
-			// Get user context
 
+			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
 			log.FailOnError(err, "Fetching non px-central-admin user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
@@ -2965,18 +2965,8 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
-		var wg sync.WaitGroup
-		defer EndTorpedoTest()
-		log.Infof("Cleaning up users")
-		for _, userName := range users {
-			wg.Add(1)
-			go func(userName string) {
-				defer wg.Done()
-				err := backup.DeleteUser(userName)
-				log.FailOnError(err, "Error deleting user %v", userName)
-			}(userName)
-		}
-		wg.Wait()
+		err := backup.DeleteUser(userName)
+		log.FailOnError(err, "Error deleting user %v", userName)
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -3013,6 +3003,7 @@ func GetAllBackupsAdmin() ([]string, error) {
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	log.FailOnError(err, "Falied to enumerate on backup objects")
 	for _, bkp = range curBackups.GetBackups() {
 		backupNames = append(backupNames, bkp.GetName())
 	}
