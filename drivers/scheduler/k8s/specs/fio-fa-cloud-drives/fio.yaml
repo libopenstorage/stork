@@ -61,7 +61,7 @@ spec:
       - ReadWriteOnce
       resources:
         requests:
-          storage: 200Gi
+          storage: 10Gi
   - metadata:
       name: fio-log
     spec:
