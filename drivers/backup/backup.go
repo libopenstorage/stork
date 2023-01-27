@@ -267,6 +267,9 @@ type SchedulePolicy interface {
 
 	// DeleteBackupSchedulePolicy deletes the list of schedule policies
 	DeleteBackupSchedulePolicy(orgID string, policyList []string) error
+
+	// GetSchedulePolicyUid gets the uid for the given schedule policy
+	GetSchedulePolicyUid(orgID string, tx context.Context, schPolicyName string) (string, error)
 }
 
 // ScheduleBackup interface
