@@ -11,6 +11,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
@@ -181,4 +182,14 @@ func IsNFSBackuplocationType(
 		return true, nil
 	}
 	return false, nil
+}
+
+func GetUIDLastSection(uid types.UID) string {
+	parts := strings.Split(string(uid), "-")
+	uidLastSection := parts[len(parts)-1]
+
+	if uidLastSection == "" {
+		uidLastSection = string(uid)
+	}
+	return uidLastSection
 }
