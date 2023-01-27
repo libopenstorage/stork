@@ -4987,6 +4987,8 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				}(userName,role)
 			}
 			wg.Wait()
+			//Waiting for catalog to update
+			time.Sleep(time.Minute * 1)
 		})
 
 		Step("Validate if all the created users are deleted ", func(){
@@ -5000,9 +5002,9 @@ var _ = Describe("{DeleteUsersRole}", func() {
 					if userObj.Name == user {
 						result = true
 						break
-					}
-					dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted user [%s]", user))
+					}	
 				}
+				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted user [%s]", user))
 			}
 		})
 	})
