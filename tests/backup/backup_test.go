@@ -4981,9 +4981,9 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				go func(userName string,role backup.PxBackupRole) {
 					defer wg.Done()
 					err := backup.DeleteRoleFromUser(userName,role,"")
-					dash.VerifyFatal(err, nil, "Remove role")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 					err = backup.DeleteUser(userName)
-					dash.VerifyFatal(err, nil, "Delete user")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 				}(userName,role)
 			}
 			wg.Wait()
