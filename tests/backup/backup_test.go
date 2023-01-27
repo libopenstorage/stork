@@ -288,7 +288,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		})
 		Step("Create User", func() {
 			err = backup.AddUser(userName, firstName, lastName, email, password)
-			dash.VerifyFatal(err, nil, "Verifying user creation")
+			log.FailOnError(err, "Failed to create user - %s", userName)
 
 		})
 		Step("Adding Credentials and Registering Backup Location", func() {
