@@ -26,6 +26,11 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+	storageapi "k8s.io/api/storage/v1"
+	storage "github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/api/core/v1"
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -5043,6 +5048,149 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	})
 })
 
+// Change replica while restoring backup through StorageClass Mapping.
+var _ = Describe("{ReplicaChangeWhileRestore}", func() {
+	namespaceMapping := make(map[string]string)
+	storageClassMapping := make(map[string]string)
+	var contexts []*scheduler.Context
+	CloudCredUIDMap := make(map[string]string)
+	var appContexts []*scheduler.Context
+	var backupLocation string
+	var backupLocationUID string
+	var cloudCredUID string
+	backupLocationMap := make(map[string]string)
+	var bkpNamespaces []string
+	var clusterUid string
+	var cloudCredName string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	bkpNamespaces = make([]string, 0)
+	timestamp := strconv.Itoa(int(time.Now().Unix()))
+	labelSelectors := make(map[string]string)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58043)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Change replica while restoring backup", func() {
+		Step("Validate applications", func() {
+			ValidateApplications(contexts)
+		})
+
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName := fmt.Sprintf("%s-%s-%s", "cred", provider, timestamp)
+				cloudCredUID = uuid.New()
+				CloudCredUIDMap[cloudCredUID] = CredName
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+			}
+		})
+
+		Step("Register cluster for backup", func() {
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		})
+
+		Step("Creating backup location", func() {
+			log.InfoD("Creating backup location")
+			bucketNames := getBucketName()
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName := fmt.Sprintf("%s-%s-%v", "cred", provider, timestamp)
+				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
+				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				CreateBackupLocation(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID,
+					bucketName, orgID, "")
+			}
+		})
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+				dash.VerifyFatal(err, nil, "Verifying backup creation with custom resources")
+			}
+		})
+		Step("Create new storage class for restore", func() {
+			log.InfoD("Create new storage class for restore")
+			scName := fmt.Sprintf("replica-sc-%s", timestamp)
+			params := make(map[string]string)
+			params["repl"] = "2"
+			k8sStorage := storage.Instance()
+			v1obj := meta_v1.ObjectMeta{
+				Name: scName,
+			}
+			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+			bindMode := storageapi.VolumeBindingImmediate
+			scObj := storageapi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				ReclaimPolicy:     &reclaimPolicyDelete,
+				VolumeBindingMode: &bindMode,
+			}
+			_, err := k8sStorage.CreateStorageClass(&scObj)
+			dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+		})
+
+		Step("Restoring the backed up application", func() {
+			log.InfoD("Restoring the backed up application")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+				scName := fmt.Sprintf("replica-sc-%s", timestamp)
+				pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
+				singlePvc := pvcs.Items[0]
+				dash.VerifyFatal(err, nil, "Getting PVC from namespace")
+				sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				dash.VerifyFatal(err, nil, "Getting SC from PVC")
+				storageClassMapping[sourceScName.Name] = scName
+				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
+				namespaceMapping[namespace] = restoredNameSpace
+				err = CreateRestoreWithCustomStorageClass(restoreName, backupName, namespaceMapping, storageClassMapping, SourceClusterName, orgID, ctx)
+				dash.VerifyFatal(err, nil, "Restoring with custom Storage Class Mapping")
+			}
+		})
+		Step("Validate applications", func() {
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		ctx, _ := backup.GetAdminCtxFromSecret()
+		log.InfoD("Deleting the deployed apps after the testcase")
+		for i := 0; i < len(contexts); i++ {
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			err := Inst().S.Destroy(contexts[i], opts)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
+		}
+		log.InfoD("Deleting backup location, cloud creds and clusters")
+		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
 // createS3BackupLocation creates backup location
 func createGkeBackupLocation(name string, cloudCred string, orgID string) {
 	Step(fmt.Sprintf("Create GKE backup location [%s] in org [%s]", name, orgID), func() {
@@ -5904,4 +6052,63 @@ func generateEncryptionKey() string {
 	})
 
 	return string(b)
+}
+
+// CreateRestoreWithCustomStorageClass creates restore with StorageClass mapping
+func CreateRestoreWithCustomStorageClass(restoreName string, backupName string,
+	namespaceMapping map[string]string, storageClassMapping map[string]string, clusterName string, orgID string, ctx context.Context) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup needed to be restored")
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	log.FailOnError(err, "Enumerate backup failed for the request - %v", bkpEnumerateReq)
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:           backupName,
+		Cluster:          clusterName,
+		NamespaceMapping: namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	restoreSuccessCheck := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		restoreResponseStatus := resp.GetRestore().GetStatus()
+		if err != nil {
+			return "", true, fmt.Errorf("Failed verifying restore for - %s", restoreName)
+		}
+		if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
+			log.Infof("Restore status - %s", restoreResponseStatus)
+			log.InfoD("Status of %s - [%s]",
+				restoreName, restoreResponseStatus.GetStatus())
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
+			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
+	}
+	_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+	return err
 }
