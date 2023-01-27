@@ -4241,7 +4241,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var backupLocationName string
-	var cloudCredUID string
+	var CloudCredUID string
 	var clusterUid string
 	var cloudCredName string
 	var restoreName string
@@ -4256,7 +4256,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		bucketName = fmt.Sprintf("%s-%s", providers[0], bucketNames[0])
 		cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", providers[0], time.Now().Unix())
 		backupLocationName = fmt.Sprintf("%s-%s", "location", providers[0])
-		cloudCredUID = uuid.New()
+		CloudCredUID = uuid.New()
 		BackupLocationUID = uuid.New()
 		encryptionKey := generateEncryptionKey()
 		CreateCloudCredential(providers[0], cloudCredName, CloudCredUID, orgID)
