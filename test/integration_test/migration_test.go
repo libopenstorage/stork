@@ -34,8 +34,6 @@ const (
 	migrationRetryInterval = 10 * time.Second
 	migrationRetryTimeout  = 5 * time.Minute
 	rabbitmqNamespace      = "rabbitmq-operator-migration"
-	waitPvcBound         = 120 * time.Second
-    waitPvcRetryInterval = 5 * time.Second
 )
 
 func TestMigration(t *testing.T) {
@@ -1284,26 +1282,21 @@ func clonePvcDestTest(t *testing.T) {
 
 	sc_src, err := core.Instance().GetStorageClassForPVC(&pvcs.Items[0])
 	require.NoError(t, err, "failed to get storage class: %v", err)
-	sc_src_name := sc_src.ObjectMeta.Name
-	sc_src_rp := *sc_src.ReclaimPolicy
-	sc_src_bm := *sc_src.VolumeBindingMode
-	sc_src_pm := sc_src.Parameters
-	sc_src_pr := sc_src.Provisioner
 	err = setDestinationKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to dest cluster: %v", err)
-	_, err = createStorageClassForPvc(sc_src_name, sc_src_rp, sc_src_bm, sc_src_pm, sc_src_pr)
+	sc_dest, err := createStorageClassForPvc(sc_src.ObjectMeta.Name, *sc_src.ReclaimPolicy, *sc_src.VolumeBindingMode, sc_src.Parameters, sc_src.Provisioner)
 	require.NoError(t, err, "failed to create storage class: %v", err)
 
 	for _, pvc := range pvcs.Items {
 		size := pvc.Status.Capacity[v1.ResourceName(v1.ResourceStorage)]
 		originalPVCName := pvc.Name
 		clonedPVCName := originalPVCName + "-clone"
-		clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, clonedPVCName, originalPVCName, sc_src_name)
-	    require.NoError(t, err, fmt.Sprintf("Failed to build cloned PVC Spec: %s", err))
+		clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, clonedPVCName, originalPVCName, sc_dest.Name)
+		require.NoError(t, err, fmt.Sprintf("Failed to build cloned PVC Spec: %s", err))
 		clonedPVC, err := core.Instance().CreatePersistentVolumeClaim(clonedPVCSpec)
 		require.NoError(t, err, fmt.Sprintf("Failed to clone PVC from source PVC %s: %s", originalPVCName, err))
-        err = core.Instance().ValidatePersistentVolumeClaim(clonedPVC.Name, waitPvcBound, waitPvcRetryInterval)
-        require.NoError(t, err, fmt.Sprintf("Cloned PVC %s is not bound.", clonedPVC.Name))
+		err = core.Instance().ValidatePersistentVolumeClaim(clonedPVC, waitPvcBound, waitPvcRetryInterval)
+		require.NoError(t, err, fmt.Sprintf("Cloned PVC %s is not bound.", clonedPVC.Name))
 		logrus.Infof("Successfully clone PVC %s", clonedPVC.Name)
 	}
 	time.Sleep(1 * time.Minute)
