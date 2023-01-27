@@ -394,8 +394,8 @@ type Driver interface {
 	// GetRebalanceJobStatus returns the rebalance jobs response
 	GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error)
 
-	//UpdatePoolsLabels updates the label of the desired pool, by appending a custom key-value pair
-	UpdatePoolsLabels(n node.Node, poolID string, labels map[string]string) error
+	//UpdatePoolLabels updates the label of the desired pool, by appending a custom key-value pair
+	UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

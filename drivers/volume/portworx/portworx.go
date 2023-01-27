@@ -4734,8 +4734,8 @@ func init() {
 	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
 }
 
-// UpdatePoolsLabels updates the pool label for a particular pool id
-func (d *portworx) UpdatePoolsLabels(n node.Node, poolID string, labels map[string]string) error {
+// UpdatePoolLabels updates the pool label for a particular pool id
+func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
 
 	labelsString := ""
 	for k, v := range labels {

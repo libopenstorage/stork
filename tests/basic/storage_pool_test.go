@@ -5249,14 +5249,11 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 		dash.VerifyFatal(err, nil, "Checking if the Volume inspect is success for the desired volume")
 		// Get the pool UUID on which the volume which is ~190G exist
 		poolIDToResize = appVol.ReplicaSets[0].PoolUuids[0]
-		log.FailOnError(err, "error identifying pool to run test")
+
 		dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
 		poolToBeResized := pools[poolIDToResize]
 		dash.VerifyFatal(poolToBeResized != nil, true, "Pool to be resized exist?")
 
-		// Px will put a new request in a queue, but in this case we can't calculate the expected size,
-		// So need to wait until the ongoing operation is completed
-		time.Sleep(time.Second * 60)
 		stepLog = "Verify that pool resize is not in progress"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5274,8 +5271,8 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
 			log.FailOnError(err, "Failed to get the storagenode using pool UUID %s", poolIDToResize)
 			// Update the pool label
-			err = Inst().V.UpdatePoolsLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
-			log.FailOnError(err, "Failed to update the label on the pool")
+			err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
+			log.FailOnError(err, "Failed to update the label on the pool %v", poolIDToResize)
 			// store the new label that is updated
 		})
 
@@ -5354,9 +5351,9 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 				Timeout:         2 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
 			})
-			if err != nil {
-				log.FailOnError(err, "Unable to execute the alerts show command")
-			}
+
+			log.FailOnError(err, "Unable to execute the alerts show command")
+
 			outLines := strings.Split(out, "\n")
 			var alertExist bool
 			alertExist = false
