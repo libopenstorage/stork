@@ -4988,6 +4988,23 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 			wg.Wait()
 		})
+
+		Step("Validate if all the created users are deleted ", func(){
+			
+			var result bool = false
+
+			remainingUsers , _ := backup.GetAllUsers()
+
+			for user, _ := range userRoleMapping {
+				for _, userObj := range remainingUsers {
+					if userObj.Name == user {
+						result = true
+						break
+					}
+					dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted user [%s]", user))
+				}
+			}
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
