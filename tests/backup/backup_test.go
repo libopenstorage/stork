@@ -4812,6 +4812,125 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 })
 
+// This test does custom resource backup and restore.
+var _ = Describe("{CustomResourceBackupAndRestore}", func() {
+	namespaceMapping := make(map[string]string)
+	var contexts []*scheduler.Context
+	labelSelectors := make(map[string]string)
+	CloudCredUIDMap := make(map[string]string)
+	var appContexts []*scheduler.Context
+	var backupLocation string
+	var backupLocationUID string
+	var cloudCredUID string
+	backupLocationMap := make(map[string]string)
+	var bkpNamespaces []string
+	var clusterUid string
+	var cloudCredName string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	bkpNamespaces = make([]string, 0)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 58043)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Create custom resource backup and restore", func() {
+		Step("Validate applications", func() {
+			ValidateApplications(contexts)
+		})
+
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredUID = uuid.New()
+				CloudCredUIDMap[cloudCredUID] = CredName
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+			}
+		})
+
+		Step("Register cluster for backup", func() {
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		})
+
+		Step("Creating backup location", func() {
+			log.InfoD("Creating backup location")
+			bucketNames := getBucketName()
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
+				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				CreateBackupLocation(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID,
+					bucketName, orgID, "")
+			}
+		})
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				err = CreateBackupWithCustomResourceType(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace}, nil, orgID, clusterUid, "", "", "", "", []string{"PersistentVolumeClaim"}, ctx)
+				dash.VerifyFatal(err, nil, "Verifying backup creation with custom resources")
+			}
+		})
+
+		Step("Restoring the backed up application", func() {
+			log.InfoD("Restoring the backed up application")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
+				namespaceMapping[namespace] = restoredNameSpace
+				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx)
+				log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
+			}
+		})
+		Step("Compare PVCs on both namespaces", func() {
+			log.InfoD("Compare PVCs on both namespaces")
+			for _, namespace := range bkpNamespaces {
+				pvcs, _ := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
+				restoreNamespace := fmt.Sprintf("%s-%s", namespace, "restored")
+				restoredpvcs, _ := core.Instance().GetPersistentVolumeClaims(restoreNamespace, labelSelectors)
+				dash.VerifyFatal(len(pvcs.Items), len(restoredpvcs.Items), "Compare number of PVCs")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		ctx, _ := backup.GetAdminCtxFromSecret()
+		log.InfoD("Deleting the deployed apps after the testcase")
+		for i := 0; i < len(contexts); i++ {
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			err := Inst().S.Destroy(contexts[i], opts)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
+		}
+		log.InfoD("Deleting backup location, cloud creds and clusters")
+		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
 // createS3BackupLocation creates backup location
 func createGkeBackupLocation(name string, cloudCred string, orgID string) {
 	Step(fmt.Sprintf("Create GKE backup location [%s] in org [%s]", name, orgID), func() {
@@ -4945,6 +5064,77 @@ func UpdateBackup(backupName string, backupuid string, org_id string, cloudCred 
 	_, err := backupDriver.UpdateBackup(ctx, bkpUpdateRequest)
 	log.FailOnError(err, "Failed to update backup with request -\n%v", bkpUpdateRequest)
 
+}
+
+// CreateBackup creates backup with custom resources
+func CreateBackupWithCustomResourceType(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, resourceType []string, ctx context.Context) error {
+
+	var bkpUid string
+	backupDriver := Inst().Backup
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  uid,
+		},
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		ResourceTypes: resourceType,
+	}
+	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	if err != nil {
+		return err
+	}
+	backupSuccessCheck := func() (interface{}, bool, error) {
+		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  backupName,
+			Uid:   bkpUid,
+			OrgId: orgID,
+		}
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
+		actual := resp.GetBackup().GetStatus().Status
+		expected := api.BackupInfo_StatusInfo_Success
+		if actual != expected {
+			return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", backupName, expected, actual)
+		}
+		return "", false, nil
+	}
+
+	task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+
+	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+	log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	_, err = backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateBackupWithoutCheck creates backup without waiting for success
