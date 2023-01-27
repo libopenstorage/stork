@@ -3,7 +3,7 @@
     {
       "Name": "PostgreSQL",
       "Version": "14.6",
-      "Image": "27ff6b0",
+      "Image": "37490df",
       "Replicas": 3,
       "ScaleReplicas": 6,
       "OldVersion": "14.4",
@@ -32,7 +32,7 @@
       "Version": "3.10.9",
       "Image": "716b7b8",
       "Replicas": 3,
-      "ScaleReplicas": 6,
+      "ScaleReplicas": 4,
       "OldVersion": "3.10.7",
       "OldImage": "862425e"
     },
@@ -41,7 +41,7 @@
       "Version": "4.0.6",
       "Image": "f888127",
       "Replicas": 3,
-      "ScaleReplicas": 6,
+      "ScaleReplicas": 5,
       "OldVersion": "4.0.5",
       "OldImage": "029172b"
     },
@@ -54,11 +54,25 @@
       "OldImage": "d8f144f"
     },
     {
-      "Name": "Redis",
-      "Version": "7.0.5",
-      "Image": "87fe164",
-      "Replicas": 6,
-      "ScaleReplicas": 8
+      "Name": "Consul",
+      "Version": "1.14.0",
+      "Image": "e737dd6",
+      "Replicas": 3,
+      "ScaleReplicas": 6
+    },
+    {
+      "Name": "Couchbase",
+      "Version": "7.1.1",
+      "Image": "d1b7cf1",
+      "Replicas": 3,
+      "ScaleReplicas": 5
+    },
+    {
+      "Name": "Elasticsearch",
+      "Version": "8.5.2",
+      "Image": "bb4743b",
+      "Replicas": 3,
+      "ScaleReplicas": 5
     }
   ],
   "InfraToTest": {

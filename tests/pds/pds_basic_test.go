@@ -56,15 +56,28 @@ var (
 	dataServiceDefaultResourceTemplateID    string
 	dataServiceDefaultAppConfigID           string
 	dataServiceVersionBuildMap              map[string][]string
+	dataServiceImageMap                     map[string][]string
+	deploymentPods                          []corev1.Pod
 	dep                                     *v1.Deployment
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter
+	podList                                 *corev1.PodList
 	isDeploymentsDeleted                    bool
 	isNamespacesDeleted                     bool
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
 )
+
+type PDSDataService struct {
+	Name          string "json:\"Name\""
+	Version       string "json:\"Version\""
+	Image         string "json:\"Image\""
+	Replicas      int    "json:\"Replicas\""
+	ScaleReplicas int    "json:\"ScaleReplicas\""
+	OldVersion    string "json:\"OldVersion\""
+	OldImage      string "json:\"OldImage\""
+}
 
 func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)

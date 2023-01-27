@@ -440,33 +440,43 @@ func GetPods(namespace string) (*corev1.PodList, error) {
 	return podList, err
 }
 
-// DeleteDeploymentPods deletes the given pods
-func DeleteDeploymentPods(podList *corev1.PodList) error {
-	var pods, newPods []corev1.Pod
-	k8sOps := k8sCore
+//ValidatePods returns err if pods are not up
+func ValidatePods(namespace string, podName string) error {
 
-	pods = append(pods, podList.Items...)
-	err := k8sOps.DeletePods(pods, true)
+	var newPods []corev1.Pod
+	newPodList, err := GetPods(namespace)
 	if err != nil {
 		return err
 	}
 
-	//get the newly created pods
-	time.Sleep(10 * time.Second)
-	newPodList, err := GetPods("pds-system")
-	if err != nil {
-		return err
+	if podName != "" {
+		for _, pod := range newPodList.Items {
+			if strings.Contains(pod.Name, podName) {
+				log.Infof("%v", pod.Name)
+				newPods = append(newPods, pod)
+			}
+		}
+	} else {
+		//reinitializing the pods
+		newPods = append(newPods, newPodList.Items...)
 	}
-	//reinitializing the pods
-	newPods = append(newPods, newPodList.Items...)
 
-	//validate deployment pods are up and running after deletion
+	//validate deployment pods are up and running
 	for _, pod := range newPods {
 		log.Infof("pds system pod name %v", pod.Name)
-		err = k8sOps.ValidatePod(&pod, timeOut, timeInterval)
+		err = k8sCore.ValidatePod(&pod, timeOut, timeInterval)
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// DeleteDeploymentPods deletes the given pods
+func DeletePods(podList []corev1.Pod) error {
+	err := k8sCore.DeletePods(podList, true)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -706,6 +716,30 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 		log.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
+}
+
+func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus string, maxtimeInterval time.Duration, timeout time.Duration) error {
+	//validate the deployments in pds
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
+		log.Infof("Health status -  %v", status.GetHealth())
+		if err != nil {
+			log.Errorf("Error occured while getting deployment status %v", err)
+			return false, nil
+		}
+		if res.StatusCode != state.StatusOK {
+			log.Errorf("Full HTTP response: %v\n", res)
+			err = fmt.Errorf("unexpected status code")
+			return false, err
+		}
+		if !strings.Contains(status.GetHealth(), healthStatus) {
+			err = fmt.Errorf("status %v", status.GetHealth())
+			return false, err
+		}
+		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+		return true, nil
+	})
+	return err
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running
