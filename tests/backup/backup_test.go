@@ -237,7 +237,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 
 })
 
-// Validate that use can't duplicate a shared backup with registering the cluster
+// Validate that user can't duplicate a shared backup without registering the cluster
 var _ = Describe("{DuplicateSharedBackup}", func() {
 	userName := "testuser1"
 	firstName := "firstName"
