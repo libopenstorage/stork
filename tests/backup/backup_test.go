@@ -6026,7 +6026,7 @@ func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []strin
 		accessUserBackupContext[accessContextUser] = backupNames[i]
 	}
 	return accessUserBackupContext, nil
-
+}
 // GetAllBackupsAdmin returns all the backups that px-central-admin has access toGetAllBackupsAdmin
 func GetAllBackupsAdmin() ([]string, error) {
 	var bkp *api.BackupObject
