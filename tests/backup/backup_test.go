@@ -4732,7 +4732,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var BackupLocation1UID string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
-	var credName string
+	var CredName string
 	providers := getProviders()
 	bucketNames := getBucketName()
 	JustBeforeEach(func() {
