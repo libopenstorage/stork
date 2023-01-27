@@ -5260,7 +5260,7 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// Wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID %v", poolToBeResized)
+				log.FailOnError(err, "Failed to get pool using UUID %v", poolToBeResized.Uuid)
 			}
 		})
 		stepLog = "set pool label, before pool expand"
@@ -5272,7 +5272,7 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 			log.FailOnError(err, "Failed to get the storagenode using pool UUID %s", poolIDToResize)
 			// Update the pool label
 			err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
-			log.FailOnError(err, "Failed to update the label on the pool %v", poolIDToResize)
+			log.FailOnError(err, "Failed to update the label on the pool %s", poolIDToResize)
 			// store the new label that is updated
 		})
 
