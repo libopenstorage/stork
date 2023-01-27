@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/aquilax/truncate"
 	"github.com/libopenstorage/stork/drivers"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -9,8 +11,8 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"strings"
 )
 
 const (
@@ -165,4 +167,14 @@ func IsNFSBackuplocationType(
 		return true, nil
 	}
 	return false, nil
+}
+
+func GetUIDLastSection(uid types.UID) string {
+	parts := strings.Split(string(uid), "-")
+	uidLastSection := parts[len(parts)-1]
+
+	if uidLastSection == "" {
+		uidLastSection = string(uid)
+	}
+	return uidLastSection
 }
