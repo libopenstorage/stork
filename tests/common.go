@@ -2702,7 +2702,8 @@ func SetupBackup(testName string) {
 	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
-	CreateSourceAndDestClusters(OrgID, "", "", ctx)
+	err = CreateSourceAndDestClusters(OrgID, "", "", ctx)
+	log.FailOnError(err, "Creating source and destination cluster")
 }
 
 // DeleteBackup deletes backup
@@ -2747,115 +2748,119 @@ func DeleteCluster(name string, orgID string, ctx context1.Context) {
 	})
 }
 
-// DeleteBackupLocation deletes backuplocation
-func DeleteBackupLocation(name string, backupLocationUID string, orgID string) {
-	Step(fmt.Sprintf("Delete backup location [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
-		bLocationDeleteReq := &api.BackupLocationDeleteRequest{
-			Name:          name,
-			OrgId:         orgID,
-			DeleteBackups: true,
-			Uid:           backupLocationUID,
-		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		_, err = backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
-		log.FailOnError(err, "Failed to delete backup location with request - [%v]", bLocationDeleteReq)
-		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
-		//	fmt.Sprintf("Failed to delete backup location [%s] in org [%s]", name, orgID))
-		// TODO: validate createBackupLocationResponse also
-	})
+// DeleteBackupLocation deletes backup location
+func DeleteBackupLocation(name string, backupLocationUID string, orgID string) error {
+
+	backupDriver := Inst().Backup
+	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
+		Name:          name,
+		OrgId:         orgID,
+		DeleteBackups: true,
+		Uid:           backupLocationUID,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+	if err != nil {
+		return err
+	}
+	// TODO: validate createBackupLocationResponse also
+	return nil
+
 }
 
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ctx context1.Context) {
+func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	dash.VerifyFatal(len(kubeconfigList) >= 2, true, "Getting the minimum number of kubeconfigs required")
+	if len(kubeconfigList) != 2 {
+		return fmt.Errorf("2 kubeconfigs are required for source and destination cluster")
+	}
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	dash.VerifyFatal(err, nil, "Getting the kubeconfigs from the configmap")
+	if err != nil {
+		return err
+	}
 	// Register source cluster with backup driver
-	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", SourceClusterName, orgID), func() {
-		srcClusterConfigPath, err := GetSourceClusterConfigPath()
-		dash.VerifyFatal(err, nil, "Getting kubeconfig path for source cluster")
-		log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-		CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid, ctx)
-	})
+	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
+	srcClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
+	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid, ctx)
+	if err != nil {
+		return err
+	}
 	// Register destination cluster with backup driver
-	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", destinationClusterName, orgID), func() {
-		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
-		dash.VerifyFatal(err, nil, "Getting kubeconfig path for destination cluster")
-		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid, ctx)
-	})
+	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
+	dstClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid, ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateBackupLocation creates backup location
-func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) {
+func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) error {
+	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		createS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
+		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
-		createAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	}
+	return err
 }
 
 // CreateCluster creates/registers cluster with px-backup
-func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) {
+func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	var clusterCreateReq *api.ClusterCreateRequest
 
-	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
-		kubeconfigRaw, err := ioutil.ReadFile(kubeconfigPath)
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to read kubeconfig file from location [%s]. Error:[%v]",
-				kubeconfigPath, err))
-		if cloud_name != "" {
-			clusterCreateReq = &api.ClusterCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					OrgId: orgID,
-				},
-				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
-				CloudCredentialRef: &api.ObjectRef{
-					Name: cloud_name,
-					Uid:  uid,
-				},
-			}
-		} else {
-			clusterCreateReq = &api.ClusterCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					OrgId: orgID,
-				},
-				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
-			}
+	log.InfoD("Create cluster [%s] in org [%s]", name, orgID)
+	backupDriver := Inst().Backup
+	kubeconfigRaw, err := ioutil.ReadFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	if cloud_name != "" {
+		clusterCreateReq = &api.ClusterCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				OrgId: orgID,
+			},
+			Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloud_name,
+				Uid:  uid,
+			},
 		}
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateCluster(ctx, clusterCreateReq)
-		if err != nil && strings.Contains(err.Error(), "creation failed as it already exists") {
-			log.Infof("Cluster [%s] in org [%s] is already created")
-			return
+	} else {
+		clusterCreateReq = &api.ClusterCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				OrgId: orgID,
+			},
+			Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
 		}
-		log.FailOnError(err, "Failed to create cluster [%s] in org [%s]. Error : [%v]", name, orgID, err)
-	})
-}
-
-// createS3BackupLocation creates backup location
-func createS3BackupLocation(name string, uid, cloudCred string, cloudCredUID, bucketName string, orgID string, encryptionKey string) {
-	Step(fmt.Sprintf("Create S3 backup location [%s] in org [%s]", name, orgID), func() {
-		CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey)
-	})
+	}
+	_, err = backupDriver.CreateCluster(ctx, clusterCreateReq)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateCloudCredential creates cloud credetials
@@ -2942,7 +2947,7 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 }
 
 // CreateS3BackupLocation creates backuplocation for S3
-func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) {
+func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -2971,19 +2976,18 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	}
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
-	if err != nil && strings.Contains(err.Error(), "already exists") {
-		return
+	if err != nil {
+		return err
 	}
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
 }
 
 // CreateAzureBackupLocation creates backuplocation for Azure
-func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
+func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -3004,15 +3008,14 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 	}
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
-	if err != nil && strings.Contains(err.Error(), "already exists") {
-		return
+	if err != nil {
+		return err
 	}
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
 }
 
 // GetProvider validates and return object store provider
@@ -3645,7 +3648,8 @@ func TearDownBackupRestoreAll() {
 	provider := GetProvider()
 	DeleteCluster(destinationClusterName, OrgID, ctx)
 	DeleteCluster(SourceClusterName, OrgID, ctx)
-	DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
+	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup  location %s", backupLocationName))
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }
@@ -3737,13 +3741,6 @@ func CreateAzureBucket(bucketName string) {
 
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to create container. Error: [%v]", err))
-}
-
-// createAzureBackupLocation creates backup location
-func createAzureBackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID string) {
-	Step(fmt.Sprintf("Create Azure backup location [%s] in org [%s]", name, orgID), func() {
-		CreateAzureBackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID)
-	})
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
