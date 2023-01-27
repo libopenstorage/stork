@@ -26,6 +26,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -4928,6 +4929,69 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 		}
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+var _ = Describe("{DeleteUsersRole}", func() {
+	var testrailID = 58089
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
+
+	contexts := make([]*scheduler.Context, 0)
+	numberOfUsers := 100
+	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.ApplicationUser, backup.InfrastructureOwner, backup.DefaultRoles}
+	userRoleMapping := map[string]backup.PxBackupRole{}
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteUsersRole", "Delete role and users", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("Delete user and roles", func() {
+
+		Step("Create Users add roles", func() {
+			log.InfoD("Creating %d users", numberOfUsers)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("autouser%v", i)
+				firstName := fmt.Sprintf("FirstName%v", i)
+				lastName := fmt.Sprintf("LastName%v", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				role := roles[rand.Intn(len(roles))]
+				wg.Add(1)
+				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
+					defer wg.Done()
+					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					log.InfoD("Adding role %v to user %v ", role, userName)
+					err = backup.AddRoleToUser(userName, role, "")
+					log.FailOnError(err, "Failed to add role to user - %s", userName)
+				}(userName, firstName, lastName, email, role)
+				userRoleMapping[userName] = role
+			}
+			wg.Wait()
+		})
+
+		Step("Delete roles and users", func() {
+
+			var wg sync.WaitGroup
+			for userName,role := range userRoleMapping {
+				log.Info("This is the user : ", userName)
+				wg.Add(1)
+				go func(userName string,role backup.PxBackupRole) {
+					defer wg.Done()
+					err := backup.DeleteRoleFromUser(userName,role,"")
+					dash.VerifyFatal(err, nil, "Remove role")
+					err = backup.DeleteUser(userName)
+					dash.VerifyFatal(err, nil, "Delete user")
+				}(userName,role)
+			}
+			wg.Wait()
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
