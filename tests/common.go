@@ -3649,7 +3649,7 @@ func TearDownBackupRestoreAll() {
 	DeleteCluster(destinationClusterName, OrgID, ctx)
 	DeleteCluster(SourceClusterName, OrgID, ctx)
 	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup  location %s", backupLocationName))
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }
