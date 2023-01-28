@@ -2792,7 +2792,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			log.InfoD("Share backup with user having full access")
 			ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
 		})
-		Step("Create  backup from the shared user with FullAccess", func() {
+		Step("Create backup from the shared user with FullAccess", func() {
 			log.InfoD("Validating if user with  FullAccess cannot duplicate backup shared but can create new backup")
 			// User with FullAccess cannot duplicate will be validated through UI only
 			ctxNonAdmin, err = backup.GetNonAdminCtx(userName, "Password1")
