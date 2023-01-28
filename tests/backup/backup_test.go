@@ -556,13 +556,13 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup pre rules %s", ruleName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup pre rules %s", ruleName))
 			}
 		}
 		if len(postRuleNameList) > 0 {
 			for _, ruleName := range postRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup post rules %s", ruleName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules %s", ruleName))
 			}
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
@@ -688,7 +688,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 			dash.VerifyFatal(err, nil, "Verifying backup creation")
 		})
-		Step("Share backup with  user having readonly access", func() {
+		Step("Share backup with user having readonly access", func() {
 			log.InfoD("Adding user with readonly access")
 			ShareBackup(backupName, nil, []string{userName}, ViewOnlyAccess, ctx)
 		})
@@ -737,9 +737,9 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		}
 		time.Sleep(time.Minute * 3)
 		err = backup.DeleteUser(userName)
-		dash.VerifySafely(err, nil, "Deleting  user")
+		dash.VerifySafely(err, nil, "Deleting user")
 		err = backup.DeleteGroup(groupName)
-		dash.VerifySafely(err, nil, "Deleting  group")
+		dash.VerifySafely(err, nil, "Deleting group")
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -2788,8 +2788,8 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 			dash.VerifyFatal(err, nil, "Verifying backup creation")
 		})
-		Step("Share backup with  user having full access", func() {
-			log.InfoD("Share backup with  user having full access")
+		Step("Share backup with user having full access", func() {
+			log.InfoD("Share backup with user having full access")
 			ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
 		})
 		Step("Create  backup from the shared user with FullAccess", func() {
@@ -2876,7 +2876,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 	})
 	It("Share Backup With Different Users having different access level and different role", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
-		dash.VerifyFatal(err, nil, "Getting px-central-admin  context")
+		dash.VerifyFatal(err, nil, "Getting px-central-admin context")
 
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
@@ -4982,9 +4982,9 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			DeleteBackup(backupName, backupUID, orgID, ctx)
 		}
 		err = DeleteBackupLocation(backupLocationNames[0], BackupLocationUID, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup  location %s", backupLocationNames[0]))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationNames[0]))
 		err = DeleteBackupLocation(backupLocationNames[1], BackupLocation1UID, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup  location %s", backupLocationNames[1]))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationNames[1]))
 		DeleteCloudCredential(CredName, orgID, CloudCredUID)
 		encryptionBucketName := fmt.Sprintf("%s-%s-%s", providers[0], bucketNames[0], "encryptionbucket")
 		DeleteBucket(providers[0], encryptionBucketName)
@@ -5302,7 +5302,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 	})
 	It("Share and remove backup location and add it back and check from other users if they show up", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
-		dash.VerifyFatal(err, nil, "Getting px-central-admin  context")
+		dash.VerifyFatal(err, nil, "Getting px-central-admin context")
 		providers := getProviders()
 		bucketNames := getBucketName()
 		Step("Validate applications", func() {
@@ -6001,7 +6001,7 @@ func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	DeleteCluster(SourceClusterName, orgID, ctx)
 	// Need to add backup location UID for Delete Backup Location call
 	err = DeleteBackupLocation(backupLocationName, "", OrgID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup  location %s", backupLocationName))
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }
@@ -6146,7 +6146,7 @@ func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, c
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup  location %s", bkpLocationName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
 		}
 		time.Sleep(time.Minute * 3)
 		DeleteCloudCredential(credName, orgID, cloudCredUID)
@@ -6203,7 +6203,7 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 		roleAccessUserBackupContext[userRoleAccessContext] = backupNames[i]
 		err = backup.AddRoleToUser(users[i], role, "Adding role to user")
 		if err != nil {
-			err = fmt.Errorf("Failed to add role %s to user  %s with err %v", role, users[i], err)
+			err = fmt.Errorf("Failed to add role %s to user %s with err %v", role, users[i], err)
 			return nil, err
 		}
 		err = ShareBackup(backupNames[i], nil, []string{users[i]}, access, ctx)
@@ -6248,7 +6248,7 @@ func ValidateSharedBackupWithUsers(user string, userCtx context.Context, access 
 		// Try restore with user having FullAccess, and it should pass
 		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
 		dash.VerifyFatal(err, nil, "Verifying that restore is possible")
-		// Try to delete the backup with user having FullAccess, and it should  pass
+		// Try to delete the backup with user having FullAccess, and it should pass
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 		// Delete backup to confirm that the user has Full Access
@@ -6278,7 +6278,7 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteCluster(SourceClusterName, orgID, ctx)
 	// Need to add backup location UID for Delete Backup Location call
 	err = DeleteBackupLocation(backupLocationName, "", OrgID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup  location %s", backupLocationName))
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 }
 
