@@ -5690,6 +5690,84 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 	return nil
 }
 
+// CreateScheduleBackup creates a scheduled backup
+func CreateScheduleBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) (*api.BackupScheduleInfo_StatusInfo_Status, error) {
+	var bkpUid string
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+	}
+	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupSuccessCheck := func() (interface{}, bool, error) {
+		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		backupSchInspectRequest := &api.BackupScheduleInspectRequest{
+			Name:  backupName,
+			Uid:   bkpUid,
+			OrgId: orgID,
+		}
+		resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
+		if err != nil {
+			return "", true, err
+		}
+		actual := resp.GetBackupSchedule().GetStatus().Status
+		expected := api.BackupScheduleInfo_StatusInfo_Success
+		if actual != expected {
+			return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", backupName, expected, actual)
+		}
+		return "", false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupSchInspectRequest := &api.BackupScheduleInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
+	if err != nil {
+		return nil, err
+	}
+	return &resp.GetBackupSchedule().GetStatus().Status, nil
+}
+
 // CreateBackupWithoutCheck creates backup without waiting for success
 func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
