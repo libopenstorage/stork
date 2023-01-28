@@ -5231,7 +5231,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 				singlePvc := pvcs.Items[0]
 				dash.VerifyFatal(err, nil, "Getting PVC from namespace")
 				sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
-				dash.VerifyFatal(err, , "Getting SC from PVC")
+				dash.VerifyFatal(err, nil, "Getting SC from PVC")
 				storageClassMapping[sourceScName.Name] = scName
 				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
 				namespaceMapping[namespace] = restoredNameSpace
