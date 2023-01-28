@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"math"
 	"os"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/utils"
 
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers"
@@ -243,6 +244,21 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 		return nil
+	}
+
+	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
+		namespaces, err := core.Instance().ListNamespaces(labelSelector)
+		if err != nil {
+			errMsg := fmt.Sprintf("error listing namespaces with label selectors: %v, error: %v", labelSelector, err)
+			logrus.Errorf("%v", errMsg)
+			return fmt.Errorf("%v", errMsg)
+		}
+		var selectedNamespaces []string
+		for _, namespace := range namespaces.Items {
+			selectedNamespaces = append(selectedNamespaces, namespace.Name)
+		}
+		backup.Spec.Namespaces = selectedNamespaces
+		backup.Status.Namespaces = selectedNamespaces
 	}
 
 	// Check whether namespace is allowed to be backed before each stage
