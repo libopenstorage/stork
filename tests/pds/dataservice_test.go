@@ -370,11 +370,11 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the workload generating deployments", func() {
-					if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper || ds.Name == mongodb) {
+					if ds.Name == cassandra || ds.Name == postgresql || ds.Name == redis || ds.Name == rabbitmq {
 						if ds.Name == cassandra || ds.Name == postgresql {
 							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
 							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-						} else {
+						} else if ds.Name == redis || ds.Name == rabbitmq {
 							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
 							err = pdslib.DeleteK8sPods(pod.Name, namespace)
 						}
