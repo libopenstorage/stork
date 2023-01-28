@@ -77,8 +77,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		Step("Check the status of backup pods", func() {
 			log.InfoD("Check the status of backup pods")
 			err := Inst().Backup.ValidateBackupCluster()
-			dash.VerifyFatal(
-			"Backup Cluster Verification successful")
+			dash.VerifyFatal(err, nil, "Backup Cluster Verification successful")
 		})
 	})
 	JustAfterEach(func() {
@@ -4332,8 +4331,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			storkLabel["name"] = "stork"
 			storkNamespace := getPXNamespace()
 			pods, err := core.Instance().GetPods(storkNamespace, storkLabel)
-			dash.VerifyFatal(
-			"Killing Stork pods")
+			dash.VerifyFatal(err, nil, "Killing Stork pods")
 			for _, pod := range pods.Items {
 				err := core.Instance().DeletePod(pod.GetName(), storkNamespace, false)
 				log.FailOnError(err, fmt.Sprintf("Failed to kill stork pod [%s]", pod.GetName()))
