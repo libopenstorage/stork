@@ -102,6 +102,7 @@ type SystemctlOpts struct {
 // BlockDrive provide block drive properties
 type BlockDrive struct {
 	Path       string
+	Labels     map[string]string
 	MountPoint string
 	FSType     string
 	Size       string

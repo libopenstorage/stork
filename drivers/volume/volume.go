@@ -192,6 +192,12 @@ type Driver interface {
 	// ExitPoolMaintenance exits pools in the given node from maintenance mode
 	ExitPoolMaintenance(n node.Node) error
 
+	//GetNodePoolsStatus returns map of pool UUID and status
+	GetNodePoolsStatus(n node.Node) (map[string]string, error)
+
+	//DeletePool deletes the pool with given poolID
+	DeletePool(n node.Node, poolID string) error
+
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
 
@@ -372,6 +378,9 @@ type Driver interface {
 
 	// AddBlockDrives add drives to the node using PXCTL
 	AddBlockDrives(n *node.Node, drivePath []string) error
+
+	// GetPoolDrives returns the map of poolID and drive name
+	GetPoolDrives(n *node.Node) (map[string][]string, error)
 
 	// AddCloudDrive add cloud drives to the node using PXCTL
 	AddCloudDrive(n *node.Node, devcieSpec string, poolID int32) error
