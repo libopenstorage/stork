@@ -5136,7 +5136,7 @@ var _ = Describe("{PoolDelete}", func() {
 			poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			log.FailOnError(err, "Failed to list storage pools")
 			var poolIDSelected string
-			for k, _ := range poolsAfr {
+			for k := range poolsAfr {
 				if _, ok := poolsBfr[k]; !ok {
 					poolIDSelected = k
 					break

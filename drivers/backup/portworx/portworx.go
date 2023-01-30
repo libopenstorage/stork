@@ -1332,7 +1332,7 @@ func (p *portworx) GetSchedulePolicyUid(orgID string, ctx context.Context, schPo
 			return schPolicyUid, nil
 		}
 	}
-        return "", fmt.Errorf("Unable to find schedule policy Uid")
+	return "", fmt.Errorf("Unable to find schedule policy Uid")
 }
 
 func (p *portworx) RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string) {

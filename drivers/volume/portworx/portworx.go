@@ -233,7 +233,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 	return nil
 }
 
-//DeletePool deletes the pool with given poolID
+// DeletePool deletes the pool with given poolID
 func (d *portworx) DeletePool(n node.Node, poolID string) error {
 	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
 	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)

@@ -440,7 +440,7 @@ func GetPods(namespace string) (*corev1.PodList, error) {
 	return podList, err
 }
 
-//ValidatePods returns err if pods are not up
+// ValidatePods returns err if pods are not up
 func ValidatePods(namespace string, podName string) error {
 
 	var newPods []corev1.Pod

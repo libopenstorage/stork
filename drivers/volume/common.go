@@ -255,7 +255,7 @@ func (d *DefaultDriver) ExitPoolMaintenance(n node.Node) error {
 	}
 }
 
-//DeletePool deletes the pool with given poolID
+// DeletePool deletes the pool with given poolID
 func (d *DefaultDriver) DeletePool(n node.Node, poolID string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
