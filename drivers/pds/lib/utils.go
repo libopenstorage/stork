@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -1056,6 +1058,127 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	log.InfoD("Will delete TPCC Worklaod Deployment now.....")
 	DeleteK8sDeployments(deployment.Name, namespace)
 	return flag
+}
+
+// Creates a temporary non PDS namespace of 6 letters length randomly chosen
+func CreateTempNS(length int32) (string, error) {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, length)
+	rand.Read(b)
+	namespace := fmt.Sprintf("%x", b)[:length]
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	ns, err = k8sCore.CreateNamespace(ns)
+	if err != nil {
+		log.Errorf("Error while creating namespace %v", err)
+		return "", err
+	}
+	return namespace, nil
+}
+
+// Create a Persistent Vol of 5G manual Storage Class
+func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
+	pv := &corev1.PersistentVolume{
+
+		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+
+		Spec: corev1.PersistentVolumeSpec{
+			StorageClassName: "manual",
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				"ReadWriteOnce",
+			},
+			Capacity: corev1.ResourceList{
+				corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("5Gi"),
+			},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/mnt/data",
+				},
+			},
+		},
+	}
+	pv, err := k8sCore.CreatePersistentVolume(pv)
+	if err != nil {
+		log.Errorf("PV Could not be created. Exiting")
+		return pv, err
+	}
+	return pv, nil
+}
+
+// Create a PV Claim of 5G Storage
+func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolumeClaim, error) {
+	ns := namespace
+	storageClass := "manual"
+	createOpts := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			StorageClassName: &storageClass,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("5Gi"),
+				},
+			},
+		},
+	}
+	pvc, err := k8sCore.CreatePersistentVolumeClaim(createOpts)
+	if err != nil {
+		log.Errorf("PVC Could not be created. Exiting. %v", err)
+		return pvc, err
+	}
+	return pvc, nil
+}
+
+// Create an Independant MySQL non PDS App running in a namespace
+func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcName string) (*corev1.Pod, string, error) {
+	namespace := ns
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  podName,
+					Image: appImage,
+					Env:   make([]corev1.EnvVar, 1),
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+		},
+	}
+	volumename := "app-persistent-storage"
+	var volumes = make([]corev1.Volume, 1)
+	volumes[0] = corev1.Volume{Name: volumename, VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName, ReadOnly: false}}}
+	podSpec.Spec.Volumes = volumes
+	env := []string{"MYSQL_ROOT_PASSWORD"}
+	var value []string
+	value = append(value, "password")
+	for index := range env {
+		podSpec.Spec.Containers[0].Env[index].Name = env[index]
+		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+	}
+
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		log.Errorf("An Error Occured while creating %v", err)
+		return pod, "", err
+	}
+	return pod, podName, nil
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
