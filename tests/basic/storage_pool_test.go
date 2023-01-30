@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"regexp"
 
 	"github.com/google/uuid"
@@ -1492,7 +1493,7 @@ func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volu
 		}
 		return nil, true, fmt.Errorf("error getting volume with size atleast %d GiB used", size)
 	}
-	_, err := task.DoRetryWithTimeout(f, 15*time.Minute, retryTimeout)
+	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, retryTimeout)
 	return volSelected, err
 }
 
@@ -5192,3 +5193,192 @@ func waitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
 	return err
 }
+
+var _ = Describe("{VolDeletePoolExpand}", func() {
+	// 1) Deploy px with cloud drive.
+	// 2) Create a large volume on that pool and write 200G on the volume.
+	// 3) Update the label for the pool before expand
+	// 4) perform volume delete
+	// 5) Expand by resize the pool when delete is in progress
+	// 6) Check the alert for the pool expand
+	// 7) check the labels after pool expand
+	var testrailID = 51285
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/51285
+
+	var runID int
+	JustBeforeEach(func() {
+
+		StartTorpedoTest("VolDeletePoolExpand", "Delete volume which has ~200G data and do an expansion of pool by resize", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+
+	})
+	var contexts []*scheduler.Context
+	var newContexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and write ~200G data to a volume"
+
+	It(stepLog, func() {
+
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldeletepoolexpand-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		log.Infof("Need to check if volume is close to 200G occupied")
+		vol, err := getVolumeWithMinimumSize(contexts, 90)
+
+		// We will change the size, after modifying/deploying a vdbench/fio to write ~200G. Current vdbench is writing 98G
+		dash.VerifyFatal(err, nil, "Checking if the desired volume is obtained")
+		volID := vol.ID
+		volName := vol.Name
+
+		log.Infof("The volume that is having size used around 190 G is %s with name %s", volID, volName)
+
+		var poolIDToResize string
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "Failed to list storage pools")
+		dash.VerifyFatal(len(pools) > 0, true, " Storage pools exist?")
+
+		// Pick a pool from a pools list and resize it
+		appVol, err := Inst().V.InspectVolume(volID)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Checking if the Volume inspect is success for the desired volume %s", volID))
+		// Get the pool UUID on which the volume which is ~190G exist
+		poolIDToResize = appVol.ReplicaSets[0].PoolUuids[0]
+
+		dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
+		poolToBeResized := pools[poolIDToResize]
+		dash.VerifyFatal(poolToBeResized != nil, true, "Pool to be resized exist?")
+
+		stepLog = "Verify that pool resize is not in progress"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if poolResizeIsInProgress(poolToBeResized) {
+				// Wait until resize is completed and get the updated pool again
+				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+				log.FailOnError(err, "Failed to get pool using UUID %v", poolToBeResized.Uuid)
+			}
+		})
+		stepLog = "set pool label, before pool expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolLabelToUpdate := make(map[string]string)
+			poolLabelToUpdate["cust-type"] = "test-label"
+			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
+			log.FailOnError(err, "Failed to get the storagenode using pool UUID %s", poolIDToResize)
+			// Update the pool label
+			err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
+			log.FailOnError(err, "Failed to update the label on the pool %s", poolIDToResize)
+			// store the new label that is updated
+		})
+
+		// Let the expand complete
+		var expectedSize uint64
+		var expectedSizeWithJournal uint64
+		var contextToDel *scheduler.Context
+
+		labelBeforeExpand := poolToBeResized.Labels
+		stepLog = "Calculate expected pool size and trigger pool resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+			// To-Do Need to handle the case for multiple pools
+			expectedSizeWithJournal = expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
+			// Delete the Volume that was ~190G before the pool expand begins
+			// Iterate through the contexts, get the volumes and then get the matching ID
+		gotContext:
+			for _, l := range contexts {
+				vols, err := Inst().S.GetVolumes(l)
+				dash.VerifyFatal(err, nil, "Verify if able to get the app for the volume that is filled approx 200G")
+				for _, vol := range vols {
+					if vol.ID == volID {
+						contextToDel = l
+						break gotContext
+					}
+				}
+			}
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			// Destroy the context
+			err = Inst().S.Destroy(contextToDel, nil)
+			dash.VerifyFatal(err, nil, "Verify the successful delete context of the volume which had ~190 G usage")
+			log.InfoD("Going to delete the volume, by deletion of Namespace")
+			TearDownContext(contextToDel, map[string]bool{
+				SkipClusterScopedObjects:                    false,
+				scheduler.OptionsWaitForResourceLeakCleanup: true,
+				scheduler.OptionsWaitForDestroy:             true,
+			})
+			dash.VerifyFatal(err, nil, "Verify the successful delete of the volume which had ~190 G usage")
+			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
+		})
+		// Make sure to remove the deleted context and validate the other apps
+		for _, l := range contexts {
+			if l.App.Key != contextToDel.App.Key {
+				newContexts = append(newContexts, l)
+			}
+		}
+		stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(newContexts)
+			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+			log.FailOnError(err, fmt.Sprintf(" Failed to get pool using UUID %s", poolIDToResize))
+			newPoolSize := resizedPool.TotalSize / units.GiB
+			isExpansionSuccess := false
+			if newPoolSize == expectedSize || newPoolSize >= expectedSizeWithJournal {
+				isExpansionSuccess = true
+			}
+			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+			log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
+			// Get the node to check the pool show output
+			n := node.GetStorageDriverNodes()[0]
+			// Below command to change when PWX-28484 is fixed
+			cmd := "pxctl alerts show| grep -e POOL"
+
+			// Execute the command and check the alerts of type POOL
+			out, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+
+			log.FailOnError(err, "Unable to execute the alerts show command")
+
+			outLines := strings.Split(out, "\n")
+			var alertExist bool
+			alertExist = false
+			for _, l := range outLines {
+				line := strings.Trim(l, " ")
+				if strings.Contains(line, "PoolExpandSuccessful") && strings.Contains(line, poolIDToResize) {
+					if strings.Contains(line, fmt.Sprintf("%d", expectedSize)) || strings.Contains(line, fmt.Sprintf("%d", expectedSizeWithJournal)) {
+						alertExist = true
+						log.Infof("The Alert generated is %s", line)
+						break
+					}
+				}
+			}
+			dash.VerifyFatal(alertExist, true, "Verify Alert is Present")
+		})
+		stepLog = "Ensure Label is not changed after expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(newContexts)
+			labelAfterExpand := poolToBeResized.Labels
+			result := reflect.DeepEqual(labelBeforeExpand, labelAfterExpand)
+			dash.VerifyFatal(result, true, "Check if labels changed after pool expand")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(newContexts, testrailID, runID)
+	})
+})

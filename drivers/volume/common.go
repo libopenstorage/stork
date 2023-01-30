@@ -981,3 +981,11 @@ func (d *DefaultDriver) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanc
 		Operation: "GetRebalanceJobStatus()",
 	}
 }
+
+// UpdatePoolLabels updates the labels of the desired pool, by appending a custom key-value pair
+func (d *DefaultDriver) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdatePoolLabels()",
+	}
+}

@@ -4733,3 +4733,23 @@ func init() {
 	torpedovolume.Register(DriverName, provisioners, &portworx{})
 	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
 }
+
+// UpdatePoolLabels updates the pool label for a particular pool id
+func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
+
+	labelsString := ""
+	for k, v := range labels {
+		labelsString += fmt.Sprintf("%s=%s,", k, v)
+	}
+	labelsString = strings.Trim(labelsString, ",")
+	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsString)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
