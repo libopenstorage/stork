@@ -28,7 +28,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -5712,18 +5711,14 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 })
 
 var _ = Describe("{DeleteUsersRole}", func() {
-	var testrailID = 58089
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
 
-	contexts := make([]*scheduler.Context, 0)
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
 	numberOfUsers := 100
 	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.ApplicationUser, backup.InfrastructureOwner, backup.DefaultRoles}
 	userRoleMapping := map[string]backup.PxBackupRole{}
-	var runID int
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteUsersRole", "Delete role and users", nil, testrailID)
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("DeleteUsersRole", "Delete role and users", nil, 58089)
 	})
 	It("Delete user and roles", func() {
 		Step("Create Users add roles", func() {
@@ -5748,12 +5743,30 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 			wg.Wait()
 		})
-		Step("Delete roles and users", func() {
+		Step("Delete roles from the users", func() {
 			for userName, role := range userRoleMapping {
-				log.Info("This is the user : ", userName)
+				log.Info(fmt.Sprintf("Deleting [%s] from the user : [%s]", role, userName))
 				err := backup.DeleteRoleFromUser(userName,role,"")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
-				err = backup.DeleteUser(userName)
+			}
+		})
+		Step("Validate if the roles are deleted from the users ", func() {
+			result := false
+			for user, role := range userRoleMapping {
+				roles, _ := backup.GetRolesForUser(user)
+				for _, roleObj := range roles {
+					if roleObj.Name == string(role) {
+						result = true
+						break
+					}	
+				}
+				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s]", role))
+			}
+		})
+		Step("Delete users", func() {
+			for userName, _ := range userRoleMapping {
+				log.Info("This is the user : ", userName)
+				err := backup.DeleteUser(userName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
 		})
@@ -5773,7 +5786,6 @@ var _ = Describe("{DeleteUsersRole}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
