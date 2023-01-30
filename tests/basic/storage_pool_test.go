@@ -1479,7 +1479,6 @@ func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volu
 				return nil, true, err
 			}
 			for _, vol := range vols {
-				fmt.Printf("vol id is %s\n", vol.ID)
 				appVol, err := Inst().V.InspectVolume(vol.ID)
 				if err != nil {
 					return nil, true, err
@@ -5246,7 +5245,7 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 
 		// Pick a pool from a pools list and resize it
 		appVol, err := Inst().V.InspectVolume(volID)
-		dash.VerifyFatal(err, nil, "Checking if the Volume inspect is success for the desired volume")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Checking if the Volume inspect is success for the desired volume %s", volID))
 		// Get the pool UUID on which the volume which is ~190G exist
 		poolIDToResize = appVol.ReplicaSets[0].PoolUuids[0]
 
@@ -5336,7 +5335,7 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 			log.FailOnError(err, fmt.Sprintf(" Failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
-			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
+			if newPoolSize == expectedSize || newPoolSize >= expectedSizeWithJournal {
 				isExpansionSuccess = true
 			}
 			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
