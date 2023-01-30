@@ -582,7 +582,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			DeleteRestore(restoreName, orgID, ctx)
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 		}
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
@@ -703,14 +704,15 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			userContexts = append(userContexts, ctxNonAdmin)
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			// Try restore with user having RestoreAccess and it should pass
 			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s to validate user can delete restore  ", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 			backupDriver := Inst().Backup
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
@@ -733,7 +735,8 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 		time.Sleep(time.Minute * 3)
 		err = backup.DeleteUser(userName)
@@ -953,7 +956,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -963,7 +966,8 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Restore validation to make sure that the user with Full Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -1000,7 +1004,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -1037,7 +1041,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -1047,7 +1051,8 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Restore validation to make sure that the user with can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -1077,7 +1082,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			backupName := backupNames[3]
@@ -1088,7 +1093,8 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Restore validation to make sure that the user with can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 			log.InfoD("Deleting Restore [%s] was successful", restoreName)
 
 			// Get Backup UID
@@ -1115,7 +1121,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			backupName := backupNames[2]
@@ -1189,7 +1195,8 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
@@ -1401,7 +1408,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
@@ -1412,7 +1419,8 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			// Restore validation to make sure that the user with Full Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -1455,7 +1463,8 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			// Restore validation to make sure that the user with Restore Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -1556,7 +1565,8 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
@@ -1766,7 +1776,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			backupName := backupNames[5]
@@ -1777,7 +1787,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Restore validation to make sure that the user with Full Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -1800,7 +1811,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			backupName = backupNames[4]
@@ -1811,7 +1822,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Restore validation to make sure that the user with Full Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupUID, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -1853,7 +1865,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Restore validation to make sure that the user with Restore Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -1879,7 +1892,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Restore validation to make sure that the user with Restore Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Backup UID
 			backupUID, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -2050,7 +2064,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
@@ -2198,7 +2213,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -2208,7 +2223,8 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			// Restore validation to make sure that the user with Full Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[0], restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 		})
 		Step("Share backup with user restore mode and validate", func() {
@@ -2231,7 +2247,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
@@ -2250,7 +2266,8 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			// Restore validation to make sure that the user with Full Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupNames[0], restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Delete backup to confirm that the user has Full Access
 			backupDeleteResponse, err := DeleteBackup(backupNames[0], backupUID, orgID, ctxNonAdmin)
@@ -2423,7 +2440,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 				// Register Source and Destination cluster
 				log.InfoD("Registering Source and Destination clusters from user context for user -%s", user)
 				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-				dash.VerifyFatal(err, "", "Creating source and destination cluster")
+				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 				for _, backup := range backupNames {
 					// Get Backup UID
@@ -2798,7 +2815,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			log.FailOnError(err, "Fetching user ctx")
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
 			err = CreateBackup(userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
 				labelSelectors, orgID, clusterUid, "", "", "", "", ctxNonAdmin)
@@ -2816,13 +2833,15 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		backupDriver := Inst().Backup
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, "Getting backup UID")
-		DeleteBackup(backupName, backupUID, orgID, ctx)
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting backup")
 		// TODO: Remove time.Sleep: PA-509
 		time.Sleep(time.Minute * 3)
 		log.Infof("Deleting backup created by user")
 		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
 		dash.VerifySafely(err, nil, "Getting backup UID of user")
-		DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
+		_, err = DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
+		dash.VerifyFatal(err, nil, "Deleting backup")
 		// TODO: Remove time.Sleep
 		time.Sleep(time.Minute * 3)
 		log.Infof("Cleaning up users")
@@ -2984,13 +3003,15 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				defer wg.Done()
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Error deleting user %v", backupName)
-				DeleteBackup(backupName, backupUID, orgID, ctx)
+				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, "Deleting backup")
 			}(backupName)
 		}
 		wg.Wait()
 		log.Infof("Deleting restore created by users")
 		for userContext, restoreName := range userRestoreContext {
-			DeleteRestore(restoreName, orgID, userContext)
+			err = DeleteRestore(restoreName, orgID, userContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 		}
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContextsList {
@@ -4469,11 +4490,13 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		log.Infof("Deleting backup, restore and backup location, cloud account")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteRestore(restoreName, orgID, ctx)
+		err = DeleteRestore(restoreName, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 			backupUID := getBackupUID(orgID, backupName)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 		err = DeleteBackupLocation(backupLocationName, BackupLocationUID, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
@@ -4972,13 +4995,15 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, restore := range restoreNames {
-			DeleteRestore(restore, orgID, ctx)
+			err = DeleteRestore(restore, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
 		}
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, backupName := range backupNames {
 			backupUID := getBackupUID(backupName, orgID)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 		err = DeleteBackupLocation(backupLocationNames[0], BackupLocationUID, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationNames[0]))
@@ -5133,6 +5158,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	bkpNamespaces = make([]string, 0)
 	timestamp := strconv.Itoa(int(time.Now().Unix()))
 	labelSelectors := make(map[string]string)
+	params := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58043)
@@ -5199,7 +5225,6 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		Step("Create new storage class for restore", func() {
 			log.InfoD("Create new storage class for restore")
 			scName := fmt.Sprintf("replica-sc-%s", timestamp)
-			params := make(map[string]string)
 			params["repl"] = "2"
 			k8sStorage := storage.Instance()
 			v1obj := meta_v1.ObjectMeta{
@@ -5456,13 +5481,15 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 				defer wg.Done()
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Error deleting user %v", backupName)
-				DeleteBackup(backupName, backupUID, orgID, ctx)
+				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, "Deleting backup")
 			}(backupName)
 		}
 		wg.Wait()
 		log.Infof("Deleting restore created by users")
 		for userContext, restoreName := range userRestoreContext {
-			DeleteRestore(restoreName, orgID, userContext)
+			err = DeleteRestore(restoreName, orgID, userContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 		}
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContextsList {
@@ -5508,6 +5535,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 		StartTorpedoTest("ViewOnlyFullBackupRestoreIncrementalBackup",
 			"Full backup view only and incremental backup restore access", nil, 82939)
 		log.InfoD("Deploy applications")
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -5520,6 +5548,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			}
 		}
 	})
+
 	It("Full backup view only and incremental backup restore access", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
@@ -5647,7 +5676,8 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			// Restore validation to make sure that the user with Full Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", incrementalBackupName, restoreName)
 			log.Infof("About to delete restore - %s", restoreName)
-			DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 
 			// Get Admin Context - needed to get backup UID
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -5694,7 +5724,8 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 
 		log.Infof("Cleaning up buckets")
@@ -5705,7 +5736,277 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 		log.Infof("Cleaning cloud accounts")
 		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
 	})
+})
 
+var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", func() {
+	var (
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
+		bkpNamespaces     []string
+		clusterUid        string
+		clusterStatus     api.ClusterInfo_StatusInfo_Status
+		backupLocationUID string
+		cloudCredName     string
+		cloudCredUID      string
+		bkpLocationName   string
+		backupName        string
+		userName          string
+		userCtx           context.Context
+		scName            string
+		restoreList       []string
+		sourceScName      *storageapi.StorageClass
+	)
+	timestamp := time.Now().Unix()
+	namespaceMap := make(map[string]string)
+	backupLocationMap := make(map[string]string)
+	labelSelectors := make(map[string]string)
+	bkpNamespaces = make([]string, 0)
+	storageClassMapping := make(map[string]string)
+	k8sStorage := storage.Instance()
+	params := make(map[string]string)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("IssueMultipleRestoresWithNamespaceAndStorageClassMapping",
+			"Issue multiple restores with namespace and storage class mapping", nil, 82945)
+		log.InfoD("Deploy applications needed for backup")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Issue multiple restores with namespace and storage class mapping", func() {
+		namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
+		ctx, err := backup.GetAdminCtxFromSecret()
+		dash.VerifyFatal(err, nil, "Getting px-central-admin context")
+		providers := getProviders()
+		bucketNames := getBucketName()
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(contexts)
+		})
+
+		Step("Register cluster for backup", func() {
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Registering backup cluster  having uid %v returned with status %v", clusterUid, clusterStatus))
+		})
+
+		Step("Create new storage class on source and destination cluster for storage class mapping for restore", func() {
+			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
+			scName = fmt.Sprintf("replica-sc-%v", timestamp)
+			params["repl"] = "2"
+			v1obj := meta_v1.ObjectMeta{
+				Name: scName,
+			}
+			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+			bindMode := storageapi.VolumeBindingImmediate
+			scObj := storageapi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				ReclaimPolicy:     &reclaimPolicyDelete,
+				VolumeBindingMode: &bindMode,
+			}
+			_, err := k8sStorage.CreateStorageClass(&scObj)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on source cluster %s", scName, SourceClusterName))
+
+			log.InfoD("Switching cluster context to destination cluster")
+			SetDestinationKubeConfig()
+			log.InfoD("Create new storage class on destination cluster for storage class mapping for restore")
+			_, err = k8sStorage.CreateStorageClass(&scObj)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", scName, destinationClusterName))
+			log.InfoD("Switching cluster context back to source cluster")
+			SetSourceKubeConfig()
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timestamp)
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, bucketNames[0], timestamp)
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				// TODO remove time.sleep: PA-509
+				time.Sleep(time.Minute * 3)
+				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Taking backup of application for different combination of restores", func() {
+			log.InfoD("Taking  backup of application for different combination of restores")
+			backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, bkpNamespaces[0], backupLocationName)
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
+				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup: %s", backupName))
+		})
+
+		Step("Getting storage class of the source cluster", func() {
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[0], labelSelectors)
+			singlePvc := pvcs.Items[0]
+			sourceScName, err = core.Instance().GetStorageClassForPVC(&singlePvc)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC %v from PVC", sourceScName.Name))
+		})
+
+		Step("Create user", func() {
+			log.InfoD("Create user")
+			userName = fmt.Sprintf("testuser-82945")
+			firstName := fmt.Sprintf("FirstName")
+			lastName := fmt.Sprintf("LastName")
+			email := fmt.Sprintf("testuser@cnbu.com")
+			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+			dash.VerifyFatal(err, nil, "Creating user")
+			userCtx, err = backup.GetNonAdminCtx(userName, "Password1")
+			dash.VerifyFatal(err, nil, "Getting user context")
+		})
+
+		Step("Share backup with user with FullAccess", func() {
+			log.InfoD("Share backup with user with FullAccess")
+			err = ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Share backup %s with  user %s having FullAccess", backupName, userName))
+			userBackups1, _ := GetAllBackupsForUser(userName, "Password1")
+			log.Info(" the backup are", userBackups1)
+			err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster for user")
+		})
+
+		Step("Restoring backup in the same namespace with user having FullAccess in different cluster", func() {
+			log.InfoD("Restoring backup in the same namespace with user having FullAccess in different cluster")
+			restoreName := fmt.Sprintf("same-namespace-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in the same namespace with user having FullAccess Access in different cluster")
+		})
+
+		Step("Restoring backup in new namespace with user having FullAccess in same cluster", func() {
+			log.InfoD("Restoring backup in new namespace with user having FullAccess in same cluster")
+			restoreName := fmt.Sprintf("new-namespace-full-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err := CreateRestore(restoreName, backupName, namespaceMap, SourceClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having FullAccess Access in same cluster")
+		})
+
+		Step("Restoring backup in new namespace with user having FullAccess in different cluster", func() {
+			log.InfoD("Restoring backup in new namespace with user having FullAccess in different cluster")
+			restoreName := fmt.Sprintf("new-namespace-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err := CreateRestore(restoreName, backupName, namespaceMap, destinationClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having FullAccess Access in different cluster")
+		})
+
+		Step("Restoring backup in different storage class with user having FullAccess in same cluster", func() {
+			log.InfoD("Restoring backup in different storage class with user having FullAccess Access in same cluster")
+			storageClassMapping[sourceScName.Name] = scName
+			restoreName := fmt.Sprintf("new-storage-class-full-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, SourceClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having FullAccess in same cluster")
+		})
+
+		Step("Restoring backup in different storage class with user having FullAccess in different cluster", func() {
+			log.InfoD("Restoring backup in different storage class with user having FullAccess Access in different cluster")
+			storageClassMapping[sourceScName.Name] = scName
+			restoreName := fmt.Sprintf("new-storage-class-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, destinationClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having FullAccess in different cluster")
+		})
+
+		Step("Share backup with user with RestoreAccess", func() {
+			err = ShareBackup(backupName, nil, []string{userName}, RestoreAccess, ctx)
+			dash.VerifyFatal(err, nil, "Share backup with user with RestoreAccess")
+		})
+
+		Step("Restoring backup in the same namespace with user having RestoreAccess in different cluster", func() {
+			restoreName := fmt.Sprintf("same-ns-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in the same namespace with user having RestoreAccess Access in different cluster")
+		})
+
+		Step("Restoring backup in new namespace with user having RestoreAccess in same cluster", func() {
+			restoreName := fmt.Sprintf("new-namespace-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err := CreateRestore(restoreName, backupName, namespaceMap, SourceClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having RestoreAccess Access in same cluster")
+		})
+
+		Step("Restoring backup in new namespace with user having RestoreAccess in different cluster", func() {
+			restoreName := fmt.Sprintf("new-namespace-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err := CreateRestore(restoreName, backupName, namespaceMap, destinationClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having RestoreAccess Access in different cluster")
+		})
+
+		Step("Restoring backup in different storage class with user having RestoreAccess in same cluster", func() {
+			log.InfoD("Restoring backup in different storage class with user having RestoreAccess in same cluster")
+			storageClassMapping[sourceScName.Name] = scName
+			restoreName := fmt.Sprintf("new-storage-class-restore-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, SourceClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having RestoreAccess in same cluster")
+		})
+
+		Step("Restoring backup in different storage class with user having RestoreAccess in different cluster", func() {
+			log.InfoD("Restoring backup in different storage class with user having RestoreAccess Access in different cluster")
+			storageClassMapping[sourceScName.Name] = scName
+			restoreName := fmt.Sprintf("new-storage-class-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreList = append(restoreList, restoreName)
+			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, destinationClusterName, orgID, userCtx)
+			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having RestoreAccess in different cluster")
+		})
+	})
+	JustAfterEach(func() {
+		var wg sync.WaitGroup
+		defer EndTorpedoTest()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+		log.InfoD("Deleting the backup created")
+		backupDriver := Inst().Backup
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		log.FailOnError(err, "Error getting backup UID for %v", backupName)
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting the backup created")
+		log.InfoD("Deleting restore created by users")
+		for _, restoreName := range restoreList {
+			wg.Add(1)
+			go func(restoreName string) {
+				defer wg.Done()
+				err = DeleteRestore(restoreName, orgID, userCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+			}(restoreName)
+		}
+		wg.Wait()
+		log.InfoD("Deleting the newly created storage class")
+		err = k8sStorage.DeleteStorageClass(scName)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting storage class %s from source cluster", scName))
+		log.InfoD("Switching cluster context to destination cluster")
+		SetDestinationKubeConfig()
+		err = k8sStorage.DeleteStorageClass(scName)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting storage class %s from destination cluster", scName))
+		log.InfoD("Switching cluster context back to source cluster")
+		SetSourceKubeConfig()
+		log.InfoD("Deleting user clusters")
+		DeleteCloudAccounts(make(map[string]string), "", "", userCtx)
+		log.InfoD("Cleaning up users")
+		err = backup.DeleteUser(userName)
+		log.FailOnError(err, "Error deleting user %v", userName)
+		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
 })
 
 // createS3BackupLocation creates backup location
@@ -6289,12 +6590,14 @@ func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 		backupUID := getBackupUID(backupName, OrgID)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteBackup(backupName, backupUID, OrgID, ctx)
+		_, err = DeleteBackup(backupName, backupUID, OrgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting backup")
 	}
 	for _, restoreName := range restores {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteRestore(restoreName, OrgID, ctx)
+		err = DeleteRestore(restoreName, OrgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 	}
 	provider := GetProvider()
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -6565,13 +6868,15 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 		backupUID := getBackupUID(BackupName, OrgID)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteBackup(BackupName, backupUID, OrgID, ctx)
+		_, err = DeleteBackup(BackupName, backupUID, OrgID, ctx)
+		dash.VerifyFatal(err, nil, "Verifying that delete backup is possible")
 	}
 	for _, restoreNamespace := range restoreNamespaces {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		RestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, restoreNamespace)
-		DeleteRestore(RestoreName, OrgID, ctx)
+		err = DeleteRestore(RestoreName, OrgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", RestoreName))
 	}
 
 	ctx, err := backup.GetAdminCtxFromSecret()
