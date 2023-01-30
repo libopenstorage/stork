@@ -2664,24 +2664,16 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 }
 
 // DeleteRestore creates restore
-func DeleteRestore(restoreName string, orgID string, ctx context1.Context) {
-
-	Step(fmt.Sprintf("Delete restore [%s] in org [%s]",
-		restoreName, orgID), func() {
-
-		backupDriver := Inst().Backup
-		expect(backupDriver).NotTo(beNil(),
-			"Backup driver is not initialized")
-
-		deleteRestoreReq := &api.RestoreDeleteRequest{
-			OrgId: orgID,
-			Name:  restoreName,
-		}
-		_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
-		log.FailOnError(err, "Failed to delete restore [%s] in org [%s]",
-			restoreName, orgID)
-		// TODO: validate createClusterResponse also
-	})
+func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	dash.VerifyFatal(backupDriver != nil, true, "Getting the backup driver")
+	deleteRestoreReq := &api.RestoreDeleteRequest{
+		OrgId: orgID,
+		Name:  restoreName,
+	}
+	_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
+	return err
+	// TODO: validate createClusterResponse also
 }
 
 // SetupBackup sets up backup location and source and destination clusters
@@ -3632,7 +3624,8 @@ func TearDownBackupRestoreAll() {
 	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
 	restores := enumRestoreResponse.GetRestores()
 	for _, restore := range restores {
-		DeleteRestore(restore.GetName(), OrgID, ctx)
+		err = DeleteRestore(restore.GetName(), OrgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting Restore")
 	}
 
 	for _, bkp := range backups {
