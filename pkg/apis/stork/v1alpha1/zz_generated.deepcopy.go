@@ -305,11 +305,6 @@ func (in *ApplicationBackupStatus) DeepCopyInto(out *ApplicationBackupStatus) {
 	in.TriggerTimestamp.DeepCopyInto(&out.TriggerTimestamp)
 	in.LastUpdateTimestamp.DeepCopyInto(&out.LastUpdateTimestamp)
 	in.FinishTimestamp.DeepCopyInto(&out.FinishTimestamp)
-	if in.Namespaces != nil {
-		in, out := &in.Namespaces, &out.Namespaces
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	return
 }
 

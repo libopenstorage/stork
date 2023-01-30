@@ -67,7 +67,6 @@ type ApplicationBackupStatus struct {
 	LastUpdateTimestamp metav1.Time                      `json:"lastUpdateTimestamp"`
 	FinishTimestamp     metav1.Time                      `json:"finishTimestamp"`
 	TotalSize           uint64                           `json:"totalSize"`
-	Namespaces          []string                         `json:"namespaces"`
 }
 
 // ObjectInfo contains info about an object being backed up or restored
