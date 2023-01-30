@@ -5725,9 +5725,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		StartTorpedoTest("DeleteUsersRole", "Delete role and users", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-
 	It("Delete user and roles", func() {
-
 		Step("Create Users add roles", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
@@ -5751,7 +5749,6 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			wg.Wait()
 		})
 		Step("Delete roles and users", func() {
-
 			for userName, role := range userRoleMapping {
 				log.Info("This is the user : ", userName)
 				err := backup.DeleteRoleFromUser(userName,role,"")
