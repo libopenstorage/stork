@@ -5750,10 +5750,9 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 			wg.Wait()
 		})
-
 		Step("Delete roles and users", func() {
 
-			for userName,role := range userRoleMapping {
+			for userName, role := range userRoleMapping {
 				log.Info("This is the user : ", userName)
 				err := backup.DeleteRoleFromUser(userName,role,"")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
@@ -5761,13 +5760,9 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
 		})
-
-		Step("Validate if all the created users are deleted ", func(){
-			
+		Step("Validate if all the created users are deleted ", func() {
 			var result bool = false
-
-			remainingUsers , _ := backup.GetAllUsers()
-
+			remainingUsers, _ := backup.GetAllUsers()
 			for user, _ := range userRoleMapping {
 				for _, userObj := range remainingUsers {
 					if userObj.Name == user {
