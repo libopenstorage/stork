@@ -4974,21 +4974,12 @@ var _ = Describe("{DeleteUsersRole}", func() {
 
 		Step("Delete roles and users", func() {
 
-			var wg sync.WaitGroup
-			for userName,role := range userRoleMapping {
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("autouser%v", i)
 				log.Info("This is the user : ", userName)
-				wg.Add(1)
-				go func(userName string,role backup.PxBackupRole) {
-					defer wg.Done()
-					err := backup.DeleteRoleFromUser(userName,role,"")
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
-					err = backup.DeleteUser(userName)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
-				}(userName,role)
+				err := backup.DeleteUser(userName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
-			wg.Wait()
-			//Waiting for catalog to update
-			time.Sleep(time.Minute * 1)
 		})
 
 		Step("Validate if all the created users are deleted ", func(){
