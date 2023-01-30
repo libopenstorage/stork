@@ -5753,10 +5753,11 @@ var _ = Describe("{DeleteUsersRole}", func() {
 
 		Step("Delete roles and users", func() {
 
-			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("autouser%v", i)
+			for userName,role := range userRoleMapping {
 				log.Info("This is the user : ", userName)
-				err := backup.DeleteUser(userName)
+				err := backup.DeleteRoleFromUser(userName,role,"")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
+				err = backup.DeleteUser(userName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
 		})
