@@ -6114,7 +6114,8 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			log.InfoD("Register cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			log.FailOnError(err, "Creation of source and destination cluster")
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s", SourceClusterName))
 		})
@@ -6122,10 +6123,12 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
+			preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+			postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup creation", backupName))
 			}
 		})
@@ -6145,7 +6148,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			log.InfoD("Delete the restores")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			DeleteRestore(restoreName, orgID, ctx)
+			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s deletion", restoreName))
 		})
 		Step("Delete the backups", func() {
