@@ -5746,14 +5746,15 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		Step("Delete roles from the users", func() {
 			for userName, role := range userRoleMapping {
 				log.Info(fmt.Sprintf("Deleting [%s] from the user : [%s]", role, userName))
-				err := backup.DeleteRoleFromUser(userName,role,"")
+				err := backup.DeleteRoleFromUser(userName, role, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
 			for user, role := range userRoleMapping {
-				roles, _ := backup.GetRolesForUser(user)
+				roles, err := backup.GetRolesForUser(user)	
+				log.FailOnError(err, "Failed to roles for user %s", user)
 				for _, roleObj := range roles {
 					if roleObj.Name == string(role) {
 						result = true
@@ -5764,16 +5765,17 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 		})
 		Step("Delete users", func() {
-			for userName, _ := range userRoleMapping {
+			for userName := range userRoleMapping {
 				log.Info("This is the user : ", userName)
 				err := backup.DeleteUser(userName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
 		})
-		Step("Validate if all the created users are deleted ", func() {
+		Step("Validate if all the created users are deleted", func() {
 			var result bool = false
-			remainingUsers, _ := backup.GetAllUsers()
-			for user, _ := range userRoleMapping {
+			remainingUsers, err := backup.GetAllUsers()
+			log.FailOnError(err, "Failed to get users")
+			for user := range userRoleMapping {
 				for _, userObj := range remainingUsers {
 					if userObj.Name == user {
 						result = true
