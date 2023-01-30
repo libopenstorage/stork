@@ -731,7 +731,7 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 // GetBlockDrives returns the block drives on the node
 func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
 	drives := make(map[string]*node.BlockDrive)
-	driveCmd := fmt.Sprintf("sudo /bin/lsblk -P -s -d -p -o NAME,SIZE,MOUNTPOINT,FSTYPE,TYPE")
+	driveCmd := fmt.Sprintf("sudo /bin/lsblk -f -P -s -d -p -o NAME,LABEL,SIZE,MOUNTPOINT,FSTYPE,TYPE")
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, driveCmd, false)
 		if err != nil {
@@ -746,7 +746,7 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 			Cause: err.Error(),
 		}
 	}
-	driveOutput := fmt.Sprint(out)
+	driveOutput := fmt.Sprintf("%s", out)
 
 	for _, line := range strings.Split(strings.TrimSpace(driveOutput), "\n") {
 		drive := &node.BlockDrive{}
@@ -755,6 +755,20 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 			if ok, _ := regexp.MatchString("^NAME", col); ok {
 				lastBin := strings.LastIndex(col, "=")
 				drive.Path = col[lastBin+2 : len(col)-1]
+			}
+			if ok, _ := regexp.MatchString("^LABEL", col); ok {
+				lastBin := strings.Index(col, "=")
+				labels := col[lastBin+2 : len(col)-1]
+				labelsList := strings.Split(labels, ",")
+				driveLabels := make(map[string]string)
+				for _, label := range labelsList {
+					labelBin := strings.LastIndex(label, "=")
+					if labelBin != -1 {
+						kv := strings.Split(label, "=")
+						driveLabels[kv[0]] = kv[1]
+					}
+				}
+				drive.Labels = driveLabels
 			}
 			if ok, _ := regexp.MatchString("^MOUNTPOINT", col); ok {
 				lastBin := strings.LastIndex(col, "=")

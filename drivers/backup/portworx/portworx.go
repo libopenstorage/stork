@@ -1317,6 +1317,24 @@ func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, s
 	return nil
 }
 
+// GetSchedulePolicyUid gets the uid for the given schedule policy
+func (p *portworx) GetSchedulePolicyUid(orgID string, ctx context.Context, schPolicyName string) (string, error) {
+	SchedulePolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schPolicyList, err := p.EnumerateSchedulePolicy(ctx, SchedulePolicyEnumerateReq)
+	if err != nil {
+		return "", fmt.Errorf("Failed to enumerate schedule policies with error: [%v]", err)
+	}
+	for i := 0; i < len(schPolicyList.SchedulePolicies); i++ {
+		if schPolicyList.SchedulePolicies[i].Metadata.Name == schPolicyName {
+			schPolicyUid := schPolicyList.SchedulePolicies[i].Metadata.Uid
+			return schPolicyUid, nil
+		}
+	}
+	return "", fmt.Errorf("Unable to find schedule policy Uid")
+}
+
 func (p *portworx) RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Failed to fetch px-central-admin ctx")

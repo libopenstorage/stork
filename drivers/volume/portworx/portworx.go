@@ -233,6 +233,24 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 	return nil
 }
 
+// DeletePool deletes the pool with given poolID
+func (d *portworx) DeletePool(n node.Node, poolID string) error {
+	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
+	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error deleting pool on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("poolID %s deletion: %s", poolID, out)
+	return nil
+}
+
 // GetStorageSpec get the storage spec used to deploy portworx
 func (d *portworx) GetStorageSpec() (*pxapi.StorageSpec, error) {
 	storageSpecResp, err := d.portworxServiceClient.GetStorageSpec(d.getContext(), &pxapi.PxGetStorageSpecRequest{})
@@ -916,6 +934,8 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 	if err := d.EnterMaintenance(n); err != nil {
 		return err
 	}
+	//wait for node to enter maintenance mode
+	time.Sleep(1 * time.Minute)
 
 	if err := d.ExitMaintenance(n); err != nil {
 		return err
@@ -1021,11 +1041,50 @@ func (d *portworx) RecoverPool(n node.Node) error {
 		return err
 	}
 
+	//wait for pool to enter maintenance mode
+	time.Sleep(1 * time.Minute)
+
 	if err := d.ExitPoolMaintenance(n); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show | grep -e UUID -e Status", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         validatePXStartTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var status string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "UUID") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+		}
+		if strings.Contains(line, "Status") {
+			status = strings.Split(line, ":")[1]
+			status = strings.Trim(status, " ")
+		}
+		if poolId != "" && status != "" {
+			poolsData[poolId] = status
+			poolId = ""
+			status = ""
+		}
+	}
+	return poolsData, nil
 }
 
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
@@ -4506,6 +4565,31 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		}
 	}
 	return nil
+}
+
+// GetPoolDrives returns the map of poolID and drive name
+func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	poolDrives := make(map[string][]string, 0)
+	log.Infof("Getting available block drives on node [%s]", n.Name)
+	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
+
+	if err != nil {
+		return poolDrives, err
+	}
+	for _, v := range blockDrives {
+		labelsMap := v.Labels
+		if pm, ok := labelsMap["pxpool"]; ok {
+			poolDrives[pm] = append(poolDrives[pm], v.Path)
+		}
+	}
+	return poolDrives, nil
 }
 
 // AddCloudDrive add cloud drives to the node using PXCTL
