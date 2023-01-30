@@ -5753,15 +5753,14 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
 			for user, role := range userRoleMapping {
-				roles, err := backup.GetRolesForUser(user)	
-				log.FailOnError(err, "Failed to roles for user %s", user)
+				roles, _ := backup.GetRolesForUser(user)
 				for _, roleObj := range roles {
 					if roleObj.Name == string(role) {
 						result = true
 						break
 					}	
 				}
-				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s]", role))
+				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
 			}
 		})
 		Step("Delete users", func() {
@@ -5772,7 +5771,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 		})
 		Step("Validate if all the created users are deleted", func() {
-			var result bool = false
+			result := false
 			remainingUsers, err := backup.GetAllUsers()
 			log.FailOnError(err, "Failed to get users")
 			for user := range userRoleMapping {
