@@ -6031,7 +6031,6 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 	bkpNamespaces = make([]string, 0)
 	var namespaceMapping map[string]string
 	namespaceMapping = make(map[string]string)
-	providers := getProviders()
 	timestamp := strconv.Itoa(int(time.Now().Unix()))
 	intervalName := fmt.Sprintf("%s-%s", "interval", timestamp)
 	JustBeforeEach(func() {
@@ -6063,6 +6062,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		}
 	})
 	It("Create backup objects and delete", func() {
+		providers := getProviders()
 
 		Step("Validate applications", func() {
 			ValidateApplications(contexts)
