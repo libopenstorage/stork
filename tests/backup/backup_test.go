@@ -28,9 +28,11 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -6197,6 +6199,86 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.Info(" Deleting deployed applications")
 		ValidateAndDestroy(contexts, opts)
+	})
+})
+
+var _ = Describe("{DeleteUsersRole}", func() {
+
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
+	numberOfUsers := 100
+	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.ApplicationUser, backup.InfrastructureOwner, backup.DefaultRoles}
+	userRoleMapping := map[string]backup.PxBackupRole{}
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteUsersRole", "Delete role and users", nil, 58089)
+	})
+	It("Delete user and roles", func() {
+		Step("Create Users add roles", func() {
+			log.InfoD("Creating %d users", numberOfUsers)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("autouser%v", i)
+				firstName := fmt.Sprintf("FirstName%v", i)
+				lastName := fmt.Sprintf("LastName%v", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				role := roles[rand.Intn(len(roles))]
+				wg.Add(1)
+				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
+					defer wg.Done()
+					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					log.InfoD("Adding role %v to user %v ", role, userName)
+					err = backup.AddRoleToUser(userName, role, "")
+					log.FailOnError(err, "Failed to add role to user - %s", userName)
+				}(userName, firstName, lastName, email, role)
+				userRoleMapping[userName] = role
+			}
+			wg.Wait()
+		})
+		Step("Delete roles from the users", func() {
+			for userName, role := range userRoleMapping {
+				log.Info(fmt.Sprintf("Deleting [%s] from the user : [%s]", role, userName))
+				err := backup.DeleteRoleFromUser(userName, role, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
+			}
+		})
+		Step("Validate if the roles are deleted from the users ", func() {
+			result := false
+			for user, role := range userRoleMapping {
+				roles, _ := backup.GetRolesForUser(user)
+				for _, roleObj := range roles {
+					if roleObj.Name == string(role) {
+						result = true
+						break
+					}	
+				}
+				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
+			}
+		})
+		Step("Delete users", func() {
+			for userName := range userRoleMapping {
+				log.Info("This is the user : ", userName)
+				err := backup.DeleteUser(userName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
+			}
+		})
+		Step("Validate if all the created users are deleted", func() {
+			result := false
+			remainingUsers, err := backup.GetAllUsers()
+			log.FailOnError(err, "Failed to get users")
+			for user := range userRoleMapping {
+				for _, userObj := range remainingUsers {
+					if userObj.Name == user {
+						result = true
+						break
+					}	
+				}
+				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted user [%s]", user))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
 
