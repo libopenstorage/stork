@@ -544,7 +544,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
-				CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
 			}
 		})
 	})
@@ -707,7 +708,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			// Try restore with user having RestoreAccess and it should pass
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s to validate user can delete restore  ", restoreName)
@@ -960,7 +961,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1045,7 +1046,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with can restore
@@ -1087,7 +1088,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Start Restore
 			backupName := backupNames[3]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with can restore
@@ -1126,7 +1127,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Start Restore
 			backupName := backupNames[2]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 
@@ -1413,7 +1414,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			// Start Restore
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1457,7 +1458,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			// Start Restore
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Restore Access can restore
@@ -1499,7 +1500,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			// Start Restore
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -1781,7 +1782,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Start Restore
 			backupName := backupNames[5]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1816,7 +1817,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Start Restore
 			backupName = backupNames[4]
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1859,7 +1860,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Start Restore
 			backupName := backupNames[3]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Restore Access can restore
@@ -1886,7 +1887,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Start Restore
 			backupName = backupNames[2]
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Restore Access can restore
@@ -1927,7 +1928,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Start Restore
 			backupName := backupNames[1]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -1949,7 +1950,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 
 			// Start Restore
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -2217,7 +2218,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[0], restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -2260,7 +2261,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[0], restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -2451,7 +2452,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 
 					// Start Restore
 					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-					err = CreateRestore(restoreName, backup, nil, destinationClusterName, orgID, ctxNonAdmin)
+					err = CreateRestore(restoreName, backup, nil, destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 
 					// Restore validation to make sure that the user with cannot restore
 					dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
@@ -2684,7 +2685,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for range bkpNamespaces {
 				for _, backupName := range backupList {
-					err = CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+					err = CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
 					dash.VerifyFatal(err, nil, "Restore failed")
 				}
 			}
@@ -4481,7 +4482,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
-				CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx)
+				CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, make(map[string]string))
 			}
 		})
 	})
@@ -4631,7 +4632,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
-				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, "Restore failed")
 			}
 		})
@@ -4821,7 +4822,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				Step("Restoring the backups application", func() {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
-					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
 				})
 				Step("Getting size before resize", func() {
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
@@ -4982,11 +4983,11 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			restoreNames = append(restoreNames, restorename)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			CreateRestore(restorename, backupNames[0], nil, destinationClusterName, orgID, ctx)
+			CreateRestore(restorename, backupNames[0], nil, destinationClusterName, orgID, ctx, make(map[string]string))
 			time.Sleep(time.Minute * 5)
 			restorename = fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[1])
 			restoreNames = append(restoreNames, restorename)
-			CreateRestore(restorename, backupNames[1], nil, destinationClusterName, orgID, ctx)
+			CreateRestore(restorename, backupNames[1], nil, destinationClusterName, orgID, ctx, make(map[string]string))
 		})
 	})
 	JustAfterEach(func() {
@@ -5109,7 +5110,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 				restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
 				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
 				namespaceMapping[namespace] = restoredNameSpace
-				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx)
+				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, make(map[string]string))
 				log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 			}
 		})
@@ -5259,7 +5260,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 				storageClassMapping[sourceScName.Name] = scName
 				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
 				namespaceMapping[namespace] = restoredNameSpace
-				err = CreateRestoreWithCustomStorageClass(restoreName, backupName, namespaceMapping, storageClassMapping, SourceClusterName, orgID, ctx)
+				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, storageClassMapping)
 				dash.VerifyFatal(err, nil, "Restoring with custom Storage Class Mapping")
 			}
 		})
@@ -5642,7 +5643,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 
 			// Start Restore and confirm that user cannot restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, fullBackupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, fullBackupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.Infof("Error returned - %s", err.Error())
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -5670,7 +5671,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, incrementalBackupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
+			err = CreateRestore(restoreName, incrementalBackupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", incrementalBackupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -5885,7 +5886,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			log.InfoD("Restoring backup in the same namespace with user having FullAccess in different cluster")
 			restoreName := fmt.Sprintf("same-namespace-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
+			err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
 			dash.VerifyFatal(err, nil, "Restoring backup in the same namespace with user having FullAccess Access in different cluster")
 		})
 
@@ -5893,7 +5894,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			log.InfoD("Restoring backup in new namespace with user having FullAccess in same cluster")
 			restoreName := fmt.Sprintf("new-namespace-full-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err := CreateRestore(restoreName, backupName, namespaceMap, SourceClusterName, orgID, userCtx)
+			err := CreateRestore(restoreName, backupName, namespaceMap, SourceClusterName, orgID, userCtx, make(map[string]string))
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having FullAccess Access in same cluster")
 		})
 
@@ -5901,7 +5902,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			log.InfoD("Restoring backup in new namespace with user having FullAccess in different cluster")
 			restoreName := fmt.Sprintf("new-namespace-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err := CreateRestore(restoreName, backupName, namespaceMap, destinationClusterName, orgID, userCtx)
+			err := CreateRestore(restoreName, backupName, namespaceMap, destinationClusterName, orgID, userCtx, make(map[string]string))
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having FullAccess Access in different cluster")
 		})
 
@@ -5910,7 +5911,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-full-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, SourceClusterName, orgID, userCtx)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, userCtx, storageClassMapping)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having FullAccess in same cluster")
 		})
 
@@ -5919,7 +5920,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, destinationClusterName, orgID, userCtx)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, storageClassMapping)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having FullAccess in different cluster")
 		})
 
@@ -5931,21 +5932,21 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		Step("Restoring backup in the same namespace with user having RestoreAccess in different cluster", func() {
 			restoreName := fmt.Sprintf("same-ns-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
+			err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
 			dash.VerifyFatal(err, nil, "Restoring backup in the same namespace with user having RestoreAccess Access in different cluster")
 		})
 
 		Step("Restoring backup in new namespace with user having RestoreAccess in same cluster", func() {
 			restoreName := fmt.Sprintf("new-namespace-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err := CreateRestore(restoreName, backupName, namespaceMap, SourceClusterName, orgID, userCtx)
+			err := CreateRestore(restoreName, backupName, namespaceMap, SourceClusterName, orgID, userCtx, make(map[string]string))
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having RestoreAccess Access in same cluster")
 		})
 
 		Step("Restoring backup in new namespace with user having RestoreAccess in different cluster", func() {
 			restoreName := fmt.Sprintf("new-namespace-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err := CreateRestore(restoreName, backupName, namespaceMap, destinationClusterName, orgID, userCtx)
+			err := CreateRestore(restoreName, backupName, namespaceMap, destinationClusterName, orgID, userCtx, make(map[string]string))
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having RestoreAccess Access in different cluster")
 		})
 
@@ -5954,7 +5955,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-restore-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, SourceClusterName, orgID, userCtx)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, userCtx, storageClassMapping)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having RestoreAccess in same cluster")
 		})
 
@@ -5963,7 +5964,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithCustomStorageClass(restoreName, backupName, make(map[string]string), storageClassMapping, destinationClusterName, orgID, userCtx)
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, storageClassMapping)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having RestoreAccess in different cluster")
 		})
 	})
@@ -6139,7 +6140,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
-				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation", backupName, restoreName))
 			}
 		})
@@ -6720,8 +6721,8 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 }
 
 // CreateRestore creates restore
-func CreateRestore(restoreName string, backupName string,
-	namespaceMapping map[string]string, clusterName string, orgID string, ctx context.Context) error {
+func CreateRestore(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
 
 	var bkp *api.BackupObject
 	var bkpUid string
@@ -6730,7 +6731,9 @@ func CreateRestore(restoreName string, backupName string,
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	log.FailOnError(err, "Enumerate backup failed for the request - %v", bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
 	for _, bkp = range curBackups.GetBackups() {
 		if bkp.Name == backupName {
 			bkpUid = bkp.Uid
@@ -6742,9 +6745,10 @@ func CreateRestore(restoreName string, backupName string,
 			Name:  restoreName,
 			OrgId: orgID,
 		},
-		Backup:           backupName,
-		Cluster:          clusterName,
-		NamespaceMapping: namespaceMapping,
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
 		BackupRef: &api.ObjectRef{
 			Name: backupName,
 			Uid:  bkpUid,
@@ -7020,7 +7024,7 @@ func ValidateSharedBackupWithUsers(user string, userCtx context.Context, access 
 	switch access {
 	case ViewOnlyAccess:
 		// Try restore with user having ViewOnlyAccess and it should fail
-		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
+		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
 		dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 		// Try to delete the backup with user having ViewOnlyAccess, and it should not pass
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -7031,7 +7035,7 @@ func ValidateSharedBackupWithUsers(user string, userCtx context.Context, access 
 
 	case RestoreAccess:
 		// Try restore with user having RestoreAccess and it should pass
-		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
+		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
 		dash.VerifyFatal(err, nil, "Verifying that restore is possible")
 		// Try to delete the backup with user having RestoreAccess, and it should not pass
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -7042,7 +7046,7 @@ func ValidateSharedBackupWithUsers(user string, userCtx context.Context, access 
 
 	case FullAccess:
 		// Try restore with user having FullAccess, and it should pass
-		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx)
+		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
 		dash.VerifyFatal(err, nil, "Verifying that restore is possible")
 		// Try to delete the backup with user having FullAccess, and it should pass
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -7183,63 +7187,4 @@ func generateEncryptionKey() string {
 	})
 
 	return string(b)
-}
-
-// CreateRestoreWithCustomStorageClass creates restore with StorageClass mapping
-func CreateRestoreWithCustomStorageClass(restoreName string, backupName string,
-	namespaceMapping map[string]string, storageClassMapping map[string]string, clusterName string, orgID string, ctx context.Context) error {
-
-	var bkp *api.BackupObject
-	var bkpUid string
-	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	log.FailOnError(err, "Enumerate backup failed for the request - %v", bkpEnumerateReq)
-	for _, bkp = range curBackups.GetBackups() {
-		if bkp.Name == backupName {
-			bkpUid = bkp.Uid
-			break
-		}
-	}
-	createRestoreReq := &api.RestoreCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  restoreName,
-			OrgId: orgID,
-		},
-		Backup:              backupName,
-		Cluster:             clusterName,
-		NamespaceMapping:    namespaceMapping,
-		StorageClassMapping: storageClassMapping,
-		BackupRef: &api.ObjectRef{
-			Name: backupName,
-			Uid:  bkpUid,
-		},
-	}
-	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
-	if err != nil {
-		return err
-	}
-	restoreInspectRequest := &api.RestoreInspectRequest{
-		Name:  restoreName,
-		OrgId: orgID,
-	}
-	restoreSuccessCheck := func() (interface{}, bool, error) {
-		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-		restoreResponseStatus := resp.GetRestore().GetStatus()
-		if err != nil {
-			return "", true, fmt.Errorf("Failed verifying restore for - %s", restoreName)
-		}
-		if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
-			log.Infof("Restore status - %s", restoreResponseStatus)
-			log.InfoD("Status of %s - [%s]",
-				restoreName, restoreResponseStatus.GetStatus())
-			return "", false, nil
-		}
-		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
-			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
-	}
-	_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
-	return err
 }
