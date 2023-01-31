@@ -270,6 +270,24 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		return nil
 	}
 
+	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
+		namespaces, err := core.Instance().ListNamespaces(labelSelector)
+		if err != nil {
+			errMsg := fmt.Sprintf("error listing namespaces with label selectors: %v, error: %v", labelSelector, err)
+			log.ApplicationBackupLog(backup).Error(errMsg)
+			a.recorder.Event(backup,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationBackupStatusFailed),
+				err.Error())
+			return nil
+		}
+		var selectedNamespaces []string
+		for _, namespace := range namespaces.Items {
+			selectedNamespaces = append(selectedNamespaces, namespace.Name)
+		}
+		backup.Spec.Namespaces = selectedNamespaces
+	}
+
 	// Check whether namespace is allowed to be backed before each stage
 	// Restrict backup to only the namespace that the object belongs
 	// except for the namespace designated by the admin
