@@ -240,6 +240,13 @@ func (in *ApplicationBackupSpec) DeepCopyInto(out *ApplicationBackupSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.NamespaceSelector != nil {
+		in, out := &in.NamespaceSelector, &out.NamespaceSelector
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.Options != nil {
 		in, out := &in.Options, &out.Options
 		*out = make(map[string]string, len(*in))
