@@ -6588,7 +6588,6 @@ var _ = Describe("{SwapShareBackup}", func() {
 		wg.Wait()
 
 		log.Infof("Cleaning cloud credential")
-		//TODO: Eliminate time.Sleep
 		for _, credName := range credNames {
 			DeleteCloudCredential(credName, orgID, cloudCredUID)
 		}
