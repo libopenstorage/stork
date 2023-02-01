@@ -690,7 +690,8 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	resp, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	log.Infof("Creating user response - %s", string(resp))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
