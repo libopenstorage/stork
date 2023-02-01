@@ -3,7 +3,7 @@ module github.com/libopenstorage/stork
 go 1.15
 
 require (
-	cloud.google.com/go v0.65.0
+	cloud.google.com/go v0.81.0
 	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
@@ -32,30 +32,32 @@ require (
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.14.0
+	github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c
+	github.com/rancher/rancher/pkg/client v0.0.0-20230131190312-4254eda21f13
 	github.com/sirupsen/logrus v1.9.0
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
-	github.com/spf13/cobra v1.1.3
+	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.1
 	github.com/urfave/cli v1.22.2
 	github.com/zoido/yag-config v0.4.0
 	gocloud.dev v0.20.0
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
-	google.golang.org/api v0.30.0
+	google.golang.org/api v0.44.0
 	google.golang.org/grpc v1.48.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.24.0
-	k8s.io/apiextensions-apiserver v0.21.5
-	k8s.io/apimachinery v0.24.3
-	k8s.io/apiserver v0.21.5
-	k8s.io/cli-runtime v0.21.5
+	k8s.io/api v0.25.4
+	k8s.io/apiextensions-apiserver v0.25.4
+	k8s.io/apimachinery v0.25.4
+	k8s.io/apiserver v0.25.4
+	k8s.io/cli-runtime v0.22.2
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.22.1
+	k8s.io/code-generator v0.25.4
 	k8s.io/component-helpers v0.24.0
 	k8s.io/kube-scheduler v0.0.0
-	k8s.io/kubectl v0.21.5
+	k8s.io/kubectl v0.22.2
 	k8s.io/kubernetes v1.21.5
-	sigs.k8s.io/controller-runtime v0.9.7
+	sigs.k8s.io/controller-runtime v0.10.1
 	sigs.k8s.io/gcp-compute-persistent-disk-csi-driver v0.7.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
