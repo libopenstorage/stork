@@ -1345,6 +1345,14 @@ func (p *portworx) RegisterBackupCluster(orgID, clusterName, uid string) (api.Cl
 	return clusterObj.Status.Status, clusterObj.Uid
 }
 
+func (p *portworx) RegisterBackupClusterNonAdminUser(orgID, clusterName, uid string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, string) {
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+	clusterResp, err := p.InspectCluster(ctx, clusterReq)
+	log.FailOnError(err, "Cluster Object for cluster %s and Org id %s is empty", clusterName, orgID)
+	clusterObj := clusterResp.GetCluster()
+	return clusterObj.Status.Status, clusterObj.Uid
+}
+
 func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error) {
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
