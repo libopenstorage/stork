@@ -1636,6 +1636,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.InfoD("Adding users to groups")
 			var wg sync.WaitGroup
 			for i := 0; i < len(users); i++ {
+				time.Sleep(2 * time.Second)
 				groupIndex := i / groupSize
 				wg.Add(1)
 				go func(i, groupIndex int) {

@@ -1045,7 +1045,8 @@ func AddGroupToUser(user, group string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
+	resp, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
+	log.Infof("Adding user to group response - %s", string(resp))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
