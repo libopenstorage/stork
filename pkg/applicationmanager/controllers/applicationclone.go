@@ -543,6 +543,7 @@ func (a *ApplicationCloneController) prepareResources(
 			namespaceMapping,
 			nil, // no support for storage class mapping
 			pvNameMappings,
+			nil,
 			clone.Spec.IncludeOptionalResourceTypes,
 			nil,
 		)

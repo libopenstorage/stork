@@ -84,6 +84,10 @@ func (c *FakeStorkV1alpha1) NamespacedSchedulePolicies(namespace string) v1alpha
 	return &FakeNamespacedSchedulePolicies{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) PlatformCredentials(namespace string) v1alpha1.PlatformCredentialInterface {
+	return &FakePlatformCredentials{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) ResourceTransformations(namespace string) v1alpha1.ResourceTransformationInterface {
 	return &FakeResourceTransformations{c, namespace}
 }

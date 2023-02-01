@@ -18,6 +18,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -689,7 +690,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 			}
 
 		case "NetworkPolicy":
-			err := r.prepareNetworkPolicyForCollection(o, opts)
+			err := r.prepareRancherNetworkPolicy(o, opts)
 			if err != nil {
 				return fmt.Errorf("error preparing NetworkPolicy resource %v: %v", metadata.GetName(), err)
 			}
@@ -788,6 +789,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	namespaceMappings map[string]string,
 	storageClassMappings map[string]string,
 	pvNameMappings map[string]string,
+	rancherProjectMappings map[string]string,
 	optionalResourceTypes []string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
 ) (bool, error) {
@@ -838,6 +840,20 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.prepareMutatingWebHookForApply(object, namespaceMappings)
 	case "Secret":
 		return false, r.prepareSecretForApply(object)
+	case "NetworkPolicy":
+		if len(rancherProjectMappings) > 0 {
+			opts := Options{
+				RancherProjectMappings: rancherProjectMappings,
+			}
+			return false, r.prepareRancherNetworkPolicy(object, opts)
+		}
+	case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+		if len(rancherProjectMappings) > 0 {
+			opts := Options{
+				RancherProjectMappings: rancherProjectMappings,
+			}
+			return false, r.prepareRancherApplicationResource(object, opts)
+		}
 	}
 	return false, nil
 }
@@ -1002,4 +1018,30 @@ func (r *ResourceCollector) getDynamicClient(
 	}
 	return dynamicInterface.Resource(
 		object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(destNamespace), nil
+}
+
+func (r *ResourceCollector) prepareRancherApplicationResource(
+	object runtime.Unstructured,
+	opts Options,
+) error {
+	content := object.UnstructuredContent()
+	if len(opts.RancherProjectMappings) > 0 {
+		podSpecField, found, err := unstructured.NestedFieldCopy(content, "spec", "template", "spec")
+		if err != nil {
+			logrus.Warnf("Unable to parse object %v while handling"+
+				" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+		}
+		podSpec, ok := podSpecField.(v1.PodSpec)
+		if found && ok {
+			podSpecPtr := PreparePodSpecNamespaceSelector(
+				&podSpec,
+				opts.RancherProjectMappings,
+			)
+			if err := unstructured.SetNestedField(content, *podSpecPtr, "spec", "template", "spec"); err != nil {
+				logrus.Warnf("Unable to set namespace selector for object %v while handling"+
+					" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+			}
+		}
+	}
+	return nil 
 }

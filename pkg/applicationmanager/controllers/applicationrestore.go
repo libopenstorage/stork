@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -18,6 +19,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -138,6 +140,10 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 				// Skip namespaces we aren't restoring
 				continue
 			}
+			projectMappingAnnotation := restore.Spec.RancherProjectMapping 
+			parseRancherProjectMapping(ns.Annotations,projectMappingAnnotation)
+			projectMappingLabel := restore.Spec.RancherProjectMapping // trim the project mapping to remove the cluster id
+			parseRancherProjectMapping(ns.Labels,projectMappingLabel)
 			// create mapped restore namespace with metadata of backed up
 			// namespace
 			_, err := core.Instance().CreateNamespace(&v1.Namespace{
@@ -527,6 +533,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						objectMap,
 						restore.Spec.NamespaceMapping,
 						nil, // no need to set storage class mappings at this stage
+						nil,
 						nil,
 						restore.Spec.IncludeOptionalResourceTypes,
 						nil,
@@ -1144,6 +1151,7 @@ func (a *ApplicationRestoreController) applyResources(
 			restore.Spec.NamespaceMapping,
 			restore.Spec.StorageClassMapping,
 			pvNameMappings,
+			restore.Spec.RancherProjectMapping,
 			restore.Spec.IncludeOptionalResourceTypes,
 			restore.Status.Volumes,
 		)
@@ -1396,4 +1404,18 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 		}
 	}
 	return nil
+}
+
+func parseRancherProjectMapping(
+	data map[string]string,
+	projectMapping map[string]string,
+) {
+	for key, value := range data {
+		if strings.Contains(key, utils.CattleProjectPrefix) {
+			if targetProjectID, ok := projectMapping[value]; ok &&
+				targetProjectID != "" {
+				data[key] = targetProjectID
+			}
+		}
+	}
 }
