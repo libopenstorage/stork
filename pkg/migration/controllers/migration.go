@@ -3,23 +3,22 @@ package controllers
 import (
 	"context"
 	"fmt"
-	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/utils"
-
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/mitchellh/hashstructure"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -913,7 +912,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			return fmt.Errorf("scheduler in Admin Cluster pair is not ready. Status: %v", schedulerStatus)
 		}
 	}
-	resKinds := make(map[string]string)
+	resGroups := make(map[string]string)
 	var updateObjects, allObjects []runtime.Unstructured
 	// Don't modify resources if mentioned explicitly in specs
 	resourceCollectorOpts := resourcecollector.Options{}
@@ -983,7 +982,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			resourceInfo.Group = "core"
 		}
 		resourceInfo.Version = gvk.Version
-		resKinds[gvk.Kind] = gvk.Version
+		resGroups[gvk.Group] = gvk.Version
 		resourceInfos = append(resourceInfos, resourceInfo)
 		updateObjects = append(updateObjects, obj)
 	}
@@ -1013,7 +1012,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, updateObjects, resKinds, clusterPair, crdList)
+	err = m.applyResources(migration, updateObjects, resGroups, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1502,7 +1501,7 @@ func (m *MigrationController) getParsedLabels(
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
-	resKinds map[string]string,
+	resGroups map[string]string,
 	clusterPair *stork_api.ClusterPair,
 	crdList *stork_api.ApplicationRegistrationList,
 ) error {
@@ -1535,7 +1534,7 @@ func (m *MigrationController) applyResources(
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
 			// only create relevant crds on dest cluster
-			if _, ok := resKinds[v.Kind]; !ok {
+			if _, ok := resGroups[v.Group]; !ok {
 				continue
 			}
 			config, err := rest.InClusterConfig()
