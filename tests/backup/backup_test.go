@@ -6511,7 +6511,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				log.FailOnError(err, "Failed getting backup uid for backup name %s", backupName)
 			})
 		}
-		Step(fmt.Sprintf("Share backup with %s", users[0]), func() {
+		Step(fmt.Sprintf("Share backup with %s", users[1]), func() {
 			log.InfoD(fmt.Sprintf("Share backup from %s to %s and validate", users[0], users[1]))
 			ctx, err := backup.GetNonAdminCtx(users[0], "Password1")
 			log.FailOnError(err, "Fetching testuser ctx")
@@ -6534,9 +6534,9 @@ var _ = Describe("{SwapShareBackup}", func() {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], "Password1")
 			log.FailOnError(err, "Fetching testuser ctx")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[1])
+			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[0])
 		})
-		Step(fmt.Sprintf("Share backup with %s", users[1]), func() {
+		Step(fmt.Sprintf("Share backup with %s", users[0]), func() {
 			log.InfoD(fmt.Sprintf("Share backup from %s to %s and validate", users[1], users[0]))
 			ctx, err := backup.GetNonAdminCtx(users[1], "Password1")
 			log.FailOnError(err, "Fetching testuser ctx")
@@ -6556,10 +6556,10 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 		Step(fmt.Sprintf("Restore the shared backup  %s with user context %s", backupName, users[0]), func() {
 			log.InfoD(fmt.Sprintf("Restore the shared backup  %s with user context %s", users[0], users[0]))
-			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], "Password1")
 			log.FailOnError(err, "Fetching testuser ctx")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[0])
+			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[1])
 		})
 	})
 	JustAfterEach(func() {
@@ -6589,7 +6589,6 @@ var _ = Describe("{SwapShareBackup}", func() {
 
 		log.Infof("Cleaning cloud credential")
 		//TODO: Eliminate time.Sleep
-		time.Sleep(time.Minute * 3)
 		for _, credName := range credNames {
 			DeleteCloudCredential(credName, orgID, cloudCredUID)
 		}
