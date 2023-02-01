@@ -2870,7 +2870,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 
 		//Delete Schedule Backup-
 		log.InfoD("Delete Schedule Backup-")
-		err = DeleteScheduleBackup(backupName, scheduleBackupUid, periodicPolicyName, schPolicyUid, orgID)
+		err = DeleteSchedule(backupName, scheduleBackupUid, periodicPolicyName, schPolicyUid, orgID)
 		log.FailOnError(err, "Error deleting Schedule backup %v", backupName)
 
 		//GetAll backups -
