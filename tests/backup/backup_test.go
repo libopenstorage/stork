@@ -6534,7 +6534,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], "Password1")
 			log.FailOnError(err, "Fetching testuser ctx")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[0])
+			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[1])
 		})
 		Step(fmt.Sprintf("Share backup with %s", users[1]), func() {
 			log.InfoD(fmt.Sprintf("Share backup from %s to %s and validate", users[1], users[0]))
