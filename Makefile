@@ -40,6 +40,15 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS := -gcflags "-N -l"
 endif
 
+ifndef DOCKER_HUB_REPO
+    DOCKER_HUB_REPO := $(shell id -un)px
+    $(warning DOCKER_HUB_REPO not defined, using '$(DOCKER_HUB_REPO)' instead)
+endif
+ifndef DOCKER_HUB_TAG
+    DOCKER_HUB_TAG := latest
+    $(warning DOCKER_HUB_TAG not defined, using '$(DOCKER_HUB_TAG)' instead)
+endif
+
 BASE_DIR := $(shell git rev-parse --show-toplevel)
 
 BIN :=$(BASE_DIR)/bin
