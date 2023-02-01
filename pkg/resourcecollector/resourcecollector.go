@@ -3,8 +3,6 @@ package resourcecollector
 import (
 	"context"
 	"fmt"
-	storkcache "github.com/libopenstorage/stork/pkg/cache"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"strconv"
 	"strings"
 	"time"
@@ -13,11 +11,13 @@ import (
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -628,7 +628,11 @@ func (r *ResourceCollector) pruneOwnedResources(
 							collect = false
 							break
 						}
-						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" && objectType.GetKind() != "ReplicaSet" && objectType.GetKind() != "DeploymentConfig" {
+						if objectType.GetKind() != "Deployment" &&
+							objectType.GetKind() != "StatefulSet" &&
+							objectType.GetKind() != "ReplicaSet" &&
+							objectType.GetKind() != "DeploymentConfig" &&
+							objectType.GetKind() != "Service" {
 							continue
 						}
 
