@@ -2,8 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +34,12 @@ const (
 	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
 	maxBackupsToBeCreated                     = "MAX_BACKUPS"
 	maxWaitPeriodForBackupCompletionInMinutes = 20
+	globalAWSBucketPrefix                     = "global-aws"
+	globalAzureBucketPrefix                   = "global-azure"
+	globalGCPBucketPrefix                     = "global-gcp"
+	globalAWSLockedBucketPrefix               = "global-aws-locked"
+	globalAzureLockedBucketPrefix             = "global-azure-locked"
+	globalGCPLockedBucketPrefix               = "global-gcp-locked"
 )
 
 var (
@@ -43,13 +49,46 @@ var (
 	wantAfterSuiteSystemCheck     bool = false
 	wantAfterSuiteValidateCleanup bool = false
 	// User should keep updating preRuleApp, postRuleApp
-	preRuleApp  = []string{"cassandra", "postgres"}
-	postRuleApp = []string{"cassandra"}
+	preRuleApp                  = []string{"cassandra", "postgres"}
+	postRuleApp                 = []string{"cassandra"}
+	globalAWSBucketName         string
+	globalAzureBucketName       string
+	globalGCPBucketName         string
+	globalAWSLockedBucketName   string
+	globalAzureLockedBucketName string
+	globalGCPLockedBucketName   string
 )
 
-func getBucketName() []string {
-	bucketName := os.Getenv("BUCKET_NAME")
-	return strings.Split(bucketName, ",")
+func getBucketNameSuffix() string {
+	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
+	if present {
+		return bucketNameSuffix
+	} else {
+		return "default-suffix"
+	}
+}
+
+func getGlobalBucketName(provider string) string {
+	switch provider {
+	case drivers.ProviderAws:
+		return globalAWSBucketName
+	case drivers.ProviderAzure:
+		return globalAzureBucketName
+	case drivers.ProviderGke:
+		return globalGCPBucketName
+	default:
+		return globalAWSBucketName
+	}
+}
+
+func getGlobalLockedBucketName(provider string) string {
+	switch provider {
+	case drivers.ProviderAws:
+		return globalAWSLockedBucketName
+	default:
+		log.Errorf("environment variable [%s] not provided with valid values", "PROVIDERS")
+		return ""
+	}
 }
 
 func TestBasic(t *testing.T) {
@@ -71,10 +110,37 @@ var _ = BeforeSuite(func() {
 	defer EndTorpedoTest()
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()
-	bucketNames := getBucketName()
+	bucketNameSuffix := getBucketNameSuffix()
 	for _, provider := range providers {
-		bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
-		CreateBucket(provider, bucketName)
+		switch provider {
+		case drivers.ProviderAws:
+			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, globalAWSBucketName)
+			log.Infof("Bucket created with name - %s", globalAWSBucketName)
+		case drivers.ProviderAzure:
+			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, globalAzureBucketName)
+			log.Infof("Bucket created with name - %s", globalAzureBucketName)
+		case drivers.ProviderGke:
+			globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, globalGCPBucketName)
+			log.Infof("Bucket created with name - %s", globalGCPBucketName)
+		}
+	}
+	lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")
+	if present {
+		for _, provider := range providers {
+			switch provider {
+			case drivers.ProviderAws:
+				globalAWSLockedBucketName = fmt.Sprintf("%s-%s", globalAWSLockedBucketPrefix, lockedBucketNameSuffix)
+			case drivers.ProviderAzure:
+				globalAzureLockedBucketName = fmt.Sprintf("%s-%s", globalAzureLockedBucketPrefix, lockedBucketNameSuffix)
+			case drivers.ProviderGke:
+				globalGCPLockedBucketName = fmt.Sprintf("%s-%s", globalGCPLockedBucketPrefix, lockedBucketNameSuffix)
+			}
+		}
+	} else {
+		log.Infof("Locked bucket name not provided")
 	}
 })
 
@@ -84,14 +150,19 @@ var _ = AfterSuite(func() {
 	defer EndTorpedoTest()
 	// Cleanup all bucket after suite
 	providers := getProviders()
-	bucketNames := getBucketName()
 	for _, provider := range providers {
-		for _, BucketName := range bucketNames {
-			bucketName := fmt.Sprintf("%s-%s", provider, BucketName)
-			DeleteBucket(provider, bucketName)
+		switch provider {
+		case drivers.ProviderAws:
+			DeleteBucket(provider, globalAWSBucketName)
+			log.Infof("Bucket deleted - %s", globalAWSBucketName)
+		case drivers.ProviderAzure:
+			DeleteBucket(provider, globalAzureBucketName)
+			log.Infof("Bucket deleted - %s", globalAzureBucketName)
+		case drivers.ProviderGke:
+			DeleteBucket(provider, globalGCPBucketName)
+			log.Infof("Bucket deleted - %s", globalGCPBucketName)
 		}
 	}
-
 })
 
 func TestMain(m *testing.M) {

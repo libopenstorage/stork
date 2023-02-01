@@ -2789,7 +2789,12 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ct
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
 	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid, ctx)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "creation failed as it already exists") {
+			log.Errorf("%s already added for the user", SourceClusterName)
+			return nil
+		} else {
+			return err
+		}
 	}
 	// Register destination cluster with backup driver
 	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
@@ -2800,7 +2805,12 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ct
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
 	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid, ctx)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "creation failed as it already exists") {
+			log.Errorf("%s already added for the user", destinationClusterName)
+			return nil
+		} else {
+			return err
+		}
 	}
 	return nil
 }

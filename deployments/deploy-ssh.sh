@@ -552,6 +552,8 @@ spec:
       value: "${S3_REGION}"
     - name: BUCKET_NAME
       value: "${BUCKET_NAME}"
+    - name: LOCKED_BUCKET_NAME
+      value: "${LOCKED_BUCKET_NAME}"
     - name: S3_DISABLE_SSL
       value: "${S3_DISABLE_SSL}"
     - name: DIAGS_BUCKET
