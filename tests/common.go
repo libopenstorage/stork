@@ -2775,7 +2775,6 @@ func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, s
 		Uid:           backupScheduleUID,
 	}
 	ctx, err := backup.GetPxCentralAdminCtx()
-
 	if err != nil {
 		return err
 	}
@@ -2794,7 +2793,9 @@ func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, s
 		clusterObj,
 		BackupRestoreCompletionTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
-
+	if err != nil {
+		return err
+	}
 	schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
 		OrgId: OrgID,
 		Name:  schedulePolicyName,

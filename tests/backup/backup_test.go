@@ -2670,7 +2670,9 @@ func GetScheduleUID(backupName string, orgID string, ctx context.Context) (strin
 		OrgId: orgID,
 	}
 	resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
-	log.FailOnError(err, "Failed for req - %v", backupSchInspectRequest)
+	if err != nil {
+		return "", fmt.Errorf("Failed to inspect backup [%s] with UID [%s], Err: %v", backupName, bkpUid, err)
+	}
 	scheduleBackupUid := resp.GetBackupSchedule().GetUid()
 	log.InfoD("Backup Name - %v  backup UID - %v", backupName, scheduleBackupUid)
 
@@ -2704,7 +2706,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ClusterBackupShareToggle",
-			"Share backup with user and duplicate it", nil, 82936)
+			"Varification of backup operation after toggling the access", nil, 82936)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2763,19 +2765,18 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			timestamp := time.Now().Unix()
 			periodicPolicyName = fmt.Sprintf("%v-%v", "interval", timestamp)
-			log.InfoD("Creating backup interval schedule policy -%s", periodicPolicyName)
+			log.Infof("Creating backup interval schedule policy - %s", periodicPolicyName)
 			intervalSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
 
 			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), orgID, intervalSchedulePolicyInfo)
-			log.InfoD("internalPolicyStatus - [%v]", intervalPolicyStatus)
-			dash.VerifyFatal(intervalPolicyStatus, nil, "Creating interval schedule policy")
+			dash.VerifyFatal(intervalPolicyStatus, nil, fmt.Sprintf("Creating interval schedule policy %v", periodicPolicyName))
 
-			log.InfoD("Fetching Schedule Backup uid")
+			log.Infof("Fetching Schedule uid %v", periodicPolicyName)
 			schPolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
-			log.FailOnError(err, "Generating pre rule UID for deployed apps failed")
+			log.FailOnError(err, "Generating pre rule UID for deployed apps failed for %v", periodicPolicyName)
 
 			//CreateSchedule backup
-			log.InfoD("backup schedule name - %v", backupName)
+			log.InfoD("Backup schedule name - %v", backupName)
 			_, err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]}, nil, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
 			log.FailOnError(err, "Creating Schedule Backup")
 		})
@@ -2784,7 +2785,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			accesses = append(accesses, ViewOnlyAccess, RestoreAccess, FullAccess)
-			log.InfoD("Accesses - %v", accesses)
+
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
 			log.FailOnError(err, "Fetching %s ctx", userName)
@@ -2795,7 +2796,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			for _, accessLevel := range accesses {
-				log.InfoD("share all backups with %v in source cluster with a user", accessLevel)
+				log.InfoD("Sharing cluster with %v access to user %s", accessLevel, userName)
 				err := ClusterUpdateBackupShare(SourceClusterName, nil, []string{userName}, accessLevel, true, ctx)
 				log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
 
@@ -2830,20 +2831,21 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 					backupDriver := Inst().Backup
 					bkpUid, err := backupDriver.GetBackupUID(ctx, recentBackupName, orgID)
 					if err != nil {
-						return err, false, nil
+						return "", true, err
 					}
-					log.FailOnError(err, "Failed while trying to get backup UID for - %s", recentBackupName)
 					backupInspectRequest := &api.BackupInspectRequest{
 						Name:  recentBackupName,
 						Uid:   bkpUid,
 						OrgId: orgID,
 					}
 					resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-					log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
+					if err != nil {
+						return "", true, fmt.Errorf("Unable to fetch inspect backup response for %v", recentBackupName)
+					}
 					actual := resp.GetBackup().GetStatus().Status
 					expected := api.BackupInfo_StatusInfo_Success
 					if actual != expected {
-						return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", recentBackupName, expected, actual)
+						return "", true, fmt.Errorf("Backup status for [%s] expected was [%s] but got [%s]", recentBackupName, expected, actual)
 					}
 					return "", false, nil
 				}
@@ -2866,7 +2868,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		log.InfoD("Get scheduleBackupUid")
 		scheduleBackupUid, err := GetScheduleUID(backupName, orgID, ctx)
 		log.InfoD("scheduleBackupUid - %v", scheduleBackupUid)
-		log.FailOnError(err, "Error deleting Schedule backup %v", backupName)
+		log.FailOnError(err, "Error in fetching schedule UID for %v", backupName)
 
 		//Delete Schedule Backup-
 		log.InfoD("Delete Schedule Backup-")
@@ -6920,19 +6922,15 @@ func CreateScheduleBackup(backupName string, clusterName string, bLocation strin
 		}
 
 		resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
-		log.FailOnError(err, "Failed for req - %v", backupSchInspectRequest)
-		log.InfoD("response - %v", resp)
+		if err != nil {
+			return "", true, fmt.Errorf("Error in fetching inspect backup schedule response for %v", backupName)
+		}
 		expected := api.BackupScheduleInfo_StatusInfo_Success
-
-		log.InfoD("Expected - %v", expected)
 		actual := resp.GetBackupSchedule().GetBackupStatus()["interval"].GetStatus()[0].GetStatus()
-
-		log.InfoD("actual  - %v ", actual)
-
 		if actual != expected {
 			return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", backupName, expected, actual)
 		}
-		return "actual is equal to expected string", false, nil
+		return fmt.Sprintf("actual [%v] is equal to expected [%v] string", actual, expected), false, nil
 	}
 
 	_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
