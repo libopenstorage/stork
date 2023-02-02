@@ -113,7 +113,9 @@ test:
 
 integration-test:
 	@echo "Building stork integration tests"
-	@cd test/integration_test && GOOS=linux go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+		   /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/test/integration_test && \
+		   GOOS=linux go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test;'
 
 integration-test-container:
 	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
@@ -130,17 +132,23 @@ codegen:
 
 stork:
 	@echo "Building the stork binary"
-	@cd cmd/stork && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/stork
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+           /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/stork && \
+		   CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/stork;'
 
 cmdexecutor:
 	@echo "Building command executor binary"
-	@cd cmd/cmdexecutor && GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/cmdexecutor
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+		/bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/cmdexecutor && \
+		GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/cmdexecutor;'
 
 storkctl:
 	@echo "Building storkctl"
-	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
-	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
-	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+		/bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/storkctl; \
+		CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/linux/storkctl; \
+		CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/darwin/storkctl; \
+		CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/windows/storkctl.exe;'
 
 px-statfs:
 	@echo "Building px_statfs.so"
