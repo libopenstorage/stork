@@ -6455,6 +6455,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
