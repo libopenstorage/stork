@@ -69,7 +69,7 @@ NOTE: perform the steps below if cluster was created using eksctl or any tool, o
     ```
 
 3. Install PX in a usual way
-4. Add the following parameters to the `[deploy-ssh.sh](http://deploy-ssh.sh)` script at the very beginning of the file
+4. Add the following parameters to the `[deploy-ssh.sh](deployments/deploy-ssh.sh)` script at the very beginning of the file
 
 ```jsx
 #KUBECONFIG=/tmp/kubeconfig # if you don't specify the config, torpedo will pick up the system config

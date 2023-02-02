@@ -33,6 +33,6 @@ ginkgo build tests/basic
 
 #### Vendoring
 
-For vendoring, we use [dep](https://golang.github.io/dep/)
+For vendoring, we use [go mod](https://go.dev/ref/mod)
 
 To update vendor directory, run `make vendor-update`
