@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/drivers"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"

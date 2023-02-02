@@ -2945,11 +2945,11 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 	case drivers.ProviderAws:
 		log.Infof("Create creds for aws")
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
-		if id == ""{
+		if id == "" {
 			return fmt.Errorf("AWS_ACCESS_KEY_ID Environment variable should not be empty")
 		}
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
-		if secret == ""{
+		if secret == "" {
 			return fmt.Errorf("AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
 		}
 		credCreateRequest := &api.CloudCredentialCreateRequest{
@@ -2978,24 +2978,24 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 		log.Infof("Create creds for azure")
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
 		credCreateRequest := &api.CloudCredentialCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  name,
-			Uid:   uid,
-			OrgId: orgID,
-		},
-		CloudCredential: &api.CloudCredentialInfo{
-			Type: api.CloudCredentialInfo_Azure,
-			Config: &api.CloudCredentialInfo_AzureConfig{
-			AzureConfig: &api.AzureConfig{
-				TenantId:       tenantID,
-				ClientId:       clientID,
-				ClientSecret:   clientSecret,
-				AccountName:    accountName,
-				AccountKey:     accountKey,
-				SubscriptionId: subscriptionID,
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Azure,
+				Config: &api.CloudCredentialInfo_AzureConfig{
+					AzureConfig: &api.AzureConfig{
+						TenantId:       tenantID,
+						ClientId:       clientID,
+						ClientSecret:   clientSecret,
+						AccountName:    accountName,
+						AccountKey:     accountKey,
+						SubscriptionId: subscriptionID,
+					},
 				},
 			},
-		},
 		}
 
 		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
@@ -3041,7 +3041,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	if err != nil {
 		return err
 	}
-			
+
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location: %v", err)
