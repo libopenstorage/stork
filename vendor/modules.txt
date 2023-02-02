@@ -1294,8 +1294,6 @@ google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
-<<<<<<< HEAD
-=======
 google.golang.org/protobuf/types/pluginpb
 # gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc
 ## explicit
@@ -1306,7 +1304,6 @@ gopkg.in/gomail.v2
 # gopkg.in/gorp.v1 v1.7.2
 ## explicit
 gopkg.in/gorp.v1
->>>>>>> 683f1b243 (Added email send changes, vendored gomail package)
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0

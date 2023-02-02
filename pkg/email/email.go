@@ -2,7 +2,6 @@ package email
 
 import (
 	"crypto/tls"
-	"log"
 
 	gomail "gopkg.in/gomail.v2"
 )
@@ -31,7 +30,7 @@ func (email *Email) SendEmail() error {
 	dialer := gomail.Dialer{Host: email.EmailHostServer, Port: EmailPortKey, Username: "", Password: ""}
 	dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 	if err := dialer.DialAndSend(m); err != nil {
-		log.Fatal(err)
+		return err
 	}
 	return nil
 }

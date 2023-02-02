@@ -210,7 +210,6 @@ require (
 	github.com/russross/blackfriday v1.5.2 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/sendgrid/rest v2.6.0+incompatible // indirect
-	github.com/sendgrid/sendgrid-go v3.6.0+incompatible // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e // indirect
 	github.com/sony/gobreaker v0.5.0 // indirect
