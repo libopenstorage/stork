@@ -2664,6 +2664,9 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 func GetScheduleUID(backupName string, orgID string, ctx context.Context) (string, error) {
 	backupDriver := Inst().Backup
 	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return "", fmt.Errorf("Failed to get backup UID for %s, Err: %v", backupName, err)
+	}
 	backupSchInspectRequest := &api.BackupScheduleInspectRequest{
 		Name:  backupName,
 		Uid:   bkpUid,
@@ -2682,11 +2685,7 @@ func GetScheduleUID(backupName string, orgID string, ctx context.Context) (strin
 
 // Cluster backup share toggle
 var _ = Describe("{ClusterBackupShareToggle}", func() {
-	userName := "testuser00"
-	firstName := "firstName00"
-	lastName := "lastName00"
-	email := "testuser00@cnbu.com"
-	password := "Password1"
+	var username string
 	var backupName string
 	var contexts []*scheduler.Context
 	var backupLocationName string
@@ -2707,7 +2706,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ClusterBackupShareToggle",
 			"Varification of backup operation after toggling the access", nil, 82936)
-		log.InfoD("Deploy applications")
+		log.Infof("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -2723,16 +2722,18 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 	It("Validate after toggling the access, user can perform operation on new backup", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
-			log.InfoD("Validate applications")
+			log.Infof("Validate applications")
 			ValidateApplications(contexts)
 		})
 		Step("Create User", func() {
-			err := backup.AddUser(userName, firstName, lastName, email, password)
-			log.FailOnError(err, "Failed to create user - %s", userName)
+			username = fmt.Sprintf("%s-%v", userName, time.Now().Unix())
+			email := userName + "@cnbu.com"
+			err := backup.AddUser(username, firstName, lastName, email, password)
+			log.FailOnError(err, "Failed to create user - %s", username)
 
 		})
 		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating cloud credentials and backup location")
+			log.Infof("Creating cloud credentials and backup location")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				CloudCredUidList = append(CloudCredUidList, cloudCredUID)
@@ -2749,7 +2750,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			}
 		})
 		Step("Register source and destination cluster for backup", func() {
-			log.InfoD("Registering Source and Destination clusters and verifying the status")
+			log.Infof("Registering Source and Destination clusters and verifying the status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
@@ -2776,7 +2777,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.FailOnError(err, "Generating pre rule UID for deployed apps failed for %v", periodicPolicyName)
 
 			//CreateSchedule backup
-			log.InfoD("Backup schedule name - %v", backupName)
+			log.Infof("Backup schedule name - %v", backupName)
 			_, err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]}, nil, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
 			log.FailOnError(err, "Creating Schedule Backup")
 		})
@@ -2787,41 +2788,41 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			accesses = append(accesses, ViewOnlyAccess, RestoreAccess, FullAccess)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
-			log.FailOnError(err, "Fetching %s ctx", userName)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(username, password)
+			log.FailOnError(err, "Fetching %s ctx", username)
 
 			// Register Source and Destination cluster
-			log.InfoD("Registering Source and Destination clusters from user context")
+			log.Infof("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			for _, accessLevel := range accesses {
-				log.InfoD("Sharing cluster with %v access to user %s", accessLevel, userName)
-				err := ClusterUpdateBackupShare(SourceClusterName, nil, []string{userName}, accessLevel, true, ctx)
+				log.InfoD("Sharing cluster with %v access to user %s", accessLevel, username)
+				err := ClusterUpdateBackupShare(SourceClusterName, nil, []string{username}, accessLevel, true, ctx)
 				log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
 
-				userBackups, err := GetAllBackupsForUser(userName, password)
-				log.FailOnError(err, "Fail on Fetching backups for %s", userName)
+				userBackups, err := GetAllBackupsForUser(username, password)
+				log.FailOnError(err, "Fail on Fetching backups for %s", username)
 
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				ValidateSharedBackupWithUsers(userName, ctxNonAdmin, accessLevel, userBackups[len(userBackups)-1], restoreName)
+				ValidateSharedBackupWithUsers(username, ctxNonAdmin, accessLevel, userBackups[len(userBackups)-1], restoreName)
 				if accessLevel != ViewOnlyAccess {
 					restoreNames = append(restoreNames, restoreName)
 				}
-				log.InfoD("RestoreNames - %v", restoreNames)
+				log.Infof("RestoreNames - %v", restoreNames)
 				if accessLevel == FullAccess {
-					log.InfoD("The fullaccess exit begins ")
+					log.Infof("The fullaccess exit begins")
 					break
 				}
 				//wait for 15 mins
 				log.InfoD("wait for 15 mins")
 				time.Sleep(15 * time.Minute)
-				fetchedUserBackups, err := GetAllBackupsForUser(userName, password)
-				log.FailOnError(err, "Fail on Fetching backups for %s", userName)
-				log.InfoD("All the backups for user %s - %v", userName, fetchedUserBackups)
+				fetchedUserBackups, err := GetAllBackupsForUser(username, password)
+				log.FailOnError(err, "Fail on Fetching backups for %s", username)
+				log.Infof("All the backups for user %s - %v", username, fetchedUserBackups)
 
 				recentBackupName := fetchedUserBackups[len(fetchedUserBackups)-1]
-				log.InfoD("recent backup - %v ", recentBackupName)
+				log.Infof("recent backup - %v ", recentBackupName)
 
 				//Check if Schedule Backup came up or not
 				dash.VerifyFatal(len(fetchedUserBackups), (len(userBackups) + 1), "Verifying the new schedule backup is up or not")
@@ -2865,13 +2866,13 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		//Get scheduleBackupUid
-		log.InfoD("Get scheduleBackupUid")
+		log.Infof("Get scheduleBackupUid")
 		scheduleBackupUid, err := GetScheduleUID(backupName, orgID, ctx)
 		log.InfoD("scheduleBackupUid - %v", scheduleBackupUid)
 		log.FailOnError(err, "Error in fetching schedule UID for %v", backupName)
 
 		//Delete Schedule Backup-
-		log.InfoD("Delete Schedule Backup-")
+		log.Infof("Delete Schedule Backup-")
 		err = DeleteSchedule(backupName, scheduleBackupUid, periodicPolicyName, schPolicyUid, orgID)
 		log.FailOnError(err, "Error deleting Schedule backup %v", backupName)
 
@@ -2890,9 +2891,9 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.FailOnError(err, "Backup [%s] could not be deleted with delete response %s", backupName, backupDeleteResponse)
 		}
 
-		log.InfoD("Deleting restore for user")
-		ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
-		log.FailOnError(err, "Fetching %s ctx", userName)
+		log.Infof("Deleting restore for user")
+		ctxNonAdmin, err := backup.GetNonAdminCtx(username, password)
+		log.FailOnError(err, "Fetching %s ctx", username)
 
 		for _, restore := range restoreNames {
 			err := DeleteRestore(restore, orgID, ctxNonAdmin)
@@ -2901,10 +2902,10 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		}
 
 		//Deleting user
-		err = backup.DeleteUser(userName)
-		log.FailOnError(err, "Error deleting user %v", userName)
+		err = backup.DeleteUser(username)
+		log.FailOnError(err, "Error deleting user %v", username)
 
-		log.InfoD("Deleting the deployed apps after the testcase")
+		log.Infof("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
 			opts[SkipClusterScopedObjects] = true

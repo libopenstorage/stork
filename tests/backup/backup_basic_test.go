@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/drivers"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -40,6 +41,10 @@ const (
 	globalAWSLockedBucketPrefix               = "global-aws-locked"
 	globalAzureLockedBucketPrefix             = "global-azure-locked"
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
+	userName                                  = "testuser"
+	firstName                                 = "firstName"
+	lastName                                  = "lastName"
+	password                                  = "Password1"
 )
 
 var (
