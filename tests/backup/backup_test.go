@@ -1974,6 +1974,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		})
 
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.InfoD("Deleting the deployed apps after the testcase")
@@ -2004,7 +2005,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			go func(groupName string) {
 				defer wg.Done()
 				err := backup.DeleteGroup(groupName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Error deleting user %v", groupName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting group %v", groupName))
 			}(groupName)
 		}
 		wg.Wait()
@@ -3146,8 +3147,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				if access != ViewOnlyAccess {
 					userRestoreContext[key.context] = restoreName
 				}
-				userContextsList = append(userContextsList, key.context)
-				ValidateSharedBackupWithUsers(key.user, key.context, key.accesses, val, restoreName)
+				ValidateSharedBackupWithUsers(key.user, key.accesses, val, restoreName)
 			}
 		})
 	})
@@ -3167,14 +3167,20 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Error deleting user %v", backupName)
 				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-				dash.VerifyFatal(err, nil, "Deleting backup")
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 			}(backupName)
 		}
 		wg.Wait()
+		log.Infof("Generating user context")
+		for _, userName := range users {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, "Password1")
+			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching  %s user ctx", userName))
+			userContextsList = append(userContextsList, ctxNonAdmin)
+		}
 		log.Infof("Deleting restore created by users")
 		for userContext, restoreName := range userRestoreContext {
 			err = DeleteRestore(restoreName, orgID, userContext)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 		}
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContextsList {
@@ -3186,12 +3192,11 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 			go func(userName string) {
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
-				log.FailOnError(err, "Error deleting user %v", userName)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Error deleting user %s", userName))
 			}(userName)
 		}
 		wg.Wait()
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
-
 	})
 })
 
@@ -5616,8 +5621,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 				if access == FullAccess {
 					newBackupNames = removeStringItemFromSlice(newBackupNames, []string{val})
 				}
-				userContextsList = append(userContextsList, key.context)
-				ValidateSharedBackupWithUsers(key.user, key.context, key.accesses, val, restoreName)
+				ValidateSharedBackupWithUsers(key.user, key.accesses, val, restoreName)
 			}
 		})
 	})
@@ -5641,6 +5645,12 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			}(backupName)
 		}
 		wg.Wait()
+		log.Infof("Generating user context")
+		for _, userName := range users {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, fmt.Sprintf("Fetching  %s user ctx", userName))
+			userContextsList = append(userContextsList, ctxNonAdmin)
+		}
 		log.Infof("Deleting restore created by users")
 		for userContext, restoreName := range userRestoreContext {
 			err = DeleteRestore(restoreName, orgID, userContext)
@@ -5660,8 +5670,6 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			}(userName)
 		}
 		wg.Wait()
-		err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
 		DeleteCloudAccounts(newBackupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 	})
@@ -7879,6 +7887,7 @@ func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, c
 		}
 		time.Sleep(time.Minute * 3)
 		DeleteCloudCredential(credName, orgID, cloudCredUID)
+
 	}
 	DeleteCluster(SourceClusterName, orgID, ctx)
 	DeleteCluster(destinationClusterName, orgID, ctx)
@@ -7943,9 +7952,11 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 	}
 	return roleAccessUserBackupContext, nil
 }
-func ValidateSharedBackupWithUsers(user string, userCtx context.Context, access BackupAccess, backupName string, restoreName string) {
+func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName string, restoreName string) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
+	userCtx, err := backup.GetNonAdminCtx(user, "Password1")
+	log.FailOnError(err, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
 	CreateSourceAndDestClusters(orgID, "", "", userCtx)
 	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup or not", user, backupAccessKeyValue[access])
