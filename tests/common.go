@@ -3036,9 +3036,11 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 		},
 	}
 
+	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
-	expect(err).NotTo(haveOccurred(),
-	fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+	if err != nil {
+		return err
+	}
 			
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
