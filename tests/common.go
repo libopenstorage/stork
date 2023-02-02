@@ -2763,13 +2763,13 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string) e
 
 }
 
-// DeleteScheduleBackup Delete Schedule Backup
+// DeleteSchedule Delete Backup  Schedule
 func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID, OrgID string) error {
 	backupDriver := Inst().Backup
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: OrgID,
 		Name:  backupScheduleName,
-		// delete_backups indicates whether the cloud backup files need to
+		// DeleteBackups indicates whether the cloud backup files need to
 		// be deleted or retained.
 		DeleteBackups: true,
 		Uid:           backupScheduleUID,
