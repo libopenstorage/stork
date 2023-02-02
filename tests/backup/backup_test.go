@@ -6584,6 +6584,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				log.FailOnError(err, "Error deleting user %v", userName)
