@@ -5607,6 +5607,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			log.InfoD("Share backup with users again with different access level")
 			accessUserBackupContext, err = ShareBackupWithUsersAndAccessAssignment(newBackupNames, users, ctx)
 			dash.VerifyFatal(err, nil, "Sharing backup with users")
+			log.Info("The user/access/backup/context mapping is %v", accessUserBackupContext)
 		})
 
 		Step("Validate if the users with different access level can restore/delete backup", func() {
@@ -7959,7 +7960,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	log.FailOnError(err, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
 	CreateSourceAndDestClusters(orgID, "", "", userCtx)
-	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup or not", user, backupAccessKeyValue[access])
+	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", user, backupAccessKeyValue[access], backupName)
 	backupDriver := Inst().Backup
 	switch access {
 	case ViewOnlyAccess:

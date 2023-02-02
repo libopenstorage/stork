@@ -441,6 +441,7 @@ func FetchIDOfUser(userName string) (string, error) {
 	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	log.Infof("User ID response for user %s - %s", userName, string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return "", err
