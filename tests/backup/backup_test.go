@@ -6599,7 +6599,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 	})
 })
 
-// This test does restart the px-backup pod, Mongpo pods during backup sharing
+// This test does restart the px-backup pod, Mongo pods during backup sharing
 var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	numberOfUsers := 10
 	var contexts []*scheduler.Context
@@ -6655,9 +6655,9 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Register cluster for backup", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
 			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
-			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source %s and destination %s cluster", SourceClusterName, destinationClusterName))
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s", SourceClusterName))
 		})
 
 		Step("Creating backup location", func() {
@@ -6670,14 +6670,14 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 				backupLocationMap[backupLocationUID] = backupLocation
 				err := CreateBackupLocation(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID,
 					getGlobalBucketName(provider), orgID, "")
-				dash.VerifyFatal(err, nil, "Creating backup location")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
 			}
 		})
 
 		Step("Start backup of application to bucket", func() {
 			for _, namespace := range bkpNamespaces {
 				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Getting context")
+				dash.VerifyFatal(err, nil, "Verifying Getting context")
 				backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
 				err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
 					nil, orgID, clusterUid, "", "", "", "", ctx)
@@ -6689,6 +6689,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Create users", func() {
 			log.InfoD("Creating users")
 			users = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, users)
 		})
 
 		Step("Share Backup with multiple users", func() {
@@ -6696,25 +6697,24 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
 			err = ShareBackup(backupName, nil, users, ViewOnlyAccess, ctx)
-			log.FailOnError(err, "Failed to share backup with users")
+			log.FailOnError(err, "Failed to share backup %s with users", backupName)
 		})
 
 		Step("Restart backup pod when backup sharing is in-progress", func() {
 			log.InfoD("Restart backup pod when backup sharing is in-progress")
-			backuPodLabel := make(map[string]string)
-			backuPodLabel["app"] = "px-backup"
-			backupPodNamespace := "px-backup"
-			pods, err := core.Instance().GetPods("px-backup", backuPodLabel)
-			dash.VerifyFatal(err, nil, "Geting px-backup pod")
-			log.Infof("Backup pods are %v", pods.Items)
+			backupPodLabel := make(map[string]string)
+			backupPodLabel["app"] = "px-backup"
+			backupPodNamespace := backup.GetPxBackupNamespace()
+			pods, err := core.Instance().GetPods(backupPodNamespace, backupPodLabel)
+			dash.VerifyFatal(err, nil, "Getting px-backup pod")
 			for _, pod := range pods.Items {
 				err := core.Instance().DeletePod(pod.GetName(), backupPodNamespace, false)
 				log.FailOnError(err, fmt.Sprintf("Failed to kill pod [%s]", pod.GetName()))
+				err = core.Instance().WaitForPodDeletion(pod.GetUID(), backupPodNamespace, 5*time.Minute)
+				log.FailOnError(err, fmt.Sprintf("%s pod termination failed", pod.GetName()))
 			}
-			time.Sleep(5 * time.Minute)
-			pods, err = core.Instance().GetPods("px-backup", backuPodLabel)
-			dash.VerifyFatal(err, nil, "Geting px-backup pod")
-			log.Infof("Backup pods are %v", pods.Items)
+			pods, err = core.Instance().GetPods("px-backup", backupPodLabel)
+			dash.VerifyFatal(err, nil, "Getting px-backup pod")
 			for _, pod := range pods.Items {
 				err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
@@ -6746,7 +6746,6 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 					// Start Restore
 					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 					err = CreateRestore(restoreName, backup, nil, destinationClusterName, orgID, ctxNonAdmin, nil)
-					log.Infof("Restore Error is  %s", err)
 
 					// Restore validation to make sure that the user with cannot restore
 					dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
@@ -6761,25 +6760,24 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
 			err = ShareBackup(backupName, nil, users, RestoreAccess, ctx)
-			log.FailOnError(err, "Failed to share backup with users")
+			log.FailOnError(err, "Failed to share backup %s with users", backupName)
 		})
 
 		Step("Restart mongo pods when backup sharing is in-progress", func() {
 			log.InfoD("Restart backup pod when backup sharing is in-progress")
-			backuPodLabel := make(map[string]string)
-			backuPodLabel["app.kubernetes.io/component"] = "pxc-backup-mongodb"
-			backupPodNamespace := "px-backup"
-			pods, err := core.Instance().GetPods("px-backup", backuPodLabel)
-			dash.VerifyFatal(err, nil, "Geting mongo pod")
-			log.Infof("Mongo pods are %v", pods.Items)
+			backupPodLabel := make(map[string]string)
+			backupPodLabel["app.kubernetes.io/component"] = "pxc-backup-mongodb"
+			backupPodNamespace := backup.GetPxBackupNamespace()
+			pods, err := core.Instance().GetPods(backupPodNamespace, backupPodLabel)
+			dash.VerifyFatal(err, nil, "Getting mongo pod")
 			for _, pod := range pods.Items {
 				err := core.Instance().DeletePod(pod.GetName(), backupPodNamespace, false)
 				log.FailOnError(err, fmt.Sprintf("Failed to kill pod [%s]", pod.GetName()))
+				err = core.Instance().WaitForPodDeletion(pod.GetUID(), backupPodNamespace, 5*time.Minute)
+				log.FailOnError(err, fmt.Sprintf("%s pod termination failed", pod.GetName()))
 			}
-			time.Sleep(5 * time.Minute)
-			pods, err = core.Instance().GetPods("px-backup", backuPodLabel)
-			log.Infof("Mongo pods are %v", pods.Items)
-			dash.VerifyFatal(err, nil, "Geting mongo pods")
+			pods, err = core.Instance().GetPods("px-backup", backupPodLabel)
+			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
 				err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
@@ -6828,6 +6826,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				log.FailOnError(err, "Error deleting user %v", userName)
