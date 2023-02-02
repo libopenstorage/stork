@@ -778,7 +778,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 				userName := fmt.Sprintf("testuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v_%v@cnbu.com", i, time.Now().Unix())
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
@@ -1597,7 +1597,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				userName := fmt.Sprintf("testuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v_%v@cnbu.com", i, time.Now().Unix())
 				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
