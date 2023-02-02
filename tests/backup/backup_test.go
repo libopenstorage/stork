@@ -5607,7 +5607,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			log.InfoD("Share backup with users again with different access level")
 			accessUserBackupContext, err = ShareBackupWithUsersAndAccessAssignment(newBackupNames, users, ctx)
 			dash.VerifyFatal(err, nil, "Sharing backup with users")
-			log.Info("The user/access/backup/context mapping is %v", accessUserBackupContext)
+			log.Infof("The user/access/backup/context mapping is %v", accessUserBackupContext)
 		})
 
 		Step("Validate if the users with different access level can restore/delete backup", func() {
