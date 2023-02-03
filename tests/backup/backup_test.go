@@ -3149,6 +3149,9 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				if access != ViewOnlyAccess {
 					userRestoreContext[key.context] = restoreName
 				}
+				if access == FullAccess {
+					backupNames = removeStringItemFromSlice(backupNames, []string{val})
+				}
 				ValidateSharedBackupWithUsers(key.user, key.accesses, val, restoreName)
 			}
 		})
