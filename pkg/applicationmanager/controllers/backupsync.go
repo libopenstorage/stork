@@ -142,7 +142,6 @@ func (b *BackupSyncController) syncBackupsFromLocation(location *storkv1.BackupL
 				backupInfo.Name = syncedBackupName
 				backupInfo.UID = ""
 				backupInfo.ResourceVersion = ""
-				backupInfo.SelfLink = ""
 				backupInfo.OwnerReferences = nil
 				backupInfo.Spec.ReclaimPolicy = storkv1.ApplicationBackupReclaimPolicyRetain
 				_, err = storkops.Instance().CreateApplicationBackup(&backupInfo)

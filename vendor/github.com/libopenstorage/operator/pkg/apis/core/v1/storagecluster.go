@@ -509,6 +509,8 @@ type AutopilotSpec struct {
 	LockImage bool `json:"lockImage,omitempty"`
 	// Providers is a list of input data providers for autopilot if it needs any
 	Providers []DataProviderSpec `json:"providers,omitempty"`
+	// GitOps is used to configure autopilot to use gitops model
+	GitOps *GitOpsSpec `json:"gitops,omitempty"`
 	// Args is a map of arguments given to autopilot
 	Args map[string]string `json:"args,omitempty"`
 	// Env is a list of environment variables used by autopilot
@@ -524,6 +526,13 @@ type DataProviderSpec struct {
 	// Type is the type of data provider. For instance, prometheus
 	Type string `json:"type,omitempty"`
 	// Params is a list of key-value params for the provider
+	Params map[string]string `json:"params,omitempty"`
+}
+
+// GitOpsSpec contains the details for GitOps provider like github or bitbucket
+type GitOpsSpec struct {
+	Name   string            `json:"name,omitempty"`
+	Type   string            `json:"type,omitempty"`
 	Params map[string]string `json:"params,omitempty"`
 }
 
@@ -559,6 +568,11 @@ type PrometheusSpec struct {
 	RemoteWriteEndpoint string `json:"remoteWriteEndpoint,omitempty"`
 	// AlertManager spec for configuring alert manager
 	AlertManager *AlertManagerSpec `json:"alertManager,omitempty"`
+	// Define resources requests and limits for single Pods. The value will pass through to Prometheus CR.
+	Resources v1.ResourceRequirements `json:"resources,omitempty"`
+	// SecurityContext holds pod-level security attributes and common container settings.
+	// This defaults to the default PodSecurityContext. The value will pass through to Prometheus CR.
+	SecurityContext *v1.PodSecurityContext `json:"securityContext,omitempty"`
 }
 
 // AlertManagerSpec contains configuration of AlertManager
@@ -575,6 +589,8 @@ type StorageClusterStatus struct {
 	ClusterUID string `json:"clusterUid,omitempty"`
 	// Phase is current status of the storage cluster
 	Phase string `json:"phase,omitempty"`
+	// Reason is CamelCase messages split with commas indicating details about why the StorageCluster is in this state.
+	Reason string `json:"reason,omitempty"`
 	// Count of hash collisions for the StorageCluster. The StorageCluster
 	// controller uses this field as a collision avoidance mechanism when it
 	// needs to create the name of the newest ControllerRevision.
@@ -623,50 +639,86 @@ type Storage struct {
 
 // ClusterCondition contains condition information for the cluster
 type ClusterCondition struct {
+	// Source is the name of component
+	Source string `json:"source,omitempty"`
 	// Type is the type of condition
-	Type ClusterConditionType `json:"type"`
+	Type ClusterConditionType `json:"type,omitempty"`
 	// Status of the condition
-	Status ClusterConditionStatus `json:"status"`
-	// Reason is human readable message indicating details about the current state of the cluster
-	Reason string `json:"reason"`
+	Status ClusterConditionStatus `json:"status,omitempty"`
+	// Message is human readable message indicating details about the current state of the cluster
+	Message string `json:"message,omitempty"`
+	// LastTransitionTime the condition transitioned from one status to another
+	LastTransitionTime meta.Time `json:"lastTransitionTime,omitempty"`
 }
 
-// ClusterConditionType is the enum type for different cluster conditions
+// ClusterState is the enum type for cluster state indicated using phase field
+type ClusterState string
+
+// These are valid cluster states
+const (
+	// ClusterStateInit means the cluster is initializing
+	ClusterStateInit ClusterState = "Initializing"
+	// ClusterStateRunning means the cluster is healthy and running
+	ClusterStateRunning ClusterState = "Running"
+	// ClusterStateDegraded means the cluster is unhealthy
+	ClusterStateDegraded ClusterState = "Degraded"
+	// ClusterStateUninstall means the cluster is uninstalling
+	ClusterStateUninstall ClusterState = "Uninstalling"
+	// ClusterStateUnknown means the cluster state is unknown
+	ClusterStateUnknown ClusterState = "Unknown"
+)
+
+// ClusterConditionType is the enum type for different cluster conditions, reflecting phases of different components
 type ClusterConditionType string
 
 // These are valid cluster condition types
 const (
-	// ClusterConditionTypeUpgrade indicates the status for an upgrade operation on the cluster
-	ClusterConditionTypeUpgrade ClusterConditionType = "Upgrade"
-	// ClusterConditionTypeDelete indicates the status for a delete operation on the cluster
-	ClusterConditionTypeDelete ClusterConditionType = "Delete"
-	// ClusterConditionTypeInstall indicates the status for an install operation on the cluster
+	// ClusterConditionTypePreflight indicates the phase for component preflight check on the cluster
+	ClusterConditionTypePreflight ClusterConditionType = "Preflight"
+	// ClusterConditionTypeInstall indicates the phase for a component install operation on the cluster
 	ClusterConditionTypeInstall ClusterConditionType = "Install"
+	// ClusterConditionTypeUpgrade indicates the phase for a component upgrade operation on the cluster
+	ClusterConditionTypeUpgrade ClusterConditionType = "Upgrade"
+	// ClusterConditionTypeDelete indicates the phase for a component delete operation on the cluster
+	ClusterConditionTypeDelete ClusterConditionType = "Delete"
+	// ClusterConditionTypeMigration indicates the phase for a component migration operation on the cluster
+	ClusterConditionTypeMigration ClusterConditionType = "Migration"
+	// ClusterConditionTypeRuntimeState indicates the runtime state of a component on the cluster
+	ClusterConditionTypeRuntimeState ClusterConditionType = "RuntimeState"
 )
 
 // ClusterConditionStatus is the enum type for cluster condition statuses
 type ClusterConditionStatus string
 
-// These are valid cluster statuses.
+// These are valid cluster condition statuses
 const (
-	// ClusterInit means the cluster is initializing
-	ClusterInit ClusterConditionStatus = "Initializing"
-	// ClusterOnline means the cluster is up and running
-	ClusterOnline ClusterConditionStatus = "Online"
-	// ClusterOffline means the cluster is offline
-	ClusterOffline ClusterConditionStatus = "Offline"
-	// ClusterNotInQuorum means the cluster is out of quorum
-	ClusterNotInQuorum ClusterConditionStatus = "NotInQuorum"
-	// ClusterUnknown means the cluster status is not known
-	ClusterUnknown ClusterConditionStatus = "Unknown"
-	// ClusterOperationInProgress means the cluster operation is in progress
-	ClusterOperationInProgress ClusterConditionStatus = "InProgress"
-	// ClusterOperationCompleted means the cluster operation has completed
-	ClusterOperationCompleted ClusterConditionStatus = "Completed"
-	// ClusterOperationFailed means the cluster operation failed
-	ClusterOperationFailed ClusterConditionStatus = "Failed"
-	// ClusterOperationTimeout means the cluster operation timedout
-	ClusterOperationTimeout ClusterConditionStatus = "Timeout"
+	// ClusterConditionStatusOnline means the component is up and running
+	ClusterConditionStatusOnline ClusterConditionStatus = "Online"
+	// ClusterConditionStatusOffline means the component is offline
+	ClusterConditionStatusOffline ClusterConditionStatus = "Offline"
+	// ClusterConditionStatusNotInQuorum means the component is out of quorum
+	ClusterConditionStatusNotInQuorum ClusterConditionStatus = "NotInQuorum"
+	// ClusterConditionStatusDegraded means the component is degraded
+	ClusterConditionStatusDegraded ClusterConditionStatus = "Degraded"
+	// ClusterConditionStatusUnknown means the component is not known
+	ClusterConditionStatusUnknown ClusterConditionStatus = "Unknown"
+	// ClusterConditionStatusReady means the component is ready
+	ClusterConditionStatusReady ClusterConditionStatus = "Ready"
+	// ClusterConditionStatusDisabled means the component is disabled
+	ClusterConditionStatusDisabled ClusterConditionStatus = "Disabled"
+	// ClusterConditionStatusError means the component has error
+	ClusterConditionStatusError ClusterConditionStatus = "Error"
+
+	// ClusterConditionStatusPending means the cluster operation is pending
+	ClusterConditionStatusPending ClusterConditionStatus = "Pending"
+	// ClusterConditionStatusInProgress means the cluster operation is in progress
+	ClusterConditionStatusInProgress ClusterConditionStatus = "InProgress"
+	// ClusterConditionStatusCompleted means the cluster operation has completed
+	ClusterConditionStatusCompleted ClusterConditionStatus = "Completed"
+	// ClusterConditionStatusFailed means the cluster operation failed
+	ClusterConditionStatusFailed ClusterConditionStatus = "Failed"
+	// ClusterConditionStatusTimeout means the cluster operation timed out
+	ClusterConditionStatusTimeout ClusterConditionStatus = "Timeout"
 )
 
 func init() {

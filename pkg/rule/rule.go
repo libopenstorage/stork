@@ -653,7 +653,7 @@ func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecut
 					// cmdExecutorImage will touch this file once it's done and hence having the below probe will
 					// allow the status to get reflected in the pod readiness probe
 					ReadinessProbe: &v1.Probe{
-						Handler: v1.Handler{
+						ProbeHandler: v1.ProbeHandler{
 							Exec: &v1.ExecAction{
 								Command: []string{"cat", "/tmp/cmdexecutor-status"},
 							},
