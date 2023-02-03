@@ -41,6 +41,10 @@ const (
 	globalAWSLockedBucketPrefix               = "global-aws-locked"
 	globalAzureLockedBucketPrefix             = "global-azure-locked"
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
+	userName                                  = "testuser"
+	firstName                                 = "firstName"
+	lastName                                  = "lastName"
+	password                                  = "Password1"
 )
 
 var (
