@@ -3155,7 +3155,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		var wg sync.WaitGroup
 		defer EndTorpedoTest()
 		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		dash.VerifyFatal(err, nil, "Getting px-central-admin context")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
@@ -3165,7 +3165,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 			go func(backupName string) {
 				defer wg.Done()
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-				log.FailOnError(err, "Error deleting user %v", backupName)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %v", backupName))
 				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 			}(backupName)
@@ -3192,7 +3192,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 			go func(userName string) {
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Error deleting user %s", userName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %s", userName))
 			}(userName)
 		}
 		wg.Wait()
