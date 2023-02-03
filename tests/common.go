@@ -247,7 +247,7 @@ const (
 const (
 	waitResourceCleanup       = 2 * time.Minute
 	defaultTimeout            = 5 * time.Minute
-	defaultVolScaleTimeout    = 2 * time.Minute
+	defaultVolScaleTimeout    = 4 * time.Minute
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
