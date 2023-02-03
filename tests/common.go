@@ -2763,7 +2763,7 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string) e
 
 }
 
-// DeleteSchedule Delete Backup  Schedule
+// DeleteSchedule deletes backup schedule
 func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID, OrgID string) error {
 	backupDriver := Inst().Backup
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
