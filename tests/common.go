@@ -2769,7 +2769,7 @@ func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, s
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: OrgID,
 		Name:  backupScheduleName,
-		// delete_backups indicates whether the cloud backup files need to
+		// DeleteBackups indicates whether the cloud backup files need to
 		// be deleted or retained.
 		DeleteBackups: true,
 		Uid:           backupScheduleUID,
