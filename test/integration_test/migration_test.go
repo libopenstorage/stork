@@ -1256,10 +1256,10 @@ func clonePvcDestTest(t *testing.T) {
 	require.NoError(t, err, "Error resetting mock time")
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-schedule-interval",
-		"mysql-1-pvc",
-		[]string{"cassandra"},
-		[]string{"mysql-migration-schedule-interval"},
+		"mysql-migration-schedule-interval-clone",
+		"mysql-1-pvc-clone",
+		[]string{},
+		[]string{"mysql-migration-schedule-interval-clone"},
 		true,
 		false,
 		false,
@@ -1268,11 +1268,11 @@ func clonePvcDestTest(t *testing.T) {
 		nil,
 	)
 
-	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+	validateMigration(t, "mysql-migration-schedule-interval-clone", preMigrationCtx.GetID())
 
 	// Get pvc lists from source cluster
 	for _, spec := range ctxs[0].App.SpecList {
-		if obj, ok := spec.(*apps_api.StatefulSet); ok {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
 			namespace = obj.GetNamespace()
 			pvcs, err = core.Instance().GetPersistentVolumeClaims(namespace, nil)
 			require.NoError(t, err, "error retriving pvc list from %s namespace", namespace)
