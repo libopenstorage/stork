@@ -3138,6 +3138,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		Step("Adding different roles to users and sharing backup with different access level", func() {
 			userRoleAccessBackupList, err = AddRoleAndAccessToUsers(users, backupNames)
 			dash.VerifyFatal(err, nil, "Adding roles and access level to users")
+			log.Infof("The user/access/backup list is %v", userRoleAccessBackupList)
 		})
 
 		Step("Validating the shared backup with user having different access level and roles", func() {
