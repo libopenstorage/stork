@@ -227,7 +227,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 		}
 		return nil, false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, validateRebalanceJobsTimeout, validateRebalanceJobsInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 	return nil
@@ -4629,7 +4629,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}
-	log.Infof("Added drive [%s] to node [%s] successfully", drivePath, n.Name)
+	log.InfoD("Added drive [%s] to node [%s] successfully", drivePath, n.Name)
 	return nil
 }
 

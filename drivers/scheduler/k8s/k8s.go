@@ -127,7 +127,7 @@ const (
 	volDirCleanupTimeout   = 5 * time.Minute
 	k8sObjectCreateTimeout = 2 * time.Minute
 	k8sPodCreateTimeout    = 4 * time.Minute
-	k8sDestroyTimeout      = 5 * time.Minute
+	k8sDestroyTimeout      = 10 * time.Minute
 	// FindFilesOnWorkerTimeout timeout for find files on worker
 	FindFilesOnWorkerTimeout = 1 * time.Minute
 	deleteTasksWaitTimeout   = 3 * time.Minute
