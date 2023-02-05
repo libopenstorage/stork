@@ -759,6 +759,7 @@ github.com/getkin/kin-openapi v0.76.0/go.mod h1:660oXbgy5JFMKreazJaQTw7o+X00qeSy
 github.com/getsentry/raven-go v0.2.0/go.mod h1:KungGk8q33+aIAZUIVWZDr2OfAEBsO49PX4NzFV5kcQ=
 github.com/ghodss/yaml v0.0.0-20150909031657-73d445a93680/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
+github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 h1:Mn26/9ZMNWSw9C9ERFA1PUxfmGpolnw2v0bKOREu5ew=
 github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32/go.mod h1:GIjDIg/heH5DOkXY3YJ/wNhfHsQHoXGjl8G8amsYQ1I=
 github.com/gizak/termui/v3 v3.1.0/go.mod h1:bXQEBkJpzxUAKf0+xq9MSWAvWZlE7c+aidmyFlkYTrY=
 github.com/go-asn1-ber/asn1-ber v1.3.1/go.mod h1:hEBeB/ic+5LoWskz+yKT7vGhhPYkProFKoKdwZRWMe0=
@@ -1110,6 +1111,7 @@ github.com/gorilla/sessions v1.2.0/go.mod h1:dk2InVEVJ0sfLlnXv9EAgkf6ecYs/i80K/z
 github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/gorilla/websocket v1.4.1/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
+github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gostaticanalysis/analysisutil v0.0.0-20190318220348-4088753ea4d3/go.mod h1:eEOZF4jCKGi+aprrirO9e7WKB3beBRtWgqGunKl6pKE=
 github.com/gostaticanalysis/analysisutil v0.0.3/go.mod h1:eEOZF4jCKGi+aprrirO9e7WKB3beBRtWgqGunKl6pKE=
@@ -1983,6 +1985,12 @@ github.com/quasilyte/go-ruleguard/rules v0.0.0-20211022131956-028d6511ab71/go.mo
 github.com/quasilyte/gogrep v0.0.0-20220828223005-86e4605de09f/go.mod h1:Cm9lpz9NZjEoL1tgZ2OgeUKPIxL1meE7eo60Z6Sk+Ng=
 github.com/quasilyte/regex/syntax v0.0.0-20200407221936-30656e2c4a95/go.mod h1:rlzQ04UMyJXu/aOvhd8qT+hvDrFpiwqp8MRXDY9szc0=
 github.com/quasilyte/stdinfo v0.0.0-20220114132959-f7386bf02567/go.mod h1:DWNGW8A4Y+GyBgPuaQJuWiy0XYftx4Xm/y5Jqk9I6VQ=
+github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c h1:xhI69R08ebqC1vIYcDMo3qY2HAPKZol+hhcG44SwHxg=
+github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c/go.mod h1:zpv7z4ySYL5LlEBKEPf/xf3cjx837/J2i/wHpT43viE=
+github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525 h1:6s3o1mPHTPuH8vWKTlmhrXux83RvNDDJruFG3n9Wx4o=
+github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525/go.mod h1:jhDWF7M+cR6Rw65YoTGbiJ+r2Rb6ojAE7I9FE0vxkhc=
+github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1 h1:Rnrc4yx1Pkqoto7/n6GT68tk5up/SLuan1uSYXACpoM=
+github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1/go.mod h1:+GbeNyk8mbdOdMSdLIqvz+0JQ/2PhIb4ufMOcmHLIJQ=
 github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
 github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446/go.mod h1:uYEyJGbgTkfkS4+E/PavXkNJcbFIpEtjt2B0KDQ5+9M=
 github.com/remyoudompheng/go-dbus v0.0.0-20121104212943-b7232d34b1d5/go.mod h1:+u151txRmLpwxBmpYn9z3d1sdJdjRPQpsXuYeY9jNls=
