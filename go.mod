@@ -32,6 +32,8 @@ require (
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20221208153443-c95ed6d757fa
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.14.0
+	github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c
+	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 	github.com/sirupsen/logrus v1.9.0
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/spf13/cobra v1.6.0
@@ -44,13 +46,13 @@ require (
 	google.golang.org/api v0.103.0
 	google.golang.org/grpc v1.51.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.25.2
-	k8s.io/apiextensions-apiserver v0.25.2
-	k8s.io/apimachinery v0.25.2
-	k8s.io/apiserver v0.25.2
+	k8s.io/api v0.25.4
+	k8s.io/apiextensions-apiserver v0.25.4
+	k8s.io/apimachinery v0.25.4
+	k8s.io/apiserver v0.25.4
 	k8s.io/cli-runtime v0.25.2
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.25.1
+	k8s.io/code-generator v0.25.4
 	k8s.io/component-helpers v0.25.1
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.25.2
@@ -115,6 +117,7 @@ require (
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.0.2 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
@@ -146,6 +149,7 @@ require (
 	github.com/googleapis/gax-go v2.0.2+incompatible // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/gosuri/uitable v0.0.4 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
@@ -224,6 +228,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
+	github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/rubenv/sql-migrate v1.1.2 // indirect
