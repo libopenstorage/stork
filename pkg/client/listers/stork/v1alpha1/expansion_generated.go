@@ -118,6 +118,14 @@ type NamespacedSchedulePolicyListerExpansion interface{}
 // NamespacedSchedulePolicyNamespaceLister.
 type NamespacedSchedulePolicyNamespaceListerExpansion interface{}
 
+// PlatformCredentialListerExpansion allows custom methods to be added to
+// PlatformCredentialLister.
+type PlatformCredentialListerExpansion interface{}
+
+// PlatformCredentialNamespaceListerExpansion allows custom methods to be added to
+// PlatformCredentialNamespaceLister.
+type PlatformCredentialNamespaceListerExpansion interface{}
+
 // ResourceTransformationListerExpansion allows custom methods to be added to
 // ResourceTransformationLister.
 type ResourceTransformationListerExpansion interface{}
