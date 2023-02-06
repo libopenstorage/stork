@@ -32,6 +32,10 @@ const (
 	PxVolumeUsagePercentMetric = "100 * (px_volume_usage_bytes / px_volume_capacity_bytes)"
 	// PxVolumeTotalCapacityMetric is metric for total volume capacity
 	PxVolumeTotalCapacityMetric = "px_volume_capacity_bytes / 1000000000"
+	//PXPoolProvisionedSpaceMetric is metric for pool provisioned space
+	PXPoolProvisionedSpaceMetric = "100 * (px_pool_stats_provisioned_bytes/ on (pool) px_pool_stats_total_bytes)"
+	//PXPoolUsedSpaceMetric is metric for pool used space
+	PXPoolUsedSpaceMetric = "100 * (px_pool_stats_used_bytes/ on (pool) px_pool_stats_total_bytes)"
 	// RuleActionsScalePercentage is name for scale percentage rule action
 	RuleActionsScalePercentage = "scalepercentage"
 	// RuleActionsScaleSize is name for scale size rule action
@@ -406,4 +410,39 @@ func WaitForActionApprovalsObjects(namespace, name string) error {
 		return err
 	}
 	return nil
+}
+
+// PoolRuleRebalanceAbsolute returns an autopilot pool rebalance rule that
+// uses provisioned and used stats deviation percentage alias key
+func PoolRuleRebalanceAbsolute(provisionedValLimit, usedValLimit int, approvalRequired bool) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pool-rebalance-absolute-prov-%d-used-%d", provisionedValLimit, usedValLimit),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      PXPoolProvisionedSpaceMetric,
+						Operator: apapi.LabelSelectorOpGt,
+						Values:   []string{fmt.Sprintf("%d", provisionedValLimit)},
+					},
+					{
+						Key:      PXPoolUsedSpaceMetric,
+						Operator: apapi.LabelSelectorOpGt,
+						Values:   []string{fmt.Sprintf("%d", usedValLimit)},
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: RebalanceSpecAction,
+				},
+			},
+		},
+	}
+	if approvalRequired {
+		apRuleObject.Spec.Enforcement = apapi.ApprovalRequired
+	}
+	return apRuleObject
 }

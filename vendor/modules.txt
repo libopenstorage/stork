@@ -960,8 +960,8 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
-## explicit; go 1.12
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
+## explicit; go 1.19
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
 github.com/portworx/torpedo/drivers/node/ssh
@@ -977,11 +977,14 @@ github.com/portworx/torpedo/drivers/volume/generic_csi
 github.com/portworx/torpedo/drivers/volume/linstor
 github.com/portworx/torpedo/drivers/volume/portworx
 github.com/portworx/torpedo/drivers/volume/portworx/schedops
+github.com/portworx/torpedo/pkg/aetosutil
 github.com/portworx/torpedo/pkg/aututils
 github.com/portworx/torpedo/pkg/errors
+github.com/portworx/torpedo/pkg/log
 github.com/portworx/torpedo/pkg/netutil
 github.com/portworx/torpedo/pkg/osutils
 github.com/portworx/torpedo/pkg/pureutils
+github.com/portworx/torpedo/pkg/restutil
 github.com/portworx/torpedo/pkg/s3utils
 github.com/portworx/torpedo/pkg/units
 github.com/portworx/torpedo/porx/px/api
@@ -1075,7 +1078,7 @@ github.com/skyrings/skyring-common/tools/uuid
 # github.com/spf13/cast v1.5.0
 ## explicit; go 1.18
 github.com/spf13/cast
-# github.com/spf13/cobra v1.6.0
+# github.com/spf13/cobra v1.6.1
 ## explicit; go 1.15
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
@@ -1442,6 +1445,9 @@ gopkg.in/freddierice/go-losetup.v1
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0
+# gopkg.in/natefinch/lumberjack.v2 v2.0.0
+## explicit
+gopkg.in/natefinch/lumberjack.v2
 # gopkg.in/square/go-jose.v2 v2.5.1
 ## explicit
 gopkg.in/square/go-jose.v2
@@ -1454,7 +1460,7 @@ gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 => helm.sh/helm/v3 v3.10.3
+# helm.sh/helm/v3 v3.6.0 => helm.sh/helm/v3 v3.10.3
 ## explicit; go 1.18
 helm.sh/helm/v3/internal/fileutil
 helm.sh/helm/v3/internal/ignore
@@ -2234,7 +2240,7 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230103234348-243afb3bb8aa
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.0

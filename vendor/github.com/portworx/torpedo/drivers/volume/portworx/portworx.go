@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 
 	"github.com/portworx/torpedo/pkg/s3utils"
 
@@ -45,13 +47,11 @@ import (
 	"github.com/portworx/torpedo/pkg/netutil"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/units"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,14 +85,15 @@ const (
 	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
-	pxctlDriveAddStart                        = "%s -j service drive add -d %s -o start"
-	pxctlDriveAddStatus                       = "%s -j service drive add -d %s -o status"
+	pxctlDriveAddStart                        = "%s -j service drive add %s -o start"
+	pxctlDriveAddStatus                       = "%s -j service drive add %s -o status"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
+	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 )
 
 const (
@@ -192,6 +193,7 @@ type portworx struct {
 	portworxServiceClient pxapi.PortworxServiceClient
 	schedOps              schedops.Driver
 	nodeDriver            node.Driver
+	namespace             string
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
@@ -206,8 +208,7 @@ type statusJSON struct {
 
 // ExpandPool resizes a pool of a given ID
 func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
-
-	logrus.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, size, operation.String())
+	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, size, operation.String())
 
 	// start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
@@ -222,22 +223,40 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			return nil, true, err
 		}
 		if jobListResp.String() != "" {
-			logrus.Debugf("Resize respone: %v", jobListResp.String())
+			log.Debugf("Resize respone: %v", jobListResp.String())
 		}
 		return nil, false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, validateRebalanceJobsTimeout, validateRebalanceJobsInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 	return nil
 }
 
-//GetStorageSpec get the storage spec used to deploy portworx
+// DeletePool deletes the pool with given poolID
+func (d *portworx) DeletePool(n node.Node, poolID string) error {
+	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
+	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error deleting pool on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("poolID %s deletion: %s", poolID, out)
+	return nil
+}
+
+// GetStorageSpec get the storage spec used to deploy portworx
 func (d *portworx) GetStorageSpec() (*pxapi.StorageSpec, error) {
 	storageSpecResp, err := d.portworxServiceClient.GetStorageSpec(d.getContext(), &pxapi.PxGetStorageSpecRequest{})
 	var storageSpec *pxapi.StorageSpec
 	if err != nil {
-		err = fmt.Errorf("Error getting storage resource ,cause : %v", err)
+		err = fmt.Errorf("Error getting StorageSpec resource, Err: %v", err)
 		return nil, err
 	}
 	storageSpec = storageSpecResp.GetSpec()
@@ -277,7 +296,6 @@ func (d *portworx) ListStoragePools(labelSelector metav1.LabelSelector) (map[str
 			}
 		}
 	}
-
 	return pools, nil
 }
 
@@ -285,9 +303,13 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
+func (d *portworx) GetVolumeDriverNamespace() (string, error) {
+	return d.schedOps.GetPortworxNamespace()
+}
+
 // init is all the functionality of Init, but allowing you to set a custom driver name
 func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string) error {
-	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+	log.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
 
 	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
@@ -303,6 +325,13 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	if d.schedOps, err = schedops.Get(sched); err != nil {
 		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
 	}
+	d.schedOps.Init()
+
+	namespace, err := d.GetVolumeDriverNamespace()
+	if err != nil {
+		return err
+	}
+	d.namespace = namespace
 
 	if err = d.setDriver(); err != nil {
 		return err
@@ -317,19 +346,19 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		return fmt.Errorf("cluster inspect returned empty nodes")
 	}
 
-	err = d.updateNodes(storageNodes)
-	if err != nil {
+	if err := d.updateNodes(storageNodes); err != nil {
 		return err
 	}
+
 	for _, n := range node.GetStorageDriverNodes() {
-		if err = d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
+		if err := d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
 			return err
 		}
 	}
 
-	logrus.Infof("The following Portworx nodes are in the cluster:")
+	log.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range storageNodes {
-		logrus.Infof(
+		log.Infof(
 			"Node UID: %v Node IP: %v Node Status: %v",
 			n.Id,
 			n.DataIp,
@@ -347,7 +376,6 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
 	}
-
 	return nil
 }
 
@@ -367,8 +395,7 @@ func (d *portworx) RefreshDriverEndpoints() error {
 		return fmt.Errorf("cluster inspect returned empty nodes")
 	}
 
-	err = d.updateNodes(storageNodes)
-	if err != nil {
+	if err := d.updateNodes(storageNodes); err != nil {
 		return err
 	}
 	return nil
@@ -380,14 +407,13 @@ func (d *portworx) updateNodes(pxNodes []*api.StorageNode) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
 func (d *portworx) printNodes(pxnodes []*api.StorageNode) {
-	logrus.Infof("The following Portworx nodes are in the cluster:")
+	log.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range pxnodes {
-		logrus.Infof(
+		log.Infof(
 			"Node UID: %v Node IP: %v Node Status: %v",
 			n.Id,
 			n.DataIp,
@@ -398,7 +424,6 @@ func (d *portworx) printNodes(pxnodes []*api.StorageNode) {
 
 // getStoragelessNode filter out storageless nodes from all px nodes and return it
 func (d *portworx) GetStoragelessNodes() ([]*api.StorageNode, error) {
-
 	storagelessNodes := make([]*api.StorageNode, 0)
 
 	pxnodes, err := d.getPxNodes()
@@ -416,8 +441,7 @@ func (d *portworx) GetStoragelessNodes() ([]*api.StorageNode, error) {
 
 // UpdateNodeWithStorageInfo update nthe storage info to a new node object
 func (d *portworx) UpdateNodeWithStorageInfo(n node.Node, skipNodeName string) error {
-
-	logrus.Infof("Updating the storage info for new node: [%s] ", n.Name)
+	log.Infof("Updating the storage info for new node [%s] ", n.Name)
 
 	// Getting all PX nodes
 	storageNodes, err := d.getPxNodes()
@@ -440,16 +464,15 @@ func (d *portworx) UpdateNodeWithStorageInfo(n node.Node, skipNodeName string) e
 		storageNodes = append(storageNodes[:skipIdx], storageNodes[skipIdx:]...)
 	}
 
-	if err = d.updateNode(&n, storageNodes); err != nil {
+	if err := d.updateNode(&n, storageNodes); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (d *portworx) WaitForPxPodsToBeUp(n node.Node) error {
-
 	// Check if PX pod is up
-	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
+	log.Debugf("checking if PX pod is up on node: %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
@@ -467,29 +490,19 @@ func (d *portworx) WaitForPxPodsToBeUp(n node.Node) error {
 }
 
 // ValidateNodeAfterPickingUpNodeID validates the pools and drives
-func (d *portworx) ValidateNodeAfterPickingUpNodeID(delNode *api.StorageNode,
-	newNode *api.StorageNode, storagelessNodes []*api.StorageNode) error {
-
+func (d *portworx) ValidateNodeAfterPickingUpNodeID(delNode *api.StorageNode, newNode *api.StorageNode, storagelessNodes []*api.StorageNode) error {
 	// If node is a storageless node below validation steps not needed
 	if !d.validateNodeIDMigration(delNode, newNode, storagelessNodes) {
-		return fmt.Errorf("validation failed: NodeId:[%s] pick-up failed by new Node: [%s]",
-			delNode.Id, newNode.Hostname,
-		)
+		return fmt.Errorf("validation failed: NodeId: [%s] pick-up failed by new Node: [%s]", delNode.Id, newNode.Hostname)
 	}
-	logrus.Infof("Pools and Disks are matching after new node:[%s] picked the NodeId: [%s]",
-		newNode.Hostname, newNode.Id,
-	)
-	logrus.Infof("After recyling a node, Node [%s] is having following pools:",
-		newNode.Hostname,
-	)
+
+	log.Infof("Pools and Disks are matching after new node:[%s] picked the NodeId: [%s]", newNode.Hostname, newNode.Id)
+	log.Infof("After recyling a node, Node [%s] is having following pools:", newNode.Hostname)
 	for _, pool := range newNode.Pools {
-		logrus.Infof("Node [%s] is having pool id: [%s]", newNode.Hostname, pool.Uuid)
+		log.Infof("Node [%s] is having pool id: [%s]", newNode.Hostname, pool.Uuid)
 	}
 
-	logrus.Infof("After recyling a node, Node [%s] is having disks: [%v]",
-		newNode.Hostname, newNode.Disks,
-	)
-
+	log.Infof("After recyling a node, Node [%s] is having disks: [%v]", newNode.Hostname, newNode.Disks)
 	return nil
 }
 
@@ -509,15 +522,14 @@ func (d *portworx) comparePoolsAndDisks(srcNode *api.StorageNode,
 	srcPools := srcNode.Pools
 	dstPools := dstNode.Pools
 
-	// comparing pool ids
+	// Comparing pool ids
 	if len(srcPools) != len(dstPools) {
 		return false
 	}
 
 	for x, pool := range srcPools {
 		if pool.Uuid != dstPools[x].Uuid {
-			logrus.Errorf("Source pools: [%v] not macthing with Destination pools: [%v]",
-				srcPools, dstPools)
+			log.Errorf("Source pools: [%v] not macthing with Destination pools: [%v]", srcPools, dstPools)
 			return false
 		}
 	}
@@ -547,16 +559,13 @@ func (d *portworx) validateNodeIDMigration(delNode *api.StorageNode, newNode *ap
 
 	// Validate that nodeID is picked up by the storage-less node
 	if len(storagelessNodes) != 0 && !d.Contains(storagelessNodes, newNode) {
-		logrus.Errorf("Delete NodeId [%s] is not pick up by storageless node", delNode.Id)
+		log.Errorf("Delete NodeId [%s] is not pick up by storageless node", delNode.Id)
 		return false
 	}
 
 	// Validate that dirves and pool IDs are same after picking up by storage-less node
 	if !d.comparePoolsAndDisks(delNode, newNode) {
-		logrus.Errorf(
-			"Pools [%v] in deleted node are not macthing with new node pools [%v]",
-			delNode.Pools, newNode.Pools,
-		)
+		log.Errorf("Pools [%v] in deleted node are not macthing with new node pools [%v]", delNode.Pools, newNode.Pools)
 		return false
 	}
 	return true
@@ -572,10 +581,10 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 			return nil, true, err
 		}
 		if nNode.Hostname == delNode.Hostname {
-			return nil, true, fmt.Errorf("waiting for NodeId %v to be picked by another node", delNode.Id)
+			return nil, true, fmt.Errorf("waiting for NodeId [%v] to be picked by another node", delNode.Id)
 		}
 		if len(nNode.Pools) == 0 {
-			return nil, true, fmt.Errorf("waiting for storage to be up in node: [%s]", nNode.Hostname)
+			return nil, true, fmt.Errorf("waiting for storage to be up in node [%s]", nNode.Hostname)
 		}
 		return nNode, false, nil
 	}
@@ -586,24 +595,24 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 	}
 
 	if result == nil {
-		return nil, fmt.Errorf("failed to pick NodeId: [%s] by PX nodes in a cluster", delNode.Id)
+		return nil, fmt.Errorf("failed to pick NodeId [%s] by PX nodes in a cluster", delNode.Id)
 	}
-
 	return result.(*api.StorageNode), nil
 }
 
-//IsPxInstalled returns if Px is installed on a node
-func (d *portworx) IsPxInstalled(n node.Node) (bool, error) {
-	logrus.Infof("Checking if px is installed on %s", n.Name)
+// IsDriverInstalled returns if PX is installed on a node
+func (d *portworx) IsDriverInstalled(n node.Node) (bool, error) {
+	log.Infof("Checking if PX is installed on node [%s]", n.Name)
 	pxInstalled, err := d.schedOps.IsPXEnabled(n)
 	if err != nil {
-		return false, fmt.Errorf("Error in checking for portworx installed on %s", n.Name)
+		return false, fmt.Errorf("Failed to check if PX is installed on node [%s], Err: %v", n.Name, err)
 	}
 	return pxInstalled, nil
 }
 
 func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
-	logrus.Infof("Updating node: %+v", *n)
+	//log.Infof("Updating node %+v", *n) // NOTE: Do we really need to print the whole node?
+	log.Infof("Updating node [%s]", n.Name)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
 	if err != nil {
 		return err
@@ -616,7 +625,8 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
-			logrus.Tracef("Checking PX node %+v for address %s", pxNode, address)
+			//log.Debugf("Checking PX node %+v for address %s", pxNode, address) // NOTE: Do we really need to print the whole node?
+			log.Debugf("Checking PX node [%s] for address [%s]", pxNode.Hostname, address)
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.SchedulerNodeName {
 				if len(pxNode.Id) > 0 {
 					n.StorageNode = pxNode
@@ -625,7 +635,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 					// TODO: PTX-2445 Replace isMetadataNode API call with SDK call
 					isMetadataNode, err := d.isMetadataNode(*n, address)
 					if err != nil {
-						logrus.Warnf("can not check if %v is metadata node", *n)
+						log.Warnf("Can not check if node [%s] is a metadata node", n.Name)
 					}
 					n.IsMetadataNode = isMetadataNode
 
@@ -647,10 +657,10 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 						}
 					}
 					if err = node.UpdateNode(*n); err != nil {
-						return fmt.Errorf("failed to update node %s. Cause: %v", n.Name, err)
+						return fmt.Errorf("failed to update node [%s], Err: %v", n.Name, err)
 					}
 				} else {
-					return fmt.Errorf("StorageNodeId is empty for node %v", pxNode)
+					return fmt.Errorf("StorageNodeId is empty for node [%s]", pxNode.Hostname)
 				}
 				return nil
 			}
@@ -658,13 +668,13 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 	}
 
 	// Return error where PX is not explicitly disabled but was not found installed
-	return fmt.Errorf("failed to find px node for node: %v PX nodes: %v", n, pxNodes)
+	return fmt.Errorf("failed to find PX node for node [%s] in PX node list: %v", n.Name, pxNodes)
 }
 
 func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) {
 	members, err := d.GetKvdbMembers(node)
 	if err != nil {
-		return false, fmt.Errorf("failed to get metadata nodes. Cause: %v", err)
+		return false, fmt.Errorf("failed to get metadata nodes, Err: %v", err)
 	}
 
 	ipRegex := regexp.MustCompile(`http://(?P<address>.*):d+`)
@@ -674,7 +684,7 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 			if val, ok := result["address"]; ok {
 				val = strings.Trim(val, "[]")
 				if address == val {
-					logrus.Debugf("Node %s is a metadata node", node.Name)
+					log.Debugf("Node [%s] is a metadata node", node.Name)
 					return true, nil
 				}
 			}
@@ -695,12 +705,21 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 			},
 		})
 	if err != nil {
-		err = fmt.Errorf("error while creating volume because of: %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to create volume, Err: %v", err)
 	}
 
-	logrus.Infof("successfully created Portworx volume %v ", resp.VolumeId)
+	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
+	return resp.VolumeId, nil
+}
 
+func (d *portworx) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
+	volDriver := d.getVolDriver()
+	resp, err := volDriver.Create(d.getContext(), request)
+	if err != nil {
+		return "", fmt.Errorf("failed to create volume, Err: %v", err)
+	}
+
+	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
 	return resp.VolumeId, nil
 }
 
@@ -717,19 +736,12 @@ func (d *portworx) CloneVolume(volumeID string) (string, error) {
 
 	volumeCloneResp, err := volDriver.Clone(d.getContext(), &api.SdkVolumeCloneRequest{ParentId: volID, Name: cloneVolumeName})
 	if err != nil {
-		err = fmt.Errorf(
-			"error while Cloning %v because of: %v",
-			pxVolume.Id,
-			err,
-		)
-		logrus.Infof("Error returned: %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to clone volume [%s], Err: %v", pxVolume.Id, err)
 	}
 	if volumeCloneResp.VolumeId == "" {
-		logrus.Infof("Cloned volume id returned was null")
 		return "", fmt.Errorf("cloned volume id returned was null")
 	}
-	logrus.Infof("successfully clone %v as %v", volumeID, volumeCloneResp.VolumeId)
+	log.Infof("Successfully cloned volume [%s] as [%s]", volumeID, volumeCloneResp.VolumeId)
 	return volumeCloneResp.VolumeId, nil
 }
 
@@ -740,12 +752,9 @@ func (d *portworx) AttachVolume(volumeID string) (string, error) {
 			VolumeId: volumeID,
 		})
 	if err != nil {
-		err = fmt.Errorf("error while attaching volume because of: %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to attach volume [%s], Err: %v", volumeID, err)
 	}
-
-	logrus.Infof("successfully attach Portworx volume %v ", volumeID)
-
+	log.Infof("successfully attached Portworx volume [%s]", volumeID)
 	return resp.DevicePath, nil
 }
 
@@ -756,12 +765,9 @@ func (d *portworx) DetachVolume(volumeID string) error {
 			VolumeId: volumeID,
 		})
 	if err != nil {
-		err = fmt.Errorf("error while detaching volume because of: %v", err)
-		return err
+		return fmt.Errorf("failed to detach volume [%s], Err: %v", volumeID, err)
 	}
-
-	logrus.Infof("successfully detach Portworx volume %v ", volumeID)
-
+	log.Infof("Successfully detached Portworx volume [%s] ", volumeID)
 	return nil
 }
 
@@ -769,25 +775,27 @@ func (d *portworx) DeleteVolume(volumeID string) error {
 	volDriver := d.getVolDriver()
 	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
 	if err != nil {
-		return fmt.Errorf("failed to find volume %v due to %v", volumeID, err)
+		return fmt.Errorf("failed to find volume [%s], Err: %v", volumeID, err)
 	}
 
 	pxVolume := volumeInspectResponse.Volume
 	volID := pxVolume.Id
-	_, err = volDriver.Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: volID})
-	if err != nil {
-		logrus.Infof("Error %v", err)
-		err = fmt.Errorf(
-			"error while Delete %v because of: %v",
-			pxVolume.Id,
-			err,
-		)
-		logrus.Infof("Error returned: %v", err)
-		return err
+	if _, err := volDriver.Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: volID}); err != nil {
+		return fmt.Errorf("failed to delete volume [%s], Err: %v", pxVolume.Id, err)
 	}
 
-	logrus.Infof("successfully deleted Portworx volume %v ", volID)
+	log.Infof("Successfully deleted Portworx volume [%s]", volID)
 	return nil
+}
+
+func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVolumeSnapshotCreateResponse, error) {
+	volDriver := d.getVolDriver()
+	snapshotResponse, err := volDriver.SnapshotCreate(d.getContext(), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeID, Name: snapName})
+	if err != nil {
+		return nil, fmt.Errorf("Error while creating snapshot [%s] on the volume [%s], Err: %v", snapName, volumeID, err)
+	}
+	return snapshotResponse, nil
+
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
@@ -818,60 +826,40 @@ func (d *portworx) CleanupVolume(volumeName string) error {
 		if pxVolume.Locator.Name == volumeName {
 			// First unmount this volume at all mount paths...
 			for _, path := range pxVolume.AttachPath {
-				if _, err = d.getMountAttachManager().Unmount(d.getContext(), &api.SdkVolumeUnmountRequest{VolumeId: pxVolume.Id, MountPath: path}); err != nil {
-					err = fmt.Errorf(
-						"error while unmounting %v at %v because of: %v",
-						pxVolume.Id,
-						path,
-						err,
-					)
-					logrus.Infof("%v", err)
-					return err
+				if _, err := d.getMountAttachManager().Unmount(d.getContext(), &api.SdkVolumeUnmountRequest{VolumeId: pxVolume.Id, MountPath: path}); err != nil {
+					return fmt.Errorf("failed to unmount volume [%s] at %s, Err: %v", pxVolume.Id, path, err)
 				}
 			}
 
-			if _, err = d.mountAttachManager.Detach(d.getContext(), &api.SdkVolumeDetachRequest{VolumeId: pxVolume.Id}); err != nil {
-				err = fmt.Errorf(
-					"error while detaching %v because of: %v",
-					pxVolume.Id,
-					err,
-				)
-				logrus.Infof("%v", err)
-				return err
+			if _, err := d.mountAttachManager.Detach(d.getContext(), &api.SdkVolumeDetachRequest{VolumeId: pxVolume.Id}); err != nil {
+				return fmt.Errorf("failed to detach volume [%s], Err: %v", pxVolume.Id, err)
 			}
 
 			if _, err := volDriver.Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: pxVolume.Id}); err != nil {
-				err = fmt.Errorf(
-					"error while deleting %v because of: %v",
-					pxVolume.Id,
-					err,
-				)
-				logrus.Infof("%v", err)
-				return err
+				return fmt.Errorf("failed to delete volume [%s], Err: %v", pxVolume.Id, err)
 			}
 
-			logrus.Infof("successfully removed Portworx volume %v", volumeName)
-
+			log.Infof("Successfully removed Portworx volume [%s]", volumeName)
 			return nil
 		}
 	}
-
 	return nil
 }
 
-func (d *portworx) GetPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
+// GetDriverNode gets and returns PX node
+func (d *portworx) GetDriverNode(n *node.Node, nManager ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
 	if len(nManager) == 0 {
 		d.refreshEndpoint = true
 		nManager = []api.OpenStorageNodeClient{d.getNodeManager()}
 	}
-	logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
+	log.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 	nodeInspectResponse, err := nManager[0].Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
 		if isNodeNotFound(err) {
-			logrus.Warnf("node %s with ID %s not found, trying to update node ID...", n.Name, n.VolDriverNodeID)
+			log.Warnf("Node [%s] with ID [%s] is not found, trying to update node ID...", n.Name, n.VolDriverNodeID)
 			n, err = d.updateNodeID(n, nManager...)
 			if err == nil {
-				return d.GetPxNode(n, nManager...)
+				return d.GetDriverNode(n, nManager...)
 			}
 		}
 		return &api.StorageNode{Status: api.Status_STATUS_NONE}, err
@@ -885,29 +873,33 @@ func isNodeNotFound(err error) bool {
 	return err != nil && (st.Code() == codes.NotFound || (st.Code() == codes.Internal && strings.Contains(err.Error(), "Unable to locate node")))
 }
 
+// GetDriverVersion gets and return PX version from any first PX node
 func (d *portworx) GetDriverVersion() (string, error) {
 	nodeList := node.GetStorageDriverNodes()
+	if len(nodeList) == 0 {
+		return "", fmt.Errorf("failed to find any PX nodes")
+	}
 	pxNode := nodeList[0]
 	pxVersion, err := d.getPxVersionOnNode(pxNode)
 	if err != nil {
-		return "", fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+		return "", fmt.Errorf("failed to get PX version on node [%s], Err: %v", pxNode.Name, err)
 	}
 	return pxVersion, nil
 }
 
-func (d *portworx) GetPxVersionOnNode(n node.Node) (string, error) {
+// GetDriverVersionOnNode gets and return PX version from a given PX node
+func (d *portworx) GetDriverVersionOnNode(n node.Node) (string, error) {
 	pxVersion, err := d.getPxVersionOnNode(n)
 	if err != nil {
-		return "", fmt.Errorf("error on getting PX Version on node %s with err: %v", n.Name, err)
+		return "", fmt.Errorf("failed to get PX version on node [%s], Err: %v", n.Name, err)
 	}
 	return pxVersion, nil
 }
 
 func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorageNodeClient) (string, error) {
-
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("Getting PX Version on node [%s]", n.Name)
-		pxNode, err := d.GetPxNode(&n, nodeManager...)
+		log.Debugf("Getting PX version on node [%s]", n.Name)
+		pxNode, err := d.GetDriverNode(&n, nodeManager...)
 		if err != nil {
 			return "", false, err
 		}
@@ -922,11 +914,11 @@ func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorag
 	if err != nil {
 		return "", fmt.Errorf("Timeout after %v waiting to get PX Version", getNodeTimeout)
 	}
-	return fmt.Sprintf("%v", pxVersion), nil
+	return fmt.Sprintf("%s", pxVersion), nil
 }
 
 func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
-	pxNode, err := d.GetPxNode(&n)
+	pxNode, err := d.GetDriverNode(&n)
 	if err != nil {
 		return nil, err
 	}
@@ -939,15 +931,15 @@ func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
 }
 
 func (d *portworx) RecoverDriver(n node.Node) error {
-
 	if err := d.EnterMaintenance(n); err != nil {
 		return err
 	}
+	//wait for node to enter maintenance mode
+	time.Sleep(1 * time.Minute)
 
 	if err := d.ExitMaintenance(n); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -963,14 +955,14 @@ func (d *portworx) EnterMaintenance(n node.Node) error {
 		return err
 	}
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.GetPxNode(&n)
+		apiNode, err := d.GetDriverNode(&n)
 		if err != nil {
 			return nil, true, err
 		}
 		if apiNode.Status == api.Status_STATUS_MAINTENANCE {
 			return nil, false, nil
 		}
-		return nil, true, fmt.Errorf("node %v, Current status: %v, Expected: %v", n.Name, apiNode.Status, api.Status_STATUS_MAINTENANCE)
+		return nil, true, fmt.Errorf("node [%s], Current status: %v, Expected: %v", n.Name, apiNode.Status, api.Status_STATUS_MAINTENANCE)
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceWaitTimeout, defaultRetryInterval); err != nil {
@@ -995,21 +987,104 @@ func (d *portworx) ExitMaintenance(n node.Node) error {
 	}
 
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.GetPxNode(&n)
+		apiNode, err := d.GetDriverNode(&n)
 		if err != nil {
 			return nil, true, err
 		}
 		if apiNode.Status == api.Status_STATUS_OK {
 			return nil, false, nil
 		}
-		return nil, true, fmt.Errorf("Node %v is not up after exiting  Maintenance mode", n.Name)
+		return nil, true, fmt.Errorf("Node [%s] is not up after exiting Maintenance mode", n.Name)
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceWaitTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (d *portworx) EnterPoolMaintenance(n node.Node) error {
+	cmd := fmt.Sprintf("pxctl sv pool maintenance -e -y")
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error when entering pool maintenance on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("Enter pool maintenance %s", out)
+	return nil
+}
+
+func (d *portworx) ExitPoolMaintenance(n node.Node) error {
+	cmd := fmt.Sprintf("pxctl sv pool maintenance -x -y")
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error when exiting pool maintenance on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("Exit pool maintenance %s", out)
+	return nil
+}
+
+func (d *portworx) RecoverPool(n node.Node) error {
+
+	if err := d.EnterPoolMaintenance(n); err != nil {
+		return err
+	}
+
+	//wait for pool to enter maintenance mode
+	time.Sleep(1 * time.Minute)
+
+	if err := d.ExitPoolMaintenance(n); err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show | grep -e UUID -e Status", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         validatePXStartTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var status string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "UUID") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+		}
+		if strings.Contains(line, "Status") {
+			status = strings.Split(line, ":")[1]
+			status = strings.Trim(status, " ")
+		}
+		if poolId != "" && status != "" {
+			poolsData[poolId] = status
+			poolId = ""
+			status = ""
+		}
+	}
+	return poolsData, nil
 }
 
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
@@ -1037,7 +1112,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
 			return nil, true, &ErrFailedToInspectVolume{
 				ID: volumeName,
-				Cause: fmt.Sprintf("Volume has invalid status. Expected:%v Actual:%v",
+				Cause: fmt.Sprintf("Volume has invalid status. Expected: %v, Actual: %v",
 					api.VolumeStatus_VOLUME_STATUS_UP, vol.Status),
 			}
 		}
@@ -1074,7 +1149,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		if err := d.schedOps.ValidateSnapshot(params, parentResp.Volume); err != nil {
 			return &ErrFailedToInspectVolume{
 				ID:    volumeName,
-				Cause: fmt.Sprintf("Snapshot/Clone validation failed. %v", err),
+				Cause: fmt.Sprintf("Snapshot/Clone validation failed, Err: %v", err),
 			}
 		}
 		return nil
@@ -1089,7 +1164,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				Cause: fmt.Sprintf("Failed to validate device path [%s]", vol.DevicePath),
 			}
 		}
-		logrus.Debugf("Successfully validated the device path for a volume: %s", volumeName)
+		log.Debugf("Successfully validated the device path for a volume [%s]", volumeName)
 	}
 
 	// If CSI Topology key is set in param, validate volume attached on right node
@@ -1099,7 +1174,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			if err := d.ValidateVolumeTopology(vol, params); err != nil {
 				return &ErrFailedToInspectVolume{
 					ID:    volumeName,
-					Cause: fmt.Sprintf("Topology Inspect failed. %v", err),
+					Cause: fmt.Sprintf("Topology Inspect failed, Err: %v", err),
 				}
 			}
 		}
@@ -1113,7 +1188,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			if err != nil {
 				return &ErrFailedToInspectVolume{
 					ID:    volumeName,
-					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+					Cause: fmt.Sprintf("Failed to inspect ReplicaSet on node %s, Err: %v", n, err),
 				}
 			}
 
@@ -1126,7 +1201,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	if err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    volumeName,
-			Cause: fmt.Sprintf("failed to parse requested spec of volume. Err: %v", err),
+			Cause: fmt.Sprintf("failed to parse requested spec of volume, Err: %v", err),
 		}
 	}
 
@@ -1137,7 +1212,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	// TODO check why PX-Backup does not copy group params correctly after restore
 	checkVolSpecGroup := true
 	if _, ok := params["backupGroupCheckSkip"]; ok {
-		logrus.Infof("Skipping group/label check, specifically for PX-Backup")
+		log.Infof("Skipping group/label check, specifically for PX-Backup")
 		checkVolSpecGroup = false
 	}
 	for k, v := range params {
@@ -1213,7 +1288,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.Spec.IoProfile {
+			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
+				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
+				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
 			}
 		case api.SpecSize:
@@ -1224,7 +1301,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		}
 	}
 
-	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	log.Infof("Successfully inspected volume [%v] (%v)", vol.Locator.Name, vol.Id)
 	return nil
 }
 
@@ -1244,7 +1321,7 @@ func (d *portworx) ValidateVolumeTopology(vol *api.Volume, params map[string]str
 	}
 	return &ErrCsiTopologyMismatch{
 		VolName: vol.Locator.Name,
-		Cause:   fmt.Errorf("volume is not attched on nodes with topology label: [%v]", zone),
+		Cause:   fmt.Errorf("volume [%s] is not attched on nodes with topology label [%s]", vol.Id, zone),
 	}
 }
 
@@ -1258,10 +1335,8 @@ func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]s
 	}
 
 	volDriver := d.getVolDriver()
-	_, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "_snapshot"})
-	if err != nil {
-		logrus.WithError(err).Error("error when creating local snapshot")
-		return err
+	if _, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "_snapshot"}); err != nil {
+		return fmt.Errorf("failed to create local snapshot, Err: %v", err)
 	}
 	return nil
 }
@@ -1274,8 +1349,7 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 		TimeBeforeRetry: defaultRetryInterval,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("error when creating local snapshot using PXCTL")
-		return err
+		return fmt.Errorf("failed to create local snapshot using PXCTL, Err: %v", err)
 	}
 	return nil
 }
@@ -1291,8 +1365,7 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		logrus.WithError(err).Error("error when setting IO priority")
-		return err
+		return fmt.Errorf("failed setting IO priority, Err: %v", err)
 	}
 	return nil
 }
@@ -1316,8 +1389,7 @@ func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, s
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		logrus.WithError(err).Error("error when creating local snapshot using PXCTL")
-		return err
+		return fmt.Errorf("failed to create local snapshot using PXCTL, Err: %v", err)
 	}
 	return nil
 }
@@ -1335,8 +1407,7 @@ func (d *portworx) ValidateCreateCloudsnap(volumeName string, params map[string]
 	}
 	_, err := d.csbackupManager.Create(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupCreateRequest{VolumeId: volumeName})
 	if err != nil {
-		logrus.WithError(err).Error("error when creating cloudsnap")
-		return err
+		return fmt.Errorf("failed to create cloudsnap, Err: %v", err)
 	}
 	return nil
 }
@@ -1348,8 +1419,7 @@ func (d *portworx) ValidateCreateCloudsnapUsingPxctl(volumeName string) error {
 		TimeBeforeRetry: defaultRetryInterval,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("error when creating cloudSnapshot using PXCTL")
-		return err
+		return fmt.Errorf("failed to create cloudsnap using PXCTL, Err: %v", err)
 	}
 	return nil
 }
@@ -1363,8 +1433,7 @@ func (d *portworx) ValidateGetByteUsedForVolume(volumeName string, params map[st
 	}
 	statistic, err := d.volDriver.Stats(d.getContextWithToken(context.Background(), token), &api.SdkVolumeStatsRequest{VolumeId: volumeName})
 	if err != nil {
-		logrus.WithError(err).Error("error retrieving volume statistic")
-		return 0, err
+		return 0, fmt.Errorf("failed to retrieve volume statistic, Err: %v", err)
 	}
 	return statistic.GetStats().BytesUsed, nil
 }
@@ -1376,10 +1445,8 @@ func (d *portworx) ValidateCreateGroupSnapshotUsingPxctl() error {
 		TimeBeforeRetry: defaultRetryInterval,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("error when creating groupsnapshot using PXCTL")
-		return err
+		return fmt.Errorf("failed to create groupsnapshot using PXCTL, Err: %v", err)
 	}
-
 	return nil
 }
 
@@ -1390,15 +1457,12 @@ func (d *portworx) ValidateVolumeInPxctlList(volumeName string) error {
 		TimeBeforeRetry: defaultRetryInterval,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("error when listing volumes using PXCTL")
-		return err
+		return fmt.Errorf("failed to list volumes using PXCTL, Err: %v", err)
 	}
 
 	if !strings.Contains(out, volumeName) {
-		logrus.Errorf("volume name %s is not present in PXCTL volume list", volumeName)
-		return fmt.Errorf("volume name %s is not present in PXCTL volume list", volumeName)
+		return fmt.Errorf("volume name [%s] is not present in PXCTL volume list", volumeName)
 	}
-
 	return nil
 }
 
@@ -1418,14 +1482,14 @@ func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params ma
 
 	// check that replicationset is nil
 	if len(respVol.GetReplicaSets()) > 0 {
-		return fmt.Errorf("purevolumes %s has replicationset and it should not", volumeName)
+		return fmt.Errorf("purevolumes [%s] has replicationset and it should not", volumeName)
 	}
 	return nil
 }
 
 func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
-	logrus.Infof("Setting IO Throttle for %s\n", volumeName)
+	log.Infof("Setting IO Throttle for volume [%s]", volumeName)
 	volDriver := d.getVolDriver()
 	_, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 	if err != nil && errIsNotFound(err) {
@@ -1433,7 +1497,7 @@ func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps u
 	} else if err != nil {
 		return err
 	}
-	logrus.Debugf("Updating volume %s", volumeName)
+	log.Debugf("Updating volume [%s]", volumeName)
 	t := func() (interface{}, bool, error) {
 		volumeSpecUpdate := &api.VolumeSpecUpdate{
 			IoThrottleOpt: &api.VolumeSpecUpdate_IoThrottle{
@@ -1448,13 +1512,13 @@ func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps u
 			Spec:     volumeSpecUpdate,
 		})
 		if err != nil {
-			return nil, true, fmt.Errorf("volume not updated yet")
+			return nil, true, fmt.Errorf("volume [%s] not updated yet", volumeName)
 		}
-		logrus.Debug("Updated volume")
+		log.Debugf("Updated volume [%s]", volumeName)
 		return nil, false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, defaultRetryInterval); err != nil {
-		return fmt.Errorf("error in setting IOps %s", err)
+		return fmt.Errorf("failed to set set IOps for volumeName [%s], Err: %v", volumeName, err)
 	}
 	return nil
 }
@@ -1508,7 +1572,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		}
 		// TODO remove shared validation when PWX-6894 and PWX-8790 are fixed
 		if volumeInspectResponse.Volume != nil && !vol.Shared {
-			return nil, true, fmt.Errorf("Volume %v is not yet removed from the system", volumeName)
+			return nil, true, fmt.Errorf("Volume [%s] is not yet removed from the system", volumeName)
 		}
 		return nil, false, nil
 	}
@@ -1520,7 +1584,6 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 			Cause: err.Error(),
 		}
 	}
-
 	return nil
 }
 
@@ -1536,7 +1599,8 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	stopFn := func() error {
 		var err error
 		for _, n := range nodes {
-			logrus.Infof("Stopping volume driver on %s.", n.Name)
+
+			log.InfoD("Stopping volume driver on [%s].", n.Name)
 			if force {
 				pxCrashCmd := "sudo pkill -9 px-storage"
 				_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
@@ -1544,10 +1608,9 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 					TimeBeforeRetry: defaultRetryInterval,
 				})
 				if err != nil {
-					logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
-					return err
+					return fmt.Errorf("failed to run cmd [%s] on node [%s], Err: %v", pxCrashCmd, n.Name, err)
 				}
-				logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
+				log.Infof("Sleeping for %v for volume driver to go down", waitVolDriverToCrash)
 				time.Sleep(waitVolDriverToCrash)
 			} else {
 				err = d.schedOps.StopPxOnNode(n)
@@ -1561,10 +1624,10 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 						TimeBeforeRetry: defaultRetryInterval,
 					}})
 				if err != nil {
-					logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
+					log.Warnf("failed to run [systemctl stopcmd] on node [%s], Err: %v", n.Name, err)
 					return err
 				}
-				logrus.Infof("Sleeping for %v for volume driver to gracefully go down.", waitVolDriverToCrash/6)
+				log.Infof("Sleeping for %v for volume driver to gracefully go down.", waitVolDriverToCrash/6)
 				time.Sleep(waitVolDriverToCrash / 6)
 			}
 
@@ -1574,14 +1637,14 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
-//GetNodeForVolume returns the node on which volume is attached
+// GetNodeForVolume returns the node on which volume is attached
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	d.refreshEndpoint = true
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil {
-			logrus.Warnf("Failed to inspect volume: %s due to: %v", volumeName, err)
+			log.Warnf("Failed to inspect volume [%s], Err: %v", volumeName, err)
 			return nil, false, &ErrFailedToInspectVolume{
 				ID:    volumeName,
 				Cause: err.Error(),
@@ -1603,7 +1666,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 			return nil, false, nil
 		}
 
-		return nil, true, fmt.Errorf("volume: %s is not attached on any node", volumeName)
+		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volumeName)
 	}
 
 	n, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
@@ -1639,7 +1702,7 @@ func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
 
 // check all the possible attachment options (node ID or node IP)
 func (d *portworx) isVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
-	logrus.Debugf("Volume attached on: %s", volume.AttachedOn)
+	log.Debugf("Volume [%s]attached on [%s]", volume.Id, volume.AttachedOn)
 	if node.VolDriverNodeID == volume.AttachedOn {
 		return true, nil
 	}
@@ -1702,8 +1765,7 @@ func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 
 // getPxNodeByID return px node by provding node id
 func (d *portworx) getPxNodeByID(nodeID string) (*api.StorageNode, error) {
-
-	logrus.Infof("Getting the node using nodeId: [%s]", nodeID)
+	log.Infof("Getting the node using nodeId [%s]", nodeID)
 	var nodeManager api.OpenStorageNodeClient = d.getNodeManager()
 
 	nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: nodeID})
@@ -1717,10 +1779,9 @@ func (d *portworx) getPxNodeByID(nodeID string) (*api.StorageNode, error) {
 	return nodeResponse.Node, nil
 }
 
-func (d *portworx) GetPxNodes() ([]*api.StorageNode, error) {
-
+// GetDriverNodes gets and return list of PX nodes
+func (d *portworx) GetDriverNodes() ([]*api.StorageNode, error) {
 	return d.getPxNodes()
-
 }
 
 func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.StorageNode, error) {
@@ -1757,20 +1818,21 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 	return nodes, nil
 }
 
+// WaitDriverUpOnNode waits for PX to be up on a given node
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
-	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
+	log.Debugf("Waiting for PX node to be up [%s]", n.Name)
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("Getting node info for node: [%s]", n.Name)
+		log.Debugf("Getting node info for node [%s]", n.Name)
 		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
+				Cause: fmt.Sprintf("failed to get node info [%s], Err: %v", n.Name, err),
 			}
 		}
 
-		logrus.Debugf("checking PX status on node: %s", n.Name)
+		log.Debugf("Checking PX status on node [%s]", n.Name)
 		pxNode := nodeInspectResponse.Node
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
@@ -1779,14 +1841,14 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
-					Cause: fmt.Sprintf("failed to get pxctl status. cause: %v", err),
+					Cause: fmt.Sprintf("failed to get pxctl status on node [%s], Err: %v", n.Name, err),
 				}
 			}
 
 			if pxStatus != api.Status_STATUS_OK.String() {
 				return "", true, &ErrFailedToWaitForPx{
 					Node: n,
-					Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
+					Cause: fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
 						n.Name, api.Status_STATUS_OK, pxStatus),
 				}
 			}
@@ -1798,42 +1860,42 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			}
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
+				Cause: fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
 					n.Name, api.Status_STATUS_OK, pxNode.Status),
 			}
 		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but node %s status is not ok. Expected: %v Actual: %v",
+				Cause: fmt.Sprintf("PX cluster is usable but node [%s] status is not ok. Expected: %v Actual: %v",
 					n.Name, api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
 
-		logrus.Infof("px on node: %s is now up. status: %v", n.Name, pxNode.Status)
+		log.Infof("PX on node [%s] is now up. status: %v", n.Name, pxNode.Status)
 
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
-		return fmt.Errorf("PX failed to come up on node : [%s]. Error: [%v]", n.Name, err)
+		return fmt.Errorf("PX failed to come up on node [%s], Err: %v", n.Name, err)
 	}
 
 	// Check if PX pod is up
-	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
+	log.Debugf("Checking if PX pod is up on node [%s]", n.Name)
 	t = func() (interface{}, bool, error) {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("px pod is not ready on node: %s after %v", n.Name, timeout),
+				Cause: fmt.Sprintf("PX pod is not ready on node [%s] after %v", n.Name, timeout),
 			}
 		}
 		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
-		return fmt.Errorf("PX pod failed to come up on node : [%s]. Error: [%v]", n.Name, err)
+		return fmt.Errorf("PX pod failed to come up on node [%s], Err: %v", n.Name, err)
 	}
 
-	logrus.Debugf("px is fully operational on node: %s", n.Name)
+	log.Debugf("PX is fully operational on node [%s]", n.Name)
 	return nil
 }
 
@@ -1848,15 +1910,15 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 					Cause: "px is not yet down on node",
 				}
 			}
-			logrus.Warn(err.Error())
+			log.Warn(err.Error())
 		}
 
-		logrus.Infof("px on node %s is now down.", n.Name)
+		log.Infof("PX on node [%s] is now down.", n.Name)
 		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, validateNodeStopTimeout, waitDriverDownOnNodeRetryInterval); err != nil {
-		return fmt.Errorf("failed to stop PX on node : [%s]. Error: [%v]", n.Name, err)
+		return fmt.Errorf("failed to stop PX on node [%s], Err: %v", n.Name, err)
 	}
 
 	return nil
@@ -1887,17 +1949,17 @@ func (d *portworx) ValidateStoragePools() error {
 					if expectedSize != pool.TotalSize {
 						if pool.TotalSize > expectedSize {
 							// no need to retry with this state as pool is already at larger size than expected
-							err := fmt.Errorf("node: %s pool: %s was expanded to size: %d larger than expected: %d",
+							err := fmt.Errorf("node [%s], pool: %s was expanded to size: %d larger than expected: %d",
 								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
-							logrus.Errorf(err.Error())
+							log.Errorf(err.Error())
 							return "", false, err
 						}
 
-						logrus.Infof("node: %s, pool: %s, size is not as expected. Expected: %v, Actual: %v",
+						log.Infof("node [%s], pool: %s, size is not as expected. Expected: %v, Actual: %v",
 							n.Name, pool.Uuid, expectedSize, pool.TotalSize)
 						allDone = false
 					} else {
-						logrus.Infof("node: %s, pool: %s, size is as expected. Expected: %v",
+						log.Infof("node: [%s], pool: %s, size is as expected. Expected: %v",
 							n.Name, pool.Uuid, expectedSize)
 					}
 				}
@@ -1916,7 +1978,6 @@ func (d *portworx) ValidateStoragePools() error {
 }
 
 func (d *portworx) ValidateRebalanceJobs() error {
-
 	// start a task to check if all rebalance jobs are done
 	t := func() (interface{}, bool, error) {
 		jobListResp, err := d.storagePoolManager.EnumerateRebalanceJobs(d.getContext(), &api.SdkEnumerateRebalanceJobsRequest{})
@@ -1937,10 +1998,9 @@ func (d *portworx) ValidateRebalanceJobs() error {
 }
 
 func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
+	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
 
-	logrus.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
-
-	// start a task to check if pool  resize is done
+	// Start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
 		jobListResp, err := d.storagePoolManager.Resize(d.getContext(), &api.SdkStoragePoolResizeRequest{
 			Uuid: poolUUID,
@@ -1953,7 +2013,7 @@ func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStora
 			return nil, true, err
 		}
 		if jobListResp.String() != "" {
-			logrus.Debugf("Resize respone: %v", jobListResp.String())
+			log.Debugf("Resize respone: %v", jobListResp.String())
 		}
 		return nil, false, nil
 	}
@@ -1994,30 +2054,27 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 			}
 		}
 	}
-	logrus.Debugf("%s: expected sizes of storage pools: %+v", fn, expectedPoolSizes)
+	log.Debugf("%s: expected sizes of storage pools: %+v", fn, expectedPoolSizes)
 	return expectedPoolSizes, nil
 }
 
-//GetAutoFsTrimStatus get status of autofstrim
+// GetAutoFsTrimStatus get status of autofstrim
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
-
-	sdkport, _ := getSDKPort()
+	sdkport, _ := d.getSDKPort()
 	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
 	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
-		logrus.Errorf("Got error while setting the connection endpoint, Error: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to set the connection endpoint [%s], Err: %v", endpoint, err)
 
 	}
 	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
 
 	autoFstrimResp, err := d.autoFsTrimManager.AutoFSTrimStatus(d.getContext(), &api.SdkAutoFSTrimStatusRequest{})
 	if err != nil {
-		logrus.Errorf("Got error while getting auto fstrim status : %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get auto fstrim status, Err: %v", err)
 
 	}
-	logrus.Infof("Trim Status is [%v]", autoFstrimResp.GetTrimStatus())
+	log.Infof("Trim Status is [%v]", autoFstrimResp.GetTrimStatus())
 	return autoFstrimResp.GetTrimStatus(), nil
 }
 
@@ -2038,7 +2095,7 @@ func (d *portworx) pickAlternateClusterManager(n node.Node) (api.OpenStorageNode
 			ns, err := nodeManager.Enumerate(d.getContext(), &api.SdkNodeEnumerateRequest{})
 			if err != nil {
 				// if not responding in this addr, continue and pick another one, log the error
-				logrus.Warnf("failed to check node %s on addr %s. Cause: %v", n.Name, addr, err)
+				log.Warnf("failed to check node [%s] on addr [%s], Err: %v", n.Name, addr, err)
 				continue
 			}
 			if len(ns.NodeIds) != 0 {
@@ -2046,7 +2103,7 @@ func (d *portworx) pickAlternateClusterManager(n node.Node) (api.OpenStorageNode
 			}
 		}
 	}
-	return nil, fmt.Errorf("failed to get an alternate cluster manager for %s", n.Name)
+	return nil, fmt.Errorf("failed to get an alternate cluster manager for node [%s]", n.Name)
 }
 
 func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
@@ -2069,7 +2126,7 @@ func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
 	return false, nil
 }
 
-// IsPureVolume return true if volume is pure volume else false
+// IsPureVolume returns true if volume is pure volume else returns false
 func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
 	var proxySpec *api.ProxySpec
 	var err error
@@ -2082,13 +2139,12 @@ func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
 	}
 
 	if proxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK || proxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
-		logrus.Debugf("Volume is Pure volume: %s", volume.ID)
+		log.Debugf("Volume [%s] is Pure volume", volume.ID)
 		return true, nil
 	}
 
-	logrus.Debugf("Volume is not Pure Block volume: %s", volume.ID)
+	log.Debugf("Volume [%s] is not Pure Block volume", volume.ID)
 	return false, nil
-
 }
 
 // getProxySpecForAVolume return proxy spec for a pure volumes
@@ -2112,10 +2168,9 @@ func (d *portworx) getProxySpecForAVolume(volume *torpedovolume.Volume) (*api.Pr
 		}
 	}
 	return proxySpec.(*api.ProxySpec), nil
-
 }
 
-// IsPureFileVolume return true if volume is FB volume else false
+// IsPureFileVolume returns true if volume is FB volume else returns false
 func (d *portworx) IsPureFileVolume(volume *torpedovolume.Volume) (bool, error) {
 	var proxySpec *api.ProxySpec
 	var err error
@@ -2127,11 +2182,11 @@ func (d *portworx) IsPureFileVolume(volume *torpedovolume.Volume) (bool, error) 
 	}
 
 	if proxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
-		logrus.Debugf("Volume is Pure File volume: %s", volume.ID)
+		log.Debugf("Volume [%s] is Pure File volume", volume.ID)
 		return true, nil
 	}
 
-	logrus.Debugf("Volume is not Pure File volume: %s", volume.ID)
+	log.Debugf("Volume [%s] is not Pure File volume", volume.ID)
 	return false, nil
 }
 
@@ -2149,15 +2204,16 @@ func isAutopilotMatchStoragePoolLabels(apRule apapi.AutopilotRule, sPools []node
 	return false
 }
 
+// WaitForUpgrade waits for a given PX node to be upgraded to a specific version
 func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
+	log.Infof("Waiting for PX node [%s] to be upgraded to PX version [%s]", n.Name, tag)
 	t := func() (interface{}, bool, error) {
-
 		// filter out first 3 octets from the tag
 		matches := regexp.MustCompile(`^(\d+\.\d+\.\d+).*`).FindStringSubmatch(tag)
 		if len(matches) != 2 {
 			return nil, false, &ErrFailedToUpgradeVolumeDriver{
 				Version: fmt.Sprintf("%s", tag),
-				Cause:   fmt.Sprintf("failed to parse first 3 octets of version from new version tag: %s", tag),
+				Cause:   fmt.Sprintf("failed to parse first 3 octets of PX version from new version tag [%s]", tag),
 			}
 		}
 
@@ -2165,25 +2221,27 @@ func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
 		if err != nil {
 			return nil, true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("failed to get PX Version with error: %s", err),
+				Cause: fmt.Sprintf("failed to get PX version from node [%s], Err: %v", n.Name, err),
 			}
 		}
+
 		if !strings.HasPrefix(pxVersion, matches[1]) {
 			return nil, true, &ErrFailedToUpgradeVolumeDriver{
 				Version: fmt.Sprintf("%s", tag),
-				Cause: fmt.Sprintf("version on node %s is still %s. It was expected to begin with: %s",
+				Cause: fmt.Sprintf("PX version on node [%s] is still [%s]. It was expected to begin with [%s]",
 					n.VolDriverNodeID, pxVersion, matches[1]),
 			}
 		}
 
-		logrus.Infof("version on node %s is %s. Expected version is %s", n.VolDriverNodeID, pxVersion, matches[1])
-
+		log.Infof("PX version on node [%s] is [%s]. Expected version is [%s]", n.VolDriverNodeID, pxVersion, matches[1])
 		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, upgradeTimeout, upgradeRetryInterval); err != nil {
 		return err
 	}
+
+	log.Infof("PX node [%s] was successfully upgraded to PX version [%s]", n.Name, tag)
 	return nil
 }
 
@@ -2213,12 +2271,12 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 			Cause: fmt.Sprintf("Replication factor is not of type int64"),
 		}
 	}
-	logrus.Debugf("Replication factor for volume: %s is %d", vol.ID, replFactor)
+	log.Debugf("Replication factor for volume: %s is %d", vol.ID, replFactor)
 
 	return replFactor, nil
 }
 
-func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, waitForUpdateToFinish bool, opts ...torpedovolume.Options) error {
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, poolsToBeUpdated []string, waitForUpdateToFinish bool, opts ...torpedovolume.Options) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	var replicationUpdateTimeout time.Duration
 	if len(opts) > 0 {
@@ -2226,8 +2284,8 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 	} else {
 		replicationUpdateTimeout = validateReplicationUpdateTimeout
 	}
-	logrus.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
-	logrus.Infof("Setting ReplicationFactor to: %v", replFactor)
+	log.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
+	log.Infof("Setting ReplicationFactor to: %v", replFactor)
 
 	t := func() (interface{}, bool, error) {
 		volDriver := d.getVolDriver()
@@ -2241,9 +2299,12 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		replicaSet := &api.ReplicaSet{}
 		if len(nodesToBeUpdated) > 0 {
 			replicaSet = &api.ReplicaSet{Nodes: nodesToBeUpdated}
-			logrus.Infof("Updating ReplicaSet of node(s): %v", nodesToBeUpdated)
-		} else {
-			logrus.Infof("Nodes not passed, random node will be choosen")
+			log.Infof("Updating ReplicaSet of node(s): %v", nodesToBeUpdated)
+		}
+
+		if len(poolsToBeUpdated) > 0 {
+			replicaSet.PoolUuids = append(replicaSet.PoolUuids, poolsToBeUpdated...)
+			log.Infof("Updating ReplicaSet of pool: %v", poolsToBeUpdated)
 		}
 
 		volumeSpecUpdate := &api.VolumeSpecUpdate{
@@ -2341,7 +2402,7 @@ func (d *portworx) GetAggregationLevel(vol *torpedovolume.Volume) (int64, error)
 			Cause: fmt.Sprintf("Aggregation level is not of type uint32"),
 		}
 	}
-	logrus.Debugf("Aggregation level for volume: %s is %d", vol.ID, aggrLevel)
+	log.Debugf("Aggregation level for volume: %s is %d", vol.ID, aggrLevel)
 
 	return int64(aggrLevel), nil
 }
@@ -2373,7 +2434,7 @@ func (d *portworx) setDriver() error {
 				d.refreshEndpoint = false
 				return nil
 			}
-			logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
+			log.Warnf("testAndSetEndpoint failed for %v: %v", endpoint, err)
 		} else if err != nil && len(node.GetWorkerNodes()) == 0 {
 			return err
 		}
@@ -2384,11 +2445,11 @@ func (d *portworx) setDriver() error {
 	// and working driver if the endpoint we are hooked onto goes
 	// down
 	d.refreshEndpoint = true
-	logrus.Infof("Getting new driver.")
+	log.Infof("Getting new driver.")
 	for _, n := range node.GetWorkerNodes() {
 		for _, addr := range n.Addresses {
 			if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
-				logrus.Infof("testAndSetEndpoint failed for %v: %v", addr, err)
+				log.Warnf("testAndSetEndpoint failed for %v: %v", addr, err)
 				continue
 			}
 			return nil
@@ -2399,12 +2460,12 @@ func (d *portworx) setDriver() error {
 }
 
 func (d *portworx) testAndSetEndpointUsingService(endpoint string) error {
-	sdkPort, err := getSDKPort()
+	sdkPort, err := d.getSDKPort()
 	if err != nil {
 		return err
 	}
 
-	restPort, err := getRestPort()
+	restPort, err := d.getRestPort()
 	if err != nil {
 		return err
 	}
@@ -2413,12 +2474,12 @@ func (d *portworx) testAndSetEndpointUsingService(endpoint string) error {
 }
 
 func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
-	sdkPort, err := getSDKContainerPort()
+	sdkPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return err
 	}
 
-	restPort, err := getRestContainerPort()
+	restPort, err := d.getRestContainerPort()
 	if err != nil {
 		return err
 	}
@@ -2457,7 +2518,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	} else {
 		return err
 	}
-	logrus.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
+	log.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
 
 	return nil
 }
@@ -2503,7 +2564,7 @@ func (d *portworx) getContext() context.Context {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
-	logrus.Infof("Starting volume driver on %s.", n.Name)
+	log.InfoD("Starting volume driver on %s.", n.Name)
 	err := d.schedOps.StartPxOnNode(n)
 	if err != nil {
 		return err
@@ -2516,42 +2577,116 @@ func (d *portworx) StartDriver(n node.Node) error {
 		}})
 }
 
-func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
-	if endpointURL == "" {
-		return fmt.Errorf("no link supplied for upgrading driver")
-	}
+// UpgradeDriver upgrades PX to a specific version, based on a given Spec Generator URL
+func (d *portworx) UpgradeDriver(endpointVersion string) error {
 	if endpointVersion == "" {
-		return fmt.Errorf("no endpoint supplied for upgrading driver")
+		return fmt.Errorf("Unable to upgrade PX, the Spec Generator URL was not passed")
 	}
+	specGenUrl := endpointVersion
+	log.Infof("Upgrade PX using URL [%s]", specGenUrl)
 
-	if err := d.upgradePortworx(endpointURL, endpointVersion); err != nil {
-		return err
-	}
+	// If PX Operator based install, perform PX StorageCluster upgrade
+	isOperatorBasedInstall, _ := d.IsOperatorBasedInstall()
+	if isOperatorBasedInstall {
+		log.InfoD("Upgrading Portworx StorageCluster")
+		var k8sCore = core.Instance()
+		k8sVersion, err := k8sCore.GetVersion()
+		if err != nil {
+			return err
+		}
 
-	if enableStork {
-		if err := d.UpgradeStork(endpointURL, endpointVersion); err != nil {
+		imageList, err := optest.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
+		if err != nil {
+			return fmt.Errorf("failed to get image list from version URL [%s], Err: %v", specGenUrl, err)
+		}
+
+		// Get PX StorageCluster
+		cluster, err := d.GetDriver()
+		if err != nil {
+			return err
+		}
+
+		// Update PX Image and Env vars if needed
+		updateParamFunc := func(cluster *v1.StorageCluster) *v1.StorageCluster {
+			// Set oci-mon version
+			cluster.Spec.Image = imageList["version"]
+			var envVars []corev1.EnvVar
+			// Add Release Manifest URL incase of edge spec
+			envVars, err := configurePxReleaseManifestEnvVars(cluster.Spec.Env, specGenUrl)
+			if err != nil {
+				return nil
+			}
+			cluster.Spec.Env = envVars
+			return cluster
+		}
+
+		// Update and validate PX StorageCluster
+		if _, err := d.updateAndValidateStorageCluster(cluster, updateParamFunc, specGenUrl, false); err != nil {
 			return err
 		}
 	} else {
-		logrus.Infof("stork upgrade is disabled, skipping...")
+		log.InfoD("Upgrading Portworx DaemonSet")
+		if err := d.upgradePortworxDaemonset(specGenUrl); err != nil {
+			return err
+		}
+
+		log.InfoD("Upgrading Stork")
+		if err := d.UpgradeStork(specGenUrl); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
-func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
-	return driver_api.PerformTask(
-		func() error {
-			return d.schedOps.RestartPxOnNode(n)
-		},
-		triggerOpts)
+// configurePxReleaseManifestEnvVars configure PX Release Manifest URL for edge end production PX versions
+func configurePxReleaseManifestEnvVars(origEnvVarList []corev1.EnvVar, specGenURL string) ([]corev1.EnvVar, error) {
+	var newEnvVarList []corev1.EnvVar
+
+	// Set release manifest URL in case of edge-install.portworx.com
+	if strings.Contains(specGenURL, "edge") {
+		releaseManifestURL, err := optest.ConstructPxReleaseManifestURL(specGenURL)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add release manifest URL to Env Vars incase of edge URL
+		newEnvVarList = origEnvVarList
+		newEnvVarList = append(newEnvVarList, corev1.EnvVar{Name: pxReleaseManifestURLEnvVarName, Value: releaseManifestURL})
+	} else {
+		for _, env := range origEnvVarList {
+			// Skip adding or remove release manifest URL to Env Vars incase of production URL
+			if env.Name == pxReleaseManifestURLEnvVarName {
+				continue
+			}
+			newEnvVarList = append(newEnvVarList, env)
+		}
+	}
+	return newEnvVarList, nil
 }
 
-// upgradePortworx upgrades Portworx
-func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) error {
-	upgradeFileName := "/upgrade.sh"
-	fullEndpointURL := fmt.Sprintf("%s/%s/upgrade", endpointURL, endpointVersion)
+// getPxEndpointVersionFromUrl gets PX endpoint from the Spec Generator URL
+func getPxEndpointVersionFromUrl(specGenUrl string) (string, error) {
+	u, err := url.Parse(specGenUrl)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+	}
+	return strings.Trim(u.Path, "/"), nil
+}
 
-	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
+// upgradePortworxDaemonset upgrades Portworx daemonset based on a given Spec Generator URL
+func (d *portworx) upgradePortworxDaemonset(specGenUrl string) error {
+	upgradeFileName := "/upgrade.sh"
+
+	// Construct PX Upgrade URL
+	u, err := url.Parse(specGenUrl)
+	if err != nil {
+		fmt.Printf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+	}
+	u.Path = path.Join(u.Path, "upgrade")
+	fullEndpointURL := u.String()
+	log.Infof("Upgrading Portworx Daemonset using URL [%s]", fullEndpointURL)
+
 	// Getting upgrade script
 	if err := osutils.Wget(fullEndpointURL, upgradeFileName, true); err != nil {
 		return fmt.Errorf("%+v", err)
@@ -2566,7 +2701,7 @@ func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) e
 	pxNode := nodeList[0]
 	pxVersion, err := d.getPxVersionOnNode(pxNode)
 	if err != nil {
-		return fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+		return fmt.Errorf("error on getting PX Version on node [%s], Err: %v", pxNode.Name, err)
 	}
 	// If PX Version less than 2.x.x.x, then we have to add timeout parameter to avoid test failure
 	// more details in https://portworx.atlassian.net/browse/PWX-10108
@@ -2580,26 +2715,33 @@ func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) e
 	if err := osutils.Sh(cmdArgs); err != nil {
 		return err
 	}
+	log.Info("Portworx Daemonset was successfully upgraded")
 
-	logrus.Infof("Portworx cluster upgraded successfully")
+	// Get PX version from Spec Gen URL
+	pxEndpointVersion, err := getPxEndpointVersionFromUrl(specGenUrl)
+	if err != nil {
+		return err
+	}
+	log.Infof("Portworx version [%s] from URL [%s]", specGenUrl, pxEndpointVersion)
 
 	for _, n := range node.GetStorageDriverNodes() {
-		if err := d.WaitForUpgrade(n, endpointVersion); err != nil {
+		if err := d.WaitForUpgrade(n, pxEndpointVersion); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// UpgradeStork upgrades stork
-func (d *portworx) UpgradeStork(endpointURL string, endpointVersion string) error {
+// UpgradeStork upgrades Stork based on the given Spec Generator URL
+func (d *portworx) UpgradeStork(specGenUrl string) error {
 	storkSpecFileName := "/stork.yaml"
 	nodeList := node.GetStorageDriverNodes()
 	pxNode := nodeList[0]
 	pxVersion, err := d.getPxVersionOnNode(pxNode)
 	if err != nil {
-		return fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+		return fmt.Errorf("error on getting PX version on node [%s], Err: %v", pxNode.Name, err)
 	}
+
 	pVersion, err := version.NewVersion(pxVersion)
 	if err != nil {
 		return err
@@ -2609,19 +2751,29 @@ func (d *portworx) UpgradeStork(endpointURL string, endpointVersion string) erro
 	if err != nil {
 		return err
 	}
+
 	if pVersion.LessThan(storkMinVersion) {
-		logrus.Debugf("skipping stork upgrade as PX Version is less than %s", pxMinVersionForStorkUpgrade)
+		log.Debugf("Skipping Stork upgrade as PX version is less than [%s]", pxMinVersionForStorkUpgrade)
 		return nil
 	}
+
 	kubeVersion, err := d.schedOps.GetKubernetesVersion()
 	if err != nil {
 		return err
 	}
 
 	// Getting stork spec
-	URL := fmt.Sprintf("%s/%s?kbver=%s&comp=stork", endpointURL, endpointVersion, kubeVersion)
-	logrus.Debugf("getting stork spec from: %s", URL)
-	if err := osutils.Wget(URL, storkSpecFileName, true); err != nil {
+	u, err := url.Parse(specGenUrl)
+	if err != nil {
+		fmt.Printf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+	}
+	q := u.Query()
+	q.Set("kbver", kubeVersion.String())
+	q.Set("comp", "stork")
+	u.RawQuery = q.Encode()
+	storkSpecGenUrl := u.String()
+	log.Debugf("Getting Stork spec from URL [%s]", storkSpecGenUrl)
+	if err := osutils.Wget(storkSpecGenUrl, storkSpecFileName, true); err != nil {
 		return err
 	}
 
@@ -2630,13 +2782,22 @@ func (d *portworx) UpgradeStork(endpointURL string, endpointVersion string) erro
 		return err
 	}
 
-	// Apply stork spec
+	// Apply Stork spec
 	cmdArgs := []string{"apply", "-f", storkSpecFileName}
 	if err := osutils.Kubectl(cmdArgs); err != nil {
 		return err
 	}
 
+	log.Infof("Successfully applied Stork spec")
 	return nil
+}
+
+func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return driver_api.PerformTask(
+		func() error {
+			return d.schedOps.RestartPxOnNode(n)
+		},
+		triggerOpts)
 }
 
 // GetClusterPairingInfo returns cluster pair information
@@ -2644,11 +2805,10 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string) (map[stri
 	pairInfo := make(map[string]string)
 	pxNodes, err := d.schedOps.GetRemotePXNodes(kubeConfigPath)
 	if err != nil {
-		logrus.Errorf("err retrieving remote px nodes: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed retrieving remote PX nodes, Err: %v", err)
 	}
 	if len(pxNodes) == 0 {
-		return nil, fmt.Errorf("No PX Node found")
+		return nil, fmt.Errorf("No PX Nodes were found")
 	}
 
 	clusterPairManager, err := d.getClusterPairManagerByAddress(pxNodes[0].Addresses[0], token)
@@ -2663,12 +2823,12 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string) (map[stri
 		resp, err = clusterPairManager.GetToken(d.getContext(), &api.SdkClusterPairGetTokenRequest{})
 	}
 
-	logrus.Infof("Response for token: %v", resp.Result.Token)
+	log.Infof("Response for token: %v", resp.Result.Token)
 
 	// file up cluster pair info
 	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
 	pairInfo[tokenKey] = resp.Result.Token
-	pwxServicePort, err := getRestContainerPort()
+	pwxServicePort, err := d.getRestContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2678,43 +2838,41 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string) (map[stri
 }
 
 func (d *portworx) DecommissionNode(n *node.Node) error {
-
 	if err := k8sCore.AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to set label on node [%s], Err: %v", n.Name, err),
 		}
 	}
 
 	if err := d.EnterMaintenance(*n); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to enter maintenence mode on node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to enter maintenence mode on node [%s], Err: %v", n.Name, err),
 		}
 	}
 
-	logrus.Infof("Waiting for a minute for node to transistion to maintenece mode")
-
+	log.Infof("Waiting for a minute for node [%s] to transistion to maintenece mode", n.Name)
 	time.Sleep(1 * time.Minute)
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to inspect node: %v. Err: %v", nodeResp.Node, err),
+			Cause: fmt.Sprintf("Failed to inspect node [%s], Err: %v", nodeResp.Node, err),
 		}
 	}
-	logrus.Infof("removing node %v, Current status : %v", nodeResp.Node.Id, nodeResp.Node.Status)
+	log.Infof("Removing node [%s], Current status: %v", nodeResp.Node.Id, nodeResp.Node.Status)
 
 	t := func() (interface{}, bool, error) {
-		stNode, err := d.GetPxNode(n)
+		stNode, err := d.GetDriverNode(n)
 		if err != nil {
-			return false, true, fmt.Errorf("error getting node %v status", n.Name)
+			return false, true, fmt.Errorf("failed getting node [%s] status", n.Name)
 		}
 		if stNode.Status == api.Status_STATUS_MAINTENANCE {
 			return true, false, nil
 		}
-		return false, true, fmt.Errorf("waiting for node %s to be in maintenence mode,current Status: %v", n.Name, stNode.Status)
+		return false, true, fmt.Errorf("waiting for node [%s] to be in maintenence mode, current Status: %v", n.Name, stNode.Status)
 	}
 	_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 
@@ -2728,19 +2886,18 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	logrus.Infof(" %v: Node remove is pending. Waiting for it to complete", nodeResp.Node.Id)
+	log.Infof("Node [%s] remove is pending. Waiting for it to complete", nodeResp.Node.Id)
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
 	if err = node.UpdateNode(*n); err != nil {
-		return fmt.Errorf("failed to update node %s. Cause: %v", n.Name, err)
+		return fmt.Errorf("failed to update node [%s], Err: %v", n.Name, err)
 	}
 
-	// force refresh endpoint
+	// Force refresh endpoint
 	d.refreshEndpoint = true
 
 	t = func() (interface{}, bool, error) {
-
 		latestNodes, err := d.getPxNodes()
 		isNodeExist := false
 
@@ -2749,7 +2906,6 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 				Node:  n.Name,
 				Cause: err.Error(),
 			}
-
 		}
 
 		for _, latestNode := range latestNodes {
@@ -2762,10 +2918,9 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		if isNodeExist {
 			return nil, true, &ErrFailedToDecommissionNode{
 				Node:  n.Name,
-				Cause: fmt.Errorf("node %s still exist in the PX cluster", n.Name).Error(),
+				Cause: fmt.Errorf("node [%s] still exist in the PX cluster", n.Name).Error(),
 			}
 		}
-
 		return nil, false, nil
 	}
 
@@ -2774,18 +2929,15 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: fmt.Errorf("node %s still exist in the PX cluster", n.Name).Error(),
+			Cause: fmt.Errorf("node [%s] still exist in the PX cluster", n.Name).Error(),
 		}
-
 	}
 
-	logrus.Infof("Successfully removed node %v", nodeResp.Node.Id)
-
+	log.Infof("Successfully removed node [%s]", nodeResp.Node.Id)
 	return nil
 }
 
 func (d *portworx) RejoinNode(n *node.Node) error {
-
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -2795,22 +2947,22 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 	if _, err := d.nodeDriver.RunCommand(*n, fmt.Sprintf("%s sv node-wipe --all", d.getPxctlPath(*n)), opts); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Error while running node wipe: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed running node wipe on node [%s], Err: %v", n.Name, err),
 		}
 	}
-	logrus.Info("Node wipe is successfull")
+	log.Info("Node wipe is successfull")
 
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to set label on node [%s], Err: %v", n.Name, err),
 		}
 	}
 
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to set label on node [%s], Err: %v", n.Name, err),
 		}
 	}
 
@@ -2819,13 +2971,12 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 			Node:  n.Name,
 			Cause: err.Error(),
 		}
-
 	}
 
 	if err := k8sCore.UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to uncordon node [%s], Err: %v", n.Name, err),
 		}
 	}
 
@@ -2833,7 +2984,20 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 }
 
 func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
-	nodeResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+
+	f := func() (interface{}, bool, error) {
+		nodeResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+		if err != nil {
+			if isNodeNotFound(err) {
+				return nil, false, err
+			}
+			return nil, true, err
+		}
+
+		return nodeResponse, false, nil
+	}
+	resp, err := task.DoRetryWithTimeout(f, 5*time.Minute, 1*time.Minute)
+
 	if err != nil {
 		if isNodeNotFound(err) {
 			apiSt := api.Status_STATUS_NONE
@@ -2841,9 +3005,11 @@ func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 		}
 		return nil, &ErrFailedToGetNodeStatus{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to check node status: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to check status on node [%s], Err: %v", n.Name, err),
 		}
 	}
+	nodeResponse := resp.(*api.SdkNodeInspectResponse)
+
 	return &nodeResponse.Node.Status, nil
 }
 
@@ -2915,7 +3081,7 @@ func (d *portworx) getClusterPairManager() api.OpenStorageClusterPairClient {
 }
 
 func (d *portworx) getClusterPairManagerByAddress(addr, token string) (api.OpenStorageClusterPairClient, error) {
-	pxPort, err := getSDKContainerPort()
+	pxPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2946,7 +3112,7 @@ func (d *portworx) getAlertsManager() api.OpenStorageAlertsClient {
 }
 
 func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClient, error) {
-	pxPort, err := getSDKContainerPort()
+	pxPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2977,7 +3143,7 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	// we are removing using service endpoint because services would
 	// return a random node endpoint the service chooses and puts it in maintenance.
 	// this would fail the status check in `EnterMaintenanc` and `ExitMaintenance`
-	pxdRestPort, err := getRestContainerPort()
+	pxdRestPort, err := d.getRestContainerPort()
 	if err != nil {
 		return err
 	}
@@ -3011,9 +3177,9 @@ func (d *portworx) updateNodeID(n *node.Node, nManager ...api.OpenStorageNodeCli
 		return n, err
 	}
 	if err = d.updateNode(n, nodes); err != nil {
-		return &node.Node{}, fmt.Errorf("failed to update node ID for node %s. Cause: %v", n.Name, err)
+		return &node.Node{}, fmt.Errorf("failed to update node ID for node [%s], Err: %v", n.Name, err)
 	}
-	return n, fmt.Errorf("node %v not found in cluster", n)
+	return n, fmt.Errorf("failed to find node [%s] with ID [%s] in the cluster", n.Name, n.Id)
 }
 
 func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
@@ -3082,7 +3248,7 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snapv
 	snapVol, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: snap})
 	if err != nil {
 		// Restore object get deleted in case of cloudsnap
-		logrus.Warnf("Snapshot volume %v not found: %v", snap, err)
+		log.Warnf("Snapshot volume %v not found: %v", snap, err)
 		grepMsg = grepMsg + snap
 	} else {
 		grepMsg = grepMsg + snapVol.Volume.GetLocator().GetName() +
@@ -3145,7 +3311,7 @@ func hasIgnorePrefix(str string) bool {
 func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.MetadataNode, error) {
 	var err error
 	kvdbMembers := make(map[string]*torpedovolume.MetadataNode)
-	pxdRestPort, err := getRestPort()
+	pxdRestPort, err := d.getRestPort()
 
 	if err != nil {
 		return kvdbMembers, err
@@ -3156,8 +3322,8 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 	}
 
 	if err != nil || endpoint == "" {
-		logrus.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
-		pxdRestPort, err = getRestContainerPort()
+		log.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
+		pxdRestPort, err = d.getRestContainerPort()
 		if err != nil {
 			return kvdbMembers, err
 		}
@@ -3166,7 +3332,7 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 		url = netutil.MakeURL("http://", endpoint, int(pxdRestPort))
 	}
 	// TODO replace by sdk call whenever it is available
-	logrus.Infof("Url to call %v", url)
+	log.Infof("Url to call %v", url)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err
@@ -3200,7 +3366,7 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 }
 
 func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
-	logrus.Info("Validating diags uploaded on S3")
+	log.Info("Validating diags uploaded on S3")
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3213,7 +3379,7 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 	}
 
 	//// Check S3 bucket for diags
-	logrus.Debugf("Node name %s", n.Name)
+	log.Debugf("Node name [%s]", n.Name)
 	if diagsFile != "" {
 		d.DiagsFile = diagsFile
 	}
@@ -3227,34 +3393,33 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 		if time.Since(start) >= timeToTryPreviousFolder {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to get g3 objects, Err: %v", err)
 			}
 		} else {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to get g3 objects, Err: %v", err)
 			}
 		}
 		for _, obj := range objects {
 			if strings.Contains(obj.Key, d.DiagsFile) {
-				logrus.Debugf("File validated on S3")
-				logrus.Debugf("Object Name is %s", obj.Key)
-				logrus.Debugf("Object Created on %s", obj.LastModified.String())
-				logrus.Debugf("Object Size %d", obj.Size)
+				log.Debugf("File validated on S3")
+				log.Debugf("Object Name is %s", obj.Key)
+				log.Debugf("Object Created on %s", obj.LastModified.String())
+				log.Debugf("Object Size %d", obj.Size)
 				return nil
 
 			}
 		}
-		logrus.Debugf("File %s not found in S3 yet, re-trying in 30s", d.DiagsFile)
+		log.Debugf("File [%s] not found in S3 yet, re-trying in 30s", d.DiagsFile)
 		time.Sleep(30 * time.Second)
 	}
 }
 
 func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, error) {
-
 	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterIDFile), opts)
 	if err != nil {
-		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+		return "", fmt.Errorf("failed to get pxctl status, Err: %v", err)
 	}
 	return out, nil
 }
@@ -3264,7 +3429,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	var status api.Status
 
 	if !diagOps.PxStopped {
-		pxNode, err := d.GetPxNode(&n)
+		pxNode, err := d.GetDriverNode(&n)
 		if err != nil {
 			return err
 		}
@@ -3274,7 +3439,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		hostname = n.Name
 		status = api.Status_STATUS_OFFLINE
 	}
-
+	log.InfoD("Collecting diags on node [%s]", hostname)
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3283,16 +3448,16 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-		logrus.Infof("Collecting diags on node %v. Will skip validation", hostname)
+		log.Infof("Skip validate on node [%s] during diags collection", hostname)
 	}
 
 	if status == api.Status_STATUS_OFFLINE {
-		logrus.Debugf("Node %v is offline, collecting diags using pxctl", hostname)
+		log.Debugf("Node [%s] is offline, collecting diags using pxctl", hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f --output %s", d.getPxctlPath(n), config.OutputFile), opts)
+		out, err := d.GetPxctlCmdOutputConnectionOpts(n, fmt.Sprintf("sv diags -a -f --output %s", config.OutputFile), opts, true)
 		if err != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
+			return fmt.Errorf("failed to collect diags on node [%s], Err: %v %v", hostname, err, out)
 		}
 	} else {
 		diagsPort := 9014
@@ -3314,8 +3479,13 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			}
 		}
 
+		if len(d.token) > 0 {
+			config.Token = d.token
+			log.Infof("Added securty token: %s", config.Token)
+		}
+
 		url := netutil.MakeURL("http://", n.Addresses[0], diagsPort)
-		logrus.Infof("Diags server url: %s", url)
+		log.Infof("Diags server url [%s]", url)
 
 		c, err := client.NewClient(url, "", "")
 		if err != nil {
@@ -3325,7 +3495,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		resp := req.Do()
 		if resp.Error() != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v", hostname, resp.Error())
+			return fmt.Errorf("failed to collect diags on node [%s], Err: %v", hostname, resp.Error())
 		}
 	}
 
@@ -3333,25 +3503,28 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", hostname, err, out)
+			return fmt.Errorf("failed to locate diags on node [%s], Err: %v %v", hostname, err, out)
 		}
 
-		pxctlPath := d.getPxctlPath(n)
-		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status -j | jq .telemetrystatus.connection_status.error_code", pxctlPath), opts)
+		out, err = d.GetPxctlCmdOutputConnectionOpts(n, "status | egrep ^Telemetry:", opts, true)
 		if err != nil {
-			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
+			return fmt.Errorf("failed to get pxctl status on node [%s], Err: %v", n.Name, err)
 		}
-		logrus.Debugf("Status returned by pxctl %s", out)
-		if strings.TrimSpace(out) == telemetryNotEnabled {
-			logrus.Debugf("Telemetry not enabled in PX Status on node %s. Skipping validation on s3", n.Name)
+		telStatus, err := regexp.MatchString(`Telemetry:.*Healthy`, out)
+		if err != nil {
+			return fmt.Errorf("Failed to check telemetry status on node [%s], Err: %v", n.Name, err)
+		}
+		log.Debugf("Status returned by pxctl [%s]", out)
+		if !telStatus {
+			log.Debugf("Telemetry not enabled in PX Status on node [%s]. Skipping validation on s3", n.Name)
 			return nil
 		}
 
-		logrus.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
+		log.Infof("Found diags file [%s]", config.OutputFile)
 		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
 	}
 
-	logrus.Debugf("Successfully collected diags on node %v", hostname)
+	log.Debugf("Successfully collected diags on node [%s]", hostname)
 	return nil
 }
 
@@ -3359,7 +3532,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 	diagsMgr := d.getDiagsManager()
 	jobMgr := d.getDiagsJobManager()
 
-	pxNode, err := d.GetPxNode(&n)
+	pxNode, err := d.GetDriverNode(&n)
 	if err != nil {
 		return err
 	}
@@ -3407,7 +3580,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 
 	//TODO: Verify we can see the files once we return a filename
 	if diagOps.Validate {
-		pxNode, err := d.GetPxNode(&n)
+		pxNode, err := d.GetDriverNode(&n)
 		if err != nil {
 			return err
 		}
@@ -3422,26 +3595,40 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate async diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate async diags on node [%s], Err: %v %v", pxNode.Hostname, err, out)
 		}
 
-		logrus.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
+		log.Infof("Found diags file [%s]", config.OutputFile)
 		/*
-			logrus.Debug("Validating CCM health")
-			// Change to config package.
-			url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-			ccmresp, err := http.Get(url)
-			if err != nil {
-				return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-			}
+									logrus.Debug("Validating CCM health")
+									// Change to config package.
+									url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
+									ccmresp, err := http.Get(url)
+									if err != nil {
+										return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+									}
+						>>>>>>> 261b8e726 (Topic/aghodke/ptx 11487 (#872))
 
-			defer ccmresp.Body.Close()
+									defer ccmresp.Body.Close()
+			=======
+					logrus.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
+					/*
+						logrus.Debug("Validating CCM health")
+						// Change to config package.
+						url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
+						ccmresp, err := http.Get(url)
+						if err != nil {
+							return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+						}
+
+						defer ccmresp.Body.Close()
+			>>>>>>> master
 		*/
 		// Check S3 bucket for diags
 		// TODO: Waiting for S3 credentials.
 
 	}
-	logrus.Debugf("Successfully collected diags on node %v", n.Name)
+	log.Infof("Successfully collected diags on node [%s]", n.Name)
 	return nil
 }
 
@@ -3543,7 +3730,7 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 						if err != nil {
 							a, parseErr := resource.ParseQuantity(actionScaleSizeValue)
 							if parseErr != nil {
-								logrus.Errorf("Can't parse actionScaleSize: '%d', cause err: %s/%s", actionScaleSize, err, parseErr)
+								log.Errorf("Can't parse actionScaleSize: '%d', cause err: %s/%s", actionScaleSize, err, parseErr)
 								return 0, err
 							}
 							actionScaleSize = uint64(a.Value())
@@ -3598,7 +3785,10 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 			if doesConditionMatch(expectedMetricValue, conditionExpression) {
 				for _, ruleAction := range apRule.Spec.Actions {
 					if actionMaxSize, ok := ruleAction.Params[aututils.RuleMaxSize]; ok {
-						maxSize := parseMaxSize(actionMaxSize)
+						maxSize, err, parseErr := parseMaxSize(actionMaxSize)
+						if err != nil && parseErr != nil {
+							log.Errorf("Can't parse maxSize: '%d', cause err: %v/%v", maxSize, err, parseErr)
+						}
 						if calculatedTotalSize >= maxSize {
 							return calculatedTotalSize, 0, nil
 						}
@@ -3616,7 +3806,10 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 
 					// check if calculated size is more than maxsize
 					if actionMaxSize, ok := ruleAction.Params[aututils.RuleMaxSize]; ok {
-						maxSize := parseMaxSize(actionMaxSize)
+						maxSize, err, parseErr := parseMaxSize(actionMaxSize)
+						if err != nil && parseErr != nil {
+							log.Errorf("Can't parse maxSize: '%d', cause err: %v/%v", maxSize, err, parseErr)
+						}
 						if maxSize != 0 && calculatedTotalSize >= maxSize {
 							return maxSize, resizeCount, nil
 						}
@@ -3678,7 +3871,7 @@ func (d *portworx) SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) 
 		return fmt.Errorf("failed to set rt_opts, Err: %v %v", err, out)
 	}
 
-	logrus.Debugf("Successfully set rt_opts")
+	log.Debugf("Successfully set rt_opts")
 	return nil
 }
 
@@ -3696,16 +3889,50 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	for k, v := range clusterOpts {
 		clusteropts += k + "=" + v + " "
 	}
-
 	clusteropts = strings.TrimSuffix(clusteropts, " ")
-	cmd := fmt.Sprintf("%s cluster options update %s", d.getPxctlPath(n), clusteropts)
-
-	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	cmd := fmt.Sprintf(" cluster options update %s", clusteropts)
+	//Create context with admin token if PX security is enabled, later delete the token
+	out, err := d.GetPxctlCmdOutputConnectionOpts(n, cmd, opts, true)
 	if err != nil {
 		return fmt.Errorf("failed to set cluster options, Err: %v %v", err, out)
 	}
-	logrus.Debugf("Successfully updated Cluster Options")
+	log.Debugf("Successfully updated Cluster Options")
 	return nil
+}
+
+// GetClusterOpts get all cluster options
+func (d *portworx) GetClusterOpts(n node.Node, options []string) (map[string]string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+	cmd := fmt.Sprintf("%s cluster options list -j json", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pxctl cluster options on node [%s], Err: %v", n.Name, err)
+	}
+	var data = map[string]interface{}{}
+	err = json.Unmarshal([]byte(out), &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal pxctl cluster option on node [%s], Err: %v", n.Name, err)
+	}
+	sort.Strings(options)
+	var options_map = make(map[string]string)
+	//Values can be string, array or map
+	for key, val := range data {
+		index := sort.SearchStrings(options, key)
+		if index < len(options) && options[index] == key {
+			options_map[key] = fmt.Sprint(val)
+		}
+	}
+	//Make sure required options are available
+	for _, option := range options {
+		if _, ok := options_map[option]; !ok {
+			return nil, fmt.Errorf("Failed to find option: %v", option)
+		}
+	}
+	return options_map, nil
 }
 
 func (d *portworx) SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error {
@@ -3728,10 +3955,10 @@ func (d *portworx) SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[s
 
 	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 	if err != nil {
-		return fmt.Errorf("failed to set cluster options, Err: %v %v", err, out)
+		return fmt.Errorf("failed to set cluster options on node [%s], Err: %v %v", n.Name, err, out)
 	}
 
-	logrus.Debugf("Successfully updated Cluster Options")
+	log.Debugf("Successfully updated Cluster Options")
 	return nil
 }
 
@@ -3752,18 +3979,16 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 
 	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 	if err != nil {
-		return fmt.Errorf("failed to toggle call-home, Err: %v %v", err, out)
+		return fmt.Errorf("failed to toggle call-home on node [%s], Err: %v %v", n.Name, err, out)
 	}
 
-	logrus.Debugf("Successfully toggled call-home")
+	log.Debugf("Successfully toggled call-home")
 	return nil
 }
 
 func (d *portworx) IsOperatorBasedInstall() (bool, error) {
 	_, err := apiExtentions.GetCRD("storageclusters.core.libopenstorage.org", metav1.GetOptions{})
-
 	return err == nil, err
-
 }
 
 func (d *portworx) RunSecretsLogin(n node.Node, secretType string) error {
@@ -3785,90 +4010,112 @@ func (d *portworx) RunSecretsLogin(n node.Node, secretType string) error {
 	return nil
 }
 
-func (d *portworx) GetStorageCluster() (*v1.StorageCluster, error) {
-	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+// GetDriver gets PX cluster and returns it
+func (d *portworx) GetDriver() (*v1.StorageCluster, error) {
+	// TODO: Need to implement it for Daemonset deployment as well, right now its only for StorageCluster
+	stcList, err := pxOperator.ListStorageClusters(d.namespace)
 	if err != nil {
-		er := fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
-		logrus.Error(er.Error())
-		return nil, er
-
+		return nil, fmt.Errorf("Failed get StorageCluster list from namespace [%s], Err: %v", d.namespace, err)
 	}
 
-	stc, err := pxOperator.GetStorageCluster(pxOps.Items[0].Name, pxOps.Items[0].Namespace)
+	stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
 	if err != nil {
-		er := fmt.Errorf("error getting Storage Clusters [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
-		logrus.Error(er.Error())
-		return nil, er
+		return nil, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
 	}
+
 	return stc, nil
 }
 
-func (d *portworx) UpdateStorageClusterImage(imageName string) error {
-	stc, err := d.GetStorageCluster()
-	if err != nil {
-		return err
-	}
-	logrus.Infof("Current Storage Cluster Image: %v", stc.Spec.Image)
-	stc.Spec.Image = imageName
-	_, err = pxOperator.UpdateStorageCluster(stc)
-	if err != nil {
-		er := fmt.Errorf("error upgrading Storage Cluster [%v], Namespace: [%v], Err: %v", stc.Name, stc.Namespace, err.Error())
-		logrus.Error(er.Error())
-		return er
+// ValidateDriver takes endpointVersion and validates PX cluster and all components against it
+func (d *portworx) ValidateDriver(endpointVersion string, autoUpdateComponents bool) error {
+	// TODO: Currently this is only used for PX StorageCluster, need to implement some checks for DaemonSet as well in future
+	log.Infof("Validate PX and all components for URL [%s]", endpointVersion)
 
-	}
-	logrus.Infof("Storage Cluster Image updated to [%v]", imageName)
-	return nil
-
-}
-
-func (d *portworx) GetPXStorageCluster() (*v1.StorageCluster, error) {
-	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
-	if err != nil {
-		err = fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
-		logrus.Error(err.Error())
-		return nil, err
-
-	}
-
-	stc, err := pxOperator.GetStorageCluster(pxOps.Items[0].Name, pxOps.Items[0].Namespace)
-	if err != nil {
-		err = fmt.Errorf("error getting Storage Clusters [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
-		logrus.Error(err.Error())
-		return nil, err
-
-	}
-	return stc, nil
-
-}
-
-func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) error {
-	// check if storagecluster CRD is present, in case yes, we continue validation
-	// otherwise px was deployed using daemonset, we skip this validation
+	// Check if StorageCluster CRD is present, do StorageCluster validation, otherwise PX was deployed using daemonset, we skip this validation
 	_, err := apiExtentions.GetCRD("storageclusters.core.libopenstorage.org", metav1.GetOptions{})
 	if err != nil && !k8serrors.IsNotFound(err) {
-		return fmt.Errorf("failed to get storagecluster CRD. cause: %v", err)
+		return fmt.Errorf("failed to get StorageCluster CRD, Err: %v", err)
 	} else if k8serrors.IsNotFound(err) {
 		return nil
 	}
-	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+	stcList, err := pxOperator.ListStorageClusters(d.namespace)
 	if err != nil {
 		return err
 	}
-	if len(pxOps.Items) > 0 {
+
+	if len(stcList.Items) > 0 {
+		stc := stcList.Items[0]
+		var newStc *v1.StorageCluster
+		if autoUpdateComponents {
+			// Auto update components as PX Operator doesn't do it between K8S/OCP version upgrades
+			updateStrategy := v1.OnceAutoUpdate
+			stc.Spec.AutoUpdateComponents = &updateStrategy
+			newStc, err = pxOperator.UpdateStorageCluster(&stc)
+			if err != nil {
+				return err
+			}
+		}
+
 		k8sVersion, err := k8sCore.GetVersion()
 		if err != nil {
 			return err
 		}
-		imageList, err := getImageList(endpointURL, endpointVersion, k8sVersion.String())
+
+		imageList, err := optest.GetImagesFromVersionURL(endpointVersion, k8sVersion.String())
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get images from version URL [%s], Err: %v", endpointVersion, err)
 		}
-		if err = optest.ValidateStorageCluster(imageList, &pxOps.Items[0], validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+
+		// Validate StorageCluster
+		if err = optest.ValidateStorageCluster(imageList, newStc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
 			return err
 		}
 	}
+
+	log.Infof("Successfully validated PX and all components for URL [%s]", endpointVersion)
 	return nil
+}
+
+// updateAndValidateStorageCluster updates StorageCluster based on a given new StorageCluster spec and validates PX and all its components
+func (d *portworx) updateAndValidateStorageCluster(cluster *v1.StorageCluster, f func(*v1.StorageCluster) *v1.StorageCluster, specGenUrl string, autoUpdateComponents bool) (*v1.StorageCluster, error) {
+	liveCluster, err := pxOperator.GetStorageCluster(cluster.Name, cluster.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	newCluster := f(liveCluster)
+
+	stc, err := pxOperator.UpdateStorageCluster(newCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	k8sVersion, err := k8sCore.GetVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	imageList, err := optest.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
+	if err != nil {
+		return nil, err
+	}
+
+	if autoUpdateComponents {
+		if autoUpdateComponents {
+			// Auto update components as PX Operator doesn't do it between K8S/OCP version upgrades
+			updateStrategy := v1.OnceAutoUpdate
+			stc.Spec.AutoUpdateComponents = &updateStrategy
+			stc, err = pxOperator.UpdateStorageCluster(stc)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		return nil, err
+	}
+	return stc, nil
 }
 
 func (d *portworx) getPxctlPath(n node.Node) string {
@@ -3895,7 +4142,7 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 
 	pxctlPath := d.getPxctlPath(n)
 
-	// create context
+	// Create context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
 		if err != nil {
@@ -3914,7 +4161,7 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 		return "", fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
 	}
 
-	// delete context
+	// Delete context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
 		if err != nil {
@@ -3932,8 +4179,7 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 // GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
 func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
 	pxctlPath := d.getPxctlPath(n)
-
-	// create context
+	// Create context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
 		if err != nil {
@@ -3956,7 +4202,7 @@ func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, 
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
 
-	// delete context
+	// Delete context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
 		if err != nil {
@@ -3984,22 +4230,22 @@ func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.
 		expectedMetricValue > condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpGt
 }
 
-func parseMaxSize(maxSize string) uint64 {
+func parseMaxSize(maxSize string) (uint64, error, error) {
 	mSize, err := strconv.ParseUint(maxSize, 10, 64)
 	if err != nil {
 		a, parseErr := resource.ParseQuantity(maxSize)
 		if parseErr != nil {
-			logrus.Errorf("Can't parse maxSize: '%s', cause err: %s/%s", maxSize, err, parseErr)
-			return 0
+
+			return 0, err, parseErr
 		}
 		mSize = uint64(a.Value())
 	}
-	return mSize
+	return mSize, nil, nil
 }
 
 // getRestPort gets the service port for rest api, required when using service endpoint
-func getRestPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getRestPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -4012,8 +4258,8 @@ func getRestPort() (int32, error) {
 }
 
 // getRestContainerPort gets the rest api container port exposed in the node, required when using node ip
-func getRestContainerPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getRestContainerPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -4026,8 +4272,8 @@ func getRestContainerPort() (int32, error) {
 }
 
 // getSDKPort gets sdk service port, required when using service endpoint
-func getSDKPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getSDKPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -4040,8 +4286,8 @@ func getSDKPort() (int32, error) {
 }
 
 // getSDKContainerPort gets the sdk container port in the node, required when using node ip
-func getSDKContainerPort() (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
+func (d *portworx) getSDKContainerPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -4051,41 +4297,6 @@ func getSDKContainerPort() (int32, error) {
 		}
 	}
 	return 0, fmt.Errorf("px-sdk target port not found in service")
-}
-
-func getImageList(endpointURL, pxVersion, k8sVersion string) (map[string]string, error) {
-	var imageList map[string]string
-	client := &http.Client{}
-	u, err := url.Parse(endpointURL)
-	if err != nil {
-		return imageList, fmt.Errorf("failed to parse URL %s request. Cause: %v", endpointURL, err)
-	}
-	q := u.Query()
-	q.Set("kbver", k8sVersion)
-	u.RawQuery = q.Encode()
-	u.Path = path.Join(pxVersion, "version")
-	resp, err := client.Get(u.String())
-	if err != nil {
-		return imageList, fmt.Errorf("error while downloading version file from %s. Cause: %v", u.String(), err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return imageList, fmt.Errorf("error while reading response body. Cause: %v", err)
-	}
-	logrus.Debugf(string(body))
-
-	yamlMap := make(map[string]interface{})
-	if err := yaml.Unmarshal(body, &yamlMap); err != nil {
-		return imageList, err
-	}
-
-	imageList = make(map[string]string)
-	for key, value := range yamlMap["components"].(map[interface{}]interface{}) {
-		imageList[key.(string)] = value.(string)
-	}
-	imageList["version"] = fmt.Sprintf("portworx/oci-monitor:%s", yamlMap["version"].(string))
-	return imageList, nil
 }
 
 // GetNodeStats returns the node stats of the given node and an error if any
@@ -4098,7 +4309,7 @@ func (d *portworx) GetNodeStats(n node.Node) (map[string]map[string]int, error) 
 
 	pxctlPath := d.getPxctlPath(n)
 
-	// create context
+	// Create context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
 		if err != nil {
@@ -4117,7 +4328,7 @@ func (d *portworx) GetNodeStats(n node.Node) (map[string]map[string]int, error) 
 		return nil, fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
 	}
 
-	// delete context
+	// Delete context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
 		if err != nil {
@@ -4165,7 +4376,7 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 
 	pxctlPath := d.getPxctlPath(n)
 
-	// create context
+	// Create context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
 		if err != nil {
@@ -4177,7 +4388,7 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
-	logrus.Info(out)
+	log.Info(out)
 
 	var data interface{}
 	err = json.Unmarshal([]byte(out), &data)
@@ -4185,7 +4396,7 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 		return nil, fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
 	}
 
-	// delete context
+	// Delete context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
 		if err != nil {
@@ -4204,7 +4415,7 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 
 	}
 
-	logrus.Infof("trash vols: %v", trashcanVols)
+	log.Infof("trash vols: %v", trashcanVols)
 
 	return trashcanVols, nil
 }
@@ -4233,8 +4444,7 @@ func (d *portworx) GetNodePureVolumeAttachedCountMap() (map[string]int, error) {
 		Labels: pureLabelMap,
 	})
 	if err != nil {
-		logrus.Errorf("Failed to get pure volume list: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed to get pure volume list, Err: %v", err)
 	}
 
 	for _, volumeID := range volumes.GetVolumeIds() {
@@ -4257,14 +4467,14 @@ func (d *portworx) RecoverNode(n *node.Node) error {
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRecoverDriver{
 			Node:  *n,
-			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to set label on node [%s], Err: %v", n.Name, err),
 		}
 	}
 
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRecoverDriver{
 			Node:  *n,
-			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to set label on node [%s], Err: %v", n.Name, err),
 		}
 	}
 
@@ -4275,12 +4485,12 @@ func (d *portworx) RecoverNode(n *node.Node) error {
 		}
 
 	}
-	logrus.Infof("Waiting for Px to trigger restart on node %s", n.Name)
+	log.Infof("Waiting for PX to trigger restart on node [%s]", n.Name)
 	time.Sleep(1 * time.Minute)
 
-	stNode, err := d.GetPxNode(n)
+	stNode, err := d.GetDriverNode(n)
 	if err != nil {
-		logrus.Errorf("error getting px storage node for %v", n.Name)
+		log.Errorf("failed to get PX storage node [%s]", n.Name) // NOTE: Why are we not returning error here?
 	} else {
 		if stNode.Status == api.Status_STATUS_MAINTENANCE {
 			if err = d.ExitMaintenance(*n); err != nil {
@@ -4288,7 +4498,6 @@ func (d *portworx) RecoverNode(n *node.Node) error {
 					Node:  *n,
 					Cause: err.Error(),
 				}
-
 			}
 		}
 	}
@@ -4296,16 +4505,14 @@ func (d *portworx) RecoverNode(n *node.Node) error {
 	if err := k8sCore.UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToRecoverDriver{
 			Node:  *n,
-			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to uncordon node [%s], Err: %v", n.Name, err),
 		}
 	}
 	return nil
-
 }
 
 // AddBlockDrives add drives to the node using PXCTL
 func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
-
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         startDriverTimeout,
@@ -4313,7 +4520,7 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		},
 		Action: "start",
 	}
-	logrus.Infof("Getting available block drives on %s.", n.Name)
+	log.Infof("Getting available block drives on node [%s]", n.Name)
 	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
 
 	if err != nil {
@@ -4333,14 +4540,12 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 	}
 
 	if drivePath == nil || len(drivePath) == 0 {
-		logrus.Infof("Adding all the available drives")
+		log.Infof("Adding all the available drives")
 		for _, drv := range eligibleDrives {
-			err := addDrive(*n, drv.Path, d)
-			if err != nil {
+			if err := addDrive(*n, drv.Path, -1, d); err != nil {
 				return err
 			}
-			err = waitForAddDriveToComplete(*n, drv.Path, d)
-			if err != nil {
+			if err := waitForAddDriveToComplete(*n, drv.Path, d); err != nil {
 				return err
 			}
 		}
@@ -4348,97 +4553,203 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		for _, drvPath := range drivePath {
 			drv, ok := eligibleDrives[drvPath]
 			if ok {
-				err := addDrive(*n, drv.Path, d)
-				if err != nil {
+				if err := addDrive(*n, drv.Path, -1, d); err != nil {
 					return err
 				}
-				err = waitForAddDriveToComplete(*n, drv.Path, d)
-				if err != nil {
+				if err := waitForAddDriveToComplete(*n, drv.Path, d); err != nil {
 					return err
 				}
 			} else {
-				return fmt.Errorf("block drive path %s is not eligible or does not exist to perform drive add", drvPath)
+				return fmt.Errorf("block drive path [%s] is not eligible or does not exist to perform drive add", drvPath)
 			}
-
 		}
 	}
 	return nil
 }
 
-func addDrive(n node.Node, drivePath string, d *portworx) error {
+// GetPoolDrives returns the map of poolID and drive name
+func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	poolDrives := make(map[string][]string, 0)
+	log.Infof("Getting available block drives on node [%s]", n.Name)
+	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
 
-	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+	if err != nil {
+		return poolDrives, err
+	}
+	for _, v := range blockDrives {
+		labelsMap := v.Labels
+		if pm, ok := labelsMap["pxpool"]; ok {
+			poolDrives[pm] = append(poolDrives[pm], v.Path)
+		}
+	}
+	return poolDrives, nil
+}
+
+// AddCloudDrive add cloud drives to the node using PXCTL
+func (d *portworx) AddCloudDrive(n *node.Node, deviceSpec string, poolID int32) error {
+	log.Infof("Adding Cloud drive on node [%s] with spec [%s]", n.Name, deviceSpec)
+	return addDrive(*n, deviceSpec, poolID, d)
+}
+
+func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
+	driveAddFlag := fmt.Sprintf("-d %s", drivePath)
+
+	if strings.Contains(drivePath, "size") {
+		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
+		if poolID != -1 {
+			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
+		}
+	}
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
 	})
 	if err != nil {
-		err = fmt.Errorf("error when adding drive %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
-		return err
+		return fmt.Errorf("error when adding drive [%s] in node [%s] using PXCTL, Err: %v", drivePath, n.Name, err)
 	}
 	output := []byte(out)
 	var addDriveStatus statusJSON
 	err = json.Unmarshal(output, &addDriveStatus)
 	if err != nil {
-		return fmt.Errorf("ERROR of unmarshal adding drive: %v", err)
+		return fmt.Errorf("failed to unmarshal adding drive, Err: %v", err)
 	}
 	if &addDriveStatus == nil {
-		return fmt.Errorf("failed to add drive %s in node %s", drivePath, n.Name)
+		return fmt.Errorf("failed to add drive [%s] on node [%s]", drivePath, n.Name)
 	}
 
 	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) {
-		return fmt.Errorf("failed to add drive %s in node %s,AddDrive Status : %+v ", drivePath, n.Name, addDriveStatus)
+		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}
-	logrus.Infof("Added drive %s to node %s successfully", drivePath, n.Name)
-
+	log.InfoD("Added drive [%s] to node [%s] successfully", drivePath, n.Name)
 	return nil
-
 }
 
 func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error {
+	driveAddFlag := fmt.Sprintf("-d %s", drivePath)
+	var addDriveStatus statusJSON
 
-	waitCount := 180
+	if strings.Contains(drivePath, "size") {
+		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
+	}
 
-	for {
-		out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStatus, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
+	f := func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStatus, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 			Timeout:         crashDriverTimeout,
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 		if err != nil {
-
 			if strings.Contains(err.Error(), driveExitsStatus) {
-				return nil
+				return nil, false, nil
 			}
-			err = fmt.Errorf("error while getting add drive status for path %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
-			return err
+			return nil, false, fmt.Errorf("failed to add drive status for path [%s] on node [%s] using PXCTL, Err: %v", drivePath, n.Name, err)
 		}
 		output := []byte(out)
-		var addDriveStatus statusJSON
+
 		err = json.Unmarshal(output, &addDriveStatus)
 		if err != nil {
-			return fmt.Errorf("ERROR of unmarshal add drive status: %v", err)
+			return nil, true, fmt.Errorf("failed to unmarshal add drive status, Err: %v", err)
 		}
 		if &addDriveStatus == nil {
-			return fmt.Errorf("failed to get add drive status for path %s in node %s", drivePath, n.Name)
+			return nil, true, fmt.Errorf("failed to get add drive status for path [%s] on node [%s]", drivePath, n.Name)
 		}
-		logrus.Infof("Current add drive for path %s status : %+v", drivePath, addDriveStatus)
-
+		log.Infof("Current add drive for path [%s] status: %+v", drivePath, addDriveStatus)
 		if strings.Contains(addDriveStatus.Status, "Drive add: Storage rebalance complete") || strings.Contains(addDriveStatus.Status, "Device already exists") {
-			break
+			return nil, false, nil
 		}
-		if waitCount == 0 {
-			return fmt.Errorf("failed to  add drive for path %s in node %s, status: %+v", drivePath, n.Name, addDriveStatus)
-		}
-		waitCount--
-		logrus.Info("Waiting for 30 seconds to check the status again")
-		time.Sleep(60 * time.Second)
+		return nil, true, nil
 	}
-	logrus.Infof("Added drive %s to node %s completed", drivePath, n.Name)
-	return nil
 
+	_, err := task.DoRetryWithTimeout(f, 3*time.Hour, 2*time.Minute)
+	if err == nil {
+		log.Infof("Added drive [%s] to node [%s] successfully", drivePath, n.Name)
+		return nil
+	}
+	return fmt.Errorf("failed to  add drive for path [%s] on node [%s], Status: %+v, Err: %v", drivePath, n.Name, addDriveStatus, err)
+}
+
+// GetPoolsUsedSize returns map of pool id and current used size
+func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"Used\"'", d.getPxctlPath(*n))
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var usedSize string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		line = strings.Trim(line, ",")
+		if strings.Contains(line, "uuid") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+			poolId = strings.ReplaceAll(poolId, "\"", "")
+		}
+		if strings.Contains(line, "Used") {
+			usedSize = strings.Split(line, ":")[1]
+			usedSize = strings.Trim(usedSize, " ")
+			usedSize = strings.ReplaceAll(usedSize, "\"", "")
+		}
+		if poolId != "" && usedSize != "" {
+			poolsData[poolId] = usedSize
+			poolId = ""
+			usedSize = ""
+		}
+	}
+	return poolsData, nil
+}
+
+// GetRebalanceJobs returns the list of rebalance jobs
+func (d *portworx) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
+	jobsResp, err := d.storagePoolManager.EnumerateRebalanceJobs(d.getContext(), &api.SdkEnumerateRebalanceJobsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return jobsResp.GetJobs(), nil
+}
+
+// GetRebalanceJobStatus returns the rebalance jobs response
+func (d *portworx) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error) {
+	return d.storagePoolManager.GetRebalanceJobStatus(d.getContext(), &api.SdkGetRebalanceJobStatusRequest{Id: jobID})
 }
 
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &portworx{})
 	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
+}
+
+// UpdatePoolLabels updates the pool label for a particular pool id
+func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
+
+	labelsString := ""
+	for k, v := range labels {
+		labelsString += fmt.Sprintf("%s=%s,", k, v)
+	}
+	labelsString = strings.Trim(labelsString, ",")
+	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsString)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+
 }

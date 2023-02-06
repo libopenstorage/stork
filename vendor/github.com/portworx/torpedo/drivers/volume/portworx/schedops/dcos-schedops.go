@@ -9,7 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 )
 
-type dcosSchedOps struct{}
+type dcosSchedOps struct {
+}
 
 func (d *dcosSchedOps) GetKubernetesVersion() (*version.Info, error) {
 	return nil, nil
@@ -66,6 +67,11 @@ func (d *dcosSchedOps) ValidateSnapshot(volParams map[string]string, parent *api
 	return nil
 }
 
+func (d *dcosSchedOps) GetPortworxNamespace() (string, error) {
+	// TODO: Implement this
+	return "", nil
+}
+
 func (d *dcosSchedOps) GetServiceEndpoint() (string, error) {
 	// PX driver is accessed directly on agent nodes. There is no DC/OS level
 	// service endpoint which can be used to redirect the calls to PX driver
@@ -107,4 +113,7 @@ func (d *dcosSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 func init() {
 	d := &dcosSchedOps{}
 	Register("dcos", d)
+}
+
+func (d *dcosSchedOps) Init() {
 }
