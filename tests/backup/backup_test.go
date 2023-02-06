@@ -6392,6 +6392,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
 			}
 		})
+		time.Sleep(2 * time.Minute)
 		Step("Delete users", func() {
 			for userName := range userRoleMapping {
 				log.Info("This is the user : ", userName)
