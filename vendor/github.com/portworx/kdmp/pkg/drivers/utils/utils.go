@@ -383,10 +383,10 @@ func GetKopiaExecutorImageRegistryAndSecret(source, sourceNs string) (string, st
 func CreateNfsSecret(secretName string, backupLocation *storkapi.BackupLocation, namespace string, labels map[string]string) error {
 	credentialData := make(map[string][]byte)
 	credentialData["type"] = []byte(backupLocation.Location.Type)
-	credentialData["serverAddr"] = []byte(backupLocation.Location.NfsConfig.ServerAddr)
+	credentialData["serverAddr"] = []byte(backupLocation.Location.NFSConfig.ServerAddr)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["path"] = []byte(backupLocation.Location.Path)
-	credentialData["subPath"] = []byte(backupLocation.Location.NfsConfig.SubPath)
+	credentialData["subPath"] = []byte(backupLocation.Location.NFSConfig.SubPath)
 
 	err := CreateJobSecret(secretName, namespace, credentialData, labels)
 

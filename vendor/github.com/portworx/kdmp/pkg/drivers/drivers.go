@@ -51,7 +51,7 @@ const (
 	CertFileName         = "public.crt"
 	CertSecretName       = "tls-s3-cert"
 	CertMount            = "/etc/tls-s3-cert"
-	NfsMount             = "/mnt/nfs-target/"
+	NfsMount             = "/tmp/nfs-target/"
 )
 
 // Driver job options.

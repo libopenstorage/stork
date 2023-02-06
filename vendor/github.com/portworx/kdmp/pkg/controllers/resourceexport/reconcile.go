@@ -372,14 +372,14 @@ func startNfsResourceJob(
 			drivers.WithNfsImageExecutorSourceNs(re.Spec.TriggeredFromNs),
 			drivers.WithRestoreExport(re.Name),
 			drivers.WithJobNamespace(re.Namespace),
-			drivers.WithNfsServer(bl.Location.NfsConfig.ServerAddr),
+			drivers.WithNfsServer(bl.Location.NFSConfig.ServerAddr),
 			drivers.WithNfsExportDir(bl.Location.Path),
 			drivers.WithAppCRName(re.Spec.Source.Name),
 			drivers.WithAppCRNamespace(re.Spec.Source.Namespace),
 			drivers.WithNamespace(re.Namespace),
 			drivers.WithResoureBackupName(re.Name),
 			drivers.WithResoureBackupNamespace(re.Namespace),
-			drivers.WithNfsMountOption(bl.Location.NfsConfig.MountOption),
+			drivers.WithNfsMountOption(bl.Location.NFSConfig.MountOptions),
 		)
 	case drivers.NFSRestore:
 		return drv.StartJob(
@@ -387,14 +387,14 @@ func startNfsResourceJob(
 			drivers.WithNfsImageExecutorSourceNs(re.Spec.TriggeredFromNs),
 			drivers.WithRestoreExport(re.Name),
 			drivers.WithJobNamespace(re.Namespace),
-			drivers.WithNfsServer(bl.Location.NfsConfig.ServerAddr),
+			drivers.WithNfsServer(bl.Location.NFSConfig.ServerAddr),
 			drivers.WithNfsExportDir(bl.Location.Path),
 			drivers.WithAppCRName(re.Spec.Source.Name),
 			drivers.WithAppCRNamespace(re.Spec.Source.Namespace),
 			drivers.WithNamespace(re.Namespace),
 			drivers.WithResoureBackupName(re.Name),
 			drivers.WithResoureBackupNamespace(re.Namespace),
-			drivers.WithNfsMountOption(bl.Location.NfsConfig.MountOption),
+			drivers.WithNfsMountOption(bl.Location.NFSConfig.MountOptions),
 		)
 	}
 	return "", fmt.Errorf("unknown data transfer driver: %s", drv.Name())
