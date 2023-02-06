@@ -6375,6 +6375,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			for userName, role := range userRoleMapping {
 				log.Info(fmt.Sprintf("Deleting [%s] from the user : [%s]", role, userName))
 				err := backup.DeleteRoleFromUser(userName, role, "")
+				time.Sleep(5 * time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
