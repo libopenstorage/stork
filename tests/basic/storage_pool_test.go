@@ -1427,7 +1427,7 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 		}
 		drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
 		if err != nil {
-			fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+			return fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
 		}
 
 	outer:
@@ -4646,7 +4646,7 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 		kvdbMembers, err := Inst().V.GetKvdbMembers(stoageDriverNodes[0])
 		log.FailOnError(err, "Error getting KVDB members")
 
-		for k, _ := range kvdbMembers {
+		for k := range kvdbMembers {
 			kvdbNodesIDs = append(kvdbNodesIDs, k)
 		}
 		for _, n := range stoageDriverNodes {
