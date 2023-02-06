@@ -2,8 +2,9 @@ package portworx
 
 import (
 	"context"
+	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	"strconv"
 )
 
@@ -38,7 +39,7 @@ func (p *pure) ValidateCreateSnapshot(volumeName string, params map[string]strin
 	// This is the only difference: we have to name snapshots with hyphens, not underscores
 	_, err := volDriver.SnapshotCreate(p.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "-snapshot"})
 	if err != nil {
-		logrus.WithError(err).Error("error when creating local snapshot")
+		log.Errorf(fmt.Sprintf("error when creating local snapshot, Err: %v", err))
 		return err
 	}
 	return nil
