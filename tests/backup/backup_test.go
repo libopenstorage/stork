@@ -6353,7 +6353,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("autouser%v", i)
+				userName := fmt.Sprintf("atuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
@@ -6375,10 +6375,10 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			for userName, role := range userRoleMapping {
 				log.Info(fmt.Sprintf("Deleting [%s] from the user : [%s]", role, userName))
 				err := backup.DeleteRoleFromUser(userName, role, "")
-				time.Sleep(5 * time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
+		time.Sleep(time.Minute * 1)
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
 			for user, role := range userRoleMapping {
@@ -6392,7 +6392,6 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
 			}
 		})
-		time.Sleep(2 * time.Minute)
 		Step("Delete users", func() {
 			for userName := range userRoleMapping {
 				log.Info("This is the user : ", userName)
