@@ -54,6 +54,7 @@ type Node struct {
 	IsStorageDriverInstalled bool
 	IsMetadataNode           bool
 	StoragePools             []StoragePool
+	PxPodRestartCount        int32
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
@@ -101,6 +102,7 @@ type SystemctlOpts struct {
 // BlockDrive provide block drive properties
 type BlockDrive struct {
 	Path       string
+	Labels     map[string]string
 	MountPoint string
 	FSType     string
 	Size       string

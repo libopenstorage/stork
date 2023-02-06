@@ -6,8 +6,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -41,16 +40,8 @@ func (d *genericCsi) RefreshDriverEndpoints() error {
 	return nil
 }
 
-func (d *genericCsi) ValidateStorageCluster(endpointURL, endpointVersion string) error {
-	// TODO: Add implementation
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ValidateStorageCluster()",
-	}
-}
-
 func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	logrus.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+	log.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo, from
 	if storageProvisioner == string(CsiStorage) {

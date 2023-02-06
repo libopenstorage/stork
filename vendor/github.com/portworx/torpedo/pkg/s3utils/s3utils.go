@@ -2,6 +2,7 @@ package s3utils
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -49,13 +49,19 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	s3Region string, disableSSLBool bool) {
 
 	// TODO: add separate function to return cred object based on type
-	id = os.Getenv("AWS_ACCESS_KEY_ID")
+	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
+	if id == "" {
+		id = os.Getenv("AWS_ACCESS_KEY_ID")
+	}
 	expect(id).NotTo(equal(""),
-		"AWS_ACCESS_KEY_ID Environment variable should not be empty")
+		"S3_AWS_ACCESS_KEY_ID Environment variable should not be empty")
 
-	secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	secret = os.Getenv("S3_AWS_SECRET_ACCESS_KEY")
+	if secret == "" {
+		secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
 	expect(secret).NotTo(equal(""),
-		"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+		"S3_AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
 
 	endpoint = os.Getenv("S3_ENDPOINT")
 	expect(endpoint).NotTo(equal(""),
@@ -102,7 +108,7 @@ func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]
 	S3Client := s3.New(sess)
 	bucket := os.Getenv("DIAGS_BUCKET")
 	prefix := fmt.Sprintf("%s/%s/%s", clusterID, nodeName, GetTimeStamp(getPreviousFolder))
-	logrus.Debugf("Looking for files under folder %s", prefix)
+	log.Debugf("Looking for files under folder %s", prefix)
 	input := &s3.ListObjectsInput{
 		Bucket: &bucket,
 		Prefix: &prefix,
