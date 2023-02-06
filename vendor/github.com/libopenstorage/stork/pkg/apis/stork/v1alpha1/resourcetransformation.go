@@ -96,7 +96,7 @@ type TransformResourceInfo struct {
 }
 
 // ResourceTransformationSpec is used to update k8s resources
-//before migration/restore
+// before migration/restore
 type ResourceTransformationSpec struct {
 	Objects []TransformSpecs `json:"transformSpecs"`
 }

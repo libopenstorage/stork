@@ -83,7 +83,7 @@ func NewUnsupportedStorage() cloudops.Storage {
 	return &unsupportedStorage{}
 }
 
-func (u *unsupportedStorage) Create(template interface{}, labels map[string]string) (interface{}, error) {
+func (u *unsupportedStorage) Create(template interface{}, labels map[string]string, options map[string]string) (interface{}, error) {
 	return nil, &cloudops.ErrNotSupported{
 		Operation: "Create",
 	}
@@ -99,12 +99,12 @@ func (u *unsupportedStorage) Attach(volumeID string, options map[string]string) 
 		Operation: "Attach",
 	}
 }
-func (u *unsupportedStorage) Expand(volumeID string, newSizeInGiB uint64) (uint64, error) {
+func (u *unsupportedStorage) Expand(volumeID string, newSizeInGiB uint64, options map[string]string) (uint64, error) {
 	return 0, &cloudops.ErrNotSupported{
 		Operation: "Expand",
 	}
 }
-func (u *unsupportedStorage) Detach(volumeID string) error {
+func (u *unsupportedStorage) Detach(volumeID string, options map[string]string) error {
 	return &cloudops.ErrNotSupported{
 		Operation: "Detach",
 	}
@@ -114,7 +114,7 @@ func (u *unsupportedStorage) DetachFrom(volumeID, instanceID string) error {
 		Operation: "DetachFrom",
 	}
 }
-func (u *unsupportedStorage) Delete(volumeID string) error {
+func (u *unsupportedStorage) Delete(volumeID string, options map[string]string) error {
 	return &cloudops.ErrNotSupported{
 		Operation: "Delete",
 	}
@@ -135,7 +135,7 @@ func (u *unsupportedStorage) FreeDevices(blockDeviceMappings []interface{}, root
 		Operation: "FreeDevices",
 	}
 }
-func (u *unsupportedStorage) Inspect(volumeIds []*string) ([]interface{}, error) {
+func (u *unsupportedStorage) Inspect(volumeIds []*string, options map[string]string) ([]interface{}, error) {
 	return nil, &cloudops.ErrNotSupported{
 		Operation: "Inspect",
 	}
@@ -158,25 +158,25 @@ func (u *unsupportedStorage) DevicePath(volumeID string) (string, error) {
 		Operation: "DevicePath",
 	}
 }
-func (u *unsupportedStorage) Snapshot(volumeID string, readonly bool) (interface{}, error) {
+func (u *unsupportedStorage) Snapshot(volumeID string, readonly bool, options map[string]string) (interface{}, error) {
 	return nil, &cloudops.ErrNotSupported{
 		Operation: "Snapshot",
 	}
 }
 
-func (u *unsupportedStorage) SnapshotDelete(snapID string) error {
+func (u *unsupportedStorage) SnapshotDelete(snapID string, options map[string]string) error {
 	return &cloudops.ErrNotSupported{
 		Operation: "SnapshotDelete",
 	}
 }
 
-func (u *unsupportedStorage) ApplyTags(volumeID string, labels map[string]string) error {
+func (u *unsupportedStorage) ApplyTags(volumeID string, labels map[string]string, options map[string]string) error {
 	return &cloudops.ErrNotSupported{
 		Operation: "ApplyTags",
 	}
 }
 
-func (u *unsupportedStorage) RemoveTags(volumeID string, labels map[string]string) error {
+func (u *unsupportedStorage) RemoveTags(volumeID string, labels map[string]string, options map[string]string) error {
 	return &cloudops.ErrNotSupported{
 		Operation: "RemoveTags",
 	}

@@ -22,6 +22,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -42,6 +43,7 @@ const (
 	storkRuleAnnotationPrefix            = "stork.libopenstorage.org"
 	preSnapRuleAnnotationKey             = storkRuleAnnotationPrefix + "/pre-snapshot-rule"
 	postSnapRuleAnnotationKey            = storkRuleAnnotationPrefix + "/post-snapshot-rule"
+	StorkSnapshotNameLabel               = "stork.libopenstorage.org/snapshotName"
 )
 
 // NewSnapshotScheduleController creates a new instance of SnapshotScheduleController.
@@ -281,7 +283,12 @@ func (s *SnapshotScheduleController) shouldStartVolumeSnapshot(snapshotSchedule 
 }
 
 func (s *SnapshotScheduleController) formatVolumeSnapshotName(snapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) string {
-	return strings.Join([]string{snapshotSchedule.Name, strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
+	snapSuffix := strings.Join([]string{strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
+	scheduleName := snapshotSchedule.Name
+	if len(scheduleName) >= validation.LabelValueMaxLength-len(snapSuffix) {
+		scheduleName = scheduleName[:validation.LabelValueMaxLength-len(snapSuffix)-1]
+	}
+	return strings.Join([]string{scheduleName, strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
 }
 
 func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) error {
@@ -317,6 +324,10 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	}
 	snapshot.Metadata.Annotations[SnapshotScheduleNameAnnotation] = snapshotSchedule.Name
 	snapshot.Metadata.Annotations[SnapshotSchedulePolicyTypeAnnotation] = string(policyType)
+	if snapshot.Metadata.Labels == nil {
+		snapshot.Metadata.Labels = make(map[string]string)
+	}
+	snapshot.Metadata.Labels[StorkSnapshotNameLabel] = snapshotName
 	if snapshotSchedule.Spec.PreExecRule != "" {
 		_, err := storkops.Instance().GetRule(snapshotSchedule.Spec.PreExecRule, snapshotSchedule.Namespace)
 		if err != nil {
@@ -378,6 +389,7 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 			return err
 		}
 		numReady := 0
+		numError := 0
 
 		// Keep up to retainNum successful snapshot statuses and all failed snapshots
 		// until there is a successful one
@@ -390,9 +402,15 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 						deleteBefore = numVolumeSnapshots - i
 						break
 					}
+				} else if policyVolumeSnapshot[(numVolumeSnapshots-1-i)].Status == snapv1.VolumeSnapshotConditionError {
+					numError++
 				}
 			}
 			failedDeletes := make([]*stork_api.ScheduledVolumeSnapshotStatus, 0)
+			// If number of ready snapshots are greater than the retain value,
+			// delete all the snapshots before the deleteBefore index
+			// else as there are already snapshots more than the retain values
+			// try to delete the error snapshots more than the retain value
 			if numReady > int(retainNum) {
 				for i := 0; i < deleteBefore; i++ {
 					err := k8sextops.Instance().DeleteSnapshot(policyVolumeSnapshot[i].Name, snapshotSchedule.Namespace)
@@ -402,12 +420,39 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 						failedDeletes = append(failedDeletes, policyVolumeSnapshot[i])
 					}
 				}
+				// Remove all the ones we tried to delete above
+				snapshotSchedule.Status.Items[policyType] = policyVolumeSnapshot[deleteBefore:]
+				// And re-add the ones that failed so that we don't lose track
+				// of them
+				snapshotSchedule.Status.Items[policyType] = append(failedDeletes, snapshotSchedule.Status.Items[policyType]...)
+			} else if numError > 1 {
+				modPolicyVolumeSnapshot := make([]*stork_api.ScheduledVolumeSnapshotStatus, 0)
+				excessSnapshots := numVolumeSnapshots - int(retainNum)
+				includeIndex := 0
+				// Only going to loop till the last but one snapshot,
+				// we don't need to delete the latest snapshot which has just now been created but in error state
+				for i := 0; i < len(policyVolumeSnapshot)-1; i++ {
+					inList := true
+					if policyVolumeSnapshot[i].Status == snapv1.VolumeSnapshotConditionError {
+						log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete snapshot %s in error state as part of pruning", policyVolumeSnapshot[i].Name)
+						err := k8sextops.Instance().DeleteSnapshot(policyVolumeSnapshot[i].Name, snapshotSchedule.Namespace)
+						if err != nil && !errors.IsNotFound(err) {
+							log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error deleting %v: %v", policyVolumeSnapshot[i].Name, err)
+						} else {
+							excessSnapshots--
+							inList = false
+						}
+					}
+					if inList {
+						modPolicyVolumeSnapshot = append(modPolicyVolumeSnapshot, policyVolumeSnapshot[i])
+					}
+					includeIndex = i + 1
+					if excessSnapshots < 1 {
+						break
+					}
+				}
+				snapshotSchedule.Status.Items[policyType] = append(modPolicyVolumeSnapshot, policyVolumeSnapshot[includeIndex:]...)
 			}
-			// Remove all the ones we tried to delete above
-			snapshotSchedule.Status.Items[policyType] = policyVolumeSnapshot[deleteBefore:]
-			// And re-add the ones that failed so that we don't lose track
-			// of them
-			snapshotSchedule.Status.Items[policyType] = append(failedDeletes, snapshotSchedule.Status.Items[policyType]...)
 		}
 	}
 	return s.client.Update(context.TODO(), snapshotSchedule)

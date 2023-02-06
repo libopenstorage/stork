@@ -4,7 +4,7 @@ services:
   - docker
 language: go
 go:
-  - 1.16.x
+  - 1.19.x
 cache:
   directories:
     - $GOPATH/pkg/mod

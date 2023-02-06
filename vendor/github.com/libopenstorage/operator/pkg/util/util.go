@@ -8,8 +8,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-version"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,8 +41,12 @@ const (
 	MigrationPendingReason = "MigrationPending"
 	// MigrationCompletedReason is added to an event when the migration is completed.
 	MigrationCompletedReason = "MigrationCompleted"
-	// MigrationFailed is added to an event when the migration fails.
+	// MigrationFailedReason is added to an event when the migration fails.
 	MigrationFailedReason = "MigrationFailed"
+	// UnevenStorageNodesReason is added to an event when there are uneven number of storage nodes are labelled across zones
+	UnevenStorageNodesReason = "UnevenStorageNodes"
+	// AllStoragelessNodesReason is added to an event when all the nodes in the cluster is  labelled as storageless
+	AllStoragelessNodesReason = "AllStoragelessNodes"
 
 	// MigrationDryRunCompletedReason is added to an event when dry run is completed
 	MigrationDryRunCompletedReason = "MigrationDryRunCompleted"
@@ -49,6 +55,18 @@ const (
 
 	// DefaultImageRegistry is the default registry when no registry is provided
 	DefaultImageRegistry = "docker.io"
+
+	// StorkSchedulerName is the default scheduler for px-csi-ext pods
+	StorkSchedulerName = "stork"
+
+	// NodeTypeKey is the key of the label used to set node as storage or storageless
+	NodeTypeKey = "portworx.io/node-type"
+	// StorageNodeValue is the value for storage node
+	StorageNodeValue = "storage"
+	// StoragelessNodeValue is the value for storage node
+	StoragelessNodeValue = "storageless"
+	// StoragePartitioningEnvKey is the storage spec environment variable used to set storage/storageless node type
+	StoragePartitioningEnvKey = "ENABLE_ASG_STORAGE_PARTITIONING"
 )
 
 var (
@@ -59,6 +77,7 @@ var (
 		"index.docker.io":             true,
 		"registry-1.docker.io":        true,
 		"registry.connect.redhat.com": true,
+		"registry.k8s.io":             true,
 	}
 
 	// podTopologySpreadConstraintKeys is a list of topology keys considered for pod spread constraints
@@ -163,6 +182,27 @@ func GetImageMajorVersion(image string) int {
 	}
 
 	return ver.Segments()[0]
+}
+
+// HasResourcesChanged compares two resources, reflect.DeepEqual does not work due to the format
+// may change, for example CPU 0.1 and 100m should be the same.
+func HasResourcesChanged(r1, r2 v1.ResourceRequirements) bool {
+	return HasResourceListChanged(r1.Requests, r2.Requests) || HasResourceListChanged(r1.Limits, r2.Limits)
+}
+
+// HasResourceListChanged compares two resource lists.
+func HasResourceListChanged(l1, l2 v1.ResourceList) bool {
+	if len(l1) != len(l2) {
+		return true
+	}
+
+	for k, v := range l1 {
+		if v2, ok := l2[k]; !ok || v2.Cmp(v) != 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // HasPullSecretChanged checks if the imagePullSecret in the cluster is the only one
@@ -281,6 +321,21 @@ func HasNodeAffinityChanged(
 		return cluster.Spec.Placement.NodeAffinity != nil
 	}
 	return !reflect.DeepEqual(cluster.Spec.Placement.NodeAffinity, existingAffinity.NodeAffinity)
+}
+
+// HasSchedulerStateChanged checks if the stork has been enabled/disabled in the StorageCluster
+func HasSchedulerStateChanged(
+	cluster *corev1.StorageCluster,
+	previousSchedulerName string,
+) bool {
+	if cluster.Spec.Stork == nil {
+		return v1.DefaultSchedulerName != previousSchedulerName
+	}
+	currentSchedulerName := v1.DefaultSchedulerName
+	if cluster.Spec.Stork.Enabled {
+		currentSchedulerName = StorkSchedulerName
+	}
+	return currentSchedulerName != previousSchedulerName
 }
 
 // ExtractVolumesAndMounts returns a list of Kubernetes volumes and volume mounts from the
@@ -428,4 +483,67 @@ func GetTopologySpreadConstraintsFromNodes(
 		})
 	}
 	return constraints, nil
+}
+
+// UpdateStorageClusterCondition update condition based on source and type
+func UpdateStorageClusterCondition(
+	cluster *corev1.StorageCluster,
+	toUpdate *corev1.ClusterCondition,
+) {
+	if toUpdate == nil || toUpdate.Source == "" || toUpdate.Type == "" {
+		logrus.Warn("empty or invalid storage cluster condition provided")
+		return
+	}
+
+	// Search for condition by source and type
+	foundIndex := -1
+	for i, condition := range cluster.Status.Conditions {
+		if toUpdate.Source == condition.Source && toUpdate.Type == condition.Type {
+			foundIndex = i
+			// No update needed but populate the last transition time
+			if toUpdate.Status == condition.Status &&
+				toUpdate.Message == condition.Message {
+				toUpdate.LastTransitionTime = condition.LastTransitionTime
+				return
+			}
+			break
+		}
+	}
+
+	// Create a new condition or overwrite existing one
+	var sortedConditions []corev1.ClusterCondition
+	if foundIndex == -1 {
+		sortedConditions = make([]corev1.ClusterCondition, len(cluster.Status.Conditions)+1)
+	} else {
+		sortedConditions = make([]corev1.ClusterCondition, len(cluster.Status.Conditions))
+	}
+
+	if toUpdate.LastTransitionTime.Equal(&metav1.Time{}) {
+		// Set timestamp if not provided, truncate to second
+		toUpdate.LastTransitionTime = metav1.NewTime(time.Now().Truncate(time.Second))
+	}
+	sortedConditions[0] = *toUpdate.DeepCopy()
+
+	for index, indexSorted := 0, 1; index < len(cluster.Status.Conditions) && indexSorted < len(sortedConditions); index++ {
+		if index == foundIndex {
+			continue
+		}
+		sortedConditions[indexSorted] = cluster.Status.Conditions[index]
+		indexSorted++
+	}
+	cluster.Status.Conditions = sortedConditions
+}
+
+// GetStorageClusterCondition returns the condition based on source and type
+func GetStorageClusterCondition(
+	cluster *corev1.StorageCluster,
+	conditionSource string,
+	conditionType corev1.ClusterConditionType,
+) *corev1.ClusterCondition {
+	for _, condition := range cluster.Status.Conditions {
+		if condition.Source == conditionSource && condition.Type == conditionType {
+			return condition.DeepCopy()
+		}
+	}
+	return nil
 }

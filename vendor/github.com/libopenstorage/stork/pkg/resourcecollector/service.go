@@ -63,7 +63,8 @@ func (r *ResourceCollector) updateService(
 		return err
 	}
 
-	if service.Spec.Type == v1.ServiceTypeNodePort {
+	if service.Spec.Type == v1.ServiceTypeNodePort ||
+		service.Spec.Type == v1.ServiceTypeLoadBalancer {
 		for i := range service.Spec.Ports {
 			service.Spec.Ports[i].NodePort = 0
 		}

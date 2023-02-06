@@ -45,11 +45,11 @@ type WarningHandlerOptions struct {
 	// AllowDuplicateLogs does not deduplicate the to-be
 	// logged surfaced warnings messages. See
 	// log.WarningHandlerOptions for considerations
-	// regarding deuplication
+	// regarding deduplication
 	AllowDuplicateLogs bool
 }
 
-// Options are creation options for a Client
+// Options are creation options for a Client.
 type Options struct {
 	// Scheme, if provided, will be used to map go structs to GroupVersionKinds
 	Scheme *runtime.Scheme
@@ -88,13 +88,12 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		// is log.KubeAPIWarningLogger with deduplication enabled.
 		// See log.KubeAPIWarningLoggerOptions for considerations
 		// regarding deduplication.
-		rest.SetDefaultWarningHandler(
-			log.NewKubeAPIWarningLogger(
-				logger,
-				log.KubeAPIWarningLoggerOptions{
-					Deduplicate: !options.Opts.AllowDuplicateLogs,
-				},
-			),
+		config = rest.CopyConfig(config)
+		config.WarningHandler = log.NewKubeAPIWarningLogger(
+			logger,
+			log.KubeAPIWarningLoggerOptions{
+				Deduplicate: !options.Opts.AllowDuplicateLogs,
+			},
 		)
 	}
 
@@ -178,7 +177,7 @@ func (c *client) RESTMapper() meta.RESTMapper {
 	return c.mapper
 }
 
-// Create implements client.Client
+// Create implements client.Client.
 func (c *client) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	switch obj.(type) {
 	case *unstructured.Unstructured:
@@ -190,7 +189,7 @@ func (c *client) Create(ctx context.Context, obj Object, opts ...CreateOption) e
 	}
 }
 
-// Update implements client.Client
+// Update implements client.Client.
 func (c *client) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
@@ -203,7 +202,7 @@ func (c *client) Update(ctx context.Context, obj Object, opts ...UpdateOption) e
 	}
 }
 
-// Delete implements client.Client
+// Delete implements client.Client.
 func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
 	switch obj.(type) {
 	case *unstructured.Unstructured:
@@ -215,7 +214,7 @@ func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) e
 	}
 }
 
-// DeleteAllOf implements client.Client
+// DeleteAllOf implements client.Client.
 func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
 	switch obj.(type) {
 	case *unstructured.Unstructured:
@@ -227,7 +226,7 @@ func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllO
 	}
 }
 
-// Patch implements client.Client
+// Patch implements client.Client.
 func (c *client) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
@@ -240,21 +239,21 @@ func (c *client) Patch(ctx context.Context, obj Object, patch Patch, opts ...Pat
 	}
 }
 
-// Get implements client.Client
-func (c *client) Get(ctx context.Context, key ObjectKey, obj Object) error {
+// Get implements client.Client.
+func (c *client) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
 	switch obj.(type) {
 	case *unstructured.Unstructured:
-		return c.unstructuredClient.Get(ctx, key, obj)
+		return c.unstructuredClient.Get(ctx, key, obj, opts...)
 	case *metav1.PartialObjectMetadata:
 		// Metadata only object should always preserve the GVK coming in from the caller.
 		defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
-		return c.metadataClient.Get(ctx, key, obj)
+		return c.metadataClient.Get(ctx, key, obj, opts...)
 	default:
-		return c.typedClient.Get(ctx, key, obj)
+		return c.typedClient.Get(ctx, key, obj, opts...)
 	}
 }
 
-// List implements client.Client
+// List implements client.Client.
 func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
 	switch x := obj.(type) {
 	case *unstructured.UnstructuredList:
@@ -288,20 +287,20 @@ func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) e
 	}
 }
 
-// Status implements client.StatusClient
+// Status implements client.StatusClient.
 func (c *client) Status() StatusWriter {
 	return &statusWriter{client: c}
 }
 
-// statusWriter is client.StatusWriter that writes status subresource
+// statusWriter is client.StatusWriter that writes status subresource.
 type statusWriter struct {
 	client *client
 }
 
-// ensure statusWriter implements client.StatusWriter
+// ensure statusWriter implements client.StatusWriter.
 var _ StatusWriter = &statusWriter{}
 
-// Update implements client.StatusWriter
+// Update implements client.StatusWriter.
 func (sw *statusWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
@@ -314,7 +313,7 @@ func (sw *statusWriter) Update(ctx context.Context, obj Object, opts ...UpdateOp
 	}
 }
 
-// Patch implements client.Client
+// Patch implements client.Client.
 func (sw *statusWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {

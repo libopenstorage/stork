@@ -2,6 +2,8 @@ package resourcecollector
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
+	"github.com/sirupsen/logrus"
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -10,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 func (r *ResourceCollector) pvToBeCollected(
@@ -90,9 +93,44 @@ func (r *ResourceCollector) pvToBeCollected(
 func (r *ResourceCollector) preparePVResourceForCollection(
 	object runtime.Unstructured,
 ) error {
+	var pv v1.PersistentVolume
+	var currentSc string
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pv); err != nil {
+		return err
+	}
+	// Some time pv spec does not contains the storage class.
+	// In that case, we will get it from pvc spec.
+	if len(pv.Spec.StorageClassName) == 0 {
+		pvc, err := r.coreOps.GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+		if err != nil {
+			return err
+		}
+		currentSc, err = utils.GetStorageClassNameForPVC(pvc)
+		if err != nil {
+			// Not returning error as there might be some cases, where PVC might not have storage class.
+			// A case where a PV can be manually bind mounted to a volume ( backend storage volume)
+			logrus.Debugf("preparePVResourceForCollection: failed to fetch storage class from PVC %v: %v", pv.Spec.ClaimRef.Name, err)
+		}
+	} else {
+		currentSc = pv.Spec.StorageClassName
+	}
 	err := unstructured.SetNestedField(object.UnstructuredContent(), nil, "spec", "claimRef")
 	if err != nil {
 		return err
+	}
+	if len(currentSc) > 0 {
+		annotations, found, err := unstructured.NestedStringMap(object.UnstructuredContent(), "metadata", "annotations")
+		if err != nil {
+			return err
+		}
+		if !found {
+			annotations = make(map[string]string)
+		}
+		annotations[CurrentStorageClassName] = currentSc
+		if err := unstructured.SetNestedStringMap(object.UnstructuredContent(), annotations, "metadata", "annotations"); err != nil {
+			return err
+		}
+		object.SetUnstructuredContent(object.UnstructuredContent())
 	}
 	return unstructured.SetNestedField(object.UnstructuredContent(), "", "spec", "storageClassName")
 }
@@ -103,6 +141,8 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	object runtime.Unstructured,
 	pvNameMappings map[string]string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
+	storageClassMappings map[string]string,
+	namespaceMappings map[string]string,
 ) (bool, error) {
 	var updatedName string
 	var present bool
@@ -119,6 +159,30 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	if updatedName, present = pvNameMappings[pv.Name]; !present {
 		return true, nil
 	}
+	// get the storage class name from the CurrentStorageClassName annotation
+	var oldSc string
+	var exists bool
+	var newSc string
+	if pv.Annotations != nil {
+		if val, ok := pv.Annotations[CurrentStorageClassName]; ok {
+			oldSc = val
+			// delete CurrentStorageClassName annotation before applying
+			delete(pv.Annotations, CurrentStorageClassName)
+			if newSc, exists = storageClassMappings[oldSc]; exists && len(newSc) > 0 {
+				// If the oldSc is present the storageclass map, get the new sc and update it in the pv spec
+				// Get the provisioner name from the new sc and update it
+				storageClass, err := r.storageOps.GetStorageClass(newSc)
+				if err != nil {
+					return false, fmt.Errorf("failed in getting the storage class [%v]: %v", newSc, err)
+				}
+				pv.Annotations[k8shelper.AnnDynamicallyProvisioned] = storageClass.Provisioner
+				pv.Spec.StorageClassName = newSc
+			} else {
+				// if the storageclass map does not have the oldSc name, update the PV spec with the oldSC itself before applying.
+				pv.Spec.StorageClassName = oldSc
+			}
+		}
+	}
 
 	pv.Name = updatedName
 	var driverName string
@@ -130,6 +194,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 			break
 		}
 	}
+
 	// in case of non-restore call make sure resourcecollector
 	// checks proper driver by looking at pv name
 	if driverName == "" {
@@ -144,7 +209,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	if err != nil {
 		return false, err
 	}
-	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo)
+	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo, namespaceMappings)
 	if err != nil {
 		return false, err
 	}

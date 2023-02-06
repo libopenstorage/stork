@@ -141,6 +141,9 @@ type Driver interface {
 	// GetPodPatches returns driver-specific json patches to mutate the pod in a webhook
 	GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error)
 
+	// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
+	GetCSIPodPrefix() (string, error)
+
 	// GroupSnapshotPluginInterface Interface for group snapshots
 	GroupSnapshotPluginInterface
 	// ClusterPairPluginInterface Interface to pair clusters
@@ -192,7 +195,7 @@ type MigratePluginInterface interface {
 	CancelMigration(*storkapi.Migration) error
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
-	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo) (*v1.PersistentVolume, error)
+	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string) (*v1.PersistentVolume, error)
 }
 
 // ClusterDomainsPluginInterface Interface to manage cluster domains
@@ -270,6 +273,8 @@ type Info struct {
 	Labels map[string]string
 	// VolumeSourceRef is a optional reference to the source of the volume
 	VolumeSourceRef interface{}
+	// NeedsAntiHyperconvergence is a flag for figuring if Pod needs anti-hyperconvergence
+	NeedsAntiHyperconvergence bool
 }
 
 // NodeStatus Status of driver on a node

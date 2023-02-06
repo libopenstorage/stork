@@ -19,6 +19,7 @@ package admission
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-logr/logr"
@@ -27,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
@@ -121,6 +123,9 @@ type Webhook struct {
 	// and potentially patches to apply to the handler.
 	Handler Handler
 
+	// RecoverPanic indicates whether the panic caused by webhook should be recovered.
+	RecoverPanic bool
+
 	// WithContextFunc will allow you to take the http.Request.Context() and
 	// add any additional information such as passing the request path or
 	// headers thus allowing you to read them from within the handler
@@ -133,19 +138,37 @@ type Webhook struct {
 }
 
 // InjectLogger gets a handle to a logging instance, hopefully with more info about this particular webhook.
-func (w *Webhook) InjectLogger(l logr.Logger) error {
-	w.log = l
+func (wh *Webhook) InjectLogger(l logr.Logger) error {
+	wh.log = l
 	return nil
+}
+
+// WithRecoverPanic takes a bool flag which indicates whether the panic caused by webhook should be recovered.
+func (wh *Webhook) WithRecoverPanic(recoverPanic bool) *Webhook {
+	wh.RecoverPanic = recoverPanic
+	return wh
 }
 
 // Handle processes AdmissionRequest.
 // If the webhook is mutating type, it delegates the AdmissionRequest to each handler and merge the patches.
 // If the webhook is validating type, it delegates the AdmissionRequest to each handler and
 // deny the request if anyone denies.
-func (w *Webhook) Handle(ctx context.Context, req Request) Response {
-	resp := w.Handler.Handle(ctx, req)
+func (wh *Webhook) Handle(ctx context.Context, req Request) (response Response) {
+	if wh.RecoverPanic {
+		defer func() {
+			if r := recover(); r != nil {
+				for _, fn := range utilruntime.PanicHandlers {
+					fn(r)
+				}
+				response = Errored(http.StatusInternalServerError, fmt.Errorf("panic: %v [recovered]", r))
+				return
+			}
+		}()
+	}
+
+	resp := wh.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
-		w.log.Error(err, "unable to encode response")
+		wh.log.Error(err, "unable to encode response")
 		return Errored(http.StatusInternalServerError, errUnableToEncodeResponse)
 	}
 
@@ -153,19 +176,19 @@ func (w *Webhook) Handle(ctx context.Context, req Request) Response {
 }
 
 // InjectScheme injects a scheme into the webhook, in order to construct a Decoder.
-func (w *Webhook) InjectScheme(s *runtime.Scheme) error {
+func (wh *Webhook) InjectScheme(s *runtime.Scheme) error {
 	// TODO(directxman12): we should have a better way to pass this down
 
 	var err error
-	w.decoder, err = NewDecoder(s)
+	wh.decoder, err = NewDecoder(s)
 	if err != nil {
 		return err
 	}
 
 	// inject the decoder here too, just in case the order of calling this is not
 	// scheme first, then inject func
-	if w.Handler != nil {
-		if _, err := InjectDecoderInto(w.GetDecoder(), w.Handler); err != nil {
+	if wh.Handler != nil {
+		if _, err := InjectDecoderInto(wh.GetDecoder(), wh.Handler); err != nil {
 			return err
 		}
 	}
@@ -175,12 +198,12 @@ func (w *Webhook) InjectScheme(s *runtime.Scheme) error {
 
 // GetDecoder returns a decoder to decode the objects embedded in admission requests.
 // It may be nil if we haven't received a scheme to use to determine object types yet.
-func (w *Webhook) GetDecoder() *Decoder {
-	return w.decoder
+func (wh *Webhook) GetDecoder() *Decoder {
+	return wh.decoder
 }
 
 // InjectFunc injects the field setter into the webhook.
-func (w *Webhook) InjectFunc(f inject.Func) error {
+func (wh *Webhook) InjectFunc(f inject.Func) error {
 	// inject directly into the handlers.  It would be more correct
 	// to do this in a sync.Once in Handle (since we don't have some
 	// other start/finalize-type method), but it's more efficient to
@@ -200,14 +223,14 @@ func (w *Webhook) InjectFunc(f inject.Func) error {
 			return err
 		}
 
-		if _, err := InjectDecoderInto(w.GetDecoder(), target); err != nil {
+		if _, err := InjectDecoderInto(wh.GetDecoder(), target); err != nil {
 			return err
 		}
 
 		return nil
 	}
 
-	return setFields(w.Handler)
+	return setFields(wh.Handler)
 }
 
 // StandaloneOptions let you configure a StandaloneWebhook.
@@ -243,7 +266,7 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 		return nil, err
 	}
 
-	if opts.Logger == nil {
+	if opts.Logger.GetSink() == nil {
 		opts.Logger = logf.RuntimeLog.WithName("webhook")
 	}
 	hook.log = opts.Logger
@@ -252,4 +275,22 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 		return hook, nil
 	}
 	return metrics.InstrumentedHook(opts.MetricsPath, hook), nil
+}
+
+// requestContextKey is how we find the admission.Request in a context.Context.
+type requestContextKey struct{}
+
+// RequestFromContext returns an admission.Request from ctx.
+func RequestFromContext(ctx context.Context) (Request, error) {
+	if v, ok := ctx.Value(requestContextKey{}).(Request); ok {
+		return v, nil
+	}
+
+	return Request{}, errors.New("admission.Request not found in context")
+}
+
+// NewContextWithRequest returns a new Context, derived from ctx, which carries the
+// provided admission.Request.
+func NewContextWithRequest(ctx context.Context, req Request) context.Context {
+	return context.WithValue(ctx, requestContextKey{}, req)
 }

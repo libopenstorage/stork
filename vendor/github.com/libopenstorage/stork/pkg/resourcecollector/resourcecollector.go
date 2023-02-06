@@ -3,9 +3,13 @@ package resourcecollector
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"github.com/go-openapi/inflect"
 	"github.com/heptio/ark/pkg/discovery"
@@ -13,9 +17,9 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -46,6 +50,12 @@ const (
 	ProjectMappingsOption = "ProjectMappings"
 	// IncludeResources to not skip resources of specific type
 	IncludeResources = "stork.libopenstorage.org/include-resource"
+	// TransformedResourceName is the annotation used to check if resource has been updated
+	// as per transformation rules
+	TransformedResourceName = "stork.libopenstorage.org/resourcetransformation-name"
+	// CurrentStorageClassName is the annotation used to store the current storage class of the PV before
+	// taking backup as we will reset it to empty.
+	CurrentStorageClassName = "stork.libopenstorage.org/current-storage-class-name"
 
 	// ServiceKind for k8s service resources
 	ServiceKind = "Service"
@@ -65,6 +75,7 @@ type ResourceCollector struct {
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
 	storkOps         storkops.Ops
+	storageOps       storage.Ops
 }
 
 // Options are the options passed to the ResourceCollector APIs that dictate how k8s
@@ -132,6 +143,11 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	if err != nil {
 		return err
 	}
+	r.storageOps, err = storage.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -181,7 +197,9 @@ func GetSupportedK8SResources(kind string, optionalResourceTypes []string) bool 
 		"LimitRange",
 		"NetworkPolicy",
 		"PodDisruptionBudget",
-		"Endpoints":
+		"Endpoints",
+		"ValidatingWebhookConfiguration",
+		"MutatingWebhookConfiguration":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -201,13 +219,21 @@ func (r *ResourceCollector) GetResourceTypes(
 		return nil, err
 	}
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := r.storkOps.ListApplicationRegistrations()
+	var crdList *stork_api.ApplicationRegistrationList
+	storkcache.Instance()
+	if !reflect.ValueOf(storage.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	} else {
-		for _, crd := range crdList.Items {
-			for _, kind := range crd.Resources {
-				crdResources = append(crdResources, kind.GroupVersionKind)
+		if crdList != nil {
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					crdResources = append(crdResources, kind.GroupVersionKind)
+				}
 			}
 		}
 	}
@@ -249,19 +275,18 @@ func (r *ResourceCollector) GetResourcesForType(
 		objects.resourceMap = make(map[types.UID]bool)
 	}
 
-	crbs, err := r.rbacOps.ListClusterRoleBindings()
-	if err != nil {
-		if !apierrors.IsForbidden(err) {
-			return nil, err
-		}
-	}
-
 	gvr := schema.GroupVersionResource{
 		Group:    resource.Group,
 		Version:  resource.Version,
 		Resource: resource.Name,
 	}
 
+	crbs, err := r.rbacOps.ListClusterRoleBindings()
+	if err != nil {
+		if !apierrors.IsForbidden(err) {
+			return nil, err
+		}
+	}
 	for _, ns := range namespaces {
 		var dynamicClient dynamic.ResourceInterface
 		if !resource.Namespaced {
@@ -293,7 +318,7 @@ func (r *ResourceCollector) GetResourcesForType(
 				return nil, fmt.Errorf("error casting object: %v", o)
 			}
 
-			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, crbs, ns, allDrivers, opts)
+			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 			if err != nil {
 				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 			}
@@ -313,7 +338,16 @@ func (r *ResourceCollector) GetResourcesForType(
 	if err != nil {
 		return nil, err
 	}
-	err = r.prepareResourcesForCollection(modObjects, namespaces, opts)
+	var crdList *stork_api.ApplicationRegistrationList
+	if !reflect.ValueOf(storage.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
+	if err != nil {
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	}
+	err = r.prepareResourcesForCollection(modObjects, namespaces, opts, crdList)
 	if err != nil {
 		return nil, err
 	}
@@ -338,16 +372,24 @@ func (r *ResourceCollector) GetResources(
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := r.storkOps.ListApplicationRegistrations()
+	var crdList *stork_api.ApplicationRegistrationList
+	if !reflect.ValueOf(storage.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	} else {
-		for _, crd := range crdList.Items {
-			for _, kind := range crd.Resources {
-				crdResources = append(crdResources, kind.GroupVersionKind)
+		if crdList != nil {
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					crdResources = append(crdResources, kind.GroupVersionKind)
+				}
 			}
 		}
 	}
+
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		if !apierrors.IsForbidden(err) {
@@ -415,7 +457,7 @@ func (r *ResourceCollector) GetResources(
 					// With this now a user can choose to backup all resources in a ns and some
 					// selected resources from different ns
 
-					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers, opts)
+					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 					if err != nil {
 						if apierrors.IsForbidden(err) {
 							continue
@@ -441,7 +483,7 @@ func (r *ResourceCollector) GetResources(
 		return nil, err
 	}
 
-	err = r.prepareResourcesForCollection(allObjects, namespaces, opts)
+	err = r.prepareResourcesForCollection(allObjects, namespaces, opts, crdList)
 	if err != nil {
 		return nil, err
 	}
@@ -495,10 +537,10 @@ func (r *ResourceCollector) objectToBeCollected(
 	labelSelectors map[string]string,
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
-	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
 	allDrivers bool,
 	opts Options,
+	crbs *rbacv1.ClusterRoleBindingList,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
 	if err != nil {
@@ -524,7 +566,6 @@ func (r *ResourceCollector) objectToBeCollected(
 	} else if !include {
 		return false, nil
 	}
-
 	switch objectType.GetKind() {
 	case "Service":
 		return r.serviceToBeCollected(object)
@@ -556,8 +597,14 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.dataVolumesToBeCollected(object)
 	case "VirtualMachineInstance":
 		return r.virtualMachineInstanceToBeCollected(object)
+	case "VirtualMachineInstanceMigration":
+		return r.virtualMachineInstanceMigrationToBeCollected(object)
 	case "Endpoints":
 		return r.endpointsToBeCollected(object)
+	case "MutatingWebhookConfiguration":
+		return r.mutatingWebHookToBeCollected(object, namespace)
+	case "ValidatingWebhookConfiguration":
+		return r.validatingWebHookToBeCollected(object, namespace)
 	}
 
 	return true, nil
@@ -627,11 +674,8 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 	objects []runtime.Unstructured,
 	namespaces []string,
 	opts Options,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
-	crdList, err := r.storkOps.ListApplicationRegistrations()
-	if err != nil {
-		logrus.Warnf("Unable to get registered crds, err %v", err)
-	}
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -684,7 +728,6 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 						kind.Version == resourceKind.Version {
 						// remove status from crd
 						if !kind.KeepStatus {
-
 							delete(content, "status")
 						}
 
@@ -766,7 +809,6 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	optionalResourceTypes []string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
 ) (bool, error) {
-
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
 		return false, err
@@ -793,7 +835,6 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		// Update the namespace of the object, will be no-op for clustered resources
 		metadata.SetNamespace(val)
 	}
-
 	switch objectType.GetKind() {
 	case "Job":
 		if slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -802,13 +843,19 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		}
 		return true, nil
 	case "PersistentVolume":
-		return r.preparePVResourceForApply(object, pvNameMappings, vInfo)
+		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings, namespaceMappings)
 	case "PersistentVolumeClaim":
 		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	case "RoleBinding":
 		return false, r.prepareRoleBindingForApply(object, namespaceMappings)
+	case "ValidatingWebhookConfiguration":
+		return false, r.prepareValidatingWebHookForApply(object, namespaceMappings)
+	case "MutatingWebhookConfiguration":
+		return false, r.prepareMutatingWebHookForApply(object, namespaceMappings)
+	case "Secret":
+		return false, r.prepareSecretForApply(object)
 	}
 	return false, nil
 }
@@ -960,6 +1007,8 @@ func (r *ResourceCollector) getDynamicClient(
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
 	resource := &metav1.APIResource{
 		Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,

@@ -1,6 +1,7 @@
 package resourcecollector
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -99,6 +100,21 @@ func (r *ResourceCollector) clusterRoleToBeCollected(
 			}
 		}
 	}
+
+	// clusterRole can also be bind to role binding as well at namespace level
+	// Get the role binding for the given namespace
+	var filterOptions = metav1.ListOptions{}
+	rbs, err := r.rbacOps.ListRoleBinding(namespace, filterOptions)
+	if err != nil {
+		return false, err
+	}
+	// Find the corresponding RoleBinding and see if it belongs to the requested namespace
+	for _, rb := range rbs.Items {
+		if rb.RoleRef.Name == name && rb.Namespace == namespace {
+			return true, nil
+		}
+	}
+
 	return false, nil
 }
 

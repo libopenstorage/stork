@@ -301,7 +301,9 @@ func (s *gceOps) InspectInstanceGroupForInstance(instanceID string) (*cloudops.I
 
 func (s *gceOps) ApplyTags(
 	diskName string,
-	labels map[string]string) error {
+	labels map[string]string,
+	options map[string]string,
+) error {
 	d, err := s.computeService.Disks.Get(s.inst.project, s.inst.zone, diskName).Do()
 	if err != nil {
 		return err
@@ -374,6 +376,7 @@ func (s *gceOps) Attach(diskName string, options map[string]string) (string, err
 func (s *gceOps) Create(
 	template interface{},
 	labels map[string]string,
+	options map[string]string,
 ) (interface{}, error) {
 	v, ok := template.(*compute.Disk)
 	if !ok {
@@ -420,7 +423,7 @@ func (s *gceOps) Create(
 }
 
 func (s *gceOps) DeleteFrom(id, _ string) error {
-	return s.Delete(id)
+	return s.Delete(id, nil)
 }
 
 func (s *gceOps) DeleteInstance(instanceID string, zone string, timeout time.Duration) error {
@@ -457,7 +460,7 @@ func (s *gceOps) DeleteInstance(instanceID string, zone string, timeout time.Dur
 	return nil
 }
 
-func (s *gceOps) Delete(id string) error {
+func (s *gceOps) Delete(id string, options map[string]string) error {
 	ctx := context.Background()
 	found := false
 	req := s.computeService.Disks.AggregatedList(s.inst.project)
@@ -487,7 +490,7 @@ func (s *gceOps) Delete(id string) error {
 	return nil
 }
 
-func (s *gceOps) Detach(devicePath string) error {
+func (s *gceOps) Detach(devicePath string, options map[string]string) error {
 	return s.detachInternal(devicePath, s.inst.name)
 }
 
@@ -664,6 +667,7 @@ func (s *gceOps) GetDeviceID(disk interface{}) (string, error) {
 func (s *gceOps) Expand(
 	volumeID string,
 	newSizeInGiB uint64,
+	options map[string]string,
 ) (uint64, error) {
 
 	vol, err := s.computeService.Disks.Get(s.inst.project, s.inst.zone, volumeID).Do()
@@ -709,7 +713,7 @@ func (s *gceOps) Expand(
 	return newSizeInGiB, waitWithErr
 }
 
-func (s *gceOps) Inspect(diskNames []*string) ([]interface{}, error) {
+func (s *gceOps) Inspect(diskNames []*string, options map[string]string) ([]interface{}, error) {
 	allDisks, err := s.getDisksFromAllZones(nil)
 	if err != nil {
 		return nil, err
@@ -729,6 +733,7 @@ func (s *gceOps) Inspect(diskNames []*string) ([]interface{}, error) {
 func (s *gceOps) RemoveTags(
 	diskName string,
 	labels map[string]string,
+	options map[string]string,
 ) error {
 	d, err := s.computeService.Disks.Get(s.inst.project, s.inst.zone, diskName).Do()
 	if err != nil {
@@ -1070,6 +1075,7 @@ func (s *gceOps) getClusterName() (string, error) {
 func (s *gceOps) Snapshot(
 	disk string,
 	readonly bool,
+	options map[string]string,
 ) (interface{}, error) {
 	rb := &compute.Snapshot{
 		Name: fmt.Sprintf("snap-%d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()),
@@ -1096,7 +1102,7 @@ func (s *gceOps) Snapshot(
 	return snap, err
 }
 
-func (s *gceOps) SnapshotDelete(snapID string) error {
+func (s *gceOps) SnapshotDelete(snapID string, options map[string]string) error {
 	operation, err := s.computeService.Snapshots.Delete(s.inst.project, snapID).Do()
 	if err != nil {
 		return err
@@ -1278,7 +1284,7 @@ func gceInfoFromEnv(inst *instance) error {
 
 func (s *gceOps) rollbackCreate(id string, createErr error) error {
 	logrus.Warnf("Rollback create volume %v, Error %v", id, createErr)
-	err := s.Delete(id)
+	err := s.Delete(id, nil)
 	if err != nil {
 		logrus.Warnf("Rollback failed volume %v, Error %v", id, err)
 	}

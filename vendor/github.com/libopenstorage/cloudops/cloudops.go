@@ -32,6 +32,9 @@ const (
 	Pure = "pure"
 	// Oracle provider
 	Oracle = "oracle"
+
+	// DryRunOption is the key to tell if dry run the request
+	DryRunOption = "dry-run"
 )
 
 // CloudResourceInfo provides metadata information on a cloud resource.
@@ -120,7 +123,7 @@ type Compute interface {
 // Storage interface to manage storage operations.
 type Storage interface {
 	// Create volume based on input template volume and also apply given labels.
-	Create(template interface{}, labels map[string]string) (interface{}, error)
+	Create(template interface{}, labels map[string]string, options map[string]string) (interface{}, error)
 	// GetDeviceID returns ID/Name of the given device/disk or snapshot
 	GetDeviceID(template interface{}) (string, error)
 	// Attach volumeID, accepts attachoOptions as opaque data
@@ -130,13 +133,13 @@ type Storage interface {
 	// It returns the new size of the device. It is a blocking API where it will
 	// only return once the requested size is validated with the cloud provider or
 	// the number of retries prescribed by the cloud provider are exhausted.
-	Expand(volumeID string, newSizeInGiB uint64) (uint64, error)
+	Expand(volumeID string, newSizeInGiB uint64, options map[string]string) (uint64, error)
 	// Detach volumeID.
-	Detach(volumeID string) error
+	Detach(volumeID string, options map[string]string) error
 	// DetachFrom detaches the disk/volume with given ID from the given instance ID
 	DetachFrom(volumeID, instanceID string) error
 	// Delete volumeID.
-	Delete(volumeID string) error
+	Delete(volumeID string, options map[string]string) error
 	// DeleteFrom deletes the given volume/disk from the given instanceID
 	DeleteFrom(volumeID, instanceID string) error
 	// Desribe an instance
@@ -146,7 +149,7 @@ type Storage interface {
 	// the instance and where they are mapped to
 	FreeDevices(blockDeviceMappings []interface{}, rootDeviceName string) ([]string, error)
 	// Inspect volumes specified by volumeID
-	Inspect(volumeIds []*string) ([]interface{}, error)
+	Inspect(volumeIds []*string, options map[string]string) ([]interface{}, error)
 	// DeviceMappings returns map[local_attached_volume_path]->volume ID/NAME
 	DeviceMappings() (map[string]string, error)
 	// Enumerate volumes that match given filters. Organize them into
@@ -159,13 +162,13 @@ type Storage interface {
 	// DevicePath for the given volume i.e path where it's attached
 	DevicePath(volumeID string) (string, error)
 	// Snapshot the volume with given volumeID
-	Snapshot(volumeID string, readonly bool) (interface{}, error)
+	Snapshot(volumeID string, readonly bool, options map[string]string) (interface{}, error)
 	// SnapshotDelete deletes the snapshot with given ID
-	SnapshotDelete(snapID string) error
+	SnapshotDelete(snapID string, options map[string]string) error
 	// ApplyTags will apply given labels/tags on the given volume
-	ApplyTags(volumeID string, labels map[string]string) error
+	ApplyTags(volumeID string, labels map[string]string, options map[string]string) error
 	// RemoveTags removes labels/tags from the given volume
-	RemoveTags(volumeID string, labels map[string]string) error
+	RemoveTags(volumeID string, labels map[string]string, options map[string]string) error
 	// Tags will list the existing labels/tags on the given volume
 	Tags(volumeID string) (map[string]string, error)
 }

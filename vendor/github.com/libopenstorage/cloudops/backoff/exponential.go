@@ -209,13 +209,13 @@ func (e *exponentialBackoff) DeleteInstance(instanceID string, zone string, time
 }
 
 // Create volume based on input template volume and also apply given labels.
-func (e *exponentialBackoff) Create(template interface{}, labels map[string]string) (interface{}, error) {
+func (e *exponentialBackoff) Create(template interface{}, labels map[string]string, options map[string]string) (interface{}, error) {
 	var (
 		drive   interface{}
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		drive, origErr = e.cloudOps.Create(template, labels)
+		drive, origErr = e.cloudOps.Create(template, labels, options)
 		msg := fmt.Sprintf("Failed to create drive.")
 		return e.handleError(origErr, msg)
 	}
@@ -252,12 +252,12 @@ func (e *exponentialBackoff) Attach(volumeID string, options map[string]string) 
 }
 
 // Detach volumeID.
-func (e *exponentialBackoff) Detach(volumeID string) error {
+func (e *exponentialBackoff) Detach(volumeID string, options map[string]string) error {
 	var (
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		origErr = e.cloudOps.Detach(volumeID)
+		origErr = e.cloudOps.Detach(volumeID, options)
 		msg := fmt.Sprintf("Failed to detach drive (%v).", volumeID)
 		return e.handleError(origErr, msg)
 	}
@@ -286,12 +286,12 @@ func (e *exponentialBackoff) DetachFrom(volumeID, instanceID string) error {
 }
 
 // Delete volumeID.
-func (e *exponentialBackoff) Delete(volumeID string) error {
+func (e *exponentialBackoff) Delete(volumeID string, options map[string]string) error {
 	var (
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		origErr = e.cloudOps.Delete(volumeID)
+		origErr = e.cloudOps.Delete(volumeID, options)
 		msg := fmt.Sprintf("Failed to delete drive (%v).", volumeID)
 		return e.handleError(origErr, msg)
 	}
@@ -345,13 +345,13 @@ func (e *exponentialBackoff) FreeDevices(blockDeviceMappings []interface{}, root
 }
 
 // Inspect volumes specified by volumeID
-func (e *exponentialBackoff) Inspect(volumeIds []*string) ([]interface{}, error) {
+func (e *exponentialBackoff) Inspect(volumeIds []*string, options map[string]string) ([]interface{}, error) {
 	var (
 		volumes []interface{}
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		volumes, origErr = e.cloudOps.Inspect(volumeIds)
+		volumes, origErr = e.cloudOps.Inspect(volumeIds, options)
 		msg := fmt.Sprintf("Failed to inspect drives (%v).", volumeIds)
 		return e.handleError(origErr, msg)
 	}
@@ -436,13 +436,13 @@ func (e *exponentialBackoff) DevicePath(volumeID string) (string, error) {
 	return devicePath, origErr
 }
 
-func (e *exponentialBackoff) Expand(volumeID string, targetSize uint64) (uint64, error) {
+func (e *exponentialBackoff) Expand(volumeID string, targetSize uint64, options map[string]string) (uint64, error) {
 	var (
 		actualSize uint64
 		origErr    error
 	)
 	conditionFn := func() (bool, error) {
-		actualSize, origErr = e.cloudOps.Expand(volumeID, targetSize)
+		actualSize, origErr = e.cloudOps.Expand(volumeID, targetSize, options)
 		msg := fmt.Sprintf("Failed to get device path for drive (%v).", volumeID)
 		return e.handleError(origErr, msg)
 	}
@@ -454,13 +454,13 @@ func (e *exponentialBackoff) Expand(volumeID string, targetSize uint64) (uint64,
 }
 
 // Snapshot the volume with given volumeID
-func (e *exponentialBackoff) Snapshot(volumeID string, readonly bool) (interface{}, error) {
+func (e *exponentialBackoff) Snapshot(volumeID string, readonly bool, options map[string]string) (interface{}, error) {
 	var (
 		snapshot interface{}
 		origErr  error
 	)
 	conditionFn := func() (bool, error) {
-		snapshot, origErr = e.cloudOps.Snapshot(volumeID, readonly)
+		snapshot, origErr = e.cloudOps.Snapshot(volumeID, readonly, options)
 		msg := fmt.Sprintf("Failed to snapshot drive (%v).", volumeID)
 		return e.handleError(origErr, msg)
 	}
@@ -472,12 +472,12 @@ func (e *exponentialBackoff) Snapshot(volumeID string, readonly bool) (interface
 }
 
 // SnapshotDelete deletes the snapshot with given ID
-func (e *exponentialBackoff) SnapshotDelete(snapID string) error {
+func (e *exponentialBackoff) SnapshotDelete(snapID string, options map[string]string) error {
 	var (
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		origErr = e.cloudOps.SnapshotDelete(snapID)
+		origErr = e.cloudOps.SnapshotDelete(snapID, options)
 		msg := fmt.Sprintf("Failed to delete snapshot (%v).", snapID)
 		return e.handleError(origErr, msg)
 	}
@@ -489,12 +489,12 @@ func (e *exponentialBackoff) SnapshotDelete(snapID string) error {
 }
 
 // ApplyTags will apply given labels/tags on the given volume
-func (e *exponentialBackoff) ApplyTags(volumeID string, labels map[string]string) error {
+func (e *exponentialBackoff) ApplyTags(volumeID string, labels map[string]string, options map[string]string) error {
 	var (
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		origErr = e.cloudOps.ApplyTags(volumeID, labels)
+		origErr = e.cloudOps.ApplyTags(volumeID, labels, options)
 		msg := fmt.Sprintf("Failed to apply tags on drive (%v).", volumeID)
 		return e.handleError(origErr, msg)
 	}
@@ -506,12 +506,12 @@ func (e *exponentialBackoff) ApplyTags(volumeID string, labels map[string]string
 }
 
 // RemoveTags removes labels/tags from the given volume
-func (e *exponentialBackoff) RemoveTags(volumeID string, labels map[string]string) error {
+func (e *exponentialBackoff) RemoveTags(volumeID string, labels map[string]string, options map[string]string) error {
 	var (
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		origErr = e.cloudOps.RemoveTags(volumeID, labels)
+		origErr = e.cloudOps.RemoveTags(volumeID, labels, options)
 		msg := fmt.Sprintf("Failed to remove tags from drive (%v).", volumeID)
 		return e.handleError(origErr, msg)
 	}

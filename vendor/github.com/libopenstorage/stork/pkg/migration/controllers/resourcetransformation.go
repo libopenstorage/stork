@@ -15,7 +15,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/core"
+	coreops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -106,23 +106,6 @@ func (r *ResourceTransformationController) handle(ctx context.Context, transform
 	}
 	switch transform.Status.Status {
 	case stork_api.ResourceTransformationStatusInitial:
-		ns := &v1.Namespace{}
-		ns.Name = getTransformNamespace(transform.Namespace)
-		_, err := core.Instance().CreateNamespace(ns)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			message := fmt.Sprintf("Unable to create resource transformation namespace: %v", err)
-			log.TransformLog(transform).Errorf(message)
-			r.recorder.Event(transform,
-				v1.EventTypeWarning,
-				string(stork_api.ResourceTransformationStatusFailed),
-				message)
-			transform.Status.Status = stork_api.ResourceTransformationStatusFailed
-			err := r.client.Update(ctx, transform)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
 		err = r.validateSpecPath(transform)
 		if err != nil {
 			message := fmt.Sprintf("Unsupported resource for resource transformation found: %v", err)
@@ -199,13 +182,57 @@ func (r *ResourceTransformationController) validateSpecPath(transform *stork_api
 
 func (r *ResourceTransformationController) validateTransformResource(ctx context.Context, transform *stork_api.ResourceTransformation) error {
 	resourceCollectorOpts := resourcecollector.Options{}
+	config, err := clientcmd.BuildConfigFromFlags("", "")
+	if err != nil {
+		return err
+	}
+	localInterface, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	localOps, err := coreops.NewForConfig(config)
+	if err != nil {
+		r.recorder.Event(transform,
+			v1.EventTypeWarning,
+			string(stork_api.ResourceTransformationStatusFailed),
+			err.Error())
+		return nil
+	}
+
+	// temp namespace to run dry-run of transformed resource option
+	remoteTempNamespace := getTransformNamespace(transform.Namespace)
+	ns := &v1.Namespace{}
+	ns.Name = remoteTempNamespace
+	_, err = localOps.CreateNamespace(ns)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		message := fmt.Sprintf("Unable to create resource transformation namespace: %v", err)
+		log.TransformLog(transform).Errorf(message)
+		r.recorder.Event(transform,
+			v1.EventTypeWarning,
+			string(stork_api.ResourceTransformationStatusFailed),
+			message)
+		transform.Status.Status = stork_api.ResourceTransformationStatusFailed
+		err := r.client.Update(ctx, transform)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
+
 	for _, spec := range transform.Spec.Objects {
 		group, version, kind, err := getGVK(spec.Resource)
 		if err != nil {
 			return fmt.Errorf("invalid resource type should be in format <group>/<version>/<kind>, actual: %s", spec.Resource)
 		}
 		resource := metav1.APIResource{
-			Name:       strings.ToLower(inflect.Pluralize(kind)),
+			Name:       strings.ToLower(ruleset.Pluralize(strings.ToLower(kind))),
 			Kind:       kind,
 			Version:    version,
 			Namespaced: true,
@@ -228,15 +255,6 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			log.TransformLog(transform).Errorf("Error getting resources kind:%s, err: %v", kind, err)
 			return err
 		}
-		// TODO: we can pass in remote config and dry run on remote cluster as well
-		localconfig, err := clientcmd.BuildConfigFromFlags("", "")
-		if err != nil {
-			return err
-		}
-		localInterface, err := dynamic.NewForConfig(localconfig)
-		if err != nil {
-			return err
-		}
 		for _, path := range spec.Paths {
 			// This can be handle by CRD validation- v1 version crd support
 			if !(path.Operation == stork_api.AddResourcePath || path.Operation == stork_api.DeleteResourcePath ||
@@ -256,16 +274,17 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 					Specs:            spec,
 				}
 				if err := resourcecollector.TransformResources(object, []stork_api.TransformResourceInfo{*resInfo}, metadata.GetName(), metadata.GetNamespace()); err != nil {
-					log.TransformLog(transform).Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
+					log.TransformLog(transform).Errorf("Unable to apply patch path %s during validation on resource kind : %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
 					resInfo.Status = stork_api.ResourceTransformationStatusFailed
 					resInfo.Reason = err.Error()
+					return err
 				}
 				unstructured, ok := object.(*unstructured.Unstructured)
 				if !ok {
 					return fmt.Errorf("unable to cast object to unstructured: %v", object)
 				}
 				resource := &metav1.APIResource{
-					Name:       inflect.Pluralize(strings.ToLower(kind)),
+					Name:       strings.ToLower(ruleset.Pluralize(strings.ToLower(kind))),
 					Namespaced: len(metadata.GetNamespace()) > 0,
 				}
 				dynamicClient := localInterface.Resource(
@@ -296,6 +315,17 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 		if resource.Status != stork_api.ResourceTransformationStatusReady {
 			transform.Status.Status = stork_api.ResourceTransformationStatusFailed
 		}
+	}
+
+	if err := localOps.DeleteNamespace(remoteTempNamespace); err != nil {
+		// log & generate event, but lets not fail resource transformation if
+		// transformation controller could not delete temp namespace created
+		message := fmt.Sprintf("Unable to delete resource transformation namespace %s: %v", ns.Name, err)
+		log.TransformLog(transform).Errorf(message)
+		r.recorder.Event(transform,
+			v1.EventTypeWarning,
+			string(stork_api.ResourceTransformationStatusFailed),
+			message)
 	}
 	return r.client.Update(ctx, transform)
 }

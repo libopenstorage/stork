@@ -8,6 +8,7 @@ import (
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -229,7 +230,20 @@ func GetOptions(policyName string, namespace string, policyType stork_api.Schedu
 	case stork_api.SchedulePolicyTypeInterval:
 		return schedulePolicy.Policy.Interval.Options, nil
 	case stork_api.SchedulePolicyTypeDaily:
-		return schedulePolicy.Policy.Daily.Options, nil
+		options := schedulePolicy.Policy.Daily.Options
+		if len(options) == 0 {
+			options = make(map[string]string)
+		}
+		scheduledDay, ok := stork_api.Days[schedulePolicy.Policy.Daily.ForceFullSnapshotDay]
+		if ok {
+			currentDay := GetCurrentTime().Weekday()
+			// force full backup on specified day
+			if currentDay == scheduledDay {
+				options[utils.PXIncrementalCountAnnotation] = "0"
+			}
+			logrus.Infof("Forcing full-snapshot for daily snapshotschedule policy on the day %s", schedulePolicy.Policy.Daily.ForceFullSnapshotDay)
+		}
+		return options, nil
 	case stork_api.SchedulePolicyTypeWeekly:
 		return schedulePolicy.Policy.Weekly.Options, nil
 	case stork_api.SchedulePolicyTypeMonthly:

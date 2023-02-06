@@ -40,8 +40,9 @@ vendor-tidy:
 vendor:
 	go mod vendor
 
-lint:
-	(mkdir -p tools && cd tools && GO111MODULE=off && go get -v golang.org/x/lint/golint)
+$(GOPATH)/bin/golint:
+	GO111MODULE=off go get -u golang.org/x/lint/golint
+lint: $(GOPATH)/bin/golint
 	for file in $$(find . -name '*.go' | grep -v vendor | \
                                        grep -v '\.pb\.go' | \
                                        grep -v '\.pb\.gw\.go' | \

@@ -409,7 +409,7 @@ func (o *oracleOps) DevicePath(volumeID string) (string, error) {
 }
 
 // Inspect volumes specified by volumeID
-func (o *oracleOps) Inspect(volumeIds []*string) ([]interface{}, error) {
+func (o *oracleOps) Inspect(volumeIds []*string, options map[string]string) ([]interface{}, error) {
 	oracleVols := []interface{}{}
 	for _, volID := range volumeIds {
 		getVolReq := core.GetVolumeRequest{
@@ -425,7 +425,7 @@ func (o *oracleOps) Inspect(volumeIds []*string) ([]interface{}, error) {
 }
 
 // Create volume based on input template volume and also apply given labels.
-func (o *oracleOps) Create(template interface{}, labels map[string]string) (interface{}, error) {
+func (o *oracleOps) Create(template interface{}, labels map[string]string, options map[string]string) (interface{}, error) {
 	vol, ok := template.(*core.Volume)
 	if !ok {
 		return nil, cloudops.NewStorageError(cloudops.ErrVolInval,
@@ -480,7 +480,7 @@ func (o *oracleOps) waitVolumeStatus(volID string, desiredStatus core.VolumeLife
 
 func (o *oracleOps) rollbackCreate(id string, createErr error) error {
 	logrus.Warnf("Rollback create volume %v, Error %v", id, createErr)
-	err := o.Delete(id)
+	err := o.Delete(id, nil)
 	if err != nil {
 		logrus.Warnf("Rollback failed volume %v, Error %v", id, err)
 	}
@@ -488,7 +488,7 @@ func (o *oracleOps) rollbackCreate(id string, createErr error) error {
 }
 
 // Delete volumeID.
-func (o *oracleOps) Delete(volumeID string) error {
+func (o *oracleOps) Delete(volumeID string, options map[string]string) error {
 	delVolReq := core.DeleteVolumeRequest{
 		VolumeId: &volumeID,
 	}
@@ -687,7 +687,7 @@ func (o *oracleOps) waitVolumeAttachmentStatus(volumeAttachmentID *string, desir
 }
 
 // Detach volumeID.
-func (o *oracleOps) Detach(volumeID string) error {
+func (o *oracleOps) Detach(volumeID string, options map[string]string) error {
 	return o.detachInternal(volumeID, o.instance)
 }
 
@@ -829,7 +829,7 @@ func nodePoolContainsNode(s []containerengine.Node, e string) bool {
 	return false
 }
 
-func (o *oracleOps) Expand(volumeID string, newSizeInGiB uint64) (uint64, error) {
+func (o *oracleOps) Expand(volumeID string, newSizeInGiB uint64, options map[string]string) (uint64, error) {
 	logrus.Debug("Expand volume to size ", newSizeInGiB, " GiB")
 
 	volume, err := o.storage.GetVolume(context.Background(), core.GetVolumeRequest{VolumeId: &volumeID})
@@ -1045,7 +1045,7 @@ func (o *oracleOps) deleted(v core.Volume) bool {
 }
 
 // ApplyTags will overwrite the existing tags with newly provided tags
-func (o *oracleOps) ApplyTags(volumeID string, labels map[string]string) error {
+func (o *oracleOps) ApplyTags(volumeID string, labels map[string]string, options map[string]string) error {
 	req := core.UpdateVolumeRequest{
 		VolumeId: common.String(volumeID),
 		UpdateVolumeDetails: core.UpdateVolumeDetails{
@@ -1061,7 +1061,7 @@ func (o *oracleOps) ApplyTags(volumeID string, labels map[string]string) error {
 
 // Tags will list the existing labels/tags on the given volume
 func (o *oracleOps) Tags(volumeID string) (map[string]string, error) {
-	vols, err := o.Inspect([]*string{&volumeID})
+	vols, err := o.Inspect([]*string{&volumeID}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1077,7 +1077,7 @@ func (o *oracleOps) Tags(volumeID string) (map[string]string, error) {
 }
 
 // RemoveTags removes labels/tags from the given volume
-func (o *oracleOps) RemoveTags(volumeID string, labels map[string]string) error {
+func (o *oracleOps) RemoveTags(volumeID string, labels map[string]string, options map[string]string) error {
 	currentTags, err := o.Tags(volumeID)
 	if err != nil {
 		return nil
@@ -1085,5 +1085,5 @@ func (o *oracleOps) RemoveTags(volumeID string, labels map[string]string) error 
 	for key := range labels {
 		delete(currentTags, key)
 	}
-	return o.ApplyTags(volumeID, currentTags)
+	return o.ApplyTags(volumeID, currentTags, options)
 }

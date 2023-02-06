@@ -84,19 +84,22 @@ func TransformResources(
 					var value interface{}
 					if path.Type == stork_api.KeyPairResourceType {
 						currMap, _, err := unstructured.NestedMap(content, strings.Split(path.Path, ".")...)
-						if err != nil {
-							return fmt.Errorf("unable to find suspend path, err: %v", err)
+						if err != nil || len(currMap) == 0 {
+							return fmt.Errorf("unable to find spec path, err: %v", err)
 						}
 						mapList := strings.Split(path.Value, ",")
 						for _, val := range mapList {
 							keyPair := strings.Split(val, ":")
+							if len(keyPair) != 2 {
+								return fmt.Errorf("invalid keypair value format :%s", keyPair)
+							}
 							currMap[keyPair[0]] = keyPair[1]
 						}
 						value = currMap
 					} else if path.Type == stork_api.SliceResourceType {
 						currList, _, err := unstructured.NestedSlice(content, strings.Split(path.Path, ".")...)
 						if err != nil {
-							return fmt.Errorf("unable to find suspend path, err: %v", err)
+							return fmt.Errorf("unable to find spec path, err: %v", err)
 						}
 						arrList := strings.Split(path.Value, ",")
 						for _, val := range arrList {
@@ -112,6 +115,20 @@ func TransformResources(
 						return err
 					}
 				}
+			}
+			// lets add annotation saying this resource has been transformed by migration/restore
+			// controller before applying
+			// set migration annotations
+			annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+			if err != nil {
+				return err
+			}
+			if !found {
+				annotations = make(map[string]string)
+			}
+			annotations[TransformedResourceName] = "true"
+			if err := unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations"); err != nil {
+				return err
 			}
 			object.SetUnstructuredContent(content)
 			logrus.Infof("Updated resource of kind %v with patch , resource: %v", patch.Kind, object)

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -117,7 +118,7 @@ func (m *MigrationController) Init(mgr manager.Manager, migrationAdminNamespace 
 func (m *MigrationController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling Migration %s/%s", request.Namespace, request.Name)
 
-	// Fetch the ApplicationBackup instance
+	// Fetch the Migration instance
 	migration := &stork_api.Migration{}
 	err := m.client.Get(context.TODO(), request.NamespacedName, migration)
 	if err != nil {
@@ -197,6 +198,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 	if spec.IncludeNetworkPolicyWithCIDR == nil {
 		defaultBool := false
 		spec.IncludeNetworkPolicyWithCIDR = &defaultBool
+	}
+	if spec.SkipDeletedNamespaces == nil {
+		defaultBool := true
+		spec.SkipDeletedNamespaces = &defaultBool
 	}
 	return spec
 }
@@ -342,7 +347,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		for _, ns := range migration.Spec.Namespaces {
 			_, err := core.Instance().GetNamespace(ns)
 			if err != nil {
-				if *migration.Spec.SkipDeletedNamespaces {
+				if migration.Spec.SkipDeletedNamespaces != nil && *migration.Spec.SkipDeletedNamespaces {
 					// Instead of throwing an error here check for the SkipDeletedNamespaces  flag
 					// and based on that either throw an error or continue for deleted namespaces
 					migration.Status.Status = stork_api.MigrationStatusInitial
@@ -380,7 +385,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),
-						err.Error())
+						errMsg)
 					err = m.updateMigrationCR(context.Background(), migration)
 					if err != nil {
 						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
@@ -402,32 +407,13 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 					}
 					return nil
 				}
-				// ensure to re-run dry-run for newly introduced object before
-				// starting migration
-				resp.Status.Resources = []*stork_api.TransformResourceInfo{}
-				resp.Status.Status = stork_api.ResourceTransformationStatusInitial
-				transform, err := storkops.Instance().UpdateResourceTransformation(resp)
-				if err != nil && !errors.IsNotFound(err) {
-					errMsg := fmt.Sprintf("Error updating transformation CR: %v", err)
+				if err := storkops.Instance().ValidateResourceTransformation(resp.Name, ns, 1*time.Minute, 5*time.Second); err != nil {
+					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.TransformSpecs[0], resp.Status.Status)
 					log.MigrationLog(migration).Errorf(errMsg)
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),
-						err.Error())
-					err = m.updateMigrationCR(context.Background(), migration)
-					if err != nil {
-						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
-					}
-					return nil
-				}
-				// wait for re-run of dry-run resources
-				if err := storkops.Instance().ValidateResourceTransformation(transform.Name, ns, 1*time.Minute, 5*time.Second); err != nil {
-					errMsg := fmt.Sprintf("transformation %s is not in ready state: %s", migration.Spec.TransformSpecs, resp.Status.Status)
-					log.MigrationLog(migration).Errorf(errMsg)
-					m.recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(stork_api.MigrationStatusFailed),
-						err.Error())
+						errMsg)
 					err = m.updateMigrationCR(context.Background(), migration)
 					if err != nil {
 						log.MigrationLog(migration).Errorf("Error updating CR, err: %v", err)
@@ -502,7 +488,13 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			}
 		}
 	case stork_api.MigrationStageApplications:
-		err := m.migrateResources(migration, false)
+		var volumesOnly bool
+		if migration.Spec.IncludeResources != nil && !*migration.Spec.IncludeResources {
+			// Include Resources is set to false
+			// This is a volumeOnly migration
+			volumesOnly = true
+		}
+		err := m.migrateResources(migration, volumesOnly)
 		if err != nil {
 			message := fmt.Sprintf("Error migrating resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
@@ -1002,16 +994,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	err = m.prepareResources(migration, updateObjects, clusterPair)
-	if err != nil {
-		m.recorder.Event(migration,
-			v1.EventTypeWarning,
-			string(stork_api.MigrationStatusFailed),
-			fmt.Sprintf("Error preparing resource: %v", err))
-		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
-		return err
-	}
-	err = m.applyResources(migration, updateObjects, resKinds, clusterPair)
+	crdList, err := storkcache.Instance().ListApplicationRegistrations()
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1021,7 +1004,25 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	migration.Status.ResourceMigrationFinishTimestamp = metav1.Now()
+	err = m.prepareResources(migration, updateObjects, clusterPair, crdList)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error preparing resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
+		return err
+	}
+	err = m.applyResources(migration, updateObjects, resKinds, clusterPair, crdList)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error applying resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error applying resources: %v", err)
+		return err
+	}
+
 	migration.Status.Stage = stork_api.MigrationStageFinal
 	migration.Status.Status = stork_api.MigrationStatusSuccessful
 	for _, resource := range migration.Status.Resources {
@@ -1030,6 +1031,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			break
 		}
 	}
+
 	if *migration.Spec.PurgeDeletedResources {
 		if err := m.purgeMigratedResources(migration, resourceCollectorOpts); err != nil {
 			message := fmt.Sprintf("Error cleaning up resources: %v", err)
@@ -1042,6 +1044,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		}
 	}
 
+	migration.Status.ResourceMigrationFinishTimestamp = metav1.Now()
 	migration.Status.FinishTimestamp = metav1.Now()
 	err = m.updateMigrationCR(context.TODO(), migration)
 	if err != nil {
@@ -1054,11 +1057,8 @@ func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 	clusterPair *stork_api.ClusterPair,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
-	if err != nil {
-		return err
-	}
 	transformName := ""
 	// this is already handled in pre-checks, we dont support multiple resource transformation
 	// rules specified in migration specs
@@ -1067,6 +1067,7 @@ func (m *MigrationController) prepareResources(
 	}
 
 	resPatch := make(map[string]stork_api.KindResourceTransform)
+	var err error
 	if transformName != "" {
 		resPatch, err = resourcecollector.GetResourcePatch(transformName, migration.Spec.Namespaces)
 		if err != nil {
@@ -1147,6 +1148,11 @@ func (m *MigrationController) updateResourceStatus(
 			(resource.Group == gkv.Group || (resource.Group == "core" && gkv.Group == "")) &&
 			resource.Version == gkv.Version &&
 			resource.Kind == gkv.Kind {
+			if _, ok := metadata.GetAnnotations()[resourcecollector.TransformedResourceName]; ok {
+				if len(migration.Spec.TransformSpecs) != 0 && len(migration.Spec.TransformSpecs) == 1 {
+					resource.TransformedBy = migration.Spec.TransformSpecs[0]
+				}
+			}
 			resource.Status = status
 			resource.Reason = reason
 			eventType := v1.EventTypeNormal
@@ -1302,7 +1308,7 @@ func (m *MigrationController) preparePVResource(
 	}
 	pv.Annotations[PVReclaimAnnotation] = string(pv.Spec.PersistentVolumeReclaimPolicy)
 	pv.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
-	_, err := m.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil)
+	_, err := m.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -1498,6 +1504,7 @@ func (m *MigrationController) applyResources(
 	objects []runtime.Unstructured,
 	resKinds map[string]string,
 	clusterPair *stork_api.ClusterPair,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -1522,12 +1529,9 @@ func (m *MigrationController) applyResources(
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
 	// create CRD on destination cluster
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
-	if err != nil {
-		logrus.Warnf("unable to list crd registrations: %v", err)
-		return err
-	}
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
 			// only create relevant crds on dest cluster
@@ -1572,11 +1576,11 @@ func (m *MigrationController) applyResources(
 
 			res.ResourceVersion = ""
 			// if crds is applied as v1beta on k8s version 1.16+ it will have
-			// preservedUnkownField set and api version converted to v1 ,
+			// preservedUnknownField set and api version converted to v1 ,
 			// which cause issue while applying it on dest cluster,
 			// since we will be applying v1 crds with non-valid schema
 
-			// this converts `preserveUnknownFiels`(deprecated) to spec.Versions[*].xPreservedUnknown
+			// this converts `preserveUnknownFields`(deprecated) to spec.Versions[*].xPreservedUnknown
 			// equivalent
 			var updatedVersions []apiextensionsv1.CustomResourceDefinitionVersion
 			if res.Spec.PreserveUnknownFields {
@@ -2015,7 +2019,7 @@ func (m *MigrationController) applyResources(
 					case "Service":
 						var skipUpdate bool
 						skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
-						if err == nil && skipUpdate {
+						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
 							break
 						}
 						fallthrough
@@ -2140,30 +2144,28 @@ func (m *MigrationController) getMigrationSummary(migration *stork_api.Migration
 		migrationSummary.ElapsedTimeForVolumeMigration = elapsedTimeVolume
 	}
 
-	if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
-		totalResources := uint64(len(migration.Status.Resources))
-		doneResources := uint64(0)
-		for _, resource := range migration.Status.Resources {
-			if resource.Status == stork_api.MigrationStatusSuccessful {
-				doneResources++
-			}
+	totalResources := uint64(len(migration.Status.Resources))
+	doneResources := uint64(0)
+	for _, resource := range migration.Status.Resources {
+		if resource.Status == stork_api.MigrationStatusSuccessful {
+			doneResources++
 		}
-		if totalResources > 0 {
-			migrationSummary.TotalNumberOfResources = totalResources
-			migrationSummary.NumberOfMigratedResources = doneResources
-		}
-		elapsedTimeResources := "NA"
-		if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
-			if migration.Status.Stage == stork_api.MigrationStageFinal {
-				if !migration.Status.ResourceMigrationFinishTimestamp.IsZero() {
-					elapsedTimeResources = migration.Status.ResourceMigrationFinishTimestamp.Sub(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
-				}
-			} else {
-				elapsedTimeResources = time.Since(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
-			}
-		}
-		migrationSummary.ElapsedTimeForResourceMigration = elapsedTimeResources
 	}
+	if totalResources > 0 {
+		migrationSummary.TotalNumberOfResources = totalResources
+		migrationSummary.NumberOfMigratedResources = doneResources
+	}
+	elapsedTimeResources := "NA"
+	if !migration.Status.VolumeMigrationFinishTimestamp.IsZero() {
+		if migration.Status.Stage == stork_api.MigrationStageFinal {
+			if !migration.Status.ResourceMigrationFinishTimestamp.IsZero() {
+				elapsedTimeResources = migration.Status.ResourceMigrationFinishTimestamp.Sub(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
+			}
+		} else {
+			elapsedTimeResources = time.Since(migration.Status.VolumeMigrationFinishTimestamp.Time).String()
+		}
+	}
+	migrationSummary.ElapsedTimeForResourceMigration = elapsedTimeResources
 
 	migrationSummary.TotalBytesMigrated = totalBytes
 	return migrationSummary

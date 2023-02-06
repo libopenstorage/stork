@@ -346,7 +346,7 @@ func (a *azureOps) SetInstanceGroupSize(instanceGroupID string,
 
 	instanceGroupSize := int32(count)
 	agentPoolProperties := containerservice.ManagedClusterAgentPoolProfileProperties{
-		Count: &instanceGroupSize,
+		Count:  &instanceGroupSize,
 		OsType: containerservice.Linux,
 	}
 
@@ -368,6 +368,7 @@ func (a *azureOps) SetInstanceGroupSize(instanceGroupID string,
 func (a *azureOps) Create(
 	template interface{},
 	labels map[string]string,
+	options map[string]string,
 ) (interface{}, error) {
 	d, ok := template.(*compute.Disk)
 	if !ok {
@@ -494,7 +495,7 @@ func (a *azureOps) handleAttachError(err error) error {
 			// but did not succeed. We need to explicitly remove it to proceed.
 			matches := attachFailureMessageRegex.FindStringSubmatch(re.ServiceError.Message)
 			if len(matches) == 2 {
-				detachErr := a.Detach(matches[1])
+				detachErr := a.Detach(matches[1], nil)
 				if detachErr != nil {
 					logrus.Warnf("Failed to detach disk %v: %v", matches[1], detachErr)
 				}
@@ -504,7 +505,7 @@ func (a *azureOps) handleAttachError(err error) error {
 	return err
 }
 
-func (a *azureOps) Detach(diskName string) error {
+func (a *azureOps) Detach(diskName string, options map[string]string) error {
 	return a.detachInternal(diskName, a.instance)
 }
 
@@ -559,7 +560,7 @@ func (a *azureOps) detachInternal(diskName, instance string) error {
 	return a.waitForDetach(diskName, instance)
 }
 
-func (a *azureOps) Delete(diskName string) error {
+func (a *azureOps) Delete(diskName string, options map[string]string) error {
 	ctx := context.Background()
 	future, err := a.disksClient.Delete(ctx, a.resourceGroupName, diskName)
 	if err != nil {
@@ -576,12 +577,13 @@ func (a *azureOps) Delete(diskName string) error {
 }
 
 func (a *azureOps) DeleteFrom(diskName, _ string) error {
-	return a.Delete(diskName)
+	return a.Delete(diskName, nil)
 }
 
 func (a *azureOps) Expand(
 	diskName string,
 	newSizeInGiB uint64,
+	options map[string]string,
 ) (uint64, error) {
 	disk, err := a.disksClient.Get(
 		context.Background(),
@@ -644,7 +646,7 @@ func (a *azureOps) FreeDevices(
 	}
 }
 
-func (a *azureOps) Inspect(diskNames []*string) ([]interface{}, error) {
+func (a *azureOps) Inspect(diskNames []*string, options map[string]string) ([]interface{}, error) {
 	var disks []interface{}
 
 	for _, diskName := range diskNames {
@@ -823,7 +825,7 @@ func (a *azureOps) devicePath(diskName string) (string, error) {
 	)
 }
 
-func (a *azureOps) Snapshot(diskName string, readonly bool) (interface{}, error) {
+func (a *azureOps) Snapshot(diskName string, readonly bool, options map[string]string) (interface{}, error) {
 	if !readonly {
 		return nil, fmt.Errorf("read-write snapshots are not supported in Azure")
 	}
@@ -861,7 +863,7 @@ func (a *azureOps) Snapshot(diskName string, readonly bool) (interface{}, error)
 	return &snap, err
 }
 
-func (a *azureOps) SnapshotDelete(snapName string) error {
+func (a *azureOps) SnapshotDelete(snapName string, options map[string]string) error {
 	ctx := context.Background()
 	future, err := a.snapshotsClient.Delete(ctx, a.resourceGroupName, snapName)
 	if err != nil {
@@ -877,7 +879,7 @@ func (a *azureOps) SnapshotDelete(snapName string) error {
 	return err
 }
 
-func (a *azureOps) ApplyTags(diskName string, labels map[string]string) error {
+func (a *azureOps) ApplyTags(diskName string, labels map[string]string, options map[string]string) error {
 	if len(labels) == 0 {
 		return nil
 	}
@@ -921,7 +923,7 @@ func (a *azureOps) ApplyTags(diskName string, labels map[string]string) error {
 	return err
 }
 
-func (a *azureOps) RemoveTags(diskName string, labels map[string]string) error {
+func (a *azureOps) RemoveTags(diskName string, labels map[string]string, options map[string]string) error {
 	if len(labels) == 0 {
 		return nil
 	}

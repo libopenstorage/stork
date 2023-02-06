@@ -22,7 +22,7 @@ type StorageNode struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
 	Spec            StorageNodeSpec `json:"spec,omitempty"`
-	Status          NodeStatus      `json:"status,omitemtpy"`
+	Status          NodeStatus      `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
