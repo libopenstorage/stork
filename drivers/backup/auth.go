@@ -441,7 +441,6 @@ func FetchIDOfUser(userName string) (string, error) {
 	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
-	log.Infof("User ID response for user %s - %s", userName, string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return "", err
@@ -460,7 +459,7 @@ func FetchIDOfUser(userName string) (string, error) {
 			break
 		}
 	}
-	log.Infof("Fetching ID of user %s - %s", userName, clientID)
+
 	return clientID, nil
 }
 
@@ -691,8 +690,7 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	resp, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
-	log.Infof("Creating user response - %s", string(resp))
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -941,8 +939,7 @@ func AddGroup(group string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
-	log.Infof("Creating group response - %s", string(response))
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -1048,8 +1045,7 @@ func AddGroupToUser(user, group string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
-	log.Infof("Adding user to group response - %s", string(response))
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -1072,7 +1068,7 @@ func FetchIDOfGroup(name string) (string, error) {
 			break
 		}
 	}
-	log.Infof("Fetching ID of group %s - %s", name, groupID)
+
 	return groupID, nil
 }
 

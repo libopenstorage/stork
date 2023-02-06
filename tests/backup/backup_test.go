@@ -677,7 +677,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			ShareBackup(backupName, nil, []string{userName}, ViewOnlyAccess, ctx)
 		})
 		Step("Share backup with group having full access", func() {
-			log.InfoD("Adding user with readonly access")
+			log.InfoD("Adding user with full access")
 			ShareBackup(backupName, []string{groupName}, nil, FullAccess, ctx)
 		})
 		Step("Share Backup with View Only access to a user of Full access group and Validate", func() {
@@ -3078,6 +3078,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -3168,6 +3169,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		for _, backupName := range backupNames {
 			wg.Add(1)
 			go func(backupName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %v", backupName))
@@ -5502,6 +5504,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -5643,6 +5646,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 		for _, backupName := range newBackupNames {
 			wg.Add(1)
 			go func(backupName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %v", backupName))
