@@ -5325,6 +5325,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	bkpNamespaces = make([]string, 0)
 	labelSelectors := make(map[string]string)
 	params := make(map[string]string)
+	var backupNames []string
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58043)
@@ -5383,6 +5384,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, "Verifying backup creation with custom resources")
+				backupNames = append(backupNames, backupName)
 			}
 		})
 		Step("Create new storage class for restore", func() {
@@ -5411,19 +5413,20 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-				restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
-				scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
-				pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
-				singlePvc := pvcs.Items[0]
-				dash.VerifyFatal(err, nil, "Getting PVC from namespace")
-				sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
-				dash.VerifyFatal(err, nil, "Getting SC from PVC")
-				storageClassMapping[sourceScName.Name] = scName
-				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
-				namespaceMapping[namespace] = restoredNameSpace
-				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, storageClassMapping)
-				dash.VerifyFatal(err, nil, "Restoring with custom Storage Class Mapping")
+				for _, backupName := range backupNames {
+					restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
+					scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
+					pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace [%s]. Total PVCs - %d", namespace, len(pvcs.Items)))
+					singlePvc := pvcs.Items[0]
+					sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC from PVC - %s", singlePvc.GetName()))
+					storageClassMapping[sourceScName.Name] = scName
+					restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
+					namespaceMapping[namespace] = restoredNameSpace
+					err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, storageClassMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring with custom Storage Class Mapping - %v", namespaceMapping))
+				}
 			}
 		})
 		Step("Validate applications", func() {
