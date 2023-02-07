@@ -459,7 +459,7 @@ func FetchIDOfUser(userName string) (string, error) {
 			break
 		}
 	}
-
+	log.Infof("Fetching ID of user %s - %s", userName, clientID)
 	return clientID, nil
 }
 
@@ -690,7 +690,8 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	log.Infof("Response for user [%s] creation - %s", userName, string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -716,7 +717,8 @@ func DeleteUser(userName string) error {
 		return err
 	}
 
-	_, err = processHTTPRequest(method, reqURL, headers, nil)
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	log.Infof("Response for user [%s] deletion - %s", userName, string(response))
 	if err != nil {
 		return err
 	}
@@ -939,7 +941,8 @@ func AddGroup(group string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	log.Infof("Creating group response - %s", string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -1045,7 +1048,8 @@ func AddGroupToUser(user, group string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
+	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
+	log.Infof("Adding user to group response - %s", string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -1068,7 +1072,7 @@ func FetchIDOfGroup(name string) (string, error) {
 			break
 		}
 	}
-
+	log.Infof("Fetching ID of group %s - %s", name, groupID)
 	return groupID, nil
 }
 

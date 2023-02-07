@@ -8373,6 +8373,28 @@ func GetAllBackupsAdmin() ([]string, error) {
 	return backupNames, err
 }
 
+// GetAllRestoresAdmin returns all the backups that px-central-admin has access to
+func GetAllRestoresAdmin() ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return restoreNames, err
+	}
+
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
+}
+
 // TODO: There is no delete org API
 /*func DeleteOrganization(orgID string) {
 	Step(fmt.Sprintf("Delete organization [%s]", orgID), func() {
@@ -8452,4 +8474,48 @@ func removeIntItemFromSlice(itemList []int, item []int) []int {
 		itemList = append(itemList[:index], itemList[index+1:]...)
 	}
 	return itemList
+}
+
+func getAllBackupLocations(ctx context.Context) (map[string]string, error) {
+	backupLocationMap := make(map[string]string, 0)
+	backupDriver := Inst().Backup
+	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
+		OrgId: orgID,
+	}
+	response, err := backupDriver.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
+	if err != nil {
+		return backupLocationMap, err
+	}
+	if len(response.BackupLocations) > 0 {
+		log.Infof("Found backup locations - ")
+		for _, backupLocation := range response.BackupLocations {
+			backupLocationMap[backupLocation.Uid] = backupLocation.Name
+			log.Infof(backupLocation.Name)
+		}
+	} else {
+		log.Info("No backup locations found")
+	}
+	return backupLocationMap, nil
+}
+
+func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
+	cloudCredentialMap := make(map[string]string, 0)
+	backupDriver := Inst().Backup
+	cloudCredentialEnumerateRequest := &api.CloudCredentialEnumerateRequest{
+		OrgId: orgID,
+	}
+	response, err := backupDriver.EnumerateCloudCredential(ctx, cloudCredentialEnumerateRequest)
+	if err != nil {
+		return cloudCredentialMap, err
+	}
+	if len(response.CloudCredentials) > 0 {
+		log.Infof("Found cloud credentials - ")
+		for _, cloudCredential := range response.CloudCredentials {
+			cloudCredentialMap[cloudCredential.Uid] = cloudCredential.Name
+			log.Infof(cloudCredential.Name)
+		}
+	} else {
+		log.Info("No cloud credentials found")
+	}
+	return cloudCredentialMap, nil
 }
