@@ -3,23 +3,22 @@ package controllers
 import (
 	"context"
 	"fmt"
-	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/utils"
-
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/mitchellh/hashstructure"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -472,11 +471,14 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			if err != nil {
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
 				log.MigrationLog(migration).Errorf(message)
-				m.recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					message)
-				return nil
+				// Don't need to log this event as Stork retries if it fails to update
+				if !strings.Contains(message, "please apply your changes to the latest version and try again") {
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						message)
+					return nil
+				}
 			}
 		} else {
 			migration.Status.Stage = stork_api.MigrationStageApplications
