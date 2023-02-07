@@ -1,50 +1,37 @@
 package email
 
 import (
-	"fmt"
+	"crypto/tls"
+	"log"
 
-	"github.com/sendgrid/sendgrid-go"
-	"github.com/sendgrid/sendgrid-go/helpers/mail"
+	gomail "gopkg.in/gomail.v2"
 )
 
 // Email contains details about email
 type Email struct {
-	Subject        string
-	From           string
-	To             []string
-	Content        string
-	SendGridAPIKey string
+	Subject         string
+	From            string
+	To              []string
+	Content         string
+	EmailHostServer string
 }
 
 const (
-	templateID       = "93bb7323-6314-4075-b2ee-a500dbae2d99"
-	sendgridHost     = "https://api.sendgrid.com"
-	sendgridEndpoint = "/v3/mail/send"
+	EmailPortKey = 25
 )
 
 // SendEmail sends email to recipients
 func (email *Email) SendEmail() error {
-	from := mail.NewEmail("", email.From)
-	m := mail.NewV3Mail()
-	m.SetFrom(from)
-	m.Subject = email.Subject
-	tos := []*mail.Email{}
-	for _, toEmailID := range email.To {
-		tos = append(tos, mail.NewEmail("User", toEmailID))
-	}
-	p := mail.NewPersonalization()
-	content := mail.NewContent("text/html", email.Content)
-	p.AddTos(tos...)
-	m.AddContent(content)
-	m.AddPersonalizations(p)
-	m.SetTemplateID(templateID)
-
-	request := sendgrid.GetRequest(email.SendGridAPIKey, sendgridEndpoint, sendgridHost)
-	request.Method = "POST"
-	request.Body = mail.GetRequestBody(m)
-	response, err := sendgrid.API(request)
-	if err != nil {
-		return fmt.Errorf("Error while sending email. Response:[%+v], Error:[%v]", response, err)
+	m := gomail.NewMessage()
+	m.SetHeader("From", email.From)
+	m.SetHeader("Subject", email.Subject)
+	tos := email.To
+	m.SetHeader("To", tos...)
+	m.SetBody("text/html", email.Content)
+	dialer := gomail.Dialer{Host: email.EmailHostServer, Port: EmailPortKey, Username: "", Password: ""}
+	dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+	if err := dialer.DialAndSend(m); err != nil {
+		log.Fatal(err)
 	}
 	return nil
 }

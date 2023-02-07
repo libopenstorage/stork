@@ -931,11 +931,8 @@ github.com/russross/blackfriday
 github.com/ryanuber/go-glob
 # github.com/sendgrid/rest v2.6.0+incompatible
 ## explicit
-github.com/sendgrid/rest
 # github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 ## explicit
-github.com/sendgrid/sendgrid-go
-github.com/sendgrid/sendgrid-go/helpers/mail
 # github.com/shopspring/decimal v1.2.0
 ## explicit; go 1.13
 github.com/shopspring/decimal
@@ -1297,6 +1294,19 @@ google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
+<<<<<<< HEAD
+=======
+google.golang.org/protobuf/types/pluginpb
+# gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc
+## explicit
+gopkg.in/alexcesaro/quotedprintable.v3
+# gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
+## explicit
+gopkg.in/gomail.v2
+# gopkg.in/gorp.v1 v1.7.2
+## explicit
+gopkg.in/gorp.v1
+>>>>>>> 683f1b243 (Added email send changes, vendored gomail package)
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0

@@ -66,6 +66,8 @@ const (
 	DefaultEmailRecipient = "test@portworx.com"
 	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
+	// EmailHostServerField is field in configmap which stores the server address
+	EmailHostServerField = "emailHostServer"
 )
 
 const (
@@ -109,6 +111,9 @@ var longevityLogger *lumberjack.Logger
 
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
+
+// EmailHostServer to use for sending email
+var EmailServer string
 
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
@@ -2446,11 +2451,11 @@ func TriggerEmailReporter() {
 	}
 
 	emailDetails := &email.Email{
-		Subject:        subject,
-		Content:        content,
-		From:           from,
-		To:             EmailRecipients,
-		SendGridAPIKey: SendGridEmailAPIKey,
+		Subject:         subject,
+		Content:         content,
+		From:            from,
+		To:              EmailRecipients,
+		EmailHostServer: EmailServer,
 	}
 
 	if err := emailDetails.SendEmail(); err != nil {
