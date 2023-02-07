@@ -6381,10 +6381,10 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("autouser%v", i)
+				userName := fmt.Sprintf("testautouser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
 				role := roles[rand.Intn(len(roles))]
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
@@ -6406,6 +6406,8 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
+		// Waiting for keycloak to sync up before moving for validation
+		time.Sleep(time.Minute * 1)
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
 			for user, role := range userRoleMapping {
