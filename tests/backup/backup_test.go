@@ -6353,7 +6353,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("atuser%v", i)
+				userName := fmt.Sprintf("testautouser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
