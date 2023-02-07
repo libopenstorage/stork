@@ -114,7 +114,7 @@ func (c *Client) GetPods(namespace string, labelSelector map[string]string) (*co
 }
 
 // GetPodsByNode returns all pods in given namespace and given k8s node name.
-//  If namespace is empty, it will return pods from all namespaces
+// If namespace is empty, it will return pods from all namespaces
 func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, error) {
 	if len(nodeName) == 0 {
 		return nil, fmt.Errorf("node name is required for this API")
@@ -128,7 +128,7 @@ func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, err
 }
 
 // GetPodsByNodeAndLabels returns all pods in given namespace and given k8s node name for the given labels
-//  If namespace is empty, it will return pods from all namespaces
+// If namespace is empty, it will return pods from all namespaces
 func (c *Client) GetPodsByNodeAndLabels(nodeName, namespace string, labels map[string]string) (*corev1.PodList, error) {
 	if len(nodeName) == 0 {
 		return nil, fmt.Errorf("node name is required for this API")
@@ -519,8 +519,8 @@ func (c *Client) GetPodLog(podName string, ns string, podLogOptions *corev1.PodL
 }
 
 // isAnyVolumeUsingVolumePlugin returns true if any of the given volumes is using a storage class for the given plugin
-//	In case errors are found while looking up a particular volume, the function ignores the errors as the goal is to
-//	find if there is any match or not
+// In case errors are found while looking up a particular volume, the function ignores the errors as the goal is to
+// find if there is any match or not
 func (c *Client) isAnyVolumeUsingVolumePlugin(volumes []corev1.Volume, volumeNamespace, plugin string) bool {
 	for _, v := range volumes {
 		if v.PersistentVolumeClaim != nil {

@@ -16,6 +16,8 @@ import (
 type EventOps interface {
 	// CreateEvent puts an event into k8s etcd
 	CreateEvent(event *corev1.Event) (*corev1.Event, error)
+	// UpdateEvent updates an event in k8s etcd
+	UpdateEvent(event *corev1.Event) (*corev1.Event, error)
 	// ListEvents retrieves all events registered with kubernetes
 	ListEvents(namespace string, opts metav1.ListOptions) (*corev1.EventList, error)
 }
@@ -26,6 +28,14 @@ func (c *Client) CreateEvent(event *corev1.Event) (*corev1.Event, error) {
 		return nil, err
 	}
 	return c.kubernetes.CoreV1().Events(event.Namespace).Create(context.TODO(), event, metav1.CreateOptions{})
+}
+
+// UpdateEvent updates an event in k8s etcd
+func (c *Client) UpdateEvent(event *corev1.Event) (*corev1.Event, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.kubernetes.CoreV1().Events(event.Namespace).Update(context.TODO(), event, metav1.UpdateOptions{})
 }
 
 // ListEvents retrieves all events registered with kubernetes
@@ -43,6 +53,7 @@ type RecorderOps interface {
 	RecordEvent(source v1.EventSource, object runtime.Object, eventtype, reason, message string)
 }
 
+// RecordEvent records an event into k8s using client-go's EventRecorder inteface
 func (c *Client) RecordEvent(source v1.EventSource, object runtime.Object, eventtype, reason, message string) {
 	if err := c.initClient(); err != nil {
 		return

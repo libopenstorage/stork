@@ -186,9 +186,11 @@ func (mr *MockDriverMockRecorder) PreInstall(arg0 interface{}) *gomock.Call {
 }
 
 // SetDefaultsOnStorageCluster mocks base method.
-func (m *MockDriver) SetDefaultsOnStorageCluster(arg0 *v1.StorageCluster) {
+func (m *MockDriver) SetDefaultsOnStorageCluster(arg0 *v1.StorageCluster) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetDefaultsOnStorageCluster", arg0)
+	ret := m.ctrl.Call(m, "SetDefaultsOnStorageCluster", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // SetDefaultsOnStorageCluster indicates an expected call of SetDefaultsOnStorageCluster.

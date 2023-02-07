@@ -8,9 +8,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-version"
-	appsv1 "k8s.io/api/apps/v1"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,13 +41,32 @@ const (
 	MigrationPendingReason = "MigrationPending"
 	// MigrationCompletedReason is added to an event when the migration is completed.
 	MigrationCompletedReason = "MigrationCompleted"
-	// MigrationFailed is added to an event when the migration fails.
+	// MigrationFailedReason is added to an event when the migration fails.
 	MigrationFailedReason = "MigrationFailed"
+	// UnevenStorageNodesReason is added to an event when there are uneven number of storage nodes are labelled across zones
+	UnevenStorageNodesReason = "UnevenStorageNodes"
+	// AllStoragelessNodesReason is added to an event when all the nodes in the cluster is  labelled as storageless
+	AllStoragelessNodesReason = "AllStoragelessNodes"
 
 	// MigrationDryRunCompletedReason is added to an event when dry run is completed
 	MigrationDryRunCompletedReason = "MigrationDryRunCompleted"
-	// MigrationDryRunFailedReason is aded to an event when dry run fails.
+	// MigrationDryRunFailedReason is added to an event when dry run fails.
 	MigrationDryRunFailedReason = "MigrationDryRunFailed"
+
+	// DefaultImageRegistry is the default registry when no registry is provided
+	DefaultImageRegistry = "docker.io"
+
+	// StorkSchedulerName is the default scheduler for px-csi-ext pods
+	StorkSchedulerName = "stork"
+
+	// NodeTypeKey is the key of the label used to set node as storage or storageless
+	NodeTypeKey = "portworx.io/node-type"
+	// StorageNodeValue is the value for storage node
+	StorageNodeValue = "storage"
+	// StoragelessNodeValue is the value for storage node
+	StoragelessNodeValue = "storageless"
+	// StoragePartitioningEnvKey is the storage spec environment variable used to set storage/storageless node type
+	StoragePartitioningEnvKey = "ENABLE_ASG_STORAGE_PARTITIONING"
 )
 
 var (
@@ -57,13 +77,30 @@ var (
 		"index.docker.io":             true,
 		"registry-1.docker.io":        true,
 		"registry.connect.redhat.com": true,
+		"registry.k8s.io":             true,
 	}
+
 	// podTopologySpreadConstraintKeys is a list of topology keys considered for pod spread constraints
 	podTopologySpreadConstraintKeys = []string{
 		"topology.kubernetes.io/region",
 		"topology.kubernetes.io/zone",
 	}
 )
+
+// AddDefaultRegistryToImage adds default registry to image.
+func AddDefaultRegistryToImage(image string) string {
+	if image == "" {
+		return ""
+	}
+
+	for k := range commonDockerRegistries {
+		if strings.HasPrefix(image, k) || strings.HasPrefix(image, "gcr.io") || strings.HasPrefix(image, "k8s.gcr.io") {
+			return image
+		}
+	}
+
+	return DefaultImageRegistry + "/" + image
+}
 
 func getMergedCommonRegistries(cluster *corev1.StorageCluster) map[string]bool {
 	val, ok := cluster.Annotations[constants.AnnotationCommonImageRegistries]
@@ -103,7 +140,7 @@ func GetImageURN(cluster *corev1.StorageCluster, image string) string {
 	registryAndRepo = strings.TrimRight(registryAndRepo, "/")
 	if registryAndRepo == "" {
 		// no registry/repository specifed, return image
-		return image
+		return AddDefaultRegistryToImage(image)
 	}
 
 	imgParts := strings.Split(image, "/")
@@ -122,6 +159,7 @@ func GetImageURN(cluster *corev1.StorageCluster, image string) string {
 			imgParts = imgParts[len(imgParts)-1:]
 		}
 	}
+
 	return registryAndRepo + "/" + path.Join(imgParts...)
 }
 
@@ -218,33 +256,33 @@ func DeepEqualObjects(
 	return nil
 }
 
-// DeepEqualDeployment compares if two deployments are same.
-func DeepEqualDeployment(d1 *appsv1.Deployment, d2 *appsv1.Deployment) (bool, error) {
+// DeepEqualPodTemplate compares if two pod template specs are same.
+func DeepEqualPodTemplate(t1, t2 *v1.PodTemplateSpec) (bool, error) {
 	// DeepDerivative will return true if first argument is nil, hence check the length of volumes.
-	// The reason we don't use deepEqual for volumes is k8s API server may add defaultMode to it.
-	if !equality.Semantic.DeepDerivative(d1.Spec.Template.Spec.Containers, d2.Spec.Template.Spec.Containers) {
-		return false, fmt.Errorf("containers not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Containers, d2.Spec.Template.Spec.Containers)
+	// The reason we don't2 use deepEqual for volumes is k8s API server may add defaultMode to it.
+	if !equality.Semantic.DeepDerivative(t1.Spec.Containers, t2.Spec.Containers) {
+		return false, fmt.Errorf("containers not equal, first: %+v, second: %+v", t1.Spec.Containers, t2.Spec.Containers)
 	}
 
-	if !(len(d1.Spec.Template.Spec.Volumes) == len(d2.Spec.Template.Spec.Volumes) &&
-		equality.Semantic.DeepDerivative(d1.Spec.Template.Spec.Volumes, d2.Spec.Template.Spec.Volumes)) {
-		return false, fmt.Errorf("volumes not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Volumes, d2.Spec.Template.Spec.Volumes)
+	if !(len(t1.Spec.Volumes) == len(t2.Spec.Volumes) &&
+		equality.Semantic.DeepDerivative(t1.Spec.Volumes, t2.Spec.Volumes)) {
+		return false, fmt.Errorf("volumes not equal, first: %+v, second: %+v", t1.Spec.Volumes, t2.Spec.Volumes)
 	}
 
-	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.ImagePullSecrets, d2.Spec.Template.Spec.ImagePullSecrets) {
-		return false, fmt.Errorf("image pull secrets not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.ImagePullSecrets, d2.Spec.Template.Spec.ImagePullSecrets)
+	if !equality.Semantic.DeepEqual(t1.Spec.ImagePullSecrets, t2.Spec.ImagePullSecrets) {
+		return false, fmt.Errorf("image pull secrets not equal, first: %+v, second: %+v", t1.Spec.ImagePullSecrets, t2.Spec.ImagePullSecrets)
 	}
 
-	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.Affinity, d2.Spec.Template.Spec.Affinity) {
-		return false, fmt.Errorf("affinity not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Affinity, d2.Spec.Template.Spec.Affinity)
+	if !equality.Semantic.DeepEqual(t1.Spec.Affinity, t2.Spec.Affinity) {
+		return false, fmt.Errorf("affinity not equal, first: %+v, second: %+v", t1.Spec.Affinity, t2.Spec.Affinity)
 	}
 
-	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.Tolerations, d2.Spec.Template.Spec.Tolerations) {
-		return false, fmt.Errorf("tolerations not equal, first: %+v, second: %+v", d1.Spec.Template.Spec.Tolerations, d2.Spec.Template.Spec.Tolerations)
+	if !equality.Semantic.DeepEqual(t1.Spec.Tolerations, t2.Spec.Tolerations) {
+		return false, fmt.Errorf("tolerations not equal, first: %+v, second: %+v", t1.Spec.Tolerations, t2.Spec.Tolerations)
 	}
 
-	if !equality.Semantic.DeepEqual(d1.Spec.Template.Spec.ServiceAccountName, d2.Spec.Template.Spec.ServiceAccountName) {
-		return false, fmt.Errorf("service account name not equal, first: %s, second: %s", d1.Spec.Template.Spec.ServiceAccountName, d2.Spec.Template.Spec.ServiceAccountName)
+	if !equality.Semantic.DeepEqual(t1.Spec.ServiceAccountName, t2.Spec.ServiceAccountName) {
+		return false, fmt.Errorf("service account name not equal, first: %s, second: %s", t1.Spec.ServiceAccountName, t2.Spec.ServiceAccountName)
 	}
 
 	return true, nil
@@ -262,6 +300,21 @@ func HasNodeAffinityChanged(
 		return cluster.Spec.Placement.NodeAffinity != nil
 	}
 	return !reflect.DeepEqual(cluster.Spec.Placement.NodeAffinity, existingAffinity.NodeAffinity)
+}
+
+// HasSchedulerStateChanged checks if the stork has been enabled/disabled in the StorageCluster
+func HasSchedulerStateChanged(
+	cluster *corev1.StorageCluster,
+	previousSchedulerName string,
+) bool {
+	if cluster.Spec.Stork == nil {
+		return v1.DefaultSchedulerName != previousSchedulerName
+	}
+	currentSchedulerName := v1.DefaultSchedulerName
+	if cluster.Spec.Stork.Enabled {
+		currentSchedulerName = StorkSchedulerName
+	}
+	return currentSchedulerName != previousSchedulerName
 }
 
 // ExtractVolumesAndMounts returns a list of Kubernetes volumes and volume mounts from the
@@ -409,4 +462,67 @@ func GetTopologySpreadConstraintsFromNodes(
 		})
 	}
 	return constraints, nil
+}
+
+// UpdateStorageClusterCondition update condition based on source and type
+func UpdateStorageClusterCondition(
+	cluster *corev1.StorageCluster,
+	toUpdate *corev1.ClusterCondition,
+) {
+	if toUpdate == nil || toUpdate.Source == "" || toUpdate.Type == "" {
+		logrus.Warn("empty or invalid storage cluster condition provided")
+		return
+	}
+
+	// Search for condition by source and type
+	foundIndex := -1
+	for i, condition := range cluster.Status.Conditions {
+		if toUpdate.Source == condition.Source && toUpdate.Type == condition.Type {
+			foundIndex = i
+			// No update needed but populate the last transition time
+			if toUpdate.Status == condition.Status &&
+				toUpdate.Message == condition.Message {
+				toUpdate.LastTransitionTime = condition.LastTransitionTime
+				return
+			}
+			break
+		}
+	}
+
+	// Create a new condition or overwrite existing one
+	var sortedConditions []corev1.ClusterCondition
+	if foundIndex == -1 {
+		sortedConditions = make([]corev1.ClusterCondition, len(cluster.Status.Conditions)+1)
+	} else {
+		sortedConditions = make([]corev1.ClusterCondition, len(cluster.Status.Conditions))
+	}
+
+	if toUpdate.LastTransitionTime.Equal(&metav1.Time{}) {
+		// Set timestamp if not provided, truncate to second
+		toUpdate.LastTransitionTime = metav1.NewTime(time.Now().Truncate(time.Second))
+	}
+	sortedConditions[0] = *toUpdate.DeepCopy()
+
+	for index, indexSorted := 0, 1; index < len(cluster.Status.Conditions) && indexSorted < len(sortedConditions); index++ {
+		if index == foundIndex {
+			continue
+		}
+		sortedConditions[indexSorted] = cluster.Status.Conditions[index]
+		indexSorted++
+	}
+	cluster.Status.Conditions = sortedConditions
+}
+
+// GetStorageClusterCondition returns the condition based on source and type
+func GetStorageClusterCondition(
+	cluster *corev1.StorageCluster,
+	conditionSource string,
+	conditionType corev1.ClusterConditionType,
+) *corev1.ClusterCondition {
+	for _, condition := range cluster.Status.Conditions {
+		if condition.Source == conditionSource && condition.Type == conditionType {
+			return condition.DeepCopy()
+		}
+	}
+	return nil
 }
