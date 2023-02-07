@@ -3,7 +3,6 @@ package dataexport
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -476,7 +475,15 @@ func (c *Controller) createJobCredCertSecrets(
 			}
 			return data, err
 		}
-		if len(pods) > 0 {
+		// filter out the pods that are create by us
+		count := len(pods)
+		for _, pod := range pods {
+			labels := pod.ObjectMeta.Labels
+			if _, ok := labels[drivers.DriverNameLabel]; ok {
+				count--
+			}
+		}
+		if count > 0 {
 			namespace = utils.AdminNamespace
 		}
 		blName = dataExport.Spec.Destination.Name
@@ -1968,7 +1975,7 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 func createCertificateSecret(secretName, namespace string, labels map[string]string) error {
 	drivers.CertFilePath = os.Getenv(drivers.CertDirPath)
 	if drivers.CertFilePath != "" {
-		certificateData, err := ioutil.ReadFile(filepath.Join(drivers.CertFilePath, drivers.CertFileName))
+		certificateData, err := os.ReadFile(filepath.Join(drivers.CertFilePath, drivers.CertFileName))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed reading data from file %s : %s", drivers.CertFilePath, err)
 			logrus.Errorf("%v", errMsg)

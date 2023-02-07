@@ -426,7 +426,15 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 	}
 	var resourceNamespace string
 	var live bool
-	if len(pods) > 0 {
+	// filter out the pods that are create by us
+	count := len(pods)
+	for _, pod := range pods {
+		labels := pod.ObjectMeta.Labels
+		if _, ok := labels[drivers.DriverNameLabel]; ok {
+			count--
+		}
+	}
+	if count > 0 {
 		resourceNamespace = utils.AdminNamespace
 		live = true
 	} else {
