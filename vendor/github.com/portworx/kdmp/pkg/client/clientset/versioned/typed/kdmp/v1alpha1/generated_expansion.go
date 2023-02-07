@@ -12,6 +12,10 @@ type BackupLocationMaintenanceExpansion interface{}
 
 type DataExportExpansion interface{}
 
+type ResourceBackupExpansion interface{}
+
+type ResourceExportExpansion interface{}
+
 type VolumeBackupExpansion interface{}
 
 type VolumeBackupDeleteExpansion interface{}

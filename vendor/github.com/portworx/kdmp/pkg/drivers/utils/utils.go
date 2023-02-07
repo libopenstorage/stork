@@ -451,17 +451,17 @@ func CreateImageRegistrySecret(sourceName, destName, sourceNamespace, destNamesp
 	return nil
 }
 
-//GetCredSecretName - get credential secret name
+// GetCredSecretName - get credential secret name
 func GetCredSecretName(name string) string {
 	return CredSecret + "-" + name
 }
 
-//GetImageSecretName - get image secret name
+// GetImageSecretName - get image secret name
 func GetImageSecretName(name string) string {
 	return ImageSecret + "-" + name
 }
 
-//GetCertSecretName - get cert secret name
+// GetCertSecretName - get cert secret name
 func GetCertSecretName(name string) string {
 	return CertSecret + "-" + name
 }

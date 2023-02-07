@@ -44,6 +44,7 @@ type Ops interface {
 	VolumeSnapshotRestoreOps
 	ApplicationRegistrationOps
 	ResourceTransformOps
+	PlatformCredentialOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
