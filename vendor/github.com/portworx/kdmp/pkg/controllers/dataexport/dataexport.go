@@ -71,7 +71,6 @@ func (c *Controller) Init(mgr manager.Manager) error {
 //
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-//
 func (c *Controller) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling DataExport %s/%s", request.Namespace, request.Name)
 
