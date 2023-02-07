@@ -68,7 +68,7 @@ const (
 	StorkAnnotationPrefix = "stork.libopenstorage.org/"
 	// StorkNamespacePrefix for namespace created for applying dry run resources
 	StorkNamespacePrefix = "stork-transform"
-	// Max number of times to retry applying resources on the desination
+	// Max number of times to retry applying resources on the destination
 	maxApplyRetries      = 10
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
@@ -532,7 +532,7 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
 		return err
 	}
-	destObjects, err := rc.GetResources(
+	destObjects, _, err := rc.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
 		nil,
@@ -548,7 +548,7 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
-	srcObjects, err := m.resourceCollector.GetResources(
+	srcObjects, _, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
 		nil,
@@ -914,6 +914,8 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 	}
 	resGroups := make(map[string]string)
 	var updateObjects, allObjects []runtime.Unstructured
+
+	var pvcsWithOwnerRef []v1.PersistentVolumeClaim
 	// Don't modify resources if mentioned explicitly in specs
 	resourceCollectorOpts := resourcecollector.Options{}
 	if *migration.Spec.SkipServiceUpdate {
@@ -929,13 +931,13 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		resourceCollectorOpts.IncludeAllNetworkPolicies = true
 	}
 	if volumesOnly {
-		allObjects, err = m.getVolumeOnlyMigrationResources(migration, resourceCollectorOpts)
+		allObjects, pvcsWithOwnerRef, err = m.getVolumeOnlyMigrationResources(migration, resourceCollectorOpts)
 		if err != nil {
 			// already raised event in getVolumeOnlyMigrationResources()
 			return err
 		}
 	} else {
-		allObjects, err = m.resourceCollector.GetResources(
+		allObjects, pvcsWithOwnerRef, err = m.resourceCollector.GetResources(
 			migration.Spec.Namespaces,
 			migration.Spec.Selectors,
 			nil,
@@ -1012,6 +1014,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
+
 	err = m.applyResources(migration, updateObjects, resGroups, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
@@ -1020,6 +1023,18 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			fmt.Sprintf("Error applying resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error applying resources: %v", err)
 		return err
+	}
+
+	if !volumesOnly {
+		err = m.updateOwnerReferenceOnPVC(migration, updateObjects, clusterPair, pvcsWithOwnerRef)
+		if err != nil {
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				fmt.Sprintf("Error updating PVC resource: %v", err))
+			log.MigrationLog(migration).Errorf("Error updating PVC resource:: %v", err)
+			return err
+		}
 	}
 
 	migration.Status.Stage = stork_api.MigrationStageFinal
@@ -1498,6 +1513,116 @@ func (m *MigrationController) getParsedLabels(
 	return m.getParsedMap(labels, clusterPair)
 }
 
+// updateOwnerReferenceOnPVC updates owner reference on PVC objects
+// on destination cluster
+func (m *MigrationController) updateOwnerReferenceOnPVC(
+	migration *stork_api.Migration,
+	objects []runtime.Unstructured,
+	clusterPair *stork_api.ClusterPair,
+	pvcsWithOwnerRef []v1.PersistentVolumeClaim,
+) error {
+	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+	if err != nil {
+		return err
+	}
+	remoteAdminConfig := remoteConfig
+	// Use the admin cluter pair for cluster scoped resources if it has been configured
+	if migration.Spec.AdminClusterPair != "" {
+		remoteAdminConfig, err = getClusterPairSchedulerConfig(migration.Spec.AdminClusterPair, m.migrationAdminNamespace)
+		if err != nil {
+			return err
+		}
+	}
+	adminClient, err := kubernetes.NewForConfig(remoteAdminConfig)
+	if err != nil {
+		return err
+	}
+	remoteInterface, err := dynamic.NewForConfig(remoteConfig)
+	if err != nil {
+		return err
+	}
+	remoteAdminInterface := remoteInterface
+	if migration.Spec.AdminClusterPair != "" {
+		remoteAdminInterface, err = dynamic.NewForConfig(remoteAdminConfig)
+		if err != nil {
+			return err
+		}
+	}
+
+	ruleset := m.getDefaultRuleSet()
+	for _, srcPvc := range pvcsWithOwnerRef {
+		destPvc, err := adminClient.CoreV1().PersistentVolumeClaims(srcPvc.GetNamespace()).Get(context.TODO(), srcPvc.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		// Skip updating if destination PVC has owner reference enabled
+		if len(destPvc.GetOwnerReferences()) > 0 {
+			continue
+		}
+
+		destPvcOwnersList := make([]metav1.OwnerReference, 0)
+
+		// This loop finds the owner reference for the current pvc owner
+		for _, pvcOwner := range srcPvc.GetOwnerReferences() {
+			var dynamicClient dynamic.ResourceInterface
+			ownerName := ""
+			for _, o := range objects {
+				metadata, err := meta.Accessor(o)
+				if err != nil {
+					return err
+				}
+				objectType, err := meta.TypeAccessor(o)
+				if err != nil {
+					return err
+				}
+				// Found the source object which is the parent of the source pvc resource
+				if metadata.GetName() == pvcOwner.Name && objectType.GetKind() == pvcOwner.Kind {
+					ownerName = metadata.GetName()
+					resource := &metav1.APIResource{
+						Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
+						Namespaced: len(metadata.GetNamespace()) > 0,
+					}
+					if resource.Namespaced {
+						dynamicClient = remoteInterface.Resource(
+							o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+					} else {
+						dynamicClient = remoteAdminInterface.Resource(
+							o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
+					}
+					break
+				}
+			}
+
+			if len(ownerName) == 0 {
+				return fmt.Errorf("could not find owner reference for pvc : %v", srcPvc.GetName())
+			}
+			destinationParentResourceUnstructured, err := dynamicClient.Get(context.TODO(), ownerName, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+
+			currOwner := metav1.OwnerReference{
+				APIVersion:         pvcOwner.APIVersion,
+				Kind:               pvcOwner.Kind,
+				Name:               pvcOwner.Name,
+				UID:                destinationParentResourceUnstructured.GetUID(),
+				Controller:         pvcOwner.Controller,
+				BlockOwnerDeletion: pvcOwner.BlockOwnerDeletion,
+			}
+			// There can be multiple owners for one resource. Update the current owner
+			// details in the list of owner references
+			destPvcOwnersList = append(destPvcOwnersList, currOwner)
+		}
+		if len(destPvcOwnersList) > 0 {
+			destPvc.SetOwnerReferences(destPvcOwnersList)
+			if _, err = adminClient.CoreV1().PersistentVolumeClaims(destPvc.GetNamespace()).Update(context.TODO(), destPvc, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
@@ -1522,14 +1647,9 @@ func (m *MigrationController) applyResources(
 	if err != nil {
 		return err
 	}
-	// TODO: we should use k8s code generator logic to pluralize
-	// crd resources instead of depending on inflect lib
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
+
+	ruleset := m.getDefaultRuleSet()
+
 	// create CRD on destination cluster
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
@@ -2207,8 +2327,9 @@ func (m *MigrationController) createCRD() error {
 func (m *MigrationController) getVolumeOnlyMigrationResources(
 	migration *stork_api.Migration,
 	resourceCollectorOpts resourcecollector.Options,
-) ([]runtime.Unstructured, error) {
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
 	var resources []runtime.Unstructured
+	var pvcWithOwnerRef []v1.PersistentVolumeClaim
 	// add pv objects
 	resource := metav1.APIResource{
 		Name:       "persistentvolumes",
@@ -2216,7 +2337,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		Version:    "v1",
 		Namespaced: false,
 	}
-	objects, err := m.resourceCollector.GetResourcesForType(
+	objects, _, err := m.resourceCollector.GetResourcesForType(
 		resource,
 		nil,
 		migration.Spec.Namespaces,
@@ -2231,7 +2352,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error getting pv resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
-		return resources, err
+		return resources, nil, err
 	}
 	resources = append(resources, objects.Items...)
 	// add pvcs to resource list
@@ -2241,7 +2362,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		Version:    "v1",
 		Namespaced: true,
 	}
-	objects, err = m.resourceCollector.GetResourcesForType(
+	objects, pvcWithOwnerRef, err = m.resourceCollector.GetResourcesForType(
 		resource,
 		nil,
 		migration.Spec.Namespaces,
@@ -2256,8 +2377,20 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error getting pv resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
-		return resources, err
+		return resources, nil, err
 	}
 	resources = append(resources, objects.Items...)
-	return resources, nil
+	return resources, pvcWithOwnerRef, nil
+}
+
+func (m *MigrationController) getDefaultRuleSet() *inflect.Ruleset {
+	// TODO: we should use k8s code generator logic to pluralize
+	// crd resources instead of depending on inflect lib
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
+	return ruleset
 }

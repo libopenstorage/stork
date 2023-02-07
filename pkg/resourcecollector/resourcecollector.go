@@ -17,6 +17,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+
+	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -248,6 +250,7 @@ func (r *ResourceCollector) GetResourceTypes(
 }
 
 // GetResourcesForType gets all the resources for the given type
+// and all PVCs which have an owner reference set.
 func (r *ResourceCollector) GetResourcesForType(
 	resource metav1.APIResource,
 	objects *Objects,
@@ -256,7 +259,7 @@ func (r *ResourceCollector) GetResourcesForType(
 	includeObjects map[stork_api.ObjectInfo]bool,
 	allDrivers bool,
 	opts Options,
-) (*Objects, error) {
+) (*Objects, []v1.PersistentVolumeClaim, error) {
 
 	if objects == nil {
 		objects = &Objects{
@@ -276,7 +279,7 @@ func (r *ResourceCollector) GetResourcesForType(
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		if !apierrors.IsForbidden(err) {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, ns := range namespaces {
@@ -298,51 +301,65 @@ func (r *ResourceCollector) GetResourcesForType(
 			LabelSelector: selectors,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("error listing objects for %v: %v", gvr, err)
+			return nil, nil, fmt.Errorf("error listing objects for %v: %v", gvr, err)
 		}
 		resourceObjects, err := meta.ExtractList(objectsList)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, o := range resourceObjects {
 			runtimeObject, ok := o.(runtime.Unstructured)
 			if !ok {
-				return nil, fmt.Errorf("error casting object: %v", o)
+				return nil, nil, fmt.Errorf("error casting object: %v", o)
 			}
 
 			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 			if err != nil {
-				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
+				return nil, nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 			}
 			if !collect {
 				continue
 			}
 			metadata, err := meta.Accessor(runtimeObject)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			objects.Items = append(objects.Items, runtimeObject)
 			objects.resourceMap[metadata.GetUID()] = true
 		}
 	}
 
-	modObjects, err := r.pruneOwnedResources(objects.Items, objects.resourceMap)
+	modObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(objects.Items, objects.resourceMap)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	crdList, err := storkcache.Instance().ListApplicationRegistrations()
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	}
+
+	// Creating a list of PVCs with owner reference before calling prepareResourcesForCollection
+	// prepareResourcesForCollection can update the PVC metadata which is required when updating
+	// owner references on the destination PVC objects
+	var pvcsWithOwnerReference []v1.PersistentVolumeClaim
+	var pvc v1.PersistentVolumeClaim
+	for _, o := range pvcObjectsWithOwnerRef {
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
+			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+		}
+		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
+	}
+
 	err = r.prepareResourcesForCollection(modObjects, namespaces, opts, crdList)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	objects.Items = modObjects
-	return objects, nil
+	return objects, pvcsWithOwnerReference, nil
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
+// and all PVCs which have an owner reference set
 func (r *ResourceCollector) GetResources(
 	namespaces []string,
 	labelSelectors map[string]string,
@@ -350,10 +367,10 @@ func (r *ResourceCollector) GetResources(
 	optionalResourceTypes []string,
 	allDrivers bool,
 	opts Options,
-) ([]runtime.Unstructured, error) {
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	allObjects := make([]runtime.Unstructured, 0)
 	// Map to prevent collection of duplicate objects
@@ -375,14 +392,14 @@ func (r *ResourceCollector) GetResources(
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		if !apierrors.IsForbidden(err) {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	for _, group := range r.discoveryHelper.Resources() {
 		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		for _, resource := range group.APIResources {
@@ -418,16 +435,16 @@ func (r *ResourceCollector) GetResources(
 					if apierrors.IsForbidden(err) {
 						continue
 					}
-					return nil, err
+					return nil, nil, err
 				}
 				objects, err := meta.ExtractList(objectsList)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				for _, o := range objects {
 					runtimeObject, ok := o.(runtime.Unstructured)
 					if !ok {
-						return nil, fmt.Errorf("error casting object: %v", o)
+						return nil, nil, fmt.Errorf("error casting object: %v", o)
 					}
 
 					var err error
@@ -444,14 +461,14 @@ func (r *ResourceCollector) GetResources(
 						if apierrors.IsForbidden(err) {
 							continue
 						}
-						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
+						return nil, nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
 					if !collect {
 						continue
 					}
 					metadata, err := meta.Accessor(runtimeObject)
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 					allObjects = append(allObjects, runtimeObject)
 					resourceMap[metadata.GetUID()] = true
@@ -460,16 +477,29 @@ func (r *ResourceCollector) GetResources(
 		}
 	}
 
-	allObjects, err = r.pruneOwnedResources(allObjects, resourceMap)
+	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// Creating a list of PVCs with owner reference before calling prepareResourcesForCollection
+	// prepareResourcesForCollection can update the PVC metadata which is required when updating
+	// owner references on the destination PVC objects
+	var pvcsWithOwnerReference []v1.PersistentVolumeClaim
+	var pvc v1.PersistentVolumeClaim
+	for _, o := range pvcObjectsWithOwnerRef {
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
+			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+		}
+		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}
 
 	err = r.prepareResourcesForCollection(allObjects, namespaces, opts, crdList)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return allObjects, nil
+
+	return allObjects, pvcsWithOwnerReference, nil
 }
 
 // IsNsPresentInIncludeResource checks if a given ns is present in the IncludeResource object
@@ -595,30 +625,45 @@ func (r *ResourceCollector) objectToBeCollected(
 // Prune objects that are owned by a CRD if we are also collecting the CR
 // since they will be recreated by the operator when the CR is created too.
 // For objects that have an ownerRef but we aren't collecting it's owner
-// remove the ownerRef so that the object doesn't get automatically deleted
-// when created
+// remove the ownerRef so that the object doesn't get automatically deleted.
+// Collect PVCs with owner reference separately as we do need to set owner
+// references for them after migrating parent CR
 func (r *ResourceCollector) pruneOwnedResources(
 	objects []runtime.Unstructured,
 	resourceMap map[types.UID]bool,
-) ([]runtime.Unstructured, error) {
+) ([]runtime.Unstructured, []runtime.Unstructured, error) {
 	updatedObjects := make([]runtime.Unstructured, 0)
+	pvcObjectsWithOwnerRef := make([]runtime.Unstructured, 0)
+
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		collect := true
 
 		objectType, err := meta.TypeAccessor(o)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
-		// Don't check for PVCs, we always want to collect them
-		if objectType.GetKind() != "PersistentVolumeClaim" {
-			owners := metadata.GetOwnerReferences()
-			if len(owners) != 0 {
+		owners := metadata.GetOwnerReferences()
+		if len(owners) != 0 {
+			if objectType.GetKind() == "PersistentVolumeClaim" {
+				for _, owner := range owners {
+					// Collect PVC objects separately. If OwnerReferences is available
+					// but the corresponding resource is not being collected, then
+					// no need to collect resource and we will not manually patch those PVCs
+					if _, exists := resourceMap[owner.UID]; exists {
+						var pvc v1.PersistentVolumeClaim
+						if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
+							return nil, nil, err
+						}
+						pvcObjectsWithOwnerRef = append(pvcObjectsWithOwnerRef, o)
+						break
+					}
+				}
+			} else {
 				if !skipOwnerRefCheck(metadata.GetAnnotations()) {
 					for _, owner := range owners {
 						// We don't collect pods, there might be some leader
@@ -652,7 +697,7 @@ func (r *ResourceCollector) pruneOwnedResources(
 		}
 	}
 
-	return updatedObjects, nil
+	return updatedObjects, pvcObjectsWithOwnerRef, nil
 
 }
 
