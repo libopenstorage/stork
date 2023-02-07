@@ -3,6 +3,7 @@ package resourcecollector
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -219,7 +220,13 @@ func (r *ResourceCollector) GetResourceTypes(
 		return nil, err
 	}
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := storkcache.Instance().ListApplicationRegistrations()
+	var crdList *stork_api.ApplicationRegistrationList
+	storkcache.Instance()
+	if !reflect.ValueOf(storage.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	} else {
@@ -333,7 +340,12 @@ func (r *ResourceCollector) GetResourcesForType(
 	if err != nil {
 		return nil, nil, err
 	}
-	crdList, err := storkcache.Instance().ListApplicationRegistrations()
+	var crdList *stork_api.ApplicationRegistrationList
+	if !reflect.ValueOf(storage.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	}
@@ -376,7 +388,12 @@ func (r *ResourceCollector) GetResources(
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := storkcache.Instance().ListApplicationRegistrations()
+	var crdList *stork_api.ApplicationRegistrationList
+	if !reflect.ValueOf(storage.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
 	if err != nil {
 		logrus.Warnf("Unable to get registered crds, err %v", err)
 	} else {

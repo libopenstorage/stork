@@ -27,7 +27,7 @@ func (c *Client) GetMutatingWebhookConfigurationV1beta1(name string) (*hook.Muta
 	return c.admission.MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
-// GetMutatingWebhookConfigurationV1beta1 creates given MutatingWebhookConfiguration
+// CreateMutatingWebhookConfigurationV1beta1 creates given MutatingWebhookConfiguration
 func (c *Client) CreateMutatingWebhookConfigurationV1beta1(cfg *hook.MutatingWebhookConfiguration) (*hook.MutatingWebhookConfiguration, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err

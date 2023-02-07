@@ -9,19 +9,20 @@ import (
 )
 
 const (
-	QPSRate   = "KUBERNETES_OPS_QPS_RATE"
-	BurstRate = "KUBERNETES_OPS_BURST_RATE"
+	qPSRate   = "KUBERNETES_OPS_QPS_RATE"
+	burstRate = "KUBERNETES_OPS_BURST_RATE"
 )
 
+// SetRateLimiter sets rate limiter
 func SetRateLimiter(config *rest.Config) error {
-	if val := os.Getenv(QPSRate); val != "" {
+	if val := os.Getenv(qPSRate); val != "" {
 		qps, err := strconv.Atoi(val)
 		if err != nil {
 			return fmt.Errorf("invalid qps count specified %v: %v", val, err)
 		}
 		config.QPS = float32(qps)
 	}
-	if val := os.Getenv(BurstRate); val != "" {
+	if val := os.Getenv(burstRate); val != "" {
 		burst, err := strconv.Atoi(val)
 		if err != nil {
 			return fmt.Errorf("invalid burst count specified %v: %v", val, err)

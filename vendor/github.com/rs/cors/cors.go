@@ -69,10 +69,15 @@ type Options struct {
 	Debug bool
 }
 
+// Logger generic interface for logger
+type Logger interface {
+	Printf(string, ...interface{})
+}
+
 // Cors http handler
 type Cors struct {
 	// Debug logger
-	Log *log.Logger
+	Log Logger
 	// Normalized list of plain allowed origins
 	allowedOrigins []string
 	// List of allowed origins containing wildcards
@@ -106,7 +111,7 @@ func New(options Options) *Cors {
 		maxAge:                 options.MaxAge,
 		optionPassthrough:      options.OptionsPassthrough,
 	}
-	if options.Debug {
+	if options.Debug && c.Log == nil {
 		c.Log = log.New(os.Stdout, "[cors] ", log.LstdFlags)
 	}
 
@@ -311,10 +316,6 @@ func (c *Cors) handleActualRequest(w http.ResponseWriter, r *http.Request) {
 	headers := w.Header()
 	origin := r.Header.Get("Origin")
 
-	if r.Method == http.MethodOptions {
-		c.logf("  Actual request no headers added: method == %s", r.Method)
-		return
-	}
 	// Always set Vary, see https://github.com/rs/cors/issues/10
 	headers.Add("Vary", "Origin")
 	if origin == "" {
@@ -349,7 +350,7 @@ func (c *Cors) handleActualRequest(w http.ResponseWriter, r *http.Request) {
 	c.logf("  Actual response added headers: %v", headers)
 }
 
-// convenience method. checks if debugging is turned on before printing
+// convenience method. checks if a logger is set.
 func (c *Cors) logf(format string, a ...interface{}) {
 	if c.Log != nil {
 		c.Log.Printf(format, a...)

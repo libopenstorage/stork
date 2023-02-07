@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8shelper "k8s.io/component-helpers/storage/volume"
-	pvutil "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
 )
 
 func (r *ResourceCollector) pvcToBeCollected(
@@ -90,7 +89,7 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 						if pvc.Annotations == nil {
 							pvc.Annotations = make(map[string]string)
 						}
-						pvc.Annotations[pvutil.AnnSelectedNode] = node.Name
+						pvc.Annotations[k8shelper.AnnSelectedNode] = node.Name
 						break
 					}
 				}

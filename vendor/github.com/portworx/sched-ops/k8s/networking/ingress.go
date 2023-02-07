@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Ops is an interface to perform kubernetes related operations on the crd resources.
+// IngressOps is an interface to perform kubernetes related operations on the crd resources.
 type IngressOps interface {
 	// CreateIngress creates the given ingress
 	CreateIngress(ingress *v1beta1.Ingress) (*v1beta1.Ingress, error)
@@ -25,6 +25,7 @@ type IngressOps interface {
 	ValidateIngress(ingress *v1beta1.Ingress, timeout, retryInterval time.Duration) error
 }
 
+// NamespaceDefault default namespace for ingress
 var NamespaceDefault = "default"
 
 // CreateIngress creates the given ingress
