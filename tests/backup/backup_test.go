@@ -6378,6 +6378,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
+		//Waiting for catalog to update before moving for validation
 		time.Sleep(time.Minute * 1)
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
