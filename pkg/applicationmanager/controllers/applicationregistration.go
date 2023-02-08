@@ -85,13 +85,15 @@ func createAppReg(regCRD map[string][]stork_api.ApplicationResource) error {
 						if newResource.Group == existingResource.Group &&
 							newResource.Kind == existingResource.Kind {
 							found = true
+							break
 						}
 					}
 					if !found {
 						// Found a resource whose Group+Kind does not match with an existing app reg
 						// For ex. strimzi.kafka.io.Kafka vs platform.confluent.io.Kafka
 						needsRegistration = true
-						appRegName = appReg.Name + "-" + newResource.Group
+						appRegName = appReg.Name + "-" + strings.ToLower(newResource.Kind) + "-" + newResource.Group
+						break
 					}
 				}
 				if needsRegistration {
