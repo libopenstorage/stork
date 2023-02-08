@@ -6414,19 +6414,19 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		Step("Validate if the roles are deleted from the users ", func() {
 			for user, role := range userRoleMapping {
 				roleDeletionSuccess := func() (interface{}, bool, error) {
-						roles, _ := backup.GetRolesForUser(user)
-						for _, roleObj := range roles {
-							if roleObj.Name == string(role) {
-								return "", true, fmt.Errorf("validation of deleted role [%s] from user [%s]", role, user)
-							} else {
-								return "", false, nil
-							}
+					roles, _ := backup.GetRolesForUser(user)
+					for _, roleObj := range roles {
+						if roleObj.Name == string(role) {
+							return "", true, fmt.Errorf("validation of deleted role [%s] from user [%s]", role, user)
+						} else {
+							return "", false, nil
 						}
-						return "", false, nil
+					}
+					return "", false, nil
 				}
 				_, err := task.DoRetryWithTimeout(roleDeletionSuccess, 3*time.Minute, 10*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted role [%s] from user [%s] success", role, user))
-		    }
+			}
 		})
 		Step("Delete users", func() {
 			for userName := range userRoleMapping {
@@ -6451,7 +6451,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				}
 				_, err := task.DoRetryWithTimeout(userDeletionSuccess, 3*time.Minute, 10*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted user [%s] success", user))
-			}	
+			}
 		})
 	})
 	JustAfterEach(func() {
@@ -6850,45 +6850,45 @@ var _ = Describe("{SwapShareBackup}", func() {
 		defer EndTorpedoTest()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
-            opts := make(map[string]bool)
-            opts[SkipClusterScopedObjects] = true
-            taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-            err := Inst().S.Destroy(contexts[i], opts)
-            dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-        }
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			err := Inst().S.Destroy(contexts[i], opts)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+		}
 
 		log.InfoD("Deleting all restores")
-        for _, userName := range users {
-            ctx, err := backup.GetNonAdminCtx(userName, "Password1")
-            log.FailOnError(err, "Fetching nonAdminctx")
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx")
 			allRestores, err := GetAllRestoresNonAdminCtx(ctx)
 			log.FailOnError(err, "Fetching all restors for nonAdminctx")
-            for _, restoreName := range allRestores {
-                err = DeleteRestore(restoreName, orgID, ctx)
-                dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
-            }
-        }
+			for _, restoreName := range allRestores {
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
+			}
+		}
 
 		log.InfoD("Delete all backups")
 		for i := 0; i <= numberOfUsers-1; i++ {
 			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
-            log.FailOnError(err, "Fetching nonAdminctx ")
+			log.FailOnError(err, "Fetching nonAdminctx ")
 			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
-        }
+		}
 
 		// Cleanup all backup locations
-        for _, userName := range users {
-            ctx, err := backup.GetNonAdminCtx(userName, "Password1")
-            log.FailOnError(err, "Fetching nonAdminctx ")
-            allBackupLocations, err := getAllBackupLocations(ctx)
-            dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-            for backupLocationUid, backupLocationName := range allBackupLocations {
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx ")
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			for backupLocationUid, backupLocationName := range allBackupLocations {
 				if userBackupLocationMapping[userName] == backupLocationName {
 					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 				}
-            }
+			}
 
 			backupLocationDeletionSuccess := func() (interface{}, bool, error) {
 				allBackupLocations, err := getAllBackupLocations(ctx)
