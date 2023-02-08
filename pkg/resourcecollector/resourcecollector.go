@@ -672,10 +672,6 @@ func (r *ResourceCollector) pruneOwnedResources(
 					// but the corresponding resource is not being collected, then
 					// no need to collect resource and we will not manually patch those PVCs
 					if _, exists := resourceMap[owner.UID]; exists {
-						var pvc v1.PersistentVolumeClaim
-						if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-							return nil, nil, err
-						}
 						pvcObjectsWithOwnerRef = append(pvcObjectsWithOwnerRef, o)
 						break
 					}
