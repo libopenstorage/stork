@@ -6849,7 +6849,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.InfoD("Deleting the deployed apps after the testcase")
-        for i := 0; i < len(contexts); i++ {
+		for i := 0; i < len(contexts); i++ {
             opts := make(map[string]bool)
             opts[SkipClusterScopedObjects] = true
             taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
