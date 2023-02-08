@@ -6384,6 +6384,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
+				time.Sleep(3000 * time.Millisecond)
 				userName := fmt.Sprintf("testautouser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
@@ -6391,6 +6392,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				role := roles[rand.Intn(len(roles))]
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -6409,20 +6411,22 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
-		// Waiting for keycloak to sync up before moving for validation
-		time.Sleep(time.Minute * 1)
 		Step("Validate if the roles are deleted from the users ", func() {
-			result := false
 			for user, role := range userRoleMapping {
-				roles, _ := backup.GetRolesForUser(user)
-				for _, roleObj := range roles {
-					if roleObj.Name == string(role) {
-						result = true
-						break
-					}
+				roleDeletionSuccess := func() (interface{}, bool, error) {
+						roles, _ := backup.GetRolesForUser(user)
+						for _, roleObj := range roles {
+							if roleObj.Name == string(role) {
+								return "", true, fmt.Errorf("validation of deleted role [%s] from user [%s]", role, user)
+							} else {
+								return "", false, nil
+							}
+						}
+						return "", false, nil
 				}
-				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
-			}
+				_, err := task.DoRetryWithTimeout(roleDeletionSuccess, 3*time.Minute, 10*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted role [%s] from user [%s] success", role, user))
+		    }
 		})
 		Step("Delete users", func() {
 			for userName := range userRoleMapping {
@@ -6432,18 +6436,22 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 		})
 		Step("Validate if all the created users are deleted", func() {
-			result := false
 			remainingUsers, err := backup.GetAllUsers()
 			log.FailOnError(err, "Failed to get users")
 			for user := range userRoleMapping {
-				for _, userObj := range remainingUsers {
-					if userObj.Name == user {
-						result = true
-						break
+				userDeletionSuccess := func() (interface{}, bool, error) {
+					for _, userObj := range remainingUsers {
+						if userObj.Name == user {
+							return "", true, fmt.Errorf("validation of deleted user [%s]", user)
+						} else {
+							return "", false, nil
+						}
 					}
+					return "", false, nil
 				}
-				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted user [%s]", user))
-			}
+				_, err := task.DoRetryWithTimeout(userDeletionSuccess, 3*time.Minute, 10*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted user [%s] success", user))
+			}	
 		})
 	})
 	JustAfterEach(func() {
@@ -6839,19 +6847,65 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 	})
 	JustAfterEach(func() {
-
 		defer EndTorpedoTest()
-
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+        for i := 0; i < len(contexts); i++ {
+            opts := make(map[string]bool)
+            opts[SkipClusterScopedObjects] = true
+            taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+            err := Inst().S.Destroy(contexts[i], opts)
+            dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+        }
+
+		log.InfoD("Deleting all restores")
+        for _, userName := range users {
+            ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+            log.FailOnError(err, "Fetching nonAdminctx")
+			allRestores, err := GetAllRestoresNonAdminCtx(ctx)
+			log.FailOnError(err, "Fetching all restors for nonAdminctx")
+            for _, restoreName := range allRestores {
+                err = DeleteRestore(restoreName, orgID, ctx)
+                dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
+            }
+        }
+
+		log.InfoD("Delete all backups")
+		for i := 0; i <= numberOfUsers-1; i++ {
+			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
+            log.FailOnError(err, "Fetching nonAdminctx ")
+			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+        }
+
+		// Cleanup all backup locations
+        for _, userName := range users {
+            ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+            log.FailOnError(err, "Fetching nonAdminctx ")
+            allBackupLocations, err := getAllBackupLocations(ctx)
+            dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+            for backupLocationUid, backupLocationName := range allBackupLocations {
+				if userBackupLocationMapping[userName] == backupLocationName {
+					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+				}
+            }
+
+			backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+				allBackupLocations, err := getAllBackupLocations(ctx)
+				dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+				for _, backupLocationName := range allBackupLocations {
+					if userBackupLocationMapping[userName] == backupLocationName {
+						return "", true, fmt.Errorf("found %s backup locations", backupLocationName)
+					} else {
+						return "", false, nil
+					}
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 10*time.Minute, 30*time.Second)
+			dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 		}
 		var wg sync.WaitGroup
-
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
@@ -6863,11 +6917,6 @@ var _ = Describe("{SwapShareBackup}", func() {
 			}(userName)
 		}
 		wg.Wait()
-
-		log.Infof("Cleaning cloud credential")
-		for _, credName := range credNames {
-			DeleteCloudCredential(credName, orgID, cloudCredUID)
-		}
 	})
 })
 
