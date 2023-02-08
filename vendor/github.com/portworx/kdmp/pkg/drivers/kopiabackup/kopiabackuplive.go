@@ -11,6 +11,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
 var (
@@ -220,6 +221,18 @@ func getVolumeDirectory(pvcName, pvcNamespace string) (string, error) {
 	// PV's been created with a CSI source.
 	if pv.Spec.CSI != nil {
 		return pvc.Spec.VolumeName + "/mount", nil
+	}
+
+	// Check if the pv spec contains pv.kubernetes.io/migrated-to annotation,
+	// Then add the mount to the volume dir as it was provisioned by the CSI provisioner.
+	// From 1.23 k8s version onwards the in-tree storage provisioner driver are not supported.
+	// So all of them will migrated to use CSI provisioner. These driver will have above annotation and
+	// will not have the CSI section in the pv spec.
+	if pv.Annotations != nil {
+		annotations := pv.GetAnnotations()
+		if _, ok := annotations[k8shelper.AnnMigratedTo]; ok {
+			return pvc.Spec.VolumeName + "/mount", nil
+		}
 	}
 
 	return pvc.Spec.VolumeName, nil
