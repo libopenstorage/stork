@@ -27,9 +27,9 @@ require (
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.1
-	github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149
+	github.com/portworx/kdmp v0.4.1-0.20230127055521-e23d6b003478
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20221208153443-c95ed6d757fa
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230206122058-c16bbc8cb982
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c
@@ -255,7 +255,7 @@ require (
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/term v0.1.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
-	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
+	golang.org/x/time v0.1.0 // indirect
 	golang.org/x/tools v0.2.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
@@ -297,7 +297,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230103234348-243afb3bb8aa
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230206122058-c16bbc8cb982
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
