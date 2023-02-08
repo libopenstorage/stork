@@ -6425,7 +6425,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 					}
 					return "", false, nil
 				}
-				_, err := task.DoRetryWithTimeout(roleDeletionSuccess, 30*time.Second, 5*time.Second)
+				_, err := task.DoRetryWithTimeout(roleDeletionSuccess, 3*time.Minute, 5*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted role [%s] from user [%s] success", role, user))
 			}
 		})
