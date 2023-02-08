@@ -6730,10 +6730,11 @@ var _ = Describe("{SwapShareBackup}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
+				time.Sleep(3000 * time.Millisecond)
+				userName := fmt.Sprintf("testautouser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer GinkgoRecover()
