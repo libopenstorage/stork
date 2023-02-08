@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func (r *ResourceCollector) prepareNetworkPolicyForCollection(
+func (r *ResourceCollector) prepareRancherNetworkPolicy(
 	object runtime.Unstructured,
 	opts Options,
 ) error {

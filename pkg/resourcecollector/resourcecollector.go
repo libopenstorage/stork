@@ -20,6 +20,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -707,7 +708,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 			}
 
 		case "NetworkPolicy":
-			err := r.prepareNetworkPolicyForCollection(o, opts)
+			err := r.prepareRancherNetworkPolicy(o, opts)
 			if err != nil {
 				return fmt.Errorf("error preparing NetworkPolicy resource %v: %v", metadata.GetName(), err)
 			}
@@ -808,6 +809,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	pvNameMappings map[string]string,
 	optionalResourceTypes []string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
+	opts *Options,
 ) (bool, error) {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
@@ -843,9 +845,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		}
 		return true, nil
 	case "PersistentVolume":
-		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings, namespaceMappings)
+		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings, namespaceMappings, *opts)
 	case "PersistentVolumeClaim":
-		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo)
+		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo, *opts)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	case "RoleBinding":
@@ -856,6 +858,11 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.prepareMutatingWebHookForApply(object, namespaceMappings)
 	case "Secret":
 		return false, r.prepareSecretForApply(object)
+	case "NetworkPolicy":
+		return false, r.prepareRancherNetworkPolicy(object, *opts)
+	case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+		return false, r.prepareRancherApplicationResource(object, *opts)
+
 	}
 	return false, nil
 }
@@ -1020,4 +1027,30 @@ func (r *ResourceCollector) getDynamicClient(
 	}
 	return dynamicInterface.Resource(
 		object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(destNamespace), nil
+}
+
+func (r *ResourceCollector) prepareRancherApplicationResource(
+	object runtime.Unstructured,
+	opts Options,
+) error {
+	content := object.UnstructuredContent()
+	if len(opts.RancherProjectMappings) > 0 {
+		podSpecField, found, err := unstructured.NestedFieldCopy(content, "spec", "template", "spec")
+		if err != nil {
+			logrus.Warnf("Unable to parse object %v while handling"+
+				" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+		}
+		podSpec, ok := podSpecField.(v1.PodSpec)
+		if found && ok {
+			podSpecPtr := PreparePodSpecNamespaceSelector(
+				&podSpec,
+				opts.RancherProjectMappings,
+			)
+			if err := unstructured.SetNestedField(content, *podSpecPtr, "spec", "template", "spec"); err != nil {
+				logrus.Warnf("Unable to set namespace selector for object %v while handling"+
+					" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+			}
+		}
+	}
+	return nil
 }
