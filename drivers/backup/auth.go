@@ -603,7 +603,8 @@ func DeleteRoleFromUser(userName string, role PxBackupRole, description string) 
 	if err != nil {
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
+	response , err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
+	log.InfoD("Response from delete role from user %s", string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
