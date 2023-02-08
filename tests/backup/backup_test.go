@@ -2783,8 +2783,10 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				log.FailOnError(err, "Fail on Fetching backups for %s", username)
 				if len(userBackups) == 0 {
 					time.Sleep(2 * time.Minute)
+					userBackups, err = GetAllBackupsForUser(username, password)
+					log.FailOnError(err, "Fail on Fetching backups for %s", username)
 				}
-				dash.VerifyFatal(len(userBackups), len(userBackups) > 0, fmt.Sprintf("Verifying backups are shared with user %s", username))
+				dash.VerifyFatal(true, len(userBackups) > 0, fmt.Sprintf("Verifying backups are shared with user %s", username))
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 				ValidateSharedBackupWithUsers(username, accessLevel, userBackups[len(userBackups)-1], restoreName)
 				if accessLevel != ViewOnlyAccess {
