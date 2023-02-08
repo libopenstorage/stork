@@ -140,6 +140,8 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 	numberOfGroups := 10
 	users := make([]string, 0)
 	groups := make([]string, 0)
+	userValidation := make([]string, 0)
+	groupValidation := make([]string, 0)
 	var groupNotCreated string
 	var userNotCreated string
 
@@ -192,10 +194,10 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 
 		Step("Validate Group", func() {
 			createdGroups, err := backup.GetAllGroups()
-			log.Info("created group ", createdGroups)
 			log.FailOnError(err, "Failed to get group")
 			responseMap := make(map[string]bool)
 			for _, createdGroup := range createdGroups {
+				groupValidation = append(groupValidation, createdGroup.Name)
 				responseMap[createdGroup.Name] = true
 			}
 			for _, group := range groups {
@@ -207,15 +209,16 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				}
 
 			}
+			log.Infof("Validating created groups %v", groupValidation)
 			dash.VerifyFatal(groupNotCreated, "", "Group Creation Verification successful")
 		})
 
 		Step("Validate User", func() {
 			createdUsers, err := backup.GetAllUsers()
-			log.Info("created user ", createdUsers)
 			log.FailOnError(err, "Failed to get user")
 			responseMap := make(map[string]bool)
 			for _, createdUser := range createdUsers {
+				userValidation = append(userValidation, createdUser.Name)
 				responseMap[createdUser.Name] = true
 			}
 			for _, user := range users {
@@ -227,6 +230,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				}
 
 			}
+			log.Infof("Validating created users %v", userValidation)
 			dash.VerifyFatal(userNotCreated, "", "User Creation Verification successful")
 		})
 
@@ -2756,7 +2760,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.FailOnError(err, "Creating Schedule Backup")
 		})
 
-		Step("Validate the Access toggle ", func() {
+		Step("Validate the Access toggle", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			accesses = append(accesses, ViewOnlyAccess, RestoreAccess, FullAccess)
@@ -2777,7 +2781,10 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 
 				userBackups, err := GetAllBackupsForUser(username, password)
 				log.FailOnError(err, "Fail on Fetching backups for %s", username)
-
+				if len(userBackups) == 0 {
+					time.Sleep(2 * time.Minute)
+				}
+				dash.VerifyFatal(len(userBackups), len(userBackups) > 0, fmt.Sprintf("Verifying backups are shared with user %s", username))
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 				ValidateSharedBackupWithUsers(username, accessLevel, userBackups[len(userBackups)-1], restoreName)
 				if accessLevel != ViewOnlyAccess {
@@ -3225,6 +3232,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
+	var backupNotDeleted string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var credName string
 	bkpNamespaces = make([]string, 0)
@@ -3355,9 +3363,19 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 		})
 		Step("Validating that backups are deleted from owner of backups", func() {
-			userBackups1, _ := GetAllBackupsAdmin()
-			log.InfoD("%v", userBackups1)
-			dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that shared backups are deleted from owner of backup"))
+			adminBackups, _ := GetAllBackupsAdmin()
+			log.Infof("%v", adminBackups)
+			adminBackupsMap := make(map[string]bool)
+			for _, backup := range adminBackups {
+				adminBackupsMap[backup] = true
+			}
+			for _, name := range backupNames {
+				if adminBackupsMap[name] {
+					backupNotDeleted = name
+					break
+				}
+			}
+			dash.VerifyFatal(backupNotDeleted, "", fmt.Sprintf("Validating that shared backups are deleted from owner of backup"))
 		})
 
 	})
