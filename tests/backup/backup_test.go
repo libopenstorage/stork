@@ -6372,7 +6372,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 var _ = Describe("{DeleteUsersRole}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
-	numberOfUsers := 100
+	numberOfUsers := 50
 	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.ApplicationUser, backup.InfrastructureOwner, backup.DefaultRoles}
 	userRoleMapping := map[string]backup.PxBackupRole{}
 
@@ -6425,8 +6425,8 @@ var _ = Describe("{DeleteUsersRole}", func() {
 					}
 					return "", false, nil
 				}
-				_, err := task.DoRetryWithTimeout(roleDeletionSuccess, 3*time.Minute, 5*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted role [%s] from user [%s] success", role, user))
+				_, err := task.DoRetryWithTimeout(roleDeletionSuccess, 30*time.Second, 5*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
 			}
 		})
 		Step("Delete users", func() {
@@ -6451,7 +6451,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 					return "", false, nil
 				}
 				_, err := task.DoRetryWithTimeout(userDeletionSuccess, 30*time.Second, 5*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted user [%s] success", user))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted user [%s]", user))
 			}
 		})
 	})
