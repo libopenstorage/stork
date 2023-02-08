@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/sirupsen/logrus"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
@@ -117,26 +117,26 @@ func (k *K8s) SetHelmParams(appKey string, helmRepo *scheduler.HelmRepo, options
 		urlKey = HelmUpgradeURL
 		// add a different helm staging repo
 		if repoName, ok := configMap.Data[HelmRepoName]; ok {
-			logrus.Debugf("upgrading helm repo name from %s to %s", helmRepo.RepoName, repoName)
+			log.Debugf("upgrading helm repo name from %s to %s", helmRepo.RepoName, repoName)
 			helmRepo.RepoName = repoName
 		}
 		// chart name could be changed during upgrade, e.g. px-backup -> px-central
 		if chartName, ok := configMap.Data[HelmChartName]; ok {
-			logrus.Debugf("upgrading helm chart name from %s to %s", helmRepo.ChartName, chartName)
+			log.Debugf("upgrading helm chart name from %s to %s", helmRepo.ChartName, chartName)
 			helmRepo.ChartName = chartName
 		}
 	}
 
 	if url, ok := configMap.Data[urlKey]; ok {
 		helmRepo.URL = url
-		logrus.Debugf("helm repo URL set: %s", helmRepo.URL)
+		log.Debugf("helm repo URL set: %s", helmRepo.URL)
 	} else {
 		return fmt.Errorf("helm repo url '%s' not provided in the configmap %s", urlKey, appKey)
 	}
 
 	if values, ok := configMap.Data[HelmValues]; ok {
 		helmRepo.Values = values
-		logrus.Debugf("helm values set: %s", helmRepo.Values)
+		log.Debugf("helm values set: %s", helmRepo.Values)
 	} else {
 		return fmt.Errorf("helm install custom values not provided in the configmap %s", appKey)
 	}
@@ -144,7 +144,7 @@ func (k *K8s) SetHelmParams(appKey string, helmRepo *scheduler.HelmRepo, options
 	// some values are generated during the test, e.g. UI endpoint and OIDC secret
 	if extraValues, ok := configMap.Data[HelmExtraValues]; ok && extraValues != "" {
 		helmRepo.Values = fmt.Sprintf("%s,%s", helmRepo.Values, extraValues)
-		logrus.Debugf("helm extra values added: %s", helmRepo.Values)
+		log.Debugf("helm extra values added: %s", helmRepo.Values)
 	}
 
 	return nil
@@ -201,7 +201,7 @@ func (k *K8s) RepoAdd(repoInfo *scheduler.HelmRepo) error {
 	}
 
 	if f.Has(name) {
-		logrus.Warnf("repository name (%s) already exists\n", name)
+		log.Warnf("repository name (%s) already exists\n", name)
 		return nil
 	}
 
@@ -225,7 +225,7 @@ func (k *K8s) RepoAdd(repoInfo *scheduler.HelmRepo) error {
 	if err := f.WriteFile(repoFile, 0644); err != nil {
 		return err
 	}
-	logrus.Infof("%q has been added to the repositories", name)
+	log.Infof("%q has been added to the repositories", name)
 	return nil
 }
 
@@ -246,21 +246,21 @@ func (k *K8s) RepoUpdate() error {
 		repos = append(repos, r)
 	}
 
-	logrus.Debugf("Getting the latest from the chart repositories")
+	log.Debugf("Getting the latest from the chart repositories")
 	var wg sync.WaitGroup
 	for _, re := range repos {
 		wg.Add(1)
 		go func(re *repo.ChartRepository) {
 			defer wg.Done()
 			if _, err := re.DownloadIndexFile(); err != nil {
-				logrus.Warnf("Unable to get an update from the %q chart repository (%s):\t%s", re.Config.Name, re.Config.URL, err)
+				log.Warnf("Unable to get an update from the %q chart repository (%s):\t%s", re.Config.Name, re.Config.URL, err)
 			} else {
-				logrus.Debugf("Successfully got an update from the %q chart repository", re.Config.Name)
+				log.Debugf("Successfully got an update from the %q chart repository", re.Config.Name)
 			}
 		}(re)
 	}
 	wg.Wait()
-	logrus.Debugf("RepoUpdate Completed successfully.")
+	log.Debugf("RepoUpdate Completed successfully.")
 	return nil
 }
 
@@ -281,7 +281,7 @@ func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo) (string, error) {
 		return "", err
 	}
 
-	logrus.Debugf("chart install path: %s", cp)
+	log.Debugf("chart install path: %s", cp)
 
 	p := getter.All(settings)
 	valueOpts := &values.Options{}
@@ -361,7 +361,7 @@ func (k *K8s) UpgradeChart(repoInfo *scheduler.HelmRepo) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	logrus.Debugf("chart upgrade path: %s", cp)
+	log.Debugf("chart upgrade path: %s", cp)
 
 	p := getter.All(settings)
 	valueOpts := &values.Options{}
@@ -448,5 +448,5 @@ func (k *K8s) UnInstallHelmChart(repoInfo *scheduler.HelmRepo) ([]interface{}, e
 
 func debug(format string, v ...interface{}) {
 	format = fmt.Sprintf(" %s\n", format)
-	logrus.Debugf(fmt.Sprintf(format, v...))
+	log.Debugf(fmt.Sprintf(format, v...))
 }

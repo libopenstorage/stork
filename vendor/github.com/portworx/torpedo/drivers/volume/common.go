@@ -61,6 +61,18 @@ type DiagOps struct {
 	Validate bool
 	// Async toggle to indicate that we want to use async diags
 	Async bool
+	// PxIsStopped
+	PxStopped bool
+}
+
+// MetadataNode TODO temporary solution until sdk supports metadataNode response
+type MetadataNode struct {
+	PeerUrls   []string `json:"PeerUrls"`
+	ClientUrls []string `json:"ClientUrls"`
+	Leader     bool     `json:"Leader"`
+	DbSize     int      `json:"DbSize"`
+	IsHealthy  bool     `json:"IsHealthy"`
+	ID         string   `json:"ID"`
 }
 
 // DefaultDriver implements defaults for Driver interface
@@ -69,6 +81,14 @@ type DefaultDriver struct {
 
 func (d *DefaultDriver) String() string {
 	return ""
+}
+
+func (d *DefaultDriver) GetVolumeDriverNamespace() (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetVolumeDriverNamespace()",
+	}
+
 }
 
 // Init initializes the volume driver under the given scheduler
@@ -92,6 +112,15 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CreateVolume()",
+	}
+}
+
+// CreateVolumeUsingRequest creates a volume with the given create request
+// returns volume_id of the new volume
+func (d *DefaultDriver) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeUsingRequest()",
 	}
 }
 
@@ -147,6 +176,14 @@ func (d *DefaultDriver) InspectVolume(name string) (*api.Volume, error) {
 	}
 }
 
+// CreateSnapshot  creates snapshot on the volume with the given string
+func (d *DefaultDriver) CreateSnapshot(volumeID string, snapName string) (*api.SdkVolumeSnapshotCreateResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateSnapshot()",
+	}
+}
+
 // GetStorageDevices returns the list of storage devices used by the given node.
 func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 	// TODO: Implement
@@ -156,6 +193,14 @@ func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 		Operation: "GetStorageDevices()",
 	}
 
+}
+
+// IsDriverInstalled checks for driver to be installed on a node
+func (d *DefaultDriver) IsDriverInstalled(n node.Node) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsDriverInstalled()",
+	}
 }
 
 // RecoverDriver will recover a volume driver from a failure/storage down state.
@@ -181,6 +226,48 @@ func (d *DefaultDriver) ExitMaintenance(n node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ExitMaintenance()",
+	}
+}
+
+// RecoverPool will recover a pool from a failure/storage down state.
+// This could be used by a pool driver to recover itself from any underlying storage
+// failure.
+func (d *DefaultDriver) RecoverPool(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RecoverPool()",
+	}
+}
+
+// EnterPoolMaintenance puts pools on the given node in maintenance mode
+func (d *DefaultDriver) EnterPoolMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnterPoolMaintenance()",
+	}
+}
+
+// ExitPoolMaintenance exits pools on the given node from maintenance mode
+func (d *DefaultDriver) ExitPoolMaintenance(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExitPoolMaintenance()",
+	}
+}
+
+// DeletePool deletes the pool with given poolID
+func (d *DefaultDriver) DeletePool(n node.Node, poolID string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeletePool()",
+	}
+}
+
+// GetNodePoolsStatus returns map of pool UUID and status
+func (d *DefaultDriver) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePoolsStatus()",
 	}
 }
 
@@ -360,13 +447,21 @@ func (d *DefaultDriver) WaitDriverUpOnNode(n node.Node, timeout time.Duration) e
 	}
 }
 
-// GetPxNodes returns current PX nodes in the cluster
-func (d *DefaultDriver) GetPxNodes() ([]*api.StorageNode, error) {
+// GetDriverNodes returns current driver nodes in the cluster
+func (d *DefaultDriver) GetDriverNodes() ([]*api.StorageNode, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetPxNodes()",
+		Operation: "GetDriverNodes()",
 	}
 
+}
+
+// GetDriverNode return api.Storage Node
+func (d *DefaultDriver) GetDriverNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDriverNode()",
+	}
 }
 
 // WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
@@ -387,10 +482,18 @@ func (d *DefaultDriver) GetReplicationFactor(vol *Volume) (int64, error) {
 }
 
 // SetReplicationFactor sets the volume's replication factor to the passed param rf.
-func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, nodesToBeUpdated []string, opts ...Options) error {
+func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, nodesToBeUpdated []string, poolsToBeUpdated []string, waitForUpdateToFinish bool, opts ...Options) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetReplicationFactor()",
+	}
+}
+
+// WaitForReplicationToComplete waits for replication factor to complete .
+func (d *DefaultDriver) WaitForReplicationToComplete(vol *Volume, replFactor int64, replicationUpdateTimeout time.Duration) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForReplicationToComplete()",
 	}
 }
 
@@ -421,15 +524,24 @@ func (d *DefaultDriver) StartDriver(n node.Node) error {
 }
 
 // UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
-func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
+func (d *DefaultDriver) UpgradeDriver(endpointVersion string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpgradeDriver()",
 	}
 }
 
+// ValidateDriver validates driver components
+func (d *DefaultDriver) ValidateDriver(endpointVersion string, autoUpdateComponents bool) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDriver()",
+	}
+}
+
 // UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
-func (d *DefaultDriver) UpgradeStork(endpointURL string, endpointVersion string) error {
+func (d *DefaultDriver) UpgradeStork(endpointVersion string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpgradeDriver()",
@@ -454,11 +566,11 @@ func (d *DefaultDriver) DecommissionNode(n *node.Node) error {
 	}
 }
 
-// RejoinNode rejoins a given node back to the cluster
-func (d *DefaultDriver) RejoinNode(n *node.Node) error {
+// RecoverNode recovers node back to the normal
+func (d *DefaultDriver) RecoverNode(n *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "RejoinNode()",
+		Operation: "RecoverNode()",
 	}
 }
 
@@ -498,6 +610,14 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 	}
 }
 
+// ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
+func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDiagsOnS3()",
+	}
+}
+
 // ValidateStoragePools validates all the storage pools
 func (d *DefaultDriver) ValidateStoragePools() error {
 	return &errors.ErrNotSupported{
@@ -530,7 +650,7 @@ func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (ma
 	}
 }
 
-//GetStorageSpec get the storage spec used to deploy portworx
+// GetStorageSpec get the storage spec used to deploy portworx
 func (d *DefaultDriver) GetStorageSpec() (*pxapi.StorageSpec, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -613,6 +733,14 @@ func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) er
 	}
 }
 
+// GetClusterOpts gets cluster options
+func (d *DefaultDriver) GetClusterOpts(n node.Node, options []string) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetClusterOpts()",
+	}
+}
+
 // SetClusterOptsWithConfirmation sets cluster options and confirm it
 func (d *DefaultDriver) SetClusterOptsWithConfirmation(n node.Node, rtOpts map[string]string) error {
 	return &errors.ErrNotSupported{
@@ -645,11 +773,11 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 	}
 }
 
-// GetPxNode return api.Storage Node
-func (d *DefaultDriver) GetPxNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
-	return &api.StorageNode{}, &errors.ErrNotSupported{
+// UpdateIOPriority update IO priority on volume
+func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string) error {
+	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetPxNode()",
+		Operation: "UpdateIOPriority",
 	}
 }
 
@@ -710,27 +838,35 @@ func (d *DefaultDriver) IsOperatorBasedInstall() (bool, error) {
 	}
 }
 
-//UpdateStorageClusterImage update storage cluster image version
-func (d *DefaultDriver) UpdateStorageClusterImage(string) error {
+// RunSecretsLogin runs secrets login using pxctl
+func (d *DefaultDriver) RunSecretsLogin(n node.Node, secretType string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "UpdateStorageClusterImage()",
+		Operation: "RunSecretsLogin()",
 	}
 }
 
-//GetPXStorageCluster returns portworx storage cluster
-func (d *DefaultDriver) GetPXStorageCluster() (*v1.StorageCluster, error) {
+// GetDriver returns driver object
+func (d *DefaultDriver) GetDriver() (*v1.StorageCluster, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetPXStorageCluster()",
+		Operation: "GetDriver()",
 	}
 }
 
-//GetPxVersionOnNode retruns PxVersion on the given node
-func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
+// GetDriverVersionOnNode retruns PxVersion on the given node
+func (d *DefaultDriver) GetDriverVersionOnNode(n node.Node) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPxVersionOnNode()",
+	}
+}
+
+// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+func (d *DefaultDriver) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlCmdOutputConnectionOpts()",
 	}
 }
 
@@ -771,5 +907,85 @@ func (d *DefaultDriver) IsPureFileVolume(volume *Volume) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsPureFileVolume()",
+	}
+}
+
+// GetKvdbMembers returns the kvdb members of the PX cluster
+func (d *DefaultDriver) GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetKvdbMembers()",
+	}
+}
+
+// GetNodePureVolumeAttachedCountMap return Map of nodeName and number of pure volume attached on that node
+func (d *DefaultDriver) GetNodePureVolumeAttachedCountMap() (map[string]int, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePureVolumeAttachedCountMap()",
+	}
+}
+
+// RejoinNode rejoins a given node back to the cluster
+func (d *DefaultDriver) RejoinNode(n *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RejoinNode()",
+	}
+}
+
+// AddBlockDrives add drives to the node using PXCTL
+func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddBlockDrives()",
+	}
+}
+
+// GetPoolDrives returns the map of poolID and drive name
+func (d *DefaultDriver) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPoolDrives()",
+	}
+}
+
+// AddCloudDrive add drives to the node using PXCTL
+func (d *DefaultDriver) AddCloudDrive(n *node.Node, deviceSpec string, poolID int32) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddCloudDrive()",
+	}
+}
+
+// GetPoolsUsedSize returns map of pool id and current used size
+func (d *DefaultDriver) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPoolsUsedSize()",
+	}
+}
+
+// GetRebalanceJobs returns the list of rebalance jobs
+func (d *DefaultDriver) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetRebalanceJobs()",
+	}
+}
+
+// GetRebalanceJobStatus returns the rebalance jobs response
+func (d *DefaultDriver) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetRebalanceJobStatus()",
+	}
+}
+
+// UpdatePoolLabels updates the labels of the desired pool, by appending a custom key-value pair
+func (d *DefaultDriver) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdatePoolLabels()",
 	}
 }

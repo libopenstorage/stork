@@ -54,6 +54,7 @@ type Node struct {
 	IsStorageDriverInstalled bool
 	IsMetadataNode           bool
 	StoragePools             []StoragePool
+	PxPodRestartCount        int32
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
@@ -96,6 +97,17 @@ type FindOpts struct {
 type SystemctlOpts struct {
 	Action string
 	ConnectionOpts
+}
+
+// BlockDrive provide block drive properties
+type BlockDrive struct {
+	Path       string
+	Labels     map[string]string
+	MountPoint string
+	FSType     string
+	Size       string
+	Online     bool
+	Type       string
 }
 
 // TestConnectionOpts provide additional options for test connection operation
@@ -194,6 +206,20 @@ type Driver interface {
 
 	// IsNodeRebootedInGivenTimeRange check if node is rebooted within given time range
 	IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error)
+
+	// InjectNetworkError by dropping packets or introdiucing delay in packet tramission
+	// nodes=> list of nodes where network injection should be done.
+	// errorInjectionType => pass "delay" or "drop"
+	// operationType => add/change/delete
+	// dropPercentage => intger value from 1 to 100
+	// delayInMilliseconds => 1 to 1000
+	InjectNetworkError(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
+
+	// GetDeviceMapperCount return devicemapper count
+	GetDeviceMapperCount(Node, time.Duration) (int, error)
+
+	//GetBlockDrives returns the block drives on the node
+	GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error)
 }
 
 // Register registers the given node driver
@@ -280,6 +306,13 @@ func (d *notSupportedDriver) Systemctl(node Node, service string, options System
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Systemctl()",
+	}
+}
+
+func (d *notSupportedDriver) GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetBlockDrives()",
 	}
 }
 
@@ -406,6 +439,22 @@ func (d *notSupportedDriver) IsUsingSSH() bool {
 func (d *notSupportedDriver) IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "PowerOnVmByName()",
+		Operation: "IsNodeRebootedInGivenTimeRange()",
+	}
+}
+
+// GetDeviceMapperCount return device mapper count in a node
+func (d *notSupportedDriver) GetDeviceMapperCount(Node, time.Duration) (int, error) {
+	return -1, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDeviceMapperCount()",
+	}
+}
+
+func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType string, operationType string,
+	dropPercentage int, delayInMilliseconds int) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InjectNetworkError()",
 	}
 }

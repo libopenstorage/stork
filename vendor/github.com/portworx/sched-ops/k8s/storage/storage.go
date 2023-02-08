@@ -18,7 +18,7 @@ var (
 
 // Ops is an interface to perform kubernetes related operations on the core resources.
 type Ops interface {
-	StorageClassOps
+	ScOps
 	VolumeAttachmentOps
 
 	// SetConfig sets the config and resets the client

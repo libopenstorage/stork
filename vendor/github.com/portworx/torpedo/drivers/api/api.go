@@ -7,7 +7,7 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/portworx/sched-ops/task"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 // TriggerOptions are common options used to check if any action is okay to be triggered/performed
@@ -53,7 +53,7 @@ func PerformTask(userTask func() error, opts *TriggerOptions) error {
 		userTaskWithTriggerChecks := func() (interface{}, bool, error) {
 			triggered, err := opts.TriggerCb()
 			if err != nil {
-				logrus.Warnf("%s: failed to invoke trigger callback function due to: %v", fn, err)
+				log.Warnf("%s: failed to invoke trigger callback function due to: %v", fn, err)
 				return false, false, err
 			}
 
@@ -97,7 +97,7 @@ func PerformTask(userTask func() error, opts *TriggerOptions) error {
 	_, err := sched.Instance().Schedule(
 		func(_ sched.Interval) {
 			if err := f(); err != nil {
-				logrus.Errorf("%s: failed to execute user task due to: %v", fn, err)
+				log.Errorf("%s: failed to execute user task due to: %v", fn, err)
 			}
 		},
 		sched.Periodic(time.Second),

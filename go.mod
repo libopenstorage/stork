@@ -21,20 +21,18 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
-	github.com/libopenstorage/openstorage v9.4.20+incompatible
+	github.com/libopenstorage/openstorage v9.4.46+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
-	github.com/pborman/uuid v1.2.0
-	github.com/portworx/kdmp v0.4.1-0.20230206133815-91b35fb37528
+	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20221208153443-c95ed6d757fa
-	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
-	github.com/prometheus/client_golang v1.12.2
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
+	github.com/prometheus/client_golang v1.14.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
-	github.com/spf13/cobra v1.6.0
+	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.1
 	github.com/urfave/cli v1.22.2
@@ -44,13 +42,13 @@ require (
 	google.golang.org/api v0.103.0
 	google.golang.org/grpc v1.51.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.25.2
-	k8s.io/apiextensions-apiserver v0.25.2
-	k8s.io/apimachinery v0.25.2
-	k8s.io/apiserver v0.25.2
+	k8s.io/api v0.25.4
+	k8s.io/apiextensions-apiserver v0.25.4
+	k8s.io/apimachinery v0.25.4
+	k8s.io/apiserver v0.25.4
 	k8s.io/cli-runtime v0.25.2
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.25.1
+	k8s.io/code-generator v0.25.4
 	k8s.io/component-helpers v0.25.1
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.25.2
@@ -58,6 +56,11 @@ require (
 	sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/gcp-compute-persistent-disk-csi-driver v0.7.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
+)
+
+require (
+	github.com/portworx/kdmp v0.4.1-0.20230206133815-91b35fb37528
+	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 )
 
 require (
@@ -179,7 +182,7 @@ require (
 	github.com/lib/pq v1.10.6 // indirect
 	github.com/libopenstorage/autopilot-api v1.3.0 // indirect
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
-	github.com/libopenstorage/operator v0.0.0-20230112002659-7e73437e61d4 // indirect
+	github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a // indirect
 	github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
@@ -207,6 +210,7 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/moul/http2curl v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/onsi/gomega v1.20.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/opencontainers/runc v1.1.3 // indirect
@@ -251,7 +255,7 @@ require (
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/term v0.1.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
-	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
+	golang.org/x/time v0.1.0 // indirect
 	golang.org/x/tools v0.2.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
@@ -260,9 +264,10 @@ require (
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/freddierice/go-losetup.v1 v1.0.0-20170407175016-fc9adea44124 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 // indirect
+	helm.sh/helm/v3 v3.6.0 // indirect
 	k8s.io/component-base v0.25.2 // indirect
 	k8s.io/gengo v0.0.0-20211129171323-c02415ce4185 // indirect
 	k8s.io/klog v1.0.0 // indirect
@@ -293,8 +298,8 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20220707215604-afbea03c04c5
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230103234348-243afb3bb8aa
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20220714042817-25f6ab6dc5d1
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 

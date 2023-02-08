@@ -86,6 +86,18 @@ func (e *ErrFailedToRecoverDriver) Error() string {
 	return fmt.Sprintf("Failed to wait for px to be up on: %v due to err: %v", e.Node.Name, e.Cause)
 }
 
+// ErrFailedToEnterMaintenence error type for failing to enter maintenence mode on a node
+type ErrFailedToEnterMaintenence struct {
+	// Node is the node on which PX failed to enter maintenence mode
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToEnterMaintenence) Error() string {
+	return fmt.Sprintf("Failed to enter maintenence mode non node: %v due to err: %v", e.Node.Name, e.Cause)
+}
+
 // ErrFailedToSetReplicationFactor error type for failing to set replication factor to given value
 type ErrFailedToSetReplicationFactor struct {
 	// ID is the ID/name of the volume for which we could not set the replication factor
