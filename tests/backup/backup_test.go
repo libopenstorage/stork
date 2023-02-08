@@ -8568,3 +8568,19 @@ func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 	}
 	return cloudCredentialMap, nil
 }
+
+func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
+}
