@@ -6414,7 +6414,8 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		Step("Validate if the roles are deleted from the users ", func() {
 			for user, role := range userRoleMapping {
 				roleDeletionSuccess := func() (interface{}, bool, error) {
-					roles, _ := backup.GetRolesForUser(user)
+					roles, err := backup.GetRolesForUser(user)
+					log.FailOnError(err, "Failed to get roles for the user [%s]", user)
 					for _, roleObj := range roles {
 						if roleObj.Name == string(role) {
 							return "", true, fmt.Errorf("validation of deleted role [%s] from user [%s]", role, user)
