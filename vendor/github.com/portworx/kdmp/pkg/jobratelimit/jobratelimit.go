@@ -48,6 +48,8 @@ func getJobLimitConfigmapKey(driverName string) (string, error) {
 		return RestoreJobLimitKey, nil
 	case drivers.KopiaDelete:
 		return DeleteJobLimitKey, nil
+	case drivers.NFSDelete:
+		return DeleteJobLimitKey, nil
 	case drivers.KopiaMaintenance:
 		return MaintenanceJobLimitKey, nil
 	default:
@@ -104,6 +106,8 @@ func getDefaultJobLimit(jobType string) int {
 	case drivers.KopiaRestore:
 		return DefaultRestoreJobLimit
 	case drivers.KopiaDelete:
+		return DefaultDeleteJobLimit
+	case drivers.NFSDelete:
 		return DefaultDeleteJobLimit
 	case drivers.KopiaMaintenance:
 		return DefaultMaintenanceJobLimit
