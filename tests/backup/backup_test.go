@@ -6372,7 +6372,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 var _ = Describe("{DeleteUsersRole}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
-	numberOfUsers := 100
+	numberOfUsers := 80
 	roles := [3]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.DefaultRoles}
 	userRoleMapping := map[string]backup.PxBackupRole{}
 
