@@ -896,20 +896,25 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20230127055521-e23d6b003478 => github.com/portworx/kdmp v0.4.1-0.20230207113334-0b97b6052012
+# github.com/portworx/kdmp v0.4.1-0.20230209151708-9d8c326aab11 => github.com/portworx/kdmp v0.4.1-0.20230209151708-9d8c326aab11
 ## explicit; go 1.19
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
 github.com/portworx/kdmp/pkg/client/clientset/versioned
 github.com/portworx/kdmp/pkg/client/clientset/versioned/scheme
 github.com/portworx/kdmp/pkg/client/clientset/versioned/typed/kdmp/v1alpha1
+github.com/portworx/kdmp/pkg/controllers
 github.com/portworx/kdmp/pkg/controllers/dataexport
+github.com/portworx/kdmp/pkg/controllers/resourceexport
 github.com/portworx/kdmp/pkg/drivers
 github.com/portworx/kdmp/pkg/drivers/driversinstance
 github.com/portworx/kdmp/pkg/drivers/kopiabackup
 github.com/portworx/kdmp/pkg/drivers/kopiadelete
 github.com/portworx/kdmp/pkg/drivers/kopiamaintenance
 github.com/portworx/kdmp/pkg/drivers/kopiarestore
+github.com/portworx/kdmp/pkg/drivers/nfsbackup
+github.com/portworx/kdmp/pkg/drivers/nfsdelete
+github.com/portworx/kdmp/pkg/drivers/nfsrestore
 github.com/portworx/kdmp/pkg/drivers/resticbackup
 github.com/portworx/kdmp/pkg/drivers/resticrestore
 github.com/portworx/kdmp/pkg/drivers/rsync
@@ -2239,7 +2244,7 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-# github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230207113334-0b97b6052012
+# github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230209151708-9d8c326aab11
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
