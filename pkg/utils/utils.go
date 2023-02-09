@@ -178,3 +178,18 @@ func GetUIDLastSection(uid types.UID) string {
 	}
 	return uidLastSection
 }
+
+// ParseRancherProjectMapping - maps the target projectId to the source projectId
+func ParseRancherProjectMapping(
+	data map[string]string,
+	projectMapping map[string]string,
+) {
+	for key, value := range data {
+		if strings.Contains(key, CattleProjectPrefix) {
+			if targetProjectID, ok := projectMapping[value]; ok &&
+				targetProjectID != "" {
+				data[key] = targetProjectID
+			}
+		}
+	}
+}

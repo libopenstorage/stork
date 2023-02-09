@@ -52,7 +52,7 @@ func PreparePodSpecNamespaceSelector(
 
 	// Affinity
 	// - handle PreferredDuringSchedulingIgnoredDuringExecution
-	if podSpec.Affinity.PodAntiAffinity != nil {
+	if podSpec.Affinity.PodAffinity != nil {
 		for affinityIndex, affinityTerm := range podSpec.Affinity.PodAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
 			if affinityTerm.PodAffinityTerm.NamespaceSelector != nil {
 				for key, val := range affinityTerm.PodAffinityTerm.NamespaceSelector.MatchLabels {
