@@ -155,14 +155,14 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 			log.InfoD("Creating %d groups", numberOfGroups)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfGroups; i++ {
-				groupName := fmt.Sprintf("testGroup%v", i)
+				groupName := fmt.Sprintf("testGroup%v", time.Now().Unix())
+				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(groupName string) {
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
 					groups = append(groups, groupName)
-
 				}(groupName)
 			}
 			wg.Wait()
@@ -172,17 +172,17 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
+				userName := fmt.Sprintf("testuser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
+				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -2676,6 +2676,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 	var credName string
 	var periodicPolicyName string
 	var schPolicyUid string
+	var userBackups []string
 	var accesses []BackupAccess
 	var restoreNames []string
 	bkpNamespaces = make([]string, 0)
@@ -2778,15 +2779,19 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				log.InfoD("Sharing cluster with %v access to user %s", accessLevel, username)
 				err := ClusterUpdateBackupShare(SourceClusterName, nil, []string{username}, accessLevel, true, ctx)
 				log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
-
-				userBackups, err := GetAllBackupsForUser(username, password)
-				log.FailOnError(err, "Fail on Fetching backups for %s", username)
-				if len(userBackups) == 0 {
-					time.Sleep(2 * time.Minute)
-					userBackups, err = GetAllBackupsForUser(username, password)
-					log.FailOnError(err, "Fail on Fetching backups for %s", username)
+				clusterShareCheck := func() (interface{}, bool, error) {
+					userBackups, err := GetAllBackupsForUser(username, password)
+					if err != nil {
+						return "", true, fmt.Errorf("Fail on Fetching backups for %s with error %v", username, err)
+					}
+					if len(userBackups) == 0 {
+						return "", true, fmt.Errorf("Unable to fetch backup from shared cluster for user %s", username)
+					}
+					return userBackups, false, nil
 				}
-				dash.VerifyFatal(true, len(userBackups) > 0, fmt.Sprintf("Verifying backups are shared with user %s", username))
+				_, err = task.DoRetryWithTimeout(clusterShareCheck, 2*time.Minute, 10*time.Second)
+				log.FailOnError(err, "Unable to fetch backup from shared cluster for user %s", username)
+
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 				ValidateSharedBackupWithUsers(username, accessLevel, userBackups[len(userBackups)-1], restoreName)
 				if accessLevel != ViewOnlyAccess {
