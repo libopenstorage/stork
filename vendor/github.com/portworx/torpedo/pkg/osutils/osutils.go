@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 // Wget runs wget command
@@ -31,12 +31,12 @@ func Wget(URL string, filename string, verifyFile bool) error {
 		if err != nil {
 			return err
 		}
-		logrus.Debugf("file %s exists", filename)
+		log.Debugf("file %s exists", filename)
 
 		if FileEmpty(file) {
 			return fmt.Errorf("file %s is empty", filename)
 		}
-		logrus.Debugf("file %s is not empty", filename)
+		log.Debugf("file %s is not empty", filename)
 	}
 	return nil
 }
@@ -75,7 +75,7 @@ func Sh(arguments []string) error {
 		return fmt.Errorf("error on executing sh command, Err: %+v", err)
 	}
 	// Print and replace all '\n' with new lines
-	logrus.Debugf("%s", strings.Replace(string(output[:]), `\n`, "\n", -1))
+	log.Debugf("%s", strings.Replace(string(output[:]), `\n`, "\n", -1))
 	return nil
 }
 
@@ -92,7 +92,7 @@ func Chmod(mode string, filename string) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error on executing chmod, Err: %v", err)
 	}
-	logrus.Infof("mode %s changed on file %s", mode, filename)
+	log.Infof("mode %s changed on file %s", mode, filename)
 
 	return nil
 }
@@ -104,7 +104,7 @@ func Cat(filename string) ([]byte, error) {
 	}
 	cmd := exec.Command("cat", filename)
 	output, err := cmd.Output()
-	logrus.Debugf("%s", string(output))
+	log.Debugf("%s", string(output))
 	if err != nil {
 		return nil, fmt.Errorf("error on getting context of file %s: %v", filename, err)
 	}
@@ -119,7 +119,7 @@ func Kubectl(arguments []string) error {
 	}
 	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	logrus.Debugf("command output for '%s': %s", cmd.String(), string(output))
+	log.Debugf("command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
@@ -136,12 +136,12 @@ func ExecShell(command string) (string, string, error) {
 func ExecShellWithEnv(command string, envVars ...string) (string, string, error) {
 	var stout, sterr []byte
 	cmd := exec.Command("bash", "-c", command)
-	logrus.Debugf("Command %s ", command)
+	log.Debugf("Command %s ", command)
 	cmd.Env = append(cmd.Env, envVars...)
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 	if err := cmd.Start(); err != nil {
-		logrus.Debugf("Command %s failed to start. Cause: %v", command, err)
+		log.Debugf("Command %s failed to start. Cause: %v", command, err)
 		return "", "", err
 	}
 

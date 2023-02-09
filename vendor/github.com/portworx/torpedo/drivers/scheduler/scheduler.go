@@ -75,6 +75,9 @@ type AppConfig struct {
 	CustomArgs           []string `yaml:"custom_args"`
 	StorageClassSharedv4 string   `yaml:"storage_class_sharedv4"`
 	PVCAccessMode        string   `yaml:"pvc_access_mode"`
+	Repl                 string   `yaml:"repl"`
+	Fs                   string   `yaml:"fs"`
+	AggregationLevel     string   `yaml:"aggregation_level"`
 }
 
 // InitOptions initialization options
@@ -86,6 +89,8 @@ type InitOptions struct {
 	VolDriverName string
 	// NodeDriverName node driver name
 	NodeDriverName string
+	// MonitorDriverName monitor driver name
+	MonitorDriverName string
 	// ConfigMap  identifies what config map should be used to
 	SecretConfigMapName string
 	// HelmValuesConfigMapName custom values for helm charts
@@ -106,6 +111,8 @@ type InitOptions struct {
 	PureSANType string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
+	//SecureApps identifies apps to be deployed with secure annotation in storage class
+	SecureApps []string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -378,6 +385,9 @@ type Driver interface {
 
 	// DeleteCsiSnapshot delete a snapshots from namespace
 	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
+
+	// GetPodsRestartCount gets restart count maps for pods in given namespace
+	GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error)
 }
 
 var (

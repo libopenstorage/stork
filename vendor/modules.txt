@@ -720,7 +720,7 @@ github.com/libopenstorage/openstorage/volume/drivers/fake
 github.com/libopenstorage/openstorage/volume/drivers/nfs
 github.com/libopenstorage/openstorage/volume/drivers/pwx
 github.com/libopenstorage/openstorage/volume/drivers/vfs
-# github.com/libopenstorage/operator v0.0.0-20230112002659-7e73437e61d4
+# github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/pkg/apis/core/v1
@@ -896,8 +896,8 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20220710173715-5d42efc7d149
-## explicit; go 1.15
+# github.com/portworx/kdmp v0.4.1-0.20230127055521-e23d6b003478 => github.com/portworx/kdmp v0.4.1-0.20230207113334-0b97b6052012
+## explicit; go 1.19
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
 github.com/portworx/kdmp/pkg/client/clientset/versioned
@@ -937,7 +937,7 @@ github.com/portworx/px-object-controller/client/listers/objectservice/v1alpha1
 github.com/portworx/px-object-controller/pkg/client
 github.com/portworx/px-object-controller/pkg/controller
 github.com/portworx/px-object-controller/pkg/utils
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20221208153443-c95ed6d757fa => github.com/portworx/sched-ops v1.20.4-rc1.0.20230103234348-243afb3bb8aa
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd => github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -960,8 +960,8 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
-## explicit; go 1.12
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
+## explicit; go 1.19
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
 github.com/portworx/torpedo/drivers/node/ssh
@@ -977,11 +977,14 @@ github.com/portworx/torpedo/drivers/volume/generic_csi
 github.com/portworx/torpedo/drivers/volume/linstor
 github.com/portworx/torpedo/drivers/volume/portworx
 github.com/portworx/torpedo/drivers/volume/portworx/schedops
+github.com/portworx/torpedo/pkg/aetosutil
 github.com/portworx/torpedo/pkg/aututils
 github.com/portworx/torpedo/pkg/errors
+github.com/portworx/torpedo/pkg/log
 github.com/portworx/torpedo/pkg/netutil
 github.com/portworx/torpedo/pkg/osutils
 github.com/portworx/torpedo/pkg/pureutils
+github.com/portworx/torpedo/pkg/restutil
 github.com/portworx/torpedo/pkg/s3utils
 github.com/portworx/torpedo/pkg/units
 github.com/portworx/torpedo/porx/px/api
@@ -1075,7 +1078,7 @@ github.com/skyrings/skyring-common/tools/uuid
 # github.com/spf13/cast v1.5.0
 ## explicit; go 1.18
 github.com/spf13/cast
-# github.com/spf13/cobra v1.6.0
+# github.com/spf13/cobra v1.6.1
 ## explicit; go 1.15
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
@@ -1180,12 +1183,12 @@ golang.org/x/crypto/pkcs12/internal/rc2
 golang.org/x/crypto/scrypt
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
-# golang.org/x/mod v0.6.0
+# golang.org/x/mod v0.7.0
 ## explicit; go 1.17
 golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.1.0
+# golang.org/x/net v0.5.0
 ## explicit; go 1.17
 golang.org/x/net/bpf
 golang.org/x/net/context
@@ -1219,7 +1222,7 @@ golang.org/x/oauth2/jwt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.1.0
+# golang.org/x/sys v0.4.0
 ## explicit; go 1.17
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
@@ -1228,10 +1231,10 @@ golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.1.0
+# golang.org/x/term v0.4.0
 ## explicit; go 1.17
 golang.org/x/term
-# golang.org/x/text v0.4.0
+# golang.org/x/text v0.6.0
 ## explicit; go 1.17
 golang.org/x/text/cases
 golang.org/x/text/encoding
@@ -1256,16 +1259,14 @@ golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/width
-# golang.org/x/time v0.0.0-20220609170525-579cf78fd858
+# golang.org/x/time v0.1.0
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.2.0
+# golang.org/x/tools v0.5.0
 ## explicit; go 1.18
 golang.org/x/tools/go/ast/astutil
 golang.org/x/tools/go/gcexportdata
-golang.org/x/tools/go/internal/gcimporter
 golang.org/x/tools/go/internal/packagesdriver
-golang.org/x/tools/go/internal/pkgbits
 golang.org/x/tools/go/packages
 golang.org/x/tools/imports
 golang.org/x/tools/internal/event
@@ -1273,10 +1274,12 @@ golang.org/x/tools/internal/event/core
 golang.org/x/tools/internal/event/keys
 golang.org/x/tools/internal/event/label
 golang.org/x/tools/internal/fastwalk
+golang.org/x/tools/internal/gcimporter
 golang.org/x/tools/internal/gocommand
 golang.org/x/tools/internal/gopathwalk
 golang.org/x/tools/internal/imports
 golang.org/x/tools/internal/packagesinternal
+golang.org/x/tools/internal/pkgbits
 golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal
 # golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
@@ -1442,6 +1445,9 @@ gopkg.in/freddierice/go-losetup.v1
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0
+# gopkg.in/natefinch/lumberjack.v2 v2.0.0
+## explicit
+gopkg.in/natefinch/lumberjack.v2
 # gopkg.in/square/go-jose.v2 v2.5.1
 ## explicit
 gopkg.in/square/go-jose.v2
@@ -1454,7 +1460,7 @@ gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 => helm.sh/helm/v3 v3.10.3
+# helm.sh/helm/v3 v3.6.0 => helm.sh/helm/v3 v3.10.3
 ## explicit; go 1.18
 helm.sh/helm/v3/internal/fileutil
 helm.sh/helm/v3/internal/ignore
@@ -2233,8 +2239,9 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230103234348-243afb3bb8aa
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20221012161221-0a543fbf7972
+# github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230207113334-0b97b6052012
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.0

@@ -184,6 +184,27 @@ func GetImageMajorVersion(image string) int {
 	return ver.Segments()[0]
 }
 
+// HasResourcesChanged compares two resources, reflect.DeepEqual does not work due to the format
+// may change, for example CPU 0.1 and 100m should be the same.
+func HasResourcesChanged(r1, r2 v1.ResourceRequirements) bool {
+	return HasResourceListChanged(r1.Requests, r2.Requests) || HasResourceListChanged(r1.Limits, r2.Limits)
+}
+
+// HasResourceListChanged compares two resource lists.
+func HasResourceListChanged(l1, l2 v1.ResourceList) bool {
+	if len(l1) != len(l2) {
+		return true
+	}
+
+	for k, v := range l1 {
+		if v2, ok := l2[k]; !ok || v2.Cmp(v) != 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // HasPullSecretChanged checks if the imagePullSecret in the cluster is the only one
 // in the given list of pull secrets
 func HasPullSecretChanged(
