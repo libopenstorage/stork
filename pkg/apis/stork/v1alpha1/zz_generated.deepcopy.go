@@ -2113,7 +2113,6 @@ func (in *PlatformCredential) DeepCopyInto(out *PlatformCredential) {
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	in.Spec.DeepCopyInto(&out.Spec)
-	in.Cluster.DeepCopyInto(&out.Cluster)
 	return
 }
 

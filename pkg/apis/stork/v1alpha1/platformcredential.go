@@ -24,7 +24,6 @@ type PlatformCredential struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              PlatformCredentialSpec `json:"spec"`
-	Cluster           ClusterItem            `json:"cluster"`
 }
 
 type PlatformCredentialSpec struct {
