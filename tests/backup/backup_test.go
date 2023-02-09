@@ -2787,7 +2787,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 					if len(userBackups) == 0 {
 						return "", true, fmt.Errorf("Unable to fetch backup from shared cluster for user %s", username)
 					}
-					return userBackups, false, nil
+					return "", false, nil
 				}
 				_, err = task.DoRetryWithTimeout(clusterShareCheck, 2*time.Minute, 10*time.Second)
 				log.FailOnError(err, "Unable to fetch backup from shared cluster for user %s", username)
