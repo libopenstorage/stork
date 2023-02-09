@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -18,6 +19,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -75,6 +77,7 @@ type ApplicationRestoreController struct {
 	resourceCollector     resourcecollector.ResourceCollector
 	dynamicInterface      dynamic.Interface
 	restoreAdminNamespace string
+	rancherProjectMapping map[string]string
 }
 
 // Init Initialize the application restore controller
@@ -116,6 +119,18 @@ func (a *ApplicationRestoreController) setDefaults(restore *storkapi.Application
 			restore.Spec.NamespaceMapping[ns] = ns
 		}
 	}
+
+	rancherProjectMapping := restore.Spec.RancherProjectMapping
+	if rancherProjectMapping != nil {
+		for key, value := range rancherProjectMapping {
+			data := strings.Split(key, ":")
+			if len(data) == 2 {
+				rancherProjectMapping[data[1]] = value
+			}
+		}
+		a.rancherProjectMapping = rancherProjectMapping
+	}
+
 	return nil
 }
 
@@ -154,6 +169,8 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 				// Skip namespaces we aren't restoring
 				continue
 			}
+			utils.ParseRancherProjectMapping(ns.Annotations, a.rancherProjectMapping)
+			utils.ParseRancherProjectMapping(ns.Labels, a.rancherProjectMapping)
 			// create mapped restore namespace with metadata of backed up
 			// namespace
 			_, err := core.Instance().CreateNamespace(&v1.Namespace{
@@ -588,6 +605,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						nil, // no need to set storage class mappings at this stage
 						nil,
 						restore.Spec.IncludeOptionalResourceTypes,
+						nil,
 						nil,
 					)
 					if err != nil {
@@ -1195,6 +1213,12 @@ func (a *ApplicationRestoreController) applyResources(
 	}
 	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 	tempObjects := make([]runtime.Unstructured, 0)
+	var opts resourcecollector.Options
+	if a.rancherProjectMapping != nil {
+		opts = resourcecollector.Options{
+			RancherProjectMappings: a.rancherProjectMapping,
+		}
+	}
 	for _, o := range objects {
 		skip, err := a.resourceCollector.PrepareResourceForApply(
 			o,
@@ -1205,6 +1229,7 @@ func (a *ApplicationRestoreController) applyResources(
 			pvNameMappings,
 			restore.Spec.IncludeOptionalResourceTypes,
 			restore.Status.Volumes,
+			&opts,
 		)
 		if err != nil {
 			return err

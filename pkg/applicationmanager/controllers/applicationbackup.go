@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/platform/rancher"
 	"github.com/libopenstorage/stork/pkg/utils"
 
 	"github.com/go-openapi/inflect"
@@ -34,11 +35,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
+	v1networking "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -961,6 +964,229 @@ func (a *ApplicationBackupController) prepareResources(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
+	platformCredential, err := storkops.Instance().GetPlatformCredential(backup.Spec.PlatformCredential, backup.Namespace)
+	if err != nil {
+		return err
+	}
+	if platformCredential.Spec.Type == stork_api.PlatformCredentialRancher {
+		if err = updateRancherProjects(platformCredential, backup, objects); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func updateRancherProjects(
+	platformCredential *stork_api.PlatformCredential,
+	backup *stork_api.ApplicationBackup,
+	objects []runtime.Unstructured,
+) error {
+	var projects map[string]string
+	for _, o := range objects {
+		metadata, err := meta.Accessor(o)
+		if err != nil {
+			return err
+		}
+		resource := o.GetObjectKind().GroupVersionKind()
+		switch resource.Kind {
+		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+			err := getProjectsFromPodNamespaceSelector(o, projects)
+			if err != nil {
+				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+			}
+		case "NetworkPolicy":
+			err := getProjectsFromNetworkPolicy(o, projects)
+			if err != nil {
+				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+			}
+		case "PersistentVolume":
+			err := getProjectsFromPV(o, projects)
+			if err != nil {
+				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+			}
+		case "PersistentVolumeClaim":
+			err := getProjectsFromPVC(o, projects)
+			if err != nil {
+				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+			}
+		default:
+		}
+	}
+
+	if err := updateProjectDiplayNames(projects, platformCredential); err != nil {
+		return err
+	}
+
+	backup.Spec.RancherProjects = projects
+
+	return nil
+}
+
+func updateProjectDiplayNames(
+	projects map[string]string,
+	platformCredential *stork_api.PlatformCredential,
+) error {
+	rancherClient := &rancher.Rancher{}
+	rancherClient.Init(*platformCredential.Spec.RancherConfig)
+	projectList, err := rancherClient.ListProjectNames()
+	if err != nil {
+		return err
+	}
+	for key, val := range projectList {
+		if _, ok := projects[key]; ok {
+			projects[key] = val
+		}
+		data := strings.Split(key, ":")
+		if len(data) == 2 {
+			if _, ok := projects[data[1]]; ok {
+				delete(projects, data[1])
+				projects[key] = val
+			}
+		}
+	}
+	return nil
+}
+
+func getProjectsFromPV(
+	object runtime.Unstructured,
+	projects map[string]string,
+) error {
+	var pv v1.PersistentVolume
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pv); err != nil {
+		return err
+	}
+	for key, val := range pv.Annotations {
+		if strings.Contains(key, utils.CattleProjectPrefix) {
+			projects[val] = ""
+		}
+	}
+	for key, val := range pv.Labels {
+		if strings.Contains(key, utils.CattleProjectPrefix) {
+			projects[val] = ""
+		}
+	}
+	return nil
+}
+
+func getProjectsFromPVC(
+	object runtime.Unstructured,
+	projects map[string]string,
+) error {
+	var pvc v1.PersistentVolumeClaim
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pvc); err != nil {
+		return err
+	}
+	for key, val := range pvc.Annotations {
+		if strings.Contains(key, utils.CattleProjectPrefix) {
+			projects[val] = ""
+		}
+	}
+	for key, val := range pvc.Labels {
+		if strings.Contains(key, utils.CattleProjectPrefix) {
+			projects[val] = ""
+		}
+	}
+	return nil
+}
+
+func getProjectsFromNetworkPolicy(
+	object runtime.Unstructured,
+	projects map[string]string,
+) error {
+	var networkPolicy v1networking.NetworkPolicy
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &networkPolicy); err != nil {
+		return fmt.Errorf("error converting to networkpolicy: %v", err)
+	}
+
+	// Handle namespace selectors for Rancher Network Policies
+	ingressRule := networkPolicy.Spec.Ingress
+	for _, ingress := range ingressRule {
+		for _, fromPolicyPeer := range ingress.From {
+			if fromPolicyPeer.NamespaceSelector != nil {
+				for key, val := range fromPolicyPeer.NamespaceSelector.MatchLabels {
+					if strings.Contains(key, utils.CattleProjectPrefix) {
+						projects[val] = ""
+					}
+				}
+			}
+		}
+	}
+	egressRule := networkPolicy.Spec.Egress
+	for _, egress := range egressRule {
+		for _, toPolicyPeer := range egress.To {
+			if toPolicyPeer.NamespaceSelector != nil {
+				for key, val := range toPolicyPeer.NamespaceSelector.MatchLabels {
+					if strings.Contains(key, utils.CattleProjectPrefix) {
+						projects[val] = ""
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func getProjectsFromPodNamespaceSelector(
+	object runtime.Unstructured,
+	projects map[string]string,
+) error {
+	content := object.UnstructuredContent()
+	podSpecField, found, err := unstructured.NestedFieldCopy(content, "spec", "template", "spec")
+	if err != nil {
+		logrus.Warnf("Unable to parse object %v while handling"+
+			" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+	}
+	podSpec, ok := podSpecField.(v1.PodSpec)
+	if found && ok {
+		// Anti Affinity
+		if podSpec.Affinity.PodAntiAffinity != nil {
+			// - handle PreferredDuringSchedulingIgnoredDuringExecution
+			for _, affinityTerm := range podSpec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+				if affinityTerm.PodAffinityTerm.NamespaceSelector != nil {
+					for key, val := range affinityTerm.PodAffinityTerm.NamespaceSelector.MatchLabels {
+						if strings.Contains(key, utils.CattleProjectPrefix) {
+							projects[val] = ""
+						}
+					}
+				}
+			}
+			// Affinity
+			// - handle RequiredDuringSchedulingIgnoredDuringExecution
+			for _, affinityTerm := range podSpec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution {
+				if affinityTerm.NamespaceSelector != nil {
+					for key, val := range affinityTerm.NamespaceSelector.MatchLabels {
+						if strings.Contains(key, utils.CattleProjectPrefix) {
+							projects[val] = ""
+						}
+					}
+				}
+			}
+		}
+		// Affinity
+		if podSpec.Affinity.PodAffinity != nil {
+			// - handle PreferredDuringSchedulingIgnoredDuringExecution
+			for _, affinityTerm := range podSpec.Affinity.PodAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+				if affinityTerm.PodAffinityTerm.NamespaceSelector != nil {
+					for key, val := range affinityTerm.PodAffinityTerm.NamespaceSelector.MatchLabels {
+						if strings.Contains(key, utils.CattleProjectPrefix) {
+							projects[val] = ""
+						}
+					}
+				}
+			}
+			// - handle RequiredDuringSchedulingIgnoredDuringExecution
+			for _, affinityTerm := range podSpec.Affinity.PodAffinity.RequiredDuringSchedulingIgnoredDuringExecution {
+				if affinityTerm.NamespaceSelector != nil {
+					for key, val := range affinityTerm.NamespaceSelector.MatchLabels {
+						if strings.Contains(key, utils.CattleProjectPrefix) {
+							projects[val] = ""
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }
 

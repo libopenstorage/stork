@@ -545,6 +545,7 @@ func (a *ApplicationCloneController) prepareResources(
 			pvNameMappings,
 			clone.Spec.IncludeOptionalResourceTypes,
 			nil,
+			nil,
 		)
 		if err != nil {
 			return nil, err
