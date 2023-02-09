@@ -230,7 +230,7 @@ func (d *DefaultDriver) ExitMaintenance(n node.Node) error {
 }
 
 // UpdatePoolIOPriority Update IO Priority of the Pool
-func (d *DefaultDriver) UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error {
+func (d *DefaultDriver) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpdatePoolIOPriority()",
@@ -996,4 +996,21 @@ func (d *DefaultDriver) UpdatePoolLabels(n node.Node, poolID string, labels map[
 		Type:      "Function",
 		Operation: "UpdatePoolLabels()",
 	}
+}
+
+func (d *DefaultDriver) GetPoolPropertyValue(poolUUID string, label string) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPoolPropertyValue()",
+	}
+}
+
+// IsNodeInMaintenance returns true if Node in Maintenance
+func (d *DefaultDriver) IsNodeInMaintenance(n node.Node) bool {
+	return false
+}
+
+// IsNodeOutOfMaintenance returns true if Node in Maintenance
+func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) bool {
+	return true
 }

@@ -206,3 +206,15 @@ func GetNodeByIP(nodeIP string) (Node, error) {
 func CleanupRegistry() {
 	nodeRegistry = make(map[string]Node)
 }
+
+// GetNodeByNodeName Get Node Details from Node Name Provided
+func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
+	StorageNodes := GetStorageNodes()
+
+	for _, each := range StorageNodes {
+		if each.Name == nodeName {
+			return each, nil
+		}
+	}
+	return Node{}, fmt.Errorf("FAILED to get Node Details by Node Name [%s] ", nodeName)
+}

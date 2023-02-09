@@ -182,7 +182,7 @@ type Driver interface {
 	ExitMaintenance(n node.Node) error
 
 	// UpdatePoolIOPriority updates IO priority of the pool
-	UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error
+	UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority string) error
 
 	// RecoverPool will recover a pool from a failure/storage down state.
 	// This could be used by a pool to recover itself from any underlying storage
@@ -397,8 +397,17 @@ type Driver interface {
 	// GetRebalanceJobStatus returns the rebalance jobs response
 	GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error)
 
-	//UpdatePoolLabels updates the label of the desired pool, by appending a custom key-value pair
+	// UpdatePoolLabels updates the label of the desired pool, by appending a custom key-value pair
 	UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error
+
+	// GetPoolPropertyStatus Gets Property details based on the labels provided
+	GetPoolPropertyValue(poolUUID string, label string) (string, error)
+
+	// IsNodeInMaintenance returns true if Node in Maintenance
+	IsNodeInMaintenance(n node.Node) bool
+
+	// IsNodeOutOfMaintenance returns true if Node in Maintenance
+	IsNodeOutOfMaintenance(n node.Node) bool
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

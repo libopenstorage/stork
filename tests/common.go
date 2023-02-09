@@ -5132,67 +5132,10 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 	return poolUuids, err
 }
 
-// GetNodeByNodeName Get Node Details from Node Name Provided
-func GetNodeDetailsByNodeName(nodeName string) (*node.Node, error) {
-	Nodes, err := GetStorageNodes()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, each := range Nodes {
-		if each.Name == nodeName {
-			return &each, nil
-		}
-	}
-	return nil, err
-}
-
-// GetPoolIOPriorityStatus Get Pool IO Priority status from PoolUUID
-func GetPoolIOPriorityStatus(poolUUID string) (string, error) {
-	var PoolIOPriority string
-	PoolIOPriority = ""
-	Pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, fmt.Sprintf("Listing storage pools failed"))
-	for _, eachPool := range Pools {
-		if eachPool.Uuid == poolUUID {
-			PoolIOPriority = eachPool.Labels["iopriority"]
-			break
-		}
-	}
-	if PoolIOPriority != "" {
-		return "", errors.New(fmt.Sprintf("Failed to Get IO Priority for PoolUUID [%v]", poolUUID))
-	}
-	return PoolIOPriority, nil
-}
-
-// isNodeInMaintenanceMode returns true if Node in Maintenance
-func IsNodeInMaintenance(n node.Node) bool {
-	stNode, err := Inst().V.GetDriverNode(&n)
-	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n)
-
-	if stNode.Status == opsapi.Status_STATUS_MAINTENANCE {
-		return true
-	}
-
-	return false
-}
-
-// isNodeInMaintenanceMode returns true if Node in Maintenance
-func IsNodeOutOfMaintenance(n node.Node) bool {
-	stNode, err := Inst().V.GetDriverNode(&n)
-	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n)
-
-	if stNode.Status == opsapi.Status_STATUS_OK {
-		return true
-	}
-
-	return false
-}
-
 // WaitTillEnterMaintenance Wait till Node Enters maintenance mode
 func WaitTillEnterMaintenanceMode(n node.Node) {
 	t := func() (interface{}, bool, error) {
-		if IsNodeInMaintenance(n) == true {
+		if Inst().V.IsNodeInMaintenance(n) == true {
 			return nil, true, nil
 		}
 		return nil, false, fmt.Errorf("Not in Maintenance mode")
@@ -5207,7 +5150,7 @@ func ExitFromMaintenanceMode(n node.Node) {
 	log.InfoD(fmt.Sprintf("Exiting maintenence mode on Node %s", n.Name))
 	t := func() (interface{}, bool, error) {
 		if err := Inst().V.ExitMaintenance(n); err != nil {
-			if IsNodeOutOfMaintenance(n) == true {
+			if Inst().V.IsNodeOutOfMaintenance(n) == true {
 				return nil, true, nil
 			}
 			return nil, true, err
@@ -5222,39 +5165,24 @@ func ExitFromMaintenanceMode(n node.Node) {
 // Checks for all the Storage Nodes present in the Cluster, in case if any node is in Maintenance mode
 // Function will attempt bringing back the Node out of Maintenance
 func ExitNodesFromMaintenanceMode() {
-	Nodes, err := GetStorageNodes()
-	log.FailOnError(err, "Failed to fetch Storage Nodes from the cluster")
+	Nodes := node.GetStorageNodes()
 	for _, eachNode := range Nodes {
-		if IsNodeInMaintenance(eachNode) {
+		if Inst().V.IsNodeInMaintenance(eachNode) {
 			ExitFromMaintenanceMode(eachNode)
 		}
 	}
-}
-
-// IsStorageNode returns true if Node is Storage Node
-func IsStorageNode(n node.Node) bool {
-	Nodes, err := GetStorageNodes()
-	log.FailOnError(err, "Failed to fetch Storage Nodes from the cluster")
-
-	for _, eachNode := range Nodes {
-		if eachNode.Id == n.Id {
-			return true
-		}
-	}
-	return false
 }
 
 // GetPoolsPresentOnNodes returns all pools present in the Nodes
 func GetPoolsDetailsOnNode(n node.Node) []*opsapi.StoragePool {
 	var poolDetails []*opsapi.StoragePool
 
-	if IsStorageNode(n) == false {
+	if node.IsStorageNode(n) == false {
 		log.Errorf("Node [%s] is not Storage Node", n.Id)
 		return nil
 	}
 
-	Nodes, err := GetStorageNodes()
-	log.FailOnError(err, "Failed to fetch Storage Nodes from the cluster")
+	Nodes := node.GetStorageNodes()
 
 	for _, eachNode := range Nodes {
 		if eachNode.Id == n.Id {
