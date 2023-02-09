@@ -493,6 +493,8 @@ type StorkSpec struct {
 	Volumes []VolumeSpec `json:"volumes,omitempty"`
 	// HostNetwork if set, will use host's network for stork pods
 	HostNetwork *bool `json:"hostNetwork,omitempty"`
+	// Resources for stork and stork-scheduler pods, e.g. CPU and memory requests or limits
+	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // AutopilotSpec contains details of an autopilot component
@@ -517,6 +519,8 @@ type AutopilotSpec struct {
 	Env []v1.EnvVar `json:"env,omitempty"`
 	// Volumes is a list of extra volumes to used by autopilot
 	Volumes []VolumeSpec `json:"volumes,omitempty"`
+	// Resources for autopilot pods, e.g. CPU and memory requests or limits
+	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // DataProviderSpec contains the details for data providers for components like autopilot
