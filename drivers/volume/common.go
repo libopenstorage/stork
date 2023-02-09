@@ -229,6 +229,14 @@ func (d *DefaultDriver) ExitMaintenance(n node.Node) error {
 	}
 }
 
+// UpdatePoolIOPriority Update IO Priority of the Pool
+func (d *DefaultDriver) UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdatePoolIOPriority()",
+	}
+}
+
 // RecoverPool will recover a pool from a failure/storage down state.
 // This could be used by a pool driver to recover itself from any underlying storage
 // failure.

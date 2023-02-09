@@ -181,6 +181,9 @@ type Driver interface {
 	// ExitMaintenance exits the given node from maintenance mode
 	ExitMaintenance(n node.Node) error
 
+	// UpdatePoolIOPriority updates IO priority of the pool
+	UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error
+
 	// RecoverPool will recover a pool from a failure/storage down state.
 	// This could be used by a pool to recover itself from any underlying storage
 	// failure.
