@@ -10,8 +10,6 @@ LABEL name="Stork" \
        summary="Storage Operator Runtime for Kubernetes" \
        description="Stork is a Cloud Native storage operator runtime scheduler plugin"
 
-RUN curl https://yum.portworx.com/dl/ubi8/libxml2-2.9.7-15.el8_7.1.x86_64.rpm -o libxml.rpm && rpm -U libxml.rpm && rm -f libxml.rpm
-
 RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip openssl
 
 RUN python3 -m pip install awscli  && python3 -m pip install rsa --upgrade
