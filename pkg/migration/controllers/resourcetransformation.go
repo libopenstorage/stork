@@ -238,7 +238,7 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			Namespaced: true,
 			Group:      group,
 		}
-		objects, err := r.resourceCollector.GetResourcesForType(
+		objects, _, err := r.resourceCollector.GetResourcesForType(
 			resource,
 			nil,
 			[]string{transform.Namespace},
