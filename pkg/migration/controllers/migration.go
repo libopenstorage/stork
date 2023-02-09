@@ -480,11 +480,14 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			if err != nil {
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
 				log.MigrationLog(migration).Errorf(message)
-				m.recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					message)
-				return nil
+				// Don't need to log this event as Stork retries if it fails to update
+				if !strings.Contains(message, "please apply your changes to the latest version and try again") {
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						message)
+					return nil
+				}
 			}
 		} else {
 			migration.Status.Stage = stork_api.MigrationStageApplications
