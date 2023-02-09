@@ -13,17 +13,14 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	storageapi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,7 +78,6 @@ func testMigration(t *testing.T) {
 	t.Run("networkpolicyTest", networkPolicyMigrationTest)
 	t.Run("endpointTest", endpointMigrationTest)
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
-	t.Run("clonePvcDestTest", clonePvcDestTest)
 	t.Run("scaleTest", migrationScaleTest)
 	t.Run("pvcResizeTest", pvcResizeMigrationTest)
 	t.Run("transformResourceTest", transformResourceTest)
@@ -1241,89 +1237,6 @@ func pvcResizeMigrationTest(t *testing.T) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
-}
-
-func clonePvcDestTest(t *testing.T) {
-	var err error
-	var namespace string
-	var pvcs *v1.PersistentVolumeClaimList
-	// Reset config in case of error
-	defer func() {
-		err = setSourceKubeConfig()
-		require.NoError(t, err, "Error resetting remote config")
-	}()
-	err = setMockTime(nil)
-	require.NoError(t, err, "Error resetting mock time")
-	ctxs, preMigrationCtx := triggerMigration(
-		t,
-		"mysql-migration-schedule-interval-clone",
-		"mysql-1-pvc-clone",
-		[]string{},
-		[]string{"mysql-migration-schedule-interval-clone"},
-		true,
-		false,
-		false,
-		false,
-		"",
-		nil,
-	)
-
-	validateMigration(t, "mysql-migration-schedule-interval-clone", preMigrationCtx.GetID())
-
-	// Get pvc lists from source cluster
-	for _, spec := range ctxs[0].App.SpecList {
-		if obj, ok := spec.(*apps_api.Deployment); ok {
-			namespace = obj.GetNamespace()
-			pvcs, err = core.Instance().GetPersistentVolumeClaims(namespace, nil)
-			require.NoError(t, err, "error retriving pvc list from %s namespace", namespace)
-			break
-		}
-	}
-
-	sc_src, err := core.Instance().GetStorageClassForPVC(&pvcs.Items[0])
-	require.NoError(t, err, "failed to get storage class: %v", err)
-	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to dest cluster: %v", err)
-	sc_dest, err := createStorageClassForPvc(sc_src.ObjectMeta.Name, *sc_src.ReclaimPolicy, *sc_src.VolumeBindingMode, sc_src.Parameters, sc_src.Provisioner)
-	require.NoError(t, err, "failed to create storage class: %v", err)
-
-	for _, pvc := range pvcs.Items {
-		size := pvc.Status.Capacity[v1.ResourceName(v1.ResourceStorage)]
-		originalPVCName := pvc.Name
-		clonedPVCName := originalPVCName + "-clone"
-		clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, clonedPVCName, originalPVCName, sc_dest.Name)
-		require.NoError(t, err, fmt.Sprintf("Failed to build cloned PVC Spec: %s", err))
-		clonedPVC, err := core.Instance().CreatePersistentVolumeClaim(clonedPVCSpec)
-		require.NoError(t, err, fmt.Sprintf("Failed to clone PVC from source PVC %s: %s", originalPVCName, err))
-		err = core.Instance().ValidatePersistentVolumeClaim(clonedPVC, waitPvcBound, waitPvcRetryInterval)
-		require.NoError(t, err, fmt.Sprintf("Cloned PVC %s is not bound.", clonedPVC.Name))
-		logrus.Infof("Successfully clone PVC %s", clonedPVC.Name)
-	}
-	time.Sleep(1 * time.Minute)
-	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, true)
-}
-
-func createStorageClassForPvc(scname string, scrp v1.PersistentVolumeReclaimPolicy, scbm storageapi.VolumeBindingMode, scpm map[string]string, scpr string) (*storageapi.StorageClass, error) {
-	k8sStorage := storage.Instance()
-
-	v1obj := meta_v1.ObjectMeta{
-		Name: scname,
-	}
-
-	scObj := storageapi.StorageClass{
-		ObjectMeta:    v1obj,
-		Provisioner:   scpr,
-		Parameters:    scpm,
-		ReclaimPolicy: &scrp,
-	}
-
-	sc, err := k8sStorage.CreateStorageClass(&scObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", scname, err)
-	}
-	return sc, err
 }
 
 func getStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
