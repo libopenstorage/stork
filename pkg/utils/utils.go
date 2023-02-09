@@ -82,3 +82,18 @@ func GetStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
 	}
 	return scName, nil
 }
+
+// ParseRancherProjectMapping - maps the target projectId to the source projectId
+func ParseRancherProjectMapping(
+	data map[string]string,
+	projectMapping map[string]string,
+) {
+	for key, value := range data {
+		if strings.Contains(key, CattleProjectPrefix) {
+			if targetProjectID, ok := projectMapping[value]; ok &&
+				targetProjectID != "" {
+				data[key] = targetProjectID
+			}
+		}
+	}
+}

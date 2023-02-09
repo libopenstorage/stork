@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func (r *ResourceCollector) prepareNetworkPolicyForCollection(
+func (r *ResourceCollector) prepareRancherNetworkPolicy(
 	object runtime.Unstructured,
 	opts Options,
 ) error {
@@ -20,6 +20,8 @@ func (r *ResourceCollector) prepareNetworkPolicyForCollection(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &networkPolicy); err != nil {
 		return fmt.Errorf("error converting to networkpolicy: %v", err)
 	}
+
+	utils.ParseRancherProjectMapping(networkPolicy.Labels, opts.RancherProjectMappings)
 
 	// Handle namespace selectors for Rancher Network Policies
 	if len(opts.RancherProjectMappings) > 0 {
