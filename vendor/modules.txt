@@ -631,6 +631,7 @@ github.com/libopenstorage/openstorage/pkg/correlation
 github.com/libopenstorage/openstorage/pkg/dbg
 github.com/libopenstorage/openstorage/pkg/defaultcontext
 github.com/libopenstorage/openstorage/pkg/diags
+github.com/libopenstorage/openstorage/pkg/grpcserver
 github.com/libopenstorage/openstorage/pkg/grpcutil
 github.com/libopenstorage/openstorage/pkg/job
 github.com/libopenstorage/openstorage/pkg/keylock
@@ -647,6 +648,7 @@ github.com/libopenstorage/openstorage/volume
 # github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
+github.com/libopenstorage/operator/drivers/storage/portworx/util
 github.com/libopenstorage/operator/pkg/apis/core/v1
 github.com/libopenstorage/operator/pkg/client/clientset/versioned
 github.com/libopenstorage/operator/pkg/client/clientset/versioned/scheme
@@ -655,6 +657,7 @@ github.com/libopenstorage/operator/pkg/constants
 github.com/libopenstorage/operator/pkg/errors
 github.com/libopenstorage/operator/pkg/mock
 github.com/libopenstorage/operator/pkg/util
+github.com/libopenstorage/operator/pkg/util/k8s
 github.com/libopenstorage/operator/pkg/util/test
 # github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 ## explicit; go 1.13
@@ -1786,6 +1789,8 @@ k8s.io/kubectl/pkg/validation
 # k8s.io/kubernetes v1.25.1 => k8s.io/kubernetes v1.25.1
 ## explicit; go 1.19
 k8s.io/kubernetes/pkg/apis/core
+k8s.io/kubernetes/pkg/apis/core/helper
+k8s.io/kubernetes/pkg/apis/core/v1/helper
 k8s.io/kubernetes/pkg/printers
 k8s.io/kubernetes/pkg/registry/core/service/allocator
 k8s.io/kubernetes/pkg/registry/core/service/portallocator
