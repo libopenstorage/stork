@@ -6891,8 +6891,6 @@ var _ = Describe("{SwapShareBackup}", func() {
 				for _, backupLocationName := range allBackupLocations {
 					if userBackupLocationMapping[userName] == backupLocationName {
 						return "", true, fmt.Errorf("found %s backup locations", backupLocationName)
-					} else {
-						return "", false, nil
 					}
 				}
 				return "", false, nil
