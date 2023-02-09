@@ -2780,7 +2780,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				err := ClusterUpdateBackupShare(SourceClusterName, nil, []string{username}, accessLevel, true, ctx)
 				log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
 				clusterShareCheck := func() (interface{}, bool, error) {
-					userBackups, err := GetAllBackupsForUser(username, password)
+					userBackups, err = GetAllBackupsForUser(username, password)
 					if err != nil {
 						return "", true, fmt.Errorf("Fail on Fetching backups for %s with error %v", username, err)
 					}
