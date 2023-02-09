@@ -6372,8 +6372,8 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 var _ = Describe("{DeleteUsersRole}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
-	numberOfUsers := 10
-	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.ApplicationUser, backup.InfrastructureOwner, backup.DefaultRoles}
+	numberOfUsers := 100
+	roles := [3]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.DefaultRoles}
 	userRoleMapping := map[string]backup.PxBackupRole{}
 
 	JustBeforeEach(func() {
@@ -6389,6 +6389,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
 				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
+				time.Sleep(3000 * time.Millisecond)
 				role := roles[rand.Intn(len(roles))]
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
@@ -6412,21 +6413,16 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 		})
 		Step("Validate if the roles are deleted from the users ", func() {
+			result := false
 			for user, role := range userRoleMapping {
-				roleDeletionSuccess := func() (interface{}, bool, error) {
-					roles, err := backup.GetRolesForUser(user)
-					log.FailOnError(err, "Failed to get roles for the user [%s]", user)
-					for _, roleObj := range roles {
-						if roleObj.Name == string(role) {
-							return "", true, fmt.Errorf("validation of deleted role [%s] from user [%s]", role, user)
-						} else {
-							return "", false, nil
-						}
+				roles, _ := backup.GetRolesForUser(user)
+				for _, roleObj := range roles {
+					if roleObj.Name == string(role) {
+						result = true
+						break
 					}
-					return "", false, nil
 				}
-				_, err := task.DoRetryWithTimeout(roleDeletionSuccess, 30*time.Second, 5*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
+				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
 			}
 		})
 		Step("Delete users", func() {
@@ -6437,21 +6433,17 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			}
 		})
 		Step("Validate if all the created users are deleted", func() {
+			result := false
 			remainingUsers, err := backup.GetAllUsers()
 			log.FailOnError(err, "Failed to get users")
 			for user := range userRoleMapping {
-				userDeletionSuccess := func() (interface{}, bool, error) {
-					for _, userObj := range remainingUsers {
-						if userObj.Name == user {
-							return "", true, fmt.Errorf("validation of deleted user [%s]", user)
-						} else {
-							return "", false, nil
-						}
+				for _, userObj := range remainingUsers {
+					if userObj.Name == user {
+						result = true
+						break
 					}
-					return "", false, nil
 				}
-				_, err := task.DoRetryWithTimeout(userDeletionSuccess, 30*time.Second, 5*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of deleted user [%s]", user))
+				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted user [%s]", user))
 			}
 		})
 	})
