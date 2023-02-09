@@ -5826,7 +5826,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
 
 		// Get IO Priority of Pool before running the test
-		ioPriorityBefore, err := Inst().V.GetPoolPropertyValue(poolUUID, "iopriority")
+		ioPriorityBefore, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
 		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
 		log.InfoD("IO Priority of Pool [%s] before Pool expand is [%s]", poolUUID, ioPriorityBefore)
 
@@ -5875,7 +5875,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		})
 
 		// Validate if PoolIO Priority is not changed after pool Expansion
-		ioPriorityAfter, err := Inst().V.GetPoolPropertyValue(poolUUID, "iopriority")
+		ioPriorityAfter, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
 		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
 
 		log.InfoD(fmt.Sprintf("Priority Before [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, ioPriorityAfter))

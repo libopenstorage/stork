@@ -998,10 +998,11 @@ func (d *DefaultDriver) UpdatePoolLabels(n node.Node, poolID string, labels map[
 	}
 }
 
-func (d *DefaultDriver) GetPoolPropertyValue(poolUUID string, label string) (string, error) {
+// GetPoolLabelValue Get Value of the Pool Properties
+func (d *DefaultDriver) GetPoolLabelValue(poolUUID string, label string) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetPoolPropertyValue()",
+		Operation: "GetPoolLabelValue()",
 	}
 }
 

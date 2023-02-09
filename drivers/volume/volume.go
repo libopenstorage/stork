@@ -400,8 +400,8 @@ type Driver interface {
 	// UpdatePoolLabels updates the label of the desired pool, by appending a custom key-value pair
 	UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error
 
-	// GetPoolPropertyStatus Gets Property details based on the labels provided
-	GetPoolPropertyValue(poolUUID string, label string) (string, error)
+	// GetPoolLabelValue Gets Property details based on the labels provided
+	GetPoolLabelValue(poolUUID string, label string) (string, error)
 
 	// IsNodeInMaintenance returns true if Node in Maintenance
 	IsNodeInMaintenance(n node.Node) bool

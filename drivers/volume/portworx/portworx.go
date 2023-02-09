@@ -4773,7 +4773,12 @@ func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[strin
 }
 
 // GetPoolIOPriorityStatus returns IO Priority of the Pool
-func (d *portworx) GetPoolPropertyValue(poolUUID string, label string) (string, error) {
+func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, error) {
+	/* e.x
+	1) d.GetPoolLabelValue(poolUUID, "iopriority")
+	2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
+	3) d.GetPoolLabelValue(poolUUID, "medium")
+	*/
 	var PropertyMatch string
 	PropertyMatch = ""
 	pools, err := d.ListStoragePools(metav1.LabelSelector{})
