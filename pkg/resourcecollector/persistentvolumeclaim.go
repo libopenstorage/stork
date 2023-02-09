@@ -56,6 +56,7 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 	pvNameMappings map[string]string,
 	storageClassMappings map[string]string,
 	vInfos []*stork_api.ApplicationRestoreVolumeInfo,
+	opts Options,
 ) (bool, error) {
 	var pvc v1.PersistentVolumeClaim
 	var updatedName string
@@ -97,6 +98,12 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		}
 
 	}
+
+	if opts.RancherProjectMappings != nil {
+		utils.ParseRancherProjectMapping(pvc.Annotations, opts.RancherProjectMappings)
+		utils.ParseRancherProjectMapping(pvc.Labels, opts.RancherProjectMappings)
+	}
+
 	if len(storageClassMappings) > 0 {
 		// In the case of storageClassMappings, we need to reset the
 		// storage class annotation and the provisioner annotation
