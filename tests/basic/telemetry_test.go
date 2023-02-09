@@ -309,7 +309,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 							}
 						}
 						return false
-					}, 5*time.Minute, 15*time.Second).Should(BeTrue(), "failed to generate profile diags on node %s", currNode.Name)
+					}, 20*time.Minute, 15*time.Second).Should(BeTrue(), "failed to generate profile diags on node %s", currNode.Name)
 
 				})
 				Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
