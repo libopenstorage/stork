@@ -54,6 +54,8 @@ const (
 	// StorkMigrationName is the annotation used to identify resource migrated by
 	// migration CRD name
 	StorkMigrationName = "stork.libopenstorage.org/migrationName"
+	// StorkMigrationNamespace is the annotation used to identify migration CRD's namespace
+	StorkMigrationNamespace = "stork.libopenstorage.org/migrationNamespace"
 	// StorkMigrationTime is the annotation used to specify time of migration
 	StorkMigrationTime = "stork.libopenstorage.org/migrationTime"
 	// StorkMigrationCRDActivateAnnotation is the annotation used to keep track of
@@ -1786,6 +1788,7 @@ func (m *MigrationController) applyResources(
 		}
 		pv.Annotations[StorkMigrationAnnotation] = "true"
 		pv.Annotations[StorkMigrationName] = migration.GetName()
+		pv.Annotations[StorkMigrationNamespace] = migration.GetNamespace()
 		pv.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		pv.Annotations = m.getParsedAnnotations(pv.Annotations, clusterPair)
 		pv.Labels = m.getParsedLabels(pv.Labels, clusterPair)
@@ -1912,6 +1915,7 @@ func (m *MigrationController) applyResources(
 		}
 		pvc.Annotations[StorkMigrationAnnotation] = "true"
 		pvc.Annotations[StorkMigrationName] = migration.GetName()
+		pvc.Annotations[StorkMigrationNamespace] = migration.GetNamespace()
 		pvc.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		pvc.Annotations[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
 		pvc.Annotations = m.getParsedAnnotations(pvc.Annotations, clusterPair)
@@ -2086,6 +2090,7 @@ func (m *MigrationController) applyResources(
 			}
 			migrAnnot[StorkMigrationAnnotation] = "true"
 			migrAnnot[StorkMigrationName] = migration.GetName()
+			migrAnnot[StorkMigrationNamespace] = migration.GetNamespace()
 			migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 			migrAnnot = m.getParsedAnnotations(migrAnnot, clusterPair)
 

@@ -41,6 +41,11 @@ const (
 	stage       = "STAGE"
 	status      = "STATUS"
 	statusOk    = "Ok\n"
+
+	// StorkMigrationScheduleCopied indicating migrated migrationscheduleobject
+	StorkMigrationScheduleCopied = "stork.libopenstorage.org/static-copy"
+	// StorkMigrationNamespace indicating the namespace of migration cr
+	StorkMigrationNamespace = "stork.libopenstorage.org/migrationNamespace"
 )
 
 var (
@@ -150,6 +155,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 		Short:   "Activate apps that were created from a migration",
 		Run: func(c *cobra.Command, args []string) {
 			activationNamespaces := make([]string, 0)
+			migrationScheduleNamespaces := make([]string, 0)
 			config, err := cmdFactory.GetConfig()
 			if err != nil {
 				util.CheckErr(err)
@@ -170,11 +176,17 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				for _, ns := range namespaces.Items {
 					activationNamespaces = append(activationNamespaces, ns.Name)
 				}
-
+				migrationScheduleNamespaces = append(migrationScheduleNamespaces, activationNamespaces...)
 			} else {
 				activationNamespaces = append(activationNamespaces, cmdFactory.GetNamespace())
+				migrationScheduleNamespace := GetMigrationScheduleCRNamespace(cmdFactory.GetNamespace(), config, ioStreams)
+				if len(migrationScheduleNamespace) > 0 {
+					migrationScheduleNamespaces = append(migrationScheduleNamespaces, migrationScheduleNamespace)
+				} else {
+					migrationScheduleNamespaces = append(migrationScheduleNamespaces, cmdFactory.GetNamespace())
+				}
 			}
-			for _, ns := range activationNamespaces {
+			for _, ns := range migrationScheduleNamespaces {
 				migrSched, err := storkops.Instance().ListMigrationSchedules(ns)
 				if err != nil {
 					util.CheckErr(err)
@@ -187,7 +199,8 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 						util.CheckErr(err)
 						return
 					}
-					printMsg(fmt.Sprintf("Updated migrationschedule status for %v/%v to activated", migr.Namespace, migr.Name), ioStreams.Out)
+					printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to true", migr.Namespace, migr.Name), ioStreams.Out)
+
 				}
 			}
 			for _, ns := range activationNamespaces {
@@ -219,6 +232,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 		Short:   "Deactivate apps that were created from a migration",
 		Run: func(c *cobra.Command, args []string) {
 			deactivationNamespaces := make([]string, 0)
+			migrationScheduleNamespaces := make([]string, 0)
 			config, err := cmdFactory.GetConfig()
 			if err != nil {
 				util.CheckErr(err)
@@ -233,9 +247,16 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				for _, ns := range namespaces.Items {
 					deactivationNamespaces = append(deactivationNamespaces, ns.Name)
 				}
+				migrationScheduleNamespaces = append(migrationScheduleNamespaces, deactivationNamespaces...)
 
 			} else {
 				deactivationNamespaces = append(deactivationNamespaces, cmdFactory.GetNamespace())
+				migrationScheduleNamespace := GetMigrationScheduleCRNamespace(cmdFactory.GetNamespace(), config, ioStreams)
+				if len(migrationScheduleNamespace) > 0 {
+					migrationScheduleNamespaces = append(migrationScheduleNamespaces, migrationScheduleNamespace)
+				} else {
+					migrationScheduleNamespaces = append(migrationScheduleNamespaces, cmdFactory.GetNamespace())
+				}
 			}
 
 			for _, ns := range deactivationNamespaces {
@@ -249,6 +270,28 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateVMObjects("VirtualMachine", ns, true, ioStreams)
 				updateCRDObjects(ns, false, ioStreams, config)
 				updateCronJobObjects(ns, false, ioStreams)
+			}
+
+			for _, ns := range migrationScheduleNamespaces {
+				migrSched, err := storkops.Instance().ListMigrationSchedules(ns)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				for _, migr := range migrSched.Items {
+					if migr.GetAnnotations() != nil {
+						if _, ok := migr.GetAnnotations()[StorkMigrationScheduleCopied]; ok {
+							// check status of all migrated app in cluster
+							migr.Status.ApplicationActivated = false
+							_, err := storkops.Instance().UpdateMigrationSchedule(&migr)
+							if err != nil {
+								util.CheckErr(err)
+								return
+							}
+							printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to false", migr.Namespace, migr.Name), ioStreams.Out)
+						}
+					}
+				}
 			}
 
 		},
@@ -333,6 +376,8 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
 	for _, res := range crdList.Items {
 		for _, crd := range res.Resources {
 			var client k8sdynamic.ResourceInterface
@@ -902,4 +947,47 @@ func ValidateMigration(migr *storkv1.Migration) error {
 
 	fmt.Printf("All Ready!!\n")
 	return nil
+}
+
+func GetMigrationScheduleCRNamespace(namespace string, config *rest.Config, ioStreams genericclioptions.IOStreams) string {
+	var migrationScheduleNamespace string
+
+	dynamicClient, err := k8sdynamic.NewForConfig(config)
+	if err != nil {
+		util.CheckErr(err)
+		return migrationScheduleNamespace
+	}
+
+	// Checking in following resources for migrationschedule namespace annotation
+	resources := []struct {
+		kind      string
+		gvr       schema.GroupVersionResource
+		namespace string
+	}{
+		{"PersistentVolumeClaim", schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}, namespace},
+		{"StatefulSet", schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}, namespace},
+		{"Deployment", schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, namespace},
+		{"Service", schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, namespace},
+		{"ConfigMap", schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, namespace},
+	}
+
+	for _, resource := range resources {
+		objects, err := dynamicClient.Resource(resource.gvr).Namespace(resource.namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			continue
+		}
+
+		for _, o := range objects.Items {
+			if _, ok := o.GetAnnotations()[StorkMigrationNamespace]; ok {
+				migrationScheduleNamespace = o.GetAnnotations()[StorkMigrationNamespace]
+				if len(migrationScheduleNamespace) > 0 {
+					break
+				}
+			}
+		}
+		if len(migrationScheduleNamespace) > 0 {
+			break
+		}
+	}
+	return migrationScheduleNamespace
 }
