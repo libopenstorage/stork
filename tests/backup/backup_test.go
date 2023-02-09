@@ -2791,6 +2791,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				}
 				_, err = task.DoRetryWithTimeout(clusterShareCheck, 2*time.Minute, 10*time.Second)
 				log.FailOnError(err, "Unable to fetch backup from shared cluster for user %s", username)
+				log.Infof("fetched user backups %v", userBackups)
 
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 				ValidateSharedBackupWithUsers(username, accessLevel, userBackups[len(userBackups)-1], restoreName)
