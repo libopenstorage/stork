@@ -644,7 +644,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a
+# github.com/libopenstorage/operator v0.0.0-20230208193934-86840976b8bb
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/pkg/apis/core/v1
@@ -929,10 +929,6 @@ github.com/russross/blackfriday
 # github.com/ryanuber/go-glob v1.0.0
 ## explicit
 github.com/ryanuber/go-glob
-# github.com/sendgrid/rest v2.6.0+incompatible
-## explicit
-# github.com/sendgrid/sendgrid-go v3.6.0+incompatible
-## explicit
 # github.com/shopspring/decimal v1.2.0
 ## explicit; go 1.13
 github.com/shopspring/decimal
@@ -1294,16 +1290,12 @@ google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
-google.golang.org/protobuf/types/pluginpb
 # gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc
 ## explicit
 gopkg.in/alexcesaro/quotedprintable.v3
 # gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 ## explicit
 gopkg.in/gomail.v2
-# gopkg.in/gorp.v1 v1.7.2
-## explicit
-gopkg.in/gorp.v1
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0

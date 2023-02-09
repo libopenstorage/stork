@@ -111,6 +111,11 @@ func (in *AutopilotSpec) DeepCopyInto(out *AutopilotSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = new(corev1.ResourceRequirements)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -1358,6 +1363,11 @@ func (in *StorkSpec) DeepCopyInto(out *StorkSpec) {
 		in, out := &in.HostNetwork, &out.HostNetwork
 		*out = new(bool)
 		**out = **in
+	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = new(corev1.ResourceRequirements)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

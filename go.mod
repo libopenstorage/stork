@@ -23,7 +23,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20221107233229-3fa4664e96b1
 	github.com/libopenstorage/openstorage v9.4.46+incompatible
-	github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a
+	github.com/libopenstorage/operator v0.0.0-20230208193934-86840976b8bb
 	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.20.1
@@ -48,7 +48,6 @@ require (
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
-	//helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
 	helm.sh/helm/v3 v3.6.0
 	k8s.io/api v0.25.2
 	k8s.io/apiextensions-apiserver v0.25.2
@@ -209,7 +208,6 @@ require (
 	github.com/rubenv/sql-migrate v1.1.2 // indirect
 	github.com/russross/blackfriday v1.5.2 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
-	github.com/sendgrid/rest v2.6.0+incompatible // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e // indirect
 	github.com/sony/gobreaker v0.5.0 // indirect
@@ -235,7 +233,6 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
-	gopkg.in/gorp.v1 v1.7.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect

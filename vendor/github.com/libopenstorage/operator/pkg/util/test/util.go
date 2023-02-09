@@ -126,7 +126,6 @@ var TestSpecPath = "testspec"
 
 var (
 	pxVer2_12, _                      = version.NewVersion("2.12.0-")
-	opVer1_11, _                      = version.NewVersion("1.11.0-")
 	opVer1_10, _                      = version.NewVersion("1.10.0-")
 	opVer1_9_1, _                     = version.NewVersion("1.9.1-")
 	minOpVersionForKubeSchedConfig, _ = version.NewVersion("1.10.2-")
@@ -640,14 +639,14 @@ func ValidateStorageCluster(
 		return err
 	}
 
-	// Validate StorageNodes
-	if err = validateStorageNodes(pxImageList, clusterSpec, timeout, interval); err != nil {
+	// Get list of expected Portworx node names
+	expectedPxNodeList, err := GetExpectedPxNodeList(clusterSpec)
+	if err != nil {
 		return err
 	}
 
-	// Get list of expected Portworx node names
-	expectedPxNodeNameList, err := GetExpectedPxNodeNameList(clusterSpec)
-	if err != nil {
+	// Validate StorageNodes
+	if err = validateStorageNodes(pxImageList, clusterSpec, len(expectedPxNodeList), timeout, interval); err != nil {
 		return err
 	}
 
@@ -655,12 +654,12 @@ func ValidateStorageCluster(
 	podTestFn := func(pod v1.Pod) bool {
 		return coreops.Instance().IsPodReady(pod)
 	}
-	if err = validateStorageClusterPods(clusterSpec, expectedPxNodeNameList, timeout, interval, podTestFn); err != nil {
+	if err = validateStorageClusterPods(clusterSpec, expectedPxNodeList, timeout, interval, podTestFn); err != nil {
 		return err
 	}
 
 	// Validate Portworx nodes
-	if err = validatePortworxNodes(liveCluster, len(expectedPxNodeNameList)); err != nil {
+	if err = validatePortworxNodes(liveCluster, len(expectedPxNodeList)); err != nil {
 		return err
 	}
 
@@ -681,7 +680,70 @@ func ValidateStorageCluster(
 	return nil
 }
 
-func validateStorageNodes(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+// ValidatePxPodsAreReadyOnGivenNodes takes list of node and validates PX pods are present and ready on these nodes
+func ValidatePxPodsAreReadyOnGivenNodes(clusterSpec *corev1.StorageCluster, nodeList []v1.Node, timeout, interval time.Duration) error {
+	labelSelector := map[string]string{"name": "portworx"}
+	expectedPxPodCount := len(nodeList)
+
+	t := func() (interface{}, bool, error) {
+		var podsReady []string
+		var podsNotReady []string
+
+		// Get StorageCluster
+		cluster, err := operatorops.Instance().GetStorageCluster(clusterSpec.Name, clusterSpec.Namespace)
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, node := range nodeList {
+			// Get PX pods from node
+			podList, err := coreops.Instance().GetPodsByNodeAndLabels(node.Name, clusterSpec.Namespace, labelSelector)
+			if err != nil {
+				return nil, true, err
+			}
+
+			// Validate PX pod is found on node and only 1
+			if len(podList.Items) == 0 {
+				return nil, true, fmt.Errorf("didn't find any Portworx pods on node [%s]", node.Name)
+			} else if len(podList.Items) > 1 {
+				return nil, true, fmt.Errorf("found [%d] Portworx pods on node [%s], should only have 1 per node", len(podList.Items), node.Name)
+			}
+			pxPod := podList.Items[0]
+
+			// Validate PX pod has right owner
+			for _, owner := range pxPod.OwnerReferences {
+				if owner.UID != cluster.UID {
+					return nil, true, fmt.Errorf("failed to match pod owner reference UID [%s] to StorageCluster UID [%s]", owner.UID, cluster.UID)
+				}
+			}
+
+			// Get list of ready and not ready PX pods
+			logrus.Infof("Found Portworx pod [%s] on node [%s]", pxPod.Name, node.Name)
+			if coreops.Instance().IsPodReady(pxPod) {
+				logrus.Infof("Portworx pod [%s] is ready on node [%s]", pxPod.Name, node.Name)
+				podsReady = append(podsReady, pxPod.Name)
+			} else {
+				logrus.Infof("Portworx pod [%s] is not ready on node [%s]", pxPod.Name, node.Name)
+				podsNotReady = append(podsNotReady, pxPod.Name)
+			}
+		}
+
+		// Validate count of PX pods equals to number of expected nodes
+		if len(podsReady) == expectedPxPodCount {
+			logrus.Infof("All Portworx pods are ready: %s", podsReady)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("some Portworx pods are still not ready: %s. Expected ready pods: %d, Got: %d", podsNotReady, expectedPxPodCount, len(podsReady))
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateStorageNodes(pxImageList map[string]string, cluster *corev1.StorageCluster, expectedNumberOfStorageNodes int, timeout, interval time.Duration) error {
 	var expectedPxVersion string
 
 	imageOverride := ""
@@ -727,8 +789,8 @@ func validateStorageNodes(pxImageList map[string]string, cluster *corev1.Storage
 			readyNodes++
 		}
 
-		if readyNodes != len(storageNodeList.Items) {
-			return nil, true, fmt.Errorf("waiting for all storagenodes to be ready: %d/%d", readyNodes, len(storageNodeList.Items))
+		if readyNodes != expectedNumberOfStorageNodes {
+			return nil, true, fmt.Errorf("waiting for all storagenodes to be ready: %d/%d", readyNodes, expectedNumberOfStorageNodes)
 		}
 		return nil, false, nil
 	}
@@ -947,10 +1009,11 @@ type podTestFnType func(pod v1.Pod) bool
 
 func validateStorageClusterPods(
 	clusterSpec *corev1.StorageCluster,
-	expectedPxNodeNameList []string,
+	expectedPxNodeList []v1.Node,
 	timeout, interval time.Duration,
 	podTestFn podTestFnType,
 ) error {
+	expectedPxNodeNameList := ConvertNodeListToNodeNameList(expectedPxNodeList)
 	t := func() (interface{}, bool, error) {
 		cluster, err := operatorops.Instance().GetStorageCluster(clusterSpec.Name, clusterSpec.Namespace)
 		if err != nil {
@@ -1113,14 +1176,15 @@ func validatePortworxAPIService(cluster *corev1.StorageCluster, timeout, interva
 	return nil
 }
 
-// GetExpectedPxNodeNameList will get the list of node names that should be included
+// GetExpectedPxNodeList will get the list of nodes that should be included
 // in the given Portworx cluster, by seeing if each non-master node matches the given
 // node selectors and affinities.
-func GetExpectedPxNodeNameList(cluster *corev1.StorageCluster) ([]string, error) {
-	var nodeNameListWithPxPods []string
+func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
+	var nodeListWithPxPods []v1.Node
+
 	nodeList, err := coreops.Instance().GetNodes()
 	if err != nil {
-		return nodeNameListWithPxPods, err
+		return nodeListWithPxPods, err
 	}
 
 	dummyPod := &v1.Pod{}
@@ -1161,11 +1225,21 @@ func GetExpectedPxNodeNameList(cluster *corev1.StorageCluster) ([]string, error)
 
 		matches, err := affinityhelper.GetRequiredNodeAffinity(dummyPod).Match(&node)
 		if err == nil && matches {
-			nodeNameListWithPxPods = append(nodeNameListWithPxPods, node.Name)
+			nodeListWithPxPods = append(nodeListWithPxPods, node)
 		}
 	}
 
-	return nodeNameListWithPxPods, nil
+	return nodeListWithPxPods, nil
+}
+
+// ConvertNodeListToNodeNameList takes list of nodes and return list of node names
+func ConvertNodeListToNodeNameList(nodeList []v1.Node) []string {
+	var nodeNameList []string
+
+	for _, node := range nodeList {
+		nodeNameList = append(nodeNameList, node.Name)
+	}
+	return nodeNameList
 }
 
 // GetFullVersion returns the full kubernetes server version
@@ -3080,8 +3154,7 @@ func ValidateAlertManagerDisabled(pxImageList map[string]string, cluster *corev1
 // ValidateTelemetryV2Enabled validates telemetry component is running as expected
 func ValidateTelemetryV2Enabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components are enabled")
-	opVersion, _ := GetPxOperatorVersion()
-	validateMetricsCollector := opVersion.GreaterThanOrEqual(opVer1_11)
+	validateMetricsCollector := false // TODO: Change this to a specific operator version, once we know in which version metrics-collector will get enabled
 
 	t := func() (interface{}, bool, error) {
 		// Validate px-telemetry-registration deployment, pods and container images
@@ -3537,7 +3610,7 @@ func ValidateTelemetryV2Disabled(cluster *corev1.StorageCluster, timeout, interv
 func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components are enabled")
 	opVersion, _ := GetPxOperatorVersion()
-	validateMetricsCollector := opVersion.GreaterThanOrEqual(opVer1_11)
+	validateMetricsCollector := opVersion.LessThan(opVer1_10)
 
 	t := func() (interface{}, bool, error) {
 		if validateMetricsCollector {
@@ -3927,7 +4000,7 @@ func ValidateStorageClusterFailedEvents(
 	}
 
 	// Get list of expected Portworx node names
-	expectedPxNodeNameList, err := GetExpectedPxNodeNameList(clusterSpec)
+	expectedPxNodeList, err := GetExpectedPxNodeList(clusterSpec)
 	if err != nil {
 		return err
 	}
@@ -3945,7 +4018,7 @@ func ValidateStorageClusterFailedEvents(
 		}
 		return false
 	}
-	if err = validateStorageClusterPods(clusterSpec, expectedPxNodeNameList, timeout, interval, podTestFn); err != nil {
+	if err = validateStorageClusterPods(clusterSpec, expectedPxNodeList, timeout, interval, podTestFn); err != nil {
 		return err
 	}
 

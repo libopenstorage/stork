@@ -300,6 +300,12 @@ type RollingUpdateStorageCluster struct {
 	// that at least 70% of original number of StorageCluster pods are available at
 	// all times during the update.
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
+
+	// Minimum number of seconds for which a newly created Portworx pod should be ready
+	// without any of its container crashing, for it to be considered available.
+	// Defaults to 0 (pod will be considered available as soon as it is ready)
+	// +optional
+	MinReadySeconds int32 `json:"minReadySeconds,omitempty"`
 }
 
 // StorageClusterDeleteStrategyType is enum for storage cluster delete strategies
