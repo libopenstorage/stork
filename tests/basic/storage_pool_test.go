@@ -5946,7 +5946,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.InfoD("Pool Details [%v] Picked for Delete", PoolDetail)
 
 		// invalidPoolID is total Pools present on the node + 1
-		invalidPoolID := len(PoolDetail) + 1
+		invalidPoolID := fmt.Sprintf("%d", len(PoolDetail)+1)
 
 		log.InfoD("Bring Node to Maintenance Mode")
 		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
