@@ -44,6 +44,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
@@ -2095,7 +2096,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "")
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator())
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -5232,4 +5233,15 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	}
 
 	return eligibilityMap, nil
+}
+
+// IsEksPxOperator returns true if current operator installation is on an EKS cluster
+func IsEksPxOperator() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsEKS(stc) {
+			logrus.Infof("EKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
 }
