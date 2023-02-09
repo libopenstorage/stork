@@ -5933,9 +5933,6 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.InfoD("Bring Node to Maintenance Mode")
 		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
 
-		// Wait for some time before verifying Maintenance state
-		time.Sleep(5 * time.Minute)
-
 		log.InfoD("Wait for Node to Enter Maintenance Mode")
 		WaitTillEnterMaintenanceMode(*nodeDetail)
 
