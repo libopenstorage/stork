@@ -6384,12 +6384,11 @@ var _ = Describe("{DeleteUsersRole}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				time.Sleep(3000 * time.Millisecond)
 				userName := fmt.Sprintf("testautouser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
 				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
-				time.Sleep(3000 * time.Millisecond)
+				time.Sleep(2 * time.Second)
 				role := roles[rand.Intn(len(roles))]
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
@@ -6415,12 +6414,14 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
 			for user, role := range userRoleMapping {
-				roles, _ := backup.GetRolesForUser(user)
+				roles, err := backup.GetRolesForUser(user)
+				log.FailOnError(err, "Failed to get roles for user - %s", user)
 				for _, roleObj := range roles {
 					if roleObj.Name == string(role) {
 						result = true
 						break
 					}
+					log.Info(fmt.Sprintf("Role name from user [%s] added role [%s] user [%s]", roleObj.Name, string(role), user))
 				}
 				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
 			}
