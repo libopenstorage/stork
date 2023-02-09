@@ -753,7 +753,7 @@ func (a *ApplicationCloneController) applyResources(
 func (a *ApplicationCloneController) cloneResources(
 	clone *stork_api.ApplicationClone,
 ) error {
-	allObjects, err := a.resourceCollector.GetResources(
+	allObjects, _, err := a.resourceCollector.GetResources(
 		[]string{clone.Spec.SourceNamespace},
 		clone.Spec.Selectors,
 		nil,

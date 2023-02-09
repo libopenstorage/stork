@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/utils"
-
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -27,6 +25,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -1217,7 +1216,7 @@ func (a *ApplicationBackupController) backupResources(
 			}
 		}
 		if len(incResNsBatch) != 0 {
-			objects, err := a.resourceCollector.GetResources(
+			objects, _, err := a.resourceCollector.GetResources(
 				incResNsBatch,
 				backup.Spec.Selectors,
 				objectMap,
@@ -1237,7 +1236,7 @@ func (a *ApplicationBackupController) backupResources(
 				for _, resource := range resourceTypes {
 					if resource.Kind == backupResourceType || (backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
 						log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
-						objects, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, true, resourceCollectorOpts)
+						objects, _, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, true, resourceCollectorOpts)
 						if err != nil {
 							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 							return err
