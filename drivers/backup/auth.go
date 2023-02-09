@@ -438,7 +438,7 @@ func FetchIDOfUser(userName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	reqURL := fmt.Sprintf("%s/users?first=0&max=500", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
@@ -566,6 +566,7 @@ func DeleteRoleFromUser(userName string, role PxBackupRole, description string) 
 	fn := "DeleteRoleFromUser"
 	// First fetch the user ID of the user
 	clientID, err := FetchIDOfUser(userName)
+	log.Infof("Response from FetchIDOfUser %s", string(clientID))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
