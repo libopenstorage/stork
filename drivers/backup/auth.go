@@ -438,7 +438,7 @@ func FetchIDOfUser(userName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	reqURL := fmt.Sprintf("%s/users?first=0&max=500", keycloakEndPoint)
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
