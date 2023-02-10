@@ -584,7 +584,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		clusterUid        string
 		clusterStatus     api.ClusterInfo_StatusInfo_Status
 		groupName         string
-		userName          string
+		userName          []string
 		backupName        string
 		backupLocationUID string
 		cloudCredName     string
@@ -595,6 +595,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
+	numberOfUsers := 1
 	JustBeforeEach(func() {
 		StartTorpedoTest("DifferentAccessSameUser",
 			"Take a backup and add user with readonly access and the group  with full access", nil, 82938)
@@ -620,13 +621,8 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Create Users", func() {
 			log.InfoD("Creating users testuser")
-			userName = "testuser"
-			firstName := "FirstName"
-			lastName := "LastName"
-			email := "testuser@cnbu.com"
-			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-			log.FailOnError(err, "Failed to create user - %s", userName)
-
+			userName = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
 		})
 		Step("Create Groups", func() {
 			log.InfoD("Creating group testGroup")
@@ -637,7 +633,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Add users to group", func() {
 			log.InfoD("Adding user to groups")
-			err := backup.AddGroupToUser(userName, groupName)
+			err := backup.AddGroupToUser(userName[0], groupName)
 			dash.VerifyFatal(err, nil, "Adding user to group")
 			usersOfGroup, err := backup.GetMembersOfGroup(groupName)
 			log.FailOnError(err, "Error fetching members of the group - %v", groupName)
@@ -649,7 +645,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			providers := getProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
@@ -674,7 +670,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Share backup with user having readonly access", func() {
 			log.InfoD("Adding user with readonly access")
-			ShareBackup(backupName, nil, []string{userName}, ViewOnlyAccess, ctx)
+			ShareBackup(backupName, nil, userName, ViewOnlyAccess, ctx)
 		})
 		Step("Share backup with group having full access", func() {
 			log.InfoD("Adding user with full access")
@@ -682,7 +678,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Share Backup with View Only access to a user of Full access group and Validate", func() {
 			log.InfoD("Backup is shared with Group having FullAccess after it is shared with user having ViewOnlyAccess, therefore user should have FullAccess")
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName[0], "Password1")
 			log.FailOnError(err, "Fetching user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 			log.InfoD("Registering Source and Destination clusters from user context")
@@ -713,12 +709,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		err = backup.DeleteUser(userName)
+		err = backup.DeleteUser(userName[0])
 		dash.VerifySafely(err, nil, "Deleting user")
 		err = backup.DeleteGroup(groupName)
 		dash.VerifySafely(err, nil, "Deleting group")
@@ -2902,7 +2893,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		bkpNamespaces     []string
 		clusterUid        string
 		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		userName          string
+		userName          []string
 		backupName        string
 		backupLocationUID string
 		cloudCredName     string
@@ -2914,6 +2905,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
+	numberOfUsers := 1
 	JustBeforeEach(func() {
 		StartTorpedoTest("ShareBackupsAndClusterWithUser",
 			"Share backup to user with full access and try to duplicate the backup from the shared user", nil, 82943)
@@ -2938,20 +2930,15 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Create Users", func() {
-			log.InfoD("Creating users testuser with FullAccess")
-			userName = "testuser"
-			firstName := "FirstName"
-			lastName := "LastName"
-			email := "testuser@cnbu.com"
-			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-			log.FailOnError(err, "Failed to create user - %s", userName)
+			userName = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
 			providers := getProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
@@ -2976,20 +2963,22 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		})
 		Step("Share backup with user having full access", func() {
 			log.InfoD("Share backup with user having full access")
-			ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
+			ShareBackup(backupName, nil, userName, FullAccess, ctx)
 		})
 		Step("Create backup from the shared user with FullAccess", func() {
 			log.InfoD("Validating if user with FullAccess cannot duplicate backup shared but can create new backup")
 			// User with FullAccess cannot duplicate will be validated through UI only
-			ctxNonAdmin, err = backup.GetNonAdminCtx(userName, "Password1")
-			log.FailOnError(err, "Fetching user ctx")
-			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
-			err = CreateBackup(userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				labelSelectors, orgID, clusterUid, "", "", "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, nil, "Verifying that create backup should pass ")
+			for _, user := range userName {
+				ctxNonAdmin, err = backup.GetNonAdminCtx(user, "Password1")
+				log.FailOnError(err, "Fetching user ctx")
+				log.InfoD("Registering Source and Destination clusters from user context")
+				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+				userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
+				err = CreateBackup(userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
+					labelSelectors, orgID, clusterUid, "", "", "", "", ctxNonAdmin)
+				dash.VerifyFatal(err, nil, "Verifying that create backup should pass ")
+			}
 		})
 	})
 	JustAfterEach(func() {
@@ -3012,7 +3001,9 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
 		time.Sleep(time.Minute * 2)
 		log.Infof("Cleaning up users")
-		err = backup.DeleteUser(userName)
+		for _, user := range userName {
+			err = backup.DeleteUser(user)
+		}
 		log.FailOnError(err, "Error in deleting user")
 		log.Infof("Deleting registered clusters for non-admin context")
 		DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
@@ -3069,24 +3060,8 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 
 		Step("Create multiple Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
-			var wg sync.WaitGroup
-			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
-				firstName := fmt.Sprintf("FirstName%v", i)
-				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
-				wg.Add(1)
-				go func(userName, firstName, lastName, email string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-					log.FailOnError(err, "Failed to create user - %s", userName)
-					users = append(users, userName)
-
-				}(userName, firstName, lastName, email)
-			}
-			wg.Wait()
-			log.Infof("The users created are %v", users)
+			users = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, users)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -5506,24 +5481,8 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 
 		Step("Create multiple Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
-			var wg sync.WaitGroup
-			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
-				firstName := fmt.Sprintf("FirstName%v", i)
-				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
-				wg.Add(1)
-				go func(userName, firstName, lastName, email string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-					log.FailOnError(err, "Failed to create user - %s", userName)
-					users = append(users, userName)
-
-				}(userName, firstName, lastName, email)
-			}
-			wg.Wait()
-			log.Infof("The users created are %v", users)
+			users = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, users)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -5927,12 +5886,13 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		cloudCredUID      string
 		bkpLocationName   string
 		backupName        string
-		userName          string
+		userName          []string
 		userCtx           context.Context
 		scName            string
 		restoreList       []string
 		sourceScName      *storageapi.StorageClass
 	)
+	numberOfUsers := 1
 	namespaceMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -6035,21 +5995,17 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 
 		Step("Create user", func() {
 			log.InfoD("Create user")
-			userName = fmt.Sprintf("testuser-82945")
-			firstName := fmt.Sprintf("FirstName")
-			lastName := fmt.Sprintf("LastName")
-			email := fmt.Sprintf("testuser@cnbu.com")
-			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-			dash.VerifyFatal(err, nil, "Creating user")
-			userCtx, err = backup.GetNonAdminCtx(userName, "Password1")
+			userName = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
+			userCtx, err = backup.GetNonAdminCtx(userName[0], "Password1")
 			dash.VerifyFatal(err, nil, "Getting user context")
 		})
 
 		Step("Share backup with user with FullAccess", func() {
 			log.InfoD("Share backup with user with FullAccess")
-			err = ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
+			err = ShareBackup(backupName, nil, userName, FullAccess, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Share backup %s with  user %s having FullAccess", backupName, userName))
-			userBackups1, _ := GetAllBackupsForUser(userName, "Password1")
+			userBackups1, _ := GetAllBackupsForUser(userName[0], "Password1")
 			log.Info(" the backup are", userBackups1)
 			err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster for user")
@@ -6098,7 +6054,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		})
 
 		Step("Share backup with user with RestoreAccess", func() {
-			err = ShareBackup(backupName, nil, []string{userName}, RestoreAccess, ctx)
+			err = ShareBackup(backupName, nil, userName, RestoreAccess, ctx)
 			dash.VerifyFatal(err, nil, "Share backup with user with RestoreAccess")
 		})
 
@@ -6177,8 +6133,8 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		log.InfoD("Deleting user clusters")
 		DeleteCloudAccounts(make(map[string]string), "", "", userCtx)
 		log.InfoD("Cleaning up users")
-		err = backup.DeleteUser(userName)
-		log.FailOnError(err, "Error deleting user %v", userName)
+		err = backup.DeleteUser(userName[0])
+		log.FailOnError(err, "Error deleting user %v", userName[0])
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -8166,10 +8122,10 @@ func createUsers(numberOfUsers int) []string {
 	log.InfoD("Creating %d users", numberOfUsers)
 	var wg sync.WaitGroup
 	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("testuser%v", i)
+		userName := fmt.Sprintf("testuser%v-%v", i, time.Now().Unix())
 		firstName := fmt.Sprintf("FirstName%v", i)
 		lastName := fmt.Sprintf("LastName%v", i)
-		email := fmt.Sprintf("testuser%v@cnbu.com", i)
+		email := fmt.Sprintf("%v@cnbu.com", userName)
 		wg.Add(1)
 		go func(userName, firstName, lastName, email string) {
 			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
