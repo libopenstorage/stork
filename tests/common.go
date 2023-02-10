@@ -255,6 +255,16 @@ const (
 )
 
 const (
+	VSPHERE_MAX_CLOUD_DRIVES        = 12
+	FA_MAX_CLOUD_DRIVES             = 32
+	CLOUD_PROVIDER_MAX_CLOUD_DRIVES = 8
+	POOL_MAX_CLOUD_DRIVES           = 6
+
+	PX_VSPHERE_SCERET_NAME = "px-vsphere-secret"
+	PX_PURE_SECRET_NAME    = "px-pure-secret"
+)
+
+const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
@@ -4622,10 +4632,14 @@ func WaitForExpansionToStart(poolID string) error {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}
 
-			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS || expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
+				return nil, true, fmt.Errorf("PoolResize is in pending state [%s]", expandedPool.LastOperation)
+			}
+
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
 				// storage pool resize has been triggered
 				log.InfoD("Pool %s expansion started", poolID)
-				return nil, true, nil
+				return nil, false, nil
 			}
 		}
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
@@ -5039,6 +5053,15 @@ func GetPoolIDWithIOs() (string, error) {
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
 func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 
+	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
+	if err != nil {
+		return nil, err
+	}
+
+	if !eligibilityMap[stNode.Id] {
+		return nil, fmt.Errorf("node [%s] is not eligible for expansion", stNode.Name)
+	}
+
 	var selectedPool *opsapi.StoragePool
 
 	t := func() (interface{}, bool, error) {
@@ -5055,6 +5078,10 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 		}
 
 		for k, v := range poolsDataBfr {
+			//skipping if pool is not eligible for expansion
+			if !eligibilityMap[k] {
+				continue
+			}
 			if v2, ok := poolsDataAfr[k]; ok {
 				if v2 != v {
 					selectedPool, err = GetStoragePoolByUUID(k)
@@ -5065,13 +5092,13 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 			}
 		}
 		if selectedPool == nil {
-			return nil, true, fmt.Errorf("no pools have IOs running")
+			return nil, true, fmt.Errorf("no pools with IOs running in the node [%s]", stNode.Name)
 		}
 
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultCmdTimeout)
+	_, err = task.DoRetryWithTimeout(t, defaultMeteringIntervalMins, defaultCmdTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -5130,4 +5157,79 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 
 	}
 	return poolUuids, err
+}
+
+// GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
+func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
+	var err error
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, err
+	}
+
+	var maxCloudDrives int32
+
+	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
+	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+		maxCloudDrives = FA_MAX_CLOUD_DRIVES
+	} else {
+		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+	var currentNodeDrives int32
+
+	driveCountMap := make(map[string]int32, 0)
+
+	for _, b := range drivesMap {
+		labels := b.Labels
+		for k, v := range labels {
+			if k == "pxpool" {
+				if c, ok := driveCountMap[v]; ok {
+					driveCountMap[v] += c
+				} else {
+					driveCountMap[v] = 1
+				}
+			}
+		}
+	}
+
+	for _, vals := range driveCountMap {
+		currentNodeDrives += vals
+	}
+	eligibilityMap := make(map[string]bool)
+
+	log.Infof("Node %s has total drives %d", stNode.Name, currentNodeDrives)
+	eligibilityMap[stNode.Id] = true
+	if currentNodeDrives == maxCloudDrives {
+		eligibilityMap[stNode.Id] = false
+	}
+
+	for _, pool := range stNode.StoragePools {
+		eligibilityMap[pool.Uuid] = true
+
+		d := driveCountMap[fmt.Sprintf("%d", pool.ID)]
+		log.Infof("pool %s has %d drives", pool.Uuid, d)
+		if d == POOL_MAX_CLOUD_DRIVES {
+			eligibilityMap[pool.Uuid] = false
+		}
+	}
+
+	return eligibilityMap, nil
 }

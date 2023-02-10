@@ -4594,7 +4594,7 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
 
 // AddCloudDrive add cloud drives to the node using PXCTL
 func (d *portworx) AddCloudDrive(n *node.Node, deviceSpec string, poolID int32) error {
-	log.Infof("Adding Cloud drive on node [%s] with spec [%s]", n.Name, deviceSpec)
+	log.Infof("Adding Cloud drive on node [%s] with spec [%s] on pool ID [%d]", n.Name, deviceSpec, poolID)
 	return addDrive(*n, deviceSpec, poolID, d)
 }
 
