@@ -981,7 +981,7 @@ func updateRancherProjects(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
-	var projects map[string]string
+	projects := map[string]string{}
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -1013,6 +1013,23 @@ func updateRancherProjects(
 		}
 	}
 
+	for _, namespace := range backup.Spec.Namespaces {
+		ns, err := core.Instance().GetNamespace(namespace)
+		if err != nil {
+			return err
+		}
+		for key, val := range ns.Annotations {
+			if strings.Contains(key, utils.CattleProjectPrefix) {
+				projects[val] = ""
+			}
+		}
+		for key, val := range ns.Labels {
+			if strings.Contains(key, utils.CattleProjectPrefix) {
+				projects[val] = ""
+			}
+		}
+	}
+
 	if err := updateProjectDiplayNames(projects, platformCredential); err != nil {
 		return err
 	}
@@ -1038,10 +1055,7 @@ func updateProjectDiplayNames(
 		}
 		data := strings.Split(key, ":")
 		if len(data) == 2 {
-			if _, ok := projects[data[1]]; ok {
-				delete(projects, data[1])
-				projects[key] = val
-			}
+			delete(projects, data[1])
 		}
 	}
 	return nil

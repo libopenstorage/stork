@@ -120,12 +120,16 @@ func (a *ApplicationRestoreController) setDefaults(restore *storkapi.Application
 		}
 	}
 
-	rancherProjectMapping := restore.Spec.RancherProjectMapping
-	if rancherProjectMapping != nil {
-		for key, value := range rancherProjectMapping {
-			data := strings.Split(key, ":")
-			if len(data) == 2 {
-				rancherProjectMapping[data[1]] = value
+	if restore.Spec.RancherProjectMapping != nil {
+		rancherProjectMapping := map[string]string{}
+		for key, value := range restore.Spec.RancherProjectMapping {
+			rancherProjectMapping[key] = value
+			dataKey := strings.Split(key, ":")
+			dataVal := strings.Split(value, ":")
+			if len(dataKey) == 2 && len(dataVal) == 2 {
+				rancherProjectMapping[dataKey[1]] = dataVal[1]
+			} else if len(dataKey) == 1 && len(dataVal) == 2 {
+				rancherProjectMapping[dataKey[0]] = dataVal[1]
 			}
 		}
 		a.rancherProjectMapping = rancherProjectMapping
