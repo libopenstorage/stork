@@ -128,6 +128,7 @@ const (
 	asyncTimeout                      = 15 * time.Minute
 	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
+	expandStoragePoolTimeout          = 2 * time.Minute
 )
 const (
 	telemetryNotEnabled = "15"
@@ -228,7 +229,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 		}
 		return nil, false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, expandStoragePoolTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 	return nil

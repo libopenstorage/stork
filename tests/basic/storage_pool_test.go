@@ -6010,7 +6010,17 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 
 			// Now trying to Expand Pool with Invalid Pool UUID
 			err = Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			if err == nil {
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			}
+
+			// Verify error on pool expansion failure
+			err = nil
+			re := regexp.MustCompile(fmt.Sprintf("failed to find storage pool with UID.*%s", invalidPoolUUID))
+			if re.MatchString(fmt.Sprintf("%v", err)) == false {
+				err = fmt.Errorf("Failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
+			}
+			dash.VerifyFatal(err, nil, "Pool expand with invalid PoolUUID completed ?")
 		})
 
 	})
@@ -6023,3 +6033,47 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	})
 
 })
+
+func getPoolDiskSize(poolToBeResized *api.StoragePool) (uint64, error) {
+
+	var driveSize uint64
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+
+	stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+	if err != nil {
+		return driveSize, err
+	}
+
+	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	if err != nil {
+		return driveSize, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+
+	var drvSize string
+outer:
+	for _, drv := range drivesMap {
+		labels := drv.Labels
+		for k, v := range labels {
+			if k == "pxpool" && v == fmt.Sprintf("%d", poolToBeResized.ID) {
+				drvSize = drv.Size
+				i := strings.Index(drvSize, "G")
+				drvSize = drvSize[:i]
+				break outer
+			}
+		}
+	}
+
+	driveSize, err = strconv.ParseUint(drvSize, 10, 64)
+
+	if err != nil {
+		return driveSize, err
+	}
+	return driveSize, nil
+
+}
