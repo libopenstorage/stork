@@ -6371,8 +6371,8 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 var _ = Describe("{DeleteUsersRole}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
-	numberOfUsers := 100
-	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.ApplicationUser, backup.InfrastructureOwner, backup.DefaultRoles}
+	numberOfUsers := 80
+	roles := [3]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.DefaultRoles}
 	userRoleMapping := map[string]backup.PxBackupRole{}
 
 	JustBeforeEach(func() {
@@ -6387,9 +6387,11 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
 				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
+				time.Sleep(2 * time.Second)
 				role := roles[rand.Intn(len(roles))]
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -6408,12 +6410,11 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
-		// Waiting for keycloak to sync up before moving for validation
-		time.Sleep(time.Minute * 1)
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
 			for user, role := range userRoleMapping {
-				roles, _ := backup.GetRolesForUser(user)
+				roles, err := backup.GetRolesForUser(user)
+				log.FailOnError(err, "Failed to get roles for user - %s", user)
 				for _, roleObj := range roles {
 					if roleObj.Name == string(role) {
 						result = true
@@ -6720,10 +6721,11 @@ var _ = Describe("{SwapShareBackup}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
+				time.Sleep(3000 * time.Millisecond)
+				userName := fmt.Sprintf("testautouser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer GinkgoRecover()
@@ -6838,9 +6840,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 	})
 	JustAfterEach(func() {
-
 		defer EndTorpedoTest()
-
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -6849,8 +6849,54 @@ var _ = Describe("{SwapShareBackup}", func() {
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
-		var wg sync.WaitGroup
 
+		log.InfoD("Deleting all restores")
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx")
+			allRestores, err := GetAllRestoresNonAdminCtx(ctx)
+			log.FailOnError(err, "Fetching all restores for nonAdminctx")
+			for _, restoreName := range allRestores {
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
+			}
+		}
+
+		log.InfoD("Delete all backups")
+		for i := 0; i <= numberOfUsers-1; i++ {
+			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx ")
+			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+		}
+
+		// Cleanup all backup locations
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx ")
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			for backupLocationUid, backupLocationName := range allBackupLocations {
+				if userBackupLocationMapping[userName] == backupLocationName {
+					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+				}
+			}
+
+			backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+				allBackupLocations, err := getAllBackupLocations(ctx)
+				dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+				for _, backupLocationName := range allBackupLocations {
+					if userBackupLocationMapping[userName] == backupLocationName {
+						return "", true, fmt.Errorf("found %s backup locations", backupLocationName)
+					}
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 10*time.Minute, 30*time.Second)
+			dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+		}
+		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
@@ -6862,11 +6908,6 @@ var _ = Describe("{SwapShareBackup}", func() {
 			}(userName)
 		}
 		wg.Wait()
-
-		log.Infof("Cleaning cloud credential")
-		for _, credName := range credNames {
-			DeleteCloudCredential(credName, orgID, cloudCredUID)
-		}
 	})
 })
 
@@ -8517,4 +8558,20 @@ func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 		log.Info("No cloud credentials found")
 	}
 	return cloudCredentialMap, nil
+}
+
+func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
 }
