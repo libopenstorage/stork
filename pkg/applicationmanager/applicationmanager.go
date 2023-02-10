@@ -87,6 +87,14 @@ func (a *ApplicationManager) createCRD() error {
 		Scope:   apiextensionsv1beta1.ClusterScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationRegistration{}).Name(),
 	}
+	platformCred := apiextensions.CustomResource{
+		Name:    stork_api.PlatformCredentialResourceName,
+		Plural:  stork_api.PlatformCredentialResourcePlural,
+		Group:   stork_crd.GroupName,
+		Version: stork_api.SchemeGroupVersion.Version,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Kind:    reflect.TypeOf(stork_api.PlatformCredential{}).Name(),
+	}
 
 	ok, err := version.RequiresV1Registration()
 	if err != nil {
@@ -100,6 +108,13 @@ func (a *ApplicationManager) createCRD() error {
 		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval); err != nil {
 			return err
 		}
+		err = k8sutils.CreateCRD(platformCred)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(platformCred.Plural+"."+platformCred.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
 		err = k8sutils.CreateCRD(appReg)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
@@ -111,6 +126,13 @@ func (a *ApplicationManager) createCRD() error {
 		return err
 	}
 	if err := apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval); err != nil {
+		return err
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(platformCred)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	if err := apiextensions.Instance().ValidateCRDV1beta1(platformCred, validateCRDTimeout, validateCRDInterval); err != nil {
 		return err
 	}
 	err = apiextensions.Instance().CreateCRDV1beta1(appReg)
