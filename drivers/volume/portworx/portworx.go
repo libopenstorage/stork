@@ -4772,7 +4772,7 @@ func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[strin
 
 }
 
-// GetPoolIOPriorityStatus returns IO Priority of the Pool
+// GetPoolLabelValue returns values of labels
 func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, error) {
 	/* e.x
 	1) d.GetPoolLabelValue(poolUUID, "iopriority")
@@ -4798,7 +4798,7 @@ func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, err
 // IsNodeInMaintenance returns true if Node in Maintenance
 func (d *portworx) IsNodeInMaintenance(n node.Node) bool {
 	stNode, err := d.GetDriverNode(&n)
-	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n)
+	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n.Name)
 
 	if stNode.Status == api.Status_STATUS_MAINTENANCE {
 		return true
@@ -4810,7 +4810,7 @@ func (d *portworx) IsNodeInMaintenance(n node.Node) bool {
 // IsNodeOutOfMaintenance returns true if Node in Maintenance
 func (d *portworx) IsNodeOutOfMaintenance(n node.Node) bool {
 	stNode, err := d.GetDriverNode(&n)
-	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n)
+	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n.Name)
 
 	if stNode.Status == api.Status_STATUS_OK {
 		return true

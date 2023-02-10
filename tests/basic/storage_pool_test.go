@@ -5822,8 +5822,8 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 
 		// Get the Pool UUID on which IO is running
 		poolUUID, err := GetPoolIDWithIOs()
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get IO Priority of Pool before running the test
 		ioPriorityBefore, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
@@ -5853,7 +5853,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		log.FailOnError(Inst().V.UpdatePoolIOPriority(*nodeDetail, poolUUID, setIOPriority), fmt.Sprintf("Failed to set IO Priority of Pool [%s]", poolUUID))
 
 		log.InfoD("Bring Node out of Maintenance Mode")
-		ExitFromMaintenanceMode(*nodeDetail)
+		log.FailOnError(ExitFromMaintenanceMode(*nodeDetail), fmt.Sprintf("Failed to bring up node [%v] back from maintenance mode", nodeDetail.Name))
 
 		// Do Pool Expand on the Node
 		stepLog = fmt.Sprintf("Expanding pool on node [%s] and pool UUID: [%s] using auto", nodeDetail.Name, poolUUID)
@@ -5918,13 +5918,14 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		// Get the Pool UUID on which IO is running
 		poolUUID, err := GetPoolIDWithIOs()
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
-		PoolDetail := GetPoolsDetailsOnNode(*nodeDetail)
+		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
+		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
 		log.InfoD("Pool Details [%v] Picked for Delete", PoolDetail)
 
 		// invalidPoolID is total Pools present on the node + 1
@@ -5934,7 +5935,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
 
 		log.InfoD("Wait for Node to Enter Maintenance Mode")
-		WaitTillEnterMaintenanceMode(*nodeDetail)
+		log.FailOnError(WaitTillEnterMaintenanceMode(*nodeDetail), fmt.Sprintf("Failed while waiting for pool to enter maintenance mode on node [%v]", nodeDetail.Name))
 
 		// Delete the Pool with Invalid Pool ID
 		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
@@ -5942,7 +5943,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
 
 		log.InfoD("Bring Node out of Maintenance Mode")
-		ExitFromMaintenanceMode(*nodeDetail)
+		log.FailOnError(ExitFromMaintenanceMode(*nodeDetail), fmt.Sprintf("Failed to bring up node [%v] back from maintenance mode", nodeDetail.Name))
 
 		JustAfterEach(func() {
 			defer EndTorpedoTest()
@@ -5980,15 +5981,15 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 
 		// Get the Pool UUID on which IO is running
 		poolUUID, err := GetPoolIDWithIOs()
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
 		// invalidPoolUUID Generation
 		id := uuid.New()
-		invalidPoolUUID := fmt.Sprintf("%s", id.String())
+		invalidPoolUUID := id.String()
 
 		// Resize Pool with Invalid Pool ID
 		// Do Pool Expand on the Node
@@ -6003,8 +6004,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 
 			// Now trying to Expand Pool with Invalid Pool UUID
 			err = Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
-			fmt.Errorf("%v", err)
-			// dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 		})
 
 	})

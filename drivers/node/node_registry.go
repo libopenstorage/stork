@@ -207,7 +207,7 @@ func CleanupRegistry() {
 	nodeRegistry = make(map[string]Node)
 }
 
-// GetNodeByNodeName Get Node Details from Node Name Provided
+// GetNodeDetailsByNodeName get node details for a given node name
 func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
 	StorageNodes := GetStorageNodes()
 
