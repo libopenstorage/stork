@@ -567,7 +567,6 @@ func DeleteRoleFromUser(userName string, role PxBackupRole, description string) 
 	fn := "DeleteRoleFromUser"
 	// First fetch the user ID of the user
 	clientID, err := FetchIDOfUser(userName)
-	log.Infof("Response from FetchIDOfUser %s", clientID)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
