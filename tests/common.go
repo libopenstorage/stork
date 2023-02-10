@@ -5159,77 +5159,6 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 	return poolUuids, err
 }
 
-// WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
-func WaitTillEnterMaintenanceMode(n node.Node) error {
-	t := func() (interface{}, bool, error) {
-		if Inst().V.IsNodeInMaintenance(n) == true {
-			return nil, true, nil
-		}
-		return nil, false, fmt.Errorf("Not in Maintenance mode")
-	}
-
-	_, err := task.DoRetryWithTimeout(t, 20*time.Minute, 2*time.Minute)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// ExitFromMaintenanceMode wait until the node exits from maintenance mode
-func ExitFromMaintenanceMode(n node.Node) error {
-	log.InfoD("Exiting maintenence mode on Node %s", n.Name)
-	t := func() (interface{}, bool, error) {
-		if err := Inst().V.ExitMaintenance(n); err != nil {
-			if Inst().V.IsNodeOutOfMaintenance(n) == true {
-				return nil, true, nil
-			}
-			return nil, true, err
-		}
-		return nil, false, nil
-	}
-	_, err := task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// ExitNodesFromMaintenanceMode waits till all nodes to exit from maintenance mode
-// Checks for all the storage nodes present in the cluster, in case if any node is in maintenance mode
-// Function will attempt bringing back the node out of maintenance
-func ExitNodesFromMaintenanceMode() {
-	Nodes := node.GetStorageNodes()
-	for _, eachNode := range Nodes {
-		if Inst().V.IsNodeInMaintenance(eachNode) {
-			log.FailOnError(ExitFromMaintenanceMode(eachNode), fmt.Sprintf("Failed exiting from maintenance mode on node [%v]", eachNode.Name))
-		}
-	}
-}
-
-// GetPoolsDetailsOnNode returns all pools present in the Nodes
-func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
-	var poolDetails []*opsapi.StoragePool
-
-	if node.IsStorageNode(n) == false {
-		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
-	}
-
-	nodes := node.GetStorageNodes()
-
-	for _, eachNode := range nodes {
-		if eachNode.Id == n.Id {
-			for _, eachPool := range eachNode.Pools {
-				poolInfo, err := GetStoragePoolByUUID(eachPool.Uuid)
-				if err != nil {
-					return nil, err
-				}
-				poolDetails = append(poolDetails, poolInfo)
-			}
-		}
-	}
-	return poolDetails, nil
-}
-
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
 func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	var err error
@@ -5303,4 +5232,75 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	}
 
 	return eligibilityMap, nil
+}
+
+// WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
+func WaitTillEnterMaintenanceMode(n node.Node) error {
+	t := func() (interface{}, bool, error) {
+		if Inst().V.IsNodeInMaintenance(n) == true {
+			return nil, true, nil
+		}
+		return nil, false, fmt.Errorf("Not in Maintenance mode")
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 20*time.Minute, 2*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExitFromMaintenanceMode wait until the node exits from maintenance mode
+func ExitFromMaintenanceMode(n node.Node) error {
+	log.InfoD("Exiting maintenence mode on Node %s", n.Name)
+	t := func() (interface{}, bool, error) {
+		if err := Inst().V.ExitMaintenance(n); err != nil {
+			if Inst().V.IsNodeOutOfMaintenance(n) == true {
+				return nil, true, nil
+			}
+			return nil, true, err
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExitNodesFromMaintenanceMode waits till all nodes to exit from maintenance mode
+// Checks for all the storage nodes present in the cluster, in case if any node is in maintenance mode
+// Function will attempt bringing back the node out of maintenance
+func ExitNodesFromMaintenanceMode() {
+	Nodes := node.GetStorageNodes()
+	for _, eachNode := range Nodes {
+		if Inst().V.IsNodeInMaintenance(eachNode) {
+			log.FailOnError(ExitFromMaintenanceMode(eachNode), fmt.Sprintf("Failed exiting from maintenance mode on node [%v]", eachNode.Name))
+		}
+	}
+}
+
+// GetPoolsDetailsOnNode returns all pools present in the Nodes
+func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
+	var poolDetails []*opsapi.StoragePool
+
+	if node.IsStorageNode(n) == false {
+		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
+	}
+
+	nodes := node.GetStorageNodes()
+
+	for _, eachNode := range nodes {
+		if eachNode.Id == n.Id {
+			for _, eachPool := range eachNode.Pools {
+				poolInfo, err := GetStoragePoolByUUID(eachPool.Uuid)
+				if err != nil {
+					return nil, err
+				}
+				poolDetails = append(poolDetails, poolInfo)
+			}
+		}
+	}
+	return poolDetails, nil
 }

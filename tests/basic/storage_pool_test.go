@@ -5795,6 +5795,50 @@ func addNewPools(n node.Node, numPools int) error {
 	return nil
 }
 
+func getPoolDiskSize(poolToBeResized *api.StoragePool) (uint64, error) {
+
+	var driveSize uint64
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+
+	stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+	if err != nil {
+		return driveSize, err
+	}
+
+	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	if err != nil {
+		return driveSize, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+
+	var drvSize string
+outer:
+	for _, drv := range drivesMap {
+		labels := drv.Labels
+		for k, v := range labels {
+			if k == "pxpool" && v == fmt.Sprintf("%d", poolToBeResized.ID) {
+				drvSize = drv.Size
+				i := strings.Index(drvSize, "G")
+				drvSize = drvSize[:i]
+				break outer
+			}
+		}
+	}
+
+	driveSize, err = strconv.ParseUint(drvSize, 10, 64)
+
+	if err != nil {
+		return driveSize, err
+	}
+	return driveSize, nil
+
+}
+
 var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 	var testrailID = 79487
 	// Testrail Description : Changed pool IO_priority should persist post pool expand
@@ -6020,7 +6064,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			if re.MatchString(fmt.Sprintf("%v", err)) == false {
 				err = fmt.Errorf("Failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
 			}
-			dash.VerifyFatal(err, nil, "Pool expand with invalid PoolUUID completed ?")
+			dash.VerifyFatal(err, nil, "Pool expand with invalid PoolUUID completed?")
 		})
 
 	})
@@ -6033,47 +6077,3 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	})
 
 })
-
-func getPoolDiskSize(poolToBeResized *api.StoragePool) (uint64, error) {
-
-	var driveSize uint64
-	systemOpts := node.SystemctlOpts{
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: defaultRetryInterval,
-		},
-		Action: "start",
-	}
-
-	stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
-	if err != nil {
-		return driveSize, err
-	}
-
-	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
-	if err != nil {
-		return driveSize, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
-	}
-
-	var drvSize string
-outer:
-	for _, drv := range drivesMap {
-		labels := drv.Labels
-		for k, v := range labels {
-			if k == "pxpool" && v == fmt.Sprintf("%d", poolToBeResized.ID) {
-				drvSize = drv.Size
-				i := strings.Index(drvSize, "G")
-				drvSize = drvSize[:i]
-				break outer
-			}
-		}
-	}
-
-	driveSize, err = strconv.ParseUint(drvSize, 10, 64)
-
-	if err != nil {
-		return driveSize, err
-	}
-	return driveSize, nil
-
-}
