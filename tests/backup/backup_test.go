@@ -6856,7 +6856,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
 			log.FailOnError(err, "Fetching nonAdminctx")
 			allRestores, err := GetAllRestoresNonAdminCtx(ctx)
-			log.FailOnError(err, "Fetching all restors for nonAdminctx")
+			log.FailOnError(err, "Fetching all restores for nonAdminctx")
 			for _, restoreName := range allRestores {
 				err = DeleteRestore(restoreName, orgID, ctx)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
