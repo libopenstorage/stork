@@ -6421,7 +6421,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 						result = true
 						break
 					}
-					log.Info(fmt.Sprintf("Role name from user [%s] added role [%s] user [%s]", roleObj.Name, string(role), user))
+					log.Info(fmt.Sprintf("Role name from get all roles [%s],deleted role under validation [%s] for the user [%s]", roleObj.Name, string(role), user))
 				}
 				dash.VerifyFatal(result, false, fmt.Sprintf("validation of deleted role [%s] from user [%s]", role, user))
 			}
