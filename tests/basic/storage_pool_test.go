@@ -5861,7 +5861,10 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 			log.InfoD(stepLog)
 			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
-			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
@@ -5998,7 +6001,10 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			log.InfoD(stepLog)
 			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
-			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
