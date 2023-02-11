@@ -2,6 +2,7 @@ package mock
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"strconv"
 	"strings"
 
@@ -48,6 +49,15 @@ type Driver struct {
 	pvcs           map[string]*v1.PersistentVolumeClaim
 	interfaceError error
 	clusterID      string
+}
+
+func (m *Driver) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
 }
 
 // String Returns the name for the driver
