@@ -1055,7 +1055,10 @@ func updateProjectDiplayNames(
 		}
 		data := strings.Split(key, ":")
 		if len(data) == 2 {
-			delete(projects, data[1])
+			if _, ok := projects[data[1]]; ok {
+				projects[key] = val
+				delete(projects, data[1])
+			}
 		}
 	}
 	return nil
