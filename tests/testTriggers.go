@@ -5703,7 +5703,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: AsyncDR,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5763,7 +5763,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 	log.Info("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
-		migrationName := migrationKey + fmt.Sprintf("%d", i)
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
@@ -5793,7 +5793,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: AsyncDRVolumeOnly,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5853,7 +5853,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 	log.InfoD("Start volume only migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
-		migrationName := migrationKey + fmt.Sprintf("%d", i)
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
@@ -5891,7 +5891,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkApplicationBackup,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5968,7 +5968,7 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpVolResize,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6068,7 +6068,7 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpHaUpdate,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6208,7 +6208,7 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpPxRestart,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6299,7 +6299,7 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpPoolResize,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
