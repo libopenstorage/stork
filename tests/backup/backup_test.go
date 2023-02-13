@@ -3418,9 +3418,10 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
+	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 0)
+		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -3507,15 +3508,16 @@ var _ = Describe("{BackupRestartPX}", func() {
 				dash.VerifyFatal(err, nil, "Getting context")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupNamespaceMap[namespace] = backupName
 				CreateBackupWithoutCheck(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
 			}
 		})
 
-		storageNodes := node.GetWorkerNodes()
 		Step(fmt.Sprintf("Restart volume driver nodes starts"), func() {
 			log.InfoD("Restart PX on nodes")
+			storageNodes := node.GetWorkerNodes()
 			for index := range storageNodes {
 				// Just restart storage driver on one of the node where volume backup is in progress
 				Inst().V.RestartDriver(storageNodes[index], nil)
@@ -3528,7 +3530,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := backupNamespaceMap[namespace]
 				backupSuccessCheck := func() (interface{}, bool, error) {
 					bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
@@ -4352,7 +4354,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var backupNames []string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Strok when backups and restores in progress", nil, 0)
+		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -4690,9 +4692,10 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	contexts = make([]*scheduler.Context, 0)
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
+	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 0)
+		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -4779,7 +4782,8 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 				dash.VerifyFatal(err, nil, "Getting context")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupNamespaceMap[namespace] = backupName
 				CreateBackup(backupName, SourceClusterName, backupLocation, BackupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
 			}
@@ -4789,7 +4793,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := backupNamespaceMap[namespace]
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
 				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, "Restore failed")
@@ -6987,15 +6991,13 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		})
 
 		Step("Start backup of application to bucket", func() {
-			for _, namespace := range bkpNamespaces {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Verifying Getting context")
-				backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
-				err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
-					nil, orgID, clusterUid, "", "", "", "", ctx)
-				log.FailOnError(err, "Backup creation failed for backup %s", backupName)
-				backupNames = append(backupNames, backupName)
-			}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Verifying Getting context")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{bkpNamespaces[0]},
+				nil, orgID, clusterUid, "", "", "", "", ctx)
+			log.FailOnError(err, "Backup creation failed for backup %s", backupName)
+			backupNames = append(backupNames, backupName)
 		})
 
 		Step("Create users", func() {
