@@ -404,10 +404,10 @@ type Driver interface {
 	GetPoolLabelValue(poolUUID string, label string) (string, error)
 
 	// IsNodeInMaintenance returns true if Node in Maintenance
-	IsNodeInMaintenance(n node.Node) bool
+	IsNodeInMaintenance(n node.Node) (bool, error)
 
 	// IsNodeOutOfMaintenance returns true if Node in Maintenance
-	IsNodeOutOfMaintenance(n node.Node) bool
+	IsNodeOutOfMaintenance(n node.Node) (bool, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

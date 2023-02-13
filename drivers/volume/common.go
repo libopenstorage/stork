@@ -1007,11 +1007,17 @@ func (d *DefaultDriver) GetPoolLabelValue(poolUUID string, label string) (string
 }
 
 // IsNodeInMaintenance returns true if Node in Maintenance
-func (d *DefaultDriver) IsNodeInMaintenance(n node.Node) bool {
-	return false
+func (d *DefaultDriver) IsNodeInMaintenance(n node.Node) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsNodeInMaintenance()",
+	}
 }
 
 // IsNodeOutOfMaintenance returns true if Node in Maintenance
-func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) bool {
-	return true
+func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
+	return true, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsNodeOutOfMaintenance()",
+	}
 }

@@ -3,7 +3,6 @@ package portworx
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -958,7 +957,7 @@ func (d *portworx) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority
 	if err != nil {
 		return fmt.Errorf("Updating Pool IO Priority failed on Node [%s], Err: [%v]", n.Name, err)
 	}
-	log.Infof("Pool IO Priority Successful %s", out)
+	log.Infof("Updateed Pool IO Priority to [%s] successfully, output: [%s]", IOPriority, out)
 	return nil
 }
 
@@ -4783,7 +4782,10 @@ func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, err
 	var PropertyMatch string
 	PropertyMatch = ""
 	pools, err := d.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, fmt.Sprintf("Listing storage pools failed"))
+	if err != nil {
+		return "", err
+	}
+
 	for _, eachPool := range pools {
 		if eachPool.Uuid == poolUUID {
 			PropertyMatch = eachPool.Labels[label]
@@ -4791,31 +4793,33 @@ func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, err
 		}
 	}
 	if PropertyMatch == "" {
-		return "", errors.New(fmt.Sprintf("Failed to Get [%s] for PoolUUID [%v]", label, poolUUID))
+		return "", fmt.Errorf(fmt.Sprintf("Failed to Get [%s] for PoolUUID [%v]", label, poolUUID))
 	}
 	return PropertyMatch, nil
 }
 
 // IsNodeInMaintenance returns true if Node in Maintenance
-func (d *portworx) IsNodeInMaintenance(n node.Node) bool {
+func (d *portworx) IsNodeInMaintenance(n node.Node) (bool, error) {
 	stNode, err := d.GetDriverNode(&n)
-	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n.Name)
-
-	if stNode.Status == api.Status_STATUS_MAINTENANCE {
-		return true
+	if err != nil {
+		return false, err
 	}
 
-	return false
+	if stNode.Status == api.Status_STATUS_MAINTENANCE {
+		return true, nil
+	}
+
+	return false, fmt.Errorf("node [%s] not in maintenance mode. current state [%v]", n.Name, stNode.Status)
 }
 
 // IsNodeOutOfMaintenance returns true if Node in Maintenance
-func (d *portworx) IsNodeOutOfMaintenance(n node.Node) bool {
+func (d *portworx) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
 	stNode, err := d.GetDriverNode(&n)
 	log.FailOnError(err, "Failed fetching Driver Details from Node [%v]", n.Name)
 
 	if stNode.Status == api.Status_STATUS_OK {
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, fmt.Errorf("node [%s] is not out of maintenance mode. current state [%v]", n.Name, stNode.Status)
 }

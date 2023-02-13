@@ -5981,7 +5981,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
 		err = Inst().V.DeletePool(*nodeDetail, "0")
-		dash.VerifyFatal(err == nil, false, fmt.Sprintf("Pool Delete Status is SUCCESS. Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+		dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
 
 		compileText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*operation is not supported"
 		re := regexp.MustCompile(compileText)
@@ -5995,12 +5995,15 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.InfoD("Bring Node to Maintenance Mode")
 		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
 
+		// Wait for some time before verifying Maintenance state
+		time.Sleep(2 * time.Minute)
+
 		log.InfoD("Wait for Node to Enter Maintenance Mode")
 		log.FailOnError(WaitTillEnterMaintenanceMode(*nodeDetail), fmt.Sprintf("Failed while waiting for pool to enter maintenance mode on node [%v]", nodeDetail.Name))
 
 		// Delete the Pool with Invalid Pool ID
 		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
-		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Pool Delete Status is SUCCESS. Expected Failure! : Node Detail [%v]", nodeDetail.Name))
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expected Failure? : Node Detail [%v]", nodeDetail.Name))
 		log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
 
 		log.InfoD("Bring Node out of Maintenance Mode")
@@ -6067,10 +6070,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 			// Now trying to Expand Pool with Invalid Pool UUID
-			err = Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
-			if err == nil {
-				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-			}
+			Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
 
 			// Verify error on pool expansion failure
 			err = nil

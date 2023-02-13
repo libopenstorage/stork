@@ -5237,7 +5237,9 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 // WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
 func WaitTillEnterMaintenanceMode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-		if Inst().V.IsNodeInMaintenance(n) == true {
+		nodeState, err := Inst().V.IsNodeInMaintenance(n)
+		log.FailOnError(err, fmt.Sprintf("Node [%v] not in Maintenance Mode", n.Name))
+		if nodeState == true {
 			return nil, true, nil
 		}
 		return nil, false, fmt.Errorf("Not in Maintenance mode")
@@ -5255,7 +5257,9 @@ func ExitFromMaintenanceMode(n node.Node) error {
 	log.InfoD("Exiting maintenence mode on Node %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		if err := Inst().V.ExitMaintenance(n); err != nil {
-			if Inst().V.IsNodeOutOfMaintenance(n) == true {
+			nodeState, err := Inst().V.IsNodeInMaintenance(n)
+			log.FailOnError(err, fmt.Sprintf("Node [%v] not in Maintenance Mode", n.Name))
+			if nodeState == true {
 				return nil, true, nil
 			}
 			return nil, true, err
@@ -5275,7 +5279,9 @@ func ExitFromMaintenanceMode(n node.Node) error {
 func ExitNodesFromMaintenanceMode() {
 	Nodes := node.GetStorageNodes()
 	for _, eachNode := range Nodes {
-		if Inst().V.IsNodeInMaintenance(eachNode) {
+		nodeState, err := Inst().V.IsNodeInMaintenance(eachNode)
+		log.FailOnError(err, fmt.Sprintf("Node [%v] not in Maintenance Mode", eachNode.Name))
+		if nodeState == true {
 			log.FailOnError(ExitFromMaintenanceMode(eachNode), fmt.Sprintf("Failed exiting from maintenance mode on node [%v]", eachNode.Name))
 		}
 	}
