@@ -5942,6 +5942,10 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 	var testrailID = 79487
 	// Testrail Description : Verify deletion of invalid pool ids
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55349
+
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55330
+	// Testrail Description : Delete pool when PX/Pool (2.6.0+) is not in maintenance mode and verify the error message
+
 	var runID int
 
 	JustBeforeEach(func() {
@@ -5975,6 +5979,16 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
 		log.InfoD("Pool Details [%v] Picked for Delete", PoolDetail)
 
+		// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
+		err = Inst().V.DeletePool(*nodeDetail, "0")
+		dash.VerifyFatal(err == nil, false, fmt.Sprintf("Pool Delete Status is SUCCESS. Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+
+		compileText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*operation is not supported"
+		re := regexp.MustCompile(compileText)
+		if re.MatchString(fmt.Sprintf("%v", err)) == false {
+			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
+		}
+
 		// invalidPoolID is total Pools present on the node + 1
 		invalidPoolID := fmt.Sprintf("%d", len(PoolDetail)+1)
 
@@ -5986,7 +6000,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		// Delete the Pool with Invalid Pool ID
 		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
-		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Pool Delete Status is SUCCESS. Expected Failure! : Node Detail [%v]", nodeDetail))
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Pool Delete Status is SUCCESS. Expected Failure! : Node Detail [%v]", nodeDetail.Name))
 		log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
 
 		log.InfoD("Bring Node out of Maintenance Mode")
