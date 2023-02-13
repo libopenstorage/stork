@@ -6070,15 +6070,16 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 			// Now trying to Expand Pool with Invalid Pool UUID
-			Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			err = Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
 
 			// Verify error on pool expansion failure
-			err = nil
-			re := regexp.MustCompile(fmt.Sprintf("failed to find storage pool with UID.*%s", invalidPoolUUID))
+			var errMatch error
+			errMatch = nil
+			re := regexp.MustCompile(fmt.Sprintf("failed to find storage pool with UID.*%s.*", invalidPoolUUID))
 			if re.MatchString(fmt.Sprintf("%v", err)) == false {
-				err = fmt.Errorf("Failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
+				errMatch = fmt.Errorf("Failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
 			}
-			dash.VerifyFatal(err, nil, "Pool expand with invalid PoolUUID completed?")
+			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
 		})
 
 	})
@@ -6089,5 +6090,4 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 		ExitNodesFromMaintenanceMode()
 		AfterEachTest(contexts, testrailID, runID)
 	})
-
 })
