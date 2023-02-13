@@ -6036,24 +6036,18 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		/*
-			contexts = make([]*scheduler.Context, 0)
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("invalidpoolid-%d", i))...)
-			}
-			ValidateApplications(contexts)
-			defer appsValidateAndDestroy(contexts)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("invalidpoolid-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
-			// Get the Pool UUID on which IO is running
-			poolUUID, err := GetPoolIDWithIOs()
-			log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
-			log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		// Get the Pool UUID on which IO is running
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
-			nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-		*/
-
-		poolUUID := "9017f87a-d797-441b-b7eb-f0b4d4fea27b"
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
