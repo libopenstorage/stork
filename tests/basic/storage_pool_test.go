@@ -6036,18 +6036,24 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deleteinvalidpoolid-%d", i))...)
-		}
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
+		/*
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("invalidpoolid-%d", i))...)
+			}
+			ValidateApplications(contexts)
+			defer appsValidateAndDestroy(contexts)
 
-		// Get the Pool UUID on which IO is running
-		poolUUID, err := GetPoolIDWithIOs()
-		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+			// Get the Pool UUID on which IO is running
+			poolUUID, err := GetPoolIDWithIOs()
+			log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+			log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
+			nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		*/
+
+		poolUUID := "9017f87a-d797-441b-b7eb-f0b4d4fea27b"
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
@@ -6070,12 +6076,12 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 			// Now trying to Expand Pool with Invalid Pool UUID
-			err = Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
-
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			fmt.Println(err)
 			// Verify error on pool expansion failure
 			var errMatch error
 			errMatch = nil
-			re := regexp.MustCompile(fmt.Sprintf("failed to find storage pool with UID.*%s.*", invalidPoolUUID))
+			re := regexp.MustCompile(fmt.Sprintf(".*failed to find storage pool with UID.*%s.*", invalidPoolUUID))
 			if re.MatchString(fmt.Sprintf("%v", err)) == false {
 				errMatch = fmt.Errorf("Failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
 			}

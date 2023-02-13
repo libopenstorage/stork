@@ -331,6 +331,9 @@ type Driver interface {
 	// ExpandPool resizes a pool of a given ID
 	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
 
+	// ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
+	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
 
@@ -406,7 +409,7 @@ type Driver interface {
 	// IsNodeInMaintenance returns true if Node in Maintenance
 	IsNodeInMaintenance(n node.Node) (bool, error)
 
-	// IsNodeOutOfMaintenance returns true if Node in Maintenance
+	// IsNodeOutOfMaintenance returns true if Node in out of Maintenance
 	IsNodeOutOfMaintenance(n node.Node) (bool, error)
 }
 

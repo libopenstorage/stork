@@ -642,6 +642,14 @@ func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_
 	}
 }
 
+// ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
+func (d *DefaultDriver) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExpandPoolUsingPxctlCmd()",
+	}
+}
+
 // GetAutoFsTrimStatus get auto ftim status of a given volume
 func (d *DefaultDriver) GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 	return nil, &errors.ErrNotSupported{
@@ -1014,7 +1022,7 @@ func (d *DefaultDriver) IsNodeInMaintenance(n node.Node) (bool, error) {
 	}
 }
 
-// IsNodeOutOfMaintenance returns true if Node in Maintenance
+// IsNodeOutOfMaintenance returns true if Node in out of Maintenance
 func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
 	return true, &errors.ErrNotSupported{
 		Type:      "Function",
