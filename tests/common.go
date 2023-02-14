@@ -5238,7 +5238,9 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 func WaitTillEnterMaintenanceMode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		nodeState, err := Inst().V.IsNodeInMaintenance(n)
-		log.FailOnError(err, fmt.Sprintf("Node [%v] not in Maintenance Mode", n.Name))
+		if err != nil {
+			return err
+		}
 		if nodeState == true {
 			return nil, true, nil
 		}
@@ -5258,7 +5260,9 @@ func ExitFromMaintenanceMode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		if err := Inst().V.ExitMaintenance(n); err != nil {
 			nodeState, err := Inst().V.IsNodeInMaintenance(n)
-			log.FailOnError(err, "is node in maintenance mode?")
+			if err != nil {
+				return err
+			}
 			if nodeState == true {
 				return nil, true, nil
 			}
@@ -5276,14 +5280,18 @@ func ExitFromMaintenanceMode(n node.Node) error {
 // ExitNodesFromMaintenanceMode waits till all nodes to exit from maintenance mode
 // Checks for all the storage nodes present in the cluster, in case if any node is in maintenance mode
 // Function will attempt bringing back the node out of maintenance
-func ExitNodesFromMaintenanceMode() {
+func ExitNodesFromMaintenanceMode() error {
 	Nodes := node.GetStorageNodes()
 	for _, eachNode := range Nodes {
 		nodeState, err := Inst().V.IsNodeInMaintenance(eachNode)
 		if err == nil && nodeState == true {
-			log.FailOnError(ExitFromMaintenanceMode(eachNode), fmt.Sprintf("Failed exiting from maintenance mode on node [%v]", eachNode.Name))
+			errExit := ExitFromMaintenanceMode(eachNode)
+			if errExit != nil {
+				return errExit
+			}
 		}
 	}
+	return nil
 }
 
 // GetPoolsDetailsOnNode returns all pools present in the Nodes

@@ -5881,6 +5881,9 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		log.InfoD("Bring Node to Maintenance Mode")
 		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
 
+		// Wait for some time before verifying Maintenance state
+		time.Sleep(2 * time.Minute)
+
 		// Set IO Priority on the Pool
 		var ioPriorities = []string{"low", "medium", "high"}
 		var setIOPriority string
@@ -5933,7 +5936,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-		ExitNodesFromMaintenanceMode()
+		log.FailOnError(ExitNodesFromMaintenanceMode())
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -5977,7 +5980,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
 		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
-		log.InfoD("Pool Details [%v] Picked for Delete", PoolDetail)
+		fmt.Printf("Pool Details [%v] Picked for Delete", PoolDetail)
 
 		// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
 		err = Inst().V.DeletePool(*nodeDetail, "0")
@@ -6012,7 +6015,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		JustAfterEach(func() {
 			defer EndTorpedoTest()
 			log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-			ExitNodesFromMaintenanceMode()
+			log.FailOnError(ExitNodesFromMaintenanceMode())
 			AfterEachTest(contexts, testrailID, runID)
 		})
 	})
@@ -6071,7 +6074,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 
 			// Now trying to Expand Pool with Invalid Pool UUID
 			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
-			fmt.Println(err)
+
 			// Verify error on pool expansion failure
 			var errMatch error
 			errMatch = nil
@@ -6087,7 +6090,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-		ExitNodesFromMaintenanceMode()
+		log.FailOnError(ExitNodesFromMaintenanceMode())
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
