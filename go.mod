@@ -22,8 +22,8 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20221107233229-3fa4664e96b1
-	github.com/libopenstorage/openstorage v9.4.46+incompatible
-	github.com/libopenstorage/operator v0.0.0-20230208193934-86840976b8bb
+	github.com/libopenstorage/openstorage v9.4.47+incompatible
+	github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a
 	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.20.1

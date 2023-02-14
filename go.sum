@@ -1789,8 +1789,8 @@ github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854/go.mo
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
 github.com/libopenstorage/operator v0.0.0-20210303221358-0bb211a9908c/go.mod h1:+83bY859mKGwHmWW8TPNYGrXAgt/hXOX2Ia7EytK17I=
 github.com/libopenstorage/operator v0.0.0-20230112002659-7e73437e61d4/go.mod h1:/sGycOMcavuKLWm3Vd907luRXZA/mcqFs1AdEbbT5k4=
-github.com/libopenstorage/operator v0.0.0-20230208193934-86840976b8bb h1:ZQ5Lr43t1P+YeGETQecJ0we7/+jJog4SSK5SxirXy4A=
-github.com/libopenstorage/operator v0.0.0-20230208193934-86840976b8bb/go.mod h1:Q66wsNUAekPawgGg9yh0Bs7eXWPa4/+c2JTefdiDciM=
+github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a h1:tDduVTF1uM3wSy0EtHraHugzynUcbpaQURbf+hjMEWw=
+github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a/go.mod h1:Q66wsNUAekPawgGg9yh0Bs7eXWPa4/+c2JTefdiDciM=
 github.com/libopenstorage/secrets v0.0.0-20190403224602-c282e8dc17bf/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=

@@ -140,6 +140,8 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 	numberOfGroups := 10
 	users := make([]string, 0)
 	groups := make([]string, 0)
+	userValidation := make([]string, 0)
+	groupValidation := make([]string, 0)
 	var groupNotCreated string
 	var userNotCreated string
 
@@ -153,14 +155,14 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 			log.InfoD("Creating %d groups", numberOfGroups)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfGroups; i++ {
-				groupName := fmt.Sprintf("testGroup%v", i)
+				groupName := fmt.Sprintf("testGroup%v", time.Now().Unix())
+				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(groupName string) {
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
 					groups = append(groups, groupName)
-
 				}(groupName)
 			}
 			wg.Wait()
@@ -170,17 +172,17 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
+				userName := fmt.Sprintf("testuser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
+				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -192,10 +194,10 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 
 		Step("Validate Group", func() {
 			createdGroups, err := backup.GetAllGroups()
-			log.Info("created group ", createdGroups)
 			log.FailOnError(err, "Failed to get group")
 			responseMap := make(map[string]bool)
 			for _, createdGroup := range createdGroups {
+				groupValidation = append(groupValidation, createdGroup.Name)
 				responseMap[createdGroup.Name] = true
 			}
 			for _, group := range groups {
@@ -207,15 +209,16 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				}
 
 			}
+			log.Infof("Validating created groups %v", groupValidation)
 			dash.VerifyFatal(groupNotCreated, "", "Group Creation Verification successful")
 		})
 
 		Step("Validate User", func() {
 			createdUsers, err := backup.GetAllUsers()
-			log.Info("created user ", createdUsers)
 			log.FailOnError(err, "Failed to get user")
 			responseMap := make(map[string]bool)
 			for _, createdUser := range createdUsers {
+				userValidation = append(userValidation, createdUser.Name)
 				responseMap[createdUser.Name] = true
 			}
 			for _, user := range users {
@@ -227,6 +230,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				}
 
 			}
+			log.Infof("Validating created users %v", userValidation)
 			dash.VerifyFatal(userNotCreated, "", "User Creation Verification successful")
 		})
 
@@ -584,7 +588,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		clusterUid        string
 		clusterStatus     api.ClusterInfo_StatusInfo_Status
 		groupName         string
-		userName          string
+		userName          []string
 		backupName        string
 		backupLocationUID string
 		cloudCredName     string
@@ -595,6 +599,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
+	numberOfUsers := 1
 	JustBeforeEach(func() {
 		StartTorpedoTest("DifferentAccessSameUser",
 			"Take a backup and add user with readonly access and the group  with full access", nil, 82938)
@@ -620,13 +625,8 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Create Users", func() {
 			log.InfoD("Creating users testuser")
-			userName = "testuser"
-			firstName := "FirstName"
-			lastName := "LastName"
-			email := "testuser@cnbu.com"
-			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-			log.FailOnError(err, "Failed to create user - %s", userName)
-
+			userName = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
 		})
 		Step("Create Groups", func() {
 			log.InfoD("Creating group testGroup")
@@ -637,7 +637,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Add users to group", func() {
 			log.InfoD("Adding user to groups")
-			err := backup.AddGroupToUser(userName, groupName)
+			err := backup.AddGroupToUser(userName[0], groupName)
 			dash.VerifyFatal(err, nil, "Adding user to group")
 			usersOfGroup, err := backup.GetMembersOfGroup(groupName)
 			log.FailOnError(err, "Error fetching members of the group - %v", groupName)
@@ -649,7 +649,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			providers := getProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
@@ -674,7 +674,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Share backup with user having readonly access", func() {
 			log.InfoD("Adding user with readonly access")
-			ShareBackup(backupName, nil, []string{userName}, ViewOnlyAccess, ctx)
+			ShareBackup(backupName, nil, userName, ViewOnlyAccess, ctx)
 		})
 		Step("Share backup with group having full access", func() {
 			log.InfoD("Adding user with full access")
@@ -682,7 +682,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Share Backup with View Only access to a user of Full access group and Validate", func() {
 			log.InfoD("Backup is shared with Group having FullAccess after it is shared with user having ViewOnlyAccess, therefore user should have FullAccess")
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName[0], "Password1")
 			log.FailOnError(err, "Fetching user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 			log.InfoD("Registering Source and Destination clusters from user context")
@@ -713,12 +713,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		err = backup.DeleteUser(userName)
+		err = backup.DeleteUser(userName[0])
 		dash.VerifySafely(err, nil, "Deleting user")
 		err = backup.DeleteGroup(groupName)
 		dash.VerifySafely(err, nil, "Deleting group")
@@ -2040,19 +2035,19 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 	var BackupLocationName string
 	var backupLocationUID string
 	var cloudCredUID string
-	var cloudCred1UID string
+	var newCloudCredUID string
 	var CloudCredUidList []string
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var credName string
-	var cred1Name string
+	var newCredName string
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
 	JustBeforeEach(func() {
 		StartTorpedoTest("ShareBackupAndEdit",
-			"Share backup with restore and full access mode and edit the shared backup", nil, 0)
+			"Share backup with restore and full access mode and edit the shared backup", nil, 82950)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2099,16 +2094,15 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 				credName = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
 				CreateCloudCredential(provider, credName, cloudCredUID, orgID)
 				log.InfoD("Created Cloud Credentials with name - %s", credName)
-				cloudCred1UID = uuid.New()
-				CloudCredUidList = append(CloudCredUidList, cloudCred1UID)
-				cred1Name = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
-				CreateCloudCredential(provider, cred1Name, cloudCred1UID, orgID)
-				//TODO: Eliminate time.Sleep
-				time.Sleep(time.Minute * 1)
 				BackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
 				err := CreateBackupLocation(provider, BackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, "Creating backup location")
 				log.InfoD("Created Backup Location with name - %s", BackupLocationName)
+				newCloudCredUID = uuid.New()
+				CloudCredUidList = append(CloudCredUidList, newCloudCredUID)
+				newCredName = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
+				CreateCloudCredential(provider, newCredName, newCloudCredUID, orgID)
+				log.InfoD("Created Cloud Credentials with name - %s", newCredName)
 			}
 		})
 		Step("Register source and destination cluster for backup", func() {
@@ -2147,7 +2141,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			backupDriver := Inst().Backup
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[0], orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupNames[0])
-			UpdateBackup(backupNames[0], backupUID, orgID, cred1Name, cloudCred1UID, ctx)
+			UpdateBackup(backupNames[0], backupUID, orgID, newCredName, newCloudCredUID, ctx)
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], "Password1")
@@ -2261,7 +2255,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		//TODO: Eliminate time.Sleep
 		time.Sleep(time.Minute * 3)
 		DeleteCloudCredential(credName, orgID, cloudCredUID)
-		DeleteCloudCredential(cred1Name, orgID, cloudCred1UID)
+		DeleteCloudCredential(newCredName, orgID, newCloudCredUID)
 	})
 })
 
@@ -2285,7 +2279,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 	providers := getProviders()
 	JustBeforeEach(func() {
 		StartTorpedoTest("SharedBackupDelete",
-			"Share backup with multiple users and delete the backup", nil, 0)
+			"Share backup with multiple users and delete the backup", nil, 82946)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2672,6 +2666,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 	var credName string
 	var periodicPolicyName string
 	var schPolicyUid string
+	var userBackups []string
 	var accesses []BackupAccess
 	var restoreNames []string
 	bkpNamespaces = make([]string, 0)
@@ -2756,7 +2751,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.FailOnError(err, "Creating Schedule Backup")
 		})
 
-		Step("Validate the Access toggle ", func() {
+		Step("Validate the Access toggle", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			accesses = append(accesses, ViewOnlyAccess, RestoreAccess, FullAccess)
@@ -2774,9 +2769,19 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				log.InfoD("Sharing cluster with %v access to user %s", accessLevel, username)
 				err := ClusterUpdateBackupShare(SourceClusterName, nil, []string{username}, accessLevel, true, ctx)
 				log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
-
-				userBackups, err := GetAllBackupsForUser(username, password)
-				log.FailOnError(err, "Fail on Fetching backups for %s", username)
+				clusterShareCheck := func() (interface{}, bool, error) {
+					userBackups, err = GetAllBackupsForUser(username, password)
+					if err != nil {
+						return "", true, fmt.Errorf("Fail on Fetching backups for %s with error %v", username, err)
+					}
+					if len(userBackups) == 0 {
+						return "", true, fmt.Errorf("Unable to fetch backup from shared cluster for user %s", username)
+					}
+					return "", false, nil
+				}
+				_, err = task.DoRetryWithTimeout(clusterShareCheck, 2*time.Minute, 10*time.Second)
+				log.FailOnError(err, "Unable to fetch backup from shared cluster for user %s", username)
+				log.Infof("fetched user backups %v", userBackups)
 
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 				ValidateSharedBackupWithUsers(username, accessLevel, userBackups[len(userBackups)-1], restoreName)
@@ -2903,7 +2908,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		bkpNamespaces     []string
 		clusterUid        string
 		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		userName          string
+		userName          []string
 		backupName        string
 		backupLocationUID string
 		cloudCredName     string
@@ -2915,6 +2920,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
+	numberOfUsers := 1
 	JustBeforeEach(func() {
 		StartTorpedoTest("ShareBackupsAndClusterWithUser",
 			"Share backup to user with full access and try to duplicate the backup from the shared user", nil, 82943)
@@ -2939,20 +2945,15 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Create Users", func() {
-			log.InfoD("Creating users testuser with FullAccess")
-			userName = "testuser"
-			firstName := "FirstName"
-			lastName := "LastName"
-			email := "testuser@cnbu.com"
-			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-			log.FailOnError(err, "Failed to create user - %s", userName)
+			userName = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
 			providers := getProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
@@ -2977,20 +2978,22 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		})
 		Step("Share backup with user having full access", func() {
 			log.InfoD("Share backup with user having full access")
-			ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
+			ShareBackup(backupName, nil, userName, FullAccess, ctx)
 		})
 		Step("Create backup from the shared user with FullAccess", func() {
 			log.InfoD("Validating if user with FullAccess cannot duplicate backup shared but can create new backup")
 			// User with FullAccess cannot duplicate will be validated through UI only
-			ctxNonAdmin, err = backup.GetNonAdminCtx(userName, "Password1")
-			log.FailOnError(err, "Fetching user ctx")
-			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
-			err = CreateBackup(userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				labelSelectors, orgID, clusterUid, "", "", "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, nil, "Verifying that create backup should pass ")
+			for _, user := range userName {
+				ctxNonAdmin, err = backup.GetNonAdminCtx(user, "Password1")
+				log.FailOnError(err, "Fetching user ctx")
+				log.InfoD("Registering Source and Destination clusters from user context")
+				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+				userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
+				err = CreateBackup(userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
+					labelSelectors, orgID, clusterUid, "", "", "", "", ctxNonAdmin)
+				dash.VerifyFatal(err, nil, "Verifying that create backup should pass ")
+			}
 		})
 	})
 	JustAfterEach(func() {
@@ -3013,7 +3016,9 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
 		time.Sleep(time.Minute * 2)
 		log.Infof("Cleaning up users")
-		err = backup.DeleteUser(userName)
+		for _, user := range userName {
+			err = backup.DeleteUser(user)
+		}
 		log.FailOnError(err, "Error in deleting user")
 		log.Infof("Deleting registered clusters for non-admin context")
 		DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
@@ -3070,24 +3075,8 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 
 		Step("Create multiple Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
-			var wg sync.WaitGroup
-			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
-				firstName := fmt.Sprintf("FirstName%v", i)
-				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
-				wg.Add(1)
-				go func(userName, firstName, lastName, email string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-					log.FailOnError(err, "Failed to create user - %s", userName)
-					users = append(users, userName)
-
-				}(userName, firstName, lastName, email)
-			}
-			wg.Wait()
-			log.Infof("The users created are %v", users)
+			users = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, users)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -3225,6 +3214,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
+	var backupNotDeleted string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var credName string
 	bkpNamespaces = make([]string, 0)
@@ -3355,9 +3345,19 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 		})
 		Step("Validating that backups are deleted from owner of backups", func() {
-			userBackups1, _ := GetAllBackupsAdmin()
-			log.InfoD("%v", userBackups1)
-			dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that shared backups are deleted from owner of backup"))
+			adminBackups, _ := GetAllBackupsAdmin()
+			log.Infof("%v", adminBackups)
+			adminBackupsMap := make(map[string]bool)
+			for _, backup := range adminBackups {
+				adminBackupsMap[backup] = true
+			}
+			for _, name := range backupNames {
+				if adminBackupsMap[name] {
+					backupNotDeleted = name
+					break
+				}
+			}
+			dash.VerifyFatal(backupNotDeleted, "", fmt.Sprintf("Validating that shared backups are deleted from owner of backup"))
 		})
 
 	})
@@ -3418,9 +3418,10 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
+	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 0)
+		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -3507,15 +3508,16 @@ var _ = Describe("{BackupRestartPX}", func() {
 				dash.VerifyFatal(err, nil, "Getting context")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupNamespaceMap[namespace] = backupName
 				CreateBackupWithoutCheck(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
 			}
 		})
 
-		storageNodes := node.GetWorkerNodes()
 		Step(fmt.Sprintf("Restart volume driver nodes starts"), func() {
 			log.InfoD("Restart PX on nodes")
+			storageNodes := node.GetWorkerNodes()
 			for index := range storageNodes {
 				// Just restart storage driver on one of the node where volume backup is in progress
 				Inst().V.RestartDriver(storageNodes[index], nil)
@@ -3528,7 +3530,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := backupNamespaceMap[namespace]
 				backupSuccessCheck := func() (interface{}, bool, error) {
 					bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
@@ -4352,7 +4354,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var backupNames []string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Strok when backups and restores in progress", nil, 0)
+		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -4585,6 +4587,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var contexts []*scheduler.Context
 	var appContexts []*scheduler.Context
+	backupLocationMap := make(map[string]string)
 	var bkpNamespaces []string
 	var backupLocationName string
 	var CloudCredUID string
@@ -4594,7 +4597,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var backupName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 0)
+		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 79918)
 	})
 	It("Creating cloud account and backup location", func() {
 		log.InfoD("Creating cloud account and backup location")
@@ -4604,9 +4607,10 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		CloudCredUID = uuid.New()
 		BackupLocationUID = uuid.New()
 		encryptionKey := generateEncryptionKey()
+		backupLocationMap[BackupLocationUID] = backupLocationName
 		CreateCloudCredential(providers[0], cloudCredName, CloudCredUID, orgID)
 		err := CreateBackupLocation(providers[0], backupLocationName, BackupLocationUID, cloudCredName, CloudCredUID, getGlobalBucketName(providers[0]), orgID, encryptionKey)
-		dash.VerifyFatal(err, nil, "Creating backup location")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4647,7 +4651,8 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
-			CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, make(map[string]string))
+			log.FailOnError(err, "%s restore failed", restoreName)
 		})
 	})
 	JustAfterEach(func() {
@@ -4657,12 +4662,10 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-		backupUID := getBackupUID(orgID, backupName)
+		backupUID := getBackupUID(backupName, orgID)
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		err = DeleteBackupLocation(backupLocationName, BackupLocationUID, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
+		DeleteCloudAccounts(backupLocationMap, cloudCredName, CloudCredUID, ctx)
 	})
 
 })
@@ -4689,9 +4692,10 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	contexts = make([]*scheduler.Context, 0)
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
+	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 0)
+		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -4778,7 +4782,8 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 				dash.VerifyFatal(err, nil, "Getting context")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupNamespaceMap[namespace] = backupName
 				CreateBackup(backupName, SourceClusterName, backupLocation, BackupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
 			}
@@ -4788,7 +4793,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := backupNamespaceMap[namespace]
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
 				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, "Restore failed")
@@ -5058,6 +5063,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var contexts []*scheduler.Context
 	var appContexts []*scheduler.Context
+	backupLocationMap := make(map[string]string)
 	var bkpNamespaces []string
 	var backupNames []string
 	var restoreNames []string
@@ -5072,7 +5078,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var encryptionBucketName string
 	providers := getProviders()
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encrypted backups", nil, 0)
+		StartTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encrypted backups", nil, 79915)
 	})
 	It("Creating bucket, encrypted and non-encrypted backup location", func() {
 		log.InfoD("Creating bucket, encrypted and non-encrypted backup location")
@@ -5089,9 +5095,11 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		CreateBucket(providers[0], encryptionBucketName)
 		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
 		err := CreateBackupLocation(providers[0], backupLocationNames[0], BackupLocationUID, CredName, CloudCredUID, getGlobalBucketName(providers[0]), orgID, "")
-		dash.VerifyFatal(err, nil, "Creating backup location")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationNames[0]))
+		backupLocationMap[BackupLocationUID] = backupLocationNames[0]
 		err = CreateBackupLocation(providers[0], backupLocationNames[1], BackupLocation1UID, CredName, CloudCredUID, encryptionBucketName, orgID, encryptionkey)
-		dash.VerifyFatal(err, nil, "Creating backup location")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationNames[1]))
+		backupLocationMap[BackupLocation1UID] = backupLocationNames[1]
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -5123,12 +5131,12 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				err = CreateBackup(backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, []string{namespace},
 					nil, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, "Verifying backup creation")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", backupName))
 				encryptionbackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, namespace)
 				backupNames = append(backupNames, encryptionbackupName)
 				err = CreateBackup(encryptionbackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, []string{namespace},
 					nil, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, "Verifying backup creation")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", encryptionbackupName))
 			}
 		})
 
@@ -5159,13 +5167,9 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		for _, backupName := range backupNames {
 			backupUID := getBackupUID(backupName, orgID)
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 		}
-		err = DeleteBackupLocation(backupLocationNames[0], BackupLocationUID, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationNames[0]))
-		err = DeleteBackupLocation(backupLocationNames[1], BackupLocation1UID, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationNames[1]))
-		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		DeleteCloudAccounts(backupLocationMap, CredName, CloudCredUID, ctx)
 		DeleteBucket(providers[0], encryptionBucketName)
 	})
 
@@ -5507,24 +5511,8 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 
 		Step("Create multiple Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
-			var wg sync.WaitGroup
-			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
-				firstName := fmt.Sprintf("FirstName%v", i)
-				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
-				wg.Add(1)
-				go func(userName, firstName, lastName, email string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-					log.FailOnError(err, "Failed to create user - %s", userName)
-					users = append(users, userName)
-
-				}(userName, firstName, lastName, email)
-			}
-			wg.Wait()
-			log.Infof("The users created are %v", users)
+			users = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, users)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -5928,12 +5916,13 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		cloudCredUID      string
 		bkpLocationName   string
 		backupName        string
-		userName          string
+		userName          []string
 		userCtx           context.Context
 		scName            string
 		restoreList       []string
 		sourceScName      *storageapi.StorageClass
 	)
+	numberOfUsers := 1
 	namespaceMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -6036,21 +6025,17 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 
 		Step("Create user", func() {
 			log.InfoD("Create user")
-			userName = fmt.Sprintf("testuser-82945")
-			firstName := fmt.Sprintf("FirstName")
-			lastName := fmt.Sprintf("LastName")
-			email := fmt.Sprintf("testuser@cnbu.com")
-			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-			dash.VerifyFatal(err, nil, "Creating user")
-			userCtx, err = backup.GetNonAdminCtx(userName, "Password1")
+			userName = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
+			userCtx, err = backup.GetNonAdminCtx(userName[0], "Password1")
 			dash.VerifyFatal(err, nil, "Getting user context")
 		})
 
 		Step("Share backup with user with FullAccess", func() {
 			log.InfoD("Share backup with user with FullAccess")
-			err = ShareBackup(backupName, nil, []string{userName}, FullAccess, ctx)
+			err = ShareBackup(backupName, nil, userName, FullAccess, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Share backup %s with  user %s having FullAccess", backupName, userName))
-			userBackups1, _ := GetAllBackupsForUser(userName, "Password1")
+			userBackups1, _ := GetAllBackupsForUser(userName[0], "Password1")
 			log.Info(" the backup are", userBackups1)
 			err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster for user")
@@ -6099,7 +6084,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		})
 
 		Step("Share backup with user with RestoreAccess", func() {
-			err = ShareBackup(backupName, nil, []string{userName}, RestoreAccess, ctx)
+			err = ShareBackup(backupName, nil, userName, RestoreAccess, ctx)
 			dash.VerifyFatal(err, nil, "Share backup with user with RestoreAccess")
 		})
 
@@ -6178,8 +6163,8 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		log.InfoD("Deleting user clusters")
 		DeleteCloudAccounts(make(map[string]string), "", "", userCtx)
 		log.InfoD("Cleaning up users")
-		err = backup.DeleteUser(userName)
-		log.FailOnError(err, "Error deleting user %v", userName)
+		err = backup.DeleteUser(userName[0])
+		log.FailOnError(err, "Error deleting user %v", userName[0])
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -6200,6 +6185,10 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		cloudCredUID      string
 		backupLocationUID string
 		bkpLocationName   string
+		preRuleName       string
+		postRuleName      string
+		preRuleUid        string
+		postRuleUid       string
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -6208,7 +6197,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 	namespaceMapping = make(map[string]string)
 	intervalName := fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteAllBackupObjects", "Create the backup Objects and Delete", nil, 0)
+		StartTorpedoTest("DeleteAllBackupObjects", "Create the backup Objects and Delete", nil, 58088)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not ")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -6295,12 +6284,26 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
-			preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-			postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+			if len(preRuleNameList) > 0 {
+				preRuleUid, err = Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+				log.FailOnError(err, "Failed to get UID for rule %s", preRuleNameList[0])
+				preRuleName = preRuleNameList[0]
+			} else {
+				preRuleUid = ""
+				preRuleName = ""
+			}
+			if len(postRuleNameList) > 0 {
+				postRuleUid, err = Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+				log.FailOnError(err, "Failed to get UID for rule %s", postRuleNameList[0])
+				postRuleName = postRuleNameList[0]
+			} else {
+				postRuleUid = ""
+				postRuleName = ""
+			}
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
+					labelSelectors, orgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup creation", backupName))
 			}
 		})
@@ -6372,8 +6375,8 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 var _ = Describe("{DeleteUsersRole}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
-	numberOfUsers := 100
-	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.ApplicationUser, backup.InfrastructureOwner, backup.DefaultRoles}
+	numberOfUsers := 80
+	roles := [3]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.DefaultRoles}
 	userRoleMapping := map[string]backup.PxBackupRole{}
 
 	JustBeforeEach(func() {
@@ -6388,9 +6391,11 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
 				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
+				time.Sleep(2 * time.Second)
 				role := roles[rand.Intn(len(roles))]
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -6409,12 +6414,11 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
 		})
-		// Waiting for keycloak to sync up before moving for validation
-		time.Sleep(time.Minute * 1)
 		Step("Validate if the roles are deleted from the users ", func() {
 			result := false
 			for user, role := range userRoleMapping {
-				roles, _ := backup.GetRolesForUser(user)
+				roles, err := backup.GetRolesForUser(user)
+				log.FailOnError(err, "Failed to get roles for user - %s", user)
 				for _, roleObj := range roles {
 					if roleObj.Name == string(role) {
 						result = true
@@ -6721,10 +6725,11 @@ var _ = Describe("{SwapShareBackup}", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
 			for i := 1; i <= numberOfUsers; i++ {
-				userName := fmt.Sprintf("testuser%v", i)
+				time.Sleep(3000 * time.Millisecond)
+				userName := fmt.Sprintf("testautouser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
 				lastName := fmt.Sprintf("LastName%v", i)
-				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", time.Now().Unix())
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer GinkgoRecover()
@@ -6839,9 +6844,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 	})
 	JustAfterEach(func() {
-
 		defer EndTorpedoTest()
-
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -6850,8 +6853,54 @@ var _ = Describe("{SwapShareBackup}", func() {
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
-		var wg sync.WaitGroup
 
+		log.InfoD("Deleting all restores")
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx")
+			allRestores, err := GetAllRestoresNonAdminCtx(ctx)
+			log.FailOnError(err, "Fetching all restores for nonAdminctx")
+			for _, restoreName := range allRestores {
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
+			}
+		}
+
+		log.InfoD("Delete all backups")
+		for i := 0; i <= numberOfUsers-1; i++ {
+			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx ")
+			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+		}
+
+		// Cleanup all backup locations
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, "Fetching nonAdminctx ")
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			for backupLocationUid, backupLocationName := range allBackupLocations {
+				if userBackupLocationMapping[userName] == backupLocationName {
+					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+				}
+			}
+
+			backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+				allBackupLocations, err := getAllBackupLocations(ctx)
+				dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+				for _, backupLocationName := range allBackupLocations {
+					if userBackupLocationMapping[userName] == backupLocationName {
+						return "", true, fmt.Errorf("found %s backup locations", backupLocationName)
+					}
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 10*time.Minute, 30*time.Second)
+			dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+		}
+		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
@@ -6863,11 +6912,6 @@ var _ = Describe("{SwapShareBackup}", func() {
 			}(userName)
 		}
 		wg.Wait()
-
-		log.Infof("Cleaning cloud credential")
-		for _, credName := range credNames {
-			DeleteCloudCredential(credName, orgID, cloudCredUID)
-		}
 	})
 })
 
@@ -6947,15 +6991,13 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		})
 
 		Step("Start backup of application to bucket", func() {
-			for _, namespace := range bkpNamespaces {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Verifying Getting context")
-				backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
-				err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
-					nil, orgID, clusterUid, "", "", "", "", ctx)
-				log.FailOnError(err, "Backup creation failed for backup %s", backupName)
-				backupNames = append(backupNames, backupName)
-			}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Verifying Getting context")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{bkpNamespaces[0]},
+				nil, orgID, clusterUid, "", "", "", "", ctx)
+			log.FailOnError(err, "Backup creation failed for backup %s", backupName)
+			backupNames = append(backupNames, backupName)
 		})
 
 		Step("Create users", func() {
@@ -7051,7 +7093,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			pods, err = core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+				err = core.Instance().ValidatePod(&pod, 10*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
 			}
 		})
@@ -8149,10 +8191,10 @@ func createUsers(numberOfUsers int) []string {
 	log.InfoD("Creating %d users", numberOfUsers)
 	var wg sync.WaitGroup
 	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("testuser%v", i)
+		userName := fmt.Sprintf("testuser%v-%v", i, time.Now().Unix())
 		firstName := fmt.Sprintf("FirstName%v", i)
 		lastName := fmt.Sprintf("LastName%v", i)
-		email := fmt.Sprintf("testuser%v@cnbu.com", i)
+		email := fmt.Sprintf("%v@cnbu.com", userName)
 		wg.Add(1)
 		go func(userName, firstName, lastName, email string) {
 			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
@@ -8518,4 +8560,20 @@ func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 		log.Info("No cloud credentials found")
 	}
 	return cloudCredentialMap, nil
+}
+
+func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
 }
