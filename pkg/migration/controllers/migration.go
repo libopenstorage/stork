@@ -1234,7 +1234,7 @@ func (m *MigrationController) getRemoteClient(migration *stork_api.Migration) (*
 	return &remoteClient, err
 }
 
-func (m *MigrationController) checkAndUpdateService(
+func (m *MigrationController) isServiceUpdated(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
 	objHash uint64,
@@ -1269,23 +1269,9 @@ func (m *MigrationController) checkAndUpdateService(
 			log.MigrationLog(migration).Infof("skipping service update, no changes found since last migration %d/%d", old, objHash)
 			return true, nil
 		}
+		return false, nil
 	}
-	// update annotations
-	for k, v := range svc.Annotations {
-		curr.Annotations[k] = v
-	}
-	// update selectors
-	if curr.Spec.Selector == nil {
-		curr.Spec.Selector = make(map[string]string)
-	}
-	for k, v := range svc.Spec.Selector {
-		curr.Spec.Selector[k] = v
-	}
-	_, err = remoteClient.adminClient.CoreV1().Services(svc.GetNamespace()).Update(context.TODO(), curr, metav1.UpdateOptions{})
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return false, nil
 }
 
 func (m *MigrationController) checkAndUpdateDefaultSA(
@@ -2118,7 +2104,7 @@ func (m *MigrationController) applyResources(
 						err = m.checkAndUpdateDefaultSA(migration, o)
 					case "Service":
 						var skipUpdate bool
-						skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
+						skipUpdate, err = m.isServiceUpdated(migration, o, objHash)
 						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
 							break
 						}
