@@ -5239,7 +5239,7 @@ func WaitTillEnterMaintenanceMode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		nodeState, err := Inst().V.IsNodeInMaintenance(n)
 		if err != nil {
-			return err
+			return nil, false, err
 		}
 		if nodeState == true {
 			return nil, true, nil
@@ -5261,7 +5261,7 @@ func ExitFromMaintenanceMode(n node.Node) error {
 		if err := Inst().V.ExitMaintenance(n); err != nil {
 			nodeState, err := Inst().V.IsNodeInMaintenance(n)
 			if err != nil {
-				return err
+				return nil, false, err
 			}
 			if nodeState == true {
 				return nil, true, nil

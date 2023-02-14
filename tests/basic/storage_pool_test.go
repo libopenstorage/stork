@@ -5936,7 +5936,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-		log.FailOnError(ExitNodesFromMaintenanceMode())
+		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -6015,7 +6015,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		JustAfterEach(func() {
 			defer EndTorpedoTest()
 			log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-			log.FailOnError(ExitNodesFromMaintenanceMode())
+			log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
 			AfterEachTest(contexts, testrailID, runID)
 		})
 	})
@@ -6090,7 +6090,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-		log.FailOnError(ExitNodesFromMaintenanceMode())
+		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
