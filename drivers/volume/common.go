@@ -229,6 +229,14 @@ func (d *DefaultDriver) ExitMaintenance(n node.Node) error {
 	}
 }
 
+// UpdatePoolIOPriority Update IO Priority of the Pool
+func (d *DefaultDriver) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdatePoolIOPriority()",
+	}
+}
+
 // RecoverPool will recover a pool from a failure/storage down state.
 // This could be used by a pool driver to recover itself from any underlying storage
 // failure.
@@ -634,6 +642,14 @@ func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_
 	}
 }
 
+// ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
+func (d *DefaultDriver) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExpandPoolUsingPxctlCmd()",
+	}
+}
+
 // GetAutoFsTrimStatus get auto ftim status of a given volume
 func (d *DefaultDriver) GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 	return nil, &errors.ErrNotSupported{
@@ -987,5 +1003,29 @@ func (d *DefaultDriver) UpdatePoolLabels(n node.Node, poolID string, labels map[
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpdatePoolLabels()",
+	}
+}
+
+// GetPoolLabelValue Get Value of the Pool Properties
+func (d *DefaultDriver) GetPoolLabelValue(poolUUID string, label string) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPoolLabelValue()",
+	}
+}
+
+// IsNodeInMaintenance returns true if Node in Maintenance
+func (d *DefaultDriver) IsNodeInMaintenance(n node.Node) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsNodeInMaintenance()",
+	}
+}
+
+// IsNodeOutOfMaintenance returns true if Node in out of Maintenance
+func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
+	return true, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsNodeOutOfMaintenance()",
 	}
 }

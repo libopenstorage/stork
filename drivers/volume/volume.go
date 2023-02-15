@@ -181,6 +181,9 @@ type Driver interface {
 	// ExitMaintenance exits the given node from maintenance mode
 	ExitMaintenance(n node.Node) error
 
+	// UpdatePoolIOPriority updates IO priority of the pool
+	UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority string) error
+
 	// RecoverPool will recover a pool from a failure/storage down state.
 	// This could be used by a pool to recover itself from any underlying storage
 	// failure.
@@ -328,6 +331,9 @@ type Driver interface {
 	// ExpandPool resizes a pool of a given ID
 	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
 
+	// ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
+	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
 
@@ -394,8 +400,17 @@ type Driver interface {
 	// GetRebalanceJobStatus returns the rebalance jobs response
 	GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error)
 
-	//UpdatePoolLabels updates the label of the desired pool, by appending a custom key-value pair
+	// UpdatePoolLabels updates the label of the desired pool, by appending a custom key-value pair
 	UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error
+
+	// GetPoolLabelValue Gets Property details based on the labels provided
+	GetPoolLabelValue(poolUUID string, label string) (string, error)
+
+	// IsNodeInMaintenance returns true if Node in Maintenance
+	IsNodeInMaintenance(n node.Node) (bool, error)
+
+	// IsNodeOutOfMaintenance returns true if Node in out of Maintenance
+	IsNodeOutOfMaintenance(n node.Node) (bool, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

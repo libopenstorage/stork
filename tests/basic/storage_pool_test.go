@@ -6035,3 +6035,259 @@ outer:
 	return driveSize, nil
 
 }
+
+var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
+	var testrailID = 79487
+	// Testrail Description : Changed pool IO_priority should persist post pool expand
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/79487
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ChangedIOPriorityPersistPoolExpand",
+			"Changed pool IO_priority should persist post pool expand",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Changed pool IO_priority should persist post pool expand"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("changedioprioritypoolexpand-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get the Pool UUID on which IO is running
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get IO Priority of Pool before running the test
+		ioPriorityBefore, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
+		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
+		log.InfoD("IO Priority of Pool [%s] before Pool expand is [%s]", poolUUID, ioPriorityBefore)
+
+		// Change IO Priority of the Pool
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details using PoolUUID [%v]", poolUUID)
+
+		log.InfoD("Bring Node to Maintenance Mode")
+		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
+
+		// Wait for some time before verifying Maintenance state
+		time.Sleep(2 * time.Minute)
+
+		// Set IO Priority on the Pool
+		var ioPriorities = []string{"low", "medium", "high"}
+		var setIOPriority string
+
+		// Selecting Pool IO Priority Value different that the one already set
+		for _, eachIOPriority := range ioPriorities {
+			if eachIOPriority != ioPriorityBefore {
+				setIOPriority = eachIOPriority
+				break
+			}
+		}
+
+		log.InfoD("Setting Pool [%s] with IO Priority [%s]", poolUUID, setIOPriority)
+		log.FailOnError(Inst().V.UpdatePoolIOPriority(*nodeDetail, poolUUID, setIOPriority), fmt.Sprintf("Failed to set IO Priority of Pool [%s]", poolUUID))
+
+		log.InfoD("Bring Node out of Maintenance Mode")
+		log.FailOnError(ExitFromMaintenanceMode(*nodeDetail), fmt.Sprintf("Failed to bring up node [%v] back from maintenance mode", nodeDetail.Name))
+
+		// Do Pool Expand on the Node
+		stepLog = fmt.Sprintf("Expanding pool on node [%s] and pool UUID: [%s] using auto", nodeDetail.Name, poolUUID)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
+
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", poolUUID, nodeDetail.Name))
+		})
+
+		// Validate if PoolIO Priority is not changed after pool Expansion
+		ioPriorityAfter, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
+		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
+
+		log.InfoD(fmt.Sprintf("Priority Before [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, ioPriorityAfter))
+		dash.VerifyFatal(ioPriorityAfter == setIOPriority, true, "IO Priority mismatch after pool expansion")
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
+	var testrailID = 79487
+	// Testrail Description : Verify deletion of invalid pool ids
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55349
+
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55330
+	// Testrail Description : Delete pool when PX/Pool (2.6.0+) is not in maintenance mode and verify the error message
+
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyPoolDeleteInvalidPoolID",
+			"Verify deletion of invalid pool ids",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Verify deletion of invalid pool ids"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deleteinvalidpoolid-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get the Pool UUID on which IO is running
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+
+		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
+		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
+
+		// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
+		err = Inst().V.DeletePool(*nodeDetail, "0")
+		dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+
+		compileText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*operation is not supported"
+		re := regexp.MustCompile(compileText)
+		if re.MatchString(fmt.Sprintf("%v", err)) == false {
+			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
+		}
+
+		// invalidPoolID is total Pools present on the node + 1
+		invalidPoolID := fmt.Sprintf("%d", len(PoolDetail)+1)
+
+		log.InfoD("Bring Node to Maintenance Mode")
+		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
+
+		// Wait for some time before verifying Maintenance state
+		time.Sleep(2 * time.Minute)
+
+		log.InfoD("Wait for Node to Enter Maintenance Mode")
+		log.FailOnError(WaitTillEnterMaintenanceMode(*nodeDetail), fmt.Sprintf("Failed while waiting for pool to enter maintenance mode on node [%v]", nodeDetail.Name))
+
+		// Delete the Pool with Invalid Pool ID
+		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expected Failure? : Node Detail [%v]", nodeDetail.Name))
+		log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
+
+		log.InfoD("Bring Node out of Maintenance Mode")
+		log.FailOnError(ExitFromMaintenanceMode(*nodeDetail), fmt.Sprintf("Failed to bring up node [%v] back from maintenance mode", nodeDetail.Name))
+
+		JustAfterEach(func() {
+			defer EndTorpedoTest()
+			log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+			log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+			AfterEachTest(contexts, testrailID, runID)
+		})
+	})
+})
+
+var _ = Describe("{PoolResizeInvalidPoolID}", func() {
+	var testrailID = 79487
+	// Testrail Description : Resize with invalid pool ID
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/84470
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolResizeInvalidPoolID",
+			"Resize with invalid pool ID",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Resize with invalid pool ID"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("invalidpoolid-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get the Pool UUID on which IO is running
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+
+		// invalidPoolUUID Generation
+		id := uuid.New()
+		invalidPoolUUID := id.String()
+
+		// Resize Pool with Invalid Pool ID
+		// Do Pool Expand on the Node
+		stepLog = fmt.Sprintf("Expanding pool on node [%s] and pool UUID: [%s] using auto", nodeDetail.Name, poolUUID)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
+
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+			// Now trying to Expand Pool with Invalid Pool UUID
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+
+			// Verify error on pool expansion failure
+			var errMatch error
+			errMatch = nil
+			re := regexp.MustCompile(fmt.Sprintf(".*failed to find storage pool with UID.*%s.*", invalidPoolUUID))
+			if re.MatchString(fmt.Sprintf("%v", err)) == false {
+				errMatch = fmt.Errorf("Failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
+			}
+			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+

@@ -127,6 +127,7 @@ const (
 	asyncTimeout                      = 15 * time.Minute
 	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
+	expandStoragePoolTimeout          = 2 * time.Minute
 )
 const (
 	telemetryNotEnabled = "15"
@@ -227,9 +228,40 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 		}
 		return nil, false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, defaultRetryInterval); err != nil {
+
+	if _, err := task.DoRetryWithTimeout(t, expandStoragePoolTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+// ExpandPoolUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+
+	var operationString string
+
+	switch operation.String() {
+	case "RESIZE_TYPE_ADD_DISK":
+		operationString = "add-disk"
+	case "RESIZE_TYPE_RESIZE_DISK":
+		operationString = "resize-disk"
+	default:
+		operationString = "auto"
+	}
+
+	log.InfoD("Initiate Pool %v resize by %v with operationtype %v using CLI", poolUUID, size, operation.String())
+	cmd := fmt.Sprintf("pxctl sv pool expand --uid %v --size %v --operation %v", poolUUID, size, operationString)
+	out, err := d.nodeDriver.RunCommandWithNoRetry(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return err
+	}
+	log.Infof("Expanding Pool with UUID [%v] to Size [%v] Successful. response: [%v]", poolUUID, size, out)
 	return nil
 }
 
@@ -940,6 +972,23 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 	if err := d.ExitMaintenance(n); err != nil {
 		return err
 	}
+	return nil
+}
+
+// UpdatePoolIOPriority Updates IO Priority of the pool
+func (d *portworx) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority string) error {
+	cmd := fmt.Sprintf("pxctl sv pool update -u %s --io_priority %s", poolUUID, IOPriority)
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Updating Pool IO Priority failed on Node [%s], Err: [%v]", n.Name, err)
+	}
+	log.Infof("Updated Pool IO Priority to [%s] successfully, output: [%s]", IOPriority, out)
 	return nil
 }
 
@@ -4762,4 +4811,58 @@ func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[strin
 	}
 	return nil
 
+}
+
+// GetPoolLabelValue returns values of labels
+func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, error) {
+	/* e.x
+	1) d.GetPoolLabelValue(poolUUID, "iopriority")
+	2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
+	3) d.GetPoolLabelValue(poolUUID, "medium")
+	*/
+	var PropertyMatch string
+	PropertyMatch = ""
+	pools, err := d.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return "", err
+	}
+
+	for _, eachPool := range pools {
+		if eachPool.Uuid == poolUUID {
+			PropertyMatch = eachPool.Labels[label]
+			break
+		}
+	}
+	if PropertyMatch == "" {
+		return "", fmt.Errorf(fmt.Sprintf("Failed to Get [%s] for PoolUUID [%v]", label, poolUUID))
+	}
+	return PropertyMatch, nil
+}
+
+// IsNodeInMaintenance returns true if Node in Maintenance
+func (d *portworx) IsNodeInMaintenance(n node.Node) (bool, error) {
+	stNode, err := d.GetDriverNode(&n)
+	if err != nil {
+		return false, err
+	}
+
+	if stNode.Status == api.Status_STATUS_MAINTENANCE {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// IsNodeOutOfMaintenance returns true if Node in out of Maintenance
+func (d *portworx) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
+	stNode, err := d.GetDriverNode(&n)
+	if err != nil {
+		return false, err
+	}
+
+	if stNode.Status == api.Status_STATUS_OK {
+		return true, nil
+	}
+
+	return false, nil
 }
