@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -38,6 +39,8 @@ var (
 
 // Taken from SharedV4 tests...
 func telemetryRunCmd(cmd string, n node.Node, cmdConnectionOpts *node.ConnectionOpts) (string, error) {
+	log.Infof("Executing command [%s] on node [%s]", cmd, n.Name)
+
 	if cmdConnectionOpts == nil {
 		cmdConnectionOpts = &telemetryCmdConnectionOpts
 	}
@@ -46,6 +49,8 @@ func telemetryRunCmd(cmd string, n node.Node, cmdConnectionOpts *node.Connection
 }
 
 func runPxctlCommand(pxctlCmd string, n node.Node, cmdConnectionOpts *node.ConnectionOpts) (string, error) {
+	log.Infof("Executing command [%s] on node [%s]", pxctlCmd, n.Name)
+
 	if cmdConnectionOpts == nil {
 		cmdConnectionOpts = &telemetryCmdConnectionOpts
 	}
@@ -240,101 +245,134 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 	var existingDiags string
 	var newDiags string
 	var err error
+	var cmd string
 	var pxInstalled bool
-	var skipTest = false
+	collectDiagRequest := &torpedovolume.DiagRequestConfig{
+		DockerHost: "unix:///var/run/docker.sock",
+		Profile:    true,
+	}
 
-	It("has to collect, validate profile diags on S3", func() {
+	testSummaryMsg := "has to collect and validate profile diags on S3"
+	It(testSummaryMsg, func() {
+		log.InfoD(testSummaryMsg)
 		contexts = make([]*scheduler.Context, 0)
-		// One node at a time, collect diags and verify in S3
+
+		// Collect diags and verify in S3 on each worker node
 		for _, currNode := range node.GetWorkerNodes() {
 			pxInstalled, err = Inst().V.IsDriverInstalled(currNode)
-			if err != nil {
-				log.Debugf("Could not get PX status on %s", currNode.Name)
+			log.FailOnError(err, "failed to check if PX is installed on node [%s]", currNode.Name)
+
+			// Skip if PX is not installed
+			if !pxInstalled {
+				log.Warnf("PX is not installed on node [%s], skipping diags collection", currNode.Name)
+				continue
 			}
-			if pxInstalled {
-				// Get the most recent profile diags for comparison
-				Step(fmt.Sprintf("Check latest profile diags on node %v", currNode.Name), func() {
-					log.Infof(" Getting latest profile  diags on %v", currNode.Name)
-					existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
-						currNode, nil)
-					if err == nil {
-						log.Infof("Found latest profiles diags on node %s:\n%s ", currNode.Name, existingDiags)
-					} else {
-						existingDiags = ""
-					}
-				})
-				// Issue a profile diags to generate new files.
-				Step(fmt.Sprintf("collect profile diags on node: %s | %s", currNode.Name, currNode.Type), func() {
-					config := &torpedovolume.DiagRequestConfig{
-						DockerHost: "unix:///var/run/docker.sock",
-						Profile:    true,
-					}
-					if TelemetryEnabled(currNode) {
-						err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
-						if err != nil {
-							log.Errorf("Failed to collect diags on Node: %s Err: %v", currNode.Name, err)
-						}
-						Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
-					} else {
-						log.Infof("Telemetry not enabled on the node %s", currNode.Name)
-						skipTest = true
-						return
-					}
-				})
+
+			// Skip if Telemetry is not enabled
+			if !TelemetryEnabled(currNode) {
+				log.Warnf("Telemetry is not enabled on node [%s], skipping diags collection", currNode.Name)
+				continue
+			}
+
+			log.Infof("PX is installed and Telemetry is enabled on node [%s]", currNode.Name)
+			// Get the most recent profile diags for comparison
+			stepMsg := fmt.Sprintf("Check latest profile diags on node [%s]", currNode.Name)
+			Step(stepMsg, func() {
+				log.InfoD(stepMsg)
+
+				log.Debugf("Get content of /var/cores/ on node [%s] before collecting profile only diags", currNode.Name)
+				cmd = "ls -lah /var/cores/"
+				out, err := telemetryRunCmd(cmd, currNode, nil)
+				log.FailOnError(err, "failed to execute [%s] on node [%s]", cmd, currNode.Name)
+				log.Debugf("Content of /var/cores/ on node [%s] before collecting profile only diags:\n%v\n", currNode.Name, out)
+
+				cmd = "ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"
+				existingDiags, err = telemetryRunCmd(cmd, currNode, nil)
+				log.FailOnError(err, "failed to execute [%s] on node [%s]", cmd, currNode.Name)
+				if len(existingDiags) > 0 {
+					log.Infof("Found existing profiles only diags [%s] on node [%s]", existingDiags, currNode.Name)
+				} else {
+					log.Infof("No existing profiles only diags were found on node [%s]", currNode.Name)
+					existingDiags = ""
+				}
+			})
+			// Issue a profile only diags to generate new files
+			stepMsg = fmt.Sprintf("Collect profile only diags on node [%s] with type [%s]", currNode.Name, currNode.Type)
+			Step(stepMsg, func() {
+				log.InfoD(stepMsg)
+
+				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: true})
+				log.FailOnError(err, "failed to collect profile only diags on node [%s]", currNode.Name)
+				log.InfoD("Successfully collected profile only diags on node [%s]", currNode.Name)
+
 				// This sleep is required because the heap and stack logs might not have been written at same time.
 				time.Sleep(10 * time.Second)
-				// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
-				Step(fmt.Sprintf("Get the new profile diags on node %v", currNode.Name), func() {
-					if skipTest {
-						log.Infof("Skipping getting new filename for node %s", currNode.Name)
-						return
-					}
-					log.Infof("Getting latest profile diags on %66v", currNode.Name)
-					Eventually(func() bool {
-						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
-							currNode, nil)
-						if err == nil {
-							if existingDiags != "" && existingDiags == newDiags {
-								log.Infof("No new profile diags found... current latest ones are %v", newDiags)
-								newDiags = ""
-							}
-							if len(newDiags) > 0 {
-								log.Infof("Found new profile diags:\n%s", newDiags)
-								// Needs to contain both stack/heap
-								if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
-									diagsFiles = strings.Split(newDiags, "\n")
-									log.Debugf("Files found %v", diagsFiles)
-									return true
-								}
-							}
-						}
-						return false
-					}, 20*time.Minute, 15*time.Second).Should(BeTrue(), "failed to generate profile diags on node %s", currNode.Name)
 
-				})
-				Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
-					for _, file := range diagsFiles {
-						fileNameToCheck := path.Base(file)
-						log.Debugf("Validating file %s", fileNameToCheck)
-						if !skipTest { // This is done in case the system is run without telemetry.
-							err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
-							if err != nil {
-								log.Errorf("Failed to validate diags: %v", err)
-							}
-							Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-						} else {
-							log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+				log.Debugf("Get content of /var/cores/ on node [%s] after collecting profile only diags", currNode.Name)
+				cmd = "ls -lah /var/cores/"
+				out, err := telemetryRunCmd(cmd, currNode, nil)
+				log.FailOnError(err, "failed to execute [%s] on node [%s]", cmd, currNode.Name)
+				log.Debugf("Content of /var/cores/ on node [%s] after collecting profile only diags:\n%v\n", currNode.Name, out)
+
+			})
+			// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
+			stepMsg = fmt.Sprintf("Get the new profile only diags on node [%s]", currNode.Name)
+			Step(stepMsg, func() {
+				log.InfoD(stepMsg)
+
+				t := func() (interface{}, bool, error) {
+					// Get new .gz diag files
+					cmd = "ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"
+					newDiags, err = telemetryRunCmd(cmd, currNode, nil)
+					if err != nil {
+						return nil, true, fmt.Errorf("failed to execute [%s], Err: %v", cmd, err)
+					}
+
+					if existingDiags != "" && existingDiags == newDiags {
+						return nil, true, fmt.Errorf("No new profile only diags were found on node [%s], current latest profile only diags are [%s]", currNode.Name, newDiags)
+					}
+
+					if len(newDiags) > 0 {
+						log.Infof("Found new profile diags [%s]", newDiags)
+						// Needs to contain both stack/heap
+						if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
+							diagsFiles = strings.Split(newDiags, "\n")
+							log.InfoD("Files found on node [%s] [%v]", currNode.Name, diagsFiles)
+							return nil, false, nil
 						}
 					}
-				})
-			} else {
-				log.Debugf("Px not enabled on node %s", currNode.Name)
-			}
+
+					log.Debugf("Get content of /var/cores/ on node [%s]", currNode.Name)
+					cmd = "ls -lah /var/cores/"
+					out, err := telemetryRunCmd(cmd, currNode, nil)
+					if err != nil {
+						return nil, true, fmt.Errorf("failed to execute [%s] on node [%s]", cmd, currNode.Name)
+					}
+					log.Debugf("Content of /var/cores/ on node [%s]:\n%v\n", currNode.Name, out)
+					return nil, true, fmt.Errorf("didn't find new profile only diags on node [%s]", currNode.Name)
+				}
+
+				_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+				log.FailOnError(err, "failed to find new profile only diags on node [%s]", currNode.Name)
+
+			})
+			stepMsg = "Validate diag files got uploaded to s3"
+			Step(stepMsg, func() {
+				log.InfoD(stepMsg)
+				for _, file := range diagsFiles {
+					fileNameToCheck := path.Base(file)
+					log.InfoD("Validating diag file [%s] on s3", fileNameToCheck)
+					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
+					log.FailOnError(err, "failed to validate diags file [%s] on s3", fileNameToCheck)
+					log.InfoD("Succesfully validated diags file [%s] got uploaded to s3 from node [%s]", fileNameToCheck, currNode.Name)
+				}
+			})
 		}
 		for _, ctx := range contexts {
 			TearDownContext(ctx, nil)
 		}
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
