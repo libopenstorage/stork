@@ -204,7 +204,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 							annotations = make(map[string]string)
 						}
 						for k, v := range ns.GetAnnotations() {
-							if _, ok := annotations[k]; !ok {
+							if _, ok := annotations[k]; !ok || strings.Contains(k, utils.CattleProjectPrefix) {
 								annotations[k] = v
 							}
 						}
@@ -213,7 +213,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 							labels = make(map[string]string)
 						}
 						for k, v := range ns.GetLabels() {
-							if _, ok := labels[k]; !ok {
+							if _, ok := labels[k]; !ok || strings.Contains(k, utils.CattleProjectPrefix) {
 								labels[k] = v
 							}
 						}
