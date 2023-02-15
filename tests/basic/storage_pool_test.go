@@ -6177,7 +6177,6 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
 		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
-		fmt.Printf("Pool Details [%v] Picked for Delete", PoolDetail)
 
 		// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
 		err = Inst().V.DeletePool(*nodeDetail, "0")
