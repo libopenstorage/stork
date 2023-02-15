@@ -187,7 +187,7 @@ func GetNodeByName(nodeName string) (Node, error) {
 			return n, nil
 		}
 	}
-	return Node{}, fmt.Errorf("FAILED: Node [%s] not found in node registry", nodeName)
+	return Node{}, fmt.Errorf("failed: Node [%s] not found in node registry", nodeName)
 }
 
 // GetNodeByIP return a node which matches with given IP
@@ -199,7 +199,7 @@ func GetNodeByIP(nodeIP string) (Node, error) {
 			}
 		}
 	}
-	return Node{}, fmt.Errorf("FAILED: Node with [%s] not found in node registry", nodeIP)
+	return Node{}, fmt.Errorf("failed: Node with [%s] not found in node registry", nodeIP)
 }
 
 // CleanupRegistry removes entry of all nodes from registry
@@ -209,12 +209,12 @@ func CleanupRegistry() {
 
 // GetNodeDetailsByNodeName get node details for a given node name
 func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
-	StorageNodes := GetStorageNodes()
+	storageNodes := GetStorageNodes()
 
-	for _, each := range StorageNodes {
+	for _, each := range storageNodes {
 		if each.Name == nodeName {
 			return each, nil
 		}
 	}
-	return Node{}, fmt.Errorf("FAILED to get Node Details by Node Name [%s] ", nodeName)
+	return Node{}, fmt.Errorf("failed to get Node Details by Node Name [%s] ", nodeName)
 }
