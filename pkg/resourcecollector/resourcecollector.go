@@ -875,8 +875,8 @@ func (r *ResourceCollector) mergeSupportedForResource(
 		return false
 	}
 	switch objectType.GetKind() {
-	case "ClusterRoleBinding",
-		"ServiceAccount":
+	case "ClusterRoleBinding", "ServiceAccount", "NetworkPolicy", "Deployment", "StatefulSet",
+		"DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
 		return true
 	}
 	return false
@@ -884,6 +884,8 @@ func (r *ResourceCollector) mergeSupportedForResource(
 
 func (r *ResourceCollector) mergeAndUpdateResource(
 	object runtime.Unstructured,
+	dynamicClient dynamic.ResourceInterface,
+	opts *Options,
 ) error {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
@@ -895,6 +897,11 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 		return r.mergeAndUpdateClusterRoleBinding(object)
 	case "ServiceAccount":
 		return r.mergeAndUpdateServiceAccount(object)
+	case "NetworkPolicy":
+		return r.mergeAndUpdateNetworkPolicy(object, opts)
+	case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+		return r.mergeAndUpdateApplicationResource(object, dynamicClient, opts)
+
 	}
 	return nil
 }
@@ -903,6 +910,7 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 func (r *ResourceCollector) ApplyResource(
 	dynamicInterface dynamic.Interface,
 	object runtime.Unstructured,
+	opts *Options,
 ) error {
 	dynamicClient, err := r.getDynamicClient(dynamicInterface, object)
 	if err != nil {
@@ -912,7 +920,7 @@ func (r *ResourceCollector) ApplyResource(
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
 			if r.mergeSupportedForResource(object) {
-				return r.mergeAndUpdateResource(object)
+				return r.mergeAndUpdateResource(object, dynamicClient, opts)
 			} else if strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
 				err = r.updateService(object)
 				if err != nil {
@@ -1027,6 +1035,33 @@ func (r *ResourceCollector) getDynamicClient(
 	}
 	return dynamicInterface.Resource(
 		object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(destNamespace), nil
+}
+
+func (r *ResourceCollector) mergeAndUpdateApplicationResource(
+	object runtime.Unstructured,
+	dynamicClient dynamic.ResourceInterface,
+	opts *Options) error {
+
+	if len(opts.RancherProjectMappings) == 0 {
+		return nil
+	}
+
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return fmt.Errorf("error getting metadata from object: %v", err)
+	}
+
+	curAppResource, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			_, err = dynamicClient.Create(context.TODO(), object.(*unstructured.Unstructured), metav1.CreateOptions{})
+		}
+		return err
+	}
+	r.prepareRancherApplicationResource(curAppResource, *opts)
+
+	dynamicClient.Update(context.TODO(), curAppResource, metav1.UpdateOptions{})
+	return nil
 }
 
 func (r *ResourceCollector) prepareRancherApplicationResource(
