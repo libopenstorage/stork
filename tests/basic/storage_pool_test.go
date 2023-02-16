@@ -6246,7 +6246,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 
 		startTime := time.Now()
 
-		// Get alerts from five hours before current time till current time
+		// Get alerts from ten hours before current time till current time to get the sufficient alerts
 		startMinusTenHours := startTime.Add(time.Duration(-600) * time.Minute)
 		endTime := time.Now()
 		alertsBefore, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_POOL, startMinusTenHours, endTime)
