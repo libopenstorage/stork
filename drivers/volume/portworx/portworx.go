@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -46,6 +47,7 @@ import (
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -702,7 +704,13 @@ func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClai
 	provisioner := ""
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName != "" {
-		storageClass, err := storkcache.Instance().GetStorageClass(storageClassName)
+		var storageClass *storagev1.StorageClass
+		var err error
+		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+			storageClass, err = storkcache.Instance().GetStorageClass(storageClassName)
+		} else {
+			storageClass, err = storage.Instance().GetStorageClass(storageClassName)
+		}
 		if err == nil {
 			if _, ok := storageClass.Parameters[proxyEndpoint]; ok && skipDirectAccessVolumes {
 				logrus.Tracef("proxy endpoint is set, not classifying it as pxd for pvc [%v]", pvc.Name)
