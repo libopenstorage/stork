@@ -3382,6 +3382,7 @@ func (p *portworx) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
+	storageClassByte []byte,
 ) ([]runtime.Unstructured, error) {
 	secretsToRestore := make(map[string]bool)
 	objectsToRestore := make([]runtime.Unstructured, 0)

@@ -25,7 +25,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
-	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -46,21 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
-
-const (
-	defaultStorageClass = "use-default-storage-class"
-)
-
-// isStorageClassMappingContainsDefault - will check whether any storageclass has use-default-storage-class
-// as destination storage class.
-func isStorageClassMappingContainsDefault(restore *storkapi.ApplicationRestore) bool {
-	for _, value := range restore.Spec.StorageClassMapping {
-		if value == defaultStorageClass {
-			return true
-		}
-	}
-	return false
-}
 
 // NewApplicationRestore creates a new instance of ApplicationRestoreController.
 func NewApplicationRestore(mgr manager.Manager, r record.EventRecorder, rc resourcecollector.ResourceCollector) *ApplicationRestoreController {
@@ -319,49 +303,6 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		}
 	}
 
-	if len(restore.Spec.StorageClassMapping) >= 1 && isStorageClassMappingContainsDefault(restore) {
-		// Update the default storageclass name in storageclassmapping.
-		// storageclassMapping will have "use-default-storage-class" as destination storage class,
-		// If default storageclass need to be selected.
-		scList, err := storage.Instance().GetDefaultStorageClasses()
-		if err != nil {
-			log.ApplicationRestoreLog(restore).Errorf(err.Error())
-			a.recorder.Event(restore,
-				v1.EventTypeWarning,
-				string(storkapi.ApplicationRestoreStatusFailed),
-				err.Error())
-			return nil
-		}
-		// If more than one storageclass is set as default storageclass, update error event
-		if len(scList.Items) > 1 {
-			errMsg := "more than one storageclass is set as default on destination cluster"
-			log.ApplicationRestoreLog(restore).Errorf(errMsg)
-			a.recorder.Event(restore,
-				v1.EventTypeWarning,
-				string(storkapi.ApplicationRestoreStatusFailed),
-				errMsg)
-			return nil
-		}
-		// If no storageclass is set as default storageclass, update error event
-		if len(scList.Items) == 0 {
-			err := fmt.Errorf("no storageclass is set as default on destination cluster")
-			log.ApplicationRestoreLog(restore).Errorf(err.Error())
-			a.recorder.Event(restore,
-				v1.EventTypeWarning,
-				string(storkapi.ApplicationRestoreStatusFailed),
-				err.Error())
-			return nil
-		}
-		for key, value := range restore.Spec.StorageClassMapping {
-			if value == defaultStorageClass {
-				restore.Spec.StorageClassMapping[key] = scList.Items[0].Name
-			}
-		}
-		err = a.client.Update(context.TODO(), restore)
-		if err != nil {
-			return err
-		}
-	}
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
 		// Make sure the namespaces exist
@@ -487,6 +428,7 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 	return restore, nil
 }
 
+/*
 func convertResourceVolInfoToAppBkpVolInfo(
 	volInfo []*kdmpapi.ResourceBackupVolumeInfo,
 ) (resVolInfo []*storkapi.ApplicationBackupVolumeInfo) {
@@ -513,6 +455,7 @@ func convertResourceVolInfoToAppBkpVolInfo(
 
 	return restoreVolumeInfos
 }
+*/
 
 func convertResourceVolInfoToAppRestoreVolInfo(
 	volInfo []*kdmpapi.ResourceRestoreVolumeInfo,
@@ -613,7 +556,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	if len(restore.Status.Volumes) != pvcCount {
 		// Here backupVolumeInfoMappings is framed based on driver name mapping, hence startRestore()
 		// gets called once per driver
-		var sErr error
 		for driverName, vInfos := range backupVolumeInfoMappings {
 			restoreVolumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 			backupVolInfos := vInfos
@@ -622,7 +564,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			//	s3 + kdmp = legacy code path
 			//	BL NFS + EBS/GKE/Azure = legacy code path
 			//	s3 + EBS/GKE/Azure = legacy code path
-			if !nfs || (nfs && driverName != volume.KDMPDriverName) {
+			if !nfs {
 				existingRestoreVolInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 				if err != nil {
 					return err
@@ -642,7 +584,13 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						return err
 					}
 				}
-				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects)
+				// storageclasses.json will be used by csi driver alone
+				storageClassesBytes, err := a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
+				if err != nil {
+					return err
+				}
+
+				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects, storageClassesBytes)
 				if err != nil {
 					log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
 					return err
@@ -694,13 +642,15 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					}
 				}
 				restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
+				var sErr error
 				restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, preRestoreObjects)
 				if err != nil {
 					return err
 				}
+				logrus.Infof("sivakumar -- Serr %v", sErr)
 			}
 			// Check whether ResourceExport is present or not
-			if nfs && driverName == volume.KDMPDriverName {
+			if nfs {
 				err = a.client.Update(context.TODO(), restore)
 				if err != nil {
 					time.Sleep(retrySleep)
@@ -794,49 +744,49 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					case kdmpapi.ResourceExportStatusInProgress:
 						return nil
 					case kdmpapi.ResourceExportStatusSuccessful:
-						backupVolInfos := convertResourceVolInfoToAppBkpVolInfo(resourceExport.VolumesInfo)
-						existingRestoreVolInfos := convertResourceVolInfoToAppRestoreVolInfo(resourceExport.ExistingVolumesInfo)
-						restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
-						restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, nil)
+						/* SIVA: For now, using resourceExport.ExistingVolumesInfo. Need to add seperate variable for restoreVolumeInfo */
+						restoreVolumeInfos = convertResourceVolInfoToAppRestoreVolInfo(resourceExport.ExistingVolumesInfo)
 					default:
 						logrus.Infof("%s still valid re CR[%v]stage not available", funct, crName)
 						return nil
 					}
 				}
 			}
-			if sErr != nil {
-				logrus.Infof("%s sErr: %v", funct, sErr)
-				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", sErr)
-				log.ApplicationRestoreLog(restore).Errorf(message)
-				if _, ok := sErr.(*volume.ErrStorageProviderBusy); ok {
-					msg := fmt.Sprintf("Volume restores are in progress. Restores are failing for some volumes"+
-						" since the storage provider is busy. Restore will be retried. Error: %v", sErr)
+			/*
+				if sErr != nil {
+					logrus.Infof("%s sErr: %v", funct, sErr)
+					message := fmt.Sprintf("Error starting Application Restore for volumes: %v", sErr)
+					log.ApplicationRestoreLog(restore).Errorf(message)
+					if _, ok := sErr.(*volume.ErrStorageProviderBusy); ok {
+						msg := fmt.Sprintf("Volume restores are in progress. Restores are failing for some volumes"+
+							" since the storage provider is busy. Restore will be retried. Error: %v", sErr)
+						a.recorder.Event(restore,
+							v1.EventTypeWarning,
+							string(storkapi.ApplicationRestoreStatusInProgress),
+							msg)
+
+						log.ApplicationRestoreLog(restore).Errorf(msg)
+						// Update the restore status even for failed restores when storage is busy
+						_, updateErr := a.updateRestoreCRInVolumeStage(
+							namespacedName,
+							storkapi.ApplicationRestoreStatusInProgress,
+							storkapi.ApplicationRestoreStageVolumes,
+							msg,
+							restoreVolumeInfos,
+						)
+						if updateErr != nil {
+							logrus.Warnf("failed to update restore status: %v", updateErr)
+						}
+						return err
+					}
 					a.recorder.Event(restore,
 						v1.EventTypeWarning,
-						string(storkapi.ApplicationRestoreStatusInProgress),
-						msg)
-
-					log.ApplicationRestoreLog(restore).Errorf(msg)
-					// Update the restore status even for failed restores when storage is busy
-					_, updateErr := a.updateRestoreCRInVolumeStage(
-						namespacedName,
-						storkapi.ApplicationRestoreStatusInProgress,
-						storkapi.ApplicationRestoreStageVolumes,
-						msg,
-						restoreVolumeInfos,
-					)
-					if updateErr != nil {
-						logrus.Warnf("failed to update restore status: %v", updateErr)
-					}
+						string(storkapi.ApplicationRestoreStatusFailed),
+						message)
+					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
 					return err
 				}
-				a.recorder.Event(restore,
-					v1.EventTypeWarning,
-					string(storkapi.ApplicationRestoreStatusFailed),
-					message)
-				_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
-				return err
-			}
+			*/
 			restoreCompleteList = append(restoreCompleteList, restoreVolumeInfos...)
 			logrus.Tracef("restoreCompleteList %+v", restoreCompleteList)
 		}
