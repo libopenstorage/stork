@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -4865,4 +4866,89 @@ func (d *portworx) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
+func (d *portworx) GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	/*
+		resourceType : RESOURCE_TYPE_NONE | RESOURCE_TYPE_VOLUME | RESOURCE_TYPE_NODE | RESOURCE_TYPE_CLUSTER | RESOURCE_TYPE_DRIVE | RESOURCE_TYPE_POOL
+		SeverityType : SEVERITY_TYPE_NONE | SEVERITY_TYPE_ALARM | SEVERITY_TYPE_WARNING | SEVERITY_TYPE_NOTIFY
+		e.x :
+			var resourceType api.ResourceType
+			var severity api.SeverityType
+			resourceType = api.ResourceType_RESOURCE_TYPE_POOL
+			severity = api.SeverityType_SEVERITY_TYPE_ALARM
+			alerts, err := Inst().V.GetAlertsUsingResourceTypeBySeverity(resourceType, severity)
+	*/
+	alerts, err := d.alertsManager.EnumerateWithFilters(d.getContext(), &api.SdkAlertsEnumerateWithFiltersRequest{
+		Queries: []*api.SdkAlertsQuery{
+			{
+				Query: &api.SdkAlertsQuery_ResourceTypeQuery{
+					ResourceTypeQuery: &api.SdkAlertsResourceTypeQuery{
+						ResourceType: resourceType,
+					},
+				},
+				Opts: []*api.SdkAlertsOption{
+					{Opt: &api.SdkAlertsOption_MinSeverityType{
+						MinSeverityType: severity,
+					}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	alertsResp, err := alerts.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	return alertsResp, nil
+}
+
+// GetAlertsUsingResourceTypeByTime returns all the alerts by resource type filtered by starttime and endtime
+func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceType, startTime time.Time, endTime time.Time) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	/*
+		resourceType : RESOURCE_TYPE_NONE | RESOURCE_TYPE_VOLUME | RESOURCE_TYPE_NODE | RESOURCE_TYPE_CLUSTER | RESOURCE_TYPE_DRIVE | RESOURCE_TYPE_POOL
+		e.x:
+			var resourceType api.ResourceType
+			var startTime time.Time
+			var endTime time.Time
+
+			startTime = time.Now()
+			endTime = time.Now()
+			resourceType = api.ResourceType_RESOURCE_TYPE_POOL
+			alerts, err := Inst().V.GetAlertsUsingResourceTypeByTime(resourceType, startTime, endTime)
+	*/
+
+	alerts, err := d.alertsManager.EnumerateWithFilters(d.getContext(), &api.SdkAlertsEnumerateWithFiltersRequest{
+		Queries: []*api.SdkAlertsQuery{
+			{
+				Query: &api.SdkAlertsQuery_ResourceTypeQuery{
+					ResourceTypeQuery: &api.SdkAlertsResourceTypeQuery{
+						ResourceType: resourceType,
+					},
+				},
+				Opts: []*api.SdkAlertsOption{
+					{Opt: &api.SdkAlertsOption_TimeSpan{
+						TimeSpan: &api.SdkAlertsTimeSpan{
+							StartTime: timestamppb.New(startTime.UTC()),
+							EndTime:   timestamppb.New(endTime.UTC()),
+						},
+					}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	alertsResp, err := alerts.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	return alertsResp, nil
 }

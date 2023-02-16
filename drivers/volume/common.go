@@ -1029,3 +1029,19 @@ func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
 		Operation: "IsNodeOutOfMaintenance()",
 	}
 }
+
+// GetAlertsUsingResourceTypeByTime returns all the alerts by resource type filtered by time
+func (d *DefaultDriver) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceType, startTime time.Time, endTime time.Time) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAlertsUsingResourceTypeByTime()",
+	}
+}
+
+// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
+func (d *DefaultDriver) GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAlertsUsingResourceTypeBySeverity()",
+	}
+}
