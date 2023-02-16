@@ -6249,7 +6249,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 		// Get alerts from five hours before current time till current time
 		startMinusTenHours := startTime.Add(time.Duration(-300) * time.Minute)
 		endTime := time.Now()
-		alertsBefore, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_VOLUME, startMinusTenHours, endTime)
+		alertsBefore, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_POOL, startMinusTenHours, endTime)
 		log.FailOnError(err, "Failed to fetch alerts between startTime [%v] and endTime [%v]", startMinusTenHours, endTime)
 
 		contexts = make([]*scheduler.Context, 0)
