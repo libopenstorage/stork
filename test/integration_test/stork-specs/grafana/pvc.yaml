@@ -1,0 +1,61 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: px-grafana-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+   repl: "3"
+   priority_io: "high"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: grafana-data
+   annotations:
+     volume.beta.kubernetes.io/storage-class: px-grafana-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 1Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: grafana-dashboard
+   annotations:
+     volume.beta.kubernetes.io/storage-class: px-grafana-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 1Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: grafana-source-config
+   annotations:
+     volume.beta.kubernetes.io/storage-class: px-grafana-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 1Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: grafana-extensions
+   annotations:
+     volume.beta.kubernetes.io/storage-class: px-grafana-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 1Gi

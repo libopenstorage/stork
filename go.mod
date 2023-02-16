@@ -21,7 +21,8 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
-	github.com/libopenstorage/openstorage v9.4.46+incompatible
+	github.com/libopenstorage/openstorage v9.4.47+incompatible
+	github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a
 	github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
@@ -29,6 +30,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
+	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
@@ -186,7 +188,6 @@ require (
 	github.com/lib/pq v1.10.6 // indirect
 	github.com/libopenstorage/autopilot-api v1.3.0 // indirect
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
-	github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a // indirect
 	github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
@@ -214,7 +215,7 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/moul/http2curl v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/gomega v1.20.0 // indirect
+	github.com/onsi/gomega v1.20.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/opencontainers/runc v1.1.3 // indirect
@@ -303,7 +304,7 @@ replace (
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230315073130-7af86b10aacb
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230216213348-6ba0e5494ad5
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
