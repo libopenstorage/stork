@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aquilax/truncate"
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
