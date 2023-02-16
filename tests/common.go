@@ -1975,26 +1975,20 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 }
 
 // DeleteCloudCredential deletes cloud credentials
-func DeleteCloudCredential(name string, orgID string, cloudCredUID string) {
-	Step(fmt.Sprintf("Delete cloud credential [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
+func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error {
 
-		credDeleteRequest := &api.CloudCredentialDeleteRequest{
-			Name:  name,
-			OrgId: orgID,
-			Uid:   cloudCredUID,
-		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
-		// Best effort cleanup, dont fail test, if deletion fails
-		// expect(err).NotTo(haveOccurred(),
-		//  fmt.Sprintf("Failed to delete cloud credential [%s] in org [%s]", name, orgID))
-		// TODO: validate CreateCloudCredentialResponse also
-	})
+	backupDriver := Inst().Backup
+	credDeleteRequest := &api.CloudCredentialDeleteRequest{
+		Name:  name,
+		OrgId: orgID,
+		Uid:   cloudCredUID,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+	return err
 }
 
 // ValidateVolumeParametersGetErr validates volume parameters using volume driver and returns err instead of failing
@@ -2317,7 +2311,6 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -2493,7 +2486,6 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 
 // CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
@@ -2540,7 +2532,6 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 		log.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
 			OrgId: OrgID}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return nil, true, err
@@ -2634,7 +2625,6 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
 func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 
 	backupDeleteRequest := &api.BackupDeleteRequest{
@@ -2734,23 +2724,15 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
-func DeleteCluster(name string, orgID string, ctx context1.Context) {
+func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 
-	Step(fmt.Sprintf("Delete cluster [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
-		clusterDeleteReq := &api.ClusterDeleteRequest{
-			OrgId: orgID,
-			Name:  name,
-		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteCluster(ctx, clusterDeleteReq)
-		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
-		//	fmt.Sprintf("Failed to delete cluster [%s] in org [%s]", name, orgID))
-	})
+	backupDriver := Inst().Backup
+	clusterDeleteReq := &api.ClusterDeleteRequest{
+		OrgId: orgID,
+		Name:  name,
+	}
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	return err
 }
 
 // DeleteBackupLocation deletes backup location
@@ -2828,7 +2810,7 @@ func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, s
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ctx context1.Context) error {
+func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -2849,8 +2831,8 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ct
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid, ctx)
-	if err != nil {
+	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
+	if err != nil && !strings.Contains(err.Error(), "already exists with status: Success") {
 		return err
 	}
 	// Register destination cluster with backup driver
@@ -2860,8 +2842,9 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ct
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid, ctx)
-	if err != nil {
+
+	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
+	if err != nil && !strings.Contains(err.Error(), "already exists with status: Success") {
 		return err
 	}
 	return nil
@@ -2983,7 +2966,6 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
 			ctx, err := backup.GetAdminCtxFromSecret()
 			expect(err).NotTo(haveOccurred(),
 				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3098,7 +3080,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 		},
 	}
 
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
@@ -3111,7 +3092,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-// CreateS3BackupLocation creates backuplocation for S3
+// CreateS3BackupLocationNonAdminUser creates backuplocation for S3
 func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -3166,7 +3147,6 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Type: api.BackupLocationInfo_Azure,
 		},
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
@@ -3201,7 +3181,6 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3807,11 +3786,14 @@ func TearDownBackupRestoreAll() {
 			RetrySeconds*time.Second)
 	}
 	provider := GetProvider()
-	DeleteCluster(destinationClusterName, OrgID, ctx)
-	DeleteCluster(SourceClusterName, OrgID, ctx)
+	err = DeleteCluster(destinationClusterName, OrgID, ctx)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+	err = DeleteCluster(SourceClusterName, OrgID, ctx)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
 	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
+	err = DeleteCloudCredential(CredName, OrgID, CloudCredUID)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
 	DeleteBucket(provider, BucketName)
 }
 

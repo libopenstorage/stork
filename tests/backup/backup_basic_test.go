@@ -2,68 +2,19 @@ package tests
 
 import (
 	"fmt"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/portworx/torpedo/tests"
 	"os"
 	"strings"
 	"testing"
 	"time"
-
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
-)
-
-const (
-	storkDeploymentName                       = "stork"
-	storkDeploymentNamespace                  = "kube-system"
-	clusterName                               = "tp-cluster"
-	restoreNamePrefix                         = "tp-restore"
-	configMapName                             = "kubeconfigs"
-	destinationClusterName                    = "destination-cluster"
-	backupLocationName                        = "tp-blocation"
-	appReadinessTimeout                       = 10 * time.Minute
-	defaultRetryInterval                      = 10 * time.Second
-	enumerateBatchSize                        = 100
-	taskNamePrefix                            = "backupcreaterestore"
-	orgID                                     = "default"
-	defaultTimeout                            = 5 * time.Minute
-	usersToBeCreated                          = "USERS_TO_CREATE"
-	groupsToBeCreated                         = "GROUPS_TO_CREATE"
-	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
-	maxBackupsToBeCreated                     = "MAX_BACKUPS"
-	maxWaitPeriodForBackupCompletionInMinutes = 20
-	globalAWSBucketPrefix                     = "global-aws"
-	globalAzureBucketPrefix                   = "global-azure"
-	globalGCPBucketPrefix                     = "global-gcp"
-	globalAWSLockedBucketPrefix               = "global-aws-locked"
-	globalAzureLockedBucketPrefix             = "global-azure-locked"
-	globalGCPLockedBucketPrefix               = "global-gcp-locked"
-	userName                                  = "testuser"
-	firstName                                 = "firstName"
-	lastName                                  = "lastName"
-	password                                  = "Password1"
-)
-
-var (
-	// enable all the after suite actions
-	wantAllAfterSuiteActions bool = true
-	// selectively enable after suite actions by setting wantAllAfterSuiteActions to false and setting these to true
-	wantAfterSuiteSystemCheck     bool = false
-	wantAfterSuiteValidateCleanup bool = false
-	// User should keep updating preRuleApp, postRuleApp
-	preRuleApp                  = []string{"cassandra", "postgres"}
-	postRuleApp                 = []string{"cassandra"}
-	globalAWSBucketName         string
-	globalAzureBucketName       string
-	globalGCPBucketName         string
-	globalAWSLockedBucketName   string
-	globalAzureLockedBucketName string
-	globalGCPLockedBucketName   string
 )
 
 func getBucketNameSuffix() string {
@@ -152,6 +103,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
@@ -184,7 +136,9 @@ var _ = AfterSuite(func() {
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
 	for _, backupName := range allBackups {
-		_, err = DeleteBackup(backupName, getBackupUID(backupName, orgID), orgID, ctx)
+		backupUID, err := getBackupUID(backupName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
 	}
 
@@ -219,7 +173,8 @@ var _ = AfterSuite(func() {
 	allCloudCredentials, err := getAllCloudCredentials(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
 	for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
-		DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
+		err = DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
 	}
 
 	cloudCredentialDeletionSuccess := func() (interface{}, bool, error) {
@@ -249,6 +204,7 @@ var _ = AfterSuite(func() {
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
 		}
 	}
+
 })
 
 func TestMain(m *testing.M) {
