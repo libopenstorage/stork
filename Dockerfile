@@ -5,7 +5,7 @@ ARG MAKE_TARGET
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install setup dependencies
-RUN apk update && apk add --no-cache git gcc musl-dev make curl openssh-client
+RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
 
 RUN GOFLAGS= GO111MODULE=on go install github.com/onsi/ginkgo/ginkgo@v1.16.5
 
