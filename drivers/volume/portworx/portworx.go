@@ -94,6 +94,7 @@ const (
 	pureBlockValue                            = "pure_block"
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
+	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 )
 
 const (
@@ -2850,7 +2851,7 @@ func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOpt
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService bool) (map[string]string, error) {
+func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService bool, reversePair bool) (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	pxNodes, err := d.schedOps.GetRemotePXNodes(kubeConfigPath)
 	if err != nil {
@@ -2860,8 +2861,8 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBSer
 		return nil, fmt.Errorf("No PX Nodes were found")
 	}
 
-	// Initially endpoint defaults to IP
-	address := pxNodes[0].Addresses[0]
+	// Initially endpoint and IP in cluster pair both default to Node IP
+	address, pairIP := pxNodes[0].Addresses[0], pxNodes[0].Addresses[0]
 	if isPxLBService {
 		// For Loadbalancer change endpoint to service endpoint
 		endpoint, err := d.schedOps.GetServiceEndpoint()
@@ -2869,6 +2870,11 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBSer
 			return nil, fmt.Errorf("failed to get px service endpoint: %v", err)
 		}
 		address = endpoint
+		if reversePair == true {
+			address = pxServiceLocalEndpoint
+		}
+		// For Loadbalancer set IP in cluster pair to service endpoint
+		pairIP = endpoint
 	}
 	clusterPairManager, err := d.getClusterPairManagerByAddress(address, token)
 	if err != nil {
@@ -2885,7 +2891,7 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBSer
 	log.Infof("Response for token: %v", resp.Result.Token)
 
 	// file up cluster pair info
-	pairInfo[clusterIP] = address
+	pairInfo[clusterIP] = pairIP
 	pairInfo[tokenKey] = resp.Result.Token
 	pwxServicePort, err := d.getRestContainerPort()
 	if err != nil {

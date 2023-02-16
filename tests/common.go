@@ -2090,7 +2090,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator())
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator(), reverse)
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -5216,7 +5216,6 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	return eligibilityMap, nil
 }
-
 
 // WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
 func WaitTillEnterMaintenanceMode(n node.Node) error {

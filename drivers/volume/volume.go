@@ -241,7 +241,7 @@ type Driver interface {
 	GetAggregationLevel(vol *Volume) (int64, error)
 
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
-	GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService bool) (map[string]string, error)
+	GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService, reversePair bool) (map[string]string, error)
 
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error

@@ -557,7 +557,7 @@ func (d *DefaultDriver) UpgradeStork(endpointVersion string) error {
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService bool) (map[string]string, error) {
+func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService, reversePair bool) (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	return pairInfo, &errors.ErrNotSupported{
 		Type:      "Function",
