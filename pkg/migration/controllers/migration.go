@@ -77,6 +77,10 @@ const (
 	boundRetryInterval   = 5 * time.Second
 )
 
+var (
+	AutoCreatedPrefixes = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+)
+
 // NewMigration creates a new instance of MigrationController.
 func NewMigration(mgr manager.Manager, d volume.Driver, r record.EventRecorder, rc resourcecollector.ResourceCollector) *MigrationController {
 	return &MigrationController{
@@ -1274,6 +1278,15 @@ func (m *MigrationController) isServiceUpdated(
 	return false, nil
 }
 
+func (m *MigrationController) secretToBeMigrated(name string) bool {
+	for _, prefix := range AutoCreatedPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return false
+		}
+	}
+	return true
+}
+
 func (m *MigrationController) checkAndUpdateDefaultSA(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
@@ -1306,6 +1319,24 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 			destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, s)
 		}
 	}
+
+	for _, s := range sourceSA.Secrets {
+		if !m.secretToBeMigrated(s.Name) {
+			continue
+		}
+		found := false
+		for _, d := range destSA.Secrets {
+			if d.Name == s.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			destSA.Secrets = append(destSA.Secrets, s)
+		}
+	}
+	destSA.AutomountServiceAccountToken = sourceSA.AutomountServiceAccountToken
+
 	// merge annotation for SA
 	log.MigrationLog(migration).Infof("Updating service account(namespace/name : %s/%s) annotations", sourceSA.GetNamespace(), sourceSA.GetName())
 	if destSA.Annotations != nil {
