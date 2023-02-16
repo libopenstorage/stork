@@ -919,6 +919,7 @@ github.com/portworx/kdmp/pkg/drivers/resticbackup
 github.com/portworx/kdmp/pkg/drivers/resticrestore
 github.com/portworx/kdmp/pkg/drivers/rsync
 github.com/portworx/kdmp/pkg/drivers/utils
+github.com/portworx/kdmp/pkg/executor
 github.com/portworx/kdmp/pkg/jobratelimit
 github.com/portworx/kdmp/pkg/util/ops
 github.com/portworx/kdmp/pkg/utils
