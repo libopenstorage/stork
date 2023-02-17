@@ -34,6 +34,12 @@ type SharedInformerCache interface {
 
 	// ListPods returns a list of pods from the cache
 	ListPods() (*corev1.PodList, error)
+
+	// ListPersistentVolumeClaims lists the persistent volume claims from the cache
+	ListPersistentVolumeClaims() (*corev1.PersistentVolumeClaimList, error)
+
+	// GetPersistentVolumeClaim gets the persistent volume claims from the cache
+	GetPersistentVolumeClaim(name, namespace string) (*corev1.PersistentVolumeClaim, error)
 }
 
 type cache struct {
@@ -89,6 +95,24 @@ func (c *cache) ListPods() (*corev1.PodList, error) {
 		return nil, err
 	}
 	return podList, nil
+}
+
+// ListPersistentVolumeClaims returns a list of pvcs from the cache
+func (c *cache) ListPersistentVolumeClaims() (*corev1.PersistentVolumeClaimList, error) {
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	if err := c.client.List(context.Background(), pvcList); err != nil {
+		return nil, err
+	}
+	return pvcList, nil
+}
+
+// GetPersistentVolumeClaim gets a pvcfrom the cache
+func (c *cache) GetPersistentVolumeClaim(name, namespace string) (*corev1.PersistentVolumeClaim, error) {
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := c.client.Get(context.Background(), client.ObjectKey{Name: name, Namespace: namespace}, pvc); err != nil {
+		return nil, err
+	}
+	return pvc, nil
 }
 
 // GetStorageClassForPVC returns the storage class for the provided PVC if present in cache

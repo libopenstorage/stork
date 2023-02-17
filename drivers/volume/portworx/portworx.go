@@ -766,7 +766,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 			err error
 		)
 		if volume.PersistentVolumeClaim != nil {
-			pvc, err = core.Instance().GetPersistentVolumeClaim(
+			pvc, err = storkcache.Instance().GetPersistentVolumeClaim(
 				volume.PersistentVolumeClaim.ClaimName,
 				namespace)
 			if err != nil {
@@ -2211,7 +2211,7 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
-		pvc, err := core.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
+		pvc, err := storkcache.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -2226,7 +2226,7 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 		}
 
 		// local single snapshot
-		pvc, err := core.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
+		pvc, err := storkcache.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}

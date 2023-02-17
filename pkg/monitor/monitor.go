@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -204,6 +205,15 @@ func (m *Monitor) driverMonitor() {
 				time.Sleep(2 * time.Second)
 			}
 			nodes = volume.RemoveDuplicateOfflineNodes(nodes)
+			pods, err := cache.Instance().ListPods()
+			if err != nil {
+				log.Errorf("Error getting pods: %v", err)
+			}
+			pvc, err := cache.Instance().ListPersistentVolumeClaims()
+			if err != nil {
+				log.Errorf("Error getting pvcs: %v", err)
+			}
+			log.Infof("Got pvcs: %v", len(pvc.Items))
 			for _, node := range nodes {
 				// Check if nodes are reported online by the storage driver
 				// If not online, look at all the pods on that node
@@ -211,7 +221,7 @@ func (m *Monitor) driverMonitor() {
 				if node.Status != volume.NodeOnline {
 					m.wg.Add(1)
 					// wait for 1 min if node is upgrading
-					go m.cleanupDriverNodePods(node)
+					go m.cleanupDriverNodePods(node, pods)
 				}
 			}
 			// lets all node to finish processing and then start sleep
@@ -226,7 +236,7 @@ func (m *Monitor) driverMonitor() {
 	}
 }
 
-func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
+func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo, pods *corev1.PodList) {
 	defer m.wg.Done()
 	err := wait.ExponentialBackoff(nodeWaitCallBackoff, func() (bool, error) {
 		n, err := m.Driver.InspectNode(node.StorageID)
@@ -241,10 +251,6 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	})
 	if err == nil {
 		return
-	}
-	pods, err := cache.Instance().ListPods()
-	if err != nil {
-		log.Errorf("Error getting pods: %v", err)
 	}
 
 	// delete volume attachments if the node is down for this pod
