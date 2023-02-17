@@ -64,6 +64,34 @@ func FileEmpty(filename os.FileInfo) bool {
 	return false
 }
 
+func ExecTorpedoShell(command string, arguments ...string) (string, string, error) {
+	var stout, sterr []byte
+	for _, value := range arguments {
+		command += " " + value
+	}
+	cmd := exec.Command("sh", "-c", command)
+	log.Debugf("Command %s ", cmd)
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	if err := cmd.Start(); err != nil {
+		log.Debugf("Command %s failed to start. Cause: %v", cmd, err)
+		return "", "", err
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		stout, _ = copyAndCapture(os.Stdout, stdout)
+		wg.Done()
+	}()
+
+	sterr, _ = copyAndCapture(os.Stderr, stderr)
+
+	wg.Wait()
+
+	err := cmd.Wait()
+	return string(stout), string(sterr), err
+}
+
 // Sh run sh command with arguments
 func Sh(arguments []string) error {
 	if len(arguments) == 0 {

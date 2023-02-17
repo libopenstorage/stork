@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/netutil"
+	"github.com/portworx/torpedo/pkg/osutils"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -35,11 +38,14 @@ const (
 	SystemdSchedServiceName = "atomic-openshift-node"
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
+	mdFileName                  = "changelog.md"
 	defaultCmdTimeout           = 5 * time.Minute
 	driverUpTimeout             = 10 * time.Minute
+	generationNumberWaitTime    = 10 * time.Minute
 	defaultCmdRetry             = 15 * time.Second
 	defaultUpgradeTimeout       = 4 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
+	ocPath                      = " -c oc"
 )
 
 var (
@@ -304,16 +310,51 @@ func getClientVersion() (string, error) {
 	return output.(string), nil
 }
 
+func getGenerationNumber() (int, error) {
+	var genNumInt int
+	clusterVersionArgs := []string{"get", "clusterversion", " -o jsonpath='{.items[*].status.observedGeneration}'"}
+	beforeGenNum, stdErr, err := osutils.ExecTorpedoShell("oc", clusterVersionArgs...)
+	if err != nil {
+		return 0, fmt.Errorf("Failed to get generation number %s. cause: %v", stdErr, err)
+	}
+	genNumInt, err = strconv.Atoi(beforeGenNum)
+	if err != nil {
+		return 0, fmt.Errorf("Failed to convert generator number from string to int : cause: %v", err)
+	}
+	return genNumInt, nil
+}
+
+func waitForNewGenertionNumber(currentGenNumber int) error {
+	//Wait upto 10 minutes to update generation number
+	var err error
+	t := func() (interface{}, bool, error) {
+		newGenNumInt, err := getGenerationNumber()
+		if err != nil {
+			return nil, true, fmt.Errorf("Failed to convert generator number from string to int : cause: %v", err)
+		}
+		if newGenNumInt == currentGenNumber {
+			return nil, false, fmt.Errorf("Generation number has not changed yet: %d", currentGenNumber)
+		}
+		log.Debugf("Set channel spec has been updated: Generation number %d", newGenNumInt)
+		return nil, true, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, generationNumberWaitTime, 5*time.Second)
+	return err
+}
+
 func selectChannel(version string) error {
 	var output []byte
 	var err error
-
 	channel := ""
 	if channel, err = getChannel(version); err != nil {
 		return err
 	}
+	beforeGenNumInt, err := getGenerationNumber()
+	if err != nil {
+		return fmt.Errorf("Failed to convert generator number from string to int : cause: %v", err)
+	}
+	log.Infof("Generation number before select channel: %d ", beforeGenNumInt)
 	log.Infof("Selected channel: %s", channel)
-
 	patch := `
 spec:
   channel: %s
@@ -323,29 +364,86 @@ spec:
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
 			return nil, true, fmt.Errorf("failed to select channel due to %s. cause: %v", string(output), err)
 		}
-		log.Info(string(output))
+		log.Info(output)
+		if err := waitForNewGenertionNumber(beforeGenNumInt); err != nil {
+			return nil, true, fmt.Errorf("Failed to select channel: cause %v", err)
+		}
 		return nil, false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
 	return err
+}
+
+// getImageSha get Image sha
+func getImageSha(ocpVersion string) (string, error) {
+	downloadURL := fmt.Sprintf("%s/%s/%s", OpenshiftMirror,
+		ocpVersion, mdFileName)
+	request := netutil.HttpRequest{
+		Method:   "GET",
+		Url:      downloadURL,
+		Content:  "application/json",
+		Body:     nil,
+		Insecure: true,
+	}
+	log.Debugf("URL %s", downloadURL)
+	content, err := netutil.DoRequest(request)
+	if err != nil {
+		return "", fmt.Errorf("Failed to get Get content from %s, error %v", downloadURL, err)
+	}
+	//Convert the body to type string
+	contentInString := string(content)
+	parts := strings.Split(contentInString, "\n")
+	for _, a := range parts {
+		if strings.Contains(a, "Image Digest:") {
+			return strings.Split(a, "`")[1], nil
+		}
+	}
+	return "", fmt.Errorf("Failed to find Image sha: in  %s", downloadURL)
 }
 
 func startUpgrade(upgradeVersion string) error {
 	var output []byte
 	var err error
-
+	var shaName string
 	args := []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion)}
 	t := func() (interface{}, bool, error) {
-		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-			return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+		output, stdErr, err := osutils.ExecTorpedoShell("oc", args...)
+		if err != nil {
+			forceUpgrade := "specify --to-image"
+			notRecommended := "is not one of the recommended updates, but is available"
+			if strings.Contains(string(stdErr), notRecommended) {
+				args = []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion), "--allow-not-recommended"}
+				log.Infof("Retrying upgrade with --allow-not-recommended option")
+				output, stdErr, err = osutils.ExecTorpedoShell("oc", args...)
+				if err != nil {
+					return output, true, fmt.Errorf("failed to start upgrade due to %s, cause: %v ", stdErr, err)
+				}
+				log.Infof(output)
+				log.Debugf(stdErr)
+			} else if strings.Contains(string(stdErr), forceUpgrade) {
+				log.Infof("Retrying upgrade with --force option")
+				if shaName, err = getImageSha(upgradeVersion); err != nil {
+					return "", false, err
+				}
+				imagePath := fmt.Sprintf("--to-image=quay.io/openshift-release-dev/ocp-release@%s", shaName)
+				log.Infof("Image full path : %s", imagePath)
+				args = []string{"adm", "upgrade", imagePath, "--force", "--allow-explicit-upgrade", "--allow-upgrade-with-warnings"}
+				output, stdErr, err = osutils.ExecTorpedoShell("oc", args...)
+				if err != nil {
+					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
+				}
+				log.Infof(output)
+				log.Warnf(stdErr)
+			} else {
+				return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
+			}
 		}
+		log.Debugf("Upgrade command output %s", output)
 		return output, false, nil
 	}
-
-	if _, err := task.DoRetryWithTimeout(t, defaultCmdTimeout, defaultCmdRetry); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, defaultCmdRetry, defaultCmdRetry); err != nil {
 		return err
 	}
-
 	t = func() (interface{}, bool, error) {
 		clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
 		if err != nil {
@@ -360,7 +458,6 @@ func startUpgrade(upgradeVersion string) error {
 
 		return nil, false, nil
 	}
-
 	_, err = task.DoRetryWithTimeout(t, defaultCmdTimeout, defaultCmdRetry)
 	return err
 }
