@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/libopenstorage/stork/pkg/cache"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/cache"
+	"github.com/libopenstorage/stork/pkg/namespacecontroller"
 
 	stork_driver "github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -136,6 +138,10 @@ func main() {
 			Name:  "health-monitor-interval",
 			Value: 120,
 			Usage: "The interval in seconds to monitor the health of the storage driver (min: 30)",
+		},
+		cli.BoolTFlag{
+			Name:  "namespace-controller",
+			Usage: "Start the namespace controller (default: true)",
 		},
 		cli.BoolTFlag{
 			Name:  "migration-controller",
@@ -466,6 +472,13 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 		if c.Bool("health-monitor") {
 			if err := monitor.Start(); err != nil {
 				log.Fatalf("Error starting storage monitor: %v", err)
+			}
+		}
+
+		if c.Bool("namespace-controller") {
+			namespacecontroller := namespacecontroller.NewNamespaceController(mgr, d, recorder)
+			if err := namespacecontroller.Init(mgr); err != nil {
+				log.Fatalf("Error initializing namespacecontroller: %v", err)
 			}
 		}
 
