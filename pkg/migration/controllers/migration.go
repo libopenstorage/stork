@@ -77,6 +77,10 @@ const (
 	boundRetryInterval   = 5 * time.Second
 )
 
+var (
+	ErrReapplyLatestVersionMsg = "please apply your changes to the latest version and try again"
+)
+
 // NewMigration creates a new instance of MigrationController.
 func NewMigration(mgr manager.Manager, d volume.Driver, r record.EventRecorder, rc resourcecollector.ResourceCollector) *MigrationController {
 	return &MigrationController{
@@ -483,7 +487,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
 				log.MigrationLog(migration).Errorf(message)
 				// Don't need to log this event as Stork retries if it fails to update
-				if !strings.Contains(message, "please apply your changes to the latest version and try again") {
+				if !strings.Contains(message, ErrReapplyLatestVersionMsg) {
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),
@@ -511,11 +515,14 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		if err != nil {
 			message := fmt.Sprintf("Error migrating resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
-			m.recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				message)
-			return nil
+			// Don't need to log this event as Stork retries if it fails to update
+			if !strings.Contains(message, ErrReapplyLatestVersionMsg) {
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					message)
+				return nil
+			}
 		}
 	case stork_api.MigrationStageFinal:
 		return nil
