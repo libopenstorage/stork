@@ -15,7 +15,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	storage "github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
@@ -26,8 +26,8 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 
 	v1 "k8s.io/api/core/v1"
-	storageapi "k8s.io/api/storage/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	storageApi "k8s.io/api/storage/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -157,7 +157,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 		})
 
 		//iterates through the group names slice and checks if the group name is present in the response map using map[key]
-		//to get the value and key to check whether the it is present or not.
+		//to get the value and key to check whether it is present or not.
 		//If it's not found, it prints the group name not found in struct slice and exit.
 
 		Step("Validate Group", func() {
@@ -2772,10 +2772,10 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				clusterShareCheck := func() (interface{}, bool, error) {
 					userBackups, err = GetAllBackupsForUser(username, password)
 					if err != nil {
-						return "", true, fmt.Errorf("Fail on Fetching backups for %s with error %v", username, err)
+						return "", true, fmt.Errorf("fail on Fetching backups for %s with error %v", username, err)
 					}
 					if len(userBackups) == 0 {
-						return "", true, fmt.Errorf("Unable to fetch backup from shared cluster for user %s", username)
+						return "", true, fmt.Errorf("unable to fetch backup from shared cluster for user %s", username)
 					}
 					return "", false, nil
 				}
@@ -2793,8 +2793,8 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 					log.Infof("The full access exit begins")
 					break
 				}
-				//waiting 15 mins for backup schedule to trigger
-				log.InfoD("waiting 15 mins for backup schedule to trigger")
+				//waiting 15 minutes for backup schedule to trigger
+				log.InfoD("waiting 15 minutes for backup schedule to trigger")
 				time.Sleep(15 * time.Minute)
 				fetchedUserBackups, err := GetAllBackupsForUser(username, password)
 				log.FailOnError(err, "Fail on Fetching backups for %s", username)
@@ -3304,12 +3304,12 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			for _, backup := range backupNames {
 				err = ShareBackup(backup, nil, []string{userName}, FullAccess, ctx)
 				log.FailOnError(err, "Failed to share backup %s", backup)
-				dash.VerifyFatal(err, nil, "Verifying backupshare")
+				dash.VerifyFatal(err, nil, "Verifying backup share")
 			}
 		})
 
 		Step("Delete Shared Backups from user", func() {
-			log.InfoD("register the Source and destination cluster of non-pxadmin")
+			log.InfoD("register the Source and destination cluster of non-px Admin")
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
@@ -3595,7 +3595,6 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 		contexts           []*scheduler.Context
 		bkpNamespaces      []string
 		namespaceMapping   map[string]string
-		taskNamePrefix     = "backuprestoresimultaneous"
 		successfulBackups  int
 		successfulRestores int
 	)
@@ -3639,7 +3638,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
-					// Override default App readiness time out of 5 mins with 10 mins
+					// Override default App readiness time out of 5 minutes with 10 minutes
 					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					bkpNamespaces = append(bkpNamespaces, namespace)
@@ -3675,9 +3674,9 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 		var wg sync.WaitGroup
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-			error, ok := bkpNamespaceErrors[namespace]
+			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				log.Warnf("Skipping waiting for backup %s because %s", backupName, error)
+				log.Warnf("Skipping waiting for backup %s because %s", backupName, err)
 			} else {
 				wg.Add(1)
 				go func(wg *sync.WaitGroup, namespace, backupName string) {
@@ -3720,9 +3719,9 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 		SetClusterContext(destClusterConfigPath)
 		for _, namespace := range bkpNamespaces {
 			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
-			error, ok := bkpNamespaceErrors[namespace]
+			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				log.Infof("Skipping create restore %s because %s", restoreName, error)
+				log.Infof("Skipping create restore %s because %s", restoreName, err)
 			} else {
 				restoreNamespaces = append(restoreNamespaces, namespace)
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
@@ -3740,9 +3739,9 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 
 		for _, namespace := range bkpNamespaces {
 			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
-			error, ok := bkpNamespaceErrors[namespace]
+			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				log.Infof("Skipping waiting for restore %s because %s", restoreName, error)
+				log.Infof("Skipping waiting for restore %s because %s", restoreName, err)
 			} else {
 				wg.Add(1)
 				go func(wg *sync.WaitGroup, namespace, restoreName string) {
@@ -3833,9 +3832,9 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 		contexts         []*scheduler.Context //for restored apps
 		bkpNamespaces    []string
 		namespaceMapping map[string]string
-		taskNamePrefix   = "backuprestoreperiod"
+		taskNamePrefix   = "backupRestorePeriod"
 	)
-	labelSelectores := make(map[string]string)
+	labelSelectors := make(map[string]string)
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
@@ -3871,7 +3870,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
-					// Override default App readiness time out of 5 mins with 10 mins
+					// Override default App readiness time out of 5 minutes with 10 minutes
 					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					namespaceContextMap[namespace] = append(namespaceContextMap[namespace], ctx)
@@ -3916,7 +3915,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 					SourceClusterName, namespace, backupName), func() {
 					err = CreateBackupGetErr(backupName,
 						SourceClusterName, backupLocationName, BackupLocationUID,
-						[]string{namespace}, labelSelectores, OrgID)
+						[]string{namespace}, labelSelectors, OrgID)
 					if err != nil {
 						aliveBackup[namespace] = false
 						log.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, OrgID, err)
@@ -4081,9 +4080,9 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 		contexts         []*scheduler.Context //for restored apps
 		bkpNamespaces    []string
 		namespaceMapping map[string]string
-		taskNamePrefix   = "backuprestoreperiodsimultaneous"
+		taskNamePrefix   = "backupRestorePeriodSimultaneous"
 	)
-	labelSelectores := make(map[string]string)
+	labelSelectors := make(map[string]string)
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
@@ -4116,7 +4115,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
-					// Override default App readiness time out of 5 mins with 10 mins
+					// Override default App readiness time out of 5 minutes with 10 minutes
 					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					namespaceContextMap[namespace] = append(namespaceContextMap[namespace], ctx)
@@ -4161,7 +4160,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 						SourceClusterName, namespace, backupName), func() {
 						err = CreateBackupGetErr(backupName,
 							SourceClusterName, backupLocationName, BackupLocationUID,
-							[]string{namespace}, labelSelectores, OrgID)
+							[]string{namespace}, labelSelectors, OrgID)
 						if err != nil {
 							//aliveBackup[namespace] = false
 							bkpNamespaceErrors[namespace] = err
@@ -4173,9 +4172,9 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			var wg sync.WaitGroup
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, counter)
-				error, ok := bkpNamespaceErrors[namespace]
+				err, ok := bkpNamespaceErrors[namespace]
 				if ok {
-					log.Warnf("Skipping waiting for backup %s because %s", backupName, error)
+					log.Warnf("Skipping waiting for backup %s because %s", backupName, err)
 					continue
 				}
 				wg.Add(1)
@@ -4216,9 +4215,9 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, counter)
 				restoreName := fmt.Sprintf("%s-%s-%d", restoreNamePrefix, namespace, counter)
-				error, ok := bkpNamespaceErrors[namespace]
+				err, ok := bkpNamespaceErrors[namespace]
 				if ok {
-					log.Infof("Skipping create restore %s because %s", restoreName, error)
+					log.Infof("Skipping create restore %s because %s", restoreName, err)
 					continue
 				}
 				go func(namespace string) {
@@ -4237,9 +4236,9 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			}
 			for _, namespace := range bkpNamespaces {
 				restoreName := fmt.Sprintf("%s-%s-%d", restoreNamePrefix, namespace, counter)
-				error, ok := bkpNamespaceErrors[namespace]
+				err, ok := bkpNamespaceErrors[namespace]
 				if ok {
-					log.Infof("Skipping waiting for restore %s because %s", restoreName, error)
+					log.Infof("Skipping waiting for restore %s because %s", restoreName, err)
 					continue
 				}
 				wg.Add(1)
@@ -4462,15 +4461,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 
 		Step("Kill stork when backup in progress", func() {
 			log.InfoD("Kill stork when backup in progress")
-			storkLabel := make(map[string]string)
-			storkLabel["name"] = "stork"
-			storkNamespace := getPXNamespace()
-			pods, err := core.Instance().GetPods(storkNamespace, storkLabel)
-			dash.VerifyFatal(err, nil, "Killing Stork pods")
-			for _, pod := range pods.Items {
-				err := core.Instance().DeletePod(pod.GetName(), storkNamespace, false)
-				log.FailOnError(err, fmt.Sprintf("Failed to kill stork pod [%s]", pod.GetName()))
-			}
+			err := DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork while backups %s is in progress", backupNames))
 		})
 
 		Step("Check if backup is successful when the stork restart happened", func() {
@@ -4523,15 +4515,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		})
 		Step("Kill stork when restore in-progress", func() {
 			log.InfoD("Kill stork when restore in-progress")
-			storkLabel := make(map[string]string)
-			storkLabel["name"] = "stork"
-			storkNamespace := getPXNamespace()
-			pods, err := core.Instance().GetPods(storkNamespace, storkLabel)
-			dash.VerifyFatal(err, nil, "Killing Stork pods")
-			for _, pod := range pods.Items {
-				err := core.Instance().DeletePod(pod.GetName(), storkNamespace, false)
-				log.FailOnError(err, fmt.Sprintf("Failed to kill stork pod [%s]", pod.GetName()))
-			}
+			err := DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
+			dash.VerifyFatal(err, nil, "Killing stork while all the restores are in progress")
 		})
 		Step("Check if restore is successful when the stork restart happened", func() {
 			log.InfoD("Check if restore is successful post stork restarts")
@@ -4612,7 +4597,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var backupName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 79918)
+		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating Backup Location with Encryption Keys", nil, 79918)
 	})
 	It("Creating cloud account and backup location", func() {
 		log.InfoD("Creating cloud account and backup location")
@@ -5107,13 +5092,13 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		CloudCredUID = uuid.New()
 		BackupLocationUID = uuid.New()
 		BackupLocation1UID = uuid.New()
-		encryptionkey := "px-b@ckup-@utomat!on"
+		encryptionKey := "px-b@ckup-@utomat!on"
 		CreateBucket(providers[0], encryptionBucketName)
 		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
 		err := CreateBackupLocation(providers[0], backupLocationNames[0], BackupLocationUID, CredName, CloudCredUID, getGlobalBucketName(providers[0]), orgID, "")
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationNames[0]))
 		backupLocationMap[BackupLocationUID] = backupLocationNames[0]
-		err = CreateBackupLocation(providers[0], backupLocationNames[1], BackupLocation1UID, CredName, CloudCredUID, encryptionBucketName, orgID, encryptionkey)
+		err = CreateBackupLocation(providers[0], backupLocationNames[1], BackupLocation1UID, CredName, CloudCredUID, encryptionBucketName, orgID, encryptionKey)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationNames[1]))
 		backupLocationMap[BackupLocation1UID] = backupLocationNames[1]
 		log.InfoD("Deploy applications")
@@ -5148,30 +5133,30 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 				err = CreateBackup(backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, []string{namespace},
 					nil, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", backupName))
-				encryptionbackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, namespace)
-				backupNames = append(backupNames, encryptionbackupName)
-				err = CreateBackup(encryptionbackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, []string{namespace},
+				encryptionBackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, namespace)
+				backupNames = append(backupNames, encryptionBackupName)
+				err = CreateBackup(encryptionBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, []string{namespace},
 					nil, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", encryptionbackupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", encryptionBackupName))
 			}
 		})
 
 		Step("Restoring encrypted and no-encrypted backups", func() {
 			log.InfoD("Restoring encrypted and no-encrypted backups")
-			restorename := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
-			restoreNames = append(restoreNames, restorename)
+			restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
+			restoreNames = append(restoreNames, restoreName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			CreateRestore(restorename, backupNames[0], nil, destinationClusterName, orgID, ctx, make(map[string]string))
+			CreateRestore(restoreName, backupNames[0], nil, destinationClusterName, orgID, ctx, make(map[string]string))
 			time.Sleep(time.Minute * 5)
-			restorename = fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[1])
-			restoreNames = append(restoreNames, restorename)
-			CreateRestore(restorename, backupNames[1], nil, destinationClusterName, orgID, ctx, make(map[string]string))
+			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[1])
+			restoreNames = append(restoreNames, restoreName)
+			CreateRestore(restoreName, backupNames[1], nil, destinationClusterName, orgID, ctx, make(map[string]string))
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		log.InfoD("Deleting Restores, Backups and Backuplocations, cloud account")
+		log.InfoD("Deleting Restores, Backups and Backup locations, cloud account")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, restore := range restoreNames {
@@ -5297,8 +5282,8 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			for _, namespace := range bkpNamespaces {
 				pvcs, _ := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
 				restoreNamespace := fmt.Sprintf("%s-%s", namespace, "restored")
-				restoredpvcs, _ := core.Instance().GetPersistentVolumeClaims(restoreNamespace, labelSelectors)
-				dash.VerifyFatal(len(pvcs.Items), len(restoredpvcs.Items), "Compare number of PVCs")
+				restoredPvcs, _ := core.Instance().GetPersistentVolumeClaims(restoreNamespace, labelSelectors)
+				dash.VerifyFatal(len(pvcs.Items), len(restoredPvcs.Items), "Compare number of PVCs")
 			}
 		})
 	})
@@ -5416,12 +5401,12 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
 			params["repl"] = "2"
 			k8sStorage := storage.Instance()
-			v1obj := meta_v1.ObjectMeta{
+			v1obj := metaV1.ObjectMeta{
 				Name: scName,
 			}
 			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
-			bindMode := storageapi.VolumeBindingImmediate
-			scObj := storageapi.StorageClass{
+			bindMode := storageApi.VolumeBindingImmediate
+			scObj := storageApi.StorageClass{
 				ObjectMeta:        v1obj,
 				Provisioner:       k8s.CsiProvisioner,
 				Parameters:        params,
@@ -5943,7 +5928,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		userCtx           context.Context
 		scName            string
 		restoreList       []string
-		sourceScName      *storageapi.StorageClass
+		sourceScName      *storageApi.StorageClass
 	)
 	numberOfUsers := 1
 	namespaceMap := make(map[string]string)
@@ -5991,12 +5976,12 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
 			scName = fmt.Sprintf("replica-sc-%v", time.Now().Unix())
 			params["repl"] = "2"
-			v1obj := meta_v1.ObjectMeta{
+			v1obj := metaV1.ObjectMeta{
 				Name: scName,
 			}
 			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
-			bindMode := storageapi.VolumeBindingImmediate
-			scObj := storageapi.StorageClass{
+			bindMode := storageApi.VolumeBindingImmediate
+			scObj := storageApi.StorageClass{
 				ObjectMeta:        v1obj,
 				Provisioner:       k8s.CsiProvisioner,
 				Parameters:        params,
@@ -6637,7 +6622,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 							}
 							resp, err := Inst().Backup.InspectRestore(ctxNonAdmin, restoreInspectRequest)
 							if err != nil {
-								return "", true, fmt.Errorf("Restore Inspect failed with error %s", err)
+								return "", true, fmt.Errorf("restore Inspect failed with error %s", err)
 							}
 							restoreResponseStatus := resp.GetRestore().GetStatus()
 							actual := restoreResponseStatus.GetStatus()
@@ -6783,7 +6768,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 					time.Sleep(time.Minute * 1)
 					backupLocationName := fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
 					err = CreateS3BackupLocationNonAdminUser(backupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "", ctxNonAdmin)
-					log.FailOnError(err, "Failed to add backup loction to user - %s", user)
+					log.FailOnError(err, "Failed to add backup location to user - %s", user)
 					userBackupLocationMapping[user] = backupLocationName
 				}
 
@@ -6881,9 +6866,9 @@ var _ = Describe("{SwapShareBackup}", func() {
 		log.InfoD("Deleting all restores")
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
-			log.FailOnError(err, "Fetching nonAdminctx")
+			log.FailOnError(err, "Fetching nonAdminCtx")
 			allRestores, err := GetAllRestoresNonAdminCtx(ctx)
-			log.FailOnError(err, "Fetching all restores for nonAdminctx")
+			log.FailOnError(err, "Fetching all restores for nonAdminCtx")
 			for _, restoreName := range allRestores {
 				err = DeleteRestore(restoreName, orgID, ctx)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
@@ -6893,7 +6878,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		log.InfoD("Delete all backups")
 		for i := 0; i <= numberOfUsers-1; i++ {
 			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
-			log.FailOnError(err, "Fetching nonAdminctx ")
+			log.FailOnError(err, "Fetching nonAdminCtx ")
 			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
 		}
@@ -6901,7 +6886,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		// Cleanup all backup locations
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
-			log.FailOnError(err, "Fetching nonAdminctx ")
+			log.FailOnError(err, "Fetching nonAdminCtx ")
 			allBackupLocations, err := getAllBackupLocations(ctx)
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 			for backupLocationUid, backupLocationName := range allBackupLocations {
@@ -7042,16 +7027,9 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.InfoD("Restart backup pod when backup sharing is in-progress")
 			backupPodLabel := make(map[string]string)
 			backupPodLabel["app"] = "px-backup"
-			backupPodNamespace := backup.GetPxBackupNamespace()
-			pods, err := core.Instance().GetPods(backupPodNamespace, backupPodLabel)
-			dash.VerifyFatal(err, nil, "Getting px-backup pod")
-			for _, pod := range pods.Items {
-				err := core.Instance().DeletePod(pod.GetName(), backupPodNamespace, false)
-				log.FailOnError(err, fmt.Sprintf("Failed to kill pod [%s]", pod.GetName()))
-				err = core.Instance().WaitForPodDeletion(pod.GetUID(), backupPodNamespace, 5*time.Minute)
-				log.FailOnError(err, fmt.Sprintf("%s pod termination failed", pod.GetName()))
-			}
-			pods, err = core.Instance().GetPods("px-backup", backupPodLabel)
+			err := DeletePodWithLabelInNamespace(backup.GetPxBackupNamespace(), backupPodLabel)
+			dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
+			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting px-backup pod")
 			for _, pod := range pods.Items {
 				err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
@@ -7102,19 +7080,12 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		})
 
 		Step("Restart mongo pods when backup sharing is in-progress", func() {
-			log.InfoD("Restart backup pod when backup sharing is in-progress")
+			log.InfoD("Restart mongo pod when backup sharing is in-progress")
 			backupPodLabel := make(map[string]string)
 			backupPodLabel["app.kubernetes.io/component"] = "pxc-backup-mongodb"
-			backupPodNamespace := backup.GetPxBackupNamespace()
-			pods, err := core.Instance().GetPods(backupPodNamespace, backupPodLabel)
-			dash.VerifyFatal(err, nil, "Getting mongo pod")
-			for _, pod := range pods.Items {
-				err := core.Instance().DeletePod(pod.GetName(), backupPodNamespace, false)
-				log.FailOnError(err, fmt.Sprintf("Failed to kill pod [%s]", pod.GetName()))
-				err = core.Instance().WaitForPodDeletion(pod.GetUID(), backupPodNamespace, 5*time.Minute)
-				log.FailOnError(err, fmt.Sprintf("%s pod termination failed", pod.GetName()))
-			}
-			pods, err = core.Instance().GetPods("px-backup", backupPodLabel)
+			err := DeletePodWithLabelInNamespace(backup.GetPxBackupNamespace(), backupPodLabel)
+			dash.VerifyFatal(err, nil, "Restart mongo pod when backup sharing is in-progress")
+			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
 				err = core.Instance().ValidatePod(&pod, 10*time.Minute, 30*time.Second)

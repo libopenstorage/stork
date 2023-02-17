@@ -5,6 +5,7 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/pkg/log"
@@ -24,12 +25,10 @@ const (
 	clusterName                               = "tp-cluster"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
-	backupLocationName                        = "tp-blocation"
+	backupLocationName                        = "tp-bkpLocation"
 	appReadinessTimeout                       = 10 * time.Minute
-	defaultRetryInterval                      = 10 * time.Second
 	taskNamePrefix                            = "backupcreaterestore"
 	orgID                                     = "default"
-	defaultTimeout                            = 5 * time.Minute
 	usersToBeCreated                          = "USERS_TO_CREATE"
 	groupsToBeCreated                         = "GROUPS_TO_CREATE"
 	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
@@ -51,8 +50,6 @@ var (
 	// enable all the after suite actions
 	wantAllAfterSuiteActions = true
 	// selectively enable after suite actions by setting wantAllAfterSuiteActions to false and setting these to true
-	wantAfterSuiteSystemCheck     = false
-	wantAfterSuiteValidateCleanup = false
 	// User should keep updating preRuleApp, postRuleApp
 	preRuleApp                  = []string{"cassandra", "postgres"}
 	postRuleApp                 = []string{"cassandra"}
@@ -82,6 +79,10 @@ var backupAccessKeyValue = map[BackupAccess]string{
 	1: "ViewOnlyAccess",
 	2: "RestoreAccess",
 	3: "FullAccess",
+}
+
+var storkLabel = map[string]string{
+	"name": "stork",
 }
 
 type BackupAccess int32
@@ -1232,4 +1233,23 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 		restoreNames = append(restoreNames, restore.Name)
 	}
 	return restoreNames, nil
+}
+
+// DeletePodWithLabelInNamespace kills pod with the given label in the given namespace
+func DeletePodWithLabelInNamespace(namespace string, label map[string]string) error {
+	pods, err := core.Instance().GetPods(namespace, label)
+	if err != nil {
+		return err
+	}
+	for _, pod := range pods.Items {
+		err := core.Instance().DeletePod(pod.GetName(), namespace, false)
+		if err != nil {
+			return err
+		}
+		err = core.Instance().WaitForPodDeletion(pod.GetUID(), namespace, 5*time.Minute)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
