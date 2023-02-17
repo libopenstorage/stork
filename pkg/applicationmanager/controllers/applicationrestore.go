@@ -77,7 +77,6 @@ type ApplicationRestoreController struct {
 	resourceCollector     resourcecollector.ResourceCollector
 	dynamicInterface      dynamic.Interface
 	restoreAdminNamespace string
-	rancherProjectMapping map[string]string
 }
 
 // Init Initialize the application restore controller
@@ -120,8 +119,27 @@ func (a *ApplicationRestoreController) setDefaults(restore *storkapi.Application
 		}
 	}
 
+	// if restore.Spec.RancherProjectMapping != nil {
+	// 	rancherProjectMapping := map[string]string{}
+	// 	for key, value := range restore.Spec.RancherProjectMapping {
+	// 		rancherProjectMapping[key] = value
+	// 		dataKey := strings.Split(key, ":")
+	// 		dataVal := strings.Split(value, ":")
+	// 		if len(dataKey) == 2 && len(dataVal) == 2 {
+	// 			rancherProjectMapping[dataKey[1]] = dataVal[1]
+	// 		} else if len(dataKey) == 1 && len(dataVal) == 2 {
+	// 			rancherProjectMapping[dataKey[0]] = dataVal[1]
+	// 		}
+	// 	}
+	// 	a.rancherProjectMapping = rancherProjectMapping
+	// }
+
+	return nil
+}
+
+func getRancherProjectMapping(restore *storkapi.ApplicationRestore) map[string]string {
+	rancherProjectMapping := map[string]string{}
 	if restore.Spec.RancherProjectMapping != nil {
-		rancherProjectMapping := map[string]string{}
 		for key, value := range restore.Spec.RancherProjectMapping {
 			rancherProjectMapping[key] = value
 			dataKey := strings.Split(key, ":")
@@ -132,10 +150,8 @@ func (a *ApplicationRestoreController) setDefaults(restore *storkapi.Application
 				rancherProjectMapping[dataKey[0]] = dataVal[1]
 			}
 		}
-		a.rancherProjectMapping = rancherProjectMapping
 	}
-
-	return nil
+	return rancherProjectMapping
 }
 
 func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.ApplicationRestore) error {
@@ -162,6 +178,8 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 	if err != nil {
 		return err
 	}
+
+	rancherProjectMapping := getRancherProjectMapping(restore)
 	if nsData != nil {
 		if err = json.Unmarshal(nsData, &namespaces); err != nil {
 			return err
@@ -173,8 +191,8 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 				// Skip namespaces we aren't restoring
 				continue
 			}
-			utils.ParseRancherProjectMapping(ns.Annotations, a.rancherProjectMapping)
-			utils.ParseRancherProjectMapping(ns.Labels, a.rancherProjectMapping)
+			utils.ParseRancherProjectMapping(ns.Annotations, rancherProjectMapping)
+			utils.ParseRancherProjectMapping(ns.Labels, rancherProjectMapping)
 			// create mapped restore namespace with metadata of backed up
 			// namespace
 			_, err := core.Instance().CreateNamespace(&v1.Namespace{
@@ -1218,9 +1236,10 @@ func (a *ApplicationRestoreController) applyResources(
 	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 	tempObjects := make([]runtime.Unstructured, 0)
 	var opts resourcecollector.Options
-	if a.rancherProjectMapping != nil {
+	if len(restore.Spec.RancherProjectMapping) != 0 {
+		rancherProjectMapping := getRancherProjectMapping(restore)
 		opts = resourcecollector.Options{
-			RancherProjectMappings: a.rancherProjectMapping,
+			RancherProjectMappings: rancherProjectMapping,
 		}
 	}
 	for _, o := range objects {
