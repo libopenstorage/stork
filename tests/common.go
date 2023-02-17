@@ -344,6 +344,13 @@ const (
 	Sunday            = "Sun"
 )
 
+type ExecutionMode string
+
+const (
+	Sequential ExecutionMode = "sequential"
+	Parallel   ExecutionMode = "parallel"
+)
+
 // TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
@@ -5310,4 +5317,84 @@ func IsEksPxOperator() bool {
 		}
 	}
 	return false
+}
+
+// ConcurrentExecute executes the given operation on each item in the collection, either sequentially
+// or in parallel, depending on the specified execution mode.
+//
+// Parameters:
+//
+//	items: The collection of items to operate on (slice, array, or map).
+//	operation: The function to execute on each item. If the function takes one argument,
+//	           it will be passed the item value. If it takes two arguments, the first
+//	           will be the item key or index, and the second will be the item value.
+//	executionMode: The mode to use for executing the operation, either "Sequential" or "Parallel".
+func ConcurrentExecute(items interface{}, operation interface{}, executionMode ExecutionMode) {
+	v := reflect.ValueOf(items)
+	var keys []reflect.Value
+	if v.Kind() == reflect.Map {
+		keys = v.MapKeys()
+	} else if v.Kind() == reflect.Slice || v.Kind() == reflect.Array {
+		keys = make([]reflect.Value, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			keys[i] = v.Index(i)
+		}
+	} else {
+		panic(fmt.Sprintf("Instead of %#v, items should be a slice, array, or map.", v.Kind().String()))
+	}
+
+	length := len(keys)
+	if length == 0 {
+		return
+	} else if length == 1 {
+		executionMode = Sequential
+	}
+
+	fnValue := reflect.ValueOf(operation)
+	numArgs := fnValue.Type().NumIn()
+
+	callOperation := func(key reflect.Value) {
+		in := make([]reflect.Value, numArgs)
+		in[0] = key
+		if numArgs == 2 {
+			in[1] = v.MapIndex(key)
+		}
+		fnValue.Call(in)
+	}
+
+	if executionMode == Sequential {
+		for i := 0; i < length; i++ {
+			callOperation(keys[i])
+		}
+	} else {
+		var wg sync.WaitGroup
+		for i := 0; i < length; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				callOperation(keys[i])
+			}(i)
+		}
+		wg.Wait()
+	}
+}
+
+func RandomUniqueStrings(strings []string, length int) ([]string, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be greater than zero")
+	}
+	if length > len(strings) {
+		return nil, fmt.Errorf("length cannot be greater than the length of the input strings")
+	}
+	randomstrings := make([]string, length)
+	selected := make(map[int]bool)
+	for i := 0; i < length; i++ {
+		j := rand.Intn(len(strings))
+		for selected[j] {
+			j = rand.Intn(len(strings))
+		}
+		selected[j] = true
+		randomstrings[i] = strings[j]
+	}
+	return randomstrings, nil
 }
