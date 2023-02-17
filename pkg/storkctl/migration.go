@@ -200,7 +200,19 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 						return
 					}
 					printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to true", migr.Namespace, migr.Name), ioStreams.Out)
-
+				}
+			}
+			for _, ns := range activationNamespaces {
+				namespace, err := core.Instance().GetNamespace(ns)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				namespace.Labels["failover"] = "start"
+				_, err = core.Instance().UpdateNamespace(namespace)
+				if err != nil {
+					util.CheckErr(err)
+					return
 				}
 			}
 			for _, ns := range activationNamespaces {
