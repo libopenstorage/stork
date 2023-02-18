@@ -1057,14 +1057,9 @@ func updateRancherProjects(
 				projects[val] = ""
 			}
 		}
-		for key, val := range ns.Labels {
-			if strings.Contains(key, utils.CattleProjectPrefix) {
-				projects[val] = ""
-			}
-		}
 	}
 
-	if err := updateProjectDiplayNames(projects, platformCredential); err != nil {
+	if err := updateProjectDisplayNames(projects, platformCredential); err != nil {
 		return err
 	}
 
@@ -1073,8 +1068,8 @@ func updateRancherProjects(
 	return nil
 }
 
-// updateProjectDiplayNames updates the projectIDs with project display names
-func updateProjectDiplayNames(
+// updateProjectDisplayNames updates the projectIDs with project display names
+func updateProjectDisplayNames(
 	projects map[string]string,
 	platformCredential *stork_api.PlatformCredential,
 ) error {
