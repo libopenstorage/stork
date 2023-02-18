@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/libopenstorage/stork/pkg/cache"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/cache"
 
 	stork_driver "github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -321,6 +322,52 @@ func run(c *cli.Context) {
 	// In this way, even the stork extender code can use this cache, since the extender filter/process
 	// requests can land on any stork pod.
 	if err := cache.CreateSharedInformerCache(mgr); err != nil {
+		log.Fatalf("failed to setup shared informer cache: %v", err)
+	}
+
+	// Create operator-sdk manager that will manage all controllers.
+	// Setup the controller manager before starting any watches / other controllers
+	mgr2, err := manager.New(config, manager.Options{Port: 8081, MetricsBindAddress: "0"})
+	if err != nil {
+		log.Fatalf("Setup controller manager2: %v", err)
+	}
+
+	mgr2Ctx := context.Background()
+	go func() {
+		if err := mgr2.Start(mgr2Ctx); err != nil {
+			log.Fatalf("Controller manager2: %v", err)
+		}
+		// Context is closed. Shutdown
+		os.Exit(0)
+	}()
+
+	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
+	// In this way, even the stork extender code can use this cache, since the extender filter/process
+	// requests can land on any stork pod.
+	if err := cache.CreateSharedInformerCache2(mgr2); err != nil {
+		log.Fatalf("failed to setup shared informer cache2: %v", err)
+	}
+
+	// Create operator-sdk manager that will manage all controllers.
+	// Setup the controller manager before starting any watches / other controllers
+	mgr3, err := manager.New(config, manager.Options{Port: 8082, MetricsBindAddress: "0"})
+	if err != nil {
+		log.Fatalf("Setup controller manager3: %v", err)
+	}
+
+	mgrCtx3 := context.Background()
+	go func() {
+		if err := mgr3.Start(mgrCtx3); err != nil {
+			log.Fatalf("Controller manager3: %v", err)
+		}
+		// Context is closed. Shutdown
+		os.Exit(0)
+	}()
+
+	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
+	// In this way, even the stork extender code can use this cache, since the extender filter/process
+	// requests can land on any stork pod.
+	if err := cache.CreateSharedInformerCache3(mgr3); err != nil {
 		log.Fatalf("failed to setup shared informer cache: %v", err)
 	}
 

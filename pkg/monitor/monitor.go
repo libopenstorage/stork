@@ -209,11 +209,34 @@ func (m *Monitor) driverMonitor() {
 			if err != nil {
 				log.Errorf("Error getting pods: %v", err)
 			}
+			log.Infof("Got pods: %v", len(pods.Items))
 			pvc, err := cache.Instance().ListPersistentVolumeClaims()
 			if err != nil {
 				log.Errorf("Error getting pvcs: %v", err)
 			}
 			log.Infof("Got pvcs: %v", len(pvc.Items))
+
+			pods2, err := cache.Instance2().ListPods()
+			if err != nil {
+				log.Errorf("Error getting pods2: %v", err)
+			}
+			log.Infof("Got pods2: %v", len(pods2.Items))
+			pvc2, err := cache.Instance2().ListPersistentVolumeClaims()
+			if err != nil {
+				log.Errorf("Error getting pvcs2: %v", err)
+			}
+			log.Infof("Got pvcs2: %v", len(pvc2.Items))
+
+			pods3, err := cache.Instance3().ListPods()
+			if err != nil {
+				log.Errorf("Error getting pods3: %v", err)
+			}
+			log.Infof("Got pods: %v", len(pods3.Items))
+			pvc3, err := cache.Instance3().ListPersistentVolumeClaims()
+			if err != nil {
+				log.Errorf("Error getting pvcs3: %v", err)
+			}
+			log.Infof("Got pvcs: %v", len(pvc3.Items))
 			for _, node := range nodes {
 				// Check if nodes are reported online by the storage driver
 				// If not online, look at all the pods on that node

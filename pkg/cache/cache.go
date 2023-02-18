@@ -47,8 +47,10 @@ type cache struct {
 }
 
 var (
-	cacheLock           sync.Mutex
-	sharedInformerCache *cache
+	cacheLock            sync.Mutex
+	sharedInformerCache  *cache
+	sharedInformerCache2 *cache
+	sharedInformerCache3 *cache
 )
 
 func CreateSharedInformerCache(mgr manager.Manager) error {
@@ -64,10 +66,48 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 	return nil
 }
 
+func CreateSharedInformerCache2(mgr manager.Manager) error {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+	if sharedInformerCache2 != nil {
+		return fmt.Errorf("shared informer cache already initialized")
+	}
+
+	sharedInformerCache2 = &cache{
+		client: mgr.GetClient(),
+	}
+	return nil
+}
+
+func CreateSharedInformerCache3(mgr manager.Manager) error {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+	if sharedInformerCache3 != nil {
+		return fmt.Errorf("shared informer cache already initialized")
+	}
+
+	sharedInformerCache3 = &cache{
+		client: mgr.GetClient(),
+	}
+	return nil
+}
+
 func Instance() SharedInformerCache {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 	return sharedInformerCache
+}
+
+func Instance2() SharedInformerCache {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+	return sharedInformerCache2
+}
+
+func Instance3() SharedInformerCache {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+	return sharedInformerCache3
 }
 
 // GetStorageClass returns the storage class if present in the cache.
