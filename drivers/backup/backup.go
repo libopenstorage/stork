@@ -50,6 +50,8 @@ type Driver interface {
 	License
 	// Rule
 	Rule
+	// Version
+	Version
 
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
@@ -62,6 +64,12 @@ type Driver interface {
 
 	// String returns the name of this driver
 	String() string
+}
+
+// Version object interface
+type Version interface {
+	// GetPxBackupVersion Gets version of Px-Backup API server
+	GetPxBackupVersion(ctx context.Context, req *api.VersionGetRequest) (*api.VersionGetResponse, error)
 }
 
 // Org object interface

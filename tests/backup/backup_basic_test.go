@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -63,6 +64,17 @@ var _ = BeforeSuite(func() {
 	dash = Inst().Dash
 	log.Infof("Init instance")
 	InitInstance()
+
+	// Getting Px-Backup server version info and setting Aetos Dashboard tags
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+	log.FailOnError(err, "Getting Px-Backup version")
+	version := versionResponse.GetVersion()
+	t := Inst().Dash.TestSet
+	t.Tags["px-backup-version"] = fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit())
+	t.Tags["px-backup-build-date"] = fmt.Sprintf("%s", version.GetBuildDate())
+
 	dash.TestSetBegin(dash.TestSet)
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()

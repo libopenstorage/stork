@@ -59,6 +59,7 @@ type portworx struct {
 	licenseManager         api.LicenseClient
 	healthManager          api.HealthClient
 	ruleManager            api.RulesClient
+	versionManager         api.VersionClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -176,6 +177,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.organizationManager = api.NewOrganizationClient(conn)
 	p.licenseManager = api.NewLicenseClient(conn)
 	p.ruleManager = api.NewRulesClient(conn)
+	p.versionManager = api.NewVersionClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -1078,6 +1080,10 @@ func (p *portworx) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (
 
 func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error) {
 	return p.ruleManager.UpdateOwnership(ctx, req)
+}
+
+func (p *portworx) GetPxBackupVersion(ctx context.Context, req *api.VersionGetRequest) (*api.VersionGetResponse, error) {
+	return p.versionManager.Get(ctx, req)
 }
 
 func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {
