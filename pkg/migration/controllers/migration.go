@@ -2144,6 +2144,13 @@ func (m *MigrationController) applyResources(
 										obj.GetName(), deleteStart, createTime)
 									break
 								}
+								if obj.GetFinalizers() != nil {
+									obj.SetFinalizers(nil)
+									_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
+									if err != nil {
+										log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+									}
+								}
 								log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
 								time.Sleep(deletedRetryInterval)
 							}
