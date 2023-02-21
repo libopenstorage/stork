@@ -918,8 +918,29 @@ func (r *ResourceCollector) mergeSupportedForResource(
 		return false
 	}
 	switch objectType.GetKind() {
-	case "ClusterRoleBinding", "ServiceAccount", "NetworkPolicy", "Deployment", "StatefulSet",
-		"DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+	case "ClusterRoleBinding",
+		"ServiceAccount":
+		return true
+	}
+	return false
+}
+
+func (r *ResourceCollector) mergeSupportedForRancherResource(
+	object runtime.Unstructured,
+	opts *Options,
+) bool {
+	// return false if there is no project mapping
+	if len(opts.RancherProjectMappings) == 0 {
+		return false
+	}
+
+	objectType, err := meta.TypeAccessor(object)
+	if err != nil {
+		return false
+	}
+	switch objectType.GetKind() {
+	case "NetworkPolicy", "Deployment", "StatefulSet", "DeploymentConfig",
+		"IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
 		return true
 	}
 	return false
@@ -962,7 +983,7 @@ func (r *ResourceCollector) ApplyResource(
 	_, err = dynamicClient.Create(context.TODO(), object.(*unstructured.Unstructured), metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
-			if r.mergeSupportedForResource(object) {
+			if r.mergeSupportedForResource(object) || r.mergeSupportedForRancherResource(object, opts) {
 				return r.mergeAndUpdateResource(object, dynamicClient, opts)
 			} else if strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
 				err = r.updateService(object)
