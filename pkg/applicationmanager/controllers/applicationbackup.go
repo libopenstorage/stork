@@ -220,6 +220,10 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 
 // handle updates for ApplicationBackup objects
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
+	// If the backup is already in final stage, return with out doing anything.
+	if backup.Status.Stage ==  stork_api.ApplicationBackupStageFinal {
+		return nil
+	}
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			canDelete, err := a.deleteBackup(backup)
