@@ -322,17 +322,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
 		if snapshotClassRequired {
-			// This is a temporary change, once CSI support enabled properly for NFS this check will be altered.
-			backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
-			if err != nil {
-				return nil, err
-			}
-			if backupLocation.Location.Type != storkapi.BackupLocationNFS {
-				dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
-			} else {
-				dataExport.Spec.SnapshotStorageClass = ""
-			}
-
+			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
 		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
