@@ -28,7 +28,7 @@ const (
 
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
+		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
 	})
 
 	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
@@ -100,7 +100,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 	steplog := "Validate Health of PDS services in case of failures"
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ValidatePDSHealthInCaseOfFailures", steplog, nil, 0)
+		StartTorpedoTest("ValidatePDSHealthInCaseOfFailures", steplog, pdsLabels, 0)
 	})
 
 	It(steplog, func() {
@@ -168,7 +168,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 var _ = Describe("{RestartPDSagentPod}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestartPDSagentPod", "Restart pds agent pods and validate if its coming back online and dataserices are not affected", nil, 0)
+		StartTorpedoTest("RestartPDSagentPod", "Restart pds agent pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
 	})
 
 	It("Restart pds pods and validate if its coming back online and dataserices are not affected", func() {
@@ -244,7 +244,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 var _ = Describe("{Enable/DisableNamespace}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
 	})
 
 	It("enable/disable namespace multiple times by giving labels to the namespace", func() {
@@ -295,7 +295,7 @@ var _ = Describe("{Enable/DisableNamespace}", func() {
 
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
 	})
 
 	It("deploy Dataservices", func() {
@@ -400,7 +400,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-PDS namespace and then enables PDS on this namespace", nil, 0)
+		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-PDS namespace and then enables PDS on this namespace", pdsLabels, 0)
 	})
 	ns := ""
 	var err error
@@ -503,7 +503,7 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 
 var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
+		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", pdsLabels, 0)
 	})
 
 	It("Deploy , Validate and start TPCC Workload", func() {
@@ -598,7 +598,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)
+		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", pdsLabels, 0)
 	})
 
 	It("runs the dataservice version upgrade test", func() {
@@ -623,7 +623,7 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", nil, 0)
+		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", pdsLabels, 0)
 	})
 
 	It("runs the dataservice build image upgrade test", func() {
@@ -649,7 +649,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", nil, 0)
+		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", pdsLabels, 0)
 	})
 
 	It("Deploy DataservicesOnDemand", func() {
@@ -900,7 +900,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 var _ = Describe("{DeployMultipleNamespaces}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", nil, 0)
+		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", pdsLabels, 0)
 	})
 
 	It("creates multiple namespaces, deploys in each namespace", func() {
@@ -969,7 +969,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 
 var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", nil, 0)
+		StartTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", pdsLabels, 0)
 	})
 
 	It("Deploy Dataservices and delete namespace", func() {
@@ -1048,7 +1048,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 var _ = Describe("{RestartPXPods}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", nil, 0)
+		StartTorpedoTest("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", pdsLabels, 0)
 	})
 
 	It("Deploy Dataservices", func() {
@@ -1228,7 +1228,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 var _ = Describe("{RollingRebootNodes}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PDS: RollingRebootNodes", "Reboot node(s) while the data services will be running", nil, 0)
+		StartTorpedoTest("PDS: RollingRebootNodes", "Reboot node(s) while the data services will be running", pdsLabels, 0)
 	})
 
 	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {

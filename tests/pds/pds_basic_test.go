@@ -67,6 +67,7 @@ var (
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
+	pdsLabels                               = make(map[string]string)
 )
 
 type PDSDataService struct {
@@ -93,11 +94,14 @@ var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
 		//InitInstance()
 		dash = Inst().Dash
+		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
+		pdsLabels["pds"] = "true"
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		params, err = pdslib.ReadParams(pdsparams)
 		log.FailOnError(err, "Failed to read params from json file")
 		infraParams := params.InfraToTest
+		pdsLabels["clusterType"] = infraParams.ClusterType
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
 		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
