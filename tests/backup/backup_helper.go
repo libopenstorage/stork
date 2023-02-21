@@ -25,7 +25,7 @@ const (
 	clusterName                               = "tp-cluster"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
-	backupLocationName                        = "tp-bkpLocation"
+	backupLocationName                        = "tp-bkplocation"
 	appReadinessTimeout                       = 10 * time.Minute
 	taskNamePrefix                            = "backupcreaterestore"
 	orgID                                     = "default"
