@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -12,10 +17,6 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"os"
-	"strings"
-	"testing"
-	"time"
 )
 
 func getBucketNameSuffix() string {

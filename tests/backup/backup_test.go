@@ -2669,6 +2669,8 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 	var userBackups []string
 	var accesses []BackupAccess
 	var restoreNames []string
+	var retryDuration int
+	var retryInterval int
 	bkpNamespaces = make([]string, 0)
 	newBackupLocationMap := make(map[string]string)
 
@@ -2807,30 +2809,9 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				dash.VerifyFatal(len(fetchedUserBackups), len(userBackups)+1, "Verifying the new schedule backup is up or not")
 
 				//Now get the status of new backup -
-				backupSuccessCheck := func() (interface{}, bool, error) {
-					backupDriver := Inst().Backup
-					bkpUid, err := backupDriver.GetBackupUID(ctx, recentBackupName, orgID)
-					if err != nil {
-						return "", true, err
-					}
-					backupInspectRequest := &api.BackupInspectRequest{
-						Name:  recentBackupName,
-						Uid:   bkpUid,
-						OrgId: orgID,
-					}
-					resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-					if err != nil {
-						return "", true, fmt.Errorf("unable to fetch inspect backup response for %v", recentBackupName)
-					}
-					actual := resp.GetBackup().GetStatus().Status
-					expected := api.BackupInfo_StatusInfo_Success
-					if actual != expected {
-						return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", recentBackupName, expected, actual)
-					}
-					return "", false, nil
-				}
-				_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+				backupStatus, err := backupSuccessCheck(recentBackupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Backup with name %s was not successful", recentBackupName)
+				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+recentBackupName)
 				log.InfoD("New backup - %s is successful from schedule backup ", recentBackupName)
 			}
 			log.InfoD("All Accesses are toggled and operations are performed")
@@ -3424,6 +3405,8 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	var retryDuration int
+	var retryInterval int
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
 
@@ -3534,40 +3517,15 @@ var _ = Describe("{BackupRestartPX}", func() {
 
 		Step("Check if backup is successful when the PX restart happened", func() {
 			log.InfoD("Check if backup is successful post px restarts")
-			var bkpUid string
-			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
-				backupSuccessCheck := func() (interface{}, bool, error) {
-					bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-					backupInspectRequest := &api.BackupInspectRequest{
-						Name:  backupName,
-						Uid:   bkpUid,
-						OrgId: orgID,
-					}
-					resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-					log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
-					actual := resp.GetBackup().GetStatus().Status
-					expected := api.BackupInfo_StatusInfo_Success
-					if actual != expected {
-						return "", true, fmt.Errorf("backup status expected was [%s] but got [%s]", expected, actual)
-					}
-					return "", false, nil
-				}
-				_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
-				log.FailOnError(err, "Check if backup %s is successful post px restarts", backupName)
-				bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-				backupInspectRequest := &api.BackupInspectRequest{
-					Name:  backupName,
-					Uid:   bkpUid,
-					OrgId: orgID,
-				}
-				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-				log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
-				dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup success for - "+resp.GetBackup().GetName())
+
+				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
+				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
+
 			}
 		})
 	})
@@ -4362,6 +4320,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces := make([]string, 0)
 	var backupNames []string
+	var retryDuration int
+	var retryInterval int
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819)
@@ -4467,39 +4427,12 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 
 		Step("Check if backup is successful when the stork restart happened", func() {
 			log.InfoD("Check if backup is successful post stork restarts")
-			var bkpUid string
-			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupSuccessCheck := func() (interface{}, bool, error) {
-					bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-					backupInspectRequest := &api.BackupInspectRequest{
-						Name:  backupName,
-						Uid:   bkpUid,
-						OrgId: orgID,
-					}
-					resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-					log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
-					actual := resp.GetBackup().GetStatus().Status
-					expected := api.BackupInfo_StatusInfo_Success
-					if actual != expected {
-						return "", true, fmt.Errorf("backup status expected was [%s] but got [%s]", expected, actual)
-					}
-					return "", false, nil
-				}
-				_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
-				log.FailOnError(err, "Check if backup %s is successful post stork restarts", backupName)
-				bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-				backupInspectRequest := &api.BackupInspectRequest{
-					Name:  backupName,
-					Uid:   bkpUid,
-					OrgId: orgID,
-				}
-				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-				log.FailOnError(err, "Inspecting the backup taken with request:\n%v", backupInspectRequest)
-				dash.VerifyFatal(resp.GetBackup().GetStatus().Status, api.BackupInfo_StatusInfo_Success, "Inspecting the backup success for - "+resp.GetBackup().GetName())
+				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
+				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
 			}
 		})
 		Step("Validate applications", func() {
@@ -4520,37 +4453,13 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		})
 		Step("Check if restore is successful when the stork restart happened", func() {
 			log.InfoD("Check if restore is successful post stork restarts")
-			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore", backupName)
-				restoreSuccessCheck := func() (interface{}, bool, error) {
-					restoreInspectRequest := &api.RestoreInspectRequest{
-						Name:  restoreName,
-						OrgId: orgID,
-					}
-					resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-					restoreResponseStatus := resp.GetRestore().GetStatus()
-					log.FailOnError(err, "Failed verifying restore for - %s", restoreName)
-					actual := restoreResponseStatus.GetStatus()
-					expected := api.RestoreInfo_StatusInfo_PartialSuccess
-					if actual != expected {
-						log.Infof("Restore status - %s", restoreResponseStatus)
-						log.InfoD("Status of %s - [%s]", restoreName, restoreResponseStatus.GetStatus())
-						return "", true, fmt.Errorf("restore status expected was [%s] but got [%s]", expected, actual)
-					}
-					return "", false, nil
-				}
-
-				_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
-				log.FailOnError(err, "Check if restore is successful when the stork restart happened")
-				restoreInspectRequest := &api.RestoreInspectRequest{
-					Name:  restoreName,
-					OrgId: orgID,
-				}
-				resp, _ := backupDriver.InspectRestore(ctx, restoreInspectRequest)
-				dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess, "Inspecting the Restore success for - "+resp.GetRestore().GetName())
+				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
+				log.FailOnError(err, "Failed while restoring Backup for - %s", backupName)
+				dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restoreName)
 			}
 		})
 		Step("Validate applications", func() {
@@ -6482,6 +6391,8 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var credName string
+	var retryDuration int
+	var retryInterval int
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
 		StartTorpedoTest("IssueMultipleDeletesForSharedBackup",
@@ -6607,7 +6518,6 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 
 		Step("Validate Restores are successful", func() {
 			log.InfoD("Validate Restores are successful")
-			backupDriver := Inst().Backup
 			for _, user := range users {
 				log.Infof("Validating Restore success for user %s", user)
 				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
@@ -6615,32 +6525,9 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				for _, restore := range restoreNames {
 					log.Infof("Validating Restore %s for user %s", restore, user)
 					if strings.Contains(restore, user) {
-						restoreSuccessCheck := func() (interface{}, bool, error) {
-							restoreInspectRequest := &api.RestoreInspectRequest{
-								Name:  restore,
-								OrgId: orgID,
-							}
-							resp, err := Inst().Backup.InspectRestore(ctxNonAdmin, restoreInspectRequest)
-							if err != nil {
-								return "", true, fmt.Errorf("restore Inspect failed with error %s", err)
-							}
-							restoreResponseStatus := resp.GetRestore().GetStatus()
-							actual := restoreResponseStatus.GetStatus()
-							expected := api.RestoreInfo_StatusInfo_Success
-							if actual != expected {
-								log.Infof("Status of %s - [%s]", restore, restoreResponseStatus.GetStatus())
-								return "", true, fmt.Errorf("restore status expected was [%s] but got [%s]", expected, actual)
-							}
-							return "", false, nil
-						}
-						_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
-						log.FailOnError(err, "Validate restores %s are successful", restoreNames)
-						restoreInspectRequest := &api.RestoreInspectRequest{
-							Name:  restore,
-							OrgId: orgID,
-						}
-						resp, _ := backupDriver.InspectRestore(ctxNonAdmin, restoreInspectRequest)
-						dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_Success, "Inspecting the Restore success for - "+resp.GetRestore().GetName())
+						restoreStatus, err := restoreSuccessCheck(restore, orgID, retryDuration, retryInterval, ctxNonAdmin)
+						log.FailOnError(err, "Failed while restoring Backup for - %s", restore)
+						dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restore)
 					}
 				}
 			}
