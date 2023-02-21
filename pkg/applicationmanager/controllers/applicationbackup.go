@@ -1734,22 +1734,24 @@ func (a *ApplicationBackupController) backupResources(
 		}
 	}
 	// get and update rancher project details
-	if err = a.updateRancherProjectDetails(backup, allObjects); err != nil {
-		message := fmt.Sprintf("Error updating rancher project details for backup: %v", err)
-		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-		backup.Status.Reason = message
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		err = a.client.Update(context.TODO(), backup)
-		if err != nil {
+	if len(backup.Spec.PlatformCredential) != 0 {
+		if err = a.updateRancherProjectDetails(backup, allObjects); err != nil {
+			message := fmt.Sprintf("Error updating rancher project details for backup: %v", err)
+			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+			backup.Status.Reason = message
+			backup.Status.LastUpdateTimestamp = metav1.Now()
+			err = a.client.Update(context.TODO(), backup)
+			if err != nil {
+				return err
+			}
+			a.recorder.Event(backup,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationBackupStatusFailed),
+				message)
+			log.ApplicationBackupLog(backup).Errorf(message)
 			return err
 		}
-		a.recorder.Event(backup,
-			v1.EventTypeWarning,
-			string(stork_api.ApplicationBackupStatusFailed),
-			message)
-		log.ApplicationBackupLog(backup).Errorf(message)
-		return err
 	}
 
 	// Upload the resources to the backup location
