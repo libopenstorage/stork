@@ -2831,8 +2831,16 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
-	if err != nil && !strings.Contains(err.Error(), "already exists with status: Success") {
+
+	sourceClusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return "", true, err
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, 2*time.Minute, 10*time.Second)
+	if err != nil {
 		return err
 	}
 	// Register destination cluster with backup driver
@@ -2842,9 +2850,15 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-
-	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
-	if err != nil && !strings.Contains(err.Error(), "already exists with status: Success") {
+	destClusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return "", true, err
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(destClusterStatus, 2*time.Minute, 10*time.Second)
+	if err != nil {
 		return err
 	}
 	return nil
