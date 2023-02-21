@@ -215,19 +215,6 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 					return
 				}
 			}
-			for _, ns := range activationNamespaces {
-				updateStatefulSets(ns, true, ioStreams)
-				updateDeployments(ns, true, ioStreams)
-				updateDeploymentConfigs(ns, true, ioStreams)
-				updateIBPObjects("IBPPeer", ns, true, ioStreams)
-				updateIBPObjects("IBPCA", ns, true, ioStreams)
-				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
-				updateIBPObjects("IBPConsole", ns, true, ioStreams)
-				updateVMObjects("VirtualMachine", ns, true, ioStreams)
-				updateCRDObjects(ns, true, ioStreams, config)
-				updateCronJobObjects(ns, true, ioStreams)
-			}
-
 		},
 	}
 	activateMigrationCommand.Flags().BoolVarP(&allNamespaces, "all-namespaces", "a", false, "Activate applications in all namespaces")
@@ -272,16 +259,16 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 			}
 
 			for _, ns := range deactivationNamespaces {
-				updateStatefulSets(ns, false, ioStreams)
-				updateDeployments(ns, false, ioStreams)
-				updateDeploymentConfigs(ns, false, ioStreams)
-				updateIBPObjects("IBPPeer", ns, false, ioStreams)
-				updateIBPObjects("IBPCA", ns, false, ioStreams)
-				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
-				updateIBPObjects("IBPConsole", ns, false, ioStreams)
-				updateVMObjects("VirtualMachine", ns, true, ioStreams)
-				updateCRDObjects(ns, false, ioStreams, config)
-				updateCronJobObjects(ns, false, ioStreams)
+				UpdateStatefulSets(ns, false, ioStreams)
+				UpdateDeployments(ns, false, ioStreams)
+				UpdateDeploymentConfigs(ns, false, ioStreams)
+				UpdateIBPObjects("IBPPeer", ns, false, ioStreams)
+				UpdateIBPObjects("IBPCA", ns, false, ioStreams)
+				UpdateIBPObjects("IBPOrderer", ns, false, ioStreams)
+				UpdateIBPObjects("IBPConsole", ns, false, ioStreams)
+				UpdateVMObjects("VirtualMachine", ns, true, ioStreams)
+				UpdateCRDObjects(ns, false, ioStreams, config)
+				UpdateCronJobObjects(ns, false, ioStreams)
 			}
 
 			for _, ns := range migrationScheduleNamespaces {
@@ -313,7 +300,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 	return deactivateMigrationCommand
 }
 
-func updateStatefulSets(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+func UpdateStatefulSets(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	statefulSets, err := apps.Instance().ListStatefulSets(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
@@ -333,7 +320,7 @@ func updateStatefulSets(namespace string, activate bool, ioStreams genericcliopt
 	}
 }
 
-func updateDeployments(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+func UpdateDeployments(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	deployments, err := apps.Instance().ListDeployments(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
@@ -352,7 +339,7 @@ func updateDeployments(namespace string, activate bool, ioStreams genericcliopti
 	}
 }
 
-func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+func UpdateDeploymentConfigs(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	deployments, err := openshift.Instance().ListDeploymentConfigs(namespace)
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -373,7 +360,7 @@ func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericc
 	}
 }
 
-func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOStreams, config *rest.Config) {
+func UpdateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOStreams, config *rest.Config) {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
 		util.CheckErr(err)
@@ -485,7 +472,7 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 		}
 	}
 }
-func updateIBPObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+func UpdateIBPObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	objects, err := dynamic.Instance().ListObjects(
 		&metav1.ListOptions{
 			TypeMeta: metav1.TypeMeta{
@@ -515,7 +502,7 @@ func updateIBPObjects(kind string, namespace string, activate bool, ioStreams ge
 		}
 	}
 }
-func updateVMObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+func UpdateVMObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	objects, err := dynamic.Instance().ListObjects(
 		&metav1.ListOptions{
 			TypeMeta: metav1.TypeMeta{
@@ -536,7 +523,7 @@ func updateVMObjects(kind string, namespace string, activate bool, ioStreams gen
 	}
 }
 
-func updateCronJobObjects(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+func UpdateCronJobObjects(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	cronJobs, err := batch.Instance().ListCronJobs(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)

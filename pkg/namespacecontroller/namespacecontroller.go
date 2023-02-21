@@ -2,13 +2,16 @@ package namespacecontroller
 
 import (
 	"context"
+	"os"
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubectl/pkg/cmd/util"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -16,8 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// New creates a new instance of NamespaceController
-// TODO: rename variable names
 func NewNamespaceController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *NamespaceController {
 	return &NamespaceController{
 		client:    mgr.GetClient(),
@@ -36,17 +37,12 @@ func (ns *NamespaceController) Init(mgr manager.Manager) error {
 	return controllers.RegisterTo(mgr, "namespace-controller", ns, &corev1.Namespace{})
 }
 
-// Reconcile handles snapshot schedule updates for persistent volume claims.
 func (ns *NamespaceController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 
-	// TODO: Extract this out to a method / class
 	namespace := &corev1.Namespace{}
 	err := ns.client.Get(context.TODO(), request.NamespacedName, namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
@@ -54,16 +50,33 @@ func (ns *NamespaceController) Reconcile(ctx context.Context, request reconcile.
 	}
 
 	if _, ok := namespace.Labels["failover"]; ok {
-		logrus.Infof("pkg/namespacecontroller.go: [detected failover label] namespace labels: %v", namespace.Labels)
 		delete(namespace.Labels, "failover")
-		namespace.Labels["promote"] = "true"
 		_, err = core.Instance().UpdateNamespace(namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return reconcile.Result{}, err
 		}
-		logrus.Infof("pkg/namespacecontroller.go: [after adding promote] namespace labels: %v", namespace.Labels)
-		ns.volDriver.ActivateMigration(namespace.GetNamespace())
+		ns.volDriver.ActivateMigration(namespace.Name)
+		logrus.Infof("NamespaceController.Reconcile(d) %v", namespace.Name)
+
+		ioStreams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stdout}
+		factory := storkctl.NewFactory()
+		config, err := factory.GetConfig()
+		if err != nil {
+			util.CheckErr(err)
+			return reconcile.Result{}, err
+		}
+		storkctl.UpdateStatefulSets(namespace.Name, true, ioStreams)
+		storkctl.UpdateDeployments(namespace.Name, true, ioStreams)
+		storkctl.UpdateDeploymentConfigs(namespace.Name, true, ioStreams)
+		storkctl.UpdateIBPObjects("IBPPeer", namespace.Name, true, ioStreams)
+		storkctl.UpdateIBPObjects("IBPCA", namespace.Name, true, ioStreams)
+		storkctl.UpdateIBPObjects("IBPOrderer", namespace.Name, true, ioStreams)
+		storkctl.UpdateIBPObjects("IBPConsole", namespace.Name, true, ioStreams)
+		storkctl.UpdateVMObjects("VirtualMachine", namespace.Name, true, ioStreams)
+		storkctl.UpdateCRDObjects(namespace.Name, true, ioStreams, config)
+		storkctl.UpdateCronJobObjects(namespace.Name, true, ioStreams)
 	}
+
 	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
