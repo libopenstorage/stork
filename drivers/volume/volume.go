@@ -188,6 +188,8 @@ type MigratePluginInterface interface {
 	// Start migration of volumes specified by the spec. Should only migrate
 	// volumes, not the specs associated with them
 	StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
+	// Promote near-sync volumes when activating a migration
+	ActivateMigration(string) error
 	// Get the status of migration of the volumes specified in the status
 	// for the migration spec
 	GetMigrationStatus(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
@@ -420,6 +422,11 @@ type MigrationNotSupported struct{}
 // StartMigration returns ErrNotSupported
 func (m *MigrationNotSupported) StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
+}
+
+// ActivateMigration returns ErrNotSupported
+func (m *MigrationNotSupported) ActivateMigration(string) error {
+	return &errors.ErrNotSupported{}
 }
 
 // GetMigrationStatus returns ErrNotSupported

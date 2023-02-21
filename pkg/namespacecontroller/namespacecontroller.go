@@ -63,6 +63,7 @@ func (ns *NamespaceController) Reconcile(ctx context.Context, request reconcile.
 			return reconcile.Result{}, err
 		}
 		logrus.Infof("pkg/namespacecontroller.go: [after adding promote] namespace labels: %v", namespace.Labels)
+		ns.volDriver.ActivateMigration(namespace.GetNamespace())
 	}
 	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
