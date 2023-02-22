@@ -367,6 +367,7 @@ func isDisruptiveTrigger(triggerType string) bool {
 func populateDataFromConfigMap(configData *map[string]string) error {
 	setEmailRecipients(configData)
 	setEmailHost(configData)
+	setEmailSubject(configData)
 	setPureTopology(configData)
 	setHyperConvergedType(configData)
 	err := setSendGridEmailAPIKey(configData)
@@ -402,6 +403,15 @@ func setEmailHost(configData *map[string]string) error {
 	}
 	return fmt.Errorf("Failed to find [%s] field in config-map [%s] in namespace [%s]",
 		EmailHostServerField, testTriggersConfigMap, configMapNS)
+}
+
+func setEmailSubject(configData *map[string]string) {
+	if emailsubject, ok := (*configData)[EmailSubjectField]; ok {
+		EmailSubject = emailsubject
+		delete(*configData, EmailSubjectField)
+	} else {
+		EmailSubject = "Torpedo Longevity Report"
+	}
 }
 
 // setPureTopology read the config map and set the pureTopologyEnabled field

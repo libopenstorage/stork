@@ -54,8 +54,7 @@ import (
 )
 
 const (
-	subject = "Torpedo Longevity Report"
-	from    = "wilkins@portworx.com"
+	from = "wilkins@portworx.com"
 
 	// EmailRecipientsConfigMapField is field in config map whose value is comma
 	// seperated list of email IDs which will receive email notifications about longevity
@@ -68,6 +67,8 @@ const (
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
 	// EmailHostServerField is field in configmap which stores the server address
 	EmailHostServerField = "emailHostServer"
+	// EmailSubjectFiled is field in configmap which stores the subject(optional)
+	EmailSubjectField = "emailSubject"
 )
 
 const (
@@ -114,6 +115,9 @@ var EmailRecipients []string
 
 // EmailHostServer to use for sending email
 var EmailServer string
+
+// EmailSubject to use for sending email
+var EmailSubject string
 
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
@@ -218,6 +222,7 @@ type emailData struct {
 	NodeInfo     []nodeInfo
 	EmailRecords emailRecords
 	TriggersInfo []triggerInfo
+	MailSubject  string
 }
 
 type nodeInfo struct {
@@ -2386,7 +2391,7 @@ func TriggerEmailReporter() {
 
 	var masterNodeList []string
 	var pxStatus string
-
+	emailData.MailSubject = EmailSubject
 	for _, n := range node.GetMasterNodes() {
 		masterNodeList = append(masterNodeList, n.Addresses...)
 	}
@@ -2451,7 +2456,7 @@ func TriggerEmailReporter() {
 	}
 
 	emailDetails := &email.Email{
-		Subject:         subject,
+		Subject:         EmailSubject,
 		Content:         content,
 		From:            from,
 		To:              EmailRecipients,
@@ -6568,7 +6573,7 @@ tbody tr:last-child {
 </style>
 </head>
 <body>
-<h1>Torpedo Longevity Report</h1>
+<h1> {{ .MailSubject }} </h1>
 <hr/>
 <h3>SetUp Details</h3>
 <p><b>Master IP:</b> {{.MasterIP}}</p>
