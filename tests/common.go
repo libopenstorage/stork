@@ -5251,3 +5251,36 @@ func IsEksPxOperator() bool {
 	}
 	return false
 }
+
+/*
+ * GetSubsetOfSlice selects a random subset of unique items from the input slice,
+ * with the given length. It returns a new slice with the selected items in random order.
+ * If length is zero or negative or greater than the length of the input slice, it also returns an error.
+ *
+ * Parameters:
+ * - items: a slice of any type to select from.
+ * - length: the number of items to select from the input slice.
+ *
+ * Returns:
+ * - a new slice of type T with the selected items in random order.
+ * - an error if the length parameter is zero or negative, or if it is greater than the length of the input slice.
+ */
+func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be greater than zero")
+	}
+	if length > len(items) {
+		return nil, fmt.Errorf("length cannot be greater than the length of the input items")
+	}
+	randomItems := make([]T, length)
+	selected := make(map[int]bool)
+	for i := 0; i < length; i++ {
+		j := rand.Intn(len(items))
+		for selected[j] {
+			j = rand.Intn(len(items))
+		}
+		selected[j] = true
+		randomItems[i] = items[j]
+	}
+	return randomItems, nil
+}
