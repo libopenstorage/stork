@@ -14,6 +14,8 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -60,11 +62,38 @@ func TestBasic(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
 }
 
-var dash *aetosutil.Dashboard
-var _ = BeforeSuite(func() {
-	dash = Inst().Dash
-	log.Infof("Init instance")
-	InitInstance()
+// BackupInitInstance initialises instances required for backup
+func BackupInitInstance() {
+	var err error
+	var token string
+	log.Info("Inside BackupInitInstance")
+	err = Inst().S.Init(scheduler.InitOptions{
+		SpecDir:            Inst().SpecDir,
+		VolDriverName:      Inst().V.String(),
+		StorageProvisioner: Inst().Provisioner,
+		NodeDriverName:     Inst().N.String(),
+	})
+
+	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
+	err = Inst().N.Init(node.InitOptions{
+		SpecDir: Inst().SpecDir,
+	})
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
+	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
+
+	if Inst().Backup != nil {
+		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
+		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
+	}
+	// Getting Px version info
+	pxVersion, err := Inst().V.GetDriverVersion()
+	log.FailOnError(err, "Error occurred while getting PX version")
+	commitID := strings.Split(pxVersion, "-")[1]
+	t := Inst().Dash.TestSet
+	t.CommitID = commitID
+	if pxVersion != "" {
+		t.Tags["px-version"] = pxVersion
+	}
 
 	// Getting Px-Backup server version info and setting Aetos Dashboard tags
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -72,10 +101,16 @@ var _ = BeforeSuite(func() {
 	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
 	log.FailOnError(err, "Getting Px-Backup version")
 	version := versionResponse.GetVersion()
-	t := Inst().Dash.TestSet
 	t.Tags["px-backup-version"] = fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit())
 	t.Tags["px-backup-build-date"] = fmt.Sprintf("%s", version.GetBuildDate())
 
+}
+
+var dash *aetosutil.Dashboard
+var _ = BeforeSuite(func() {
+	dash = Inst().Dash
+	log.Infof("Backup Init instance")
+	BackupInitInstance()
 	dash.TestSetBegin(dash.TestSet)
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
