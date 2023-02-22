@@ -1048,7 +1048,9 @@ func updateProjectDisplayNames(
 	platformCredential *stork_api.PlatformCredential,
 ) error {
 	rancherClient := &rancher.Rancher{}
-	rancherClient.Init(*platformCredential.Spec.RancherConfig)
+	if err := rancherClient.Init(*platformCredential.Spec.RancherConfig); err != nil {
+		return err
+	}
 	projectList, err := rancherClient.ListProjectNames()
 	if err != nil {
 		return err
