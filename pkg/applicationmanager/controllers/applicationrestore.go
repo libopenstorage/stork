@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -18,9 +19,11 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -41,6 +44,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+const (
+	defaultStorageClass = "use-default-storage-class"
+)
+
+// isStorageClassMappingContainsDefault - will check whether any storageclass has use-default-storage-class
+// as destination storage class.
+func isStorageClassMappingContainsDefault(restore *storkapi.ApplicationRestore) bool {
+	for _, value := range restore.Spec.StorageClassMapping {
+		if value == defaultStorageClass {
+			return true
+		}
+	}
+	return false
+}
 
 // NewApplicationRestore creates a new instance of ApplicationRestoreController.
 func NewApplicationRestore(mgr manager.Manager, r record.EventRecorder, rc resourcecollector.ResourceCollector) *ApplicationRestoreController {
@@ -100,7 +118,25 @@ func (a *ApplicationRestoreController) setDefaults(restore *storkapi.Application
 			restore.Spec.NamespaceMapping[ns] = ns
 		}
 	}
+
 	return nil
+}
+
+func getRancherProjectMapping(restore *storkapi.ApplicationRestore) map[string]string {
+	rancherProjectMapping := map[string]string{}
+	if restore.Spec.RancherProjectMapping != nil {
+		for key, value := range restore.Spec.RancherProjectMapping {
+			rancherProjectMapping[key] = value
+			dataKey := strings.Split(key, ":")
+			dataVal := strings.Split(value, ":")
+			if len(dataKey) == 2 && len(dataVal) == 2 {
+				rancherProjectMapping[dataKey[1]] = dataVal[1]
+			} else if len(dataKey) == 1 && len(dataVal) == 2 {
+				rancherProjectMapping[dataKey[0]] = dataVal[1]
+			}
+		}
+	}
+	return rancherProjectMapping
 }
 
 func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.ApplicationRestore) error {
@@ -127,6 +163,8 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 	if err != nil {
 		return err
 	}
+
+	rancherProjectMapping := getRancherProjectMapping(restore)
 	if nsData != nil {
 		if err = json.Unmarshal(nsData, &namespaces); err != nil {
 			return err
@@ -138,6 +176,8 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 				// Skip namespaces we aren't restoring
 				continue
 			}
+			utils.ParseRancherProjectMapping(ns.Annotations, rancherProjectMapping)
+			utils.ParseRancherProjectMapping(ns.Labels, rancherProjectMapping)
 			// create mapped restore namespace with metadata of backed up
 			// namespace
 			_, err := core.Instance().CreateNamespace(&v1.Namespace{
@@ -167,7 +207,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 							annotations = make(map[string]string)
 						}
 						for k, v := range ns.GetAnnotations() {
-							if _, ok := annotations[k]; !ok {
+							if _, ok := annotations[k]; !ok && !strings.Contains(k, utils.CattleProjectPrefix) {
 								annotations[k] = v
 							}
 						}
@@ -176,10 +216,12 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 							labels = make(map[string]string)
 						}
 						for k, v := range ns.GetLabels() {
-							if _, ok := labels[k]; !ok {
+							if _, ok := labels[k]; !ok && !strings.Contains(k, utils.CattleProjectPrefix) {
 								labels[k] = v
 							}
 						}
+						utils.ParseRancherProjectMapping(annotations, rancherProjectMapping)
+						utils.ParseRancherProjectMapping(labels, rancherProjectMapping)
 					}
 					log.ApplicationRestoreLog(restore).Tracef("Namespace already exists, updating dest namespace %v", ns.Name)
 					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
@@ -286,6 +328,49 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		return nil
 	}
 
+	if len(restore.Spec.StorageClassMapping) >= 1 && isStorageClassMappingContainsDefault(restore) {
+		// Update the default storageclass name in storageclassmapping.
+		// storageclassMapping will have "use-default-storage-class" as destination storage class,
+		// If default storageclass need to be selected.
+		scList, err := storage.Instance().GetDefaultStorageClasses()
+		if err != nil {
+			log.ApplicationRestoreLog(restore).Errorf(err.Error())
+			a.recorder.Event(restore,
+				v1.EventTypeWarning,
+				string(storkapi.ApplicationRestoreStatusFailed),
+				err.Error())
+			return nil
+		}
+		// If more than one storageclass is set as default storageclass, update error event
+		if len(scList.Items) > 1 {
+			errMsg := "more than one storageclass is set as default on destination cluster"
+			log.ApplicationRestoreLog(restore).Errorf(errMsg)
+			a.recorder.Event(restore,
+				v1.EventTypeWarning,
+				string(storkapi.ApplicationRestoreStatusFailed),
+				errMsg)
+			return nil
+		}
+		// If no storageclass is set as default storageclass, update error event
+		if len(scList.Items) == 0 {
+			err := fmt.Errorf("no storageclass is set as default on destination cluster")
+			log.ApplicationRestoreLog(restore).Errorf(err.Error())
+			a.recorder.Event(restore,
+				v1.EventTypeWarning,
+				string(storkapi.ApplicationRestoreStatusFailed),
+				err.Error())
+			return nil
+		}
+		for key, value := range restore.Spec.StorageClassMapping {
+			if value == defaultStorageClass {
+				restore.Spec.StorageClassMapping[key] = scList.Items[0].Name
+			}
+		}
+		err = a.client.Update(context.TODO(), restore)
+		if err != nil {
+			return err
+		}
+	}
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
 		// Make sure the namespaces exist
@@ -529,6 +614,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						nil, // no need to set storage class mappings at this stage
 						nil,
 						restore.Spec.IncludeOptionalResourceTypes,
+						nil,
 						nil,
 					)
 					if err != nil {
@@ -1136,6 +1222,13 @@ func (a *ApplicationRestoreController) applyResources(
 	}
 	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 	tempObjects := make([]runtime.Unstructured, 0)
+	var opts resourcecollector.Options
+	if len(restore.Spec.RancherProjectMapping) != 0 {
+		rancherProjectMapping := getRancherProjectMapping(restore)
+		opts = resourcecollector.Options{
+			RancherProjectMappings: rancherProjectMapping,
+		}
+	}
 	for _, o := range objects {
 		skip, err := a.resourceCollector.PrepareResourceForApply(
 			o,
@@ -1146,6 +1239,7 @@ func (a *ApplicationRestoreController) applyResources(
 			pvNameMappings,
 			restore.Spec.IncludeOptionalResourceTypes,
 			restore.Status.Volumes,
+			&opts,
 		)
 		if err != nil {
 			return err
@@ -1187,7 +1281,9 @@ func (a *ApplicationRestoreController) applyResources(
 
 		err = a.resourceCollector.ApplyResource(
 			a.dynamicInterface,
-			o)
+			o,
+			&opts,
+		)
 		if err != nil && errors.IsAlreadyExists(err) {
 			switch restore.Spec.ReplacePolicy {
 			case storkapi.ApplicationRestoreReplacePolicyDelete:
