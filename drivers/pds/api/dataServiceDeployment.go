@@ -180,7 +180,7 @@ func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfig
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdPut(ctx, deploymentID).Body(createRequest).Execute()
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdGet``: %v\n", err)
+		log.Errorf("Error when calling `ApiDeploymentsIdPut``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
 	return dsModel, err

@@ -63,6 +63,20 @@ type ResourceSettingTemplate struct {
 	} `json:"resources"`
 }
 
+// WorkloadGenerationParams has data service creds
+type WorkloadGenerationParams struct {
+	Host                         string
+	User                         string
+	Password                     string
+	DataServiceName              string
+	DeploymentName               string
+	DeploymentID                 string
+	ScaleFactor                  string
+	Iterations                   string
+	Namespace                    string
+	UseSSL, VerifyCerts, TimeOut string
+}
+
 // StorageOptions struct used to store template values
 type StorageOptions struct {
 	Filesystem  string
@@ -138,11 +152,15 @@ const (
 	redis                 = "Redis"
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
+	esRallyImage          = "elastic/rally"
+	cbloadImage           = "portworx/pds-loadtests:couchbase-0.0.2"
 	pdsTpccImage          = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 	postgresql            = "PostgreSQL"
 	cassandra             = "Cassandra"
+	elasticSearch         = "Elasticsearch"
+	couchbase             = "Couchbase"
 	rabbitmq              = "RabbitMQ"
 	mysql                 = "MySQL"
 	pxLabel               = "pds.portworx.com/available"
@@ -218,7 +236,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "An Error Occured while parsing the URL")
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme
@@ -258,7 +275,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	dnsZone, err := controlplane.GetDNSZone(tenantID)
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "Error while getting DNS Zone")
 	}
 	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, tenantName, AccountName)
 	projcts := components.Project
@@ -270,7 +286,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	ns, err = k8sCore.GetNamespace("kube-system")
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "Error while getting k8s namespace")
 	}
 	clusterID := string(ns.GetObjectMeta().GetUID())
 	if len(clusterID) > 0 {
@@ -283,7 +298,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "Error while listing deployments")
 	}
 	if targetClusters == nil {
 		log.Fatalf("No Target cluster is available for the account/tenant %v", err)
@@ -299,7 +313,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 		}
 	}
 	if !istargetclusterAvailable {
-		log.Fatalf("Target cluster is not available for the account/tenant")
+		return "", "", "", "", "", fmt.Errorf("target cluster is not available for the account/tenant")
 	}
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
 }
@@ -726,17 +740,17 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
-			log.Errorf("Error occured while getting deployment status %v", err)
+			log.Infof("Deployment status %v", err)
 			return false, nil
 		}
 		if res.StatusCode != state.StatusOK {
-			log.Errorf("Full HTTP response: %v\n", res)
+			log.Infof("Full HTTP response: %v\n", res)
 			err = fmt.Errorf("unexpected status code")
 			return false, err
 		}
 		if !strings.Contains(status.GetHealth(), healthStatus) {
-			err = fmt.Errorf("status %v", status.GetHealth())
-			return false, err
+			log.Infof("status: %v", status.GetHealth())
+			return false, nil
 		}
 		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
@@ -1181,8 +1195,59 @@ func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcNa
 	return pod, podName, nil
 }
 
-// CreatecassandraWorkload generate workloads on the cassandra db
-func CreatecassandraWorkload(cassCommand string, deploymentName string, namespace string) (*v1.Deployment, error) {
+//CreatePodWorkloads generate workloads as standalone pods
+func CreatePodWorkloads(name string, image string, creds WorkloadGenerationParams, namespace string, count string, env []string) (*corev1.Pod, error) {
+	var value []string
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: name + "-",
+			Namespace:    namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  name,
+					Image: image,
+					Env:   make([]corev1.EnvVar, 4),
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+		},
+	}
+
+	value = append(value, creds.Host)
+	value = append(value, creds.User)
+	value = append(value, creds.Password)
+	value = append(value, count)
+
+	for index := range env {
+		podSpec.Spec.Containers[0].Env[index].Name = env[index]
+		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+	}
+
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pod [%s], Err: %v", podSpec.Name, err)
+	}
+
+	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate pod [%s], Err: %v", pod.Name, err)
+	}
+
+	//TODO: Remove static sleep and verify the injected data
+	time.Sleep(1 * time.Minute)
+
+	return pod, nil
+
+}
+
+// CreateDeploymentWorkloads generate workloads as deployment pods
+func CreateDeploymentWorkloads(command, deploymentName, stressImage, namespace string) (*v1.Deployment, error) {
 
 	var replicas int32 = 1
 	deploymentSpec := &v1.Deployment{
@@ -1204,8 +1269,9 @@ func CreatecassandraWorkload(cassCommand string, deploymentName string, namespac
 					Containers: []corev1.Container{
 						{
 							Name:    deploymentName,
-							Image:   "scylladb/scylla:4.1.11",
-							Command: []string{"/bin/sh", "-c", cassCommand},
+							Image:   stressImage,
+							Command: []string{"/bin/bash", "-c"},
+							Args:    []string{command},
 						},
 					},
 					RestartPolicy: "Always",
@@ -1441,58 +1507,69 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	return false, errors.New("TPCC run failed.")
 }
 
-// CreateDataServiceWorkloads func
-func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (*corev1.Pod, *v1.Deployment, error) {
+//CreateDataServiceWorkloads generates workloads for the given dataservices
+func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
 
-	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
+	dnsEndpoint, err := GetDeploymentConnectionInfo(params.DeploymentID)
 	if err != nil {
-		log.Errorf("An Error Occured while getting connection info %v", err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error occured while getting connection info, Err: %v", err)
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 
-	pdsPassword, err := GetDeploymentCredentials(deploymentID)
+	pdsPassword, err := GetDeploymentCredentials(params.DeploymentID)
 	if err != nil {
-		log.Errorf("An Error Occured while getting credentials info %v", err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error occured while getting credentials info, Err: %v", err)
 	}
 
-	switch dataServiceName {
+	switch params.DataServiceName {
 	case postgresql:
-		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, scalefactor, iterations, deploymentName, namespace)
+		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, params.ScaleFactor, params.Iterations, params.DeploymentName, params.Namespace)
 		if err != nil {
-			log.Errorf("An Error Occured while creating postgresql workload %v", err)
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("error occured while creating postgresql workload, Err: %v", err)
 		}
 
 	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
 		command := "while true; do java -jar perf-test.jar --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 100 --variable-rate 100:30 --producers 10 --consumers 50; done"
-		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
+		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
-			log.Errorf("An Error Occured while creating rabbitmq workload %v", err)
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("error occured while creating rabbitmq workload, Err: %v", err)
 		}
 
 	case redis:
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
 		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster --user ${PDS_USER}"
-		pod, err = CreateRedisWorkload(deploymentName, redisStressImage, dnsEndpoint, pdsPassword, namespace, env, command)
+		pod, err = CreateRedisWorkload(params.DeploymentName, redisStressImage, dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
-			log.Errorf("An Error Occured while creating redis workload %v", err)
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
 
 	case cassandra:
-		cassCommand := deploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + deploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + deploymentName + ".load.data"
-		dep, err = CreatecassandraWorkload(cassCommand, deploymentName, namespace)
+		cassCommand := fmt.Sprintf("%s write no-warmup n=1000000 cl=ONE -mode user=pds password=%s native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node %s -port native=9042 -rate auto -log file=/tmp/%s.load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/%s.load.data", params.DeploymentName, pdsPassword, dnsEndpoint, params.DeploymentName, params.DeploymentName)
+		dep, err = CreateDeploymentWorkloads(cassCommand, params.DeploymentName, cassandraStresImage, params.Namespace)
 		if err != nil {
-			log.Errorf("An Error Occured while creating cassandra workload %v", err)
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("error occured while creating cassandra workload, Err: %v", err)
+		}
+	case elasticSearch:
+		esCommand := fmt.Sprintf("while true; do esrally race --track=geonames --target-hosts=%s --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:%s,use_ssl:%s,verify_certs:%s,basic_auth_user:%s,basic_auth_password:'%s'\"; done", dnsEndpoint, params.TimeOut, params.UseSSL, params.VerifyCerts, params.User, pdsPassword)
+		dep, err = CreateDeploymentWorkloads(esCommand, params.DeploymentName, esRallyImage, params.Namespace)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error occured while creating elasticSearch workload, Err: %v", err)
 		}
 
+	case couchbase:
+		env := []string{"HOST", "PDS_USER", "PASSWORD", "COUNT"}
+
+		params.Host = dnsEndpoint
+		params.User = "pds"
+		params.Password = pdsPassword
+
+		pod, err = CreatePodWorkloads(params.DeploymentName, cbloadImage, params, params.Namespace, "1000", env)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error occured while creating couchbase workload, Err: %v", err)
+		}
 	}
 	return pod, dep, nil
 }
@@ -1519,7 +1596,6 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 
 	currentReplicas = replicas
 
-	//for ds, id := range supportedDataServicesMap {
 	log.Infof("dataService: %v ", ds)
 	id := GetDataServiceID(ds)
 	if id == "" {
@@ -1713,13 +1789,14 @@ func GetAllSupportedDataServices() map[string]string {
 
 // UpdateDataServices modifies the existing deployment
 func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
-
 	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
-	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
-	if err != nil {
-		log.Errorf("An Error Occured while updating deployment %v", err)
-		return nil, err
-	}
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	})
 
 	err = ValidateDataServiceDeployment(deployment, namespace)
 	if err != nil {

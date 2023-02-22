@@ -4,81 +4,14 @@ import (
 	"os"
 	"testing"
 
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
-	v1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 )
-
-const (
-	pdsNamespace            = "pds-system"
-	deploymentName          = "qa"
-	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
-	postgresql              = "PostgreSQL"
-	cassandra               = "Cassandra"
-	redis                   = "Redis"
-	rabbitmq                = "RabbitMQ"
-	mongodb                 = "MongoDB"
-	mysql                   = "MySQL"
-	kafka                   = "Kafka"
-	zookeeper               = "ZooKeeper"
-	pdsNamespaceLabel       = "pds.portworx.com/available"
-)
-
-var (
-	namespace                               string
-	pxnamespace                             string
-	tenantID                                string
-	dnsZone                                 string
-	projectID                               string
-	serviceType                             string
-	deploymentTargetID                      string
-	replicas                                int32
-	err                                     error
-	supportedDataServices                   []string
-	dataServiceNameDefaultAppConfigMap      map[string]string
-	namespaceID                             string
-	storageTemplateID                       string
-	dataServiceDefaultResourceTemplateIDMap map[string]string
-	dataServiceNameIDMap                    map[string]string
-	supportedDataServicesNameIDMap          map[string]string
-	DeployAllVersions                       bool
-	DataService                             string
-	DeployAllImages                         bool
-	dataServiceDefaultResourceTemplateID    string
-	dataServiceDefaultAppConfigID           string
-	dataServiceVersionBuildMap              map[string][]string
-	dataServiceImageMap                     map[string][]string
-	deploymentPods                          []corev1.Pod
-	dep                                     *v1.Deployment
-	pod                                     *corev1.Pod
-	params                                  *pdslib.Parameter
-	podList                                 *corev1.PodList
-	isDeploymentsDeleted                    bool
-	isNamespacesDeleted                     bool
-	dash                                    *aetosutil.Dashboard
-	deployment                              *pds.ModelsDeployment
-	k8sCore                                 = core.Instance()
-	pdsLabels                               = make(map[string]string)
-)
-
-type PDSDataService struct {
-	Name          string "json:\"Name\""
-	Version       string "json:\"Version\""
-	Image         string "json:\"Image\""
-	Replicas      int    "json:\"Replicas\""
-	ScaleReplicas int    "json:\"ScaleReplicas\""
-	OldVersion    string "json:\"OldVersion\""
-	OldImage      string "json:\"OldImage\""
-}
 
 func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)
