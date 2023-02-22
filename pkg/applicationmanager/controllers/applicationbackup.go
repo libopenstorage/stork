@@ -248,6 +248,10 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		return nil
 	}
 
+	// If the backup is already in final stage, return with out doing anything.
+	if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+		return nil
+	}
 	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
 		namespaces, err := core.Instance().ListNamespaces(labelSelector)
 		if err != nil {
@@ -1048,7 +1052,9 @@ func updateProjectDisplayNames(
 	platformCredential *stork_api.PlatformCredential,
 ) error {
 	rancherClient := &rancher.Rancher{}
-	rancherClient.Init(*platformCredential.Spec.RancherConfig)
+	if err := rancherClient.Init(*platformCredential.Spec.RancherConfig); err != nil {
+		return err
+	}
 	projectList, err := rancherClient.ListProjectNames()
 	if err != nil {
 		return err
