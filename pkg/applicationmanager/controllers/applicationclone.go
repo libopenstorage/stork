@@ -545,6 +545,7 @@ func (a *ApplicationCloneController) prepareResources(
 			pvNameMappings,
 			clone.Spec.IncludeOptionalResourceTypes,
 			nil,
+			nil,
 		)
 		if err != nil {
 			return nil, err
@@ -704,7 +705,7 @@ func (a *ApplicationCloneController) applyResources(
 		retained := false
 		err = a.resourceCollector.ApplyResource(
 			a.dynamicInterface,
-			o)
+			o, nil)
 		if err != nil && errors.IsAlreadyExists(err) {
 			switch clone.Spec.ReplacePolicy {
 			case stork_api.ApplicationCloneReplacePolicyDelete:

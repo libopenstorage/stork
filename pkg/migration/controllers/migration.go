@@ -79,6 +79,8 @@ const (
 
 var (
 	AutoCreatedPrefixes = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+
+	ErrReapplyLatestVersionMsg = "please apply your changes to the latest version and try again"
 )
 
 // NewMigration creates a new instance of MigrationController.
@@ -487,7 +489,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
 				log.MigrationLog(migration).Errorf(message)
 				// Don't need to log this event as Stork retries if it fails to update
-				if !strings.Contains(message, "please apply your changes to the latest version and try again") {
+				if !strings.Contains(message, ErrReapplyLatestVersionMsg) {
 					m.recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),
@@ -515,11 +517,14 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		if err != nil {
 			message := fmt.Sprintf("Error migrating resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
-			m.recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				message)
-			return nil
+			// Don't need to log this event as Stork retries if it fails to update
+			if !strings.Contains(message, ErrReapplyLatestVersionMsg) {
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					message)
+				return nil
+			}
 		}
 	case stork_api.MigrationStageFinal:
 		return nil
@@ -2160,6 +2165,13 @@ func (m *MigrationController) applyResources(
 									log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
 										obj.GetName(), deleteStart, createTime)
 									break
+								}
+								if obj.GetFinalizers() != nil {
+									obj.SetFinalizers(nil)
+									_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
+									if err != nil {
+										log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+									}
 								}
 								log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
 								time.Sleep(deletedRetryInterval)

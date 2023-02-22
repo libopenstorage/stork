@@ -143,6 +143,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
 	storageClassMappings map[string]string,
 	namespaceMappings map[string]string,
+	opts Options,
 ) (bool, error) {
 	var updatedName string
 	var present bool
@@ -182,6 +183,11 @@ func (r *ResourceCollector) preparePVResourceForApply(
 				pv.Spec.StorageClassName = oldSc
 			}
 		}
+	}
+
+	if opts.RancherProjectMappings != nil {
+		utils.ParseRancherProjectMapping(pv.Annotations, opts.RancherProjectMappings)
+		utils.ParseRancherProjectMapping(pv.Labels, opts.RancherProjectMappings)
 	}
 
 	pv.Name = updatedName
