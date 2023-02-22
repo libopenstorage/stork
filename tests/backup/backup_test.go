@@ -6488,7 +6488,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				backupMap[backupName] = backupUID
 
 				// Start Restore
-				namespaceMapping[bkpNamespaces[0]] = bkpNamespaces[0] + user
+				namespaceMapping[bkpNamespaces[0]] = bkpNamespaces[0] + "restored"
 				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, user)
 				restoreNames = append(restoreNames, restoreName)
 				log.Infof("Creating restore %s for user %s", restoreName, user)
