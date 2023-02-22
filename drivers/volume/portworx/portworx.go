@@ -2467,15 +2467,13 @@ func (p *portworx) ActivateMigration(namespace string) error {
 		if err != nil {
 			return err
 		}
-		if len(volumes) != 1 { // TODO(dgoel): can one PVC have multiple underlying volumes?
+		if len(volumes) != 1 {
 			return &errors.ErrNotFound{
 				ID:   volID,
 				Type: "Volume",
 			}
 		}
 		vol := volumes[0]
-
-		// TODO(dgoel): check if nearsync volume
 
 		volLocator := vol.Locator
 		if volLocator.VolumeLabels == nil {
