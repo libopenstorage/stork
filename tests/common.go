@@ -111,7 +111,6 @@ import (
 
 	context1 "context"
 
-	"github.com/pborman/uuid"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -152,7 +151,7 @@ const (
 	meteringIntervalMinsFlag             = "metering_interval_mins"
 	SourceClusterName                    = "source-cluster"
 	destinationClusterName               = "destination-cluster"
-	backupLocationName                   = "tp-blocation"
+	backupLocationNameConst              = "tp-blocation"
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
@@ -2384,7 +2383,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  schedulePolicyUID,
 			},
 			BackupLocationRef: &api.ObjectRef{
-				Name: backupLocationName,
+				Name: backupLocationNameConst,
 				Uid:  BackupLocationUID,
 			},
 		}
@@ -2677,28 +2676,6 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 	_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
 	return err
 	// TODO: validate createClusterResponse also
-}
-
-// SetupBackup sets up backup location and source and destination clusters
-func SetupBackup(testName string) {
-	log.Infof("Backup driver: %v", Inst().Backup)
-	provider := GetProvider()
-	log.Infof("Run Setup backup with object store provider: %s", provider)
-	OrgID = "default"
-	BucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
-	CloudCredUID = uuid.New()
-	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
-	BackupLocationUID = uuid.New()
-	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
-
-	CreateBucket(provider, BucketName)
-	CreateOrganization(OrgID)
-	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
-	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
-	err = CreateSourceAndDestClusters(OrgID, "", "", ctx)
-	log.FailOnError(err, "Creating source and destination cluster")
 }
 
 // DeleteBackup deletes backup
@@ -3743,72 +3720,6 @@ func ValidateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error
 		return fmt.Errorf("failed to set replication factor of the volume: %v due to err: %v", v.Name, err.Error())
 	}
 	return nil
-}
-
-// TearDownBackupRestoreAll enumerates backups and restores before deleting them
-func TearDownBackupRestoreAll() {
-	log.Infof("Enumerating scheduled backups")
-	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-		OrgId:  OrgID,
-		Labels: make(map[string]string),
-		BackupLocationRef: &api.ObjectRef{
-			Name: backupLocationName,
-			Uid:  BackupLocationUID,
-		},
-	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
-	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
-	for _, bkpSched := range bkpSchedules {
-		schedPol := bkpSched.GetSchedulePolicyRef()
-		DeleteScheduledBackup(bkpSched.GetName(), bkpSched.GetUid(), schedPol.GetName(), schedPol.GetUid())
-	}
-
-	log.Infof("Enumerating backups")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: OrgID,
-	}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
-	backups := enumBkpResponse.GetBackups()
-	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID, ctx)
-	}
-
-	log.Infof("Enumerating restores")
-	restoreEnumerateReq := &api.RestoreEnumerateRequest{
-		OrgId: OrgID}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
-	restores := enumRestoreResponse.GetRestores()
-	for _, restore := range restores {
-		err = DeleteRestore(restore.GetName(), OrgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting Restore")
-	}
-
-	for _, bkp := range backups {
-		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	for _, restore := range restores {
-		Inst().Backup.WaitForRestoreDeletion(ctx, restore.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	provider := GetProvider()
-	err = DeleteCluster(destinationClusterName, OrgID, ctx)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-	err = DeleteCluster(SourceClusterName, OrgID, ctx)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-	err = DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
-	DeleteBucket(provider, BucketName)
 }
 
 // CreateBucket creates bucket on the appropriate cloud platform

@@ -2508,7 +2508,7 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 				SourceClusterName, namespace, backupName), func() {
 				err = CreateBackupGetErr(backupName,
-					SourceClusterName, backupLocationName, BackupLocationUID,
+					SourceClusterName, backupLocationNameConst, BackupLocationUID,
 					[]string{namespace}, labelSelectors, OrgID)
 				if err != nil {
 					bkpNamespaceErrors[namespace] = err
@@ -2698,7 +2698,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			bkpNames = append(bkpNames, namespace)
 			log.Infof("Create backup full name %s:%s:%s", SourceClusterName, namespace, backupName)
-			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
+			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{namespace}, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"ConfigMap"}
@@ -3044,7 +3044,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 			for _, ns := range nsList.Items {
 				namespaces = append(namespaces, ns.Name)
 			}
-			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
+			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				namespaces, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"PersistentVolumeClaim"}
@@ -3236,7 +3236,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 	})
 	Step(fmt.Sprintf("Backup using label [%s=%s]", labelKey, labelValue), func() {
 		labelSelectors[labelKey] = labelValue
-		backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
+		backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationNameConst, BackupLocationUID,
 			namespaces, labelSelectors, OrgID)
 		backupCreateRequest.Name = backupName
 		err = CreateBackupFromRequest(backupName, OrgID, backupCreateRequest)
@@ -3478,7 +3478,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
@@ -3566,7 +3566,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
@@ -3701,7 +3701,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, "all", backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{"*"}, labelSelectors, OrgID)
 			UpdateOutcome(event, err)
 		})
@@ -3784,7 +3784,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, "all", backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{"*"}, labelSelectors, OrgID)
 			UpdateOutcome(event, err)
 		})
