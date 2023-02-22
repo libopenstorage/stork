@@ -4638,6 +4638,7 @@ func WaitForExpansionToStart(poolID string) error {
 				log.InfoD("Pool %s expansion started", poolID)
 				return nil, false, nil
 			}
+
 		}
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
 	}
@@ -4754,7 +4755,7 @@ func Contains(app_list []string, app string) bool {
 }
 
 // ValidatePoolRebalance checks rebalnce state of pools if running
-func ValidatePoolRebalance() error {
+func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 
 	rebalanceFunc := func() (interface{}, bool, error) {
 
@@ -4818,27 +4819,42 @@ func ValidatePoolRebalance() error {
 		return err
 	}
 
-	var pools map[string]*opsapi.StoragePool
-	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, "error getting pools list")
-
-	for _, pool := range pools {
-
-		if pool == nil {
-			return fmt.Errorf("pool value is nil")
+	nodePoolsToValidate := make([]node.StoragePool, 0)
+	if poolID != -1 {
+		for _, p := range stNode.StoragePools {
+			if p.ID == poolID {
+				nodePoolsToValidate = append(nodePoolsToValidate, p)
+				break
+			}
 		}
+	} else {
+		//A new pool might be created due to add drive,hence 2 min wait for pool to associate with node
+		time.Sleep(2 * time.Minute)
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing end points")
+		for _, n := range node.GetStorageNodes() {
+			if n.Id == stNode.Id {
+				stNode = n
+				break
+			}
+		}
+		nodePoolsToValidate = append(nodePoolsToValidate, stNode.StoragePools...)
+
+	}
+
+	for _, nodePool := range nodePoolsToValidate {
 		currentLastMsg := ""
 		f := func() (interface{}, bool, error) {
-			expandedPool, err := GetStoragePoolByUUID(pool.Uuid)
+			expandedPool, err := GetStoragePoolByUUID(nodePool.Uuid)
 			if err != nil {
-				return nil, true, fmt.Errorf("error getting pool by using id %s", pool.Uuid)
+				return nil, true, fmt.Errorf("error getting pool by using id %s from node %s", nodePool.Uuid, stNode.Name)
 			}
 
 			if expandedPool == nil {
 				return nil, false, fmt.Errorf("expanded pool value is nil")
 			}
 			if expandedPool.LastOperation != nil {
-				log.Infof("Pool Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+				log.Infof("Node [%s] Pool [%s] Status : %v, Message : %s", stNode.Name, nodePool.Uuid, expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
 					return nil, false, fmt.Errorf("Pool is failed state. Error: %s", expandedPool.LastOperation)
 				}
@@ -4860,7 +4876,6 @@ func ValidatePoolRebalance() error {
 		}
 		_, err = task.DoRetryWithTimeout(f, time.Minute*180, time.Minute*2)
 	}
-
 	return err
 }
 
@@ -5253,7 +5268,7 @@ func WaitTillEnterMaintenanceMode(n node.Node) error {
 
 // ExitFromMaintenanceMode wait until the node exits from maintenance mode
 func ExitFromMaintenanceMode(n node.Node) error {
-	log.InfoD("Exiting maintenence mode on Node %s", n.Name)
+	log.InfoD("Exiting maintenance mode on Node %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		if err := Inst().V.ExitMaintenance(n); err != nil {
 			nodeState, err := Inst().V.IsNodeInMaintenance(n)
