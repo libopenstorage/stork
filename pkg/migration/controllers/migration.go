@@ -78,6 +78,8 @@ const (
 )
 
 var (
+	AutoCreatedPrefixes = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+
 	ErrReapplyLatestVersionMsg = "please apply your changes to the latest version and try again"
 )
 
@@ -1241,7 +1243,7 @@ func (m *MigrationController) getRemoteClient(migration *stork_api.Migration) (*
 	return &remoteClient, err
 }
 
-func (m *MigrationController) checkAndUpdateService(
+func (m *MigrationController) isServiceUpdated(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
 	objHash uint64,
@@ -1276,23 +1278,18 @@ func (m *MigrationController) checkAndUpdateService(
 			log.MigrationLog(migration).Infof("skipping service update, no changes found since last migration %d/%d", old, objHash)
 			return true, nil
 		}
+		return false, nil
 	}
-	// update annotations
-	for k, v := range svc.Annotations {
-		curr.Annotations[k] = v
+	return false, nil
+}
+
+func (m *MigrationController) secretToBeMigrated(name string) bool {
+	for _, prefix := range AutoCreatedPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return false
+		}
 	}
-	// update selectors
-	if curr.Spec.Selector == nil {
-		curr.Spec.Selector = make(map[string]string)
-	}
-	for k, v := range svc.Spec.Selector {
-		curr.Spec.Selector[k] = v
-	}
-	_, err = remoteClient.adminClient.CoreV1().Services(svc.GetNamespace()).Update(context.TODO(), curr, metav1.UpdateOptions{})
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return true
 }
 
 func (m *MigrationController) checkAndUpdateDefaultSA(
@@ -1327,6 +1324,24 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 			destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, s)
 		}
 	}
+
+	for _, s := range sourceSA.Secrets {
+		if !m.secretToBeMigrated(s.Name) {
+			continue
+		}
+		found := false
+		for _, d := range destSA.Secrets {
+			if d.Name == s.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			destSA.Secrets = append(destSA.Secrets, s)
+		}
+	}
+	destSA.AutomountServiceAccountToken = sourceSA.AutomountServiceAccountToken
+
 	// merge annotation for SA
 	log.MigrationLog(migration).Infof("Updating service account(namespace/name : %s/%s) annotations", sourceSA.GetNamespace(), sourceSA.GetName())
 	if destSA.Annotations != nil {
@@ -2125,7 +2140,7 @@ func (m *MigrationController) applyResources(
 						err = m.checkAndUpdateDefaultSA(migration, o)
 					case "Service":
 						var skipUpdate bool
-						skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
+						skipUpdate, err = m.isServiceUpdated(migration, o, objHash)
 						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
 							break
 						}
