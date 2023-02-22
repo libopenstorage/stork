@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func (r *ResourceCollector) prepareNetworkPolicyForCollection(
+func (r *ResourceCollector) prepareRancherNetworkPolicy(
 	object runtime.Unstructured,
 	opts Options,
 ) error {
@@ -20,6 +22,8 @@ func (r *ResourceCollector) prepareNetworkPolicyForCollection(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &networkPolicy); err != nil {
 		return fmt.Errorf("error converting to networkpolicy: %v", err)
 	}
+
+	utils.ParseRancherProjectMapping(networkPolicy.Labels, opts.RancherProjectMappings)
 
 	// Handle namespace selectors for Rancher Network Policies
 	if len(opts.RancherProjectMappings) > 0 {
@@ -100,4 +104,46 @@ func (r *ResourceCollector) networkPolicyToBeCollected(
 	}
 
 	return true, nil
+}
+
+func (r *ResourceCollector) mergeAndUpdateNetworkPolicy(
+	object runtime.Unstructured,
+	opts *Options,
+) error {
+
+	if len(opts.RancherProjectMappings) == 0 {
+		return nil
+	}
+
+	var newNetworkPolicy v1.NetworkPolicy
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &newNetworkPolicy); err != nil {
+		return fmt.Errorf("error converting to networkpolicy: %v", err)
+	}
+
+	curNetworkPolicy, err := r.coreOps.GetNetworkPolicy(newNetworkPolicy.Name, newNetworkPolicy.Namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			_, err = r.coreOps.CreateNetworkPolicy(&newNetworkPolicy)
+		}
+		return err
+	}
+
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&curNetworkPolicy)
+	if err != nil {
+		return fmt.Errorf("error converting from networkPolicy to runtime.Unstructured: %v", err)
+	}
+	obj := &unstructured.Unstructured{}
+	obj.SetUnstructuredContent(content)
+
+	if err = r.prepareRancherNetworkPolicy(obj, *opts); err != nil {
+		return err
+	}
+
+	var parsedNetworkPolicy v1.NetworkPolicy
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &parsedNetworkPolicy); err != nil {
+		return fmt.Errorf("error converting to networkpolicy: %v", err)
+	}
+
+	_, err = r.coreOps.UpdateNetworkPolicy(&parsedNetworkPolicy)
+	return err
 }
