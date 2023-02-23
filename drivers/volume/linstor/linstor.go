@@ -85,6 +85,15 @@ func (l *linstor) Init(_ interface{}) error {
 	return l.startNodeCache()
 }
 
+func (l *linstor) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
+}
+
 func (l *linstor) startNodeCache() error {
 	resyncPeriod := 30 * time.Second
 

@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
@@ -63,6 +64,15 @@ func (m Driver) Init(_ interface{}) error {
 // Stop Stops the mock driver
 func (m Driver) Stop() error {
 	return nil
+}
+
+func (m *Driver) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
 }
 
 // CreateCluster Creates a cluster with specified number of nodes
