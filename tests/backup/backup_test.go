@@ -448,8 +448,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				}
 			}
 		})
-		Step("Creating bucket,backup location and cloud setting", func() {
-			log.InfoD("Creating bucket,backup location and cloud setting")
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
@@ -734,8 +734,8 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			log.Infof("Group [%v] contains the following users: \n%v", groupName, usersOfGroup)
 
 		})
-		Step("Creating bucket,backup location and cloud setting", func() {
-			log.InfoD("Creating bucket,backup location and cloud setting")
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
 			providers := getProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
@@ -916,7 +916,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating bucket, cloud credentials and backup location")
+			log.InfoD("Creating cloud credentials and backup location")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
@@ -1753,7 +1753,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating bucket, cloud credentials and backup location")
+			log.InfoD("Creating cloud credentials and backup location")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
@@ -2187,7 +2187,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			wg.Wait()
 		})
 		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating bucket, cloud credentials and backup location")
+			log.InfoD("Creating cloud credentials and backup location")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
@@ -2414,7 +2414,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			users = createUsers(numberOfUsers)
 		})
 		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating bucket, cloud credentials and backup location")
+			log.InfoD("Creating cloud credentials and backup location")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
@@ -3047,7 +3047,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
 		})
 		Step("Creating backup location and cloud setting", func() {
-			log.InfoD("Creating bucket,backup location and cloud setting")
+			log.InfoD("Creating backup location and cloud setting")
 			providers := getProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
@@ -5026,7 +5026,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating bucket, cloud credentials and backup location")
+			log.InfoD("Creating cloud credentials and backup location")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
@@ -6007,7 +6007,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			wg.Wait()
 		})
 		Step(fmt.Sprintf("Adding Credentials and Registering Backup Location for %s and %s", users[0], users[1]), func() {
-			log.InfoD(fmt.Sprintf("Creating bucket, cloud credentials and backup location for %s and %s", users[0], users[1]))
+			log.InfoD(fmt.Sprintf("Creating cloud credentials and backup location for %s and %s", users[0], users[1]))
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
