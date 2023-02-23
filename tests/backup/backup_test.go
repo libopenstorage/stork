@@ -6426,7 +6426,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreation", "Create schedule backup creation with a single namespace", nil, testrailID)
+		StartTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, testrailID)
 		log.Info("Application installation")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -6559,7 +6559,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreation", "Create schedule backup creation with all namespaces", nil, testrailID)
+		StartTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, testrailID)
 		log.Info("Application installation")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
