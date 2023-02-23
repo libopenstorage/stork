@@ -4665,7 +4665,7 @@ func Contains(app_list []string, app string) bool {
 	return false
 }
 
-// ValidatePoolRebalance checks rebalnce state of pools if running
+// ValidatePoolRebalance checks rebalance state of pools if running
 func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 
 	rebalanceFunc := func() (interface{}, bool, error) {
@@ -5165,6 +5165,7 @@ func WaitTillEnterMaintenanceMode(n node.Node) error {
 			return nil, false, err
 		}
 		if nodeState == true {
+			log.InfoD("Node [%v] entered maintenance mode", n.Name)
 			return nil, true, nil
 		}
 		return nil, false, fmt.Errorf("Not in Maintenance mode")
@@ -5187,6 +5188,7 @@ func ExitFromMaintenanceMode(n node.Node) error {
 				return nil, false, err
 			}
 			if nodeState == true {
+				log.InfoD("Node [%v] out of Maintenance mode", n.Name)
 				return nil, true, nil
 			}
 			return nil, true, err
@@ -5283,4 +5285,139 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 		randomItems[i] = items[j]
 	}
 	return randomItems, nil
+
+}
+
+// WaitTillPoolState returns if pool is in rebalance state
+func WaitTillPoolState(state opsapi.StorageRebalanceJobState) (bool, error) {
+
+	rebalanceFunc := func() (interface{}, bool, error) {
+		rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+		if err != nil {
+			return nil, true, err
+		}
+
+		for _, job := range rebalanceJobs {
+			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+			if err != nil {
+				return nil, true, err
+			}
+
+			jobState := jobResponse.GetJob().GetState()
+			switch jobState {
+			case opsapi.StorageRebalanceJobState_CANCELLED:
+				if state == opsapi.StorageRebalanceJobState_CANCELLED {
+					return nil, true, nil
+				}
+				return nil, false, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+			case opsapi.StorageRebalanceJobState_PAUSED:
+				if state == opsapi.StorageRebalanceJobState_PAUSED {
+					return nil, true, nil
+				}
+				return nil, false, fmt.Errorf("Job %v is in paused/pending state", job.GetId())
+			case opsapi.StorageRebalanceJobState_DONE:
+				if state == opsapi.StorageRebalanceJobState_DONE {
+					return nil, true, nil
+				}
+				return nil, false, nil
+			case opsapi.StorageRebalanceJobState_RUNNING:
+				if state == opsapi.StorageRebalanceJobState_RUNNING {
+					return nil, true, nil
+				}
+				return nil, false, fmt.Errorf("job %v has status Running, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+			default:
+				if state == jobState {
+					return nil, true, fmt.Errorf("Job not in required state [%v]", state)
+				}
+			}
+		}
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(rebalanceFunc, time.Minute*60, time.Minute*2)
+	if err != nil {
+		return false, err
+	}
+	return true, err
+}
+
+func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
+		}
+
+		if poolsStatus == nil {
+			return nil, false, fmt.Errorf("pools status is nil")
+		}
+
+		for k, v := range poolsStatus {
+			if v != expectedStatus {
+				return nil, true, fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+			}
+		}
+
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	return err
+}
+
+// MakeStoragetoStoragelessNode returns true on converting Storage Node to Storageless Node
+func MakeStoragetoStoragelessNode(n node.Node) error {
+
+	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
+
+	// Get total list of pools present on the node
+	poolList, err := GetPoolsDetailsOnNode(n)
+	if err != nil {
+		return err
+	}
+	lenPools := len(poolList)
+	log.InfoD("total number of Pools present on the Node [%v] is [%d]", n.Name, lenPools)
+
+	// Enter pool maintenance mode before deleting the pools from the cluster
+	err = Inst().V.EnterPoolMaintenance(n)
+	if err != nil {
+		return fmt.Errorf("failed to set pool maintenance mode on node %s : Error [%v]", n.Name, err)
+	}
+
+	time.Sleep(1 * time.Minute)
+	expectedStatus := "In Maintenance"
+	err = WaitForPoolStatusToUpdate(n, expectedStatus)
+	if err != nil {
+		return fmt.Errorf("node [%s] pools are not in status [%s] : Error [%v]", n.Name, expectedStatus, err)
+	}
+
+	// Delete all the pools present on the Node
+	for i := 0; i < lenPools; i++ {
+		err := Inst().V.DeletePool(n, strconv.Itoa(i))
+		if err != nil {
+			return err
+		}
+	}
+
+	err = Inst().V.ExitPoolMaintenance(n)
+	if err != nil {
+		return fmt.Errorf("failed to exit pool maintenance mode on node [%s] Error: [%v]", n.Name, err)
+	}
+
+	err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
+	if err != nil {
+		return fmt.Errorf("volume driver down on node %s with Error: [%v]", n.Name, err)
+	}
+
+	expectedStatus = "Online"
+	err = WaitForPoolStatusToUpdate(n, expectedStatus)
+	if err != nil {
+		return fmt.Errorf("node %s pools are not in status %s with Error: [%v]", n.Name, expectedStatus, err)
+	}
+
+	storageLessNodeAfterPoolDelete := node.GetStorageLessNodes()
+	if len(storageLessNodeBeforePoolDelete) <= len(storageLessNodeAfterPoolDelete) {
+		return fmt.Errorf("making storage node to storagelessnode failed")
+	}
+
+	return nil
 }
