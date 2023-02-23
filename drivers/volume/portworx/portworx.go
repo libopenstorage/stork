@@ -89,6 +89,7 @@ const (
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
 	pxctlDriveAddStart                        = "%s -j service drive add %s -o start"
 	pxctlDriveAddStatus                       = "%s -j service drive add %s -o status"
+	pxctlCloudDriveInspect                    = "%s -j cd inspect --node %s"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
@@ -1873,6 +1874,23 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 		nodes = append(nodes, nodeResp.(*api.SdkNodeInspectResponse).Node)
 	}
 	return nodes, nil
+}
+
+// GetDriveSet runs `pxctl cd i --node <node ID>` on the given node
+func (d *portworx) GetDriveSet(n *node.Node) (*torpedovolume.DriveSet, error) {
+	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, fmt.Sprintf(pxctlCloudDriveInspect, d.getPxctlPath(*n), n.VolDriverNodeID), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error when inspecting drive sets for node ID [%s] using PXCTL, Err: %v", n.VolDriverNodeID, err)
+	}
+	var driveSetInspect torpedovolume.DriveSet
+	err = json.Unmarshal([]byte(out), &driveSetInspect)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal drive set inspect, Err: %v", err)
+	}
+	return &driveSetInspect, nil
 }
 
 // WaitDriverUpOnNode waits for PX to be up on a given node

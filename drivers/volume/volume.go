@@ -40,6 +40,27 @@ type Image struct {
 	Version string
 }
 
+type DriveSet struct {
+	Configs           map[string]DriveConfig
+	NodeID            string
+	SchedulerNodeName string
+	InstanceID        string
+	Zone              string
+	State             string
+	Labels            map[string]string
+}
+
+type DriveConfig struct {
+	Type   string
+	Size   uint
+	ID     string
+	Path   string
+	IOPS   int
+	PXType string
+	State  string
+	Labels map[string]string
+}
+
 // Options to pass to APIs
 type Options struct {
 	ValidateReplicationUpdateTimeout time.Duration
@@ -218,6 +239,8 @@ type Driver interface {
 
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
+
+	GetDriveSet(n *node.Node) (*DriveSet, error)
 
 	//IsDriverInstalled checks for driver to be installed on a node
 	IsDriverInstalled(n node.Node) (bool, error)
