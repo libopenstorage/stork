@@ -6381,8 +6381,6 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
-<<<<<<< Updated upstream
-=======
 
 var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 	// Testrail Description : Resize to lower size than existing pool size,should fail with proper error statement
@@ -6518,4 +6516,3 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 	})
 
 })
->>>>>>> Stashed changes
