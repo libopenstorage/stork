@@ -6604,8 +6604,13 @@ var _ = Describe("{AddDriveStorageLessNodeResizeDisk}", func() {
 		pickNode = storageLessNode[randomIndex]
 		log.InfoD("Storage Less node is [%v]", pickNode.Name)
 
-		// Add Drive to Storage less node
-		log.FailOnError(addCloudDrive(pickNode, -1), "error adding cloud drive")
+		// Add multiple Drives to Storage less node
+		maxDrivesToAdd := 6
+		randomCount := rand.Intn(maxDrivesToAdd)
+		for i := 0; i < randomCount; i++ {
+			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, randomCount, pickNode.Name)
+			log.FailOnError(addCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
+		}
 
 		// Resize the cloud drive added on the Node
 		poolList, err := GetPoolsDetailsOnNode(pickNode)
