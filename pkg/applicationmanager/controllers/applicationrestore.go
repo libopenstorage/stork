@@ -1357,15 +1357,7 @@ func (a *ApplicationRestoreController) restoreResources(
 
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
-	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
-	restore.Status.Reason = "Volumes and resources were restored up successfully"
-	for _, resource := range restore.Status.Resources {
-		if resource.Status != storkapi.ApplicationRestoreStatusSuccessful {
-			restore.Status.Status = storkapi.ApplicationRestoreStatusPartialSuccess
-			restore.Status.Reason = "Volumes were restored successfully. Some existing resources were not replaced"
-			break
-		}
-	}
+	setOverallApplicationRestoreStatus(restore)
 
 	restore.Status.LastUpdateTimestamp = metav1.Now()
 	if err := a.client.Update(context.TODO(), restore); err != nil {
@@ -1373,6 +1365,25 @@ func (a *ApplicationRestoreController) restoreResources(
 	}
 
 	return nil
+}
+
+// setOverallApplicationRestoreStatus set final application restore status based on status of all individual resources
+func setOverallApplicationRestoreStatus(restore *storkapi.ApplicationRestore) {
+	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
+	restore.Status.Reason = "Volumes and resources were restored up successfully"
+	numFailedResources := 0
+	for _, resource := range restore.Status.Resources {
+		if resource.Status == storkapi.ApplicationRestoreStatusFailed {
+			numFailedResources++
+		}
+	}
+	if numFailedResources == len(restore.Status.Resources) {
+		restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+		restore.Status.Reason = "Volumes were restored successfully. Resources were not replaced"
+	} else if numFailedResources != 0 {
+		restore.Status.Status = storkapi.ApplicationRestoreStatusPartialSuccess
+		restore.Status.Reason = "Volumes were restored successfully. Some resources were not replaced"
+	}
 }
 
 func (a *ApplicationRestoreController) addCSIVolumeResources(restore *storkapi.ApplicationRestore) error {
