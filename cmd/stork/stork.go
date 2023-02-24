@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/cache"
-	"github.com/libopenstorage/stork/pkg/namespacecontroller"
 
 	stork_driver "github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -34,6 +33,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/monitor"
+	namespacedaction "github.com/libopenstorage/stork/pkg/namespacedactioncontroller"
 	"github.com/libopenstorage/stork/pkg/objectcontroller"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
@@ -140,8 +140,8 @@ func main() {
 			Usage: "The interval in seconds to monitor the health of the storage driver (min: 30)",
 		},
 		cli.BoolTFlag{
-			Name:  "namespace-controller",
-			Usage: "Start the namespace controller (default: true)",
+			Name:  "namespaced-action-controller",
+			Usage: "Start the NamespacedAction controller (default: true)",
 		},
 		cli.BoolTFlag{
 			Name:  "migration-controller",
@@ -475,10 +475,10 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 			}
 		}
 
-		if c.Bool("namespace-controller") {
-			namespacecontroller := namespacecontroller.NewNamespaceController(mgr, d, recorder)
-			if err := namespacecontroller.Init(mgr); err != nil {
-				log.Fatalf("Error initializing namespacecontroller: %v", err)
+		if c.Bool("namespaced-action-controller") {
+			namespacedActionController := namespacedaction.NewNamespacedActionController(mgr, d, recorder)
+			if err := namespacedActionController.Init(mgr); err != nil {
+				log.Fatalf("Error initializing namespaced action controller: %v", err)
 			}
 		}
 
