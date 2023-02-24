@@ -6171,7 +6171,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 })
 
 var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
-	var testrailID = 79487
+	var testrailID = 55349
 	// Testrail Description : Verify deletion of invalid pool ids
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55349
 
@@ -6309,9 +6309,15 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 		alertsBefore, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_POOL,
 			startMinusTenHours,
 			endTime)
-		log.FailOnError(err, "Failed to fetch alerts between startTime [%v] and endTime [%v]",
-			startMinusTenHours,
-			endTime)
+		if err != nil {
+			// Ignoring the error as it is quite possible that no
+			// alerts for resource type pool is seen on the fresh installed cluster
+			// instead of failing the test here , we will verify the alerts post
+			// after running the script with some negative scenarios
+			log.Errorf("failed to fetch alerts between startTime [%v] and endTime [%v]",
+				startMinusTenHours,
+				endTime)
+		}
 
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -6370,10 +6376,14 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 				startMinusTenHours, endTime)
 			alerts, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_POOL,
 				startMinusTenHours, endTime)
+
+			// Failing as no alerts seen , as we are runnign some negative scenarios it is expected to have some
+			// alerts generated for resource type pool
 			log.FailOnError(err, "Failed to fetch alerts between startTime [%v] and endTime [%v]",
 				startMinusTenHours, endTime)
 			dash.VerifyFatal(len(alertsBefore.Alerts) < len(alerts.Alerts),
-				true, fmt.Sprintf("did alert generated for resource type [%v] with time specified?",
+				true,
+				fmt.Sprintf("did alert generated for resource type [%v] with time specified?",
 					api.ResourceType_RESOURCE_TYPE_POOL))
 
 		})
@@ -6628,13 +6638,11 @@ var _ = Describe("{AddDriveStorageLessNodeResizeDisk}", func() {
 
 var _ = Describe("{DriveAddPXDown}", func() {
 	/*
-		Pool Resize after adding drives to storage less node
-		https://portworx.testrail.net/index.php?/cases/view/51329
-		https://portworx.testrail.net/index.php?/cases/view/51330
+		Add drive when Px is down
 	*/
 
 	var testrailID = 0
-	// Testrail Description : Pool Resize after adding drives to storage less node
+	// Testrail Description : add drive when px is down
 	var runID int
 
 	JustBeforeEach(func() {
@@ -6644,13 +6652,13 @@ var _ = Describe("{DriveAddPXDown}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
-	stepLog := "Add Drives to storage less node and resize after adding the node"
+	stepLog := "Add Drive when Px is down"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeleterebalanceid-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivepxdownid-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
@@ -6718,7 +6726,7 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 	})
 	var contexts []*scheduler.Context
 
-	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+	stepLog := "Initiate pool expansion using add-drive and restart PX"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
