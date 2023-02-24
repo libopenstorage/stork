@@ -22,13 +22,10 @@ type NamespacedActionList struct {
 	Items         []NamespacedAction `json:"items"`
 }
 
-// TODO(dgoel): I moved these lines around, it can possibly cause problems
-// CAUTION!!!!
-
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// NamespacedAction represents a scheduled migration object
+// NamespacedAction is a resource with which user can trigger various actions
 type NamespacedAction struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
@@ -36,7 +33,7 @@ type NamespacedAction struct {
 	Status          NamespacedActionStatus `json:"status"`
 }
 
-// NamespacedActionSpec is the spec used to schedule migrations
+// NamespacedActionSpec is the action that the user wants to trigger, or nil if no action
 type NamespacedActionSpec struct {
 	Action NamespacedActionType `json:"action"`
 }
@@ -50,20 +47,19 @@ const (
 	NamespacedActionFailback NamespacedActionType = "failback"
 )
 
-// NamespacedActionStatus is the status of a migration schedule
+// NamespacedActionStatus is the result of the past triggered actions
 type NamespacedActionStatus struct {
 	Items []*NamespacedActionStatusItem `json:"items"`
 }
 
-// ScheduledMigrationStatus keeps track of the migration that was triggered by a
-// scheduled policy
+// NamespacedActionStatusItem keeps track of the actions, their timestamp and their result
 type NamespacedActionStatusItem struct {
 	Action    NamespacedActionType       `json:"action"`
 	Timestamp meta.Time                  `json:"timestamp"`
 	Status    NamespacedActionStatusType `json:"status"`
 }
 
-// NamespacedActionStatusType is the status of the NamespacedAction
+// NamespacedActionStatusType is the result of the action after it has completed
 type NamespacedActionStatusType string
 
 const (
