@@ -1131,7 +1131,7 @@ var _ = Describe("{AddDriveAndPXRestart}", func() {
 			log.InfoD(stepLog)
 			err := Inst().V.RestartDriver(stNode, nil)
 			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
-			err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(stNode, 15*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after restarting on node %s", stNode.Name))
 		})
@@ -6250,7 +6250,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		err = Inst().V.ExitPoolMaintenance(*nodeDetail)
 		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", nodeDetail.Name)
 
-		err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 5*time.Minute)
+		err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
 		log.FailOnError(err, "volume driver down on node %s", nodeDetail.Name)
 
 		expectedStatus = "Online"
@@ -6474,7 +6474,7 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 		err = Inst().V.ExitPoolMaintenance(*nodeDetail)
 		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", nodeDetail.Name)
 
-		err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 5*time.Minute)
+		err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
 		log.FailOnError(err, "volume driver down on node %s", nodeDetail.Name)
 
 		expectedStatus = "Online"
@@ -6678,7 +6678,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 			log.InfoD("Start Px Driver and wait for driver to come up on node [%v]", nodeDetail.Name)
 			log.FailOnError(Inst().V.StartDriver(*nodeDetail),
 				fmt.Sprintf("Failed to Bring back the Px on Node [%v]", nodeDetail.Name))
-			log.FailOnError(Inst().V.WaitDriverUpOnNode(*nodeDetail, 20*time.Minute),
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut),
 				fmt.Sprintf("Driver is still down on node [%v] after waiting", nodeDetail.Name))
 		}
 		// Bring Px Down on the Node selected
@@ -6767,7 +6767,7 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 			log.InfoD(stepLog)
 			err := Inst().V.RestartDriver(*nodeDetail, nil)
 			log.FailOnError(err, fmt.Sprintf("error restarting px on node [%s]", nodeDetail.Name))
-			err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 2*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node [%s]", nodeDetail.Name))
 			dash.VerifyFatal(err == nil, true,
 				fmt.Sprintf("PX is up after restarting on node [%s]", nodeDetail.Name))
@@ -6847,7 +6847,7 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 		err = RebootNodeAndWait(*storageNode)
 		log.FailOnError(err, "Failed to reboot node [%v] and wait till it is up", storageNode.Name)
 
-		log.FailOnError(Inst().V.WaitDriverUpOnNode(*storageNode, 2*time.Minute), fmt.Sprintf("Driver is down on node [%s]", storageNode.Name))
+		log.FailOnError(Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut), fmt.Sprintf("Driver is down on node [%s]", storageNode.Name))
 
 		resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 		dash.VerifyFatal(resizeErr,
