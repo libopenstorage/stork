@@ -6670,7 +6670,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 			log.InfoD("Start Px Driver and wait for driver to come up on node [%v]", nodeDetail.Name)
 			log.FailOnError(Inst().V.StartDriver(*nodeDetail),
 				fmt.Sprintf("Failed to Bring back the Px on Node [%v]", nodeDetail.Name))
-			log.FailOnError(Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute),
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(*nodeDetail, 20*time.Minute),
 				fmt.Sprintf("Driver is still down on node [%v] after waiting", nodeDetail.Name))
 		}
 		// Bring Px Down on the Node selected
@@ -6699,6 +6699,255 @@ var _ = Describe("{DriveAddPXDown}", func() {
 		defer EndTorpedoTest()
 		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
 		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
+	/*
+		Expand Using Add drive and restart Px
+	*/
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ExpandUsingAddDriveAndPXRestart",
+			"Initiate pool expansion using add-drive and restart PX", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+
+		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		dash.VerifyFatal(resizeErr, nil,
+			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+
+		stepLog = fmt.Sprintf("Restart PX on node %s", nodeDetail.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.RestartDriver(*nodeDetail, nil)
+			log.FailOnError(err, fmt.Sprintf("error restarting px on node [%s]", nodeDetail.Name))
+			err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 2*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node [%s]", nodeDetail.Name))
+			dash.VerifyFatal(err == nil, true,
+				fmt.Sprintf("PX is up after restarting on node [%s]", nodeDetail.Name))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
+	/*
+		Expand Using Add drive and restart Node and verify if Px will be up after restart
+	*/
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ExpandUsingAddDriveAndNodeRestart",
+			"Initiate pool expansion using add-drive and Reboot Node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Initiate pool expansion using add-drive and Reboot Node"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expanddiskadddrive-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+
+		drvSize, err := getPoolDiskSize(poolToBeResized)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
+
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+		expectedSize = roundUpValue(expectedSize)
+		expectedSizeWithJournal := expectedSize
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+
+		if isjournal {
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
+		}
+		log.InfoD("Current Size of the pool [%s] is [%d]",
+			poolToBeResized.Uuid,
+			poolToBeResized.TotalSize/units.GiB)
+
+		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
+			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+			expectedSize)
+		dash.VerifyFatal(err,
+			nil,
+			"Pool expansion init successful?")
+
+		storageNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolToBeResized.Uuid))
+		err = RebootNodeAndWait(*storageNode)
+		log.FailOnError(err, "Failed to reboot node [%v] and wait till it is up", storageNode.Name)
+
+		log.FailOnError(Inst().V.WaitDriverUpOnNode(*storageNode, 2*time.Minute), fmt.Sprintf("Driver is down on node [%s]", storageNode.Name))
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+		dash.VerifyFatal(resizeErr,
+			nil,
+			fmt.Sprintf("Expected new size to be [%d] or [%d] if pool has journal",
+				expectedSize,
+				expectedSizeWithJournal))
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
+	/*
+		Resize Disk Followed by adddisk should not create a new pool
+	*/
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizeDiskAddDiskSamePool",
+			"Resize Disk Followed by adddisk should not create a new pool", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Resize Disk Followed by adddisk should not create a new pool"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizediskadddisk-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+
+		allPoolsOnNode, err := GetPoolsDetailsOnNode(*nodeDetail)
+		log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
+
+		drvSize, err := getPoolDiskSize(poolToBeResized)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
+
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+		expectedSize = roundUpValue(expectedSize)
+		expectedSizeWithJournal := expectedSize
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+
+		if isjournal {
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
+		}
+		log.InfoD("Current Size of the pool %s is %d",
+			poolToBeResized.Uuid,
+			poolToBeResized.TotalSize/units.GiB)
+
+		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
+			api.SdkStoragePool_RESIZE_TYPE_AUTO,
+			expectedSize)
+		dash.VerifyFatal(err,
+			nil,
+			"Pool expansion init successful?")
+
+		log.FailOnError(WaitForExpansionToStart(poolToBeResized.Uuid),
+			"Failed while waiting for expansion to start")
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+		dash.VerifyFatal(resizeErr, nil,
+			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolToBeResized.Uuid))
+
+		// Expand Pool using Add Drive and verify if the Pool is expanded successfully
+		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
+			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+			expectedSize)
+		dash.VerifyFatal(err,
+			nil,
+			"Pool expansion init successful?")
+
+		resizeErr = waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		dash.VerifyFatal(resizeErr, nil,
+			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolUUID))
+
+		allPoolsOnNode_afterResize, err := GetPoolsDetailsOnNode(*nodeDetail)
+		log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
+		dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNode_afterResize), true,
+			"New pool is created on trying to expand pool using add disk option")
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
 

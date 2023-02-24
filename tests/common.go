@@ -5042,6 +5042,7 @@ func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
 	return node.Node{}, fmt.Errorf("no node with IOs running identified,err: %v", err)
 }
 
+// GetRandomStorageLessNode returns random storageless node
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
 	// pick a random storageless node
 	randomIndex := rand.Intn(len(slNodes))
@@ -5341,6 +5342,7 @@ func WaitTillPoolState(state opsapi.StorageRebalanceJobState) (bool, error) {
 	return true, err
 }
 
+// WaitForPoolStatusToUpdate returns true when pool status updated to expected status
 func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
 	t := func() (interface{}, bool, error) {
 		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
