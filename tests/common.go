@@ -5289,7 +5289,7 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 
 }
 
-// WaitTillPoolState returns if pool is in rebalance state
+// WaitTillPoolState returns true if the pool state matches the expected state
 func WaitTillPoolState(state opsapi.StorageRebalanceJobState) (bool, error) {
 
 	rebalanceFunc := func() (interface{}, bool, error) {
