@@ -268,12 +268,15 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 	err = m.pruneMigrations(migrationSchedule)
 	if err != nil {
 		msg := fmt.Sprintf("Error pruning old migrations: %v", err)
-		m.recorder.Event(migrationSchedule,
-			v1.EventTypeWarning,
-			string(stork_api.MigrationStatusFailed),
-			msg)
-		log.MigrationScheduleLog(migrationSchedule).Error(msg)
-		return err
+		// Don't need to log this event as Stork retries if it fails to update
+		if !strings.Contains(msg, ErrReapplyLatestVersionMsg) {
+			m.recorder.Event(migrationSchedule,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				msg)
+			log.MigrationScheduleLog(migrationSchedule).Error(msg)
+			return err
+		}
 	}
 
 	return nil

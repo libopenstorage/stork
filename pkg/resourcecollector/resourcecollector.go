@@ -751,7 +751,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 			}
 
 		case "NetworkPolicy":
-			err := r.prepareNetworkPolicyForCollection(o, opts)
+			err := r.prepareRancherNetworkPolicy(o, opts)
 			if err != nil {
 				return fmt.Errorf("error preparing NetworkPolicy resource %v: %v", metadata.GetName(), err)
 			}
@@ -852,6 +852,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	pvNameMappings map[string]string,
 	optionalResourceTypes []string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
+	opts *Options,
 ) (bool, error) {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
@@ -887,9 +888,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		}
 		return true, nil
 	case "PersistentVolume":
-		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings, namespaceMappings)
+		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings, namespaceMappings, *opts)
 	case "PersistentVolumeClaim":
-		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo)
+		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo, *opts)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	case "RoleBinding":
@@ -900,6 +901,11 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.prepareMutatingWebHookForApply(object, namespaceMappings)
 	case "Secret":
 		return false, r.prepareSecretForApply(object)
+	case "NetworkPolicy":
+		return false, r.prepareRancherNetworkPolicy(object, *opts)
+	case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+		return false, r.prepareRancherApplicationResource(object, *opts)
+
 	}
 	return false, nil
 }
@@ -919,8 +925,31 @@ func (r *ResourceCollector) mergeSupportedForResource(
 	return false
 }
 
+func (r *ResourceCollector) mergeSupportedForRancherResource(
+	object runtime.Unstructured,
+	opts *Options,
+) bool {
+	// return false if there is no project mapping
+	if len(opts.RancherProjectMappings) == 0 {
+		return false
+	}
+
+	objectType, err := meta.TypeAccessor(object)
+	if err != nil {
+		return false
+	}
+	switch objectType.GetKind() {
+	case "NetworkPolicy", "Deployment", "StatefulSet", "DeploymentConfig",
+		"IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+		return true
+	}
+	return false
+}
+
 func (r *ResourceCollector) mergeAndUpdateResource(
 	object runtime.Unstructured,
+	dynamicClient dynamic.ResourceInterface,
+	opts *Options,
 ) error {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
@@ -932,6 +961,11 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 		return r.mergeAndUpdateClusterRoleBinding(object)
 	case "ServiceAccount":
 		return r.mergeAndUpdateServiceAccount(object)
+	case "NetworkPolicy":
+		return r.mergeAndUpdateNetworkPolicy(object, opts)
+	case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
+		return r.mergeAndUpdateApplicationResource(object, dynamicClient, opts)
+
 	}
 	return nil
 }
@@ -940,6 +974,7 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 func (r *ResourceCollector) ApplyResource(
 	dynamicInterface dynamic.Interface,
 	object runtime.Unstructured,
+	opts *Options,
 ) error {
 	dynamicClient, err := r.getDynamicClient(dynamicInterface, object)
 	if err != nil {
@@ -948,8 +983,8 @@ func (r *ResourceCollector) ApplyResource(
 	_, err = dynamicClient.Create(context.TODO(), object.(*unstructured.Unstructured), metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
-			if r.mergeSupportedForResource(object) {
-				return r.mergeAndUpdateResource(object)
+			if r.mergeSupportedForResource(object) || r.mergeSupportedForRancherResource(object, opts) {
+				return r.mergeAndUpdateResource(object, dynamicClient, opts)
 			} else if strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
 				err = r.updateService(object)
 				if err != nil {
@@ -1064,4 +1099,64 @@ func (r *ResourceCollector) getDynamicClient(
 	}
 	return dynamicInterface.Resource(
 		object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(destNamespace), nil
+}
+
+func (r *ResourceCollector) mergeAndUpdateApplicationResource(
+	object runtime.Unstructured,
+	dynamicClient dynamic.ResourceInterface,
+	opts *Options) error {
+
+	if len(opts.RancherProjectMappings) == 0 {
+		return nil
+	}
+
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return fmt.Errorf("error getting metadata from object: %v", err)
+	}
+
+	curAppResource, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			_, err = dynamicClient.Create(context.TODO(), object.(*unstructured.Unstructured), metav1.CreateOptions{})
+		}
+		return err
+	}
+	r.prepareRancherApplicationResource(curAppResource, *opts)
+
+	dynamicClient.Update(context.TODO(), curAppResource, metav1.UpdateOptions{})
+	return nil
+}
+
+func (r *ResourceCollector) prepareRancherApplicationResource(
+	object runtime.Unstructured,
+	opts Options,
+) error {
+	content := object.UnstructuredContent()
+	if len(opts.RancherProjectMappings) > 0 {
+		podSpecField, found, err := unstructured.NestedFieldCopy(content, "spec", "template", "spec")
+		if err != nil {
+			logrus.Warnf("Unable to parse object %v while handling"+
+				" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+		}
+		var podSpec v1.PodSpec
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(podSpecField.(map[string]interface{}), &podSpec); err != nil {
+			return fmt.Errorf("error converting to podSpec: %v", err)
+		}
+		if found {
+			podSpecPtr := PreparePodSpecNamespaceSelector(
+				&podSpec,
+				opts.RancherProjectMappings,
+			)
+			o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&podSpecPtr)
+			if err != nil {
+				return err
+			}
+			if err := unstructured.SetNestedField(content, o, "spec", "template", "spec"); err != nil {
+				logrus.Warnf("Unable to set namespace selector for object %v while handling"+
+					" rancher project mappings", object.GetObjectKind().GroupVersionKind().Kind)
+			}
+		}
+	}
+	return nil
 }

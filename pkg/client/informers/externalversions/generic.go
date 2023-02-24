@@ -79,8 +79,12 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().Migrations().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("migrationschedules"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().MigrationSchedules().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("namespacedactions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().NamespacedActions().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("namespacedschedulepolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().NamespacedSchedulePolicies().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("platformcredentials"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().PlatformCredentials().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("resourcetransformations"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ResourceTransformations().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("rules"):
