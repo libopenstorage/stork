@@ -31,6 +31,10 @@ const (
 	DefaultAdminNamespace = "kube-system"
 	// StorkConfigMapName holds any generic config specific to stork module
 	StorkConfigMapName = "stork-objlock-config"
+	// StorkControllerConfigMapName is the name of stork controller configmap
+	StorkControllerConfigMapName = "stork-controller-config"
+	// AdminNsKey is the key to hold custom stork admin namespace
+	AdminNsKey = "admin-ns"
 	// ObjectLockIncrBackupCountKey defines scheduleBackup's incremental backup count
 	ObjectLockIncrBackupCountKey = "object-lock-incr-backup-count"
 	// ObjectLockDefaultIncrementalCount defines default incremental backup count
