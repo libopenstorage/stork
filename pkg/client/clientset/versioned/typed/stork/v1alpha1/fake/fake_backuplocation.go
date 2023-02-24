@@ -105,7 +105,7 @@ func (c *FakeBackupLocations) Update(ctx context.Context, backupLocation *v1alph
 // Delete takes name of the backupLocation and deletes it. Returns an error if one occurs.
 func (c *FakeBackupLocations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(backuplocationsResource, c.ns, name), &v1alpha1.BackupLocation{})
+		Invokes(testing.NewDeleteActionWithOptions(backuplocationsResource, c.ns, name, opts), &v1alpha1.BackupLocation{})
 
 	return err
 }

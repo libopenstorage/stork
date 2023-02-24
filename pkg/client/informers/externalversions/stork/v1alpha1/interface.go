@@ -50,8 +50,12 @@ type Interface interface {
 	Migrations() MigrationInformer
 	// MigrationSchedules returns a MigrationScheduleInformer.
 	MigrationSchedules() MigrationScheduleInformer
+	// NamespacedActions returns a NamespacedActionInformer.
+	NamespacedActions() NamespacedActionInformer
 	// NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.
 	NamespacedSchedulePolicies() NamespacedSchedulePolicyInformer
+	// PlatformCredentials returns a PlatformCredentialInformer.
+	PlatformCredentials() PlatformCredentialInformer
 	// ResourceTransformations returns a ResourceTransformationInformer.
 	ResourceTransformations() ResourceTransformationInformer
 	// Rules returns a RuleInformer.
@@ -140,9 +144,19 @@ func (v *version) MigrationSchedules() MigrationScheduleInformer {
 	return &migrationScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// NamespacedActions returns a NamespacedActionInformer.
+func (v *version) NamespacedActions() NamespacedActionInformer {
+	return &namespacedActionInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.
 func (v *version) NamespacedSchedulePolicies() NamespacedSchedulePolicyInformer {
 	return &namespacedSchedulePolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// PlatformCredentials returns a PlatformCredentialInformer.
+func (v *version) PlatformCredentials() PlatformCredentialInformer {
+	return &platformCredentialInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ResourceTransformations returns a ResourceTransformationInformer.

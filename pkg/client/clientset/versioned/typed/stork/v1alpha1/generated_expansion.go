@@ -44,6 +44,8 @@ type MigrationExpansion interface{}
 
 type MigrationScheduleExpansion interface{}
 
+type NamespacedActionExpansion interface{}
+
 type NamespacedSchedulePolicyExpansion interface{}
 
 type PlatformCredentialExpansion interface{}

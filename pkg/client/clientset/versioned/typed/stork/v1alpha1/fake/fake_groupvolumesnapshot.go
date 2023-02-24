@@ -105,7 +105,7 @@ func (c *FakeGroupVolumeSnapshots) Update(ctx context.Context, groupVolumeSnapsh
 // Delete takes name of the groupVolumeSnapshot and deletes it. Returns an error if one occurs.
 func (c *FakeGroupVolumeSnapshots) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(groupvolumesnapshotsResource, c.ns, name), &v1alpha1.GroupVolumeSnapshot{})
+		Invokes(testing.NewDeleteActionWithOptions(groupvolumesnapshotsResource, c.ns, name, opts), &v1alpha1.GroupVolumeSnapshot{})
 
 	return err
 }

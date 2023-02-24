@@ -117,7 +117,7 @@ func (c *FakeMigrationSchedules) UpdateStatus(ctx context.Context, migrationSche
 // Delete takes name of the migrationSchedule and deletes it. Returns an error if one occurs.
 func (c *FakeMigrationSchedules) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(migrationschedulesResource, c.ns, name), &v1alpha1.MigrationSchedule{})
+		Invokes(testing.NewDeleteActionWithOptions(migrationschedulesResource, c.ns, name, opts), &v1alpha1.MigrationSchedule{})
 
 	return err
 }

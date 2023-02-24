@@ -110,6 +110,14 @@ type MigrationScheduleListerExpansion interface{}
 // MigrationScheduleNamespaceLister.
 type MigrationScheduleNamespaceListerExpansion interface{}
 
+// NamespacedActionListerExpansion allows custom methods to be added to
+// NamespacedActionLister.
+type NamespacedActionListerExpansion interface{}
+
+// NamespacedActionNamespaceListerExpansion allows custom methods to be added to
+// NamespacedActionNamespaceLister.
+type NamespacedActionNamespaceListerExpansion interface{}
+
 // NamespacedSchedulePolicyListerExpansion allows custom methods to be added to
 // NamespacedSchedulePolicyLister.
 type NamespacedSchedulePolicyListerExpansion interface{}
