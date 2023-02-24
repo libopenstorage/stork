@@ -5310,12 +5310,16 @@ func WaitTillPoolState(state opsapi.StorageRebalanceJobState) (bool, error) {
 				if state == opsapi.StorageRebalanceJobState_CANCELLED {
 					return nil, true, nil
 				}
-				return nil, false, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+				return nil, false,
+					fmt.Errorf("job %v has cancelled, Summary: %v",
+						job.GetId(),
+						jobResponse.GetSummary().GetWorkSummary())
 			case opsapi.StorageRebalanceJobState_PAUSED:
 				if state == opsapi.StorageRebalanceJobState_PAUSED {
 					return nil, true, nil
 				}
-				return nil, false, fmt.Errorf("Job %v is in paused/pending state", job.GetId())
+				return nil, false,
+					fmt.Errorf("Job %v is in paused/pending state", job.GetId())
 			case opsapi.StorageRebalanceJobState_DONE:
 				if state == opsapi.StorageRebalanceJobState_DONE {
 					return nil, true, nil
@@ -5325,10 +5329,14 @@ func WaitTillPoolState(state opsapi.StorageRebalanceJobState) (bool, error) {
 				if state == opsapi.StorageRebalanceJobState_RUNNING {
 					return nil, true, nil
 				}
-				return nil, false, fmt.Errorf("job %v has status Running, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+				return nil, false,
+					fmt.Errorf("job %v has status Running, Summary: %v",
+						job.GetId(),
+						jobResponse.GetSummary().GetWorkSummary())
 			default:
 				if state == jobState {
-					return nil, true, fmt.Errorf("Job not in required state [%v]", state)
+					return nil, true,
+						fmt.Errorf("Job not in required state [%v]", state)
 				}
 			}
 		}
@@ -5347,16 +5355,19 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 	t := func() (interface{}, bool, error) {
 		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
 		if err != nil {
-			return nil, true, fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
+			return nil, true,
+				fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
 		}
 
 		if poolsStatus == nil {
-			return nil, false, fmt.Errorf("pools status is nil")
+			return nil,
+				false, fmt.Errorf("pools status is nil")
 		}
 
 		for k, v := range poolsStatus {
 			if v != expectedStatus {
-				return nil, true, fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+				return nil, true,
+					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
 			}
 		}
 
