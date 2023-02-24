@@ -6553,7 +6553,7 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 
 })
 
-var _ = Describe("{AddDriveStorageLessNodeResizeDisk}", func() {
+var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 	/*
 		Pool Resize after adding drives to storage less node
 		https://portworx.testrail.net/index.php?/cases/view/51329
@@ -6565,7 +6565,7 @@ var _ = Describe("{AddDriveStorageLessNodeResizeDisk}", func() {
 	var runID int
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddDriveStorageLessNodeResizeDisk",
+		StartTorpedoTest("AddMultipleDriveStorageLessNodeResizeDisk",
 			"Add Drive to storage less node and resize Disk",
 			nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -6606,9 +6606,8 @@ var _ = Describe("{AddDriveStorageLessNodeResizeDisk}", func() {
 
 		// Add multiple Drives to Storage less node
 		maxDrivesToAdd := 6
-		randomCount := rand.Intn(maxDrivesToAdd)
-		for i := 0; i < randomCount; i++ {
-			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, randomCount, pickNode.Name)
+		for i := 0; i < maxDrivesToAdd; i++ {
+			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(addCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
 
@@ -6621,8 +6620,15 @@ var _ = Describe("{AddDriveStorageLessNodeResizeDisk}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", eachPool.Uuid))
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
+			// Resize the Pool with either one of the allowed resize type
 			log.InfoD("Current Size of the pool %s is %d", eachPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(eachPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
+				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+				api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+			randomIndex := rand.Intn(len(poolResizeType))
+			pickType := poolResizeType[randomIndex]
+			log.InfoD("Expanding Pool [%v] using resize type [%v]", eachPool.Uuid, pickType)
+			err = Inst().V.ExpandPool(eachPool.Uuid, pickType, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			isjournal, err := isJournalEnabled()
