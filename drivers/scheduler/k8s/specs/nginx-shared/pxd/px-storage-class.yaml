@@ -9,5 +9,5 @@ parameters:
   repl: "{{ .Repl }}"
   {{ else }}
   repl: "3"{{ end }}
-  sharedv4: "true"
+  shared: "true"
 allowVolumeExpansion: true

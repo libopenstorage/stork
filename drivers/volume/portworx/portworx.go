@@ -1342,6 +1342,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
 				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
 				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
+				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
+				log.Infof("requested Spec: %+v", requestedSpec)
+				log.Infof("actual Spec: %+v", vol.Spec)
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
 			}
 		case api.SpecSize:
@@ -4779,6 +4782,34 @@ func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 		}
 	}
 	return poolsData, nil
+}
+
+// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+func (d *portworx) IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error) {
+
+	log.Infof("Got vol-id [%s] for checking IOs", volumeNameOrID)
+	cmd := fmt.Sprintf("%s v i %s| grep -e 'IOs in progress'", d.getPxctlPath(*n), volumeNameOrID)
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+
+	if err != nil {
+		return false, err
+	}
+	line := strings.Trim(out, " ")
+	data := strings.Split(line, ":")[1]
+	data = strings.Trim(data, "\n")
+	data = strings.Trim(data, " ")
+	val, err := strconv.Atoi(data)
+	if err != nil {
+		return false, err
+	}
+	if val > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 // GetRebalanceJobs returns the list of rebalance jobs

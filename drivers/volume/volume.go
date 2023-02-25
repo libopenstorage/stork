@@ -394,6 +394,9 @@ type Driver interface {
 	// GetPoolsUsedSize returns map of pool id and current used size
 	GetPoolsUsedSize(n *node.Node) (map[string]string, error)
 
+	// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+	IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error)
+
 	// GetRebalanceJobs returns the list of rebalance jobs
 	GetRebalanceJobs() ([]*api.StorageRebalanceJob, error)
 

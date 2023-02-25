@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+type: Opaque
+data:
+  nginx-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
+---
+##### Persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-legacy-shared
+spec:
+  storageClassName: nginx-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-enc-legacy-shared
+  annotations:
+    px/secret-name: volume-secrets
+    px/secret-namespace: "_NAMESPACE_"
+    px/secret-key: nginx-secret
+    px/secure: "true"
+spec:
+  storageClassName: nginx-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
