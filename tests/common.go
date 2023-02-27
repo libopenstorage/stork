@@ -5508,11 +5508,17 @@ func IsOpenShiftPxOperator() bool {
 	return false
 }
 
-func IsInPoolInMaintenance(n node.Node) bool {
+func IsPoolInMaintenance(n node.Node) bool {
 	expectedStatus := "In Maintenance"
-	err := WaitForPoolStatusToUpdate(n, expectedStatus)
-	if err != nil {
+	poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+	if err != nil || poolsStatus == nil {
 		return false
 	}
-	return true
+
+	for _, v := range poolsStatus {
+		if v == expectedStatus {
+			return true
+		}
+	}
+	return false
 }

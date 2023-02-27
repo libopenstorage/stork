@@ -1555,7 +1555,7 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 	}
 
 	// Check if the Node in pool maintenance, exit from maintenance if it is in mode
-	if IsInPoolInMaintenance(stNode) {
+	if IsPoolInMaintenance(stNode) {
 		// Exit pool maintenance and see if px becomes operational
 		err = Inst().V.ExitPoolMaintenance(stNode)
 		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", stNode.Name)
