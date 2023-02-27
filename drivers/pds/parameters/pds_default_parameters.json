@@ -92,6 +92,8 @@
   "InfraToTest": {
     "ControlPlaneURL": "https://staging.pds.portworx.com/",
     "AccountName": "Portworx",
+    "TenantName": "Default",
+    "ProjectName": "Default",
     "ClusterType": "onprem",
     "Namespace": "automation",
     "PxNamespace": "portworx"
