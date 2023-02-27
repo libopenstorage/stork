@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/libopenstorage/stork/pkg/cache"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +22,7 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/apis"
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
+	"github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/clusterdomains"
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
@@ -208,6 +208,10 @@ func main() {
 			Usage: "Start the resource transformation controller (default: true)",
 		},
 	}
+
+	// Export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+	log.Warnf("Export USE_GKE_GCLOUD_AUTH_PLUGIN=True")
+	os.Setenv("USE_GKE_GCLOUD_AUTH_PLUGIN", "True")
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatalf("Error starting stork: %v", err)
