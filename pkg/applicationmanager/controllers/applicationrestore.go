@@ -539,7 +539,6 @@ func convertResourceVolInfoToAppBkpVolInfo(
 
 	return restoreVolumeInfos
 }
-*/
 
 func convertResourceVolInfoToAppRestoreVolInfo(
 	volInfo []*kdmpapi.ResourceRestoreVolumeInfo,
@@ -564,6 +563,7 @@ func convertResourceVolInfoToAppRestoreVolInfo(
 
 	return restoreVolumeInfos
 }
+*/
 
 func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.ApplicationRestore) error {
 	funct := "restoreVolumes"
@@ -642,7 +642,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		// gets called once per driver
 		// var sErr error
 		for driverName, vInfos := range backupVolumeInfoMappings {
-			restoreVolumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 			backupVolInfos := vInfos
 			driver, err := volume.Get(driverName)
 			//	BL NFS + kdmp = nfs code path
@@ -727,12 +726,12 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					}
 				}
 				restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
-				var sErr error
-				restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, preRestoreObjects)
+				restoreVolumeInfos, sErr := driver.StartRestore(restore, backupVolInfos, preRestoreObjects)
 				if err != nil {
 					return err
 				}
 				logrus.Infof("sivakumar -- sErr %v", sErr)
+				restoreCompleteList = append(restoreCompleteList, restoreVolumeInfos...)
 			}
 			// Check whether ResourceExport is present or not
 			if nfs {
@@ -836,7 +835,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 							restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, nil)
 						*/
 						/* SIVA: For now, using resourceExport.ExistingVolumesInfo. Need to add seperate variable for restoreVolumeInfo */
-						restoreVolumeInfos = convertResourceVolInfoToAppRestoreVolInfo(resourceExport.ExistingVolumesInfo)
+						restoreCompleteList = append(restoreCompleteList, resourceExport.RestoreCompleteList...)
 					default:
 						logrus.Infof("%s still valid re CR[%v]stage not available", funct, crName)
 						return nil
@@ -878,7 +877,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					return err
 				}
 			*/
-			restoreCompleteList = append(restoreCompleteList, restoreVolumeInfos...)
 			logrus.Tracef("sivakumar ----->>> restoreCompleteList %+v", restoreCompleteList)
 		}
 		restore, err = a.updateRestoreCRInVolumeStage(
