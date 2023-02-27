@@ -154,8 +154,11 @@ const (
 	envDsBuild            = "DS_BUILD"
 	zookeeper             = "ZooKeeper"
 	redis                 = "Redis"
+	consul                = "Consul"
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
+	consulBenchImage      = "pwxbuild/consul-bench-0.1.1"
+	consulAgentImage      = "pwxbuild/consul-agent-0.1.1"
 	esRallyImage          = "elastic/rally"
 	cbloadImage           = "portworx/pds-loadtests:couchbase-0.0.2"
 	pdsTpccImage          = "portworx/torpedo-tpcc-automation:v1"
@@ -542,7 +545,6 @@ func GetAppConfTemplate(tenantID string, supportedDataService string) (string, e
 	isavailable = false
 	isTemplateavailable = false
 	dataServiceId := GetDataServiceID(supportedDataService)
-
 	for i := 0; i < len(appConfigs); i++ {
 		if appConfigs[i].GetName() == appConfigTemplateName {
 			isTemplateavailable = true
@@ -1007,6 +1009,130 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	log.InfoD("Will delete TPCC Worklaod Deployment now.....")
 	DeleteK8sDeployments(deployment.Name, namespace)
 	return flag
+}
+
+// This module runs Consul Bench workload from pre-cooked Consul Agent and Consul Bench images
+func RunConsulBenchWorkload(deploymentName string, namespace string) (*v1.Deployment, error) {
+	var replicas int32 = 1
+	benchmarkName := deploymentName + "-bench"
+	deploymentSpec := &v1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      benchmarkName,
+			Namespace: namespace,
+		},
+		Spec: v1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": benchmarkName},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": benchmarkName},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            "consul-agent",
+							Image:           consulAgentImage,
+							ImagePullPolicy: corev1.PullAlways,
+							Env: []corev1.EnvVar{
+								{
+									Name: "AGENT_TOKEN",
+									ValueFrom: &corev1.EnvVarSource{
+										SecretKeyRef: &corev1.SecretKeySelector{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: deploymentName + "-creds",
+											},
+											Key: "master_token",
+										},
+									},
+								},
+								{
+									Name:  "PDS_CLUSTER",
+									Value: deploymentName,
+								},
+								{
+									Name:  "PDS_NS",
+									Value: namespace,
+								},
+							},
+						},
+						{
+							Name:            "consul-kv-workload",
+							Image:           consulAgentImage,
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         []string{"/bin/kv-workload.sh"},
+							Env: []corev1.EnvVar{
+								{
+									Name: "AGENT_TOKEN",
+									ValueFrom: &corev1.EnvVarSource{
+										SecretKeyRef: &corev1.SecretKeySelector{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: deploymentName + "-creds",
+											},
+											Key: "master_token",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:            "consul-bench",
+							Image:           consulBenchImage,
+							ImagePullPolicy: corev1.PullAlways,
+							Env: []corev1.EnvVar{
+								{
+									Name: "CONSUL_HTTP_TOKEN",
+									ValueFrom: &corev1.EnvVarSource{
+										SecretKeyRef: &corev1.SecretKeySelector{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: deploymentName + "-creds",
+											},
+											Key: "master_token",
+										},
+									},
+								},
+								{
+									Name: "SERVICE_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.name",
+										},
+									},
+								},
+								{
+									Name:  "SERVICE_INSTANCES",
+									Value: "10",
+								},
+								{
+									Name:  "SERVICE_FLAP_SECONDS",
+									Value: "10",
+								},
+								{
+									Name:  "SERVICE_WATCHERS",
+									Value: "10",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	log.InfoD("Going to Trigger Consul Bench Workload for the Deployment")
+	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sleeping for 1 minute to let the Workload run
+	time.Sleep(1 * time.Minute)
+
+	return deployment, nil
 }
 
 // Creates a temporary non PDS namespace of 6 letters length randomly chosen
@@ -1636,6 +1762,12 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		pod, err = CreatePodWorkloads(params.DeploymentName, cbloadImage, params, params.Namespace, "1000", env)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating couchbase workload, Err: %v", err)
+		}
+
+	case consul:
+		dep, err = RunConsulBenchWorkload(params.DeploymentName, params.Namespace)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error occured while creating Consul workload, Err: %v", err)
 		}
 	}
 	return pod, dep, nil

@@ -35,6 +35,7 @@ const (
 	mysql                   = "MySQL"
 	kafka                   = "Kafka"
 	zookeeper               = "ZooKeeper"
+	consul                  = "Consul"
 	pdsNamespaceLabel       = "pds.portworx.com/available"
 )
 
@@ -80,7 +81,7 @@ var (
 	components                              *pdsapi.Components
 )
 
-var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql}
+var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul}
 var dataServicePodWorkloads = []string{redis, rabbitmq, couchbase}
 
 func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, deployment *pds.ModelsDeployment, namespace string) (*corev1.Pod, *v1.Deployment, error) {
@@ -131,6 +132,11 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 		log.Infof("Running Workloads on DataService %v ", ds.Name)
 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
 
+	}
+	if ds.Name == consul {
+		params.DeploymentName = *deployment.ClusterResourceName
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
 	}
 
 	return pod, dep, err
