@@ -4954,20 +4954,50 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs() (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return "", err
 	}
-	var selectedPool *opsapi.StoragePool
-	stNodes := node.GetStorageNodes()
-	for _, stNode := range stNodes {
-		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
-		if selectedPool != nil {
-			return selectedPool.Uuid, nil
+
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", err
 		}
+
+		node := node.GetStorageDriverNodes()[0]
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return "", err
+			}
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+			if err != nil {
+				return "", err
+			}
+			if isIOsInProgress {
+				log.Infof("IOs are in progress for [%v]", vol.Name)
+				poolUuids := appVol.ReplicaSets[0].PoolUuids
+				for _, p := range poolUuids {
+					n, err := GetNodeWithGivenPoolID(p)
+					if err != nil {
+						return "", err
+					}
+					eligibilityMap, err := GetPoolExpansionEligibility(n)
+					if err != nil {
+						return "", err
+					}
+					if eligibilityMap[n.Id] && eligibilityMap[p] {
+						return p, nil
+					}
+
+				}
+			}
+		}
+
 	}
 
 	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
