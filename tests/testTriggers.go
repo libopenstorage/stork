@@ -4693,17 +4693,17 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				}
 
 				val, ok := fsTrimStatuses[appVol.Id]
-				var fsTrimStatus string
+				var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
 
 				if !ok {
-					fsTrimStatus = waitForFsTrimStatus(event, attachedNode, appVol.Id)
+					fsTrimStatus, _ = waitForFsTrimStatus(event, attachedNode, appVol.Id)
 				} else {
-					fsTrimStatus = val.String()
+					fsTrimStatus = val
 				}
 
-				if fsTrimStatus != "" {
+				if fsTrimStatus != -1 {
 
-					if strings.Contains(fsTrimStatus, "FAILED") {
+					if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
 
 						err = fmt.Errorf("AutoFstrim failed for volume %v, status: %v", v.ID, val.String())
 						UpdateOutcome(event, err)
@@ -4725,7 +4725,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 }
 
-func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) string {
+func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
 	doExit := false
 	exitCount := 50
 
@@ -4734,20 +4734,24 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) stri
 		time.Sleep(2 * time.Minute)
 		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
 		if err != nil {
-			UpdateOutcome(event, err)
+			if event != nil {
+				UpdateOutcome(event, err)
+			} else {
+				return -1, nil
+			}
 		}
 
 		fsTrimStatus, isValueExist := fsTrimStatuses[volumeID]
 
 		if isValueExist {
-			return fsTrimStatus.String()
+			return fsTrimStatus, nil
 		}
 		if exitCount == 0 {
 			doExit = true
 		}
 		exitCount--
 	}
-	return ""
+	return -1, nil
 }
 
 // TriggerTrashcan enables trashcan feature in the PX Cluster and validates it

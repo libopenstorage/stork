@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"net"
 	"net/url"
@@ -2130,6 +2131,24 @@ func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.Filesyst
 	}
 	log.Infof("Trim Status is [%v]", autoFstrimResp.GetTrimStatus())
 	return autoFstrimResp.GetTrimStatus(), nil
+}
+
+// GetAutoFsTrimUsage get status of autofstrim
+func (d *portworx) GetAutoFsTrimUsage(endpoint string) (map[string]*api.FstrimVolumeUsageInfo, error) {
+	sdkport, _ := d.getSDKPort()
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
+	newConn, err := grpc.Dial(pxEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to set the connection endpoint [%s], Err: %v", endpoint, err)
+	}
+	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
+
+	autoFstrimResp, err := d.autoFsTrimManager.AutoFSTrimUsage(d.getContext(), &api.SdkAutoFSTrimUsageRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auto fstrim usage stats, Err: %v", err)
+	}
+	log.Infof("Trim Usage is [%v]", autoFstrimResp.GetUsage())
+	return autoFstrimResp.GetUsage(), nil
 }
 
 // pickAlternateClusterManager returns a different node than given one, useful in case you want to skip nodes which are down

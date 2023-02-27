@@ -658,6 +658,14 @@ func (d *DefaultDriver) GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.F
 	}
 }
 
+// GetAutoFsTrimUsage get autofstrim  usage stats
+func (d *DefaultDriver) GetAutoFsTrimUsage(pxEndpoint string) (map[string]*api.FstrimVolumeUsageInfo, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutoFsTrimUsage()",
+	}
+}
+
 // ListStoragePools lists all existing storage pools
 func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error) {
 	return nil, &errors.ErrNotSupported{

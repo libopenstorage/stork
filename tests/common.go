@@ -5314,3 +5314,109 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	}
 	return randomItems, nil
 }
+
+func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
+
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]opsapi.FilesystemTrim_FilesystemTrimStatus)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("inspecting volume [%s]", v.Name)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimStatuses[appVol.Id]
+		var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
+
+		if !ok {
+			fsTrimStatus, err = waitForFsTrimStatus(nil, attachedNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != -1 {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] not started on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+func GetAutoFstrimUsageForCtx(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolumeUsageInfo, error) {
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]*opsapi.FstrimVolumeUsageInfo)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("Getting info: %s", v.ID)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimUsages, err := Inst().V.GetAutoFsTrimUsage(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimUsages[appVol.Id]
+		var fsTrimStatus *opsapi.FstrimVolumeUsageInfo
+
+		if !ok {
+			log.Errorf("usage not found for %s", appVol.Id)
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != nil {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] has no usage on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}

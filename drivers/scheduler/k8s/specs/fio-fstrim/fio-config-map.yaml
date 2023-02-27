@@ -6,25 +6,33 @@ data:
     fio.job: |
         [global]
         name=fio-rand-RW
+        ioengine=falloc
         directory=/scratch/
+        iodepth=1
         rw=randwrite
-        randrepeat=1
-        rwmixread=0
-        bsrange=64k-512k
-        blocksize=32k
-        direct=1
-        end_fsync=1
-        do_verify=1
-        verify=crc32c
-        verify_pattern=0xdeadbeef
+        direct=0
+        buffered=0
         disable_lat=0
         time_based=1
         runtime=1800
-        [file1]
-        filesize=10M-1G
         nrfiles=15
-        ioengine=libaio
-        iodepth=64
+        size=1G
+        filesize=1G
+        [bs-split]
+        stonewall
+        runtime=1800
+        time_based=1
+        bssplit=4k/10:64k/50:32k/40
+        rw=randwrite
+        numjobs=1
+        filename=frag_file
+        [punch-hole-creator]
+        bs=4k
+        runtime=1800
+        time_based=1
+        rw=randtrim
+        numjobs=2
+        filename=frag_file
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -38,7 +46,7 @@ data:
       type: file
       path: /logs/fio.log
       readall: false
-      fail_on_missing_logfile: true
+      fail_on_missing_logfile: false
     imports:
     - type: grok_patterns
       dir: ./patterns
