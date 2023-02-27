@@ -5532,3 +5532,19 @@ func IsPoolInMaintenance(n node.Node) bool {
 	}
 	return false
 }
+
+func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
+	nodesPresent := node.GetStorageNodes()
+	for _, each := range nodesPresent {
+		poolsPresent, err := GetPoolsDetailsOnNode(each)
+		if err != nil {
+			return -1, err
+		}
+		for _, eachPool := range poolsPresent {
+			if eachPool.Uuid == poolUuid {
+				return eachPool.ID, nil
+			}
+		}
+	}
+	return -1, nil
+}

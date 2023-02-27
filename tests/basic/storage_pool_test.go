@@ -6893,7 +6893,6 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
-
 })
 
 var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
@@ -7050,20 +7049,6 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 
-		// Bring Node on pool maintenance mode
-		exitPoolMaintenance := func(n *node.Node) {
-			// Exit pool maintenance and see if px becomes operational
-			err = Inst().V.ExitPoolMaintenance(*n)
-			log.FailOnError(err, "failed to exit pool maintenance mode on node %s", n.Name)
-
-			err = Inst().V.WaitDriverUpOnNode(*n, addDriveUpTimeOut)
-			log.FailOnError(err, "volume driver down on node %s", n.Name)
-
-			expectedStatus := "Online"
-			err = WaitForPoolStatusToUpdate(*n, expectedStatus)
-			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", n.Name, expectedStatus))
-		}
-
 		// Enter maintenance mode before deleting the pools from the cluster
 		log.InfoD("Setting pools to maintenance on node [%s]", nodeDetail.Name)
 		log.FailOnError(Inst().V.EnterPoolMaintenance(*nodeDetail),
@@ -7072,9 +7057,6 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 		expectedStatus := "In Maintenance"
 		log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
 			fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
-
-		// Exit Pool maintenance Mode
-		defer exitPoolMaintenance(nodeDetail)
 
 		//Wait for 2 min to bring up the portworx daemon before trying cloud drive add
 		time.Sleep(2 * time.Minute)
@@ -7101,10 +7083,29 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 		err = Inst().V.AddCloudDrive(nodeDetail, newSpec, -1)
 		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeDetail.Name))
 
+		// Exit pool maintenance and see if px becomes operational
+		err = Inst().V.ExitPoolMaintenance(*nodeDetail)
+		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", nodeDetail.Name)
+
+		err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
+		log.FailOnError(err, "volume driver down on node %s", nodeDetail.Name)
+
+		expectedStatus = "Online"
+		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
+		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+
+		log.FailOnError(Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut),
+			fmt.Sprintf("Driver is down on node [%s]", nodeDetail.Name))
+
+		poolID, err := GetPoolIDFromPoolUUID(poolUUID)
+		log.FailOnError(err, "Failed to get poolID from PoolUUID")
+
+		log.FailOnError(ValidatePoolRebalance(*nodeDetail, poolID),
+			fmt.Sprintf("pool %v with UUID %v rebalance failed", poolID, poolUUID))
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
-
 })
