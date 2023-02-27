@@ -1087,7 +1087,6 @@ func (p *portworx) GetPxBackupVersion(ctx context.Context, req *api.VersionGetRe
 }
 
 func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {
-	var backupUID string
 	var totalBackups int
 	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
@@ -1106,7 +1105,8 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 			bkpEnumerateReq.EnumerateOptions.ObjectIndex += uint64(len(enumerateRsp.GetBackups()))
 		}
 	}
-	return backupUID, nil
+
+	return "", fmt.Errorf("backup with name '%s' not found for org '%s'", backupName, orgID)
 }
 
 var (
