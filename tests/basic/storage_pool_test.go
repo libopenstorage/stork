@@ -6340,7 +6340,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get the Pool UUID on which IO is running
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool using UUID")
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
