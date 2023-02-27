@@ -6442,7 +6442,7 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 		log.InfoD(stepLog)
 
 		if IsEksPxOperator() != true {
-			dash.ForceFail("DeletePool is currently supported for EKS and LocalDrives")
+			log.FailOnError(fmt.Errorf("DeletePool is currently supported for EKS and LocalDrives"), "Pool deletion supported?")
 		}
 
 		contexts = make([]*scheduler.Context, 0)
@@ -6619,7 +6619,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		var pickNode node.Node
 		if len(storageLessNode) == 0 {
 			if IsEksPxOperator() != true {
-				dash.ForceFail("DeletePool is currently supported for EKS and LocalDrives")
+				log.FailOnError(fmt.Errorf("DeletePool is currently supported for EKS and LocalDrives"), "Pool deletion supported?")
 			}
 			err := MakeStoragetoStoragelessNode(*nodeDetail)
 			log.FailOnError(err, "failed to mark storage Node to Storage less Node")

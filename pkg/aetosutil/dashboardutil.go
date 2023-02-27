@@ -424,12 +424,6 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	expect(err).NotTo(haveOccurred())
 }
 
-// ForceFail fails the test forcefully
-func (d *Dashboard) ForceFail(description string) {
-	err := fmt.Errorf(description)
-	expect(err).NotTo(haveOccurred())
-}
-
 // Info logging info message
 func (d *Dashboard) Info(message string) {
 	if d.IsEnabled {

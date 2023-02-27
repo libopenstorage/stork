@@ -5508,6 +5508,16 @@ func IsOpenShiftPxOperator() bool {
 	return false
 }
 
+// IsLocalCluster returns true if the cluster used is local cluster from vsphere
+func IsLocalCluster(n node.Node) bool {
+	response, err := IsCloudDriveInitialised(n)
+	if err != nil || response == false {
+		return false
+	}
+	return true
+}
+
+// IsPoolInMaintenance returns true if pool in maintenance
 func IsPoolInMaintenance(n node.Node) bool {
 	expectedStatus := "In Maintenance"
 	poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
