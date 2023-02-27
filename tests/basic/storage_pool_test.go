@@ -6352,6 +6352,63 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	})
 })
 
+var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
+	// Testrail Description : Resize to lower size than existing pool size,should fail with proper error statement
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizePoolReduceErrorcheck",
+			"Resize to lower size than existing pool size,should fail with proper error statement",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Resize to lower size than existing"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reducesize-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get the Pool UUID on which IO is running
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool using UUID")
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+
+		// Resize Pool with lower pool size than existing
+		stepLog = fmt.Sprintf("Resizing pool on node [%s] and pool UUID: [%s] using auto", nodeDetail.Name, poolUUID)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) - 1
+			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+			// Now trying to Expand Pool with reduced Pool size
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+
+			// Verify error on pool expansion failure
+			var errMatch error
+			errMatch = nil
+			re := regexp.MustCompile(fmt.Sprintf("service pool expand: pool: %s is already at a size..*", poolUUID))
+			if re.MatchString(fmt.Sprintf("%v", err)) == false {
+				errMatch = fmt.Errorf("Failed to verify failure to lower pool size PoolUUID [%v]", poolUUID)
+			}
+			dash.VerifyFatal(errMatch, nil, "Pool expand to lower size than existing pool size completed?")
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 	/*
 		1. Create 4 Pools  say  0, 1 ,2 3, using disk of different size
