@@ -7080,8 +7080,10 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 			}
 		}
 		newSpec := strings.Join(paramsArr, ",")
-		err = Inst().V.AddCloudDrive(nodeDetail, newSpec, -1)
-		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeDetail.Name))
+		cloudAdderr := Inst().V.AddCloudDrive(nodeDetail, newSpec, -1)
+		// NOTE: Will be validating error after bringing up the pool out of maintenance mode
+		// this is to make sure that Pool is out of maintenance and other tests which runs after this
+		// would not fail because of pool maintenance
 
 		// Exit pool maintenance and see if px becomes operational
 		err = Inst().V.ExitPoolMaintenance(*nodeDetail)
@@ -7093,6 +7095,8 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 		expectedStatus = "Online"
 		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
 		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+
+		log.FailOnError(cloudAdderr, fmt.Sprintf("Add cloud drive failed on node %s", nodeDetail.Name))
 
 		log.FailOnError(Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut),
 			fmt.Sprintf("Driver is down on node [%s]", nodeDetail.Name))
