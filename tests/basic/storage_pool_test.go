@@ -5500,7 +5500,7 @@ var _ = Describe("{PoolDelete}", func() {
 
 			time.Sleep(1 * time.Minute)
 			expectedStatus := "In Maintenance"
-			err = waitForPoolStatusToUpdate(nodeSelected, expectedStatus)
+			err = WaitForPoolStatusToUpdate(nodeSelected, expectedStatus)
 			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeSelected.Name, expectedStatus))
 
 			err = Inst().V.DeletePool(nodeSelected, poolIDToDelete)
@@ -5513,7 +5513,7 @@ var _ = Describe("{PoolDelete}", func() {
 			log.FailOnError(err, "volume driver down on node %s", nodeSelected.Name)
 
 			expectedStatus = "Online"
-			err = waitForPoolStatusToUpdate(nodeSelected, expectedStatus)
+			err = WaitForPoolStatusToUpdate(nodeSelected, expectedStatus)
 			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeSelected.Name, expectedStatus))
 
 			poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
@@ -5624,29 +5624,6 @@ func appsValidateAndDestroy(contexts []*scheduler.Context) {
 			TearDownContext(ctx, opts)
 		}
 	})
-}
-
-func waitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
-	t := func() (interface{}, bool, error) {
-		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
-		if err != nil {
-			return nil, true, fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
-		}
-
-		if poolsStatus == nil {
-			return nil, false, fmt.Errorf("pools status is nil")
-		}
-
-		for k, v := range poolsStatus {
-			if v != expectedStatus {
-				return nil, true, fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
-			}
-		}
-
-		return nil, false, nil
-	}
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
-	return err
 }
 
 var _ = Describe("{VolDeletePoolExpand}", func() {
