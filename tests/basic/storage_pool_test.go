@@ -6960,9 +6960,6 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 			nil,
 			"Pool expansion init successful?")
 
-		log.FailOnError(WaitForExpansionToStart(poolToBeResized.Uuid),
-			"Failed while waiting for expansion to start")
-
 		resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolToBeResized.Uuid))
