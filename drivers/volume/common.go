@@ -982,6 +982,14 @@ func (d *DefaultDriver) GetPoolsUsedSize(n *node.Node) (map[string]string, error
 	}
 }
 
+// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+func (d *DefaultDriver) IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsIOsInProgressForTheVolume()",
+	}
+}
+
 // GetRebalanceJobs returns the list of rebalance jobs
 func (d *DefaultDriver) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
 	return nil, &errors.ErrNotSupported{

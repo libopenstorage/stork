@@ -1554,13 +1554,6 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 		return fmt.Errorf("add cloud drive failed on node %s, err: %v", stNode.Name, err)
 	}
 
-	// Check if the Node in pool maintenance, exit from maintenance if it is in mode
-	if IsPoolInMaintenance(stNode) {
-		// Exit pool maintenance and see if px becomes operational
-		err = Inst().V.ExitPoolMaintenance(stNode)
-		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", stNode.Name)
-	}
-
 	log.InfoD("Validate pool rebalance after drive add")
 	err = ValidatePoolRebalance(stNode, poolID)
 	if err != nil {
@@ -1591,6 +1584,7 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 	dash.VerifyFatal(isPoolSizeUpdated, true, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
 	return nil
 }
+
 func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volume.Volume, error) {
 	var volSelected *volume.Volume
 	//waiting till one of the volume has enough IO and selecting pool and node  using the volume to run the test
@@ -6200,8 +6194,8 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
 			fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 
-		//Wait for 5 min to bring up the px to start before trying pool delete
-		time.Sleep(5 * time.Minute)
+		//Wait till the Node goes down
+		log.FailOnError(Inst().V.WaitDriverDownOnNode(*nodeDetail), fmt.Sprintf("Failed while waiting node to become down [%v]", nodeDetail.Name))
 
 		// Delete the Pool with Invalid Pool ID
 		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
@@ -6816,7 +6810,6 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
-
 })
 
 var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
@@ -7083,9 +7076,31 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 		// Exit Pool maintenance Mode
 		defer exitPoolMaintenance(nodeDetail)
 
-		//Wait for 5 min to bring up the portworx daemon before trying cloud drive add
-		time.Sleep(5 * time.Minute)
-		log.FailOnError(addCloudDrive(*nodeDetail, -1), "error adding cloud drive on Node [%v]", nodeDetail.Name)
+		//Wait for 2 min to bring up the portworx daemon before trying cloud drive add
+		time.Sleep(2 * time.Minute)
+
+		// Add cloud drive on the node selected and wait for rebalance to happen
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+		var specSize uint64
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				val := strings.Split(param, "=")[1]
+				specSize, err = strconv.ParseUint(val, 10, 64)
+				log.FailOnError(err, "Error converting size to uint64")
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize/2))
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+		newSpec := strings.Join(paramsArr, ",")
+		err = Inst().V.AddCloudDrive(nodeDetail, newSpec, -1)
+		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeDetail.Name))
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
