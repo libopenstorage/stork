@@ -28,7 +28,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230207071213-7a8e221c9ebf
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
@@ -61,7 +61,7 @@ require (
 )
 
 require (
-	github.com/portworx/kdmp v0.4.1-0.20230209151708-9d8c326aab11
+	github.com/portworx/kdmp v0.4.1-0.20230227151031-f476d18272d5
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 )
 
@@ -301,7 +301,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230209151708-9d8c326aab11
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230227151031-f476d18272d5
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
