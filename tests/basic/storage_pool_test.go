@@ -6395,7 +6395,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get the Pool UUID on which IO is running
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool using UUID")
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
@@ -6471,7 +6471,7 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 		log.FailOnError(err, "Failed to list storage pools")
 
 		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
@@ -6620,7 +6620,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
@@ -6718,7 +6718,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
@@ -6792,7 +6792,7 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
@@ -6860,7 +6860,7 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
@@ -6944,7 +6944,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
@@ -7060,7 +7060,7 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs()
+		poolUUID, err := GetPoolIDWithIOs(contexts)
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
