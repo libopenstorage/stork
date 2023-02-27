@@ -979,7 +979,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 
 				time.Sleep(1 * time.Minute)
 				expectedStatus := "In Maintenance"
-				err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
+				err = WaitForPoolStatusToUpdate(selectedNode, expectedStatus)
 				log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
 
 				err = Inst().V.DeletePool(selectedNode, "0")
@@ -992,7 +992,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				log.FailOnError(err, "volume driver down on node %s", selectedNode.Name)
 
 				expectedStatus = "Online"
-				err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
+				err = WaitForPoolStatusToUpdate(selectedNode, expectedStatus)
 				log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
 
 				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
