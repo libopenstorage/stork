@@ -1553,6 +1553,14 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 	if err != nil {
 		return fmt.Errorf("add cloud drive failed on node %s, err: %v", stNode.Name, err)
 	}
+
+	// Check if the Node in pool maintenance, exit from maintenance if it is in mode
+	if IsInPoolInMaintenance(stNode) {
+		// Exit pool maintenance and see if px becomes operational
+		err = Inst().V.ExitPoolMaintenance(stNode)
+		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", stNode.Name)
+	}
+
 	log.InfoD("Validate pool rebalance after drive add")
 	err = ValidatePoolRebalance(stNode, poolID)
 	if err != nil {

@@ -5507,3 +5507,12 @@ func IsOpenShiftPxOperator() bool {
 	}
 	return false
 }
+
+func IsInPoolInMaintenance(n node.Node) bool {
+	expectedStatus := "In Maintenance"
+	err := WaitForPoolStatusToUpdate(n, expectedStatus)
+	if err != nil {
+		return false
+	}
+	return true
+}
