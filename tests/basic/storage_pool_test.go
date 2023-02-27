@@ -6218,7 +6218,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
 
 		commonText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*"
-		compileText := fmt.Sprintf("[%s]operation is not supportes", commonText)
+		compileText := fmt.Sprintf("[%s]operation is not supported", commonText)
 		compileTextMaintenanceError := fmt.Sprintf("[%s]Requires pool maintenance mode", commonText)
 
 		err = nil
@@ -6242,6 +6242,9 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		expectedStatus := "In Maintenance"
 		log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
 			fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+
+		//Wait for 5 min to bring up the px to start before trying pool delete
+		time.Sleep(5 * time.Minute)
 
 		// Delete the Pool with Invalid Pool ID
 		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
@@ -6380,7 +6383,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			alerts, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_POOL,
 				startMinusTenHours, endTime)
 
-			// Failing as no alerts seen , as we are runnign some negative scenarios it is expected to have some
+			// Failing as no alerts seen , as we are running some negative scenarios it is expected to have some
 			// alerts generated for resource type pool
 			log.FailOnError(err, "Failed to fetch alerts between startTime [%v] and endTime [%v]",
 				startMinusTenHours, endTime)
@@ -6426,6 +6429,10 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
+		if IsEksPxOperator() != true {
+			dash.ForceFail("DeletePool is currently supported for EKS and LocalDrives")
+		}
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeleterebalanceid-%d", i))...)
@@ -6466,6 +6473,9 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 		expectedStatus := "In Maintenance"
 		log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
 			fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+
+		//Wait for 5 min to bring up the portworx daemon before trying cloud drive add
+		time.Sleep(5 * time.Minute)
 
 		// Once 4 Pools are added Delete Pool 1 and Pool 3 from the Node
 		for _, poolID := range []string{"1", "3"} {
@@ -6596,6 +6606,9 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		// Get random storage less node present in the cluster
 		var pickNode node.Node
 		if len(storageLessNode) == 0 {
+			if IsEksPxOperator() != true {
+				dash.ForceFail("DeletePool is currently supported for EKS and LocalDrives")
+			}
 			err := MakeStoragetoStoragelessNode(*nodeDetail)
 			log.FailOnError(err, "failed to mark storage Node to Storage less Node")
 			storageLessNode = node.GetStorageLessNodes()
@@ -6986,6 +6999,81 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNode_afterResize), true,
 			"New pool is created on trying to expand pool using add disk option")
 
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
+	/*
+		Rebalance taking long time during drive add in pool maintenance mode [PTX-15691] -> [PWX-26629]
+	*/
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DriveAddRebalanceInMaintenance",
+			"Rebalance taking long time during drive add in pool maintenance mode", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Rebalance taking long time during drive add in pool maintenance mode"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizediskadddisk-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs()
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+
+		// Bring Node on pool maintenance mode
+		exitPoolMaintenance := func(n *node.Node) {
+			// Exit pool maintenance and see if px becomes operational
+			err = Inst().V.ExitPoolMaintenance(*n)
+			log.FailOnError(err, "failed to exit pool maintenance mode on node %s", n.Name)
+
+			err = Inst().V.WaitDriverUpOnNode(*n, addDriveUpTimeOut)
+			log.FailOnError(err, "volume driver down on node %s", n.Name)
+
+			expectedStatus := "Online"
+			err = WaitForPoolStatusToUpdate(*n, expectedStatus)
+			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", n.Name, expectedStatus))
+		}
+
+		// Enter maintenance mode before deleting the pools from the cluster
+		log.InfoD("Setting pools to maintenance on node [%s]", nodeDetail.Name)
+		log.FailOnError(Inst().V.EnterPoolMaintenance(*nodeDetail),
+			"failed to set pool maintenance mode on node [%s]", nodeDetail.Name)
+
+		expectedStatus := "In Maintenance"
+		log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
+			fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+
+		// Exit Pool maintenance Mode
+		defer exitPoolMaintenance(nodeDetail)
+
+		//Wait for 5 min to bring up the portworx daemon before trying cloud drive add
+		time.Sleep(5 * time.Minute)
+		log.FailOnError(addCloudDrive(*nodeDetail, -1), "error adding cloud drive on Node [%v]", nodeDetail.Name)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()

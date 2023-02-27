@@ -5434,3 +5434,58 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 
 	return nil
 }
+
+// IsPksPxOperator returns true if current operator installation is on an EKS cluster
+func IsPksPxOperator() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsPKS(stc) {
+			logrus.Infof("PKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsOkePxOperator returns true if current operator installation is on an EKS cluster
+func IsOkePxOperator() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsOKE(stc) {
+			logrus.Infof("OKE installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsAksPxOperator returns true if current operator installation is on an EKS cluster
+func IsAksPxOperator() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsAKS(stc) {
+			logrus.Infof("AKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsIksPxOperator returns true if current operator installation is on an EKS cluster
+func IsIksPxOperator() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsIKS(stc) {
+			logrus.Infof("IKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsOpenShiftPxOperator returns true if current operator installation is on an EKS cluster
+func IsOpenShiftPxOperator() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsOpenshift(stc) {
+			logrus.Infof("OpenShift installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
