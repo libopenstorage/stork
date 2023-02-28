@@ -117,7 +117,7 @@ func (c *FakeResourceTransformations) UpdateStatus(ctx context.Context, resource
 // Delete takes name of the resourceTransformation and deletes it. Returns an error if one occurs.
 func (c *FakeResourceTransformations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(resourcetransformationsResource, c.ns, name), &v1alpha1.ResourceTransformation{})
+		Invokes(testing.NewDeleteActionWithOptions(resourcetransformationsResource, c.ns, name, opts), &v1alpha1.ResourceTransformation{})
 
 	return err
 }
