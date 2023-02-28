@@ -383,29 +383,39 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		cloudCredUID      string
 		backupLocationUID string
 		bkpLocationName   string
+		backupLocationMap map[string]string
+		labelSelectors    map[string]string
+		namespaceMapping  map[string]string
+		providers         []string
+		intervalName      string
+		dailyName         string
+		weeklyName        string
+		monthlyName       string
+		backupNames       []string
+		restoreNames      []string
 	)
-	backupLocationMap := make(map[string]string)
-	labelSelectors := make(map[string]string)
-	bkpNamespaces = make([]string, 0)
-	var namespaceMapping map[string]string
-	namespaceMapping = make(map[string]string)
-	providers := getProviders()
-	intervalName := fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
-	dailyName := fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
-	weeklyName := fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
-	monthlyName := fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
+
 	JustBeforeEach(func() {
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		bkpNamespaces = make([]string, 0)
+		namespaceMapping = make(map[string]string)
+		providers = getProviders()
+		intervalName = fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
+		dailyName = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
+		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
+		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
-		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not ")
+		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not")
 		for i := 0; i < len(appList); i++ {
-			if Contains(postRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["post"]; ok {
-					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
-				}
-			}
 			if Contains(preRuleApp, appList[i]) {
 				if _, ok := portworx.AppParameters[appList[i]]["pre"]; ok {
-					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+					dash.VerifyFatal(ok, true, fmt.Sprintf("Pre Rule details mentioned for the app [%s]", appList[i]))
+				}
+			}
+			if Contains(postRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["post"]; ok {
+					dash.VerifyFatal(ok, true, fmt.Sprintf("Post Rule details mentioned for the app [%s]", appList[i]))
 				}
 			}
 		}
@@ -423,17 +433,17 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		}
 	})
 	It("Basic Backup Creation", func() {
-
-		Step("Validate applications", func() {
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
 			ValidateApplications(contexts)
 		})
 		Step("Creating rules for backup", func() {
+			log.InfoD("Creating rules for backup")
 			log.InfoD("Creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
 				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
-				log.FailOnError(err, "Creating pre rule for deployed apps failed")
+				log.FailOnError(err, "Creating pre rule for deployed app [%s] failed", appList[i])
 				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
-
 				if ruleName != "" {
 					preRuleNameList = append(preRuleNameList, ruleName)
 				}
@@ -441,7 +451,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
 				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
-				log.FailOnError(err, "Creating post rule for deployed apps failed")
+				log.FailOnError(err, "Creating post rule for deployed app [%s] failed", appList[i])
 				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 				if ruleName != "" {
 					postRuleNameList = append(postRuleNameList, ruleName)
@@ -462,6 +472,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			}
 		})
 		Step("Creating backup schedule policies", func() {
+			log.InfoD("Creating backup schedule policies")
 			log.InfoD("Creating backup interval schedule policy")
 			intervalSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
 			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(intervalName, uuid.New(), orgID, intervalSchedulePolicyInfo)
@@ -482,31 +493,42 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			monthlyPolicyStatus := Inst().Backup.BackupSchedulePolicy(monthlyName, uuid.New(), orgID, monthlySchedulePolicyInfo)
 			dash.VerifyFatal(monthlyPolicyStatus, nil, "Creating monthly schedule policy")
 		})
-		Step("Register cluster for backup", func() {
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster with uid [%s]", clusterUid))
 		})
-		Step("Taking backup of applications", func() {
+		Step("Taking backup of all namespaces", func() {
+			log.InfoD("Taking backup of all namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(4))
+				for strings.Contains(strings.Join(backupNames, ","), backupName) {
+					backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(4))
+				}
+				backupNames = append(backupNames, backupName)
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, "Verifying backup creation")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying [%s] backup creation", backupName))
 			}
 		})
-		Step("Restoring the backed up application", func() {
+		Step("Restoring the backed up namespaces", func() {
+			log.InfoD("Restoring the backed up namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
+				restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", namespace, RandomString(4))
+				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
+					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", namespace, RandomString(4))
+				}
+				restoreNames = append(restoreNames, restoreName)
 				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			}
 		})
 	})
@@ -518,33 +540,37 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup pre rules %s", ruleName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup pre rules [%s]", ruleName))
 			}
 		}
 		if len(postRuleNameList) > 0 {
 			for _, ruleName := range postRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules %s", ruleName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules [%s]", ruleName))
 			}
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		log.Info(" Deleting deployed applications")
+		log.Info("Deleting deployed namespaces")
 		ValidateAndDestroy(contexts, opts)
-
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
-
 		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-		backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
-		log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
-		dash.VerifyFatal(backupDeleteResponse.String(), "", "Verifying backup deletion is successful")
-
-		err = DeleteRestore(restoreName, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+		log.Info("Deleting backed up namespaces")
+		for _, backupName := range backupNames {
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
+			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
+			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
+		}
+		log.Info("Deleting restored namespaces")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		}
+		log.Info("Deleting cloud accounts")
+		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 

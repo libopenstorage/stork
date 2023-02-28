@@ -5284,3 +5284,15 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	}
 	return randomItems, nil
 }
+
+// RandomString generates a random lowercase string of length characters.
+func RandomString(length int) string {
+	rand.Seed(time.Now().UnixNano())
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	randomBytes := make([]byte, length)
+	for i := range randomBytes {
+		randomBytes[i] = letters[rand.Intn(len(letters))]
+	}
+	randomString := string(randomBytes)
+	return randomString
+}
