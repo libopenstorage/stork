@@ -117,7 +117,7 @@ func (c *FakeClusterPairs) UpdateStatus(ctx context.Context, clusterPair *v1alph
 // Delete takes name of the clusterPair and deletes it. Returns an error if one occurs.
 func (c *FakeClusterPairs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(clusterpairsResource, c.ns, name), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewDeleteActionWithOptions(clusterpairsResource, c.ns, name, opts), &v1alpha1.ClusterPair{})
 
 	return err
 }

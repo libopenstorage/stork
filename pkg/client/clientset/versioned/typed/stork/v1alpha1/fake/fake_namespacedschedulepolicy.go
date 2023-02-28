@@ -93,7 +93,7 @@ func (c *FakeNamespacedSchedulePolicies) Update(ctx context.Context, namespacedS
 // Delete takes name of the namespacedSchedulePolicy and deletes it. Returns an error if one occurs.
 func (c *FakeNamespacedSchedulePolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(namespacedschedulepoliciesResource, c.ns, name), &v1alpha1.NamespacedSchedulePolicy{})
+		Invokes(testing.NewDeleteActionWithOptions(namespacedschedulepoliciesResource, c.ns, name, opts), &v1alpha1.NamespacedSchedulePolicy{})
 
 	return err
 }

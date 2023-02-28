@@ -117,7 +117,7 @@ func (c *FakeApplicationRestores) UpdateStatus(ctx context.Context, applicationR
 // Delete takes name of the applicationRestore and deletes it. Returns an error if one occurs.
 func (c *FakeApplicationRestores) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(applicationrestoresResource, c.ns, name), &v1alpha1.ApplicationRestore{})
+		Invokes(testing.NewDeleteActionWithOptions(applicationrestoresResource, c.ns, name, opts), &v1alpha1.ApplicationRestore{})
 
 	return err
 }

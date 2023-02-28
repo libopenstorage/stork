@@ -99,7 +99,7 @@ func (c *FakeSchedulePolicies) Update(ctx context.Context, schedulePolicy *v1alp
 // Delete takes name of the schedulePolicy and deletes it. Returns an error if one occurs.
 func (c *FakeSchedulePolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(schedulepoliciesResource, name), &v1alpha1.SchedulePolicy{})
+		Invokes(testing.NewRootDeleteActionWithOptions(schedulepoliciesResource, name, opts), &v1alpha1.SchedulePolicy{})
 	return err
 }
 
