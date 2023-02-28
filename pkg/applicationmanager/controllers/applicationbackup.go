@@ -253,7 +253,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		return nil
 	}
 	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
-		namespaces, err := core.Instance().ListNamespaces(labelSelector)
+		namespaces, err := core.Instance().ListNamespacesV2(labelSelector)
 		if err != nil {
 			errMsg := fmt.Sprintf("error listing namespaces with label selectors: %v, error: %v", labelSelector, err)
 			log.ApplicationBackupLog(backup).Error(errMsg)

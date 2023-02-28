@@ -233,15 +233,15 @@ func (in *ApplicationBackupSpec) DeepCopyInto(out *ApplicationBackupSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.Selectors != nil {
-		in, out := &in.Selectors, &out.Selectors
+	if in.RancherProjects != nil {
+		in, out := &in.RancherProjects, &out.RancherProjects
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}
 	}
-	if in.NamespaceSelector != nil {
-		in, out := &in.NamespaceSelector, &out.NamespaceSelector
+	if in.Selectors != nil {
+		in, out := &in.Selectors, &out.Selectors
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
@@ -713,6 +713,13 @@ func (in *ApplicationRestoreSpec) DeepCopyInto(out *ApplicationRestoreSpec) {
 	}
 	if in.StorageClassMapping != nil {
 		in, out := &in.StorageClassMapping, &out.StorageClassMapping
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.RancherProjectMapping != nil {
+		in, out := &in.RancherProjectMapping, &out.RancherProjectMapping
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
