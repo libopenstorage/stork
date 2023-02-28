@@ -6535,13 +6535,6 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 			log.FailOnError(err, "Error checking pool rebalance")
 		})
-		/*
-			// Wait for Node rebalance in Progress
-			state, err := WaitTillPoolState(api.StorageRebalanceJobState_RUNNING)
-			log.FailOnError(err, "Failed to get rebalance state of the Pool")
-			if state == false {
-				log.InfoD("Ignoring as Pool rebalance is already in state Done")
-			}*/
 
 		log.FailOnError(addNewPools(*nodeDetail, -1),
 			fmt.Sprintf("Adding New Pools failed on Node [%v]", nodeDetail.Name))
