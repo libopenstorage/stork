@@ -18,11 +18,6 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/portworx/sched-ops/k8s/core"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // PxCentralAdminPwd password of PxCentralAdminUser
@@ -57,19 +52,12 @@ const (
 
 	defaultWaitTimeout  time.Duration = 30 * time.Second
 	defaultWaitInterval time.Duration = 5 * time.Second
+	// pxBackupNamespace where px backup is running
+	pxBackupNamespace = "PX_BACKUP_NAMESPACE"
 	// OidcSecretName where secrets for OIDC auth cred info resides
 	oidcSecretName = "SECRET_NAME"
 	// PxCentralUI URL Eg: http://<IP>:<Port>
 	PxCentralUIURL = "PX_CENTRAL_UI_URL"
-)
-
-const (
-	// PxBackupServiceName is the name of the PxBackup service in kubernetes
-	PxBackupServiceName = "px-backup"
-)
-
-var (
-	k8sCore = core.Instance()
 )
 
 type tokenResponse struct {
@@ -201,8 +189,7 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 		}
 	}
 	name := getOidcSecretName()
-	ns, err := GetPxBackupNamespace()
-	log.FailOnError(err, "Unable to get PxBackup namespace")
+	ns := GetPxBackupNamespace()
 	// check and validate oidc details
 	secret, err := k8s.Instance().GetSecret(name, ns)
 	if err != nil {
@@ -226,18 +213,12 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 }
 
 // GetPxBackupNamespace returns namespace of px-backup deployment.
-func GetPxBackupNamespace() (string, error) {
-	var allServices *corev1.ServiceList
-	var err error
-	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
-		return "", fmt.Errorf("failed to get list of services. Err: %v", err)
+func GetPxBackupNamespace() string {
+	ns, present := os.LookupEnv(pxBackupNamespace)
+	if !(present) {
+		return AdminTokenSecretNamespace
 	}
-	for _, svc := range allServices.Items {
-		if svc.Name == PxBackupServiceName {
-			return svc.Namespace, nil
-		}
-	}
-	return "", fmt.Errorf("can't find PxBackup service [%s] from list of services", PxBackupServiceName)
+	return ns
 }
 
 // GetToken fetches JWT token for given user credentials
@@ -289,9 +270,7 @@ func GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
 // GetPxCentralAdminPwd fetches password from PxCentralAdminUser from secret
 func GetPxCentralAdminPwd() (string, error) {
 
-	pxBackupNamespace, err := GetPxBackupNamespace()
-	log.FailOnError(err, "Unable to get PxBackup namespace")
-	secret, err := k8s.Instance().GetSecret(PxCentralAdminSecretName, pxBackupNamespace)
+	secret, err := k8s.Instance().GetSecret(PxCentralAdminSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return "", err
 	}
@@ -789,9 +768,7 @@ func UpdatePxBackupAdminSecret() error {
 		return err
 	}
 
-	pxBackupNamespace, err := GetPxBackupNamespace()
-	log.FailOnError(err, "Unable to get PxBackup namespace")
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, pxBackupNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return err
 	}
@@ -812,9 +789,7 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 		return nil, err
 	}
 
-	pxBackuupNamespace, err := GetPxBackupNamespace()
-	log.FailOnError(err, "Unable to get PxBackup namespace")
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, pxBackuupNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return nil, err
 	}
@@ -836,9 +811,7 @@ func GetAdminTokenFromSecret() (string, error) {
 		return "", err
 	}
 
-	pxBackuupNamespace, err := GetPxBackupNamespace()
-	log.FailOnError(err, "Unable to get PxBackup namespace")
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, pxBackuupNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return "", err
 	}

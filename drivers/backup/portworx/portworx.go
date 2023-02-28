@@ -135,8 +135,7 @@ func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volum
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
-	pxBackupNamespace, _ := backup.GetPxBackupNamespace()
-	if err = p.setDriver(pxbServiceName, pxBackupNamespace); err != nil {
+	if err = p.setDriver(pxbServiceName, backup.GetPxBackupNamespace()); err != nil {
 		return fmt.Errorf("Error setting px-backup endpoint: %v", err)
 	}
 
@@ -1443,7 +1442,7 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 func (p *portworx) ValidateBackupCluster() error {
 	flag := false
 	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
-	ns, _ := backup.GetPxBackupNamespace()
+	ns := backup.GetPxBackupNamespace()
 	pods, err := core.Instance().GetPods(ns, labelSelectors)
 	if err != nil {
 		err = fmt.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
