@@ -117,7 +117,7 @@ func (c *FakeApplicationBackupSchedules) UpdateStatus(ctx context.Context, appli
 // Delete takes name of the applicationBackupSchedule and deletes it. Returns an error if one occurs.
 func (c *FakeApplicationBackupSchedules) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(applicationbackupschedulesResource, c.ns, name), &v1alpha1.ApplicationBackupSchedule{})
+		Invokes(testing.NewDeleteActionWithOptions(applicationbackupschedulesResource, c.ns, name, opts), &v1alpha1.ApplicationBackupSchedule{})
 
 	return err
 }

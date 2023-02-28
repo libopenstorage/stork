@@ -117,7 +117,7 @@ func (c *FakeApplicationBackups) UpdateStatus(ctx context.Context, applicationBa
 // Delete takes name of the applicationBackup and deletes it. Returns an error if one occurs.
 func (c *FakeApplicationBackups) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(applicationbackupsResource, c.ns, name), &v1alpha1.ApplicationBackup{})
+		Invokes(testing.NewDeleteActionWithOptions(applicationbackupsResource, c.ns, name, opts), &v1alpha1.ApplicationBackup{})
 
 	return err
 }
