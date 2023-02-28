@@ -5446,3 +5446,15 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
 	return err
 }
+
+// RandomString generates a random lowercase string of length characters.
+func RandomString(length int) string {
+	rand.Seed(time.Now().UnixNano())
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	randomBytes := make([]byte, length)
+	for i := range randomBytes {
+		randomBytes[i] = letters[rand.Intn(len(letters))]
+	}
+	randomString := string(randomBytes)
+	return randomString
+}
