@@ -186,8 +186,10 @@ const (
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 
-	torpedoJobNameFlag = "torpedo-job-name"
-	torpedoJobTypeFlag = "torpedo-job-type"
+	torpedoJobNameFlag       = "torpedo-job-name"
+	torpedoJobTypeFlag       = "torpedo-job-type"
+	clusterCreationTimeout   = 5 * time.Minute
+	clusterCreationRetryTime = 10 * time.Second
 )
 
 // Dashboard params
@@ -2816,7 +2818,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -2834,7 +2836,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(destClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -5464,4 +5466,146 @@ func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 		}
 	}
 	return -1, nil
+}
+
+func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
+
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]opsapi.FilesystemTrim_FilesystemTrimStatus)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("inspecting volume [%s]", v.Name)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimStatuses[appVol.Id]
+		var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
+
+		if !ok {
+			fsTrimStatus, err = waitForFsTrimStatus(nil, attachedNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != -1 {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] not started on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+func GetAutoFstrimUsageForCtx(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolumeUsageInfo, error) {
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]*opsapi.FstrimVolumeUsageInfo)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("Getting info: %s", v.ID)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimUsages, err := Inst().V.GetAutoFsTrimUsage(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimUsages[appVol.Id]
+		var fsTrimStatus *opsapi.FstrimVolumeUsageInfo
+
+		if !ok {
+			log.Errorf("usage not found for %s", appVol.Id)
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != nil {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] has no usage on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+// WaitForPoolStatusToUpdate returns true when pool status updated to expected status
+func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
+		if err != nil {
+			return nil, true,
+				fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
+		}
+		if poolsStatus == nil {
+			return nil,
+				false, fmt.Errorf("pools status is nil")
+		}
+		for k, v := range poolsStatus {
+			if v != expectedStatus {
+				return nil, true,
+					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+			}
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	return err
+}
+
+// RandomString generates a random lowercase string of length characters.
+func RandomString(length int) string {
+	rand.Seed(time.Now().UnixNano())
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	randomBytes := make([]byte, length)
+	for i := range randomBytes {
+		randomBytes[i] = letters[rand.Intn(len(letters))]
+	}
+	randomString := string(randomBytes)
+	return randomString
 }

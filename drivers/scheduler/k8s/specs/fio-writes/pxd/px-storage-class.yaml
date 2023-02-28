@@ -2,32 +2,28 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: mysql-sc
+  name: fio-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
   {{ if .Repl }}
-  repl: "{{ .Repl }}"
+  repl : "{{ .Repl }}"
   {{ else }}
-  repl: "3"{{ end }}
+  repl: "2"{{ end }}
   priority_io: "high"
-  io_profile: "db"
+  io_profile: "db_remote"
 allowVolumeExpansion: true
 ---
+##### Portworx storage class
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: mysql-sc-aggr
+  name: fio-log
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  fs: "ext4"
-  block_size: "512b"
   {{ if .Repl }}
   repl: "{{ .Repl }}"
   {{ else }}
   repl: "2"{{ end }}
-  aggregation_level: "2"
-  io_profile: "random"
   priority_io: "high"
-  labels: "type=aggregated"
-  group: "mysql-data"
+  io_profile: "db_remote"
 allowVolumeExpansion: true
