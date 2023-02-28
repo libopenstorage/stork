@@ -110,7 +110,7 @@ func (c *FakeClusterDomainsStatuses) UpdateStatus(ctx context.Context, clusterDo
 // Delete takes name of the clusterDomainsStatus and deletes it. Returns an error if one occurs.
 func (c *FakeClusterDomainsStatuses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(clusterdomainsstatusesResource, name), &v1alpha1.ClusterDomainsStatus{})
+		Invokes(testing.NewRootDeleteActionWithOptions(clusterdomainsstatusesResource, name, opts), &v1alpha1.ClusterDomainsStatus{})
 	return err
 }
 
