@@ -186,8 +186,10 @@ const (
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 
-	torpedoJobNameFlag = "torpedo-job-name"
-	torpedoJobTypeFlag = "torpedo-job-type"
+	torpedoJobNameFlag       = "torpedo-job-name"
+	torpedoJobTypeFlag       = "torpedo-job-type"
+	clusterCreationTimeout   = 5 * time.Minute
+	clusterCreationRetryTime = 10 * time.Second
 )
 
 // Dashboard params
@@ -2816,7 +2818,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -2834,7 +2836,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(destClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -4954,27 +4956,57 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs() (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return "", err
 	}
-	var selectedPool *opsapi.StoragePool
-	stNodes := node.GetStorageNodes()
-	for _, stNode := range stNodes {
-		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
-		if selectedPool != nil {
-			return selectedPool.Uuid, nil
+
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", err
 		}
+
+		node := node.GetStorageDriverNodes()[0]
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return "", err
+			}
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+			if err != nil {
+				return "", err
+			}
+			if isIOsInProgress {
+				log.Infof("IOs are in progress for [%v]", vol.Name)
+				poolUuids := appVol.ReplicaSets[0].PoolUuids
+				for _, p := range poolUuids {
+					n, err := GetNodeWithGivenPoolID(p)
+					if err != nil {
+						return "", err
+					}
+					eligibilityMap, err := GetPoolExpansionEligibility(n)
+					if err != nil {
+						return "", err
+					}
+					if eligibilityMap[n.Id] && eligibilityMap[p] {
+						return p, nil
+					}
+
+				}
+			}
+		}
+
 	}
 
 	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
-func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
+func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context) (*opsapi.StoragePool, error) {
 
 	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
 	if err != nil {
@@ -4984,44 +5016,45 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 	if !eligibilityMap[stNode.Id] {
 		return nil, fmt.Errorf("node [%s] is not eligible for expansion", stNode.Name)
 	}
+	nodePools := make([]string, 0)
+	for _, np := range stNode.StoragePools {
+		nodePools = append(nodePools, np.Uuid)
+	}
 
+	var selectedNodePoolID string
 	var selectedPool *opsapi.StoragePool
 
-	t := func() (interface{}, bool, error) {
-		poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+outer:
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 
-		time.Sleep(30 * time.Second)
-
-		poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-		if err != nil {
-			return nil, false, err
-		}
-
-		for k, v := range poolsDataBfr {
-			//skipping if pool is not eligible for expansion
-			if !eligibilityMap[k] {
-				continue
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return nil, err
 			}
-			if v2, ok := poolsDataAfr[k]; ok {
-				if v2 != v {
-					selectedPool, err = GetStoragePoolByUUID(k)
-					if err != nil {
-						return nil, false, err
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&stNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+			if isIOsInProgress {
+				log.Infof("IOs are in progress for [%v]", vol.Name)
+				poolUuids := appVol.ReplicaSets[0].PoolUuids
+				for _, p := range poolUuids {
+					if Contains(nodePools, p) && eligibilityMap[p] {
+						selectedNodePoolID = p
+						break outer
 					}
 				}
 			}
 		}
-		if selectedPool == nil {
-			return nil, true, fmt.Errorf("no pools with IOs running in the node [%s]", stNode.Name)
-		}
-
-		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, defaultMeteringIntervalMins, defaultCmdTimeout)
+	selectedPool, err = GetStoragePoolByUUID(selectedNodePoolID)
+
 	if err != nil {
 		return nil, err
 	}
@@ -5029,17 +5062,16 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 }
 
 // GetRandomNodeWithPoolIOs returns node with IOs running
-func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
+func GetRandomNodeWithPoolIOs(contexts []*scheduler.Context) (node.Node, error) {
 	// pick a storage node with pool having IOs
-	var err error
-	var pool *opsapi.StoragePool
-	for _, stNode := range stNodes {
-		pool, err = GetPoolWithIOsInGivenNode(stNode)
-		if pool != nil {
-			return stNode, nil
-		}
+
+	poolID, err := GetPoolIDWithIOs(contexts)
+	if err != nil {
+		return node.Node{}, err
 	}
-	return node.Node{}, fmt.Errorf("no node with IOs running identified,err: %v", err)
+
+	n, err := GetNodeWithGivenPoolID(poolID)
+	return *n, err
 }
 
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
@@ -5283,6 +5315,136 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 		randomItems[i] = items[j]
 	}
 	return randomItems, nil
+}
+
+func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
+
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]opsapi.FilesystemTrim_FilesystemTrimStatus)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("inspecting volume [%s]", v.Name)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimStatuses[appVol.Id]
+		var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
+
+		if !ok {
+			fsTrimStatus, err = waitForFsTrimStatus(nil, attachedNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != -1 {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] not started on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+func GetAutoFstrimUsageForCtx(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolumeUsageInfo, error) {
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]*opsapi.FstrimVolumeUsageInfo)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("Getting info: %s", v.ID)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimUsages, err := Inst().V.GetAutoFsTrimUsage(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimUsages[appVol.Id]
+		var fsTrimStatus *opsapi.FstrimVolumeUsageInfo
+
+		if !ok {
+			log.Errorf("usage not found for %s", appVol.Id)
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != nil {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] has no usage on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+// WaitForPoolStatusToUpdate returns true when pool status updated to expected status
+func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
+		if err != nil {
+			return nil, true,
+				fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
+		}
+		if poolsStatus == nil {
+			return nil,
+				false, fmt.Errorf("pools status is nil")
+		}
+		for k, v := range poolsStatus {
+			if v != expectedStatus {
+				return nil, true,
+					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+			}
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	return err
 }
 
 // RandomString generates a random lowercase string of length characters.

@@ -364,6 +364,9 @@ type Driver interface {
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
+	//GetAutoFsTrimUsage get usage stats of autofstrim
+	GetAutoFsTrimUsage(pxEndpoint string) (map[string]*api.FstrimVolumeUsageInfo, error)
+
 	// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
 	GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error)
 
@@ -393,6 +396,9 @@ type Driver interface {
 
 	// GetPoolsUsedSize returns map of pool id and current used size
 	GetPoolsUsedSize(n *node.Node) (map[string]string, error)
+
+	// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+	IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error)
 
 	// GetRebalanceJobs returns the list of rebalance jobs
 	GetRebalanceJobs() ([]*api.StorageRebalanceJob, error)

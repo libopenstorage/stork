@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"net"
 	"net/url"
@@ -1342,6 +1343,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
 				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
 				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
+				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
+				log.Infof("requested Spec: %+v", requestedSpec)
+				log.Infof("actual Spec: %+v", vol.Spec)
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
 			}
 		case api.SpecSize:
@@ -2127,6 +2131,24 @@ func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.Filesyst
 	}
 	log.Infof("Trim Status is [%v]", autoFstrimResp.GetTrimStatus())
 	return autoFstrimResp.GetTrimStatus(), nil
+}
+
+// GetAutoFsTrimUsage get status of autofstrim
+func (d *portworx) GetAutoFsTrimUsage(endpoint string) (map[string]*api.FstrimVolumeUsageInfo, error) {
+	sdkport, _ := d.getSDKPort()
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
+	newConn, err := grpc.Dial(pxEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to set the connection endpoint [%s], Err: %v", endpoint, err)
+	}
+	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
+
+	autoFstrimResp, err := d.autoFsTrimManager.AutoFSTrimUsage(d.getContext(), &api.SdkAutoFSTrimUsageRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auto fstrim usage stats, Err: %v", err)
+	}
+	log.Infof("Trim Usage is [%v]", autoFstrimResp.GetUsage())
+	return autoFstrimResp.GetUsage(), nil
 }
 
 // pickAlternateClusterManager returns a different node than given one, useful in case you want to skip nodes which are down
@@ -4779,6 +4801,34 @@ func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 		}
 	}
 	return poolsData, nil
+}
+
+// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+func (d *portworx) IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error) {
+
+	log.Infof("Got vol-id [%s] for checking IOs", volumeNameOrID)
+	cmd := fmt.Sprintf("%s v i %s| grep -e 'IOs in progress'", d.getPxctlPath(*n), volumeNameOrID)
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+
+	if err != nil {
+		return false, err
+	}
+	line := strings.Trim(out, " ")
+	data := strings.Split(line, ":")[1]
+	data = strings.Trim(data, "\n")
+	data = strings.Trim(data, " ")
+	val, err := strconv.Atoi(data)
+	if err != nil {
+		return false, err
+	}
+	if val > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 // GetRebalanceJobs returns the list of rebalance jobs

@@ -6308,7 +6308,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.InfoD("Restart backup pod when backup sharing is in-progress")
 			backupPodLabel := make(map[string]string)
 			backupPodLabel["app"] = "px-backup"
-			err := DeletePodWithLabelInNamespace(backup.GetPxBackupNamespace(), backupPodLabel)
+			pxBackupNamespace, _ := backup.GetPxBackupNamespace()
+			err := DeletePodWithLabelInNamespace(pxBackupNamespace, backupPodLabel)
 			dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting px-backup pod")
@@ -6364,7 +6365,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.InfoD("Restart mongo pod when backup sharing is in-progress")
 			backupPodLabel := make(map[string]string)
 			backupPodLabel["app.kubernetes.io/component"] = "pxc-backup-mongodb"
-			err := DeletePodWithLabelInNamespace(backup.GetPxBackupNamespace(), backupPodLabel)
+			pxBackupNamespace, _ := backup.GetPxBackupNamespace()
+			err := DeletePodWithLabelInNamespace(pxBackupNamespace, backupPodLabel)
 			dash.VerifyFatal(err, nil, "Restart mongo pod when backup sharing is in-progress")
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
@@ -6452,7 +6454,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreation", "Create schedule backup creation with a single namespace", nil, testrailID)
+		StartTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, testrailID)
 		log.Info("Application installation")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -6585,7 +6587,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreation", "Create schedule backup creation with all namespaces", nil, testrailID)
+		StartTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, testrailID)
 		log.Info("Application installation")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
