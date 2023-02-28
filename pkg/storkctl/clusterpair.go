@@ -36,10 +36,10 @@ const (
 var (
 	clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
 
-	projectMappingHelpString = "Project mappings between source and destination clusters. \n" +
-		"Use comma-separated <source-project-id>=<dest-project-id> pairs (currently supported only for Rancher). \n" +
-		"For the project-id, you can also have a cluster-id field added as a prefix to the project-id. \n" +
-		"It is recommended to include both one-to-one mappings of the project-id and Rancher cluster-id prefixed project-id as follows: \n" +
+	projectMappingHelpString = "Project mappings between source and destination clusters (currently supported only for Rancher).\n" +
+		"Use comma-separated <source-project-id>=<dest-project-id> pairs.\n" +
+		"For the project-id, you can also have a cluster-id field added as a prefix to the project-id.\n" +
+		"It is recommended to include both one-to-one mappings of the project-id and Rancher cluster-id prefixed project-id as follows:\n" +
 		"<source-project-id>=<dest-project-id>,<source-cluster-id>:<source-project-id>=<dest-cluster-id>:<dest-project-id>"
 )
 
