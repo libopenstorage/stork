@@ -6543,30 +6543,6 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 		poolsAfrAdding, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 
-		newPoolCreated := func(poolToCompare map[string]*api.StoragePool,
-			poolCompareFrom map[string]*api.StoragePool) []*api.StoragePool {
-			var newPools []*api.StoragePool
-			for _, pool := range poolCompareFrom {
-				var tempVar []*api.StoragePool
-				for _, toCompare := range poolToCompare {
-					if pool == toCompare {
-						tempVar = append(tempVar, pool)
-					}
-				}
-				if len(tempVar) > 0 {
-					for _, each := range tempVar {
-						newPools = append(newPools, each)
-					}
-				}
-			}
-			return newPools
-		}
-
-		newPools := newPoolCreated(poolsAfr, poolsAfrAdding)
-
-		dash.VerifySafely(len(poolsAfr) < len(poolsAfrAdding), true,
-			fmt.Sprintf("New Pool added successfully on the node [%v]", newPools))
-
 		isAvailable := func(element *api.StoragePool, storagePools map[string]*api.StoragePool) bool {
 			// iterate using the for loop
 			for _, each := range storagePools {
@@ -6584,6 +6560,10 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 				newPoolAdded = append(newPoolAdded, eachPool)
 			}
 		}
+
+		dash.VerifySafely(len(poolsAfr) < len(poolsAfrAdding), true,
+			fmt.Sprintf("New Pool added successfully on the node [%v]", newPoolAdded))
+
 		dash.VerifyFatal(len(newPoolAdded) > 0, true, "New Pool Addition successful ?")
 		log.InfoD("New Pool Added [%v]", newPoolAdded[0].Uuid)
 

@@ -5315,30 +5315,6 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	return randomItems, nil
 }
 
-// WaitForPoolStatusToUpdate returns true when pool status updated to expected status
-func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
-	t := func() (interface{}, bool, error) {
-		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
-		if err != nil {
-			return nil, true,
-				fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
-		}
-		if poolsStatus == nil {
-			return nil,
-				false, fmt.Errorf("pools status is nil")
-		}
-		for k, v := range poolsStatus {
-			if v != expectedStatus {
-				return nil, true,
-					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
-			}
-		}
-		return nil, false, nil
-	}
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
-	return err
-}
-
 // MakeStoragetoStoragelessNode returns true on converting Storage Node to Storageless Node
 func MakeStoragetoStoragelessNode(n node.Node) error {
 	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
