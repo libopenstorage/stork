@@ -117,7 +117,7 @@ func (c *FakeDataExports) UpdateStatus(ctx context.Context, dataExport *v1alpha1
 // Delete takes name of the dataExport and deletes it. Returns an error if one occurs.
 func (c *FakeDataExports) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(dataexportsResource, c.ns, name), &v1alpha1.DataExport{})
+		Invokes(testing.NewDeleteActionWithOptions(dataexportsResource, c.ns, name, opts), &v1alpha1.DataExport{})
 
 	return err
 }

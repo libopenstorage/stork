@@ -33,7 +33,7 @@ type ApplicationBackupSpec struct {
 	PlatformCredential string                             `json:"platformCredential"`
 	RancherProjects    map[string]string                  `json:"rancherProjects"`
 	Selectors          map[string]string                  `json:"selectors"`
-	NamespaceSelector  map[string]string                  `json:"namespaceSelector"`
+	NamespaceSelector  string                             `json:"namespaceSelector"`
 	PreExecRule        string                             `json:"preExecRule"`
 	PostExecRule       string                             `json:"postExecRule"`
 	ReclaimPolicy      ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`

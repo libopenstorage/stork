@@ -117,7 +117,7 @@ func (c *FakeApplicationClones) UpdateStatus(ctx context.Context, applicationClo
 // Delete takes name of the applicationClone and deletes it. Returns an error if one occurs.
 func (c *FakeApplicationClones) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(applicationclonesResource, c.ns, name), &v1alpha1.ApplicationClone{})
+		Invokes(testing.NewDeleteActionWithOptions(applicationclonesResource, c.ns, name, opts), &v1alpha1.ApplicationClone{})
 
 	return err
 }

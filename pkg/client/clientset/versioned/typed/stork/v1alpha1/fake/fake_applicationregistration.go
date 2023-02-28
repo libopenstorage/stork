@@ -99,7 +99,7 @@ func (c *FakeApplicationRegistrations) Update(ctx context.Context, applicationRe
 // Delete takes name of the applicationRegistration and deletes it. Returns an error if one occurs.
 func (c *FakeApplicationRegistrations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(applicationregistrationsResource, name), &v1alpha1.ApplicationRegistration{})
+		Invokes(testing.NewRootDeleteActionWithOptions(applicationregistrationsResource, name, opts), &v1alpha1.ApplicationRegistration{})
 	return err
 }
 
