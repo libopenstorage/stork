@@ -186,8 +186,10 @@ const (
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 
-	torpedoJobNameFlag = "torpedo-job-name"
-	torpedoJobTypeFlag = "torpedo-job-type"
+	torpedoJobNameFlag       = "torpedo-job-name"
+	torpedoJobTypeFlag       = "torpedo-job-type"
+	clusterCreationTimeout   = 5 * time.Minute
+	clusterCreationRetryTime = 10 * time.Second
 )
 
 // Dashboard params
@@ -2816,7 +2818,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -2834,7 +2836,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(destClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
