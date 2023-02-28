@@ -5315,63 +5315,28 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	return randomItems, nil
 }
 
-// WaitTillPoolState returns true if the pool state matches the expected state
-func WaitTillPoolState(state opsapi.StorageRebalanceJobState) (bool, error) {
-	rebalanceFunc := func() (interface{}, bool, error) {
-		rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+// WaitForPoolStatusToUpdate returns true when pool status updated to expected status
+func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
 		if err != nil {
-			return nil, true, err
+			return nil, true,
+				fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
 		}
-
-		for _, job := range rebalanceJobs {
-			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
-			if err != nil {
-				return nil, true, err
-			}
-			jobState := jobResponse.GetJob().GetState()
-			switch jobState {
-			case opsapi.StorageRebalanceJobState_CANCELLED:
-				if state == opsapi.StorageRebalanceJobState_CANCELLED {
-					return nil, true, nil
-				}
-				return nil, false,
-					fmt.Errorf("job %v has cancelled, Summary: %v",
-						job.GetId(),
-						jobResponse.GetSummary().GetWorkSummary())
-
-			case opsapi.StorageRebalanceJobState_PAUSED:
-				if state == opsapi.StorageRebalanceJobState_PAUSED {
-					return nil, true, nil
-				}
-				return nil, false,
-					fmt.Errorf("Job %v is in paused/pending state", job.GetId())
-			case opsapi.StorageRebalanceJobState_DONE:
-				if state == opsapi.StorageRebalanceJobState_DONE {
-					return nil, true, nil
-				}
-				return nil, false, nil
-			case opsapi.StorageRebalanceJobState_RUNNING:
-				if state == opsapi.StorageRebalanceJobState_RUNNING {
-					return nil, true, nil
-				}
-				return nil, false,
-					fmt.Errorf("job %v has status Running, Summary: %v",
-						job.GetId(),
-						jobResponse.GetSummary().GetWorkSummary())
-			default:
-				if state == jobState {
-					return nil, true,
-						fmt.Errorf("Job not in required state [%v]", state)
-				}
+		if poolsStatus == nil {
+			return nil,
+				false, fmt.Errorf("pools status is nil")
+		}
+		for k, v := range poolsStatus {
+			if v != expectedStatus {
+				return nil, true,
+					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
 			}
 		}
 		return nil, false, nil
 	}
-	_, err := task.DoRetryWithTimeout(rebalanceFunc, time.Minute*60, time.Minute*2)
-	if err != nil {
-		return false, err
-	}
-	return true, err
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	return err
 }
 
 // MakeStoragetoStoragelessNode returns true on converting Storage Node to Storageless Node
@@ -5429,8 +5394,8 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 	return nil
 }
 
-// IsPksPxOperator returns true if current operator installation is on an EKS cluster
-func IsPksPxOperator() bool {
+// IsPksCluster returns true if current operator installation is on an EKS cluster
+func IsPksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsPKS(stc) {
 			logrus.Infof("PKS installation with PX operator detected.")
@@ -5440,8 +5405,8 @@ func IsPksPxOperator() bool {
 	return false
 }
 
-// IsOkePxOperator returns true if current operator installation is on an EKS cluster
-func IsOkePxOperator() bool {
+// IsOkeCluster returns true if current operator installation is on an EKS cluster
+func IsOkeCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsOKE(stc) {
 			logrus.Infof("OKE installation with PX operator detected.")
@@ -5451,8 +5416,8 @@ func IsOkePxOperator() bool {
 	return false
 }
 
-// IsAksPxOperator returns true if current operator installation is on an EKS cluster
-func IsAksPxOperator() bool {
+// IsAksCluster returns true if current operator installation is on an EKS cluster
+func IsAksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsAKS(stc) {
 			logrus.Infof("AKS installation with PX operator detected.")
@@ -5462,8 +5427,8 @@ func IsAksPxOperator() bool {
 	return false
 }
 
-// IsIksPxOperator returns true if current operator installation is on an EKS cluster
-func IsIksPxOperator() bool {
+// IsIksCluster returns true if current operator installation is on an EKS cluster
+func IsIksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsIKS(stc) {
 			logrus.Infof("IKS installation with PX operator detected.")
@@ -5473,8 +5438,8 @@ func IsIksPxOperator() bool {
 	return false
 }
 
-// IsOpenShiftPxOperator returns true if current operator installation is on an EKS cluster
-func IsOpenShiftPxOperator() bool {
+// IsOpenShift returns true if current operator installation is on an EKS cluster
+func IsOpenShift() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsOpenshift(stc) {
 			logrus.Infof("OpenShift installation with PX operator detected.")
