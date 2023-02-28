@@ -6507,21 +6507,72 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 			true,
 			"verify pools count is updated after pools deletion")
 
-		// Wait for Node rebalance in Progress
-		state, err := WaitTillPoolState(api.StorageRebalanceJobState_RUNNING)
-		log.FailOnError(err, "Failed to get rebalance state of the Pool")
-		if state == false {
-			log.InfoD("Ignoring as Pool rebalance is already in state Done")
-		}
+		stepLog = fmt.Sprintf("Ensure that pool %s rebalance started and add new pool to the node %s", poolUUID, nodeDetail.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			t := func() (interface{}, bool, error) {
+				expandedPool, err := GetStoragePoolByUUID(poolUUID)
+				if err != nil {
+					return nil, true, fmt.Errorf("error getting pool by using id %s", poolUUID)
+				}
 
-		log.FailOnError(addNewPools(*nodeDetail, 1),
+				if expandedPool == nil {
+					return nil, false, fmt.Errorf("expanded pool value is nil")
+				}
+				if expandedPool.LastOperation != nil {
+					log.Infof("Pool Resize Status: %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
+						(strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance is running") || strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress")) {
+						return nil, false, nil
+					}
+					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
+						return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
+					}
+
+				}
+				return nil, true, fmt.Errorf("pool status not updated")
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+			log.FailOnError(err, "Error checking pool rebalance")
+		})
+		/*
+			// Wait for Node rebalance in Progress
+			state, err := WaitTillPoolState(api.StorageRebalanceJobState_RUNNING)
+			log.FailOnError(err, "Failed to get rebalance state of the Pool")
+			if state == false {
+				log.InfoD("Ignoring as Pool rebalance is already in state Done")
+			}*/
+
+		log.FailOnError(addNewPools(*nodeDetail, -1),
 			fmt.Sprintf("Adding New Pools failed on Node [%v]", nodeDetail.Name))
 
 		// Verify New Pool added successfully
 		poolsAfrAdding, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
+
+		newPoolCreated := func(poolToCompare map[string]*api.StoragePool,
+			poolCompareFrom map[string]*api.StoragePool) []*api.StoragePool {
+			var newPools []*api.StoragePool
+			for _, pool := range poolCompareFrom {
+				var tempVar []*api.StoragePool
+				for _, toCompare := range poolToCompare {
+					if pool == toCompare {
+						tempVar = append(tempVar, pool)
+					}
+				}
+				if len(tempVar) > 0 {
+					for _, each := range tempVar {
+						newPools = append(newPools, each)
+					}
+				}
+			}
+			return newPools
+		}
+
+		newPools := newPoolCreated(poolsAfr, poolsAfrAdding)
+
 		dash.VerifySafely(len(poolsAfr) < len(poolsAfrAdding), true,
-			"New Pool added successfully on the node")
+			fmt.Sprintf("New Pool added successfully on the node [%v]", newPools))
 
 		isAvailable := func(element *api.StoragePool, storagePools map[string]*api.StoragePool) bool {
 			// iterate using the for loop
@@ -6630,6 +6681,9 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 			log.FailOnError(addCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
 
+		// Refresh endpoints
+		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
+
 		// Resize the cloud drive added on the Node
 		poolList, err := GetPoolsDetailsOnNode(pickNode)
 		log.FailOnError(err, "failed to get pool details from Node [%v]", pickNode)
@@ -6657,7 +6711,6 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 			dash.VerifyFatal(resizeErr, nil,
 				fmt.Sprintf("Verify pool %s on expansion using auto option", eachPool.Uuid))
 		}
-
 	})
 
 	JustAfterEach(func() {
@@ -6723,7 +6776,8 @@ var _ = Describe("{DriveAddPXDown}", func() {
 			"Errored while stopping Px Driver")
 
 		// wait for some time for driver to go down completly
-		time.Sleep(5 * time.Minute)
+		log.FailOnError(Inst().V.WaitDriverDownOnNode(*nodeDetail), "Failed waiting for driver to come up")
+
 		// Start PxDriver after attempting add cloud drive
 		defer startDriver()
 
