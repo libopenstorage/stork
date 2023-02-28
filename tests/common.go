@@ -188,7 +188,7 @@ const (
 
 	torpedoJobNameFlag       = "torpedo-job-name"
 	torpedoJobTypeFlag       = "torpedo-job-type"
-	clusterCreationTimeout   = 4 * time.Minute
+	clusterCreationTimeout   = 5 * time.Minute
 	clusterCreationRetryTime = 10 * time.Second
 )
 
