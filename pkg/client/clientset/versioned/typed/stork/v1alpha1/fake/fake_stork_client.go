@@ -28,6 +28,10 @@ type FakeStorkV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeStorkV1alpha1) Actions(namespace string) v1alpha1.ActionInterface {
+	return &FakeActions{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) ApplicationBackups(namespace string) v1alpha1.ApplicationBackupInterface {
 	return &FakeApplicationBackups{c, namespace}
 }
@@ -78,10 +82,6 @@ func (c *FakeStorkV1alpha1) Migrations(namespace string) v1alpha1.MigrationInter
 
 func (c *FakeStorkV1alpha1) MigrationSchedules(namespace string) v1alpha1.MigrationScheduleInterface {
 	return &FakeMigrationSchedules{c, namespace}
-}
-
-func (c *FakeStorkV1alpha1) NamespacedActions(namespace string) v1alpha1.NamespacedActionInterface {
-	return &FakeNamespacedActions{c, namespace}
 }
 
 func (c *FakeStorkV1alpha1) NamespacedSchedulePolicies(namespace string) v1alpha1.NamespacedSchedulePolicyInterface {

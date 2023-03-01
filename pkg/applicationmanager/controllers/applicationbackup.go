@@ -1637,7 +1637,11 @@ func (a *ApplicationBackupController) backupResources(
 	backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
-	backup.Status.Reason = "Volumes and resources were backed up successfully"
+	if len(backup.Spec.NamespaceSelector) != 0 && len(backup.Spec.Namespaces) == 0 {
+		backup.Status.Reason = "Namespace label selector did not find any namespaces with selected labels for backup"
+	} else {
+		backup.Status.Reason = "Volumes and resources were backed up successfully"
+	}
 
 	// Only on success compute the total backup size
 	for _, vInfo := range backup.Status.Volumes {

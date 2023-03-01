@@ -32,59 +32,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// NamespacedActionInformer provides access to a shared informer and lister for
-// NamespacedActions.
-type NamespacedActionInformer interface {
+// ActionInformer provides access to a shared informer and lister for
+// Actions.
+type ActionInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.NamespacedActionLister
+	Lister() v1alpha1.ActionLister
 }
 
-type namespacedActionInformer struct {
+type actionInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewNamespacedActionInformer constructs a new informer for NamespacedAction type.
+// NewActionInformer constructs a new informer for Action type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewNamespacedActionInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredNamespacedActionInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewActionInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredActionInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredNamespacedActionInformer constructs a new informer for NamespacedAction type.
+// NewFilteredActionInformer constructs a new informer for Action type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredNamespacedActionInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredActionInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().NamespacedActions(namespace).List(context.TODO(), options)
+				return client.StorkV1alpha1().Actions(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().NamespacedActions(namespace).Watch(context.TODO(), options)
+				return client.StorkV1alpha1().Actions(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&storkv1alpha1.NamespacedAction{},
+		&storkv1alpha1.Action{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *namespacedActionInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredNamespacedActionInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *actionInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredActionInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *namespacedActionInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&storkv1alpha1.NamespacedAction{}, f.defaultInformer)
+func (f *actionInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&storkv1alpha1.Action{}, f.defaultInformer)
 }
 
-func (f *namespacedActionInformer) Lister() v1alpha1.NamespacedActionLister {
-	return v1alpha1.NewNamespacedActionLister(f.Informer().GetIndexer())
+func (f *actionInformer) Lister() v1alpha1.ActionLister {
+	return v1alpha1.NewActionLister(f.Informer().GetIndexer())
 }

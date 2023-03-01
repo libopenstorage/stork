@@ -28,6 +28,7 @@ import (
 
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ActionsGetter
 	ApplicationBackupsGetter
 	ApplicationBackupSchedulesGetter
 	ApplicationClonesGetter
@@ -41,7 +42,6 @@ type StorkV1alpha1Interface interface {
 	GroupVolumeSnapshotsGetter
 	MigrationsGetter
 	MigrationSchedulesGetter
-	NamespacedActionsGetter
 	NamespacedSchedulePoliciesGetter
 	PlatformCredentialsGetter
 	ResourceTransformationsGetter
@@ -54,6 +54,10 @@ type StorkV1alpha1Interface interface {
 // StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *StorkV1alpha1Client) Actions(namespace string) ActionInterface {
+	return newActions(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) ApplicationBackups(namespace string) ApplicationBackupInterface {
@@ -106,10 +110,6 @@ func (c *StorkV1alpha1Client) Migrations(namespace string) MigrationInterface {
 
 func (c *StorkV1alpha1Client) MigrationSchedules(namespace string) MigrationScheduleInterface {
 	return newMigrationSchedules(c, namespace)
-}
-
-func (c *StorkV1alpha1Client) NamespacedActions(namespace string) NamespacedActionInterface {
-	return newNamespacedActions(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) NamespacedSchedulePolicies(namespace string) NamespacedSchedulePolicyInterface {
