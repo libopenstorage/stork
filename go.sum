@@ -2254,8 +2254,8 @@ github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1/go.mod h1
 github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987 h1:VNBTmIPjJRZ2QP64zdsrif3ELDHiMzoyNNX74VNHgZ8=
 github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987/go.mod h1:g3pw2lI2AjqAixUCRhaBdKTY98znsCPR7NGRrlpimVU=
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd h1:cjKFXeQwi1EYlkT1Rjcj6MgPwKjDUKuOx6iCQbQP09M=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd/go.mod h1:JbHASXqA/GXwFD4blS1DZkrxtS5llb98ViZgUerOtQA=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203 h1:f+KYmAiOiYDiEycOuEyPn+of4t0cew+IW8x12zQTksw=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203/go.mod h1:JbHASXqA/GXwFD4blS1DZkrxtS5llb98ViZgUerOtQA=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3 h1:UZE1bIdN10MDnO7CXSnM2js1ixtfH3gkOah8koCPvdY=
 github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3/go.mod h1:6/JatmSXhilsjBkh46EUCDKRYo0zKP8OVrA7W00ER2I=
