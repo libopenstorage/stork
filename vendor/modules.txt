@@ -1024,7 +1024,7 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c
+# github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 ## explicit; go 1.19
 github.com/rancher/norman/clientbase
 github.com/rancher/norman/httperror
@@ -1036,7 +1036,7 @@ github.com/rancher/norman/types/values
 # github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 ## explicit; go 1.19
 github.com/rancher/rancher/pkg/client/generated/management/v3
-# github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1
+# github.com/rancher/wrangler v1.1.0
 ## explicit; go 1.19
 github.com/rancher/wrangler/pkg/name
 # github.com/rogpeppe/go-internal v1.9.0
