@@ -1,4 +1,4 @@
-package namespacedaction
+package action
 
 import (
 	"context"
@@ -45,7 +45,7 @@ func (ns *ActionController) Init(mgr manager.Manager) error {
 	if err != nil {
 		return err
 	}
-	return controllers.RegisterTo(mgr, "namespace-action-controller", ns, &storkv1.Action{})
+	return controllers.RegisterTo(mgr, "action-controller", ns, &storkv1.Action{})
 }
 
 func (ns *ActionController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
