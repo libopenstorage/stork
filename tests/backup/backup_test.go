@@ -6308,8 +6308,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.InfoD("Restart backup pod when backup sharing is in-progress")
 			backupPodLabel := make(map[string]string)
 			backupPodLabel["app"] = "px-backup"
-			pxBackupNamespace, _ := backup.GetPxBackupNamespace()
-			err := DeletePodWithLabelInNamespace(pxBackupNamespace, backupPodLabel)
+			err := DeletePodWithLabelInNamespace(backup.GetPxBackupNamespace(), backupPodLabel)
 			dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting px-backup pod")
@@ -6365,8 +6364,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.InfoD("Restart mongo pod when backup sharing is in-progress")
 			backupPodLabel := make(map[string]string)
 			backupPodLabel["app.kubernetes.io/component"] = "pxc-backup-mongodb"
-			pxBackupNamespace, _ := backup.GetPxBackupNamespace()
-			err := DeletePodWithLabelInNamespace(pxBackupNamespace, backupPodLabel)
+			err := DeletePodWithLabelInNamespace(backup.GetPxBackupNamespace(), backupPodLabel)
 			dash.VerifyFatal(err, nil, "Restart mongo pod when backup sharing is in-progress")
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
