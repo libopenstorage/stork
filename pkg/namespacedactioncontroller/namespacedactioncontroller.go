@@ -10,12 +10,14 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/sirupsen/logrus"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -28,10 +30,15 @@ const (
 )
 
 func NewNamespacedActionController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *NamespacedActionController {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		logrus.Fatalf("Error getting cluster config: %v", err)
+	}
 	return &NamespacedActionController{
 		client:    mgr.GetClient(),
 		volDriver: d,
 		recorder:  r,
+		config:    config,
 	}
 }
 
@@ -39,6 +46,7 @@ type NamespacedActionController struct {
 	client    runtimeclient.Client
 	volDriver volume.Driver
 	recorder  record.EventRecorder
+	config    *rest.Config
 }
 
 func (ns *NamespacedActionController) Init(mgr manager.Manager) error {
@@ -77,16 +85,28 @@ func (ns *NamespacedActionController) handle(ctx context.Context, namespacedActi
 	case storkv1.NamespacedActionNil:
 		return nil
 	case storkv1.NamespacedActionFailover:
-		logrus.Infof("[DEBUG] NamespacedAction handle: Failover")
+		logrus.Infof("[DEBUG] NamespacedActionController handle: Failover")
+		resourceutils.ScaleReplicas(namespacedAction.Namespace, true, printFunc, ns.config)
 		namespacedAction.Spec.Action = storkv1.NamespacedActionNil
 	case storkv1.NamespacedActionFailback:
-		logrus.Infof("[DEBUG] NamespacedAction handle: Failback")
+		logrus.Infof("[DEBUG] NamespacedActionController handle: Failback")
 		namespacedAction.Spec.Action = storkv1.NamespacedActionNil
 	default:
 		return fmt.Errorf("Invalid value received for NamespacedAction.Spec.Action!")
 	}
-
 	return ns.createNamespacedActionStatusItem(namespacedAction, action, storkv1.NamespacedActionStatusSuccessful)
+}
+
+func printFunc(msg, stream string) {
+	switch stream {
+	case "out":
+		logrus.Infof(msg)
+	case "err":
+		logrus.Errorf(msg)
+	default:
+		logrus.Errorf("printFunc received invalid stream")
+		logrus.Errorf(msg)
+	}
 }
 
 func (ns *NamespacedActionController) createNamespacedActionStatusItem(
