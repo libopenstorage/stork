@@ -30,7 +30,7 @@ require (
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
 	github.com/prometheus/client_golang v1.14.0
-	github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c
+	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 	github.com/sirupsen/logrus v1.9.0
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
@@ -231,7 +231,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
-	github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1 // indirect
+	github.com/rancher/wrangler v1.1.0 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/rubenv/sql-migrate v1.1.2 // indirect
