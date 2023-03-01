@@ -5376,7 +5376,7 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 func IsPksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsPKS(stc) {
-			logrus.Infof("PKS installation with PX operator detected.")
+			log.InfoD("PKS installation with PX operator detected.")
 			return true
 		}
 	}
@@ -5387,7 +5387,7 @@ func IsPksCluster() bool {
 func IsOkeCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsOKE(stc) {
-			logrus.Infof("OKE installation with PX operator detected.")
+			log.InfoD("OKE installation with PX operator detected.")
 			return true
 		}
 	}
@@ -5398,7 +5398,7 @@ func IsOkeCluster() bool {
 func IsAksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsAKS(stc) {
-			logrus.Infof("AKS installation with PX operator detected.")
+			log.InfoD("AKS installation with PX operator detected.")
 			return true
 		}
 	}
@@ -5409,7 +5409,7 @@ func IsAksCluster() bool {
 func IsIksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsIKS(stc) {
-			logrus.Infof("IKS installation with PX operator detected.")
+			log.InfoD("IKS installation with PX operator detected.")
 			return true
 		}
 	}
@@ -5420,7 +5420,7 @@ func IsIksCluster() bool {
 func IsOpenShift() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsOpenshift(stc) {
-			logrus.Infof("OpenShift installation with PX operator detected.")
+			log.InfoD("OpenShift installation with PX operator detected.")
 			return true
 		}
 	}
