@@ -24,6 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// Actions returns a ActionInformer.
+	Actions() ActionInformer
 	// ApplicationBackups returns a ApplicationBackupInformer.
 	ApplicationBackups() ApplicationBackupInformer
 	// ApplicationBackupSchedules returns a ApplicationBackupScheduleInformer.
@@ -50,8 +52,6 @@ type Interface interface {
 	Migrations() MigrationInformer
 	// MigrationSchedules returns a MigrationScheduleInformer.
 	MigrationSchedules() MigrationScheduleInformer
-	// NamespacedActions returns a NamespacedActionInformer.
-	NamespacedActions() NamespacedActionInformer
 	// NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.
 	NamespacedSchedulePolicies() NamespacedSchedulePolicyInformer
 	// PlatformCredentials returns a PlatformCredentialInformer.
@@ -77,6 +77,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// Actions returns a ActionInformer.
+func (v *version) Actions() ActionInformer {
+	return &actionInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ApplicationBackups returns a ApplicationBackupInformer.
@@ -142,11 +147,6 @@ func (v *version) Migrations() MigrationInformer {
 // MigrationSchedules returns a MigrationScheduleInformer.
 func (v *version) MigrationSchedules() MigrationScheduleInformer {
 	return &migrationScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// NamespacedActions returns a NamespacedActionInformer.
-func (v *version) NamespacedActions() NamespacedActionInformer {
-	return &namespacedActionInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.

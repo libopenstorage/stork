@@ -42,7 +42,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&GroupVolumeSnapshotList{},
 		&SchedulePolicy{},
 		&SchedulePolicyList{},
-		&NamespacedAction{},
+		&Action{},
 		&NamespacedActionList{},
 		&NamespacedSchedulePolicy{},
 		&NamespacedSchedulePolicyList{},

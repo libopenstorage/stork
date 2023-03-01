@@ -53,6 +53,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=stork.libopenstorage.org, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("actions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().Actions().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("applicationbackups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ApplicationBackups().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("applicationbackupschedules"):
@@ -79,8 +81,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().Migrations().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("migrationschedules"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().MigrationSchedules().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("namespacedactions"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().NamespacedActions().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("namespacedschedulepolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().NamespacedSchedulePolicies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("platformcredentials"):

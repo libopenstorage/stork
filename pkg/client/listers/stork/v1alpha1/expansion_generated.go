@@ -18,6 +18,14 @@ limitations under the License.
 
 package v1alpha1
 
+// ActionListerExpansion allows custom methods to be added to
+// ActionLister.
+type ActionListerExpansion interface{}
+
+// ActionNamespaceListerExpansion allows custom methods to be added to
+// ActionNamespaceLister.
+type ActionNamespaceListerExpansion interface{}
+
 // ApplicationBackupListerExpansion allows custom methods to be added to
 // ApplicationBackupLister.
 type ApplicationBackupListerExpansion interface{}
@@ -109,14 +117,6 @@ type MigrationScheduleListerExpansion interface{}
 // MigrationScheduleNamespaceListerExpansion allows custom methods to be added to
 // MigrationScheduleNamespaceLister.
 type MigrationScheduleNamespaceListerExpansion interface{}
-
-// NamespacedActionListerExpansion allows custom methods to be added to
-// NamespacedActionLister.
-type NamespacedActionListerExpansion interface{}
-
-// NamespacedActionNamespaceListerExpansion allows custom methods to be added to
-// NamespacedActionNamespaceLister.
-type NamespacedActionNamespaceListerExpansion interface{}
 
 // NamespacedSchedulePolicyListerExpansion allows custom methods to be added to
 // NamespacedSchedulePolicyLister.

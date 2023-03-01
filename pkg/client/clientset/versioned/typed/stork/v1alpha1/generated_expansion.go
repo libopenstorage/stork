@@ -18,6 +18,8 @@ limitations under the License.
 
 package v1alpha1
 
+type ActionExpansion interface{}
+
 type ApplicationBackupExpansion interface{}
 
 type ApplicationBackupScheduleExpansion interface{}
@@ -43,8 +45,6 @@ type GroupVolumeSnapshotExpansion interface{}
 type MigrationExpansion interface{}
 
 type MigrationScheduleExpansion interface{}
-
-type NamespacedActionExpansion interface{}
 
 type NamespacedSchedulePolicyExpansion interface{}
 
