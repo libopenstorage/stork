@@ -14,7 +14,7 @@ type NamespacedActionOps interface {
 	// GetNamespacedAction gets the NamespacedAction
 	GetNamespacedAction(string, string) (*storkv1alpha1.NamespacedAction, error)
 	// ListNamespacedActions lists all the NamespacedActions
-	ListNamespacedActions(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.NamespacedActionList, error)
+	ListNamespacedActions(namespace string) (*storkv1alpha1.NamespacedActionList, error)
 	// UpdateNamespacedAction updates the NamespacedAction
 	UpdateNamespacedAction(*storkv1alpha1.NamespacedAction) (*storkv1alpha1.NamespacedAction, error)
 	// DeleteNamespacedAction deletes the NamespacedAction
@@ -38,11 +38,11 @@ func (c *Client) GetNamespacedAction(name string, namespace string) (*storkv1alp
 }
 
 // ListNamespacedActions lists all the NamespacedActions
-func (c *Client) ListNamespacedActions(namespace string, filterOptions metav1.ListOptions) (*storkv1alpha1.NamespacedActionList, error) {
+func (c *Client) ListNamespacedActions(namespace string) (*storkv1alpha1.NamespacedActionList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().NamespacedActions(namespace).List(context.TODO(), filterOptions)
+	return c.stork.StorkV1alpha1().NamespacedActions(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // UpdateNamespacedAction updates the NamespacedAction
