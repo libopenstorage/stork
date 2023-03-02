@@ -37,7 +37,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -108,7 +108,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 		for _, ds := range params.DataServiceToTest {
 			Step("Deploy and validate data service", func() {
 				isDeploymentsDeleted = false
-				deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+				deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 				log.FailOnError(err, "Error while deploying data services")
 			})
 
@@ -180,7 +180,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -311,7 +311,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -639,7 +639,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -748,7 +748,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func DeployandValidateDataServices(ds PDSDataService, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	Step("Deploy Data Services", func() {
 		log.InfoD("Deploying DataService %v ", ds.Name)
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
@@ -759,6 +759,11 @@ func DeployandValidateDataServices(ds PDSDataService, tenantID, projectID string
 		log.FailOnError(err, "Error while getting app configuration template")
 		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+
+		log.InfoD("Getting the namespaceID to deploy dataservice")
+		namespaceID, err := pdslib.GetnameSpaceID(namespace, deploymentTargetID)
+		log.FailOnError(err, "Error while getting namespaceID")
+		dash.VerifyFatal(namespaceID != "", true, "Validating namespaceID")
 
 		deployment, dataServiceImageMap, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
 			deploymentTargetID,
@@ -897,12 +902,8 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 		Step("Deploy All Supported Data Services", func() {
 			var cleanupall []string
 			for _, namespace := range namespaces {
-				log.InfoD("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
-				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
-				log.FailOnError(err, "error while getting namespaceid")
-				Expect(newNamespaceID).NotTo(BeEmpty())
-
-				deps := DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
+				log.InfoD("Deploying dataservices in namespace: %v", namespace.Name)
+				deps := DeployInANamespaceAndVerify(namespace.Name)
 				cleanupall = append(cleanupall, deps...)
 			}
 
@@ -958,7 +959,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					cleanup = append(cleanup, deployment)
 				})
@@ -1021,7 +1022,7 @@ var _ = Describe("{RestartPXPods}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -1160,13 +1161,12 @@ func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp 
 	}
 }
 
-func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
-
+func DeployInANamespaceAndVerify(nname string) []string {
 	var cleanup []string
 	for _, ds := range params.DataServiceToTest {
 		Step("Deploy and validate data service", func() {
 			isDeploymentsDeleted = false
-			deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+			deployment, _, _, err = DeployandValidateDataServices(ds, nname, tenantID, projectID)
 			log.FailOnError(err, "Error while deploying data services")
 		})
 	}
@@ -1183,7 +1183,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
