@@ -72,7 +72,6 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 	switch action.Spec.ActionType {
 	case storkv1.ActionTypeFailover:
 		logrus.Infof("Performing action: failover")
-		resourceutils.ScaleReplicas(action.Namespace, true, printFunc, ac.config)
 		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
