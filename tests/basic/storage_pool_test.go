@@ -6112,7 +6112,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
 
                 log.InfoD(fmt.Sprintf("Priority Before [%s] was set to [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, setIOPriority, ioPriorityAfter))
-		dash.VerifyFatal(strings.ToLower(ioPriorityBefore) == strings.ToLower(ioPriorityAfter), true, "IO Priority mismatch after pool expansion")
+		dash.VerifyFatal(strings.ToLower(setIOPriority) == strings.ToLower(ioPriorityAfter), true, "IO Priority mismatch after pool expansion")
 
 	})
 
