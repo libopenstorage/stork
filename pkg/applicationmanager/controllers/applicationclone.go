@@ -536,6 +536,7 @@ func (a *ApplicationCloneController) prepareResources(
 				return nil, fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		}
+		var opts resourcecollector.Options
 		_, err = a.resourceCollector.PrepareResourceForApply(
 			o,
 			objects,
@@ -545,7 +546,7 @@ func (a *ApplicationCloneController) prepareResources(
 			pvNameMappings,
 			clone.Spec.IncludeOptionalResourceTypes,
 			nil,
-			nil,
+			&opts,
 		)
 		if err != nil {
 			return nil, err
