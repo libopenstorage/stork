@@ -12,6 +12,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -47,19 +48,17 @@ type ActionController struct {
 	config    *rest.Config
 }
 
-func (ns *ActionController) Init(mgr manager.Manager) error {
-	err := ns.createCRD()
+func (ac *ActionController) Init(mgr manager.Manager) error {
+	err := ac.createCRD()
 	if err != nil {
 		return err
 	}
-	return controllers.RegisterTo(mgr, "action-controller", ns, &storkv1.Action{})
+	return controllers.RegisterTo(mgr, "action-controller", ac, &storkv1.Action{})
 }
 
-func (ns *ActionController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	logrus.Infof("[DEBUG] ActionController Reconcile")
-
+func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	action := &storkv1.Action{}
-	err := ns.client.Get(context.TODO(), request.NamespacedName, action)
+	err := ac.client.Get(context.TODO(), request.NamespacedName, action)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -68,21 +67,25 @@ func (ns *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	if err = ns.handle(context.TODO(), action); err != nil {
-		logrus.Errorf("%s: %s: %s", reflect.TypeOf(ns), action.Name, err)
+	if err = ac.handle(context.TODO(), action); err != nil {
+		logrus.Errorf("%s: %s: %s", reflect.TypeOf(ac), action.Name, err)
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
 	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
 
-func (ns *ActionController) handle(ctx context.Context, action *storkv1.Action) error {
-	actionType := action.Spec.ActionType
-	switch actionType {
+func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) error {
+	ac.updateStatus(action, storkv1.ActionStatusInProgress)
+	switch action.Spec.ActionType {
 	case storkv1.ActionTypeFailover:
 		logrus.Infof("[DEBUG] Action handle: Failover")
-		resourceutils.ScaleReplicas(action.Namespace, true, printFunc, ns.config)
+		resourceutils.ScaleReplicas(action.Namespace, true, printFunc, ac.config)
+		// (dgoel) what happens if action completes but not able to update status value
+		// should all the actions be idempotent?
+		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 	default:
+		ac.updateStatus(action, storkv1.ActionStatusFailed)
 		return fmt.Errorf("Invalid value received for Action.Spec.ActionType!")
 	}
 	return nil
@@ -100,7 +103,15 @@ func printFunc(msg, stream string) {
 	}
 }
 
-func (c *ActionController) createCRD() error {
+func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus storkv1.ActionStatus) {
+	action.Status = actionStatus
+	_, err := storkops.Instance().UpdateAction(action)
+	if err != nil {
+		logrus.Errorf("Failed to update Action status: %v/%v", action.Name, actionStatus)
+	}
+}
+
+func (ac *ActionController) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    storkv1.ActionResourceName,
 		Plural:  storkv1.ActionResourcePlural,
