@@ -6073,7 +6073,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 
 		// Selecting Pool IO Priority Value different that the one already set
 		for _, eachIOPriority := range ioPriorities {
-			if eachIOPriority != ioPriorityBefore {
+			if eachIOPriority != strings.ToLower(ioPriorityBefore) {
 				setIOPriority = eachIOPriority
 				break
 			}
@@ -6111,8 +6111,8 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		ioPriorityAfter, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
 		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
 
-		log.InfoD(fmt.Sprintf("Priority Before [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, ioPriorityAfter))
-		dash.VerifyFatal(ioPriorityAfter == setIOPriority, true, "IO Priority mismatch after pool expansion")
+                log.InfoD(fmt.Sprintf("Priority Before [%s] was set to [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, setIOPriority, ioPriorityAfter))
+		dash.VerifyFatal(strings.ToLower(ioPriorityBefore) == strings.ToLower(ioPriorityAfter), true, "IO Priority mismatch after pool expansion")
 
 	})
 
