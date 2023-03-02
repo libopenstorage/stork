@@ -6,9 +6,9 @@ import (
 
 const (
 	// ActionResourceName is name for "Action" resource
-	ActionResourceName = "Action"
+	ActionResourceName = "action"
 	// ActionResourcePlural is plural for "Action" resource
-	ActionResourcePlural = "Actions"
+	ActionResourcePlural = "actions"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
