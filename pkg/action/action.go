@@ -11,7 +11,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -55,13 +54,14 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
-		// Error reading the object - requeue the request.
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	if err = ac.handle(context.TODO(), action); err != nil {
-		logrus.Errorf("%s: %s: %s", reflect.TypeOf(ac), action.Name, err)
-		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	if action.Status == storkv1.ActionStatusScheduled {
+		if err = ac.handle(context.TODO(), action); err != nil {
+			logrus.Errorf("%s: %s: %s", reflect.TypeOf(ac), action.Name, err)
+			return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+		}
 	}
 
 	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
@@ -71,10 +71,8 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 	ac.updateStatus(action, storkv1.ActionStatusInProgress)
 	switch action.Spec.ActionType {
 	case storkv1.ActionTypeFailover:
-		logrus.Infof("[DEBUG] Action handle: Failover")
+		logrus.Infof("Performing action: failover")
 		resourceutils.ScaleReplicas(action.Namespace, true, printFunc, ac.config)
-		// (dgoel) what happens if action completes but not able to update status value
-		// should all the actions be idempotent?
 		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
@@ -97,9 +95,9 @@ func printFunc(msg, stream string) {
 
 func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus storkv1.ActionStatus) {
 	action.Status = actionStatus
-	_, err := storkops.Instance().UpdateAction(action)
+	err := ac.client.Update(context.TODO(), action)
 	if err != nil {
-		logrus.Errorf("Failed to update Action status: %v/%v", action.Name, actionStatus)
+		logrus.Errorf("Failed to update Action status %v/%v with error %v", action.Name, actionStatus, err)
 	}
 }
 
