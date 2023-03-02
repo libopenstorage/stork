@@ -605,6 +605,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			if (driverName == "csi" || driverName == "kdmp") && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
 				objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 				objectBasedOnIncludeResources := make([]runtime.Unstructured, 0)
+				var opts resourcecollector.Options
 				for _, o := range objects {
 					skip, err := a.resourceCollector.PrepareResourceForApply(
 						o,
@@ -615,7 +616,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						nil,
 						restore.Spec.IncludeOptionalResourceTypes,
 						nil,
-						nil,
+						&opts,
 					)
 					if err != nil {
 						return err
