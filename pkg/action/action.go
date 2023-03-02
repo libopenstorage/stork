@@ -80,18 +80,6 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 	return nil
 }
 
-func printFunc(msg, stream string) {
-	switch stream {
-	case "out":
-		logrus.Infof(msg)
-	case "err":
-		logrus.Errorf(msg)
-	default:
-		logrus.Errorf("printFunc received invalid stream")
-		logrus.Errorf(msg)
-	}
-}
-
 func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus storkv1.ActionStatus) {
 	action.Status = actionStatus
 	err := ac.client.Update(context.TODO(), action)
