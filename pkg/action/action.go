@@ -71,11 +71,11 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 	ac.updateStatus(action, storkv1.ActionStatusInProgress)
 	switch action.Spec.ActionType {
 	case storkv1.ActionTypeFailover:
-		logrus.Infof("Performing action: failover")
+		logrus.Infof("performing action: failover")
 		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
-		return fmt.Errorf("Invalid value received for Action.Spec.ActionType!")
+		return fmt.Errorf("invalid value received for Action.Spec.ActionType!")
 	}
 	return nil
 }
@@ -84,7 +84,7 @@ func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus st
 	action.Status = actionStatus
 	err := ac.client.Update(context.TODO(), action)
 	if err != nil {
-		logrus.Errorf("Failed to update Action status %v/%v with error %v", action.Name, actionStatus, err)
+		logrus.Errorf("failed to update Action status %v/%v with error %v", action.Name, actionStatus, err)
 	}
 }
 
