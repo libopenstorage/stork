@@ -16,8 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/portworx/torpedo/pkg/log"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 
