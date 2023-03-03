@@ -111,7 +111,6 @@ import (
 
 	context1 "context"
 
-	"github.com/pborman/uuid"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -152,7 +151,7 @@ const (
 	meteringIntervalMinsFlag             = "metering_interval_mins"
 	SourceClusterName                    = "source-cluster"
 	destinationClusterName               = "destination-cluster"
-	backupLocationName                   = "tp-blocation"
+	backupLocationNameConst              = "tp-blocation"
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
@@ -187,8 +186,10 @@ const (
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 
-	torpedoJobNameFlag = "torpedo-job-name"
-	torpedoJobTypeFlag = "torpedo-job-type"
+	torpedoJobNameFlag       = "torpedo-job-name"
+	torpedoJobTypeFlag       = "torpedo-job-type"
+	clusterCreationTimeout   = 5 * time.Minute
+	clusterCreationRetryTime = 10 * time.Second
 )
 
 // Dashboard params
@@ -2384,7 +2385,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  schedulePolicyUID,
 			},
 			BackupLocationRef: &api.ObjectRef{
-				Name: backupLocationName,
+				Name: backupLocationNameConst,
 				Uid:  BackupLocationUID,
 			},
 		}
@@ -2679,28 +2680,6 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 	// TODO: validate createClusterResponse also
 }
 
-// SetupBackup sets up backup location and source and destination clusters
-func SetupBackup(testName string) {
-	log.Infof("Backup driver: %v", Inst().Backup)
-	provider := GetProvider()
-	log.Infof("Run Setup backup with object store provider: %s", provider)
-	OrgID = "default"
-	BucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
-	CloudCredUID = uuid.New()
-	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
-	BackupLocationUID = uuid.New()
-	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
-
-	CreateBucket(provider, BucketName)
-	CreateOrganization(OrgID)
-	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
-	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
-	err = CreateSourceAndDestClusters(OrgID, "", "", ctx)
-	log.FailOnError(err, "Creating source and destination cluster")
-}
-
 // DeleteBackup deletes backup
 func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	var err error
@@ -2839,7 +2818,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -2857,7 +2836,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(destClusterStatus, 2*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -3743,72 +3722,6 @@ func ValidateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error
 		return fmt.Errorf("failed to set replication factor of the volume: %v due to err: %v", v.Name, err.Error())
 	}
 	return nil
-}
-
-// TearDownBackupRestoreAll enumerates backups and restores before deleting them
-func TearDownBackupRestoreAll() {
-	log.Infof("Enumerating scheduled backups")
-	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-		OrgId:  OrgID,
-		Labels: make(map[string]string),
-		BackupLocationRef: &api.ObjectRef{
-			Name: backupLocationName,
-			Uid:  BackupLocationUID,
-		},
-	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
-	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
-	for _, bkpSched := range bkpSchedules {
-		schedPol := bkpSched.GetSchedulePolicyRef()
-		DeleteScheduledBackup(bkpSched.GetName(), bkpSched.GetUid(), schedPol.GetName(), schedPol.GetUid())
-	}
-
-	log.Infof("Enumerating backups")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: OrgID,
-	}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
-	backups := enumBkpResponse.GetBackups()
-	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID, ctx)
-	}
-
-	log.Infof("Enumerating restores")
-	restoreEnumerateReq := &api.RestoreEnumerateRequest{
-		OrgId: OrgID}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
-	restores := enumRestoreResponse.GetRestores()
-	for _, restore := range restores {
-		err = DeleteRestore(restore.GetName(), OrgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting Restore")
-	}
-
-	for _, bkp := range backups {
-		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	for _, restore := range restores {
-		Inst().Backup.WaitForRestoreDeletion(ctx, restore.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	provider := GetProvider()
-	err = DeleteCluster(destinationClusterName, OrgID, ctx)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-	err = DeleteCluster(SourceClusterName, OrgID, ctx)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-	err = DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
-	DeleteBucket(provider, BucketName)
 }
 
 // CreateBucket creates bucket on the appropriate cloud platform
@@ -4819,9 +4732,9 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 		return err
 	}
 
-	nodePoolsToValidate := make([]node.StoragePool, 0)
+	nodePoolsToValidate := make([]*opsapi.StoragePool, 0)
 	if poolID != -1 {
-		for _, p := range stNode.StoragePools {
+		for _, p := range stNode.Pools {
 			if p.ID == poolID {
 				nodePoolsToValidate = append(nodePoolsToValidate, p)
 				break
@@ -4838,7 +4751,7 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 				break
 			}
 		}
-		nodePoolsToValidate = append(nodePoolsToValidate, stNode.StoragePools...)
+		nodePoolsToValidate = append(nodePoolsToValidate, stNode.Pools...)
 
 	}
 
@@ -5043,27 +4956,57 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs() (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return "", err
 	}
-	var selectedPool *opsapi.StoragePool
-	stNodes := node.GetStorageNodes()
-	for _, stNode := range stNodes {
-		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
-		if selectedPool != nil {
-			return selectedPool.Uuid, nil
+
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", err
 		}
+
+		node := node.GetStorageDriverNodes()[0]
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return "", err
+			}
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+			if err != nil {
+				return "", err
+			}
+			if isIOsInProgress {
+				log.Infof("IOs are in progress for [%v]", vol.Name)
+				poolUuids := appVol.ReplicaSets[0].PoolUuids
+				for _, p := range poolUuids {
+					n, err := GetNodeWithGivenPoolID(p)
+					if err != nil {
+						return "", err
+					}
+					eligibilityMap, err := GetPoolExpansionEligibility(n)
+					if err != nil {
+						return "", err
+					}
+					if eligibilityMap[n.Id] && eligibilityMap[p] {
+						return p, nil
+					}
+
+				}
+			}
+		}
+
 	}
 
 	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
-func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
+func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context) (*opsapi.StoragePool, error) {
 
 	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
 	if err != nil {
@@ -5073,44 +5016,45 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 	if !eligibilityMap[stNode.Id] {
 		return nil, fmt.Errorf("node [%s] is not eligible for expansion", stNode.Name)
 	}
+	nodePools := make([]string, 0)
+	for _, np := range stNode.StoragePools {
+		nodePools = append(nodePools, np.Uuid)
+	}
 
+	var selectedNodePoolID string
 	var selectedPool *opsapi.StoragePool
 
-	t := func() (interface{}, bool, error) {
-		poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+outer:
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 
-		time.Sleep(30 * time.Second)
-
-		poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-		if err != nil {
-			return nil, false, err
-		}
-
-		for k, v := range poolsDataBfr {
-			//skipping if pool is not eligible for expansion
-			if !eligibilityMap[k] {
-				continue
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return nil, err
 			}
-			if v2, ok := poolsDataAfr[k]; ok {
-				if v2 != v {
-					selectedPool, err = GetStoragePoolByUUID(k)
-					if err != nil {
-						return nil, false, err
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&stNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+			if isIOsInProgress {
+				log.Infof("IOs are in progress for [%v]", vol.Name)
+				poolUuids := appVol.ReplicaSets[0].PoolUuids
+				for _, p := range poolUuids {
+					if Contains(nodePools, p) && eligibilityMap[p] {
+						selectedNodePoolID = p
+						break outer
 					}
 				}
 			}
 		}
-		if selectedPool == nil {
-			return nil, true, fmt.Errorf("no pools with IOs running in the node [%s]", stNode.Name)
-		}
-
-		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, defaultMeteringIntervalMins, defaultCmdTimeout)
+	selectedPool, err = GetStoragePoolByUUID(selectedNodePoolID)
+
 	if err != nil {
 		return nil, err
 	}
@@ -5118,17 +5062,16 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 }
 
 // GetRandomNodeWithPoolIOs returns node with IOs running
-func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
+func GetRandomNodeWithPoolIOs(contexts []*scheduler.Context) (node.Node, error) {
 	// pick a storage node with pool having IOs
-	var err error
-	var pool *opsapi.StoragePool
-	for _, stNode := range stNodes {
-		pool, err = GetPoolWithIOsInGivenNode(stNode)
-		if pool != nil {
-			return stNode, nil
-		}
+
+	poolID, err := GetPoolIDWithIOs(contexts)
+	if err != nil {
+		return node.Node{}, err
 	}
-	return node.Node{}, fmt.Errorf("no node with IOs running identified,err: %v", err)
+
+	n, err := GetNodeWithGivenPoolID(poolID)
+	return *n, err
 }
 
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
@@ -5339,4 +5282,393 @@ func IsEksPxOperator() bool {
 		}
 	}
 	return false
+}
+
+/*
+ * GetSubsetOfSlice selects a random subset of unique items from the input slice,
+ * with the given length. It returns a new slice with the selected items in random order.
+ * If length is zero or negative or greater than the length of the input slice, it also returns an error.
+ *
+ * Parameters:
+ * - items: a slice of any type to select from.
+ * - length: the number of items to select from the input slice.
+ *
+ * Returns:
+ * - a new slice of type T with the selected items in random order.
+ * - an error if the length parameter is zero or negative, or if it is greater than the length of the input slice.
+ */
+func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be greater than zero")
+	}
+	if length > len(items) {
+		return nil, fmt.Errorf("length cannot be greater than the length of the input items")
+	}
+	randomItems := make([]T, length)
+	selected := make(map[int]bool)
+	for i := 0; i < length; i++ {
+		j := rand.Intn(len(items))
+		for selected[j] {
+			j = rand.Intn(len(items))
+		}
+		selected[j] = true
+		randomItems[i] = items[j]
+	}
+	return randomItems, nil
+}
+
+// MakeStoragetoStoragelessNode returns true on converting Storage Node to Storageless Node
+func MakeStoragetoStoragelessNode(n node.Node) error {
+	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
+	// Get total list of pools present on the node
+	poolList, err := GetPoolsDetailsOnNode(n)
+	if err != nil {
+		return err
+	}
+
+	lenPools := len(poolList)
+	log.InfoD("total number of Pools present on the Node [%v] is [%d]", n.Name, lenPools)
+
+	// Enter pool maintenance mode before deleting the pools from the cluster
+	err = Inst().V.EnterPoolMaintenance(n)
+	if err != nil {
+		return fmt.Errorf("failed to set pool maintenance mode on node %s. Err: [%v]", n.Name, err)
+	}
+
+	time.Sleep(1 * time.Minute)
+	expectedStatus := "In Maintenance"
+	err = WaitForPoolStatusToUpdate(n, expectedStatus)
+	if err != nil {
+		return fmt.Errorf("node [%s] pools are not in status [%s]. Err: [%v]", n.Name, expectedStatus, err)
+	}
+
+	// Delete all the pools present on the Node
+	for i := 0; i < lenPools; i++ {
+		err := Inst().V.DeletePool(n, strconv.Itoa(i))
+		if err != nil {
+			return err
+		}
+	}
+
+	err = Inst().V.ExitPoolMaintenance(n)
+	if err != nil {
+		return fmt.Errorf("failed to exit pool maintenance mode on node [%s] Error: [%v]", n.Name, err)
+	}
+
+	err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
+	if err != nil {
+		return fmt.Errorf("volume driver down on node %s with Error: [%v]", n.Name, err)
+	}
+	expectedStatus = "Online"
+	err = WaitForPoolStatusToUpdate(n, expectedStatus)
+	if err != nil {
+		return fmt.Errorf("node %s pools are not in status %s. Err:[%v]", n.Name, expectedStatus, err)
+	}
+
+	storageLessNodeAfterPoolDelete := node.GetStorageLessNodes()
+	if len(storageLessNodeBeforePoolDelete) <= len(storageLessNodeAfterPoolDelete) {
+		return fmt.Errorf("making storage node to storagelessnode failed")
+	}
+	return nil
+}
+
+// IsPksCluster returns true if current operator installation is on an EKS cluster
+func IsPksCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsPKS(stc) {
+			log.InfoD("PKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsOkeCluster returns true if current operator installation is on an EKS cluster
+func IsOkeCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsOKE(stc) {
+			log.InfoD("OKE installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsAksCluster returns true if current operator installation is on an EKS cluster
+func IsAksCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsAKS(stc) {
+			log.InfoD("AKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsIksCluster returns true if current operator installation is on an EKS cluster
+func IsIksCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsIKS(stc) {
+			log.InfoD("IKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsOpenShift returns true if current operator installation is on an EKS cluster
+func IsOpenShift() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsOpenshift(stc) {
+			log.InfoD("OpenShift installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsLocalCluster returns true if the cluster used is local cluster from vsphere
+func IsLocalCluster(n node.Node) bool {
+	response, err := IsCloudDriveInitialised(n)
+	if err != nil || response == false {
+		return false
+	}
+	return true
+}
+
+// IsPoolInMaintenance returns true if pool in maintenance
+func IsPoolInMaintenance(n node.Node) bool {
+	expectedStatus := "In Maintenance"
+	poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+	if err != nil || poolsStatus == nil {
+		return false
+	}
+
+	for _, v := range poolsStatus {
+		if v == expectedStatus {
+			return true
+		}
+	}
+	return false
+}
+
+func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
+	nodesPresent := node.GetStorageNodes()
+	for _, each := range nodesPresent {
+		poolsPresent, err := GetPoolsDetailsOnNode(each)
+		if err != nil {
+			return -1, err
+		}
+		for _, eachPool := range poolsPresent {
+			if eachPool.Uuid == poolUuid {
+				return eachPool.ID, nil
+			}
+		}
+	}
+	return -1, nil
+}
+
+func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
+
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]opsapi.FilesystemTrim_FilesystemTrimStatus)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("inspecting volume [%s]", v.Name)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimStatuses[appVol.Id]
+		var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
+
+		if !ok {
+			fsTrimStatus, err = waitForFsTrimStatus(nil, attachedNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != -1 {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] not started on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+func GetAutoFstrimUsageForCtx(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolumeUsageInfo, error) {
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxAutoFsTrimStatus := make(map[string]*opsapi.FstrimVolumeUsageInfo)
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("Getting info: %s", v.ID)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimUsages, err := Inst().V.GetAutoFsTrimUsage(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimUsages[appVol.Id]
+		var fsTrimStatus *opsapi.FstrimVolumeUsageInfo
+
+		if !ok {
+			log.Errorf("usage not found for %s", appVol.Id)
+		} else {
+			fsTrimStatus = val
+		}
+
+		if fsTrimStatus != nil {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] has no usage on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+// WaitForPoolStatusToUpdate returns true when pool status updated to expected status
+func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
+		if err != nil {
+			return nil, true,
+				fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
+		}
+		if poolsStatus == nil {
+			return nil,
+				false, fmt.Errorf("pools status is nil")
+		}
+		for k, v := range poolsStatus {
+			if v != expectedStatus {
+				return nil, true,
+					fmt.Errorf("pool %s is not %s, current status: %s", k, expectedStatus, v)
+			}
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	return err
+}
+
+// RandomString generates a random lowercase string of length characters.
+func RandomString(length int) string {
+	rand.Seed(time.Now().UnixNano())
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	randomBytes := make([]byte, length)
+	for i := range randomBytes {
+		randomBytes[i] = letters[rand.Intn(len(letters))]
+	}
+	randomString := string(randomBytes)
+	return randomString
+}
+
+// DeleteGivenPoolInNode deletes pool with given ID in the given node
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) {
+
+	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
+	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	//Waiting for cli to work
+	time.Sleep(2 * time.Minute)
+
+	status, err := Inst().V.GetNodeStatus(stNode)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Node [%s] has status: [%v] after entering pool maintenance", stNode.Name, status)
+
+	expectedStatus := "In Maintenance"
+	if err = WaitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
+		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
+	}
+	defer func() {
+		var exitErr error
+		if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
+			log.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+
+		if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
+			log.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		//Adding wait as even PX is up it is taking some time for pool status to update
+		//when all pools are deleted
+		time.Sleep(1 * time.Minute)
+		cmd := "pxctl sv pool show"
+		var out string
+
+		// Execute the command and check if any pools exist
+		out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if exitErr != nil {
+			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		log.Infof("pool show: [%s]", out)
+
+		//skipping waitForPoolStatusToUpdate if there are no pools in the node
+		if strings.Contains(out, "No drives configured for this node") {
+			return
+		}
+
+		expectedStatus := "Online"
+		if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
+			log.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
+		}
+
+	}()
+	err = Inst().V.DeletePool(stNode, poolIDToDelete)
+	return err
 }

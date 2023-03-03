@@ -135,7 +135,11 @@ func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volum
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
-	if err = p.setDriver(pxbServiceName, backup.GetPxBackupNamespace()); err != nil {
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	if err = p.setDriver(pxbServiceName, pxbNamespace); err != nil {
 		return fmt.Errorf("Error setting px-backup endpoint: %v", err)
 	}
 
@@ -1087,7 +1091,6 @@ func (p *portworx) GetPxBackupVersion(ctx context.Context, req *api.VersionGetRe
 }
 
 func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {
-	var backupUID string
 	var totalBackups int
 	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
@@ -1106,7 +1109,8 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 			bkpEnumerateReq.EnumerateOptions.ObjectIndex += uint64(len(enumerateRsp.GetBackups()))
 		}
 	}
-	return backupUID, nil
+
+	return "", fmt.Errorf("backup with name '%s' not found for org '%s'", backupName, orgID)
 }
 
 var (
@@ -1442,7 +1446,10 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 func (p *portworx) ValidateBackupCluster() error {
 	flag := false
 	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
-	ns := backup.GetPxBackupNamespace()
+	ns, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
 	pods, err := core.Instance().GetPods(ns, labelSelectors)
 	if err != nil {
 		err = fmt.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",

@@ -22,13 +22,14 @@ import (
 )
 
 const (
+	cloudAccountDeleteTimeout                 = 10 * time.Minute
+	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
 	clusterName                               = "tp-cluster"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
-	backupLocationName                        = "tp-bkplocation"
 	appReadinessTimeout                       = 10 * time.Minute
-	taskNamePrefix                            = "backupcreaterestore"
+	taskNamePrefix                            = "pxbackuptask"
 	orgID                                     = "default"
 	usersToBeCreated                          = "USERS_TO_CREATE"
 	groupsToBeCreated                         = "GROUPS_TO_CREATE"
@@ -49,9 +50,6 @@ const (
 )
 
 var (
-	// enable all the after suite actions
-	wantAllAfterSuiteActions = true
-	// selectively enable after suite actions by setting wantAllAfterSuiteActions to false and setting these to true
 	// User should keep updating preRuleApp, postRuleApp
 	preRuleApp                  = []string{"cassandra", "postgres"}
 	postRuleApp                 = []string{"cassandra"}
@@ -684,58 +682,6 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 	return nil
 }
 
-// TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
-func TearDownBackupRestoreSpecific(backups []string, restores []string) error {
-	for _, backupName := range backups {
-		backupUID, err := getBackupUID(backupName, OrgID)
-		if err != nil {
-			return err
-		}
-		ctx, err := backup.GetAdminCtxFromSecret()
-		if err != nil {
-			return err
-		}
-		_, err = DeleteBackup(backupName, backupUID, OrgID, ctx)
-		if err != nil {
-			return err
-		}
-	}
-	for _, restoreName := range restores {
-		ctx, err := backup.GetAdminCtxFromSecret()
-		if err != nil {
-			return err
-		}
-		err = DeleteRestore(restoreName, OrgID, ctx)
-		if err != nil {
-			return err
-		}
-	}
-	provider := GetProvider()
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	err = DeleteCluster(destinationClusterName, OrgID, ctx)
-	if err != nil {
-		return err
-	}
-	err = DeleteCluster(SourceClusterName, orgID, ctx)
-	if err != nil {
-		return err
-	}
-	// Need to add backup location UID for Delete Backup Location call
-	err = DeleteBackupLocation(backupLocationName, "", OrgID)
-	if err != nil {
-		return err
-	}
-	err = DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	if err != nil {
-		return err
-	}
-	DeleteBucket(provider, BucketName)
-	return nil
-}
-
 // CreateRestoreWithoutCheck creates restore without waiting for completion
 func CreateRestoreWithoutCheck(restoreName string, backupName string,
 	namespaceMapping map[string]string, clusterName string, orgID string, ctx context.Context) error {
@@ -772,34 +718,6 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 		return err
 	}
 	return nil
-}
-
-// CreateRestoreGetErr creates restore
-func CreateRestoreGetErr(restoreName string, backupName string,
-	namespaceMapping map[string]string, clusterName string, orgID string) (err error) {
-	backupDriver := Inst().Backup
-	createRestoreReq := &api.RestoreCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  restoreName,
-			OrgId: orgID,
-		},
-		Backup:           backupName,
-		Cluster:          clusterName,
-		NamespaceMapping: namespaceMapping,
-	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
-	if err != nil {
-		return err
-	}
-
-	// TODO: validate createClusterResponse also
-
-	return err
 }
 
 func getBackupUID(backupName, orgID string) (string, error) {
@@ -873,9 +791,27 @@ func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, c
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+				}
+				if status == true {
+					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
-		time.Sleep(time.Minute * 3)
-		err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+		cloudCredDeleteStatus := func() (interface{}, bool, error) {
+			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+			if err != nil {
+				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+			}
+			return "", false, nil
+		}
+		_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
 	err := DeleteCluster(SourceClusterName, orgID, ctx)
@@ -961,12 +897,14 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	case ViewOnlyAccess:
 		// Try restore with user having ViewOnlyAccess and it should fail
 		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 		// Try to delete the backup with user having ViewOnlyAccess, and it should not pass
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has ViewOnlyAccess and cannot delete backup
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case RestoreAccess:
@@ -978,6 +916,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has Restore Access and delete backup should fail
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case FullAccess:
@@ -991,37 +930,6 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
 		Inst().Dash.VerifyFatal(err, nil, "Verifying that delete backup is possible")
 	}
-}
-
-func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
-	for _, bkpNamespace := range bkpNamespaces {
-		backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespace)
-		backupUID, err := getBackupUID(backupName, OrgID)
-		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
-		ctx, err := backup.GetAdminCtxFromSecret()
-		Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-		_, err = DeleteBackup(backupName, backupUID, OrgID, ctx)
-		Inst().Dash.VerifyFatal(err, nil, "Verifying that delete backup is possible")
-	}
-	for _, restoreNamespace := range restoreNamespaces {
-		ctx, err := backup.GetAdminCtxFromSecret()
-		Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-		RestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, restoreNamespace)
-		err = DeleteRestore(RestoreName, OrgID, ctx)
-		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", RestoreName))
-	}
-
-	ctx, err := backup.GetAdminCtxFromSecret()
-	Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-	err = DeleteCluster(destinationClusterName, OrgID, ctx)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-	err = DeleteCluster(SourceClusterName, orgID, ctx)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-	// Need to add backup location UID for Delete Backup Location call
-	err = DeleteBackupLocation(backupLocationName, "", OrgID)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-	err = DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
 }
 
 func getEnv(environmentVariable string, defaultValue string) string {
@@ -1258,7 +1166,6 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 
 // backupSuccessCheck inspects backup task
 func backupSuccessCheck(backupName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, error) {
-	var bkpUid string
 	backupDriver := Inst().Backup
 	if retryDuration == 0 {
 		retryDuration = maxWaitPeriodForBackupCompletionInMinutes
@@ -1288,23 +1195,11 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 		return "", false, nil
 	}
 
-	task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
-	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	_, err := task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
 	if err != nil {
 		return false, err
 	}
-	backupInspectRequest := &api.BackupInspectRequest{
-		Name:  backupName,
-		Uid:   bkpUid,
-		OrgId: orgID,
-	}
-	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-	if err != nil {
-		return false, err
-	}
-	backupStatus := (resp.GetBackup().GetStatus().Status == api.BackupInfo_StatusInfo_Success)
-	log.Infof("Backup [%s] created successfully", backupName)
-	return backupStatus, nil
+	return true, nil
 }
 
 // restoreSuccessCheck inspects restore task
@@ -1333,8 +1228,10 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
 			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
 	}
-	task.DoRetryWithTimeout(restoreSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
-
+	_, err := task.DoRetryWithTimeout(restoreSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
+	if err != nil {
+		return false, err
+	}
 	restoreInspectRequest = &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
@@ -1347,4 +1244,22 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 	restoreStatus := (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_PartialSuccess) || (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_Success)
 	log.Infof("[%s] restored successfully", restoreName)
 	return restoreStatus, nil
+}
+
+// IsBackupLocationPresent checks whether the backup location is present or not
+func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID string) (bool, error) {
+	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
+		OrgId: orgID,
+	}
+	response, err := Inst().Backup.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Backup locations present are %v", response.BackupLocations)
+	for _, bkpLoc := range response.GetBackupLocations() {
+		if bkpLoc.GetName() == bkpLocation {
+			return true, nil
+		}
+	}
+	return false, nil
 }

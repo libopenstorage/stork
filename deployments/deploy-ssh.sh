@@ -16,6 +16,10 @@ if [ -z "${DASH_UID}" ]; then
     fi
 fi
 
+SECURITY_CONTEXT=false
+if [ "${IS_OCP}" == true ]; then
+    SECURITY_CONTEXT=true
+fi
 
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
@@ -435,6 +439,8 @@ spec:
   - name: torpedo
     image: ${TORPEDO_IMG}
     imagePullPolicy: Always
+    securityContext:
+      privileged: ${SECURITY_CONTEXT}
     command: [ "ginkgo" ]
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
