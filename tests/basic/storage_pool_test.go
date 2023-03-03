@@ -6668,6 +6668,8 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				"Failed to match the error while adding drive")
 			log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 		} else {
+			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
+			log.InfoD("Enter pool Maintenance mode ")
 			isjournal, err := isJournalEnabled()
 			if isjournal {
 				err = AddCloudDriveAsJournal(*nodeDetail, -1)
@@ -6684,6 +6686,8 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 					log.InfoD("journal drive add successful")
 				}
 			}
+			Inst().V.ExitPoolMaintenance(*nodeDetail)
+			log.InfoD("Exit from pool Maintenance mode ")
 		}
 	})
 
