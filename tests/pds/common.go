@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"time"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
@@ -37,6 +39,8 @@ const (
 	zookeeper               = "ZooKeeper"
 	consul                  = "Consul"
 	pdsNamespaceLabel       = "pds.portworx.com/available"
+	timeOut                 = 30 * time.Minute
+	maxtimeInterval         = 30 * time.Second
 )
 
 var (

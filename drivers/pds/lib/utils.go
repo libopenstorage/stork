@@ -2300,3 +2300,59 @@ func VerifyPxPodOnNode(nodeName string, namespace string) (bool, error) {
 	log.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
 	return true, nil
 }
+
+// Returns nodes on which pods of a given statefulset are running
+func GetNodesOfSS(SSName string, namespace string) ([]*corev1.Node, error) {
+	var nodes []*corev1.Node
+	// Get StatefulSet Object of the given Statefulset
+	ss, err := k8sApps.GetStatefulSet(SSName, namespace)
+	if err != nil {
+		return nil, err
+	}
+	// Get The pods associated to this statefulset
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		return nil, err
+	}
+	// Create Node objects and append them to a list
+	if pods != nil && len(pods) > 0 {
+		for _, pod := range pods {
+			if len(pod.Spec.NodeName) > 0 {
+				node, err := k8sCore.GetNodeByName(pod.Spec.NodeName)
+				if err != nil {
+					return nil, err
+				}
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	return nodes, nil
+}
+
+//Returns list of Pods from a given Statefulset running on a given Node
+func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]corev1.Pod, error) {
+	// Get StatefulSet Object of the given Statefulset
+	ss, err := k8sApps.GetStatefulSet(SSName, namespace)
+	if err != nil {
+		return nil, err
+	}
+	// Get The pods associated to this statefulset
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		return nil, err
+	}
+	var podsList []corev1.Pod
+
+	// Create Node objects and append them to a list
+	if pods != nil && len(pods) > 0 {
+		for _, pod := range pods {
+			if pod.Spec.NodeName == nodeName {
+				podsList = append(podsList, pod)
+			}
+		}
+	}
+	if podsList != nil && len(podsList) > 0 {
+		return podsList, nil
+	}
+	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
+}
