@@ -6761,17 +6761,23 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
-		if len(stNodes) == 0 {
-			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
-		}
-		stNode, err := GetRandomNodeWithPoolIOs(stNodes)
-		log.FailOnError(err, "error identifying node to run test")
-		selectedPool, err := GetPoolWithIOsInGivenNode(stNode)
-		poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-		drvSize, err := getPoolDiskSize(poolToBeResized)
-		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
-		expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+
+		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 		isjournal, err := isJournalEnabled()
 		log.FailOnError(err, "Failed to check if Journal enabled")
@@ -7156,6 +7162,10 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 	/*
 	   1. Delete all the pools in a node
 	   2. Verify it becomes a storageless node
+	   3. Create a new pool on the node
+	   4. Validate volume upadate and apps deployment it the new pool
+	   5. Delete newly created pool
+	   6. Validate node becomes storage less node
 	   7. validate apps
 	*/
 
@@ -7675,8 +7685,13 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 			Timeout:         2 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		})
+		// Add cloud drive on the node selected and wait for rebalance to happen
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		deviceSpec := driveSpecs[0]
 		if strings.Contains(out, `"type": "dmthin",`) {
-			err = AddCloudDriveAsJournal(*nodeDetail, -1)
+			err := Inst().V.AddCloudDriveAsJournal(nodeDetail, deviceSpec, -1)
 			re := regexp.MustCompile(".*Journal/Metadata device add not supported for PX-StoreV2*")
 			dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
 				true,
@@ -7687,14 +7702,14 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 			log.InfoD("Enter pool Maintenance mode ")
 			isjournal, err := isJournalEnabled()
 			if isjournal {
-				err = AddCloudDriveAsJournal(*nodeDetail, -1)
+				err = Inst().V.AddCloudDriveAsJournal(nodeDetail, deviceSpec, -1)
 				re := regexp.MustCompile(".*journal exists*")
 				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
 					true,
 					"Failed to match the error while adding drive")
 				log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 			} else {
-				err = AddCloudDriveAsJournal(*nodeDetail, -1)
+				err = Inst().V.AddCloudDriveAsJournal(nodeDetail, deviceSpec, -1)
 				if err != nil {
 					log.FailOnError(err, "journal add failed")
 				} else {

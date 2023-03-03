@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"net"
 	"net/url"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/portworx/torpedo/pkg/log"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
@@ -5012,7 +5013,7 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 // AddCloudDrive add cloud drives to the node as journal using PXCTL
 func (d *portworx) AddCloudDriveAsJournal(n *node.Node, deviceSpec string, poolID int32) error {
 	log.Infof("Adding Cloud drive on node [%s] with spec [%s] on pool ID [%d]", n.Name, deviceSpec, poolID)
-	return addDrive(*n, deviceSpec+" --journal", poolID, d)
+	return addDriveAsJournal(*n, deviceSpec+" --journal", poolID, d)
 }
 
 func addDriveAsJournal(n node.Node, drivePath string, poolID int32, d *portworx) error {
