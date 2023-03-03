@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/portworx/torpedo/pkg/log"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 
@@ -4957,4 +4959,44 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 	}
 
 	return alertsResp, nil
+}
+
+// AddCloudDrive add cloud drives to the node as journal using PXCTL
+func (d *portworx) AddCloudDriveAsJournal(n *node.Node, deviceSpec string, poolID int32) error {
+	log.Infof("Adding Cloud drive on node [%s] with spec [%s] on pool ID [%d]", n.Name, deviceSpec, poolID)
+	return addDrive(*n, deviceSpec+" --journal", poolID, d)
+}
+
+func addDriveAsJournal(n node.Node, drivePath string, poolID int32, d *portworx) error {
+	driveAddFlag := fmt.Sprintf("-d %s", drivePath)
+	if strings.Contains(drivePath, "size") {
+		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
+		if poolID != -1 {
+			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
+		}
+	}
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return fmt.Errorf("error when adding drive [%s] in node [%s] using PXCTL, Err: %v", drivePath, n.Name, err)
+	}
+	output := []byte(out)
+	var addDriveStatus statusJSON
+	err = json.Unmarshal(output, &addDriveStatus)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal adding drive, Err: %v", err)
+	}
+	if &addDriveStatus == nil {
+		return fmt.Errorf("failed to add drive [%s] on node [%s]", drivePath, n.Name)
+	}
+
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) {
+		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
+
+	}
+	log.InfoD("Added drive [%s] to node [%s] successfully", drivePath, n.Name)
+	return nil
 }
