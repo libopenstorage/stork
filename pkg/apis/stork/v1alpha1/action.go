@@ -34,7 +34,7 @@ type Action struct {
 
 // ActionSpec specifies the type of Action
 type ActionSpec struct {
-	ActionType ActionType `json:"actiontype"`
+	ActionType ActionType `json:"actionType"`
 }
 
 // ActionType lists the various actions that can be performed
