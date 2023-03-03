@@ -75,6 +75,7 @@ const (
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
 	boundRetryInterval   = 5 * time.Second
+	applyRetryInterval   = 5 * time.Second
 )
 
 var (
@@ -1058,6 +1059,16 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
+	err = m.updateStorageClassOnPV(migration, updateObjects, clusterPair)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error updating StorageClass on PV: %v", err))
+		log.MigrationLog(migration).Errorf("Error updating Storageclass for PV: %v", err)
+		return err
+	}
+
 	migration.Status.Stage = stork_api.MigrationStageFinal
 	migration.Status.Status = stork_api.MigrationStatusSuccessful
 	for _, resource := range migration.Status.Resources {
@@ -1562,6 +1573,82 @@ func (m *MigrationController) getParsedLabels(
 	clusterPair *stork_api.ClusterPair,
 ) map[string]string {
 	return m.getParsedMap(labels, clusterPair)
+}
+
+// updateStorageClassOnPV updates StorageClass on PV object
+// StorageClass is created on destination if it doesn't exist
+func (m *MigrationController) updateStorageClassOnPV(
+	migration *stork_api.Migration,
+	objects []runtime.Unstructured,
+	clusterPair *stork_api.ClusterPair,
+) error {
+	remoteClient, err := m.getRemoteClient(migration)
+	if err != nil {
+		return err
+	}
+	// Get a list of StorageClasses from destination
+	destStorageClasses, err := remoteClient.adminClient.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	destScExists := make(map[string]bool)
+	for _, sc := range destStorageClasses.Items {
+		destScExists[sc.Name] = true
+	}
+
+	for _, obj := range objects {
+		metadata, err := meta.Accessor(obj)
+		if err != nil {
+			return err
+		}
+		if obj.GetObjectKind().GroupVersionKind().Kind != "PersistentVolume" {
+			continue
+		}
+		destPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if scName, ok := destPV.Annotations[resourcecollector.CurrentStorageClassName]; ok {
+			// Create StorageClass on destination if it doesn't exist
+			if _, ok := destScExists[scName]; !ok {
+				// Get StorageClass from source
+				sc, err := storkcache.Instance().GetStorageClass(scName)
+				if err != nil {
+					return err
+				}
+				sc.UID = ""
+				sc.ResourceVersion = ""
+				log.MigrationLog(migration).Infof("Applying %v %v", sc.Kind, sc.Name)
+				for retries := 0; retries < maxApplyRetries; retries++ {
+					_, err = remoteClient.adminClient.StorageV1().StorageClasses().Create(context.TODO(), sc, metav1.CreateOptions{})
+					if err == nil {
+						// Update the map to reflect the new StorageClas that was created on destination
+						destScExists[scName] = true
+						break
+					}
+					log.MigrationLog(migration).Infof("Unable to create %v %v on destination due to err: %v. Retrying.", sc.Kind, sc.Name, err)
+					time.Sleep(applyRetryInterval)
+				}
+				if err != nil {
+					log.MigrationLog(migration).Errorf("All attempts to create %v %v on destination failed due to err: %v", sc.Kind, sc.Name, err)
+					return err
+				}
+			}
+			// IF StorageClass is already updated on destination PV, then no need to update
+			// It is possible that StorageClass was deleted manually on destination cluster while PV was present with StorageClass name
+			// To make sure such inconsistencies get fixed in subsequent migration, this check is being done after StorageClass creation
+			if scName == destPV.Spec.StorageClassName {
+				continue
+			}
+			// Update StorageClass on destination PV
+			destPV.Spec.StorageClassName = scName
+			log.MigrationLog(migration).Infof("Updating %v %v with StorageClass %v", destPV.Kind, destPV.Name, scName)
+			if _, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), destPV, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // updateOwnerReferenceOnPVC updates owner reference on PVC objects
