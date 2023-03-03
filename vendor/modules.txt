@@ -76,7 +76,7 @@ github.com/BurntSushi/toml/internal
 # github.com/GoogleCloudPlatform/k8s-cloud-provider v1.18.1-0.20220218231025-f11817397a1b
 ## explicit; go 1.13
 github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/meta
-# github.com/IBM-Cloud/bluemix-go v0.0.0-20220329045155-d2a8118ac5c7
+# github.com/IBM-Cloud/bluemix-go v0.0.0-20230120122421-afb48116b8f1
 ## explicit; go 1.13
 github.com/IBM-Cloud/bluemix-go
 github.com/IBM-Cloud/bluemix-go/api/container/containerv1
@@ -602,7 +602,7 @@ github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
-# github.com/libopenstorage/cloudops v0.0.0-20221107233229-3fa4664e96b1
+# github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 ## explicit; go 1.13
 github.com/libopenstorage/cloudops
 github.com/libopenstorage/cloudops/azure
@@ -796,7 +796,7 @@ github.com/onsi/ginkgo/reporters/stenographer
 github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable
 github.com/onsi/ginkgo/reporters/stenographer/support/go-isatty
 github.com/onsi/ginkgo/types
-# github.com/onsi/gomega v1.20.1
+# github.com/onsi/gomega v1.21.1
 ## explicit; go 1.18
 github.com/onsi/gomega
 github.com/onsi/gomega/format

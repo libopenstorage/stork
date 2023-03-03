@@ -371,7 +371,7 @@ func (a *azureOps) Create(
 	options map[string]string,
 ) (interface{}, error) {
 	d, ok := template.(*compute.Disk)
-	if !ok {
+	if !ok || d.DiskProperties == nil || d.DiskProperties.DiskSizeGB == nil {
 		return nil, cloudops.NewStorageError(
 			cloudops.ErrVolInval,
 			"Invalid volume template given",
@@ -578,6 +578,12 @@ func (a *azureOps) Delete(diskName string, options map[string]string) error {
 
 func (a *azureOps) DeleteFrom(diskName, _ string) error {
 	return a.Delete(diskName, nil)
+}
+
+func (a *azureOps) AreVolumesReadyToExpand(volumeIDs []*string) (bool, error) {
+	return true, &cloudops.ErrNotSupported{
+		Operation: "azureOps.IsVolumesReadyToExpand",
+	}
 }
 
 func (a *azureOps) Expand(
