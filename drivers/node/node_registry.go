@@ -91,13 +91,14 @@ func GetStorageDriverNodes() []Node {
 
 // IsStorageNode returns true if the node is a storage node, false otherwise
 func IsStorageNode(n Node) bool {
-	return len(n.StoragePools) > 0
+	return len(n.Pools) > 0
 }
 
 // GetStorageNodes gets all the nodes with non-empty StoragePools
 func GetStorageNodes() []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	storageDriverNodes := GetStorageDriverNodes()
+	for _, n := range storageDriverNodes {
 		if IsStorageNode(n) {
 			nodeList = append(nodeList, n)
 		}
@@ -108,11 +109,9 @@ func GetStorageNodes() []Node {
 // GetStorageLessNodes gets all the nodes with empty StoragePools
 func GetStorageLessNodes() []Node {
 	var nodeList []Node
-	workerNodes := GetWorkerNodes()
-	storageNodes := GetStorageNodes()
-	for _, n := range workerNodes {
-		isExist := Contains(storageNodes, n)
-		if !isExist {
+	storageDriverNodes := GetStorageDriverNodes()
+	for _, n := range storageDriverNodes {
+		if !IsStorageNode(n) {
 			nodeList = append(nodeList, n)
 		}
 	}
