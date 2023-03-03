@@ -25,6 +25,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/action"
 	"github.com/libopenstorage/stork/pkg/apis"
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
+	"github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/clusterdomains"
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
@@ -193,12 +194,12 @@ func main() {
 		cli.IntFlag{
 			Name:  "k8s-api-qps",
 			Value: 100,
-			Usage: "Restrict number of k8s api requests from stork (default: 100 QPS)",
+			Usage: "Restrict number of k8s API requests from stork (default: 100 QPS)",
 		},
 		cli.IntFlag{
 			Name:  "k8s-api-burst",
 			Value: 100,
-			Usage: "Restrict number of k8s api requests from stork (default: 100 Burst)",
+			Usage: "Restrict number of k8s API requests from stork (default: 100 Burst)",
 		},
 		cli.BoolTFlag{
 			Name:  "kdmp-controller",
@@ -214,6 +215,10 @@ func main() {
 			Usage: "Start the resource transformation controller (default: true)",
 		},
 	}
+
+	// Export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+	log.Warnf("Export USE_GKE_GCLOUD_AUTH_PLUGIN=True")
+	os.Setenv("USE_GKE_GCLOUD_AUTH_PLUGIN", "True")
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatalf("Error starting stork: %v", err)
