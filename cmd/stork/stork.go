@@ -11,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/cache"
-
 	stork_driver "github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
