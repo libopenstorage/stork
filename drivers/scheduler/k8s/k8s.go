@@ -748,7 +748,8 @@ func (k *K8s) getAddressesForNode(n corev1.Node) []string {
 func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 	var nodeType node.Type
 	var zone, region string
-	if k8sCore.IsNodeMaster(n) {
+
+	if k8sCore.IsNodeMaster(n) && k.NodeDriverName != "ibm" {
 		nodeType = node.TypeMaster
 	} else {
 		nodeType = node.TypeWorker
