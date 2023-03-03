@@ -378,6 +378,10 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
 	ruleset.AddPlural("mongodb", "mongodb")
+	ruleset.AddPlural("wkc", "wkc")
+	ruleset.AddPlural("factsheet", "factsheet")
+	ruleset.AddPlural("datarefinery", "datarefinery")
+	
 	for _, res := range crdList.Items {
 		for _, crd := range res.Resources {
 			var client k8sdynamic.ResourceInterface

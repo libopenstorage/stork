@@ -1341,6 +1341,10 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
 	ruleset.AddPlural("mongodb", "mongodb")
+	ruleset.AddPlural("wkc", "wkc")
+	ruleset.AddPlural("factsheet", "factsheet")
+	ruleset.AddPlural("datarefinery", "datarefinery")
+	
 	v1CrdApiReqrd, err := version.RequiresV1Registration()
 	if err != nil {
 		return err

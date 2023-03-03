@@ -225,6 +225,9 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
 	ruleset.AddPlural("mongodb", "mongodb")
+	ruleset.AddPlural("wkc", "wkc")
+	ruleset.AddPlural("factsheet", "factsheet")
+	ruleset.AddPlural("datarefinery", "datarefinery")
 
 	for _, spec := range transform.Spec.Objects {
 		group, version, kind, err := getGVK(spec.Resource)
