@@ -2489,5 +2489,9 @@ func (m *MigrationController) getDefaultRuleSet() *inflect.Ruleset {
 	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
 	ruleset.AddPlural("mongodb", "mongodb")
+	ruleset.AddPlural("wkc", "wkc")
+	ruleset.AddPlural("factsheet", "factsheet")
+	ruleset.AddPlural("datarefinery", "datarefinery")
+
 	return ruleset
 }
