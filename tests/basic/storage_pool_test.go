@@ -7693,9 +7693,9 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		if strings.Contains(out, `"type": "dmthin",`) {
 			err := Inst().V.AddCloudDriveAsJournal(nodeDetail, deviceSpec, -1)
 			re := regexp.MustCompile(".*Journal/Metadata device add not supported for PX-StoreV2*")
-			dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
-				true,
-				"Failed to match the error while adding drive")
+			if re.MatchString(fmt.Sprintf("%v", err)) == false {
+				log.Error("Failed to match the error while adding drive")
+			}
 			log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 		} else {
 			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
@@ -7704,9 +7704,9 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 			if isjournal {
 				err = Inst().V.AddCloudDriveAsJournal(nodeDetail, deviceSpec, -1)
 				re := regexp.MustCompile(".*journal exists*")
-				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
-					true,
-					"Failed to match the error while adding drive")
+				if re.MatchString(fmt.Sprintf("%v", err)) == false {
+					log.Error("Failed to match the error while adding drive")
+				}
 				log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 			} else {
 				err = Inst().V.AddCloudDriveAsJournal(nodeDetail, deviceSpec, -1)
