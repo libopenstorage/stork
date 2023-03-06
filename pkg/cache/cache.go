@@ -3,12 +3,13 @@ package cache
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sync"
 )
 
 // SharedInformerCache  is an eventually consistent cache. The cache interface
@@ -30,6 +31,9 @@ type SharedInformerCache interface {
 
 	// ListApplicationRegistrations lists the application registration CRs from the cache
 	ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegistrationList, error)
+
+	// ListPods lists the all the Pods from the cache
+	ListPods() (*corev1.PodList, error)
 }
 
 type cache struct {
@@ -109,4 +113,13 @@ func (c *cache) ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegist
 		return nil, err
 	}
 	return appRegList, nil
+}
+
+// ListPods lists the all the Pods from the cache
+func (c *cache) ListPods() (*corev1.PodList, error) {
+	podList := &corev1.PodList{}
+	if err := c.client.List(context.Background(), podList); err != nil {
+		return nil, err
+	}
+	return podList, nil
 }

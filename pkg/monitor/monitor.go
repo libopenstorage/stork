@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -241,7 +242,8 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	if err == nil {
 		return
 	}
-	pods, err := core.Instance().GetPods("", nil)
+
+	pods, err := storkcache.Instance().ListPods()
 	if err != nil {
 		log.Errorf("Error getting pods: %v", err)
 	}
