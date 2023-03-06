@@ -2893,7 +2893,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 
 			//CreateSchedule backup
 			log.Infof("Backup schedule name - %v", backupName)
-			_, err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]}, nil, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
+			err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]}, nil, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
 			log.FailOnError(err, "Creating Schedule Backup")
 		})
 
@@ -6522,9 +6522,11 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				schBackupName, err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
+				err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup - %s", schBackupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
+				schBackupName, err = Inst().Backup.GetFirstScheduleBackupName(ctx, backupName, orgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
 			}
 		})
 
@@ -6653,9 +6655,11 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
 			backupName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, timeStamp)
-			schBackupName, err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces,
+			err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces,
 				labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup - %s", schBackupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
+			schBackupName, err = Inst().Backup.GetFirstScheduleBackupName(ctx, backupName, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
 		})
 
 		Step("Restoring scheduled backups", func() {
