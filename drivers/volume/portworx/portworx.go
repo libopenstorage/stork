@@ -35,6 +35,7 @@ import (
 	"github.com/libopenstorage/openstorage/volume/drivers/pwx"
 	lsecrets "github.com/libopenstorage/secrets"
 	k8s_secrets "github.com/libopenstorage/secrets/k8s"
+	"github.com/libopenstorage/stork/drivers"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	applicationcontrollers "github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
@@ -151,8 +152,9 @@ const (
 	clusterDomainsTimeout = 1 * time.Minute
 	cloudBackupTimeout    = 1 * time.Minute
 
-	pxSharedSecret = "PX_SHARED_SECRET"
-	pxJwtIssuer    = "PX_JWT_ISSUER"
+	pxSharedSecret         = "PX_SHARED_SECRET"
+	pxJwtIssuer            = "PX_JWT_ISSUER"
+	pXGenericBackupEnabled = "ENABLE_PX_GENERIC_BACKUP"
 
 	restoreNamePrefix = "in-place-restore-"
 	restoreTaskPrefix = "restore-"
@@ -690,7 +692,24 @@ func (p *portworx) GetClusterID() (string, error) {
 }
 
 func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+	if enablePXGenericBackup() {
+		logrus.Tracef("Provisioner in Storageclass is Portworx but will take generic backup")
+		return false
+	}
 	return p.IsSupportedPVC(coreOps, pvc, true)
+}
+
+func enablePXGenericBackup() bool {
+	kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
+	if err != nil {
+		logrus.Tracef("error readig kdmp config map: %v", err)
+		return false
+	}
+	if enableGenericBackup, ok := kdmpData.Data[pXGenericBackupEnabled]; ok && enableGenericBackup == "true" {
+		return true
+	}
+
+	return false
 }
 
 func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
@@ -746,6 +765,7 @@ func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClai
 		logrus.Tracef("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
+
 	return true
 }
 
