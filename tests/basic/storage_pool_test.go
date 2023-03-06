@@ -7603,29 +7603,17 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
-			stepLog = fmt.Sprintf("Creating a new pool on node [%v]", stNode.Name)
+			stepLog = fmt.Sprintf("Add a new drive on node [%v]", stNode.Name)
 
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-
-			err := addCloudDrive(stNode, -1)
-			log.FailOnError(err, "error adding cloud drive")
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error refreshing end points")
-			stNodes := node.GetStorageNodes()
-			isStorageNode := false
-
-			for _, n := range stNodes {
-				if n.Name == stNode.Name {
-					isStorageNode = true
-					stNode = n
-					break
-				}
-			}
-
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := addCloudDrive(stNode, -1)
+				log.FailOnError(err, "error adding cloud drive")
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "error refreshing end points")
+			})
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
-
 		})
 	})
 
