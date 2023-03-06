@@ -1619,7 +1619,7 @@ func errIsNotFound(err error) bool {
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: vol.ID})
 		if err != nil && errIsNotFound(err) {
 			return nil, false, nil
 		} else if err != nil {
@@ -1627,7 +1627,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		}
 		// TODO remove shared validation when PWX-6894 and PWX-8790 are fixed
 		if volumeInspectResponse.Volume != nil && !vol.Shared {
-			return nil, true, fmt.Errorf("Volume [%s] is not yet removed from the system", volumeName)
+			return nil, true, fmt.Errorf("volume [%s] with ID [%s] in namespace [%s] is not yet removed from the system", volumeName, vol.ID, vol.Namespace)
 		}
 		return nil, false, nil
 	}

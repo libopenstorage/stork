@@ -3,6 +3,7 @@ package ibm
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	bluemix "github.com/IBM-Cloud/bluemix-go"
@@ -20,6 +21,7 @@ const (
 	labelWorkerPoolName         = "ibm-cloud.kubernetes.io/worker-pool-name"
 	labelWorkerPoolID           = "ibm-cloud.kubernetes.io/worker-pool-id"
 	labelWorkerID               = "ibm-cloud.kubernetes.io/worker-id"
+	labelInstanceID             = "ibm-cloud.kubernetes.io/instance-id"
 	vpcProviderName             = "vpc-gen2"
 	iksClusterInfoConfigMapName = "cluster-info"
 	clusterIDconfigMapField     = "cluster-config.json"
@@ -325,5 +327,33 @@ func (i *ibmOps) waitForInstanceGroupResize(instanceGroupID string,
 			return err
 		}
 	}
+	return nil
+}
+
+func (i *ibmOps) DeleteInstance(instanceID string, zone string, timeout time.Duration) error {
+
+	logrus.Infof("Cluster name: %s, Instance ID: %s", i.inst.clusterName, instanceID)
+	labels, err := core.Instance().GetLabelsOnNode(instanceID)
+	if err != nil {
+		return err
+	}
+	instanceID = labels[labelInstanceID]
+	logrus.Infof("Got instance id %s", instanceID)
+	req := v2.InstanceDeleteConfig{
+		Cluster: i.inst.clusterName,
+		Name:    instanceID,
+	}
+	resp, err := i.ibmClusterClient.Ingresses().GetIngressInstanceList(i.inst.clusterName, false)
+	if err != nil {
+		logrus.Errorf("got error getting instances, err %v", err)
+	}
+
+	logrus.Infof("Instances details : %+v", resp)
+	err = i.ibmClusterClient.Ingresses().DeleteIngressInstance(req)
+	if err != nil {
+		logrus.Errorf("got error while deleting instance, err %v", err)
+		return err
+	}
+
 	return nil
 }

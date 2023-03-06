@@ -4732,9 +4732,9 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 		return err
 	}
 
-	nodePoolsToValidate := make([]node.StoragePool, 0)
+	nodePoolsToValidate := make([]*opsapi.StoragePool, 0)
 	if poolID != -1 {
-		for _, p := range stNode.StoragePools {
+		for _, p := range stNode.Pools {
 			if p.ID == poolID {
 				nodePoolsToValidate = append(nodePoolsToValidate, p)
 				break
@@ -4751,7 +4751,7 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 				break
 			}
 		}
-		nodePoolsToValidate = append(nodePoolsToValidate, stNode.StoragePools...)
+		nodePoolsToValidate = append(nodePoolsToValidate, stNode.Pools...)
 
 	}
 
@@ -5317,6 +5317,157 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	return randomItems, nil
 }
 
+// MakeStoragetoStoragelessNode returns true on converting Storage Node to Storageless Node
+func MakeStoragetoStoragelessNode(n node.Node) error {
+	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
+	// Get total list of pools present on the node
+	poolList, err := GetPoolsDetailsOnNode(n)
+	if err != nil {
+		return err
+	}
+
+	lenPools := len(poolList)
+	log.InfoD("total number of Pools present on the Node [%v] is [%d]", n.Name, lenPools)
+
+	// Enter pool maintenance mode before deleting the pools from the cluster
+	err = Inst().V.EnterPoolMaintenance(n)
+	if err != nil {
+		return fmt.Errorf("failed to set pool maintenance mode on node %s. Err: [%v]", n.Name, err)
+	}
+
+	time.Sleep(1 * time.Minute)
+	expectedStatus := "In Maintenance"
+	err = WaitForPoolStatusToUpdate(n, expectedStatus)
+	if err != nil {
+		return fmt.Errorf("node [%s] pools are not in status [%s]. Err: [%v]", n.Name, expectedStatus, err)
+	}
+
+	// Delete all the pools present on the Node
+	for i := 0; i < lenPools; i++ {
+		err := Inst().V.DeletePool(n, strconv.Itoa(i))
+		if err != nil {
+			return err
+		}
+	}
+
+	err = Inst().V.ExitPoolMaintenance(n)
+	if err != nil {
+		return fmt.Errorf("failed to exit pool maintenance mode on node [%s] Error: [%v]", n.Name, err)
+	}
+
+	err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
+	if err != nil {
+		return fmt.Errorf("volume driver down on node %s with Error: [%v]", n.Name, err)
+	}
+	expectedStatus = "Online"
+	err = WaitForPoolStatusToUpdate(n, expectedStatus)
+	if err != nil {
+		return fmt.Errorf("node %s pools are not in status %s. Err:[%v]", n.Name, expectedStatus, err)
+	}
+
+	storageLessNodeAfterPoolDelete := node.GetStorageLessNodes()
+	if len(storageLessNodeBeforePoolDelete) <= len(storageLessNodeAfterPoolDelete) {
+		return fmt.Errorf("making storage node to storagelessnode failed")
+	}
+	return nil
+}
+
+// IsPksCluster returns true if current operator installation is on an EKS cluster
+func IsPksCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsPKS(stc) {
+			log.InfoD("PKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsOkeCluster returns true if current operator installation is on an EKS cluster
+func IsOkeCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsOKE(stc) {
+			log.InfoD("OKE installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsAksCluster returns true if current operator installation is on an EKS cluster
+func IsAksCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsAKS(stc) {
+			log.InfoD("AKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsIksCluster returns true if current operator installation is on an EKS cluster
+func IsIksCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsIKS(stc) {
+			log.InfoD("IKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsOpenShift returns true if current operator installation is on an EKS cluster
+func IsOpenShift() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsOpenshift(stc) {
+			log.InfoD("OpenShift installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsLocalCluster returns true if the cluster used is local cluster from vsphere
+func IsLocalCluster(n node.Node) bool {
+	response, err := IsCloudDriveInitialised(n)
+	if err != nil || response == false {
+		return false
+	}
+	return true
+}
+
+// IsPoolInMaintenance returns true if pool in maintenance
+func IsPoolInMaintenance(n node.Node) bool {
+	expectedStatus := "In Maintenance"
+	poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+	if err != nil || poolsStatus == nil {
+		return false
+	}
+
+	for _, v := range poolsStatus {
+		if v == expectedStatus {
+			return true
+		}
+	}
+	return false
+}
+
+func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
+	nodesPresent := node.GetStorageNodes()
+	for _, each := range nodesPresent {
+		poolsPresent, err := GetPoolsDetailsOnNode(each)
+		if err != nil {
+			return -1, err
+		}
+		for _, eachPool := range poolsPresent {
+			if eachPool.Uuid == poolUuid {
+				return eachPool.ID, nil
+			}
+		}
+	}
+	return -1, nil
+}
+
 func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
 
 	appVolumes, err := Inst().S.GetVolumes(ctx)
@@ -5438,7 +5589,7 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 		for k, v := range poolsStatus {
 			if v != expectedStatus {
 				return nil, true,
-					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+					fmt.Errorf("pool %s is not %s, current status: %s", k, expectedStatus, v)
 			}
 		}
 		return nil, false, nil
@@ -5457,4 +5608,67 @@ func RandomString(length int) string {
 	}
 	randomString := string(randomBytes)
 	return randomString
+}
+
+// DeleteGivenPoolInNode deletes pool with given ID in the given node
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) {
+
+	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
+	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	//Waiting for cli to work
+	time.Sleep(2 * time.Minute)
+
+	status, err := Inst().V.GetNodeStatus(stNode)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Node [%s] has status: [%v] after entering pool maintenance", stNode.Name, status)
+
+	expectedStatus := "In Maintenance"
+	if err = WaitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
+		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
+	}
+	defer func() {
+		var exitErr error
+		if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
+			log.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+
+		if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
+			log.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		//Adding wait as even PX is up it is taking some time for pool status to update
+		//when all pools are deleted
+		time.Sleep(1 * time.Minute)
+		cmd := "pxctl sv pool show"
+		var out string
+
+		// Execute the command and check if any pools exist
+		out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if exitErr != nil {
+			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		log.Infof("pool show: [%s]", out)
+
+		//skipping waitForPoolStatusToUpdate if there are no pools in the node
+		if strings.Contains(out, "No drives configured for this node") {
+			return
+		}
+
+		expectedStatus := "Online"
+		if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
+			log.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
+		}
+
+	}()
+	err = Inst().V.DeletePool(stNode, poolIDToDelete)
+	return err
 }
