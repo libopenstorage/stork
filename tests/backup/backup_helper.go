@@ -3,6 +3,8 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/apps"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -1250,4 +1252,90 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 	}
 	log.Infof("Backup locations fetched - %s", backupLocationNames)
 	return false, nil
+}
+
+// CreateCustomRestoreWithPVCs function can be used to deploy custom deployment with it's PVCs. It cannot be used for any other resource type.
+func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, namespace string) (deploymentName string, err error) {
+
+	var bkpUid string
+	var newResources []*api.ResourceInfo
+	var options metav1.ListOptions
+	var deploymentPvcMap = make(map[string][]string)
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup needed to be restored")
+	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return "", fmt.Errorf("unable to get backup UID for %v with error %v", backupName, err)
+	}
+	deploymentList, err := apps.Instance().ListDeployments(namespace, options)
+	if err != nil {
+		return "", fmt.Errorf("unable to list the deployments in namespace %v with error %v", namespace, err)
+	}
+	if len(deploymentList.Items) == 0 {
+		return "", fmt.Errorf("deployment list is null")
+	}
+	deployments := deploymentList.Items
+	for _, deployment := range deployments {
+		var pvcs []string
+		for _, vol := range deployment.Spec.Template.Spec.Volumes {
+			pvcName := vol.PersistentVolumeClaim.ClaimName
+			pvcs = append(pvcs, pvcName)
+		}
+		deploymentPvcMap[deployment.Name] = pvcs
+	}
+	// select a random index from the slice of deployment names to be restored
+	randomIndex := rand.Intn(len(deployments))
+	deployment := deployments[randomIndex]
+	log.Infof("selected deployment %v", deployment.Name)
+	pvcs, exists := deploymentPvcMap[deployment.Name]
+	if !exists {
+		return "", fmt.Errorf("deploymentName %v not found in the deploymentPvcMap", deployment.Name)
+	}
+	deploymentStruct := &api.ResourceInfo{
+		Version:   "v1",
+		Group:     "apps",
+		Kind:      "Deployment",
+		Name:      deployment.Name,
+		Namespace: namespace,
+	}
+	pvcsStructs := make([]*api.ResourceInfo, len(pvcs))
+	for i, pvcName := range pvcs {
+		pvcStruct := &api.ResourceInfo{
+			Version:   "v1",
+			Group:     "core",
+			Kind:      "PersistentVolumeClaim",
+			Name:      pvcName,
+			Namespace: namespace,
+		}
+		pvcsStructs[i] = pvcStruct
+	}
+	newResources = append([]*api.ResourceInfo{deploymentStruct}, pvcsStructs...)
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		IncludeResources: newResources,
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return "", fmt.Errorf("fail to create restore with createrestore req %v and error %v", createRestoreReq, err)
+	}
+	status, err := restoreSuccessCheck(restoreName, orgID, 10, 30, ctx)
+	if err != nil {
+		return "", fmt.Errorf("fail to create restore %v with error %v", restoreName, err)
+	}
+	if status == false {
+		return "", fmt.Errorf("restore status is false with error %v", err)
+	}
+	return deployment.Name, nil
 }

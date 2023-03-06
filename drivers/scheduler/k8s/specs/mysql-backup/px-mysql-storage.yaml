@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+type: Opaque
+data:
+  mysql-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data
+  annotations:
+    px/secret-name: volume-secrets
+    px/secret-namespace: "_NAMESPACE_"
+    px/secret-key: mysql-secret
+spec:
+  storageClassName: mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-seq
+spec:
+   storageClassName: mysql-sc-seq
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-aggr
+spec:
+   storageClassName: mysql-sc-aggr
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
