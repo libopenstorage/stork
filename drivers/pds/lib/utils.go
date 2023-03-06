@@ -1244,7 +1244,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	return tenantID, dnsZone, projectID, serviceType, clusterID, err
 }
 
-//RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
+// RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
 func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error {
 	log.InfoD("Test control plane url connectivity.")
 	_, err := IsReachable(controlPlaneUrl)
@@ -1388,7 +1388,7 @@ func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcNa
 	return pod, podName, nil
 }
 
-//CreatePodWorkloads generate workloads as standalone pods
+// CreatePodWorkloads generate workloads as standalone pods
 func CreatePodWorkloads(name string, image string, creds WorkloadGenerationParams, namespace string, count string, env []string) (*corev1.Pod, error) {
 	var value []string
 	podSpec := &corev1.Pod{
@@ -1700,7 +1700,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	return false, errors.New("TPCC run failed.")
 }
 
-//CreateDataServiceWorkloads generates workloads for the given dataservices
+// CreateDataServiceWorkloads generates workloads for the given dataservices
 func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod

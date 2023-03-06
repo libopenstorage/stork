@@ -48,7 +48,7 @@ type TargetCluster struct {
 	kubeconfig string
 }
 
-//RegisterToControlPlane register the target cluster to control plane.
+// RegisterToControlPlane register the target cluster to control plane.
 func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantId string, clusterType string) error {
 	var cmd string
 	apiEndpoint := fmt.Sprintf(controlPlaneURL + "api")

@@ -786,7 +786,9 @@ func createUsers(numberOfUsers int) []string {
 	return users
 }
 
-func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
+// CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
+func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
+	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
@@ -1248,6 +1250,7 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 
 // IsBackupLocationPresent checks whether the backup location is present or not
 func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID string) (bool, error) {
+	backupLocationNames := make([]string, 0)
 	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -1255,11 +1258,14 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 	if err != nil {
 		return false, err
 	}
-	log.Infof("Backup locations present are %v", response.BackupLocations)
-	for _, bkpLoc := range response.GetBackupLocations() {
-		if bkpLoc.GetName() == bkpLocation {
+
+	for _, backupLocationObj := range response.GetBackupLocations() {
+		backupLocationNames = append(backupLocationNames, backupLocationObj.GetName())
+		if backupLocationObj.GetName() == bkpLocation {
+			log.Infof("Backup location [%s] is present", bkpLocation)
 			return true, nil
 		}
 	}
+	log.Infof("Backup locations fetched - %s", backupLocationNames)
 	return false, nil
 }
