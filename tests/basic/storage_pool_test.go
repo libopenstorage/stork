@@ -7720,8 +7720,8 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 					log.InfoD("journal drive add successful")
 				}
 			}
-			Inst().V.ExitPoolMaintenance(*nodeDetail)
-			log.InfoD("Exit from pool Maintenance mode ")
+			//Inst().V.ExitPoolMaintenance(*nodeDetail)
+			//log.InfoD("Exit from pool Maintenance mode ")
 		}
 	})
 
