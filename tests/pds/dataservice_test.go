@@ -395,11 +395,11 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 			log.InfoD("Namespace %s created for creating a Non-PDS App", ns)
 		})
 		Step("Create an Independent app in a non-PDS namespace", func() {
-			_, pv_creation_err := pdslib.CreateIndependentPV("mysql-pv")
+			_, pv_creation_err := pdslib.CreateIndependentPV("mysql-pv-" + ns)
 			if pv_creation_err == nil {
-				_, pvc_creation_err := pdslib.CreateIndependentPVC(ns, "mysql-pvc")
+				_, pvc_creation_err := pdslib.CreateIndependentPVC(ns, "mysql-pvc-"+ns)
 				if pvc_creation_err == nil {
-					_, podName, err = pdslib.CreateIndependentMySqlApp(ns, "mysql-app", "mysql:8.0", "mysql-pvc")
+					_, podName, err = pdslib.CreateIndependentMySqlApp(ns, "mysql-app-"+ns, "mysql:8.0", "mysql-pvc-"+ns)
 					log.FailOnError(err, "Failure in creating the application in non-pds namespace")
 					log.InfoD("Non PDS MySQL App with name : %s is created", podName)
 				} else {
@@ -471,10 +471,10 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 		err = pdslib.DeleteK8sPods(podName, ns)
 		log.FailOnError(err, "Error while deleting K8s pods")
 		log.InfoD("Trying to Delete Independent PVC now from ns : %s", ns)
-		err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
+		err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc-"+ns, ns)
 		log.FailOnError(err, "Error while deleting Independent PVC")
 		log.InfoD("Trying to delete Independent PV now")
-		err = k8sCore.DeletePersistentVolume("mysql-pv")
+		err = k8sCore.DeletePersistentVolume("mysql-pv-" + ns)
 		log.FailOnError(err, "Error while deleting Independent PV")
 		log.InfoD("Trying to delete NS now: %s", ns)
 		err = pdslib.DeletePDSNamespace(ns)
