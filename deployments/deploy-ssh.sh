@@ -624,6 +624,8 @@ spec:
       value: "${PX_ORACLE_fingerprint}"
     - name: PX_ORACLE_private_key_path
       value: "${ORACLE_API_KEY}"
+    - name: INSTANCE_GROUP
+      value: "${INSTANCE_GROUP}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
