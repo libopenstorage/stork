@@ -521,13 +521,14 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.InfoD("Restoring the backed up namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, namespace := range bkpNamespaces {
+			for index, namespace := range bkpNamespaces {
 				restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", namespace, RandomString(4))
 				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
 					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", namespace, RandomString(4))
 				}
 				restoreNames = append(restoreNames, restoreName)
-				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				log.InfoD("Restoring [%s] namespace from the [%s] backup", namespace, backupNames[index])
+				err = CreateRestore(restoreName, backupNames[index], namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			}
 		})
