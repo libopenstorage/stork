@@ -288,14 +288,15 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 }
 
 // CreateScheduleBackup creates a scheduled backup
-func CreateScheduleBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
+func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) (string, error) {
-	var bkpUid string
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) error {
+	var firstScheduleBackupName string
+	var firstScheduleBackupUid string
 	backupDriver := Inst().Backup
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:  backupName,
+			Name:  scheduleName,
 			OrgId: orgID,
 		},
 		SchedulePolicyRef: &api.ObjectRef{
@@ -321,53 +322,40 @@ func CreateScheduleBackup(backupName string, clusterName string, bLocation strin
 	}
 	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
-		return "", err
+		return err
 	}
 	time.Sleep(1 * time.Minute)
 	backupSuccessCheck := func() (interface{}, bool, error) {
-		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+		firstScheduleBackupName, err = backupDriver.GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 		if err != nil {
 			return "", true, err
 		}
-		backupSchInspectRequest := &api.BackupScheduleInspectRequest{
-			Name:  backupName,
-			Uid:   bkpUid,
+		firstScheduleBackupUid, err = backupDriver.GetFirstScheduleBackupUID(ctx, scheduleName, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  firstScheduleBackupName,
+			Uid:   firstScheduleBackupUid,
 			OrgId: orgID,
 		}
-
-		resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 		if err != nil {
-			return "", true, fmt.Errorf("error in fetching inspect backup schedule response for %v", backupName)
+			return "", true, err
 		}
-		expected := api.BackupScheduleInfo_StatusInfo_Success
-		actual := resp.GetBackupSchedule().GetBackupStatus()["interval"].GetStatus()[0].GetStatus()
+		actual := resp.GetBackup().GetStatus().Status
+		expected := api.BackupInfo_StatusInfo_Success
 		if actual != expected {
-			return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", backupName, expected, actual)
+			return "", true, fmt.Errorf("status for first schedule backup [%s] expected was [%s] but got [%s]", firstScheduleBackupName, expected, actual)
 		}
-		return fmt.Sprintf("actual [%v] is equal to expected [%v] string", actual, expected), false, nil
+		return "", false, nil
 	}
 
 	_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
 	if err != nil {
-		return "", err
+		return err
 	}
-	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return "", err
-	}
-	backupSchInspectRequest := &api.BackupScheduleInspectRequest{
-		Name:  backupName,
-		Uid:   bkpUid,
-		OrgId: orgID,
-	}
-	resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
-	log.InfoD("InspectBackupSchedule response - [%v]", resp)
-	if err != nil {
-		return "", err
-	}
-	schBackupName := resp.GetBackupSchedule().GetBackupStatus()["interval"].GetStatus()[0].GetBackupName()
-	log.InfoD("InspectBackupSchedule response - [%v]", schBackupName)
-	return schBackupName, nil
+	return nil
 }
 
 // CreateBackupWithoutCheck creates backup without waiting for success
@@ -1052,22 +1040,16 @@ func generateEncryptionKey() string {
 
 func GetScheduleUID(scheduleName string, orgID string, ctx context.Context) (string, error) {
 	backupDriver := Inst().Backup
-	bkpUid, err := backupDriver.GetBackupUID(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get backup UID for %s, Err: %v", scheduleName, err)
-	}
-	backupSchInspectRequest := &api.BackupScheduleInspectRequest{
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
 		Name:  scheduleName,
-		Uid:   bkpUid,
+		Uid:   "",
 		OrgId: orgID,
 	}
-	resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to inspect backup [%s] with UID [%s], Err: %v", scheduleName, bkpUid, err)
+		return "", err
 	}
 	scheduleUid := resp.GetBackupSchedule().GetUid()
-	log.InfoD("Schedule Name - %s Schedule UID - %s", scheduleName, scheduleUid)
-
 	return scheduleUid, err
 }
 
