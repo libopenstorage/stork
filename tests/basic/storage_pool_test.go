@@ -1140,6 +1140,8 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by adding cloud drives.
 	//4) Restart px service where the pool expansion is in-progress
+	//5) Verify total pool count after addition of cloud drive of same spec with PX restart
+
 	var testrailID = 50632
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50632
 	var runID int
@@ -1161,11 +1163,13 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
+		var initialPoolCount int
 		stNode, err := GetRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "error getting pools list")
 		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+		initialPoolCount = len(pools)
 
 		var currentTotalPoolSize uint64
 		var specSize uint64
@@ -1203,6 +1207,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			log.FailOnError(err, "Pool re-balance failed")
 			dash.VerifyFatal(err == nil, true, "PX is up after add drive with vol driver restart")
 
+			var finalPoolCount int
 			var newTotalPoolSize uint64
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			log.FailOnError(err, "error getting pools list")
@@ -1210,7 +1215,9 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			for _, pool := range pools {
 				newTotalPoolSize += pool.GetTotalSize() / units.GiB
 			}
+			finalPoolCount = len(pools)
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+			dash.VerifyFatal(initialPoolCount == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
 		})
 
 	})
@@ -6074,7 +6081,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		ioPriorityAfter, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
 		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
 
-                log.InfoD(fmt.Sprintf("Priority Before [%s] was set to [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, setIOPriority, ioPriorityAfter))
+		log.InfoD(fmt.Sprintf("Priority Before [%s] was set to [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, setIOPriority, ioPriorityAfter))
 		dash.VerifyFatal(strings.ToLower(setIOPriority) == strings.ToLower(ioPriorityAfter), true, "IO Priority mismatch after pool expansion")
 
 	})
