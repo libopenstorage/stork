@@ -7589,8 +7589,19 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 		//px restart
 		err = Inst().V.RestartDriver(stNode, nil)
 		log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
+		err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 
-		stepLog := "Initiate pool expansion drive while PX is restarting"
+		var newTotalPoolSize uint64
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "error getting pools list")
+		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+		for _, pool := range pools {
+			newTotalPoolSize += pool.GetTotalSize() / units.GiB
+		}
+		dash.VerifyFatal(newTotalPoolSize, expectedSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+
+		stepLog = "Initiate pool expansion drive while PX is restarting and add drive which should fail"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
@@ -7614,9 +7625,12 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 			})
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
+			log.InfoD("Validate pool rebalance after drive add and px restart")
+			err = ValidatePoolRebalance(stNode, -1)
+			log.FailOnError(err, "Pool re-balance failed")
+			dash.VerifyFatal(err == nil, true, "PX is up after add drive with vol driver restart")
 		})
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
