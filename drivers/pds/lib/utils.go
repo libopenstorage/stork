@@ -1135,12 +1135,18 @@ func RunConsulBenchWorkload(deploymentName string, namespace string) (*v1.Deploy
 	return deployment, nil
 }
 
-// Creates a temporary non PDS namespace of 6 letters length randomly chosen
-func CreateTempNS(length int32) (string, error) {
+// Returns a randomly generated string of given length
+func GetRandomString(length int32) string {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, length)
 	rand.Read(b)
-	namespace := fmt.Sprintf("%x", b)[:length]
+	random_string := fmt.Sprintf("%x", b)[:length]
+	return random_string
+}
+
+// Creates a temporary non PDS namespace of 6 letters length randomly chosen
+func CreateTempNS(length int32) (string, error) {
+	namespace := GetRandomString(length)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
@@ -1286,8 +1292,54 @@ func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string
 	return nil
 }
 
+// Check if PV and associated PVC is still present. If yes then delete both of them
+func CheckAndDeleteIndependentPV(name string) error {
+	pv_check, err := k8sCore.GetPersistentVolume(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		return err
+	}
+	log.InfoD("Stranded PV Found by the name - %s. Going ahead to delete this PV and associated entities", name)
+	if pv_check.Status.Phase == corev1.VolumeBound {
+		if pv_check.Spec.ClaimRef != nil && pv_check.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
+			namespace := pv_check.Spec.ClaimRef.Namespace
+			pvc_name := pv_check.Spec.ClaimRef.Name
+			// Delete all Pods in this namespace
+			var newPods []corev1.Pod
+			podList, err := GetPods(namespace)
+			if err != nil {
+				return err
+			}
+			for _, pod := range podList.Items {
+				newPods = append(newPods, pod)
+			}
+			err = DeletePods(newPods)
+			if err != nil {
+				return err
+			}
+			// Delete PVC from figured out namespace
+			err = k8sCore.DeletePersistentVolumeClaim(pvc_name, namespace)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// Delete PV as it is still available from previous run
+	err = k8sCore.DeletePersistentVolume(name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Create a Persistent Vol of 5G manual Storage Class
 func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
+	err := CheckAndDeleteIndependentPV(name)
+	if err != nil {
+		return nil, err
+	}
 	pv := &corev1.PersistentVolume{
 
 		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
@@ -1310,9 +1362,8 @@ func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
 			},
 		},
 	}
-	pv, err := k8sCore.CreatePersistentVolume(pv)
+	pv, err = k8sCore.CreatePersistentVolume(pv)
 	if err != nil {
-		log.Errorf("PV Could not be created. Exiting")
 		return pv, err
 	}
 	return pv, nil
