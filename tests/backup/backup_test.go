@@ -883,10 +883,10 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 				email := fmt.Sprintf("testuser%v_%v@cnbu.com", i, time.Now().Unix())
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					wg.Done()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -899,10 +899,10 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
 				go func(groupName string) {
+					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
 					groups = append(groups, groupName)
-					wg.Done()
 				}(groupName)
 			}
 			wg.Wait()
@@ -911,14 +911,14 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		Step("Add users to group", func() {
 			log.InfoD("Adding users to groups")
 			var wg sync.WaitGroup
-			for i := 0; i < len(users); i++ {
+			for i, userName := range users {
 				groupIndex := i / groupSize
 				wg.Add(1)
-				go func(i, groupIndex int) {
-					err := backup.AddGroupToUser(users[i], groups[groupIndex])
+				go func(userName string, groupIndex int) {
+					defer wg.Done()
+					err := backup.AddGroupToUser(userName, groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
-					wg.Done()
-				}(i, groupIndex)
+				}(userName, groupIndex)
 			}
 			wg.Wait()
 
@@ -1145,6 +1145,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Get user from the restore access group
 			username, err := backup.GetRandomUserFromGroup(groups[1])
 			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[1])
+			log.Infof("Sharing backup with user - %s", username)
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
@@ -1188,6 +1189,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Get user from the view only access group
 			username, err := backup.GetRandomUserFromGroup(groups[0])
 			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
+			log.Infof("Sharing backup with user - %s", username)
 
 			// Get user context
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
@@ -1360,14 +1362,14 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		Step("Add users to group", func() {
 			log.InfoD("Adding users to groups")
 			var wg sync.WaitGroup
-			for i := 0; i < len(users); i++ {
+			for i, user := range users {
 				groupIndex := i / groupSize
 				wg.Add(1)
-				go func(i, groupIndex int) {
+				go func(userName string, groupIndex int) {
 					defer wg.Done()
-					err := backup.AddGroupToUser(users[i], groups[groupIndex])
+					err := backup.AddGroupToUser(userName, groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
-				}(i, groupIndex)
+				}(user, groupIndex)
 			}
 			wg.Wait()
 
@@ -1696,10 +1698,10 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					wg.Done()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -1719,10 +1721,10 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
 				go func(groupName string) {
+					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
 					groups = append(groups, groupName)
-					wg.Done()
 				}(groupName)
 			}
 			wg.Wait()
@@ -1731,15 +1733,15 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		Step("Add users to group", func() {
 			log.InfoD("Adding users to groups")
 			var wg sync.WaitGroup
-			for i := 0; i < len(users); i++ {
+			for i, user := range users {
 				time.Sleep(2 * time.Second)
 				groupIndex := i / groupSize
 				wg.Add(1)
-				go func(i, groupIndex int) {
-					err := backup.AddGroupToUser(users[i], groups[groupIndex])
+				go func(userName string, groupIndex int) {
+					defer wg.Done()
+					err := backup.AddGroupToUser(userName, groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
-					wg.Done()
-				}(i, groupIndex)
+				}(user, groupIndex)
 			}
 			wg.Wait()
 
@@ -2178,10 +2180,10 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					wg.Done()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()

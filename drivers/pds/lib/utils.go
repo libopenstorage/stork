@@ -2380,7 +2380,7 @@ func GetNodesOfSS(SSName string, namespace string) ([]*corev1.Node, error) {
 	return nodes, nil
 }
 
-//Returns list of Pods from a given Statefulset running on a given Node
+// Returns list of Pods from a given Statefulset running on a given Node
 func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]corev1.Pod, error) {
 	// Get StatefulSet Object of the given Statefulset
 	ss, err := k8sApps.GetStatefulSet(SSName, namespace)
