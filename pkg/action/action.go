@@ -10,10 +10,12 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/sirupsen/logrus"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -26,10 +28,15 @@ const (
 )
 
 func NewActionController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *ActionController {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		logrus.Fatalf("error getting cluster config: %v", err)
+	}
 	return &ActionController{
 		client:    mgr.GetClient(),
 		volDriver: d,
 		recorder:  r,
+		config:    config,
 	}
 }
 
@@ -37,6 +44,7 @@ type ActionController struct {
 	client    runtimeclient.Client
 	volDriver volume.Driver
 	recorder  record.EventRecorder
+	config    *rest.Config
 }
 
 func (ac *ActionController) Init(mgr manager.Manager) error {
@@ -72,12 +80,25 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 	switch action.Spec.ActionType {
 	case storkv1.ActionTypeFailover:
 		logrus.Infof("performing action: failover")
+		resourceutils.ScaleReplicas(action.Namespace, true, printFunc, ac.config)
 		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
 		return fmt.Errorf("invalid value received for Action.Spec.ActionType")
 	}
 	return nil
+}
+
+func printFunc(msg, stream string) {
+	switch stream {
+	case "out":
+		logrus.Infof(msg)
+	case "err":
+		logrus.Errorf(msg)
+	default:
+		logrus.Errorf("printFunc received invalid stream")
+		logrus.Errorf(msg)
+	}
 }
 
 func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus storkv1.ActionStatus) {
