@@ -2438,56 +2438,6 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 	return nil
 }
 
-func (p *portworx) ActivateMigration(namespace string) error {
-	logrus.Debugf("ActivateMigration namespace: %s", namespace)
-	volDriver, err := p.getAdminVolDriver() // TODO(dgoel): admin or user vol driver?
-	if err != nil {
-		return err
-	}
-
-	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
-	if err != nil {
-		return fmt.Errorf("error getting list of volumes to migrate: %v", err)
-	}
-	for _, pvc := range pvcList.Items {
-		if !p.OwnsPVC(core.Instance(), &pvc) {
-			continue
-		}
-		if resourcecollector.SkipResource(pvc.Annotations) { // TODO(dgoel): do we need this?
-			continue
-		}
-
-		volID, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
-		if err != nil {
-			return fmt.Errorf("error getting volume for PVC: %v", err)
-		}
-		logrus.Debugf("ActivateMigration volID: %v", volID)
-
-		volumes, err := volDriver.Inspect([]string{volID})
-		if err != nil {
-			return err
-		}
-		if len(volumes) != 1 {
-			return &errors.ErrNotFound{
-				ID:   volID,
-				Type: "Volume",
-			}
-		}
-		vol := volumes[0]
-
-		volLocator := vol.Locator
-		if volLocator.VolumeLabels == nil {
-			volLocator.VolumeLabels = make(map[string]string)
-		}
-		volLocator.VolumeLabels["promote"] = "true"
-		if err := volDriver.Set(vol.GetId(), volLocator, vol.GetSpec()); err != nil {
-			return fmt.Errorf("failed to promote volume: %v", vol.GetId())
-		}
-		logrus.Debugf("ActivateMigration promoted %v", vol.GetId())
-	}
-	return nil
-}
-
 func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
 	if !p.initDone {
 		if err := p.initPortworxClients(); err != nil {
