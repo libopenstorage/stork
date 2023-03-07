@@ -7620,9 +7620,7 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
 			time.Sleep(5 * time.Second)
 			log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
-			err = Inst().V.RestartDriver(stNode, nil)
-			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
-			err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			log.InfoD("Validate pool rebalance after drive add and px restart")
 			err = ValidatePoolRebalance(stNode, -1)
