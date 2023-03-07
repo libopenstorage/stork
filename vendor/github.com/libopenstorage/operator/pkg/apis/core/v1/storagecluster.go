@@ -1,6 +1,7 @@
 package v1
 
 import (
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -300,6 +301,12 @@ type RollingUpdateStorageCluster struct {
 	// that at least 70% of original number of StorageCluster pods are available at
 	// all times during the update.
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
+
+	// Minimum number of seconds for which a newly created Portworx pod should be ready
+	// without any of its container crashing, for it to be considered available.
+	// Defaults to 0 (pod will be considered available as soon as it is ready)
+	// +optional
+	MinReadySeconds int32 `json:"minReadySeconds,omitempty"`
 }
 
 // StorageClusterDeleteStrategyType is enum for storage cluster delete strategies
@@ -577,6 +584,23 @@ type PrometheusSpec struct {
 	// SecurityContext holds pod-level security attributes and common container settings.
 	// This defaults to the default PodSecurityContext. The value will pass through to Prometheus CR.
 	SecurityContext *v1.PodSecurityContext `json:"securityContext,omitempty"`
+	// Replicas specifies the number of replicas of each shard to deploy for a Prometheus deployment.
+	Replicas *int32 `json:"replicas,omitempty"`
+	// Retention specifies time duration Prometheus shall retain data for.
+	Retention string `json:"retention,omitempty"`
+	// RetentionSize specifies maximum amount of disk space used by blocks.*
+	RetentionSize string `json:"retentionSize,omitempty"`
+	// StorageSpec defines the configured storage for a group Prometheus servers. If no storage option is
+	// specified, then by default an EmptyDir will be used. If multiple storage options are specified,
+	// priority will be given as follows: EmptyDir, Ephemeral, and lastly VolumeClaimTemplate.
+	Storage *monitoringv1.StorageSpec `json:"storage,omitempty"`
+	// Volumes allows configuration of additional volumes on the output StatefulSet definition. Volumes specified will
+	// be appended to other volumes that are generated as a result of StorageSpec objects.
+	Volumes []v1.Volume `json:"volumes,omitempty"`
+	// VolumeMounts allows configuration of additional VolumeMounts on the output StatefulSet definition.
+	// VolumeMounts specified will be appended to other VolumeMounts in the prometheus container,
+	// that are generated as a result of StorageSpec objects.
+	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
 }
 
 // AlertManagerSpec contains configuration of AlertManager
@@ -681,8 +705,8 @@ const (
 	ClusterConditionTypePreflight ClusterConditionType = "Preflight"
 	// ClusterConditionTypeInstall indicates the phase for a component install operation on the cluster
 	ClusterConditionTypeInstall ClusterConditionType = "Install"
-	// ClusterConditionTypeUpgrade indicates the phase for a component upgrade operation on the cluster
-	ClusterConditionTypeUpgrade ClusterConditionType = "Upgrade"
+	// ClusterConditionTypeUpdate indicates the phase for a component update operation on the cluster
+	ClusterConditionTypeUpdate ClusterConditionType = "Update"
 	// ClusterConditionTypeDelete indicates the phase for a component delete operation on the cluster
 	ClusterConditionTypeDelete ClusterConditionType = "Delete"
 	// ClusterConditionTypeMigration indicates the phase for a component migration operation on the cluster
