@@ -1750,7 +1750,7 @@ func (a *ApplicationBackupController) createCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !k8s_errors.IsAlreadyExists(err) {
 			return err
 		}

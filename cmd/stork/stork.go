@@ -20,6 +20,7 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/kdmp"
 	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/action"
 	"github.com/libopenstorage/stork/pkg/apis"
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
 	"github.com/libopenstorage/stork/pkg/cache"
@@ -136,6 +137,10 @@ func main() {
 			Name:  "health-monitor-interval",
 			Value: 120,
 			Usage: "The interval in seconds to monitor the health of the storage driver (min: 30)",
+		},
+		cli.BoolTFlag{
+			Name:  "action-controller",
+			Usage: "Start the Action controller (default: true)",
 		},
 		cli.BoolTFlag{
 			Name:  "migration-controller",
@@ -470,6 +475,13 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 		if c.Bool("health-monitor") {
 			if err := monitor.Start(); err != nil {
 				log.Fatalf("Error starting storage monitor: %v", err)
+			}
+		}
+
+		if c.Bool("action-controller") {
+			actionController := action.NewActionController(mgr, d, recorder)
+			if err := actionController.Init(mgr); err != nil {
+				log.Fatalf("Error initializing action controller: %v", err)
 			}
 		}
 
