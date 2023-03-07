@@ -7609,7 +7609,7 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize + drvSize
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
