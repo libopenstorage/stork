@@ -624,6 +624,12 @@ spec:
       value: "${PX_ORACLE_fingerprint}"
     - name: PX_ORACLE_private_key_path
       value: "${ORACLE_API_KEY}"
+    - name: INSTANCE_GROUP
+      value: "${INSTANCE_GROUP}"
+    - name: LOGGLY_API_TOKEN
+      value: "${LOGGLY_API_TOKEN}"
+    - name: PODMETRIC_METERING_INTERVAL_MINUTES
+      value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
