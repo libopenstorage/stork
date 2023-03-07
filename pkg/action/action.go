@@ -84,7 +84,7 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
-		return fmt.Errorf("invalid value received for Action.Spec.ActionType!")
+		return fmt.Errorf("invalid value received for Action.Spec.ActionType")
 	}
 	return nil
 }

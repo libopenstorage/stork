@@ -937,7 +937,7 @@ github.com/portworx/px-object-controller/client/listers/objectservice/v1alpha1
 github.com/portworx/px-object-controller/pkg/client
 github.com/portworx/px-object-controller/pkg/controller
 github.com/portworx/px-object-controller/pkg/utils
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd => github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203 => github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1024,7 +1024,7 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c
+# github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 ## explicit; go 1.19
 github.com/rancher/norman/clientbase
 github.com/rancher/norman/httperror
@@ -1036,7 +1036,7 @@ github.com/rancher/norman/types/values
 # github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 ## explicit; go 1.19
 github.com/rancher/rancher/pkg/client/generated/management/v3
-# github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1
+# github.com/rancher/wrangler v1.1.0
 ## explicit; go 1.19
 github.com/rancher/wrangler/pkg/name
 # github.com/rogpeppe/go-internal v1.9.0
@@ -2240,7 +2240,7 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
 # github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230207113334-0b97b6052012
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3

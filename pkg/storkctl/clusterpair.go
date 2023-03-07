@@ -33,7 +33,15 @@ const (
 	gcloudBinaryName      = "gcloud"
 )
 
-var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
+var (
+	clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
+
+	projectMappingHelpString = "Project mappings between source and destination clusters (currently supported only for Rancher).\n" +
+		"Use comma-separated <source-project-id>=<dest-project-id> pairs.\n" +
+		"For the project-id, you can also have a cluster-id field added as a prefix to the project-id.\n" +
+		"It is recommended to include both one-to-one mappings of the project-id and Rancher cluster-id prefixed project-id as follows:\n" +
+		"<source-project-id>=<dest-project-id>,<source-cluster-id>:<source-project-id>=<dest-cluster-id>:<dest-project-id>"
+)
 
 func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	getClusterPairCommand := &cobra.Command{
@@ -208,8 +216,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 			if len(projectMappingsStr) > 0 {
 				projectIDMap, err := utils.ParseKeyValueList(strings.Split(projectMappingsStr, ","))
 				if err != nil {
-					util.CheckErr(fmt.Errorf("invalid project-mappings provided, use comma-separated" +
-						"<source-project-id>=<dest-project-id> pairs (Currently supported only for Rancher)"))
+					util.CheckErr(fmt.Errorf("invalid %v", projectMappingHelpString))
 				}
 				clusterPair.Spec.PlatformOptions = storkv1.PlatformSpec{
 					Rancher: &storkv1.RancherSpec{ProjectMappings: projectIDMap},
@@ -224,8 +231,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 	}
 
 	generateClusterPairCommand.Flags().StringVarP(&storageOptions, "storageoptions", "s", "", "comma seperated key-value pair storage options")
-	generateClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "",
-		"project mappings between source and destination clusters, use comma-separated <source-project-id>=<dest-project-id> pairs (Currently supported only for Rancher)")
+	generateClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
 	return generateClusterPairCommand
 }
 
@@ -325,16 +331,15 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 		},
 	}
 
-	createClusterPairCommand.Flags().StringVarP(&sIP, "src-ip", "", "", "ip of storage node from source cluster")
-	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9001", "port of storage node from source cluster")
-	createClusterPairCommand.Flags().StringVarP(&sFile, "src-kube-file", "", "", "kube-config of source cluster")
-	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "kube-config of destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9001", "port of storage node from destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "kube-config of destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(optional)source cluster token for cluster pairing")
-	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(optional)destination cluster token for cluster pairing")
-	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "",
-		"project mappings between source and destination clusters, use comma-separated <source-project-id>=<dest-project-id> pairs (Currently supported only for Rancher)")
+	createClusterPairCommand.Flags().StringVarP(&sIP, "src-ip", "", "", "IP of storage node from source cluster")
+	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9001", "Port of storage node from source cluster")
+	createClusterPairCommand.Flags().StringVarP(&sFile, "src-kube-file", "", "", "Path to the kubeconfig of source cluster")
+	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "IP of storage node from destination cluster")
+	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9001", "Port of storage node from destination cluster")
+	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "Path to the kubeconfig of destination cluster")
+	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(Optional)Source cluster token for cluster pairing")
+	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
+	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
 
 	return createClusterPairCommand
 }
