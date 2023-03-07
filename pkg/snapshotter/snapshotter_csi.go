@@ -561,13 +561,13 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 	pvc.Spec.VolumeName = ""
 
 	if c.v1SnapshotRequired {
-		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(o.RestoreNamespace).Get(context.TODO(), o.RestoreSnapshotName, metav1.GetOptions{})
+		snapshot, err := c.snapshotClient.SnapshotV1().VolumeSnapshots(o.RestoreNamespace).Get(context.TODO(), o.RestoreSnapshotName, metav1.GetOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get volumesnapshot %s/%s", o.RestoreNamespace, o.RestoreSnapshotName)
 		}
 
 		checkVsStatus := func() (interface{}, bool, error) {
-			snapshot, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(snapshot.Namespace).Get(context.TODO(), snapshot.Name, metav1.GetOptions{})
+			snapshot, err = c.snapshotClient.SnapshotV1().VolumeSnapshots(snapshot.Namespace).Get(context.TODO(), snapshot.Name, metav1.GetOptions{})
 			if err != nil {
 				errMsg := fmt.Sprintf("failed to get volumesnapshot [%v/%v]", snapshot.Namespace, snapshot.Name)
 				return "", true, fmt.Errorf("%v", errMsg)
