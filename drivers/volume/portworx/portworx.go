@@ -1340,13 +1340,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
-				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
-				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
+			if requestedSpec.IoProfile != vol.DerivedIoProfile &&
+				vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE {
 				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
 				log.Infof("requested Spec: %+v", requestedSpec)
-				log.Infof("actual Spec: %+v", vol.Spec)
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
+				log.Infof("actual Spec: %+v", vol)
+				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 			}
 		case api.SpecSize:
 			if requestedSpec.Size != vol.Spec.Size {
@@ -4853,12 +4852,16 @@ func init() {
 // UpdatePoolLabels updates the pool label for a particular pool id
 func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
 
-	labelsString := ""
+	labelStrings := make([]string, 0)
 	for k, v := range labels {
-		labelsString += fmt.Sprintf("%s=%s,", k, v)
+		labelString := fmt.Sprintf("%s=%s", k, v)
+		labelStrings = append(labelStrings, labelString)
 	}
-	labelsString = strings.Trim(labelsString, ",")
-	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsString)
+
+	labelsStr := strings.Join(labelStrings, ",")
+	fmt.Printf("label string is %s\n", labelsStr)
+	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsStr)
+	fmt.Printf("cmd: %s\n", cmd)
 	_, err := d.nodeDriver.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
 		Timeout:         2 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,
