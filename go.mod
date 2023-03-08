@@ -291,7 +291,7 @@ replace (
 	github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 	github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
-	github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
+	github.com/docker/docker => github.com/moby/moby v20.10.23+incompatible
 	//github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	//github.com/heptio/ark => github.com/heptio/ark v1.0.0

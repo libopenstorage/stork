@@ -247,7 +247,6 @@ github.com/containerd/containerd/version
 ## explicit; go 1.17
 github.com/containerd/continuity/devices
 github.com/containerd/continuity/driver
-github.com/containerd/continuity/fs
 github.com/containerd/continuity/pathdriver
 github.com/containerd/continuity/sysx
 # github.com/coreos/go-oidc v2.2.1+incompatible
@@ -291,7 +290,7 @@ github.com/docker/distribution/registry/client/auth/challenge
 github.com/docker/distribution/registry/client/transport
 github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
-# github.com/docker/docker v20.10.17+incompatible => github.com/moby/moby v20.10.4+incompatible
+# github.com/docker/docker v20.10.17+incompatible => github.com/moby/moby v20.10.23+incompatible
 ## explicit
 github.com/docker/docker/api/types
 github.com/docker/docker/api/types/blkiodev
@@ -2231,7 +2230,7 @@ sigs.k8s.io/yaml
 # github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 # github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 # github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
-# github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
+# github.com/docker/docker => github.com/moby/moby v20.10.23+incompatible
 # github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 # github.com/heptio/velero => github.com/heptio/velero v1.0.0
 # github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0

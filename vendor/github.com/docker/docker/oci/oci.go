@@ -13,21 +13,25 @@ import (
 //      that *only* passes `a` as value: `echo a > /sys/fs/cgroup/1/devices.allow, which would be
 //      the "implicit" equivalent of "a *:* rwm". Source-code also looks to confirm this, and returns
 //      early for "a" (all); https://github.com/torvalds/linux/blob/v5.10/security/device_cgroup.c#L614-L642
-// nolint: gosimple
+//nolint: gosimple
 var deviceCgroupRuleRegex = regexp.MustCompile("^([acb]) ([0-9]+|\\*):([0-9]+|\\*) ([rwm]{1,3})$")
 
 // SetCapabilities sets the provided capabilities on the spec
-// All capabilities are added if privileged is true
+// All capabilities are added if privileged is true.
 func SetCapabilities(s *specs.Spec, caplist []string) error {
-	s.Process.Capabilities.Effective = caplist
-	s.Process.Capabilities.Bounding = caplist
-	s.Process.Capabilities.Permitted = caplist
-	s.Process.Capabilities.Inheritable = caplist
 	// setUser has already been executed here
-	// if non root drop capabilities in the way execve does
-	if s.Process.User.UID != 0 {
-		s.Process.Capabilities.Effective = []string{}
-		s.Process.Capabilities.Permitted = []string{}
+	if s.Process.User.UID == 0 {
+		s.Process.Capabilities = &specs.LinuxCapabilities{
+			Effective: caplist,
+			Bounding:  caplist,
+			Permitted: caplist,
+		}
+	} else {
+		// Do not set Effective and Permitted capabilities for non-root users,
+		// to match what execve does.
+		s.Process.Capabilities = &specs.LinuxCapabilities{
+			Bounding: caplist,
+		}
 	}
 	return nil
 }
