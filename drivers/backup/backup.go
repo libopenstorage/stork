@@ -280,7 +280,7 @@ type SchedulePolicy interface {
 	DeleteBackupSchedulePolicy(orgID string, policyList []string) error
 
 	// GetSchedulePolicyUid gets the uid for the given schedule policy
-	GetSchedulePolicyUid(orgID string, tx context.Context, schPolicyName string) (string, error)
+	GetSchedulePolicyUid(orgID string, ctx context.Context, schedulePolicyName string) (string, error)
 }
 
 // ScheduleBackup interface
@@ -309,6 +309,30 @@ type ScheduleBackup interface {
 	// This wait function is for the backupschedule deletion with delete-backup option set.
 	WaitForBackupScheduleDeletion(ctx context.Context, backupScheduleName, namespace, orgID string,
 		clusterObj *api.ClusterObject, timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// GetAllScheduleBackupNames returns names of all scheduled backups for the given schedule
+	GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error)
+
+	// GetOrdinalScheduleBackupName returns the name of the backup at the specified ordinal position for the given schedule
+	GetOrdinalScheduleBackupName(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error)
+
+	// GetFirstScheduleBackupName returns the name of the first scheduled backup for the given schedule
+	GetFirstScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error)
+
+	// GetLatestScheduleBackupName returns the name of the latest scheduled backup for the given schedule
+	GetLatestScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error)
+
+	// GetAllScheduleBackupUIDs returns uids of all scheduled backups for the given schedule
+	GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error)
+
+	// GetOrdinalScheduleBackupUID returns the uid of the backup at the specified ordinal position for the given schedule
+	GetOrdinalScheduleBackupUID(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error)
+
+	// GetFirstScheduleBackupUID returns the uid of the first scheduled backup for the given schedule
+	GetFirstScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error)
+
+	// GetLatestScheduleBackupUID returns the uid of the latest scheduled backup for the given schedule
+	GetLatestScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error)
 }
 
 // License interface

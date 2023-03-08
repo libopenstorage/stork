@@ -48,7 +48,7 @@ type TargetCluster struct {
 	kubeconfig string
 }
 
-//RegisterToControlPlane register the target cluster to control plane.
+// RegisterToControlPlane register the target cluster to control plane.
 func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantId string, clusterType string) error {
 	var cmd string
 	apiEndpoint := fmt.Sprintf(controlPlaneURL + "api")
@@ -63,12 +63,12 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	}
 	if !isRegistered {
 		log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
-		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set platform=ocp --set tenantId=%s "+
+		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
 			"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		if strings.EqualFold(clusterType, "ocp") {
 			cmd = fmt.Sprintf("%s %s ", cmd, "--set platform=ocp")
 		}
-		log.Infof("helm command %v ", cmd)
+		log.Infof("helm command: %v ", cmd)
 	}
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {

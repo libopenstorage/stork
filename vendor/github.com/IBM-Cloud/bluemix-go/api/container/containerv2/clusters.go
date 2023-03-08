@@ -33,15 +33,14 @@ type ClusterCreateRequest struct {
 }
 
 type WorkerPoolConfig struct {
-	DiskEncryption bool              `json:"diskEncryption,omitempty"`
-	Entitlement    string            `json:"entitlement"`
-	Flavor         string            `json:"flavor"`
-	Isolation      string            `json:"isolation,omitempty"`
-	Labels         map[string]string `json:"labels,omitempty"`
-	Name           string            `json:"name" binding:"required" description:"The workerpool's name"`
-	VpcID          string            `json:"vpcID"`
-	WorkerCount    int               `json:"workerCount"`
-	Zones          []Zone            `json:"zones"`
+	HostPoolID string `json:"hostPoolID,omitempty"`
+	CommonWorkerPoolConfig
+}
+
+type WorkerVolumeEncryption struct {
+	KmsInstanceID     string `json:"kmsInstanceID,omitempty"`
+	WorkerVolumeCRKID string `json:"workerVolumeCRKID,omitempty"`
+	KMSAccountID      string `json:"kmsAccountID,omitempty"`
 }
 
 // type Label struct {

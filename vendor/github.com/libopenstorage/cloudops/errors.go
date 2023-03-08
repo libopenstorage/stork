@@ -112,3 +112,15 @@ type ErrCurrentCapacityHigherThanDesired struct {
 func (e *ErrCurrentCapacityHigherThanDesired) Error() string {
 	return fmt.Sprintf("current capacity (%d) is higher than desired capacity: %d", e.Current, e.Desired)
 }
+
+// ErrCloudProviderRequestFailure is returned when an unknown API request failure occurred.
+type ErrCloudProviderRequestFailure struct {
+    // Request is the API function name
+	Request string
+    // Message is the error message returned by the cloud provider
+	Message string
+}
+
+func (e *ErrCloudProviderRequestFailure) Error() string {
+	return fmt.Sprintf("Request %s returns %s", e.Request, e.Message)
+}

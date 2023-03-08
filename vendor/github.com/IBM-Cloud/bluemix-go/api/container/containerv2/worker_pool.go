@@ -6,11 +6,28 @@ import (
 	"github.com/IBM-Cloud/bluemix-go/client"
 )
 
+// CommonWorkerPoolConfig provides common worker pool data for cluster and workerpool operations
+type CommonWorkerPoolConfig struct {
+	DiskEncryption         bool                    `json:"diskEncryption,omitempty"`
+	Entitlement            string                  `json:"entitlement"`
+	Flavor                 string                  `json:"flavor"`
+	Isolation              string                  `json:"isolation,omitempty"`
+	Labels                 map[string]string       `json:"labels,omitempty"`
+	Name                   string                  `json:"name" binding:"required" description:"The workerpool's name"`
+	OperatingSystem        string                  `json:"operatingSystem,omitempty"`
+	VpcID                  string                  `json:"vpcID"`
+	WorkerCount            int                     `json:"workerCount"`
+	Zones                  []Zone                  `json:"zones"`
+	WorkerVolumeEncryption *WorkerVolumeEncryption `json:"workerVolumeEncryption,omitempty"`
+	SecondaryStorageOption string                  `json:"secondaryStorageOption,omitempty"`
+}
+
 // WorkerPoolRequest provides worker pool data
 // swagger:model
 type WorkerPoolRequest struct {
-	Cluster string `json:"cluster" description:"cluster name where the worker pool will be created"`
-	WorkerPoolConfig
+	Cluster    string `json:"cluster" description:"cluster name where the worker pool will be created"`
+	HostPoolID string `json:"hostPool,omitempty"`
+	CommonWorkerPoolConfig
 }
 type WorkerPoolTaintRequest struct {
 	Cluster    string            `json:"cluster" description:"cluster name"`
@@ -32,17 +49,33 @@ type WorkerPoolZone struct {
 }
 
 type GetWorkerPoolResponse struct {
-	Flavor      string            `json:"flavor"`
-	ID          string            `json:"id"`
-	Isolation   string            `json:"isolation"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Taints      map[string]string `json:"taints,omitempty"`
-	Lifecycle   `json:"lifecycle"`
-	VpcID       string     `json:"vpcID"`
-	WorkerCount int        `json:"workerCount"`
-	PoolName    string     `json:"poolName"`
-	Provider    string     `json:"provider"`
-	Zones       []ZoneResp `json:"zones"`
+	HostPoolID             string            `json:"dedicatedHostPoolId,omitempty"`
+	Flavor                 string            `json:"flavor"`
+	ID                     string            `json:"id"`
+	Isolation              string            `json:"isolation"`
+	Labels                 map[string]string `json:"labels,omitempty"`
+	OperatingSystem        string            `json:"operatingSystem,omitempty"`
+	Taints                 map[string]string `json:"taints,omitempty"`
+	Lifecycle              `json:"lifecycle"`
+	VpcID                  string                  `json:"vpcID"`
+	WorkerCount            int                     `json:"workerCount"`
+	PoolName               string                  `json:"poolName"`
+	Provider               string                  `json:"provider"`
+	Zones                  []ZoneResp              `json:"zones"`
+	WorkerVolumeEncryption *WorkerVolumeEncryption `json:"workerVolumeEncryption,omitempty"`
+	SecondaryStorageOption *DiskConfigResp         `json:"secondaryStorageOption,omitempty"`
+}
+
+// DiskConfigResp response type for describing a disk configuration
+// swagger:model
+type DiskConfigResp struct {
+	Name  string `json:"name,omitempty"`
+	Count int
+	// the size of each individual device in GB
+	Size              int
+	DeviceType        string
+	RAIDConfiguration string
+	Profile           string `json:"profile,omitempty"`
 }
 
 type Lifecycle struct {
