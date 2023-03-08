@@ -7554,7 +7554,7 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by add-disk
 	//4) Restart px service while expand pool
-	//5) Expand pool by add-disk should add to same pool and not create a different pool
+	//5) add-disk should add drive successfully
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PXRestartAddDiskWhilePoolExpand", " restart PX and Initiate pool expansion using add-disk", nil, 0)
@@ -7579,11 +7579,8 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
 
 		var currentTotalPoolSize uint64
-		var specSize uint64
-		for _, pool := range pools {
-			currentTotalPoolSize += pool.GetTotalSize() / units.GiB
-		}
 
+		var specSize uint64
 		driveSpecs, err := GetCloudDriveDeviceSpecs()
 		log.FailOnError(err, "Error getting cloud drive specs")
 		deviceSpec := driveSpecs[0]
@@ -7612,14 +7609,11 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 
 		err = WaitForExpansionToStart(poolToBeResized.Uuid)
 		log.FailOnError(err, "error waiting for expansion to start on the pool [%s]", poolToBeResized.Uuid)
-
 		//px restart
 		err = Inst().V.RestartDriver(stNode, nil)
 		log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
 		err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
-		expectedTotalPoolSize := currentTotalPoolSize + specSize
-
 		stepLog := "Initiate add cloud drive and restart PX"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -7627,17 +7621,19 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
 			time.Sleep(5 * time.Second)
 			log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
-
+			for _, pool := range pools {
+				currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+			}
+			expectedTotalPoolSize := currentTotalPoolSize + specSize + specSize
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			log.InfoD("Validate pool rebalance after drive add and px restart")
 			err = ValidatePoolRebalance(stNode, -1)
-			//log.FailOnError(err, "Pool re-balance failed")
-			//dash.VerifyFatal(err == nil, true, "PX is up after add drive with vol driver restart")
-			re := regexp.MustCompile(".*Pool is failed state. Error: msg:Requires pool maintenance mode*")
-			if re.MatchString(fmt.Sprintf("%v", err)) == false {
-				log.Error("Failed to match the error while adding drive")
-			}
+			log.FailOnError(err, "Pool re-balance failed")
+			dash.VerifyFatal(err == nil, true, "PX is up after add drive with vol driver restart")
 
+			//since two drives are added so minus two times
+			expectedSizeWithJournal := expectedTotalPoolSize - 3
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
 			var newTotalPoolSize uint64
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			log.FailOnError(err, "error getting pools list")
@@ -7645,7 +7641,7 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 			for _, pool := range pools {
 				newTotalPoolSize += pool.GetTotalSize() / units.GiB
 			}
-			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+			dash.VerifyFatal(newTotalPoolSize, expectedSizeWithJournal, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
 		})
 
 	})
@@ -7659,20 +7655,23 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 var _ = Describe("{DriveAddAsJournal}", func() {
 	/*
 		Add drive when as journal
+		case1:if dmthin journal is not supported so it should fail with  error message
+		case2:if it is btrfs and journal drive exists so it should have failed with error message jounral drive exists
+		case3:if it is btrfs and journal drive does not exists so it add journal drive successfully
 
 	*/
 	var testrailID = 0
-	// Testrail Description : add drive when px is down
+	// Testrail Description : Add drive when as journal
 	var runID int
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DriveAddAsJournal",
-			"Add Drive when Px is down",
+			"Add drive when as journal",
 			nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
-	stepLog := "Add Drive when Px is down"
+	stepLog := "Add drive when as journal"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
@@ -7752,8 +7751,6 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 					log.InfoD("journal drive add successful")
 				}
 			}
-			//Inst().V.ExitPoolMaintenance(*nodeDetail)
-			//log.InfoD("Exit from pool Maintenance mode ")
 		}
 	})
 
