@@ -91,14 +91,13 @@ func GetStorageDriverNodes() []Node {
 
 // IsStorageNode returns true if the node is a storage node, false otherwise
 func IsStorageNode(n Node) bool {
-	return len(n.Pools) > 0
+	return len(n.StoragePools) > 0
 }
 
 // GetStorageNodes gets all the nodes with non-empty StoragePools
 func GetStorageNodes() []Node {
 	var nodeList []Node
-	storageDriverNodes := GetStorageDriverNodes()
-	for _, n := range storageDriverNodes {
+	for _, n := range nodeRegistry {
 		if IsStorageNode(n) {
 			nodeList = append(nodeList, n)
 		}
@@ -109,9 +108,11 @@ func GetStorageNodes() []Node {
 // GetStorageLessNodes gets all the nodes with empty StoragePools
 func GetStorageLessNodes() []Node {
 	var nodeList []Node
-	storageDriverNodes := GetStorageDriverNodes()
-	for _, n := range storageDriverNodes {
-		if !IsStorageNode(n) {
+	workerNodes := GetWorkerNodes()
+	storageNodes := GetStorageNodes()
+	for _, n := range workerNodes {
+		isExist := Contains(storageNodes, n)
+		if !isExist {
 			nodeList = append(nodeList, n)
 		}
 	}
@@ -216,4 +217,14 @@ func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
 		}
 	}
 	return Node{}, fmt.Errorf("failed to get Node Details by Node Name [%s] ", nodeName)
+}
+
+// GetNodeUuidByName get node uuid for a given node name
+func GetNodeUuidByName(nodeName string) (string, error) {
+	for _, n := range nodeRegistry {
+		if n.Name == nodeName {
+			return n.uuid, nil
+		}
+	}
+	return "", fmt.Errorf("failed: Node [%s] not found in node registry", nodeName)
 }
