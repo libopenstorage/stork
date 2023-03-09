@@ -1340,13 +1340,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
-				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
-				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
+			if requestedSpec.IoProfile != vol.DerivedIoProfile &&
+				vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE {
 				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
 				log.Infof("requested Spec: %+v", requestedSpec)
-				log.Infof("actual Spec: %+v", vol.Spec)
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
+				log.Infof("actual Spec: %+v", vol)
+				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 			}
 		case api.SpecSize:
 			if requestedSpec.Size != vol.Spec.Size {
@@ -1619,7 +1618,7 @@ func errIsNotFound(err error) bool {
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: vol.ID})
 		if err != nil && errIsNotFound(err) {
 			return nil, false, nil
 		} else if err != nil {
@@ -1627,7 +1626,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		}
 		// TODO remove shared validation when PWX-6894 and PWX-8790 are fixed
 		if volumeInspectResponse.Volume != nil && !vol.Shared {
-			return nil, true, fmt.Errorf("Volume [%s] is not yet removed from the system", volumeName)
+			return nil, true, fmt.Errorf("volume [%s] with ID [%s] in namespace [%s] is not yet removed from the system", volumeName, vol.ID, vol.Namespace)
 		}
 		return nil, false, nil
 	}
@@ -4853,12 +4852,16 @@ func init() {
 // UpdatePoolLabels updates the pool label for a particular pool id
 func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
 
-	labelsString := ""
+	labelStrings := make([]string, 0)
 	for k, v := range labels {
-		labelsString += fmt.Sprintf("%s=%s,", k, v)
+		labelString := fmt.Sprintf("%s=%s", k, v)
+		labelStrings = append(labelStrings, labelString)
 	}
-	labelsString = strings.Trim(labelsString, ",")
-	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsString)
+
+	labelsStr := strings.Join(labelStrings, ",")
+	fmt.Printf("label string is %s\n", labelsStr)
+	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsStr)
+	fmt.Printf("cmd: %s\n", cmd)
 	_, err := d.nodeDriver.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
 		Timeout:         2 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,

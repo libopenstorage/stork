@@ -3,6 +3,8 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/apps"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -22,8 +24,9 @@ import (
 )
 
 const (
+	cloudAccountDeleteTimeout                 = 10 * time.Minute
+	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
-	clusterName                               = "tp-cluster"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
@@ -286,14 +289,15 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 }
 
 // CreateScheduleBackup creates a scheduled backup
-func CreateScheduleBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
+func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) (string, error) {
-	var bkpUid string
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) error {
+	var firstScheduleBackupName string
+	var firstScheduleBackupUid string
 	backupDriver := Inst().Backup
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:  backupName,
+			Name:  scheduleName,
 			OrgId: orgID,
 		},
 		SchedulePolicyRef: &api.ObjectRef{
@@ -319,53 +323,40 @@ func CreateScheduleBackup(backupName string, clusterName string, bLocation strin
 	}
 	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
-		return "", err
+		return err
 	}
 	time.Sleep(1 * time.Minute)
 	backupSuccessCheck := func() (interface{}, bool, error) {
-		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+		firstScheduleBackupName, err = backupDriver.GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 		if err != nil {
 			return "", true, err
 		}
-		backupSchInspectRequest := &api.BackupScheduleInspectRequest{
-			Name:  backupName,
-			Uid:   bkpUid,
+		firstScheduleBackupUid, err = backupDriver.GetFirstScheduleBackupUID(ctx, scheduleName, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  firstScheduleBackupName,
+			Uid:   firstScheduleBackupUid,
 			OrgId: orgID,
 		}
-
-		resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 		if err != nil {
-			return "", true, fmt.Errorf("error in fetching inspect backup schedule response for %v", backupName)
+			return "", true, err
 		}
-		expected := api.BackupScheduleInfo_StatusInfo_Success
-		actual := resp.GetBackupSchedule().GetBackupStatus()["interval"].GetStatus()[0].GetStatus()
+		actual := resp.GetBackup().GetStatus().Status
+		expected := api.BackupInfo_StatusInfo_Success
 		if actual != expected {
-			return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", backupName, expected, actual)
+			return "", true, fmt.Errorf("status for first schedule backup [%s] expected was [%s] but got [%s]", firstScheduleBackupName, expected, actual)
 		}
-		return fmt.Sprintf("actual [%v] is equal to expected [%v] string", actual, expected), false, nil
+		return "", false, nil
 	}
 
 	_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
 	if err != nil {
-		return "", err
+		return err
 	}
-	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return "", err
-	}
-	backupSchInspectRequest := &api.BackupScheduleInspectRequest{
-		Name:  backupName,
-		Uid:   bkpUid,
-		OrgId: orgID,
-	}
-	resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
-	log.InfoD("InspectBackupSchedule response - [%v]", resp)
-	if err != nil {
-		return "", err
-	}
-	schBackupName := resp.GetBackupSchedule().GetBackupStatus()["interval"].GetStatus()[0].GetBackupName()
-	log.InfoD("InspectBackupSchedule response - [%v]", schBackupName)
-	return schBackupName, nil
+	return nil
 }
 
 // CreateBackupWithoutCheck creates backup without waiting for success
@@ -784,14 +775,33 @@ func createUsers(numberOfUsers int) []string {
 	return users
 }
 
-func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
+// CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
+func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
+	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
+			_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+				}
+				if status == true {
+					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+				}
+				return "", false, nil
+			}
+			_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
-		time.Sleep(time.Minute * 3)
-		err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+		cloudCredDeleteStatus := func() (interface{}, bool, error) {
+			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+			if err != nil {
+				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+			}
+			return "", false, nil
+		}
+		_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
 	err := DeleteCluster(SourceClusterName, orgID, ctx)
@@ -877,12 +887,14 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	case ViewOnlyAccess:
 		// Try restore with user having ViewOnlyAccess and it should fail
 		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 		// Try to delete the backup with user having ViewOnlyAccess, and it should not pass
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has ViewOnlyAccess and cannot delete backup
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case RestoreAccess:
@@ -894,6 +906,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has Restore Access and delete backup should fail
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case FullAccess:
@@ -1027,22 +1040,16 @@ func generateEncryptionKey() string {
 
 func GetScheduleUID(scheduleName string, orgID string, ctx context.Context) (string, error) {
 	backupDriver := Inst().Backup
-	bkpUid, err := backupDriver.GetBackupUID(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get backup UID for %s, Err: %v", scheduleName, err)
-	}
-	backupSchInspectRequest := &api.BackupScheduleInspectRequest{
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
 		Name:  scheduleName,
-		Uid:   bkpUid,
+		Uid:   "",
 		OrgId: orgID,
 	}
-	resp, err := backupDriver.InspectBackupSchedule(ctx, backupSchInspectRequest)
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to inspect backup [%s] with UID [%s], Err: %v", scheduleName, bkpUid, err)
+		return "", err
 	}
 	scheduleUid := resp.GetBackupSchedule().GetUid()
-	log.InfoD("Schedule Name - %s Schedule UID - %s", scheduleName, scheduleUid)
-
 	return scheduleUid, err
 }
 
@@ -1143,7 +1150,6 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 
 // backupSuccessCheck inspects backup task
 func backupSuccessCheck(backupName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, error) {
-	var bkpUid string
 	backupDriver := Inst().Backup
 	if retryDuration == 0 {
 		retryDuration = maxWaitPeriodForBackupCompletionInMinutes
@@ -1173,23 +1179,11 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 		return "", false, nil
 	}
 
-	task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
-	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	_, err := task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
 	if err != nil {
 		return false, err
 	}
-	backupInspectRequest := &api.BackupInspectRequest{
-		Name:  backupName,
-		Uid:   bkpUid,
-		OrgId: orgID,
-	}
-	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-	if err != nil {
-		return false, err
-	}
-	backupStatus := (resp.GetBackup().GetStatus().Status == api.BackupInfo_StatusInfo_Success)
-	log.Infof("Backup [%s] created successfully", backupName)
-	return backupStatus, nil
+	return true, nil
 }
 
 // restoreSuccessCheck inspects restore task
@@ -1218,8 +1212,10 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
 			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
 	}
-	task.DoRetryWithTimeout(restoreSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
-
+	_, err := task.DoRetryWithTimeout(restoreSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
+	if err != nil {
+		return false, err
+	}
 	restoreInspectRequest = &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
@@ -1232,4 +1228,112 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 	restoreStatus := (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_PartialSuccess) || (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_Success)
 	log.Infof("[%s] restored successfully", restoreName)
 	return restoreStatus, nil
+}
+
+// IsBackupLocationPresent checks whether the backup location is present or not
+func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID string) (bool, error) {
+	backupLocationNames := make([]string, 0)
+	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
+		OrgId: orgID,
+	}
+	response, err := Inst().Backup.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+
+	for _, backupLocationObj := range response.GetBackupLocations() {
+		backupLocationNames = append(backupLocationNames, backupLocationObj.GetName())
+		if backupLocationObj.GetName() == bkpLocation {
+			log.Infof("Backup location [%s] is present", bkpLocation)
+			return true, nil
+		}
+	}
+	log.Infof("Backup locations fetched - %s", backupLocationNames)
+	return false, nil
+}
+
+// CreateCustomRestoreWithPVCs function can be used to deploy custom deployment with it's PVCs. It cannot be used for any other resource type.
+func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, namespace string) (deploymentName string, err error) {
+
+	var bkpUid string
+	var newResources []*api.ResourceInfo
+	var options metav1.ListOptions
+	var deploymentPvcMap = make(map[string][]string)
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup needed to be restored")
+	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return "", fmt.Errorf("unable to get backup UID for %v with error %v", backupName, err)
+	}
+	deploymentList, err := apps.Instance().ListDeployments(namespace, options)
+	if err != nil {
+		return "", fmt.Errorf("unable to list the deployments in namespace %v with error %v", namespace, err)
+	}
+	if len(deploymentList.Items) == 0 {
+		return "", fmt.Errorf("deployment list is null")
+	}
+	deployments := deploymentList.Items
+	for _, deployment := range deployments {
+		var pvcs []string
+		for _, vol := range deployment.Spec.Template.Spec.Volumes {
+			pvcName := vol.PersistentVolumeClaim.ClaimName
+			pvcs = append(pvcs, pvcName)
+		}
+		deploymentPvcMap[deployment.Name] = pvcs
+	}
+	// select a random index from the slice of deployment names to be restored
+	randomIndex := rand.Intn(len(deployments))
+	deployment := deployments[randomIndex]
+	log.Infof("selected deployment %v", deployment.Name)
+	pvcs, exists := deploymentPvcMap[deployment.Name]
+	if !exists {
+		return "", fmt.Errorf("deploymentName %v not found in the deploymentPvcMap", deployment.Name)
+	}
+	deploymentStruct := &api.ResourceInfo{
+		Version:   "v1",
+		Group:     "apps",
+		Kind:      "Deployment",
+		Name:      deployment.Name,
+		Namespace: namespace,
+	}
+	pvcsStructs := make([]*api.ResourceInfo, len(pvcs))
+	for i, pvcName := range pvcs {
+		pvcStruct := &api.ResourceInfo{
+			Version:   "v1",
+			Group:     "core",
+			Kind:      "PersistentVolumeClaim",
+			Name:      pvcName,
+			Namespace: namespace,
+		}
+		pvcsStructs[i] = pvcStruct
+	}
+	newResources = append([]*api.ResourceInfo{deploymentStruct}, pvcsStructs...)
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		IncludeResources: newResources,
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return "", fmt.Errorf("fail to create restore with createrestore req %v and error %v", createRestoreReq, err)
+	}
+	status, err := restoreSuccessCheck(restoreName, orgID, 10, 30, ctx)
+	if err != nil {
+		return "", fmt.Errorf("fail to create restore %v with error %v", restoreName, err)
+	}
+	if status == false {
+		return "", fmt.Errorf("restore status is false with error %v", err)
+	}
+	return deployment.Name, nil
 }

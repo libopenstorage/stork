@@ -31,6 +31,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+type PDS_Health_Status string
+
+const (
+	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
+	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
+	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
+)
+
 type Parameter struct {
 	DataServiceToTest []struct {
 		Name          string `json:"Name"`
@@ -671,8 +679,9 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
 
-func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus string, maxtimeInterval time.Duration, timeout time.Duration) error {
-	//validate the deployments in pds
+// WaitForPDSDeploymentToBeDown Checks for the deployment health status(Down/Degraded)
+func WaitForPDSDeploymentToBeDown(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
+	// validate the deployments in pds
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
@@ -685,12 +694,38 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 			err = fmt.Errorf("unexpected status code")
 			return false, err
 		}
-		if !strings.Contains(status.GetHealth(), healthStatus) {
+		if strings.Contains(status.GetHealth(), string(PDS_Health_Status_DEGRADED)) || strings.Contains(status.GetHealth(), string(PDS_Health_Status_DOWN)) {
+			log.InfoD("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+			return true, nil
+		} else {
 			log.Infof("status: %v", status.GetHealth())
 			return false, nil
 		}
-		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
-		return true, nil
+	})
+	return err
+}
+
+// WaitForPDSDeploymentToBeUp Checks for the any given deployment health status
+func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
+	// validate the deployments in pds
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
+		if err != nil {
+			return false, fmt.Errorf("get deployment status is failing with error: %v", err)
+		}
+		log.Infof("Health status -  %v", status.GetHealth())
+		if res.StatusCode != state.StatusOK {
+			log.Infof("Full HTTP response: %v\n", res)
+			return false, fmt.Errorf("unexpected status code: %v", err)
+		}
+		if strings.Contains(status.GetHealth(), string(PDS_Health_Status_HEALTHY)) {
+			log.InfoD("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+			return true, nil
+		} else {
+			log.Infof("status: %v", status.GetHealth())
+			return false, nil
+		}
+
 	})
 	return err
 }
@@ -1135,12 +1170,18 @@ func RunConsulBenchWorkload(deploymentName string, namespace string) (*v1.Deploy
 	return deployment, nil
 }
 
-// Creates a temporary non PDS namespace of 6 letters length randomly chosen
-func CreateTempNS(length int32) (string, error) {
+// Returns a randomly generated string of given length
+func GetRandomString(length int32) string {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, length)
 	rand.Read(b)
-	namespace := fmt.Sprintf("%x", b)[:length]
+	random_string := fmt.Sprintf("%x", b)[:length]
+	return random_string
+}
+
+// Creates a temporary non PDS namespace of 6 letters length randomly chosen
+func CreateTempNS(length int32) (string, error) {
+	namespace := GetRandomString(length)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
@@ -1244,7 +1285,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	return tenantID, dnsZone, projectID, serviceType, clusterID, err
 }
 
-//RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
+// RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
 func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error {
 	log.InfoD("Test control plane url connectivity.")
 	_, err := IsReachable(controlPlaneUrl)
@@ -1286,8 +1327,54 @@ func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string
 	return nil
 }
 
+// Check if PV and associated PVC is still present. If yes then delete both of them
+func CheckAndDeleteIndependentPV(name string) error {
+	pv_check, err := k8sCore.GetPersistentVolume(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		return err
+	}
+	log.InfoD("Stranded PV Found by the name - %s. Going ahead to delete this PV and associated entities", name)
+	if pv_check.Status.Phase == corev1.VolumeBound {
+		if pv_check.Spec.ClaimRef != nil && pv_check.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
+			namespace := pv_check.Spec.ClaimRef.Namespace
+			pvc_name := pv_check.Spec.ClaimRef.Name
+			// Delete all Pods in this namespace
+			var newPods []corev1.Pod
+			podList, err := GetPods(namespace)
+			if err != nil {
+				return err
+			}
+			for _, pod := range podList.Items {
+				newPods = append(newPods, pod)
+			}
+			err = DeletePods(newPods)
+			if err != nil {
+				return err
+			}
+			// Delete PVC from figured out namespace
+			err = k8sCore.DeletePersistentVolumeClaim(pvc_name, namespace)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// Delete PV as it is still available from previous run
+	err = k8sCore.DeletePersistentVolume(name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Create a Persistent Vol of 5G manual Storage Class
 func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
+	err := CheckAndDeleteIndependentPV(name)
+	if err != nil {
+		return nil, err
+	}
 	pv := &corev1.PersistentVolume{
 
 		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
@@ -1310,9 +1397,8 @@ func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
 			},
 		},
 	}
-	pv, err := k8sCore.CreatePersistentVolume(pv)
+	pv, err = k8sCore.CreatePersistentVolume(pv)
 	if err != nil {
-		log.Errorf("PV Could not be created. Exiting")
 		return pv, err
 	}
 	return pv, nil
@@ -1388,7 +1474,7 @@ func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcNa
 	return pod, podName, nil
 }
 
-//CreatePodWorkloads generate workloads as standalone pods
+// CreatePodWorkloads generate workloads as standalone pods
 func CreatePodWorkloads(name string, image string, creds WorkloadGenerationParams, namespace string, count string, env []string) (*corev1.Pod, error) {
 	var value []string
 	podSpec := &corev1.Pod{
@@ -1700,7 +1786,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	return false, errors.New("TPCC run failed.")
 }
 
-//CreateDataServiceWorkloads generates workloads for the given dataservices
+// CreateDataServiceWorkloads generates workloads for the given dataservices
 func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
@@ -2299,4 +2385,60 @@ func VerifyPxPodOnNode(nodeName string, namespace string) (bool, error) {
 	pxPodName := pods.Items[0].Name
 	log.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
 	return true, nil
+}
+
+// Returns nodes on which pods of a given statefulset are running
+func GetNodesOfSS(SSName string, namespace string) ([]*corev1.Node, error) {
+	var nodes []*corev1.Node
+	// Get StatefulSet Object of the given Statefulset
+	ss, err := k8sApps.GetStatefulSet(SSName, namespace)
+	if err != nil {
+		return nil, err
+	}
+	// Get The pods associated to this statefulset
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		return nil, err
+	}
+	// Create Node objects and append them to a list
+	if pods != nil && len(pods) > 0 {
+		for _, pod := range pods {
+			if len(pod.Spec.NodeName) > 0 {
+				node, err := k8sCore.GetNodeByName(pod.Spec.NodeName)
+				if err != nil {
+					return nil, err
+				}
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	return nodes, nil
+}
+
+// Returns list of Pods from a given Statefulset running on a given Node
+func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]corev1.Pod, error) {
+	// Get StatefulSet Object of the given Statefulset
+	ss, err := k8sApps.GetStatefulSet(SSName, namespace)
+	if err != nil {
+		return nil, err
+	}
+	// Get The pods associated to this statefulset
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		return nil, err
+	}
+	var podsList []corev1.Pod
+
+	// Create Node objects and append them to a list
+	if pods != nil && len(pods) > 0 {
+		for _, pod := range pods {
+			if pod.Spec.NodeName == nodeName {
+				podsList = append(podsList, pod)
+			}
+		}
+	}
+	if podsList != nil && len(podsList) > 0 {
+		return podsList, nil
+	}
+	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
 }

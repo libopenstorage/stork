@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -37,7 +38,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -72,12 +73,12 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("Delete Deployments", func() {
-					log.InfoD("Deleting Deployment %v ", *deployment.Name)
+					log.InfoD("Deleting Deployment %v ", *deployment.ClusterResourceName)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
+					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 			}
 
@@ -92,6 +93,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				log.FailOnError(err, "Error while deleting data services")
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 			}
 		}()
 	})
@@ -108,22 +110,19 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 		for _, ds := range params.DataServiceToTest {
 			Step("Deploy and validate data service", func() {
 				isDeploymentsDeleted = false
-				deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+				deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 				log.FailOnError(err, "Error while deploying data services")
 			})
 
 			pdsPods := make([]corev1.Pod, 0)
 
 			Step("Delete dataservice pods and Check health of data service in PDS Controlplane", func() {
-				podList, err := pdslib.GetPods(namespace)
+				podList, err := pdslib.GetPods(params.InfraToTest.Namespace)
 				log.FailOnError(err, "Error while getting pods")
 
-				log.Infof("PDS DataService Pods")
-				log.Infof("deployment name %v", *deployment.ClusterResourceName)
-
 				for _, pod := range podList.Items {
-					if strings.Contains(pod.Name, *deployment.ClusterResourceName) {
-						log.Infof("%v", pod.Name)
+					if strings.Contains(pod.Name, *deployment.ClusterResourceName) && !strings.Contains(pod.Name, "init") {
+						log.Infof("Deployment pod: %v", pod.Name)
 						pdsPods = append(pdsPods, pod)
 					}
 				}
@@ -132,25 +131,35 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				wg.Add(2)
 				go func() {
 					defer wg.Done()
-					log.InfoD("Deleting the data service pods")
-					err = pdslib.DeletePods(pdsPods)
-					log.FailOnError(err, "Error while deleting pods")
+					defer GinkgoRecover()
+					log.InfoD("Deleting the first data service pod %s", pdsPods[0].GetName())
+					err = k8sCore.DeletePod(pdsPods[0].GetName(), params.InfraToTest.Namespace, true)
+					log.FailOnError(err, "Error while deleting pod %s", pdsPods[0].GetName())
+
 				}()
 
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					log.InfoD("Validating the data service pod status in PDS Control Plane")
-					err = pdslib.ValidatePDSDeploymentStatus(deployment, "Down", 5*time.Second, 30*time.Minute)
+					err = pdslib.WaitForPDSDeploymentToBeDown(deployment, timeInterval, timeOut)
 					log.FailOnError(err, "Error while validating the pds pods")
+
 				}()
 				wg.Wait()
 
-				log.InfoD("Validating the data service pods are back to healthy state")
-				err = pdslib.ValidatePods(namespace, *deployment.ClusterResourceName)
-				log.FailOnError(err, "Error while validating the pods")
-
-				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 30*time.Minute)
+				log.InfoD("Validating if the data service pods are back to healthy state")
+				err = pdslib.WaitForPDSDeploymentToBeUp(deployment, timeInterval, timeOut)
 				log.FailOnError(err, "Error while validating the pds deployment pods")
+
+				Step("Delete Deployments", func() {
+					log.InfoD("Deleting Deployment %v ", *deployment.Name)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					isDeploymentsDeleted = true
+					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
+				})
 
 			})
 		}
@@ -180,7 +189,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -311,7 +320,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -394,11 +403,11 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 			log.InfoD("Namespace %s created for creating a Non-PDS App", ns)
 		})
 		Step("Create an Independent app in a non-PDS namespace", func() {
-			_, pv_creation_err := pdslib.CreateIndependentPV("mysql-pv")
+			_, pv_creation_err := pdslib.CreateIndependentPV("mysql-pv-" + ns)
 			if pv_creation_err == nil {
-				_, pvc_creation_err := pdslib.CreateIndependentPVC(ns, "mysql-pvc")
+				_, pvc_creation_err := pdslib.CreateIndependentPVC(ns, "mysql-pvc-"+ns)
 				if pvc_creation_err == nil {
-					_, podName, err = pdslib.CreateIndependentMySqlApp(ns, "mysql-app", "mysql:8.0", "mysql-pvc")
+					_, podName, err = pdslib.CreateIndependentMySqlApp(ns, "mysql-app-"+ns, "mysql:8.0", "mysql-pvc-"+ns)
 					log.FailOnError(err, "Failure in creating the application in non-pds namespace")
 					log.InfoD("Non PDS MySQL App with name : %s is created", podName)
 				} else {
@@ -470,10 +479,10 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 		err = pdslib.DeleteK8sPods(podName, ns)
 		log.FailOnError(err, "Error while deleting K8s pods")
 		log.InfoD("Trying to Delete Independent PVC now from ns : %s", ns)
-		err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
+		err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc-"+ns, ns)
 		log.FailOnError(err, "Error while deleting Independent PVC")
 		log.InfoD("Trying to delete Independent PV now")
-		err = k8sCore.DeletePersistentVolume("mysql-pv")
+		err = k8sCore.DeletePersistentVolume("mysql-pv-" + ns)
 		log.FailOnError(err, "Error while deleting Independent PV")
 		log.InfoD("Trying to delete NS now: %s", ns)
 		err = pdslib.DeletePDSNamespace(ns)
@@ -627,6 +636,77 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 	})
 })
 
+var _ = Describe("{CordonNodeAndDeletePod}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CordonNodeAndDeletePod", "Deploys a data service, cordons one selected node, deletes the pod from that node", pdsLabels, 0)
+	})
+
+	It("Cordon a Node and Delete Pods from that node", func() {
+		Step("Deploy, Validate, Cordon Node and Delete Pods, Validate new Pod, Validate Storage, Run Workload on Data Service", func() {
+			for _, ds := range params.DataServiceToTest {
+				isDeploymentsDeleted = false
+				deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+				log.FailOnError(err, fmt.Sprintf("Error while deploying data services %s", ds.Name))
+				log.InfoD("Running Check Node DataService Func %v ", ds.Name)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
+				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
+				var nodeName string
+				Step("Delete Pods and Cordon a node", func() {
+					nodeName = nodes[0].Name // Selecting the 1st node in the list to cordon
+					podsList, err := pdslib.GetPodsOfSsByNode(*deployment.ClusterResourceName, nodeName, namespace)
+					log.FailOnError(err, fmt.Sprintf("Pod not found on this Node : %s", nodeName))
+					log.InfoD("Pods found on %v node. Trying to Cordon and Drain pods from this node now.", nodeName)
+					err = k8sCore.DrainPodsFromNode(nodeName, podsList, timeOut, maxtimeInterval)
+					log.FailOnError(err, fmt.Sprintf("Draining pod from the node %s failed", nodeName))
+				})
+				Step("Validate Data Service Again", func() {
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, fmt.Sprintf("error on ValidateDataServiceVolumes method for %v", *deployment.ClusterResourceName))
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+				})
+				Step("Validate no pods are on the cordoned node anymore", func() {
+					nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
+					log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *deployment.ClusterResourceName))
+					for _, nodeObj := range nodes {
+						if nodeObj.Name == nodeName {
+							log.FailOnError(errors.New("New Pod came up on the node that was cordoned."), "Unexpected error")
+						}
+					}
+					log.InfoD("The pods of the Stateful Set %v are not on the cordoned node. Moving ahead now.", *deployment.ClusterResourceName)
+				})
+				Step("Running Workloads before scaling up of dataservices ", func() {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while generating workloads for dataservice [%s]", ds.Name))
+				})
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else if Contains(dataServicePodWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}()
+	})
+})
+
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	JustBeforeEach(func() {
@@ -639,7 +719,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -748,7 +828,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func DeployandValidateDataServices(ds PDSDataService, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	Step("Deploy Data Services", func() {
 		log.InfoD("Deploying DataService %v ", ds.Name)
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
@@ -759,6 +839,11 @@ func DeployandValidateDataServices(ds PDSDataService, tenantID, projectID string
 		log.FailOnError(err, "Error while getting app configuration template")
 		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+
+		log.InfoD("Getting the namespaceID to deploy dataservice")
+		namespaceID, err := pdslib.GetnameSpaceID(namespace, deploymentTargetID)
+		log.FailOnError(err, "Error while getting namespaceID")
+		dash.VerifyFatal(namespaceID != "", true, "Validating namespaceID")
 
 		deployment, dataServiceImageMap, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
 			deploymentTargetID,
@@ -897,12 +982,8 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 		Step("Deploy All Supported Data Services", func() {
 			var cleanupall []string
 			for _, namespace := range namespaces {
-				log.InfoD("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
-				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
-				log.FailOnError(err, "error while getting namespaceid")
-				Expect(newNamespaceID).NotTo(BeEmpty())
-
-				deps := DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
+				log.InfoD("Deploying dataservices in namespace: %v", namespace.Name)
+				deps := DeployInANamespaceAndVerify(namespace.Name)
 				cleanupall = append(cleanupall, deps...)
 			}
 
@@ -958,7 +1039,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					cleanup = append(cleanup, deployment)
 				})
@@ -1021,7 +1102,7 @@ var _ = Describe("{RestartPXPods}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
@@ -1160,13 +1241,12 @@ func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp 
 	}
 }
 
-func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
-
+func DeployInANamespaceAndVerify(nname string) []string {
 	var cleanup []string
 	for _, ds := range params.DataServiceToTest {
 		Step("Deploy and validate data service", func() {
 			isDeploymentsDeleted = false
-			deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+			deployment, _, _, err = DeployandValidateDataServices(ds, nname, tenantID, projectID)
 			log.FailOnError(err, "Error while deploying data services")
 		})
 	}
@@ -1183,7 +1263,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 

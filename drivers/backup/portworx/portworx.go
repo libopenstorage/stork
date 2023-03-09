@@ -135,7 +135,11 @@ func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volum
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
-	if err = p.setDriver(pxbServiceName, backup.GetPxBackupNamespace()); err != nil {
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	if err = p.setDriver(pxbServiceName, pxbNamespace); err != nil {
 		return fmt.Errorf("Error setting px-backup endpoint: %v", err)
 	}
 
@@ -1109,6 +1113,118 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 	return "", fmt.Errorf("backup with name '%s' not found for org '%s'", backupName, orgID)
 }
 
+func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
+	var scheduleBackupNames []string
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  scheduleName,
+		Uid:   "",
+	}
+	resp, err := p.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return scheduleBackupNames, err
+	}
+	scheduleBackups := resp.GetBackupSchedule().GetBackupStatus()["interval"].GetStatus()
+	for _, scheduleBackup := range scheduleBackups {
+		scheduleBackupNames = append(scheduleBackupNames, scheduleBackup.GetBackupName())
+	}
+	return scheduleBackupNames, nil
+}
+
+func (p *portworx) GetOrdinalScheduleBackupName(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error) {
+	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(scheduleBackupNames) == 0 {
+		return "", fmt.Errorf("no backups were found for the schedule [%s]", scheduleName)
+	}
+	if ordinal < 1 {
+		return "", fmt.Errorf("the ordinal value [%d] for schedule backups with schedule name [%s] is invalid. valid values range from 1 to [%d]", ordinal, scheduleName, len(scheduleBackupNames))
+	}
+	if ordinal > len(scheduleBackupNames) {
+		return "", fmt.Errorf("schedule backups with schedule name [%s] have not been created up to the provided ordinal value [%d]", scheduleName, ordinal)
+	}
+	return scheduleBackupNames[len(scheduleBackupNames)-ordinal], nil
+}
+
+func (p *portworx) GetFirstScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(scheduleBackupNames) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return scheduleBackupNames[len(scheduleBackupNames)-1], nil
+}
+
+func (p *portworx) GetLatestScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(scheduleBackupNames) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return scheduleBackupNames[0], nil
+}
+
+func (p *portworx) GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
+	var scheduleBackupUIDs []string
+	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return scheduleBackupUIDs, err
+	}
+	for _, scheduleBackupName := range scheduleBackupNames {
+		scheduleBackupUID, err := p.GetBackupUID(ctx, scheduleBackupName, orgID)
+		if err != nil {
+			return scheduleBackupUIDs, err
+		}
+		scheduleBackupUIDs = append(scheduleBackupUIDs, scheduleBackupUID)
+	}
+	return scheduleBackupUIDs, nil
+}
+
+func (p *portworx) GetOrdinalScheduleBackupUID(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error) {
+	scheduleBackupUIDs, err := p.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(scheduleBackupUIDs) == 0 {
+		return "", fmt.Errorf("no backups were found for the schedule [%s]", scheduleName)
+	}
+	if ordinal < 1 {
+		return "", fmt.Errorf("the provided ordinal value [%d] for schedule backups with schedule name [%s] is invalid. valid values range from 1 to [%d]", ordinal, scheduleName, len(scheduleBackupUIDs))
+	}
+	if ordinal > len(scheduleBackupUIDs) {
+		return "", fmt.Errorf("schedule backups with schedule name [%s] have not been created up to the provided ordinal value [%d]", scheduleName, ordinal)
+	}
+	return scheduleBackupUIDs[len(scheduleBackupUIDs)-ordinal], nil
+}
+
+func (p *portworx) GetFirstScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	scheduleBackupUIDs, err := p.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(scheduleBackupUIDs) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return scheduleBackupUIDs[len(scheduleBackupUIDs)-1], nil
+}
+
+func (p *portworx) GetLatestScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	scheduleBackupUIDs, err := p.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(scheduleBackupUIDs) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return scheduleBackupUIDs[0], nil
+}
+
 var (
 	// AppParameters Here the len of "pre_action_list","pod_selector_list","background", "runInSinglePod", "container"
 	//should be same for any given app for a pre,post rule
@@ -1442,7 +1558,10 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 func (p *portworx) ValidateBackupCluster() error {
 	flag := false
 	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
-	ns := backup.GetPxBackupNamespace()
+	ns, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
 	pods, err := core.Instance().GetPods(ns, labelSelectors)
 	if err != nil {
 		err = fmt.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
