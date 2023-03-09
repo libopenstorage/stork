@@ -1,7 +1,0 @@
-apiVersion: stork.libopenstorage.org/v1alpha1
-kind: Action
-metadata:
-  name: mysql-action
-  namespace: mysql-enc-pvc-mysql-action
-spec:
-  actiontype: failover

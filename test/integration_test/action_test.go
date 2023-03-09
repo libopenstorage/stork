@@ -11,6 +11,7 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
@@ -88,7 +89,7 @@ func actionFailoverTest(t *testing.T) {
 	appKey := "mysql-enc-pvc"
 	instanceID := "mysql-action"
 	migrationAppId := "mysql-action-migration"
-	failoverAppId := "mysql-action-failover"
+	actionName := "mysql-action-failover"
 
 	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
 	deleteNamespace(t, namespace, "src")
@@ -150,21 +151,39 @@ func actionFailoverTest(t *testing.T) {
 	err = setDestinationKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
-	createActionCR(t, failoverAppId, ctxs)
+	createActionCR(t, actionName, namespace, ctxs[0])
+
+	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "error waiting for app to get to running state")
+
+	// if above call to WaitForRunning is successful,
+	// then Action validateActionCR should be successful too
+	validateActionCR(t, actionName, namespace)
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 }
 
-func createActionCR(t *testing.T, actionAppKey string, ctxs []*scheduler.Context) {
-	err := schedulerDriver.AddTasks(
-		ctxs[0],
-		scheduler.ScheduleOptions{AppKeys: []string{actionAppKey}},
-	)
-	require.NoError(t, err, "error creating Action CR")
+func createActionCR(t *testing.T, actionAppKey, namespace string, ctx *scheduler.Context) {
+	actionSpec := v1alpha1.Action{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      actionAppKey,
+			Namespace: namespace,
+		},
+		Spec: v1alpha1.ActionSpec{
+			ActionType: v1alpha1.ActionTypeFailover,
+		},
+		Status: v1alpha1.ActionStatusScheduled,
+	}
+	_, err := storkops.Instance().CreateAction(&actionSpec)
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "error waiting for app to get to running state")
+	require.NoError(t, err, "error creating Action CR")
+}
+
+func validateActionCR(t *testing.T, actionName, namespace string) {
+	action, err := storkops.Instance().GetAction(actionName, namespace)
+	require.NoError(t, err, "error fetching Action CR")
+	require.Equal(t, v1alpha1.ActionStatusSuccessful, action.Status)
 }
 
 func scaleDownApps(
