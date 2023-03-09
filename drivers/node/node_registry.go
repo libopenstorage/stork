@@ -217,13 +217,3 @@ func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
 	}
 	return Node{}, fmt.Errorf("failed to get Node Details by Node Name [%s] ", nodeName)
 }
-
-// GetNodeUuidByName get node uuid for a given node name
-func GetNodeUuidByName(nodeName string) (string, error) {
-	for _, n := range nodeRegistry {
-		if n.Name == nodeName {
-			return n.uuid, nil
-		}
-	}
-	return "", fmt.Errorf("failed: Node [%s] not found in node registry", nodeName)
-}
