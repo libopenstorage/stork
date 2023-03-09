@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-openapi/inflect"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -372,16 +372,8 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 		util.CheckErr(err)
 		return
 	}
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
-	ruleset.AddPlural("wkc", "wkc")
-	ruleset.AddPlural("factsheet", "factsheet")
-	ruleset.AddPlural("datarefinery", "datarefinery")
-	
+	ruleset := resourcecollector.GetDefaultRuleSet()
+
 	for _, res := range crdList.Items {
 		for _, crd := range res.Resources {
 			var client k8sdynamic.ResourceInterface

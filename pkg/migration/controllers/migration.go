@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
@@ -1664,7 +1663,7 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 		return err
 	}
 
-	ruleset := m.getDefaultRuleSet()
+	ruleset := resourcecollector.GetDefaultRuleSet()
 	for _, srcPvc := range pvcsWithOwnerRef {
 		destPvc, err := remoteClient.adminClient.CoreV1().PersistentVolumeClaims(srcPvc.GetNamespace()).Get(context.TODO(), srcPvc.Name, metav1.GetOptions{})
 		if err != nil {
@@ -1746,7 +1745,7 @@ func (m *MigrationController) applyResources(
 		return err
 	}
 
-	ruleset := m.getDefaultRuleSet()
+	ruleset := resourcecollector.GetDefaultRuleSet()
 
 	// create CRD on destination cluster
 	for _, crd := range crdList.Items {
@@ -2478,20 +2477,4 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	}
 	resources = append(resources, objects.Items...)
 	return resources, pvcWithOwnerRef, nil
-}
-
-func (m *MigrationController) getDefaultRuleSet() *inflect.Ruleset {
-	// TODO: we should use k8s code generator logic to pluralize
-	// crd resources instead of depending on inflect lib
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
-	ruleset.AddPlural("wkc", "wkc")
-	ruleset.AddPlural("factsheet", "factsheet")
-	ruleset.AddPlural("datarefinery", "datarefinery")
-
-	return ruleset
 }

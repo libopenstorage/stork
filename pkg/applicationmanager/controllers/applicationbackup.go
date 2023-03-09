@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
@@ -1335,16 +1334,8 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	if err != nil {
 		return err
 	}
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
-	ruleset.AddPlural("wkc", "wkc")
-	ruleset.AddPlural("factsheet", "factsheet")
-	ruleset.AddPlural("datarefinery", "datarefinery")
-	
+	ruleset := resourcecollector.GetDefaultRuleSet()
+
 	v1CrdApiReqrd, err := version.RequiresV1Registration()
 	if err != nil {
 		return err
