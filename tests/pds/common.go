@@ -5,7 +5,6 @@ import (
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
-	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -41,6 +40,7 @@ const (
 	pdsNamespaceLabel       = "pds.portworx.com/available"
 	timeOut                 = 30 * time.Minute
 	maxtimeInterval         = 30 * time.Second
+	timeInterval            = 1 * time.Second
 )
 
 var (
@@ -66,23 +66,18 @@ var (
 	DeployAllImages                         bool
 	dataServiceDefaultResourceTemplateID    string
 	dataServiceDefaultAppConfigID           string
-	accountID                               string
 	dataServiceVersionBuildMap              map[string][]string
 	dataServiceImageMap                     map[string][]string
 	dep                                     *v1.Deployment
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter
 	podList                                 *corev1.PodList
-	ns                                      *corev1.Namespace
 	isDeploymentsDeleted                    bool
 	isNamespacesDeleted                     bool
-	isAccountAvailable                      bool
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
 	pdsLabels                               = make(map[string]string)
-	apiClient                               *pds.APIClient
-	components                              *pdsapi.Components
 )
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul}

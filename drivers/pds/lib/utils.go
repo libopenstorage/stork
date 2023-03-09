@@ -31,6 +31,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+type PDS_Health_Status string
+
+const (
+	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
+	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
+	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
+)
+
 type Parameter struct {
 	DataServiceToTest []struct {
 		Name          string `json:"Name"`
@@ -671,8 +679,9 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
 
-func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus string, maxtimeInterval time.Duration, timeout time.Duration) error {
-	//validate the deployments in pds
+// WaitForPDSDeploymentToBeDown Checks for the deployment health status(Down/Degraded)
+func WaitForPDSDeploymentToBeDown(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
+	// validate the deployments in pds
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
@@ -685,12 +694,38 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 			err = fmt.Errorf("unexpected status code")
 			return false, err
 		}
-		if !strings.Contains(status.GetHealth(), healthStatus) {
+		if strings.Contains(status.GetHealth(), string(PDS_Health_Status_DEGRADED)) || strings.Contains(status.GetHealth(), string(PDS_Health_Status_DOWN)) {
+			log.InfoD("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+			return true, nil
+		} else {
 			log.Infof("status: %v", status.GetHealth())
 			return false, nil
 		}
-		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
-		return true, nil
+	})
+	return err
+}
+
+// WaitForPDSDeploymentToBeUp Checks for the any given deployment health status
+func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
+	// validate the deployments in pds
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
+		if err != nil {
+			return false, fmt.Errorf("get deployment status is failing with error: %v", err)
+		}
+		log.Infof("Health status -  %v", status.GetHealth())
+		if res.StatusCode != state.StatusOK {
+			log.Infof("Full HTTP response: %v\n", res)
+			return false, fmt.Errorf("unexpected status code: %v", err)
+		}
+		if strings.Contains(status.GetHealth(), string(PDS_Health_Status_HEALTHY)) {
+			log.InfoD("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+			return true, nil
+		} else {
+			log.Infof("status: %v", status.GetHealth())
+			return false, nil
+		}
+
 	})
 	return err
 }

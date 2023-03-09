@@ -73,12 +73,12 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("Delete Deployments", func() {
-					log.InfoD("Deleting Deployment %v ", *deployment.Name)
+					log.InfoD("Deleting Deployment %v ", *deployment.ClusterResourceName)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
+					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 			}
 
@@ -93,6 +93,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				log.FailOnError(err, "Error while deleting data services")
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 			}
 		}()
 	})
@@ -116,15 +117,12 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 			pdsPods := make([]corev1.Pod, 0)
 
 			Step("Delete dataservice pods and Check health of data service in PDS Controlplane", func() {
-				podList, err := pdslib.GetPods(namespace)
+				podList, err := pdslib.GetPods(params.InfraToTest.Namespace)
 				log.FailOnError(err, "Error while getting pods")
 
-				log.Infof("PDS DataService Pods")
-				log.Infof("deployment name %v", *deployment.ClusterResourceName)
-
 				for _, pod := range podList.Items {
-					if strings.Contains(pod.Name, *deployment.ClusterResourceName) {
-						log.Infof("%v", pod.Name)
+					if strings.Contains(pod.Name, *deployment.ClusterResourceName) && !strings.Contains(pod.Name, "init") {
+						log.Infof("Deployment pod: %v", pod.Name)
 						pdsPods = append(pdsPods, pod)
 					}
 				}
@@ -133,25 +131,35 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				wg.Add(2)
 				go func() {
 					defer wg.Done()
-					log.InfoD("Deleting the data service pods")
-					err = pdslib.DeletePods(pdsPods)
-					log.FailOnError(err, "Error while deleting pods")
+					defer GinkgoRecover()
+					log.InfoD("Deleting the first data service pod %s", pdsPods[0].GetName())
+					err = k8sCore.DeletePod(pdsPods[0].GetName(), params.InfraToTest.Namespace, true)
+					log.FailOnError(err, "Error while deleting pod %s", pdsPods[0].GetName())
+
 				}()
 
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					log.InfoD("Validating the data service pod status in PDS Control Plane")
-					err = pdslib.ValidatePDSDeploymentStatus(deployment, "Down", 5*time.Second, 30*time.Minute)
+					err = pdslib.WaitForPDSDeploymentToBeDown(deployment, timeInterval, timeOut)
 					log.FailOnError(err, "Error while validating the pds pods")
+
 				}()
 				wg.Wait()
 
-				log.InfoD("Validating the data service pods are back to healthy state")
-				err = pdslib.ValidatePods(namespace, *deployment.ClusterResourceName)
-				log.FailOnError(err, "Error while validating the pods")
-
-				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 30*time.Minute)
+				log.InfoD("Validating if the data service pods are back to healthy state")
+				err = pdslib.WaitForPDSDeploymentToBeUp(deployment, timeInterval, timeOut)
 				log.FailOnError(err, "Error while validating the pds deployment pods")
+
+				Step("Delete Deployments", func() {
+					log.InfoD("Deleting Deployment %v ", *deployment.Name)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					isDeploymentsDeleted = true
+					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
+				})
 
 			})
 		}
