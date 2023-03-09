@@ -7923,3 +7923,218 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
+	//1) Deploy px with cloud drive.
+	//2) Create a volume on that pool and write some data on the volume.
+	//3) Expand pool by add-disk
+	//4) Restart px service while expand pool
+	//5) add-disk should add drive successfully
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PXRestartAddDiskWhilePoolExpand", " restart PX and Initiate pool expansion using add-disk", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by add-disk"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		stNode, err := GetRandomNodeWithPoolIOs(contexts)
+		log.FailOnError(err, "error identifying node to run test")
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "error getting pools list")
+		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+
+		var currentTotalPoolSize uint64
+
+		var specSize uint64
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				val := strings.Split(param, "=")[1]
+				specSize, err = strconv.ParseUint(val, 10, 64)
+				log.FailOnError(err, "Error converting size to uint64")
+			}
+		}
+		log.FailOnError(err, "error identifying node to run test")
+		selectedPool, err := GetPoolWithIOsInGivenNode(stNode, contexts)
+		log.FailOnError(err, "error identifying pool to run test")
+
+		//add drive and start pool expand
+		poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) * 2
+
+		log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+
+		err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
+		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+		err = WaitForExpansionToStart(poolToBeResized.Uuid)
+		log.FailOnError(err, "error waiting for expansion to start on the pool [%s]", poolToBeResized.Uuid)
+		//px restart
+		err = Inst().V.RestartDriver(stNode, nil)
+		log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
+		err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+		stepLog := "Initiate add cloud drive and restart PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.AddCloudDrive(&stNode, deviceSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+			time.Sleep(5 * time.Second)
+			log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
+			for _, pool := range pools {
+				currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+			}
+			//since drives are added two times, so expected pool size should be addition of two drives
+			expectedTotalPoolSize := currentTotalPoolSize + specSize + specSize
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+			log.InfoD("Validate pool rebalance after drive add and px restart")
+			err = ValidatePoolRebalance(stNode, -1)
+			log.FailOnError(err, "Pool re-balance failed")
+
+			//since two drives are added so minus two times
+			expectedSizeWithJournal := expectedTotalPoolSize - 3
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
+			var newTotalPoolSize uint64
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "error getting pools list")
+			dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+			for _, pool := range pools {
+				newTotalPoolSize += pool.GetTotalSize() / units.GiB
+			}
+			dash.VerifyFatal(newTotalPoolSize, expectedSizeWithJournal, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+var _ = Describe("{DriveAddAsJournal}", func() {
+	/*
+		Add drive when as journal
+		case1:if dmthin journal is not supported so it should fail with  error message
+		case2:if it is btrfs and journal drive exists so it should have failed with error message jounral drive exists
+		case3:if it is btrfs and journal drive does not exists so it add journal drive successfully
+
+	*/
+	var testrailID = 0
+	// Testrail Description : Add drive when as journal
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DriveAddAsJournal",
+			"Add drive when as journal",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Add drive when as journal"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		startDriver := func() {
+			// Start Px Back on the Node
+			log.InfoD("Start Px Driver and wait for driver to come up on node [%v]", nodeDetail.Name)
+			log.FailOnError(Inst().V.StartDriver(*nodeDetail),
+				fmt.Sprintf("Failed to Bring back the Px on Node [%v]", nodeDetail.Name))
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut),
+				fmt.Sprintf("Driver is still down on node [%v] after waiting", nodeDetail.Name))
+		}
+		// Bring Px Down on the Node selected
+		var nodeToPxDown []node.Node
+		nodeToPxDown = append(nodeToPxDown, *nodeDetail)
+		log.FailOnError(Inst().V.StopDriver(nodeToPxDown,
+			false,
+			nil),
+			"Errored while stopping Px Driver")
+
+		// wait for some time for driver to go down completely
+		log.FailOnError(Inst().V.WaitDriverDownOnNode(*nodeDetail), "Failed waiting for driver to come up")
+
+		// Start PxDriver after attempting add cloud drive
+		defer startDriver()
+		path := "/etc/pwx/config.json"
+		cmd := "sudo cat " + path
+		out, err := Inst().N.RunCommandWithNoRetry(*nodeDetail, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		// Add cloud drive on the node selected and wait for rebalance to happen
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		deviceSpec := driveSpecs[0]
+		devicespecjournal := deviceSpec + " --journal"
+		if strings.Contains(out, `"type": "dmthin",`) {
+			err := Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
+			re := regexp.MustCompile(".*Journal/Metadata device add not supported for PX-StoreV2*")
+			if re.MatchString(fmt.Sprintf("%v", err)) == false {
+				log.Error("Failed to match the error while adding drive")
+			}
+			log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+		} else {
+			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
+			log.InfoD("Enter pool Maintenance mode ")
+			isjournal, err := isJournalEnabled()
+			if isjournal {
+				devicespecjournal := deviceSpec + " --journal"
+				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
+				re := regexp.MustCompile(".*journal exists*")
+				if re.MatchString(fmt.Sprintf("%v", err)) == false {
+					log.Error("Failed to match the error while adding drive")
+				}
+				log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+			} else {
+				devicespecjournal := deviceSpec + " --journal"
+				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
+				if err != nil {
+					log.FailOnError(err, "journal add failed")
+				} else {
+					log.InfoD("journal drive add successful")
+				}
+			}
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})

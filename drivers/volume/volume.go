@@ -394,9 +394,6 @@ type Driver interface {
 	// AddCloudDrive add cloud drives to the node using PXCTL
 	AddCloudDrive(n *node.Node, devcieSpec string, poolID int32) error
 
-	// AddCloudDrive add cloud drives to the node using PXCTL
-	AddCloudDriveAsJournal(n *node.Node, devcieSpec string, poolID int32) error
-
 	// GetPoolsUsedSize returns map of pool id and current used size
 	GetPoolsUsedSize(n *node.Node) (map[string]string, error)
 
