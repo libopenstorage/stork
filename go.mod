@@ -61,7 +61,7 @@ require (
 )
 
 require (
-	github.com/portworx/kdmp v0.4.1-0.20230127055521-e23d6b003478
+	github.com/portworx/kdmp v0.4.1-0.20230308031702-45af42923951
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 )
 
@@ -291,7 +291,7 @@ replace (
 	github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 	github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
-	github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
+	github.com/docker/docker => github.com/moby/moby v20.10.23+incompatible
 	//github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	//github.com/heptio/ark => github.com/heptio/ark v1.0.0
@@ -301,7 +301,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230207113334-0b97b6052012
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230308031702-45af42923951
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7

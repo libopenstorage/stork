@@ -683,7 +683,15 @@ func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (stri
 	if err != nil {
 		return "", err
 	}
-	_, err = cs.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), dataExport.Spec.SnapshotStorageClass, metav1.GetOptions{})
+	v1SnapshotRequired, err := version.RequiresV1VolumeSnapshot()
+	if err != nil {
+		return "", err
+	}
+	if v1SnapshotRequired {
+		_, err = cs.SnapshotV1().VolumeSnapshotClasses().Get(context.TODO(), dataExport.Spec.SnapshotStorageClass, metav1.GetOptions{})
+	} else {
+		_, err = cs.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), dataExport.Spec.SnapshotStorageClass, metav1.GetOptions{})
+	}
 	if err == nil {
 		return csiProvider, nil
 	}
