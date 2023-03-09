@@ -125,14 +125,16 @@ type NodeConditionStatus string
 
 // These are valid statuses of different node conditions.
 const (
-	// NodeSucceeded means the node condition status is succeeded
+	// NodeSucceededStatus means the node condition status is succeeded
 	NodeSucceededStatus NodeConditionStatus = "Succeeded"
-	// NodeFailed means the node condition status is failed
+	// NodeFailedStatus means the node condition status is failed
 	NodeFailedStatus NodeConditionStatus = "Failed"
 	// NodeOnlineStatus means the node condition is online and healthy
 	NodeOnlineStatus NodeConditionStatus = "Online"
 	// NodeInitStatus means the node condition is in initializing state
 	NodeInitStatus NodeConditionStatus = "Initializing"
+	// NodeUpdateStatus means the node condition is in updating state
+	NodeUpdateStatus NodeConditionStatus = "Updating"
 	// NodeNotInQuorumStatus means the node is not in quorum
 	NodeNotInQuorumStatus NodeConditionStatus = "NotInQuorum"
 	// NodeMaintenanceStatus means the node condition is in maintenance state

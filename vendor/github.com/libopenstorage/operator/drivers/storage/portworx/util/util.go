@@ -30,6 +30,8 @@ import (
 	k8sutil "github.com/libopenstorage/operator/pkg/util/k8s"
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -211,7 +213,7 @@ const (
 	// ErrMsgGrpcConnection error message if failed to connect to GRPC server
 	ErrMsgGrpcConnection = "error connecting to GRPC server"
 	// ImageNamePause is the container image to use for the pause container
-	ImageNamePause = "k8s.gcr.io/pause:3.1"
+	ImageNamePause = k8sutil.DefaultK8SRegistryPath + "/pause:3.1"
 
 	// userVolumeNamePrefix prefix used for user volume names to avoid name conflicts with existing volumes
 	userVolumeNamePrefix = "user-"
@@ -246,6 +248,9 @@ const (
 	// EnvKeyPortworxEnableTLS is a flag for enabling operator TLS with PX
 	EnvKeyPortworxEnableTLS  = "PX_ENABLE_TLS"
 	EnvKeyPortworxEnforceTLS = "PX_ENFORCE_TLS"
+
+	// TelemetryCertName is name of the telemetry cert.
+	TelemetryCertName = "pure-telemetry-certs"
 )
 
 var (
@@ -632,16 +637,26 @@ func GetClusterEnvVarValue(ctx context.Context, cluster *corev1.StorageCluster, 
 
 // GetPxProxyEnvVarValue returns the PX_HTTP(S)_PROXY environment variable value for a cluster.
 // Note: we only expect one proxy for the telemetry CCM container but we prefer https over http if both are specified
-func GetPxProxyEnvVarValue(cluster *corev1.StorageCluster) string {
+func GetPxProxyEnvVarValue(cluster *corev1.StorageCluster) (string, string) {
 	httpProxy := ""
 	for _, env := range cluster.Spec.Env {
-		if env.Name == EnvKeyPortworxHTTPSProxy {
-			return env.Value
-		} else if env.Name == EnvKeyPortworxHTTPProxy {
-			httpProxy = env.Value
+		key, val := env.Name, env.Value
+		if key == EnvKeyPortworxHTTPSProxy {
+			// If http proxy is specified in https env var, treat it as a http proxy endpoint
+			if strings.HasPrefix(val, "http://") {
+				logrus.Warnf("using endpoint %s from environment variable %s as a http proxy endpoint instead",
+					val, EnvKeyPortworxHTTPSProxy)
+				return EnvKeyPortworxHTTPProxy, val
+			}
+			return EnvKeyPortworxHTTPSProxy, val
+		} else if key == EnvKeyPortworxHTTPProxy {
+			httpProxy = val
 		}
 	}
-	return httpProxy
+	if httpProxy != "" {
+		return EnvKeyPortworxHTTPProxy, httpProxy
+	}
+	return "", ""
 }
 
 // SplitPxProxyHostPort trims protocol prefix then splits the proxy address of the form "host:port"
@@ -1095,6 +1110,37 @@ func IsCCMGoSupported(pxVersion *version.Version) bool {
 	return pxVersion.GreaterThanOrEqual(MinimumPxVersionCCMGO)
 }
 
+// ValidateTelemetry validates if telemetry is enabled correctly
+func ValidateTelemetry(cluster *corev1.StorageCluster) error {
+	if !IsTelemetryEnabled(cluster.Spec) {
+		return nil
+	}
+
+	pxVersion := GetPortworxVersion(cluster)
+	if pxVersion.LessThan(MinimumPxVersionCCM) {
+		// PX version is lower than 2.8
+		return fmt.Errorf("telemetry is not supported on Portworx version: %s", pxVersion)
+	} else if IsCCMGoSupported(pxVersion) {
+		proxyType, proxy := GetPxProxyEnvVarValue(cluster)
+		if proxy == "" {
+			return nil
+		} else if proxyType == EnvKeyPortworxHTTPProxy {
+			// CCM Go is enabled with http proxy, but it cannot be split into host and port
+			if _, _, err := SplitPxProxyHostPort(proxy); err != nil {
+				return fmt.Errorf("telemetry is not supported with proxy in a format of: %s", proxy)
+			}
+		} else if proxyType == EnvKeyPortworxHTTPSProxy {
+			// CCM Go is enabled with https proxy
+			// TODO: remove when custom proxy is supported
+			return fmt.Errorf("telemetry is not supported with secure proxy: %s", proxy)
+		}
+	}
+
+	// NOTE: don't check if air-gapped here when telemetry is specified enabled or disabled explicitly,
+	// as it will ping the registration endpoint periodically
+	return nil
+}
+
 // IsPxRepoEnabled returns true is pxRepo is enabled
 func IsPxRepoEnabled(spec corev1.StorageClusterSpec) bool {
 	return spec.PxRepo != nil &&
@@ -1238,4 +1284,54 @@ func IsFreshInstall(cluster *corev1.StorageCluster) bool {
 		cluster.Status.Phase == string(corev1.ClusterStateInit) ||
 		(cluster.Status.Phase == string(corev1.ClusterStateDegraded) &&
 			util.GetStorageClusterCondition(cluster, PortworxComponentName, corev1.ClusterConditionTypeRuntimeState) == nil)
+}
+
+func SetTelemetryCertOwnerRef(
+	cluster *corev1.StorageCluster,
+	ownerRef *metav1.OwnerReference,
+	k8sClient client.Client,
+) error {
+	secret := &v1.Secret{}
+	err := k8sClient.Get(
+		context.TODO(),
+		types.NamespacedName{
+			Name:      TelemetryCertName,
+			Namespace: cluster.Namespace,
+		},
+		secret,
+	)
+
+	// The cert is created after ccm container starts, so we may not have it for a while.
+	if errors.IsNotFound(err) {
+		logrus.Infof("telemetry cert %s/%s not found", cluster.Namespace, TelemetryCertName)
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	// Only delete the secret when delete strategy is UninstallAndWipe
+	deleteCert := cluster.Spec.DeleteStrategy != nil &&
+		cluster.Spec.DeleteStrategy.Type == corev1.UninstallAndWipeStorageClusterStrategyType
+
+	referenceMap := make(map[types.UID]*metav1.OwnerReference)
+	for _, ref := range secret.OwnerReferences {
+		referenceMap[ref.UID] = &ref
+	}
+
+	_, ownerSet := referenceMap[ownerRef.UID]
+	if deleteCert && !ownerSet {
+		referenceMap[ownerRef.UID] = ownerRef
+	} else if !deleteCert && ownerSet {
+		delete(referenceMap, ownerRef.UID)
+	} else {
+		return nil
+	}
+
+	var references []metav1.OwnerReference
+	for _, v := range referenceMap {
+		references = append(references, *v)
+	}
+	secret.OwnerReferences = references
+
+	return k8sClient.Update(context.TODO(), secret)
 }
