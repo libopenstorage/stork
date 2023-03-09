@@ -1621,8 +1621,8 @@ func (m *MigrationController) updateStorageClassOnPV(
 				log.MigrationLog(migration).Infof("Applying %v %v", sc.Kind, sc.Name)
 				for retries := 0; retries < maxApplyRetries; retries++ {
 					_, err = remoteClient.adminClient.StorageV1().StorageClasses().Create(context.TODO(), sc, metav1.CreateOptions{})
-					if err == nil {
-						// Update the map to reflect the new StorageClas that was created on destination
+					if err == nil || errors.IsAlreadyExists(err) {
+						// Update the map to reflect the new StorageClass that was created on destination
 						destScExists[scName] = true
 						break
 					}
