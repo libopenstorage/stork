@@ -11,7 +11,6 @@ import (
 	"k8s.io/client-go/rest"
 	controllercache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // SharedInformerCache  is an eventually consistent cache. The cache interface
@@ -47,7 +46,7 @@ var (
 	sharedInformerCache *cache
 )
 
-func CreateSharedInformerCache(mgr manager.Manager) error {
+func CreateSharedInformerCache() error {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 	if sharedInformerCache != nil {
