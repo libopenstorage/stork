@@ -14,6 +14,8 @@ RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip
 
 RUN python3 -m pip install awscli && python3 -m pip install oci-cli && python3 -m pip install rsa --upgrade
 
+RUN curl https://yum.portworx.com/dl/ubi8/libcurl-7.61.1-25.el8_7.3.x86_64.rpm -o libcurl.rpm && rpm -U libcurl.rpm && rm -f libcurl.rpm
+RUN curl https://yum.portworx.com/dl/ubi8/curl-7.61.1-25.el8_7.3.x86_64.rpm -o curl.rpm && rpm -U curl.rpm && rm -f curl.rpm
 
 RUN curl -q -o /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \
     chmod +x /usr/local/bin/aws-iam-authenticator
