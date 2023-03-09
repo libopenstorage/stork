@@ -61,7 +61,7 @@ spec:
       - ReadWriteOnce
       resources:
         requests:
-          storage: {{ if .VolumeSize }}"{{ .VolumeSize }}"{{ else }}"10Gi"{{ end }}
+          storage: {{ if .VolumeSize }}"{{ .VolumeSize }}"{{ else }}"5Gi"{{ end }}
   - metadata:
       name: fio-log
     spec:
