@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"os"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"net/http"
 
@@ -27,7 +28,6 @@ type BearerToken struct {
 
 // GetContext return context for api call.
 func GetContext() (context.Context, error) {
-	log.Info("Check for environmental variable.")
 	envVars := MustHaveEnvVariables()
 
 	endpointURL, err := url.Parse(envVars.PDSControlPlaneURL)
