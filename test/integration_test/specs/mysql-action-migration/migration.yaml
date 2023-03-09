@@ -1,0 +1,11 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: Migration
+metadata:
+  name: mysql-migration
+spec:
+  clusterPair: remoteclusterpair
+  includeResources: true
+  startApplications: false
+  includeVolumes: false
+  namespaces:
+  - mysql-enc-pvc-mysql-action

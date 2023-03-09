@@ -633,6 +633,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*storkapi.MigrationSchedule); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*storkapi.Action); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*storkapi.BackupLocation); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*storkapi.ApplicationBackup); ok {
@@ -846,6 +848,24 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createMigrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	// TODO(dgoel): can we add a wrapper method around this?
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createActionObject(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -2275,6 +2295,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			log.Infof("[%v] Validated MigrationSchedule: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*storkapi.Action); ok {
+			if err := k8sStork.ValidateAction(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate Action: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			log.Infof("[%v] Validated Action: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.BackupLocation); ok {
 			if err := k8sStork.ValidateBackupLocation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
@@ -4161,6 +4190,27 @@ func (k *K8s) createMigrationObjects(
 		return transform, nil
 	}
 
+	return nil, nil
+}
+
+func (k *K8s) createActionObject(
+	specObj interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	k8sOps := k8sStork
+	if obj, ok := specObj.(*storkapi.Action); ok {
+		obj.Namespace = ns.Name
+		action, err := k8sOps.CreateAction(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Action: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created Action: %v", app.Key, action.Name)
+		return action, nil
+	}
 	return nil, nil
 }
 

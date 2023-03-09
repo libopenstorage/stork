@@ -2,8 +2,12 @@ package stork
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/errors"
+	"github.com/portworx/sched-ops/task"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -19,6 +23,8 @@ type ActionOps interface {
 	UpdateAction(*storkv1alpha1.Action) (*storkv1alpha1.Action, error)
 	// DeleteAction deletes the Action
 	DeleteAction(string, string) error
+	// ValidateAction validates the Action
+	ValidateAction(name string, namespace string, timeout, retryInterval time.Duration) error
 }
 
 // CreateAction creates a Action
@@ -61,4 +67,39 @@ func (c *Client) DeleteAction(name string, namespace string) error {
 	return c.stork.StorkV1alpha1().Actions(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+// ValidateAction validate the Action status
+func (c *Client) ValidateAction(name string, namespace string, timeout, retryInterval time.Duration) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := c.GetAction(name, namespace)
+		if err != nil {
+			return "", true, err
+		}
+
+		if resp.Status == storkv1alpha1.ActionStatusSuccessful {
+			return "", false, nil
+		} else if resp.Status == storkv1alpha1.ActionStatusFailed {
+			return "", false, &errors.ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("Action Status %v", resp.Status),
+				Type:  resp,
+			}
+		}
+
+		return "", true, &errors.ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("Action Status %v", resp.Status),
+			Type:  resp,
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
 }
