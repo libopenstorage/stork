@@ -2438,8 +2438,9 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 	return nil
 }
 
-func (p *portworx) ActivateMigration(namespace string) error {
-	logrus.Debugf("ActivateMigration namespace: %s", namespace)
+func (p *portworx) Failover(action *storkapi.Action) error {
+	namespace := action.Namespace
+	logrus.Debugf("Failover: namespace %s", namespace)
 	volDriver, err := p.getAdminVolDriver() // TODO(dgoel): admin or user vol driver?
 	if err != nil {
 		return err
@@ -2461,7 +2462,7 @@ func (p *portworx) ActivateMigration(namespace string) error {
 		if err != nil {
 			return fmt.Errorf("error getting volume for PVC: %v", err)
 		}
-		logrus.Debugf("ActivateMigration volID: %v", volID)
+		logrus.Debugf("Failover: volID %v", volID)
 
 		volumes, err := volDriver.Inspect([]string{volID})
 		if err != nil {
@@ -2483,7 +2484,7 @@ func (p *portworx) ActivateMigration(namespace string) error {
 		if err := volDriver.Set(vol.GetId(), volLocator, vol.GetSpec()); err != nil {
 			return fmt.Errorf("failed to promote volume: %v", vol.GetId())
 		}
-		logrus.Debugf("ActivateMigration promoted %v", vol.GetId())
+		logrus.Debugf("Failover: promoted %v", vol.GetId())
 	}
 	return nil
 }
