@@ -184,7 +184,7 @@ var _ = AfterSuite(func() {
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
 	for _, backupName := range allBackups {
-		backupUID, err := getBackupUID(backupName, orgID)
+		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))

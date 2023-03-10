@@ -1096,7 +1096,10 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
 	for {
 		enumerateRsp, err := p.EnumerateBackup(ctx, bkpEnumerateReq)
-		log.FailOnError(err, "Failed to enumerate backups for org %s ctx: [%v]\n Backup enumerate request: [%v]", orgID, err, bkpEnumerateReq)
+		if err != nil {
+			log.InfoD("Backup enumeration for the ctx [%v] within org [%s] failed with error [%v]. Backup enumerate request: [%v].", ctx, orgID, err, bkpEnumerateReq)
+			return "", err
+		}
 		for _, backup := range enumerateRsp.GetBackups() {
 			if backup.GetName() == backupName {
 				return backup.GetUid(), nil
@@ -1111,6 +1114,32 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 	}
 
 	return "", fmt.Errorf("backup with name '%s' not found for org '%s'", backupName, orgID)
+}
+
+func (p *portworx) GetBackupName(ctx context.Context, backupUid string, orgID string) (string, error) {
+	var totalBackups int
+	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
+	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
+	for {
+		enumerateRsp, err := p.EnumerateBackup(ctx, bkpEnumerateReq)
+		if err != nil {
+			log.InfoD("Backup enumeration for the ctx [%v] within org [%s] failed with error [%v]. Backup enumerate request: [%v].", ctx, orgID, err, bkpEnumerateReq)
+			return "", err
+		}
+		for _, backup := range enumerateRsp.GetBackups() {
+			if backup.GetUid() == backupUid {
+				return backup.GetName(), nil
+			}
+			totalBackups++
+		}
+		if uint64(totalBackups) >= enumerateRsp.GetTotalCount() {
+			break
+		} else {
+			bkpEnumerateReq.EnumerateOptions.ObjectIndex += uint64(len(enumerateRsp.GetBackups()))
+		}
+	}
+
+	return "", fmt.Errorf("backup with uid '%s' not found for org '%s'", backupUid, orgID)
 }
 
 func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
@@ -1131,45 +1160,6 @@ func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName s
 	return scheduleBackupNames, nil
 }
 
-func (p *portworx) GetOrdinalScheduleBackupName(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error) {
-	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", err
-	}
-	if len(scheduleBackupNames) == 0 {
-		return "", fmt.Errorf("no backups were found for the schedule [%s]", scheduleName)
-	}
-	if ordinal < 1 {
-		return "", fmt.Errorf("the ordinal value [%d] for schedule backups with schedule name [%s] is invalid. valid values range from 1 to [%d]", ordinal, scheduleName, len(scheduleBackupNames))
-	}
-	if ordinal > len(scheduleBackupNames) {
-		return "", fmt.Errorf("schedule backups with schedule name [%s] have not been created up to the provided ordinal value [%d]", scheduleName, ordinal)
-	}
-	return scheduleBackupNames[len(scheduleBackupNames)-ordinal], nil
-}
-
-func (p *portworx) GetFirstScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
-	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", err
-	}
-	if len(scheduleBackupNames) == 0 {
-		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
-	}
-	return scheduleBackupNames[len(scheduleBackupNames)-1], nil
-}
-
-func (p *portworx) GetLatestScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
-	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", err
-	}
-	if len(scheduleBackupNames) == 0 {
-		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
-	}
-	return scheduleBackupNames[0], nil
-}
-
 func (p *portworx) GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
 	var scheduleBackupUIDs []string
 	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
@@ -1184,45 +1174,6 @@ func (p *portworx) GetAllScheduleBackupUIDs(ctx context.Context, scheduleName st
 		scheduleBackupUIDs = append(scheduleBackupUIDs, scheduleBackupUID)
 	}
 	return scheduleBackupUIDs, nil
-}
-
-func (p *portworx) GetOrdinalScheduleBackupUID(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error) {
-	scheduleBackupUIDs, err := p.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", err
-	}
-	if len(scheduleBackupUIDs) == 0 {
-		return "", fmt.Errorf("no backups were found for the schedule [%s]", scheduleName)
-	}
-	if ordinal < 1 {
-		return "", fmt.Errorf("the provided ordinal value [%d] for schedule backups with schedule name [%s] is invalid. valid values range from 1 to [%d]", ordinal, scheduleName, len(scheduleBackupUIDs))
-	}
-	if ordinal > len(scheduleBackupUIDs) {
-		return "", fmt.Errorf("schedule backups with schedule name [%s] have not been created up to the provided ordinal value [%d]", scheduleName, ordinal)
-	}
-	return scheduleBackupUIDs[len(scheduleBackupUIDs)-ordinal], nil
-}
-
-func (p *portworx) GetFirstScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error) {
-	scheduleBackupUIDs, err := p.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", err
-	}
-	if len(scheduleBackupUIDs) == 0 {
-		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
-	}
-	return scheduleBackupUIDs[len(scheduleBackupUIDs)-1], nil
-}
-
-func (p *portworx) GetLatestScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error) {
-	scheduleBackupUIDs, err := p.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
-	if err != nil {
-		return "", err
-	}
-	if len(scheduleBackupUIDs) == 0 {
-		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
-	}
-	return scheduleBackupUIDs[0], nil
 }
 
 var (
