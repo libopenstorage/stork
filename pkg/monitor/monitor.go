@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -245,7 +244,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	}
 
 	var pods *v1.PodList
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	if storkcache.Instance() != nil {
 		pods, err = storkcache.Instance().ListTransformedPods()
 	} else {
 		log.Warnf("shared informer cache has not been initialized.")

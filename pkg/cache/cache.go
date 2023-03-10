@@ -33,7 +33,7 @@ type SharedInformerCache interface {
 	// ListApplicationRegistrations lists the application registration CRs from the cache
 	ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegistrationList, error)
 
-	// ListPods lists the all the Pods from the cache
+	// ListTransformedPods lists the all the Pods from the cache after applying TransformFunc
 	ListTransformedPods() (*corev1.PodList, error)
 }
 
@@ -66,7 +66,6 @@ func CreateSharedInformerCache() error {
 			}
 			currPod := corev1.Pod{}
 			currPod.Name = podResource.Name
-			currPod.Namespace = podResource.Namespace
 			currPod.Namespace = podResource.Namespace
 
 			currPod.Spec.Volumes = podResource.Spec.Volumes
@@ -154,7 +153,7 @@ func (c *cache) ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegist
 	return appRegList, nil
 }
 
-// ListPods lists the all the Pods from the cache
+// ListTransformedPods lists the all the Pods from the cache after applying TransformFunc
 func (c *cache) ListTransformedPods() (*corev1.PodList, error) {
 	podList := &corev1.PodList{}
 	if err := c.controllerCache.List(context.Background(), podList); err != nil {
