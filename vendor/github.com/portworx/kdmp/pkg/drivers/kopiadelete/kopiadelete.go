@@ -84,6 +84,15 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		logrus.Errorf("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
+
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(jobName, job.ObjectMeta.Namespace, o)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
 		errMsg := fmt.Sprintf("creation of backup snapshot delete job [%s] failed: %v", jobName, err)
 		logrus.Errorf("%s %v", fn, errMsg)
@@ -184,21 +193,22 @@ func jobFor(
 		jobOption.VolumeBackupDeleteNamespace,
 	}, " ")
 
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during delete: %v", err)
-		return nil, err
+		errMsg := fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		logrus.Errorf("%v", errMsg)
+		return nil, errMsg
 	}
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+	tolerations, err := utils.GetTolerationsFromDeployment(jobOption.KopiaImageExecutorSource,
+		jobOption.KopiaImageExecutorSourceNs)
+	if err != nil {
+		logrus.Errorf("failed to get the toleration details: %v", err)
+		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobName)
 	}
-
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -240,6 +250,7 @@ func jobFor(
 							},
 						},
 					},
+					Tolerations: tolerations,
 					Volumes: []corev1.Volume{
 						{
 							Name: "cred-secret",
@@ -253,6 +264,27 @@ func jobFor(
 				},
 			},
 		},
+	}
+
+	if len(jobOption.NfsServer) != 0 {
+		volumeMount := corev1.VolumeMount{
+			Name:      utils.NfsVolumeName,
+			MountPath: drivers.NfsMount,
+		}
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		volume := corev1.Volume{
+			Name: utils.NfsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: utils.GetPvcNameForJob(jobName),
+				},
+			},
+		}
+
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
 	}
 
 	if drivers.CertFilePath != "" {
@@ -309,6 +341,16 @@ func jobFor(
 					},
 				},
 			}
+		} else {
+			nodeAffinity, err := utils.GetNodeAffinityFromDeployment(jobOption.KopiaImageExecutorSource,
+				jobOption.KopiaImageExecutorSourceNs)
+			if err != nil {
+				logrus.Errorf("failed to get the node affinity details: %v", err)
+				return nil, fmt.Errorf("failed to get the node affinity details for job [%s/%s]", jobOption.Namespace, jobName)
+			}
+			job.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
 		}
 
 		job.Spec.Template.Spec.Containers[0].Env = env
@@ -330,7 +372,7 @@ func toRepoName(pvcName, pvcNamespace string) string {
 
 func addVolumeBackupDeleteLabels(jobOpts drivers.JobOpts) map[string]string {
 	labels := make(map[string]string)
-	labels[utils.BackupObjectNameKey] = jobOpts.BackupObjectName
+	labels[utils.BackupObjectNameKey] = utils.GetValidLabel(jobOpts.BackupObjectName)
 	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
 	return labels
 }
@@ -341,7 +383,7 @@ func addJobLabels(labels map[string]string, jobOpts drivers.JobOpts) map[string]
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.KopiaDelete
-	labels[utils.BackupObjectNameKey] = jobOpts.BackupObjectName
+	labels[utils.BackupObjectNameKey] = utils.GetValidLabel(jobOpts.BackupObjectName)
 	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
 	return labels
 }
