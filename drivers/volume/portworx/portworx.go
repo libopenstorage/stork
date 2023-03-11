@@ -2446,6 +2446,14 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 		return err
 	}
 
+	// TODO(dgoel): when should we return error
+	// and should we just log an error and continue
+
+	// TODO(dgoel): show relevant events in the Action CR
+	// return list of errors (as above) - controller can use to log events
+	// for ex: a volume promote failed
+
+	// can we directly fetch PersistentVolumes here?
 	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 	if err != nil {
 		return fmt.Errorf("error getting list of volumes to migrate: %v", err)
@@ -2458,9 +2466,19 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 			continue
 		}
 
-		volID, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
 			return fmt.Errorf("error getting volume for PVC: %v", err)
+		}
+		logrus.Debugf("Failover: PV %v", pvName)
+
+		pv, err := core.Instance().GetPersistentVolume(pvName)
+		if err != nil {
+			return err
+		}
+		volID := pv.Spec.PortworxVolume.VolumeID
+		if volID == "" {
+			return fmt.Errorf("PV contains \"\" value for Spec.PortworxVolume.VolumeID")
 		}
 		logrus.Debugf("Failover: volID %v", volID)
 
@@ -2482,7 +2500,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 		}
 		volLocator.VolumeLabels["promote"] = "true"
 		if err := volDriver.Set(vol.GetId(), volLocator, vol.GetSpec()); err != nil {
-			return fmt.Errorf("failed to promote volume: %v", vol.GetId())
+			logrus.Errorf("failed to promote volume %v: %v", vol.GetId(), err)
 		}
 		logrus.Debugf("Failover: promoted %v", vol.GetId())
 	}
