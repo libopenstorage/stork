@@ -3,8 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apps"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/apps"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -288,7 +289,7 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 	return nil
 }
 
-// CreateScheduleBackup creates a scheduled backup
+// CreateScheduleBackup creates a schedule backup
 func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) error {
@@ -327,11 +328,11 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	}
 	time.Sleep(1 * time.Minute)
 	backupSuccessCheck := func() (interface{}, bool, error) {
-		firstScheduleBackupName, err = backupDriver.GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+		firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 		if err != nil {
 			return "", true, err
 		}
-		firstScheduleBackupUid, err = backupDriver.GetFirstScheduleBackupUID(ctx, scheduleName, orgID)
+		firstScheduleBackupUid, err = GetFirstScheduleBackupUID(ctx, scheduleName, orgID)
 		if err != nil {
 			return "", true, err
 		}
@@ -362,7 +363,7 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 // CreateBackupWithoutCheck creates backup without waiting for success
 func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
+	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) (*api.BackupInspectResponse, error) {
 
 	backupDriver := Inst().Backup
 	bkpCreateRequest := &api.BackupCreateRequest{
@@ -392,9 +393,69 @@ func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation s
 	}
 	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
+func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+	}
+	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  scheduleName,
+		Uid:   "",
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
 }
 
 // ShareBackup provides access to the mentioned groups or/add users
@@ -673,7 +734,7 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 
 // CreateRestoreWithoutCheck creates restore without waiting for completion
 func CreateRestoreWithoutCheck(restoreName string, backupName string,
-	namespaceMapping map[string]string, clusterName string, orgID string, ctx context.Context) error {
+	namespaceMapping map[string]string, clusterName string, orgID string, ctx context.Context) (*api.RestoreInspectResponse, error) {
 
 	var bkp *api.BackupObject
 	var bkpUid string
@@ -704,22 +765,17 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 	}
 	_, err := backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
-}
-
-func getBackupUID(backupName, orgID string) (string, error) {
-	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
+	backupScheduleInspectRequest := &api.RestoreInspectRequest{
+		OrgId: orgID,
+		Name:  restoreName,
+	}
+	resp, err := backupDriver.InspectRestore(ctx, backupScheduleInspectRequest)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return "", err
-	}
-	return backupUID, nil
+	return resp, nil
 }
 
 func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
@@ -1336,4 +1392,88 @@ func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespac
 		return "", fmt.Errorf("restore status is false with error %v", err)
 	}
 	return deployment.Name, nil
+}
+
+// GetOrdinalScheduleBackupName returns the name of the schedule backup at the specified ordinal position for the given schedule
+func GetOrdinalScheduleBackupName(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error) {
+	if ordinal < 1 {
+		return "", fmt.Errorf("the provided ordinal value [%d] for schedule backups with schedule name [%s] is invalid. valid values range from 1", ordinal, scheduleName)
+	}
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(allScheduleBackupNames) == 0 {
+		return "", fmt.Errorf("no backups were found for the schedule [%s]", scheduleName)
+	}
+	if ordinal > len(allScheduleBackupNames) {
+		return "", fmt.Errorf("schedule backups with schedule name [%s] have not been created up to the provided ordinal value [%d]", scheduleName, ordinal)
+	}
+	return allScheduleBackupNames[ordinal-1], nil
+}
+
+// GetFirstScheduleBackupName returns the name of the first schedule backup for the given schedule
+func GetFirstScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(allScheduleBackupNames) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return allScheduleBackupNames[0], nil
+}
+
+// GetLatestScheduleBackupName returns the name of the latest schedule backup for the given schedule
+func GetLatestScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(allScheduleBackupNames) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return allScheduleBackupNames[len(allScheduleBackupNames)-1], nil
+}
+
+// GetOrdinalScheduleBackupUID returns the uid of the schedule backup at the specified ordinal position for the given schedule
+func GetOrdinalScheduleBackupUID(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error) {
+	if ordinal < 1 {
+		return "", fmt.Errorf("the provided ordinal value [%d] for schedule backups with schedule name [%s] is invalid. valid values range from 1", ordinal, scheduleName)
+	}
+	allScheduleBackupUids, err := Inst().Backup.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(allScheduleBackupUids) == 0 {
+		return "", fmt.Errorf("no backups were found for the schedule [%s]", scheduleName)
+	}
+	if ordinal > len(allScheduleBackupUids) {
+		return "", fmt.Errorf("schedule backups with schedule name [%s] have not been created up to the provided ordinal value [%d]", scheduleName, ordinal)
+	}
+	return allScheduleBackupUids[ordinal-1], nil
+}
+
+// GetFirstScheduleBackupUID returns the uid of the first schedule backup for the given schedule
+func GetFirstScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	allScheduleBackupUids, err := Inst().Backup.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(allScheduleBackupUids) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return allScheduleBackupUids[0], nil
+}
+
+// GetLatestScheduleBackupUID returns the uid of the latest schedule backup for the given schedule
+func GetLatestScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error) {
+	allScheduleBackupUids, err := Inst().Backup.GetAllScheduleBackupUIDs(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	if len(allScheduleBackupUids) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
+	}
+	return allScheduleBackupUids[len(allScheduleBackupUids)-1], nil
 }
