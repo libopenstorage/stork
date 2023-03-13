@@ -95,7 +95,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.Infof("Deleting backup, restore and backup location, cloud account")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -241,7 +241,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, _ := backup.GetAdminCtxFromSecret()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
@@ -428,7 +428,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -541,7 +541,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting Restores, Backups and Backup locations, cloud account")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")

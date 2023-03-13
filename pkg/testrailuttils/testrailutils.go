@@ -22,24 +22,25 @@ var (
 )
 
 const (
-	pwxProjectID           = 1
+	PwxProjectID           = 1
 	testRailPassStatusCode = 1
 	testRailFailStatusCode = 5
 )
 
 // Testrail object
 type Testrail struct {
-	Status        string
-	TestID        int
-	RunID         int
-	DriverVersion string
+	Status          string
+	TestID          int
+	RunID           int
+	DriverVersion   string
+	PxBackupVersion string
 }
 
 // CreateMilestone Creates a milestone if it does not exists, else creates it
 func CreateMilestone() {
 	log.Infof("Create Testrail milestone")
 	var err error
-	milestoneID, err = getMilestoneByProjectID(pwxProjectID, MilestoneName)
+	milestoneID, err = getMilestoneByProjectID(PwxProjectID, MilestoneName)
 	if err != nil {
 		log.Errorf("error in getting milestone: %s", MilestoneName)
 		return
@@ -50,7 +51,7 @@ func CreateMilestone() {
 			Name:        MilestoneName,
 			Description: "Created from Automation",
 		}
-		msCreated, err := client.AddMilestone(pwxProjectID, sendatbleMs)
+		msCreated, err := client.AddMilestone(PwxProjectID, sendatbleMs)
 		if err != nil {
 			log.Errorf("error in creating milestone: %s", MilestoneName)
 		}
@@ -86,19 +87,19 @@ func AddRunsToMilestone(testrailID int) int {
 	filter := testrail.RequestFilterForRun{
 		MilestoneID: []int{milestoneID},
 	}
-	runID = getRunID(pwxProjectID, filter)
+	runID = getRunID(PwxProjectID, filter)
 	if runID == 0 {
 		log.Debugf("Creating run %s for milestone", RunName)
 		includeAll := false
 		sendableRun := testrail.SendableRun{
-			SuiteID:     pwxProjectID,
+			SuiteID:     PwxProjectID,
 			Name:        RunName,
 			Description: "Test run created from Jenkins trigger",
 			MilestoneID: milestoneID,
 			CaseIDs:     []int{testrailID},
 			IncludeAll:  &includeAll,
 		}
-		createdRun, err := client.AddRun(pwxProjectID, sendableRun)
+		createdRun, err := client.AddRun(PwxProjectID, sendableRun)
 		if err != nil {
 			log.Errorf("Unable to add the run %s", err)
 		}
@@ -153,14 +154,15 @@ func AddTestEntry(testrailObject Testrail) {
 			}
 			sendableResult := testrail.SendableResult{
 				StatusID: statusID,
-				Comment:  fmt.Sprintf("This is updated from Jenkins run of job %s, \n Job Run ID: %s, \n BuildUrl: %s, \n pxctl version: %s", RunName, JobRunID, JenkinsBuildURL, testrailObject.DriverVersion),
-				Defects:  "",
+				Comment: fmt.Sprintf("This is updated from Jenkins run of job %s, \n Job Run ID: %s, \n BuildUrl: %s, \n pxctl version: %s \n (Optional) Px Backup Version: %s",
+					RunName, JobRunID, JenkinsBuildURL, testrailObject.DriverVersion, testrailObject.PxBackupVersion),
+				Defects: "",
 			}
 			_, err = client.AddResult(test.ID, sendableResult)
 			if err != nil {
 				log.Errorf("Error in adding result to %d - %s", testrailObject.TestID, err)
 			} else {
-				log.Debugf("testrail update succcesful")
+				log.Debugf("testrail update successful")
 			}
 		}
 	}
@@ -206,5 +208,6 @@ func Init(hostname string, username string, password string) error {
 		return err
 	}
 	testRailConnectionSuccessful = true
+	log.Infof("Connection to testrail [%s] with provided credentials is successful", hostname)
 	return nil
 }

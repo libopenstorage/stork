@@ -115,7 +115,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
@@ -251,7 +251,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, _ := backup.GetAdminCtxFromSecret()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
@@ -470,7 +470,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.Info(" Deleting deployed applications")
@@ -589,7 +589,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, _ := backup.GetAdminCtxFromSecret()
 		log.InfoD("Clean up objects after test execution")
 		log.Info("Deleting backup schedules")
@@ -720,7 +720,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, _ := backup.GetAdminCtxFromSecret()
 		log.InfoD("Clean up objects after test execution")
 		log.Info("Deleting backup schedules")
@@ -859,7 +859,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx failed")
 

@@ -271,10 +271,12 @@ const (
 )
 
 var pxRuntimeOpts string
+var PxBackupVersion string
 
-const (
-	taskNamePrefix = "backupcreaterestore"
-	orgID          = "default"
+var (
+	RunIdForSuite             int
+	TestRailSetupSuccessful   bool
+	CurrentTestRailTestCaseId int
 )
 
 var (
@@ -404,18 +406,7 @@ func InitInstance() {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occured while Backup Driver Initialization")
 	}
-	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
-		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
-		if err == nil {
-			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
-				err = fmt.Errorf("not all details provided to update testrail")
-				log.FailOnError(err, "Error occured while testrail initialization")
-			}
-			testrailuttils.CreateMilestone()
-		}
-	} else {
-		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
-	}
+	SetupTestRail()
 
 	if jiraUserName != "" && jiraToken != "" {
 		log.Infof("Initializing JIRA connection")
@@ -2027,12 +2018,14 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 			log.Errorf("Error in getting driver version")
 		}
 		testrailObject := testrailuttils.Testrail{
-			Status:        testStatus,
-			TestID:        ids[0],
-			RunID:         ids[1],
-			DriverVersion: driverVersion,
+			Status:          testStatus,
+			TestID:          ids[0],
+			RunID:           ids[1],
+			DriverVersion:   driverVersion,
+			PxBackupVersion: PxBackupVersion,
 		}
 		testrailuttils.AddTestEntry(testrailObject)
+		log.Infof("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testRailHostname, ids[1], testrailuttils.PwxProjectID)
 	}
 }
 
@@ -4867,6 +4860,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
+	if TestRailSetupSuccessful && testRepoID != 0 {
+		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
+		CurrentTestRailTestCaseId = testRepoID
+	}
 }
 
 // enableAutoFSTrim on supported PX version.
@@ -4906,6 +4903,15 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+// EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
+func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	CloseLogger(TestLogger)
+	dash.TestCaseEnd()
+	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
+		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	}
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -5710,4 +5716,21 @@ outer:
 	}
 
 	return "", fmt.Errorf("no pool with metadata in node [%s]", stNode.Name)
+}
+
+// SetupTestRail checks if the required parameters for testrail are passed, verifies connectivity and creates milestone if it does not exist
+func SetupTestRail() {
+	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
+		err := testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
+		if err == nil {
+			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
+				err = fmt.Errorf("not all details provided to update testrail")
+				log.FailOnError(err, "Error occurred while testrail initialization")
+			}
+			testrailuttils.CreateMilestone()
+			TestRailSetupSuccessful = true
+		}
+	} else {
+		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+	}
 }
