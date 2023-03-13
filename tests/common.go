@@ -1727,14 +1727,12 @@ func GetStorageNodes() ([]node.Node, error) {
 	storageNodes := []node.Node{}
 	nodes := node.GetStorageDriverNodes()
 	for _, eachNode := range nodes {
-		if node.IsStorageNode(eachNode) {
-			devices, err := Inst().V.GetStorageDevices(eachNode)
-			if err != nil {
-				return nil, err
-			}
-			if len(devices) > 0 {
-				storageNodes = append(storageNodes, eachNode)
-			}
+		devices, err := Inst().V.GetStorageDevices(eachNode)
+		if err != nil {
+			return nil, err
+		}
+		if len(devices) > 0 {
+			storageNodes = append(storageNodes, eachNode)
 		}
 	}
 	return storageNodes, nil
