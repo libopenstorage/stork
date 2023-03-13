@@ -3,6 +3,12 @@ package tests
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -17,11 +23,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math/rand"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 // This is to create multiple users and groups
@@ -3793,7 +3794,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, user)
 				restoreNames = append(restoreNames, restoreName)
 				log.Infof("Creating restore %s for user %s", restoreName, user)
-				err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctxNonAdmin)
+				_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctxNonAdmin)
 				log.FailOnError(err, "Failed to create restore %s for user %s", restoreName, user)
 			}
 		})
