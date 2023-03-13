@@ -1823,7 +1823,8 @@ func PerformSystemCheck() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetNodes()
-			expect(nodes).NotTo(beEmpty())
+			dash.VerifyFatal(len(nodes) > 0, true, "verify nodes list is not empty")
+			coreNodes := make([]string, 0)
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
@@ -1834,12 +1835,17 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
+					log.FailOnError(err, "error checking for cores in node %s", n.Name)
 					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
-					// Collect Support Bundle only once
-					CollectSupport()
-					log.Fatalf("Core generated, please check logs for more details")
+					coreNodes = append(coreNodes, n.Name)
 				}
 			}
+			if len(coreNodes) > 0 {
+				// Collect Support Bundle only once
+				CollectSupport()
+				log.Warn("Cores are generated. Please check logs for more details")
+			}
+			dash.VerifyFatal(len(coreNodes), 0, "verify if cores are generated in one or more nodes")
 		})
 	})
 }
@@ -2004,7 +2010,6 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	log.Debugf("contexts: %v", &contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
@@ -2084,7 +2089,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator(), reverse)
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksCluster(), reverse)
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -5277,8 +5282,8 @@ func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	return poolDetails, nil
 }
 
-// IsEksPxOperator returns true if current operator installation is on an EKS cluster
-func IsEksPxOperator() bool {
+// IsEksCluster returns true if current operator installation is on an EKS cluster
+func IsEksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsEKS(stc) {
 			logrus.Infof("EKS installation with PX operator detected.")
@@ -5733,4 +5738,65 @@ func SetupTestRail() {
 	} else {
 		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
+}
+
+// AsgKillNode terminates the given node
+func AsgKillNode(nodeToKill node.Node) error {
+	initNodes := node.GetStorageDriverNodes()
+	initNodeNames := make([]string, len(initNodes))
+	var err error
+	for _, iNode := range initNodes {
+		initNodeNames = append(initNodeNames, iNode.Name)
+	}
+	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// workaround for eks until EKS sdk is implemented
+		if IsEksCluster() {
+			_, err = Inst().N.RunCommandWithNoRetry(nodeToKill, "ifconfig eth0 down  < /dev/null &", node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+
+		} else {
+			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+		}
+
+	})
+	if err != nil {
+		return err
+	}
+
+	stepLog = "Wait for  node get replaced by autoscaling group"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		t := func() (interface{}, bool, error) {
+
+			err = Inst().S.RefreshNodeRegistry()
+			if err != nil {
+				return "", true, err
+			}
+
+			err = Inst().V.RefreshDriverEndpoints()
+			if err != nil {
+				return "", true, err
+			}
+
+			newNodesList := node.GetStorageDriverNodes()
+
+			for _, nNode := range newNodesList {
+				if !Contains(initNodeNames, nNode.Name) {
+					return "", false, nil
+				}
+			}
+
+			return "", true, fmt.Errorf("no new node scaled up")
+		}
+
+		_, err = task.DoRetryWithTimeout(t, defaultAutoStorageNodeRecoveryTimeout, waitResourceCleanup)
+
+	})
+	return err
+
 }

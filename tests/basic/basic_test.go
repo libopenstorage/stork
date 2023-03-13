@@ -56,21 +56,24 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-
 	TestLogger = CreateLogger("SystemCheck.log")
-	defer dash.TestSetEnd()
 
+	defer dash.TestSetEnd()
 	defer CloseLogger(TestLogger)
 	defer dash.TestCaseEnd()
-	log.SetTorpedoFileOutput(TestLogger)
+	// making sure validate clean up executed even if systemcheck failed
+	defer func() {
+		if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
+			ValidateCleanup()
+		}
+	}()
 
+	log.SetTorpedoFileOutput(TestLogger)
 	dash.TestCaseBegin("System check", "validating system check and clean up", "", nil)
 	if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
 		PerformSystemCheck()
 	}
-	if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
-		ValidateCleanup()
-	}
+
 })
 
 func TestMain(m *testing.M) {
