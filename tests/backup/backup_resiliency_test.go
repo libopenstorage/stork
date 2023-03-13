@@ -166,7 +166,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -352,7 +352,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, _ := backup.GetAdminCtxFromSecret()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
@@ -569,7 +569,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, _ := backup.GetAdminCtxFromSecret()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
