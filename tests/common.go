@@ -1717,6 +1717,7 @@ func GetStorageNodes() ([]node.Node, error) {
 
 	storageNodes := []node.Node{}
 	nodes := node.GetStorageDriverNodes()
+	
 	for _, node := range nodes {
 		devices, err := Inst().V.GetStorageDevices(node)
 		if err != nil {
