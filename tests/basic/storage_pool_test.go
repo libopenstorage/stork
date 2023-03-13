@@ -7989,21 +7989,39 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			log.FailOnError(err, "Failed to get volumes from context")
 			for _, eachVol := range vols {
-				// Change Replica sets of each volumes created to 3
-				var maxReplicaFactor int64
-				var nodesToBeUpdated []string
-				var poolsToBeUpdated []string
-				maxReplicaFactor = 3
-				nodesToBeUpdated = nil
-				poolsToBeUpdated = nil
-				log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
-					nodesToBeUpdated, poolsToBeUpdated, true),
-					"Failed to set Replicaiton factor")
+				getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
+				log.FailOnError(err, "Failed to get replication factor on the volume")
 
-				// Sleep for some time before checking if any resync to start
-				time.Sleep(2 * time.Minute)
-				if inResync(eachVol.Name) {
-					WaitTillVolumeInResync(eachVol.Name)
+				var poolID []string
+				poolID, err = GetPoolIDsFromVolName(eachVol.Name)
+				log.FailOnError(err, "Failed to get PoolID from olume Name [%s]", eachVol.Name)
+
+				for _, eachPoolUUID := range poolID {
+					if eachPoolUUID == poolUUID {
+						// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 3
+						if len(getReplicaSets) == 3 {
+							newRepl := int64(len(getReplicaSets) - 1)
+							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, newRepl,
+								nil, nil, true),
+								"Failed to set Replicaiton factor")
+						}
+						// Change Replica sets of each volumes created to 3
+						var maxReplicaFactor int64
+						var nodesToBeUpdated []string
+						var poolsToBeUpdated []string
+						maxReplicaFactor = 3
+						nodesToBeUpdated = nil
+						poolsToBeUpdated = nil
+						log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
+							nodesToBeUpdated, poolsToBeUpdated, true),
+							"Failed to set Replicaiton factor")
+
+						// Sleep for some time before checking if any resync to start
+						time.Sleep(2 * time.Minute)
+						if inResync(eachVol.Name) {
+							WaitTillVolumeInResync(eachVol.Name)
+						}
+					}
 				}
 			}
 		}
