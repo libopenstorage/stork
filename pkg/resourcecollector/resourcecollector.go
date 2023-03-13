@@ -1082,12 +1082,7 @@ func (r *ResourceCollector) getDynamicClient(
 	}
 
 	// The default ruleset doesn't pluralize quotas correctly, so add that
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
+	ruleset := GetDefaultRuleSet()
 	resource := &metav1.APIResource{
 		Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
@@ -1159,4 +1154,20 @@ func (r *ResourceCollector) prepareRancherApplicationResource(
 		}
 	}
 	return nil
+}
+
+func GetDefaultRuleSet() *inflect.Ruleset {
+	// TODO: we should use k8s code generator logic to pluralize
+	// crd resources instead of depending on inflect lib
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
+	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
+	ruleset.AddPlural("mongodb", "mongodb")
+	ruleset.AddPlural("wkc", "wkc")
+	ruleset.AddPlural("factsheet", "factsheet")
+	ruleset.AddPlural("datarefinery", "datarefinery")
+
+	return ruleset
 }

@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
@@ -219,12 +218,7 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 		return nil
 	}
 
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
+	ruleset := resourcecollector.GetDefaultRuleSet()
 
 	for _, spec := range transform.Spec.Objects {
 		group, version, kind, err := getGVK(spec.Resource)
