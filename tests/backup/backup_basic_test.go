@@ -85,6 +85,9 @@ func BackupInitInstance() {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
 	}
+
+	SetupTestRail()
+
 	// Getting Px version info
 	pxVersion, err := Inst().V.GetDriverVersion()
 	log.FailOnError(err, "Error occurred while getting PX version")
@@ -101,7 +104,8 @@ func BackupInitInstance() {
 	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
 	log.FailOnError(err, "Getting Px-Backup version")
 	version := versionResponse.GetVersion()
-	t.Tags["px-backup-version"] = fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit())
+	PxBackupVersion = fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit())
+	t.Tags["px-backup-version"] = PxBackupVersion
 	t.Tags["px-backup-build-date"] = fmt.Sprintf("%s", version.GetBuildDate())
 
 }

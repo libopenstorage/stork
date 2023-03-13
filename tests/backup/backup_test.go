@@ -30,7 +30,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")
 	})
 })
@@ -76,7 +76,7 @@ var _ = Describe("{UserGroupManagement}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("Cleanup started")
 		err := backup.DeleteUser("testuser1")
 		dash.VerifySafely(err, nil, "Delete user testuser1")
@@ -254,7 +254,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")

@@ -1162,7 +1162,7 @@ func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 		for _, cloudCredential := range response.CloudCredentials {
 			cloudCredentialMap[cloudCredential.Uid] = cloudCredential.Name
 		}
-		log.Infof("The backup locations and their UID are %v", cloudCredentialMap)
+		log.Infof("The cloud credentials and their UID are %v", cloudCredentialMap)
 	} else {
 		log.Info("No cloud credentials found")
 	}
