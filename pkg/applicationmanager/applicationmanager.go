@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	log "github.com/sirupsen/logrus"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
@@ -37,6 +38,7 @@ func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, st
 	if err := a.createCRD(); err != nil {
 		return err
 	}
+	log.Warn("*ApplicationManager Init")
 	backupController := controllers.NewApplicationBackup(mgr, a.Recorder, a.ResourceCollector)
 	if err := backupController.Init(mgr, adminNamespace, a.RsyncTime); err != nil {
 		return err
@@ -79,6 +81,7 @@ func (a *ApplicationManager) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.BackupLocation{}).Name(),
 	}
+	log.Printf("*Registering AppReg")
 	appReg := apiextensions.CustomResource{
 		Name:    stork_api.ApplicationRegistrationResourceName,
 		Plural:  stork_api.ApplicationRegistrationResourcePlural,

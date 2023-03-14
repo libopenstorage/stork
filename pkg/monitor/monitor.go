@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -254,6 +255,18 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	if err != nil {
 		log.Errorf("Error getting pods: %v", err)
 		return
+	}
+
+	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		list, err := storkcache.Instance().ListApplicationRegistrations()
+		logrus.Warn("err = %v", err)
+		logrus.Warn("ListApplicationRegistrations = %v", list)
+	}
+
+	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		list, err := storkcache.Instance().GetApplicationRegistration("volumesnapshot")
+		logrus.Warn("err = %v", err)
+		logrus.Warn("GetApplicationRegistration = %v", list)
 	}
 
 	// delete volume attachments if the node is down for this pod
