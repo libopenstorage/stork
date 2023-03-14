@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -10,6 +11,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -893,5 +895,176 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		log.Infof("Deleting backup location, cloud credentials and clusters")
 		CleanupCloudSettingsAndClusters(newBackupLocationMap, credName, cloudCredUID, ctx)
 
+	})
+})
+
+var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
+	var (
+		contexts                   []*scheduler.Context
+		cloudCredUID               string
+		cloudCredName              string
+		backupLocationName         string
+		backupLocationUID          string
+		backupLocationMap          map[string]string
+		periodicSchedulePolicyName string
+		periodicSchedulePolicyUid  string
+		scheduleName               string
+		appNamespaces              []string
+		appClusterName             string
+		restoreName                string
+		nextScheduleBackupName     interface{}
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AllNSBackupWithIncludeNewNSOption", "Verification of schedule backups created with include new namespaces option", nil, 84760)
+	})
+
+	It("Validates schedule backups created with include new namespaces option includes newly created namespaces", func() {
+		Step("Create cloud credentials and backup locations", func() {
+			log.InfoD("Creating cloud credentials and backup locations")
+			providers := getProviders()
+			backupLocationMap = make(map[string]string)
+			for _, provider := range providers {
+				cloudCredUID = uuid.New()
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				log.InfoD("Creating cloud credential named [%s] and uid [%s] using [%s] as provider", cloudCredUID, cloudCredName, provider)
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				bucketName := getGlobalBucketName(provider)
+				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location named [%s] with uid [%s] of [%s] as provider", backupLocationName, backupLocationUID, provider))
+			}
+		})
+		Step("Configure source and destination clusters with px-central-admin ctx", func() {
+			log.InfoD("Configuring source and destination clusters with px-central-admin ctx")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
+			appClusterName = destinationClusterName
+			clusterStatus, clusterUid := Inst().Backup.RegisterBackupCluster(orgID, appClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying registration of cluster named [%s] with uid [%s] as backup cluster", appClusterName, clusterUid))
+		})
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating a schedule policy")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
+			periodicSchedulePolicyUid = uuid.New()
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
+			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
+			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
+		})
+		Step("Create schedule backups", func() {
+			log.InfoD("Creating a schedule backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
+			namespaces := []string{"*"}
+			labelSelectors := make(map[string]string)
+			err = CreateScheduleBackup(scheduleName, appClusterName, backupLocationName, backupLocationUID, namespaces,
+				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+		})
+		// To ensure applications are deployed after a schedule backup is created
+		Step("Schedule applications to create new namespaces", func() {
+			log.InfoD("Scheduling applications to create new namespaces")
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				for _, ctx := range appContexts {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					log.InfoD("Scheduled application with namespace [%s]", namespace)
+					// appNamespaces in this scenario is a of newly created namespaces
+					appNamespaces = append(appNamespaces, namespace)
+				}
+			}
+		})
+		Step("Validate new namespaces", func() {
+			log.InfoD("Validating new namespaces")
+			ValidateApplications(contexts)
+		})
+		Step("Verify new application namespaces inclusion in next schedule backup", func() {
+			log.InfoD("Verifying new application namespaces inclusion in next schedule backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching names of all schedule backups of schedule named [%s]", scheduleName))
+			currentScheduleBackupCount := len(allScheduleBackupNames)
+			log.InfoD("Current number of schedule backups is [%v]", currentScheduleBackupCount)
+			nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+			log.InfoD("Ordinal of the next schedule backup is [%v]", nextScheduleBackupOrdinal)
+			checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+				ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+				if err != nil {
+					return "", true, err
+				}
+				return ordinalScheduleBackupName, false, nil
+			}
+			log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
+			time.Sleep(15 * time.Minute)
+			nextScheduleBackupName, err = task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
+			log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName.(string))
+			_, err = backupSuccessCheck(nextScheduleBackupName.(string), orgID, 0, 0, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying success of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName.(string), scheduleName))
+			nextScheduleBackupUid, err := Inst().Backup.GetBackupUID(ctx, nextScheduleBackupName.(string), orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
+			backupInspectRequest := &api.BackupInspectRequest{
+				Name:  nextScheduleBackupName.(string),
+				Uid:   nextScheduleBackupUid,
+				OrgId: orgID,
+			}
+			resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspecting next schedule backup named [%s] and uid [%s]", nextScheduleBackupName, nextScheduleBackupUid))
+			backedUpNamespaces := resp.GetBackup().GetNamespaces()
+			log.InfoD("Namespaces in next schedule backup named [%s] and uid [%s] are [%v]", nextScheduleBackupName, nextScheduleBackupUid, backedUpNamespaces)
+			for _, namespace := range appNamespaces {
+				dash.VerifyFatal(strings.Contains(strings.Join(backedUpNamespaces, ","), namespace), true, fmt.Sprintf("Checking the new application namespace [%s] against the next scheduled backup named [%s]", namespace, nextScheduleBackupName))
+			}
+		})
+		Step("Restore new application namespaces from next schedule backup", func() {
+			log.InfoD("Restoring new application namespaces from next schedule backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			namespaceMapping := make(map[string]string)
+			// Modifying namespaceMapping to restore only new namespaces
+			for _, namespace := range appNamespaces {
+				namespaceMapping[namespace] = namespace
+			}
+			log.InfoD("Namespace mapping used for restoring - %v", namespaceMapping)
+			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
+			err = CreateRestore(restoreName, nextScheduleBackupName.(string), namespaceMapping, appClusterName, orgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
+		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
+		allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s]", scheduleName))
+		log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName})
+		err = DeleteSchedule(scheduleName, scheduleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule named [%s]", scheduleName))
+		err = DeleteRestore(restoreName, orgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
+		ValidateAndDestroy(contexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
