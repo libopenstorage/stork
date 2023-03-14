@@ -271,10 +271,12 @@ const (
 )
 
 var pxRuntimeOpts string
+var PxBackupVersion string
 
-const (
-	taskNamePrefix = "backupcreaterestore"
-	orgID          = "default"
+var (
+	RunIdForSuite             int
+	TestRailSetupSuccessful   bool
+	CurrentTestRailTestCaseId int
 )
 
 var (
@@ -404,18 +406,7 @@ func InitInstance() {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occured while Backup Driver Initialization")
 	}
-	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
-		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
-		if err == nil {
-			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
-				err = fmt.Errorf("not all details provided to update testrail")
-				log.FailOnError(err, "Error occured while testrail initialization")
-			}
-			testrailuttils.CreateMilestone()
-		}
-	} else {
-		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
-	}
+	SetupTestRail()
 
 	if jiraUserName != "" && jiraToken != "" {
 		log.Infof("Initializing JIRA connection")
@@ -1832,7 +1823,8 @@ func PerformSystemCheck() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetNodes()
-			expect(nodes).NotTo(beEmpty())
+			dash.VerifyFatal(len(nodes) > 0, true, "verify nodes list is not empty")
+			coreNodes := make([]string, 0)
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
@@ -1843,12 +1835,17 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
+					log.FailOnError(err, "error checking for cores in node %s", n.Name)
 					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
-					// Collect Support Bundle only once
-					CollectSupport()
-					log.Fatalf("Core generated, please check logs for more details")
+					coreNodes = append(coreNodes, n.Name)
 				}
 			}
+			if len(coreNodes) > 0 {
+				// Collect Support Bundle only once
+				CollectSupport()
+				log.Warn("Cores are generated. Please check logs for more details")
+			}
+			dash.VerifyFatal(len(coreNodes), 0, "verify if cores are generated in one or more nodes")
 		})
 	})
 }
@@ -2013,7 +2010,6 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	log.Debugf("contexts: %v", &contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
@@ -2027,12 +2023,14 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 			log.Errorf("Error in getting driver version")
 		}
 		testrailObject := testrailuttils.Testrail{
-			Status:        testStatus,
-			TestID:        ids[0],
-			RunID:         ids[1],
-			DriverVersion: driverVersion,
+			Status:          testStatus,
+			TestID:          ids[0],
+			RunID:           ids[1],
+			DriverVersion:   driverVersion,
+			PxBackupVersion: PxBackupVersion,
 		}
 		testrailuttils.AddTestEntry(testrailObject)
+		log.Infof("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testRailHostname, ids[1], testrailuttils.PwxProjectID)
 	}
 }
 
@@ -2091,7 +2089,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator(), reverse)
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksCluster(), reverse)
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -4867,6 +4865,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
+	if TestRailSetupSuccessful && testRepoID != 0 {
+		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
+		CurrentTestRailTestCaseId = testRepoID
+	}
 }
 
 // enableAutoFSTrim on supported PX version.
@@ -4906,6 +4908,15 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+// EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
+func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	CloseLogger(TestLogger)
+	dash.TestCaseEnd()
+	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
+		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	}
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -5271,8 +5282,8 @@ func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	return poolDetails, nil
 }
 
-// IsEksPxOperator returns true if current operator installation is on an EKS cluster
-func IsEksPxOperator() bool {
+// IsEksCluster returns true if current operator installation is on an EKS cluster
+func IsEksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsEKS(stc) {
 			logrus.Infof("EKS installation with PX operator detected.")
@@ -5710,4 +5721,82 @@ outer:
 	}
 
 	return "", fmt.Errorf("no pool with metadata in node [%s]", stNode.Name)
+}
+
+// SetupTestRail checks if the required parameters for testrail are passed, verifies connectivity and creates milestone if it does not exist
+func SetupTestRail() {
+	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
+		err := testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
+		if err == nil {
+			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
+				err = fmt.Errorf("not all details provided to update testrail")
+				log.FailOnError(err, "Error occurred while testrail initialization")
+			}
+			testrailuttils.CreateMilestone()
+			TestRailSetupSuccessful = true
+		}
+	} else {
+		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+	}
+}
+
+// AsgKillNode terminates the given node
+func AsgKillNode(nodeToKill node.Node) error {
+	initNodes := node.GetStorageDriverNodes()
+	initNodeNames := make([]string, len(initNodes))
+	var err error
+	for _, iNode := range initNodes {
+		initNodeNames = append(initNodeNames, iNode.Name)
+	}
+	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// workaround for eks until EKS sdk is implemented
+		if IsEksCluster() {
+			_, err = Inst().N.RunCommandWithNoRetry(nodeToKill, "ifconfig eth0 down  < /dev/null &", node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+
+		} else {
+			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+		}
+
+	})
+	if err != nil {
+		return err
+	}
+
+	stepLog = "Wait for  node get replaced by autoscaling group"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		t := func() (interface{}, bool, error) {
+
+			err = Inst().S.RefreshNodeRegistry()
+			if err != nil {
+				return "", true, err
+			}
+
+			err = Inst().V.RefreshDriverEndpoints()
+			if err != nil {
+				return "", true, err
+			}
+
+			newNodesList := node.GetStorageDriverNodes()
+
+			for _, nNode := range newNodesList {
+				if !Contains(initNodeNames, nNode.Name) {
+					return "", false, nil
+				}
+			}
+
+			return "", true, fmt.Errorf("no new node scaled up")
+		}
+
+		_, err = task.DoRetryWithTimeout(t, defaultAutoStorageNodeRecoveryTimeout, waitResourceCleanup)
+
+	})
+	return err
+
 }
