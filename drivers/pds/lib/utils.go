@@ -630,7 +630,9 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	isVersionAvailable = false
 	isBuildAvailable = false
 	for i := 0; i < len(versions); i++ {
-		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
+		log.Debugf("version name %s and is enabled=%t", *versions[i].Name, *versions[i].Enabled)
+		if *versions[i].Name == dsVersion {
+			log.Debugf("DS Version %s is enabled in the control plane", dsVersion)
 			images, _ = components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
 				if *images[j].Build == dsBuild {
