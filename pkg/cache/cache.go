@@ -6,11 +6,13 @@ import (
 	"sync"
 
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/client-go/rest"
 	controllercache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // SharedInformerCache  is an eventually consistent cache. The cache interface
@@ -46,7 +48,7 @@ var (
 	sharedInformerCache *cache
 )
 
-func CreateSharedInformerCache() error {
+func CreateSharedInformerCache(mgr manager.Manager) error {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 	if sharedInformerCache != nil {
@@ -82,6 +84,7 @@ func CreateSharedInformerCache() error {
 
 	sharedInformerCache = &cache{}
 	sharedInformerCache.controllerCache, err = controllercache.New(config, controllercache.Options{
+		Scheme:            mgr.GetScheme(),
 		TransformByObject: transformMap,
 	})
 	if err != nil {
@@ -93,6 +96,19 @@ func CreateSharedInformerCache() error {
 	if !synced {
 		return fmt.Errorf("error syncing the shared informer cache")
 	}
+
+	appRegList := &storkv1alpha1.ApplicationRegistrationList{}
+	if err = sharedInformerCache.controllerCache.List(context.Background(), appRegList); err != nil {
+		logrus.Warnf("*err = %v", err)
+	}
+	logrus.Warnf("*ApplicationRegistrationList = %v", appRegList)
+
+	podList := &corev1.PodList{}
+	if err = sharedInformerCache.controllerCache.List(context.Background(), podList); err != nil {
+		logrus.Warnf("*err = %v", err)
+	}
+	logrus.Warnf("*podList = %v", podList)
+
 	return nil
 }
 
