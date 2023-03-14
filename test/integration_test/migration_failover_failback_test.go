@@ -5,8 +5,6 @@ package integrationtest
 
 import (
 	"fmt"
-	"testing"
-
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -15,6 +13,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"testing"
+	"time"
 )
 
 const (
@@ -27,6 +27,9 @@ func testMigrationFailoverFailback(t *testing.T) {
 	// Create secrets on source and destination
 	// Since the secrets need to be created on the destination before migration
 	// is triggered using the API instead of spec factory in torpedo
+	// Add sleep to hault CBT to validate cluster issues
+	time.Sleep(10 * time.Hour)
+
 	err := setDestinationKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
