@@ -247,6 +247,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	var pods *v1.PodList
 	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
 		pods, err = storkcache.Instance().ListTransformedPods()
+		// logrus.Warn("Pods = %v", pods)
 	} else {
 		log.Warnf("shared informer cache has not been initialized.")
 		pods, err = core.Instance().GetPods("", nil)
@@ -255,6 +256,34 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 		log.Errorf("Error getting pods: %v", err)
 		return
 	}
+
+	// if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	// 	crdList, err := storkcache.Instance().ListApplicationRegistrations()
+	// 	logrus.Warn("* Correct")
+	// 	logrus.Warn("err = %v", err)
+	// 	logrus.Warn("ListApplicationRegistrations = %v", crdList)
+	// }
+
+	// if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	// 	crdList, err := storkcache.Instance().ListStorageClasses()
+	// 	logrus.Warn("* Correct")
+	// 	logrus.Warn("err = %v", err)
+	// 	logrus.Warn("ListStorageClasses = %v", crdList)
+	// }
+
+	// if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	// 	crdList, err := storkcache.Instance().GetStorageClass("px-csi-db")
+	// 	logrus.Warn("* Correct")
+	// 	logrus.Warn("err = %v", err)
+	// 	logrus.Warn("GetStorageClass = %v", crdList)
+	// }
+
+	// if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	// 	crdList, err := storkcache.Instance().GetApplicationRegistration("volumesnapshot")
+	// 	logrus.Warn("* Correct")
+	// 	logrus.Warn("err = %v", err)
+	// 	logrus.Warn("GetApplicationRegistration = %v", crdList)
+	// }
 
 	// delete volume attachments if the node is down for this pod
 	err = m.cleanupVolumeAttachmentsByNode(node)

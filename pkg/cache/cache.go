@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"sync"
 
+	stork "github.com/libopenstorage/stork/pkg/apis/stork"
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	controllercache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,13 +85,63 @@ func CreateSharedInformerCache() error {
 		},
 	}
 
+	// var gvkToType map[schema.GroupVersionKind]reflect.Type
+	// gvkToTypeMap := make(map[schema.GroupVersionKind]reflect.Type)
+	var gvkToTypeMap = map[schema.GroupVersionKind]runtime.Object{
+		{Group: stork.GroupName, Version: "v1alpha1", Kind: storkv1alpha1.ApplicationRegistrationResourcePlural}: &storkv1alpha1.ApplicationRegistration{},
+		{Group: "", Version: "v1", Kind: "pods"}: &corev1.Pod{},
+
+		// Add more mappings for other types...
+	}
+
+	// gvkToTypeMap[appRegResource] = reflect.TypeOf(&storkv1alpha1.ApplicationRegistration{}).Elem()
+	// logrus.Warnf("Runtime reflect.TypeOf(&storkv1alpha1.ApplicationRegistration{}) = %v", reflect.TypeOf(&storkv1alpha1.ApplicationRegistration{}))
+	// logrus.Warnf("Runtime reflect.TypeOf(&storkv1alpha1.ApplicationRegistration{}).Elem() = %v", reflect.TypeOf(&storkv1alpha1.ApplicationRegistration{}).Elem())
+	// logrus.Warnf("Runtime gvkToType = %v", scheme.AddFieldLabelConversionFunc())
+	// logrus.Warnf("Runtime scheme = %v", scheme)
+
+	scheme := runtime.NewScheme()
+	// // Update the scheme with the given GVK to type mappings
+	for gvk, obj := range gvkToTypeMap {
+		logrus.Warnf("gvk.GroupVersion() = %v", gvk.GroupVersion())
+		scheme.AddKnownTypes(gvk.GroupVersion(), obj)
+	}
+
+	groupVersion := schema.GroupVersion{Group: "", Version: "v1"}
+	scheme.AddKnownTypes(groupVersion, &corev1.PodList{})
+	groupVersion2 := schema.GroupVersion{Group: "", Version: "v1"}
+	scheme.AddKnownTypes(groupVersion2, &metav1.ListOptions{})
+
+	groupVersion3 := schema.GroupVersion{Group: "stork.libopenstorage.org", Version: "v1alpha1"}
+	scheme.AddKnownTypes(groupVersion3, &storkv1alpha1.ApplicationRegistrationList{})
+	groupVersion4 := schema.GroupVersion{Group: "stork.libopenstorage.org", Version: "v1alpha1"}
+	scheme.AddKnownTypes(groupVersion4, &storkv1alpha1.ApplicationRegistration{})
+	groupVersion5 := schema.GroupVersion{Group: "stork.libopenstorage.org", Version: "v1alpha1"}
+	scheme.AddKnownTypes(groupVersion5, &metav1.ListOptions{})
+
+	groupVersion6 := schema.GroupVersion{Group: storagev1.GroupName, Version: storagev1.SchemeGroupVersion.Version}
+	scheme.AddKnownTypes(groupVersion6, &storagev1.StorageClassList{})
+	groupVersion7 := schema.GroupVersion{Group: storagev1.GroupName, Version: storagev1.SchemeGroupVersion.Version}
+	scheme.AddKnownTypes(groupVersion7, &storagev1.StorageClass{})
+	groupVersion8 := schema.GroupVersion{Group: storagev1.GroupName, Version: storagev1.SchemeGroupVersion.Version}
+	scheme.AddKnownTypes(groupVersion8, &metav1.ListOptions{})
+	// storkGV := schema.GroupVersion{
+	//     Group:   storkv1alpha1.GroupName,
+	//     Version: storkv1alpha1.Version,
+	// }
+
+	logrus.Warnf("Runtime updated scheme = %v", scheme)
+	// logrus.Warnf("Runtime gvkTypeMap = %v", scheme.Scheme.gvkTypeMap)
+
 	sharedInformerCache = &cache{}
 	sharedInformerCache.controllerCache, err = controllercache.New(config, controllercache.Options{
+		Scheme:            scheme,
 		TransformByObject: transformMap,
 	})
 	if err != nil {
 		return err
 	}
+
 	go sharedInformerCache.controllerCache.Start(context.Background())
 
 	synced := sharedInformerCache.controllerCache.WaitForCacheSync(context.Background())
