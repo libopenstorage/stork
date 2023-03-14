@@ -1227,7 +1227,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		}
 
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
-		err = DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID)
+		err = DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
 		log.Infof("Cleaning cloud credential")
 		//TODO: Eliminate time.Sleep
@@ -2995,7 +2995,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 
 		Step("Removing backup location after sharing backup with all the users", func() {
 			log.InfoD("Removing backup location after sharing backup with all the users")
-			err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
+			err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
 		})
 
@@ -4080,7 +4080,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 			for backupLocationUid, backupLocationName := range allBackupLocations {
 				if userBackupLocationMapping[userName] == backupLocationName {
-					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID)
+					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 				}
 			}
