@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/client-go/rest"
@@ -93,6 +94,13 @@ func CreateSharedInformerCache() error {
 	if !synced {
 		return fmt.Errorf("error syncing the shared informer cache")
 	}
+
+	appRegList := &storkv1alpha1.ApplicationRegistrationList{}
+	if err := sharedInformerCache.controllerCache.List(context.Background(), appRegList); err != nil {
+		logrus.Warnf("** ApplicationRegistrationList = %v", appRegList)
+		return nil
+	}
+
 	return nil
 }
 
