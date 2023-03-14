@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -1476,4 +1477,16 @@ func GetLatestScheduleBackupUID(ctx context.Context, scheduleName string, orgID 
 		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
 	}
 	return allScheduleBackupUids[len(allScheduleBackupUids)-1], nil
+}
+
+// IsPresent verifies if the given data is present in slice of data
+func IsPresent(dataSlice interface{}, data interface{}) bool {
+	s := reflect.ValueOf(dataSlice)
+	for i := 0; i < s.Len(); i++ {
+		if s.Index(i).Interface() == data {
+			return true
+		}
+	}
+	return false
+
 }

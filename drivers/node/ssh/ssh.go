@@ -731,7 +731,7 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 // GetBlockDrives returns the block drives on the node
 func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
 	drives := make(map[string]*node.BlockDrive)
-	driveCmd := fmt.Sprintf("sudo /bin/lsblk -f -P -s -d -p -o NAME,LABEL,SIZE,MOUNTPOINT,FSTYPE,TYPE")
+	driveCmd := fmt.Sprintf("sudo /bin/lsblk -f -P -s -p -o NAME,LABEL,SIZE,MOUNTPOINT,FSTYPE,TYPE")
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, driveCmd, false)
 		if err != nil {
@@ -750,6 +750,9 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 
 	for _, line := range strings.Split(strings.TrimSpace(driveOutput), "\n") {
 		drive := &node.BlockDrive{}
+		if strings.Contains(line, "mapper") {
+			continue
+		}
 		columns := strings.Split(line, " ")
 		for _, col := range columns {
 			if ok, _ := regexp.MatchString("^NAME", col); ok {
@@ -767,7 +770,17 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 						kv := strings.Split(label, "=")
 						driveLabels[kv[0]] = kv[1]
 					} else {
-						driveLabels[label] = ""
+						if label != "" {
+							// this logic is required for identifying pools disks in case of DMthin using labels
+							val := "any:pwx"
+							if strings.Contains(label, val) {
+								pos := strings.LastIndex(label, val)
+								adjustedPos := pos + len(val)
+								driveLabels["pxpool"] = label[adjustedPos:]
+							} else {
+								driveLabels[label] = "true"
+							}
+						}
 					}
 				}
 				drive.Labels = driveLabels
