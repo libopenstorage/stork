@@ -120,6 +120,7 @@ func (a *ApplicationManager) createCRD() error {
 		}
 		err = k8sutils.CreateCRD(appReg)
 		if err != nil && !errors.IsAlreadyExists(err) {
+			log.Warnf("Create AppReg CRD error = %v", err)
 			return err
 		}
 		return apiextensions.Instance().ValidateCRD(appReg.Plural+"."+appReg.Group, validateCRDTimeout, validateCRDInterval)
