@@ -205,7 +205,7 @@ var _ = AfterSuite(func() {
 	allBackupLocations, err := getAllBackupLocations(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 	for backupLocationUid, backupLocationName := range allBackupLocations {
-		err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID)
+		err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 	}
 
