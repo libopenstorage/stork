@@ -8336,10 +8336,9 @@ var _ = Describe("{PXRestartAddDiskWhilePoolExpand}", func() {
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) * 2
 
 		log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-
+		time.Sleep(10 * time.Second)
 		err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
 		err = WaitForExpansionToStart(poolToBeResized.Uuid)
 		log.FailOnError(err, "error waiting for expansion to start on the pool [%s]", poolToBeResized.Uuid)
 		//px restart
