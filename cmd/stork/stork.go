@@ -238,6 +238,21 @@ func run(c *cli.Context) {
 	} else if err != nil {
 		log.Warnf("Unable to create stork version configmap: %v", err)
 	}
+	// create configmap to store stork admin namespace details.
+	storkControllerCm := &api_v1.ConfigMap{}
+	storkControllerCm.Name = k8sutils.StorkControllerConfigMapName
+	storkControllerCm.Namespace = defaultAdminNamespace
+	storkControllerCm.Data = make(map[string]string)
+	storkControllerCm.Data[k8sutils.AdminNsKey] = c.String("admin-namespace")
+	_, err = schedops.Instance().CreateConfigMap(storkControllerCm)
+	if k8s_errors.IsAlreadyExists(err) {
+		_, err := schedops.Instance().UpdateConfigMap(storkControllerCm)
+		if err != nil {
+			log.Warnf("unable to update stork controller configmap: %v", err)
+		}
+	} else if err != nil {
+		log.Warnf("Unable to create stork controller configmap: %v", err)
+	}
 	marketPlace := os.Getenv("MARKET_PLACE")
 	kdmpConfig := &api_v1.ConfigMap{}
 	kdmpConfig.Name = stork_driver.KdmpConfigmapName

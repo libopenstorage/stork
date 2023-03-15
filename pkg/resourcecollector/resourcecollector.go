@@ -1168,6 +1168,14 @@ func GetDefaultRuleSet() *inflect.Ruleset {
 	ruleset.AddPlural("wkc", "wkc")
 	ruleset.AddPlural("factsheet", "factsheet")
 	ruleset.AddPlural("datarefinery", "datarefinery")
+	ruleset.AddPlural("ug", "ug")
+	ruleset.AddPlural("hardwaredata", "hardwaredata")
+	ruleset.AddPlural("mongodbmulti", "mongodbmulti")
+	ruleset.AddPlural("dp", "dp")
+	ruleset.AddPlural("wmla-watch", "wmla-watch")
+	ruleset.AddPlural("hadoop", "hadoop")
+	ruleset.AddPlural("scheduling", "scheduling")
+	ruleset.AddPlural("spss", "spss")
 
 	return ruleset
 }
