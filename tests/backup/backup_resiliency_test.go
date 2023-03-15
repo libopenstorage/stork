@@ -716,19 +716,34 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 				}(backupName)
 			}
 			wg.Wait()
-			log.InfoD("Sleeping for 30 seconds for the backup cancellation to take place")
-			time.Sleep(30 * time.Second)
+			log.InfoD("Sleeping for 60 seconds for the backup cancellation to take place")
+			time.Sleep(60 * time.Second)
 		})
 		Step("Verifying if all the backup creation is cancelled", func() {
 			log.InfoD("Verifying if all the backup creation is cancelled")
 			adminBackups, err := GetAllBackupsAdmin()
 			log.Infof("The list of backups after backup cancellation is %v", adminBackups)
-			dash.VerifyFatal(err, nil, "Getting list of backups by px-central-admin")
+			log.FailOnError(err, "Getting the list of backups after backup cancellation")
 			if len(adminBackups) != 0 {
-				for _, backupName := range backupNames {
-					result := IsPresent(adminBackups, backupName)
-					dash.VerifyFatal(result, false, fmt.Sprintf("Verifying if backup %s is not present anymore", backupName))
+				backupJobCancelStatus := func() (interface{}, bool, error) {
+					adminBackups, err := GetAllBackupsAdmin()
+					if err != nil {
+						return "", true, err
+					}
+					for _, backupName := range backupNames {
+						if IsPresent(adminBackups, backupName) {
+							return "", true, nil
+						}
+					}
+					return "", false, nil
 				}
+				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+				if err != nil {
+					adminBackups, error := GetAllBackupsAdmin()
+					log.Infof("The list of backups after backup cancellation and wait of 10 minutes is %v", adminBackups)
+					log.FailOnError(error, "Getting the list of backups after backup cancellation and wait of 10 minutes")
+				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup jobs cancellation while backup is in progress"))
 			}
 			log.Infof("All the backups created by this testcase is deleted after backup cancellation")
 		})

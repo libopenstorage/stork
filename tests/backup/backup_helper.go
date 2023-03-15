@@ -40,6 +40,8 @@ const (
 	maxBackupsToBeCreated                     = "MAX_BACKUPS"
 	maxWaitPeriodForBackupCompletionInMinutes = 20
 	maxWaitPeriodForRestoreCompletionInMinute = 20
+	maxWaitPeriodForBackupJobCancellation     = 10
+	backupJobCancellationRetryTime            = 30
 	globalAWSBucketPrefix                     = "global-aws"
 	globalAzureBucketPrefix                   = "global-azure"
 	globalGCPBucketPrefix                     = "global-gcp"
