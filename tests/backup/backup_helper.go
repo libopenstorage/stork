@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 10 * time.Minute
+	cloudAccountDeleteTimeout                 = 20 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
 	restoreNamePrefix                         = "tp-restore"
@@ -50,6 +50,7 @@ const (
 	firstName                                 = "firstName"
 	lastName                                  = "lastName"
 	password                                  = "Password1"
+	mongodbStatefulset                        = "pxc-backup-mongodb"
 )
 
 var (
