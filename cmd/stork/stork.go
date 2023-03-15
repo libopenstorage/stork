@@ -335,13 +335,6 @@ func run(c *cli.Context) {
 		os.Exit(0)
 	}()
 
-	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
-	// In this way, even the stork extender code can use this cache, since the extender filter/process
-	// requests can land on any stork pod.
-	if err := cache.CreateSharedInformerCache(mgr); err != nil {
-		log.Fatalf("failed to setup shared informer cache: %v", err)
-	}
-
 	// Setup scheme for all stork resources
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
 		log.Fatalf("Setup scheme failed for stork resources: %v", err)
@@ -566,6 +559,13 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 		if err := dataexport.Init(mgr); err != nil {
 			log.Fatalf("Error initializing kdmp controller: %v", err)
 		}
+	}
+
+	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
+	// In this way, even the stork extender code can use this cache, since the extender filter/process
+	// requests can land on any stork pod.
+	if err := cache.CreateSharedInformerCache(mgr); err != nil {
+		log.Fatalf("failed to setup shared informer cache: %v", err)
 	}
 
 	go func() {
