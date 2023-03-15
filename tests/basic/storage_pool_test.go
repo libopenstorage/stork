@@ -5129,12 +5129,11 @@ func inResync(vol string) bool {
 	}
 	for _, v := range volDetails.RuntimeState {
 		log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
-		if v.GetRuntimeState()["RuntimeState"] != "resync" ||
-		    v.GetRuntimeState()["RuntimeState"] != "clean" {
-			return false
+		if v.GetRuntimeState()["RuntimeState"] == "resync" {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func WaitTillVolumeInResync(vol string) bool {
@@ -5220,14 +5219,33 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			log.InfoD("Restarting the Driver on Node [%s]", restartDriver.Name)
-			err = Inst().N.RebootNode(*restartDriver, node.RebootNodeOpts{
-				Force: true,
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         1 * time.Minute,
-					TimeBeforeRetry: 5 * time.Second,
-				},
-			})
-			log.FailOnError(err, "Rebooting Node failed?")
+			log.FailOnError(RebootNodeAndWait(*restartDriver), fmt.Sprintf("error rebooting node %s", restartDriver.Name))
+
+			for _, eachContext := range contexts {
+				vols, err := Inst().S.GetVolumes(eachContext)
+				log.FailOnError(err, "Failed to get volumes from context")
+				for _, eachVol := range vols {
+					getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
+					log.FailOnError(err, "Failed to get replication factor on the volume")
+
+					if len(getReplicaSets) == 3 {
+						newRepl := int64(len(getReplicaSets) - 1)
+						log.FailOnError(Inst().V.SetReplicationFactor(eachVol, newRepl,
+							nil, nil, true),
+							"Failed to set Replication factor")
+					}
+					// Change Replica sets of each volumes created to 3
+					var maxReplicaFactor int64
+					var nodesToBeUpdated []string
+					var poolsToBeUpdated []string
+					maxReplicaFactor = 3
+					nodesToBeUpdated = nil
+					poolsToBeUpdated = nil
+					log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
+						nodesToBeUpdated, poolsToBeUpdated, true),
+						"Failed to set Replicaiton factor")
+				}
+			}
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
