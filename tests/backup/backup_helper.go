@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 10 * time.Minute
+	cloudAccountDeleteTimeout                 = 20 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
 	restoreNamePrefix                         = "tp-restore"
@@ -50,6 +50,7 @@ const (
 	firstName                                 = "firstName"
 	lastName                                  = "lastName"
 	password                                  = "Password1"
+	mongodbStatefulset                        = "pxc-backup-mongodb"
 )
 
 var (
@@ -530,7 +531,10 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	backupDriver := Inst().Backup
 	groupIDs := make([]string, 0)
 	userIDs := make([]string, 0)
-	_, clusterUID := backupDriver.RegisterBackupCluster(orgID, SourceClusterName, "")
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
 
 	for _, groupName := range groupNames {
 		groupID, err := backup.FetchIDOfGroup(groupName)
@@ -593,29 +597,32 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 		}
 	}
 
-	_, err := backupDriver.ClusterUpdateBackupShare(ctx, clusterBackupShareUpdateRequest)
-	return err
+	_, err = backupDriver.ClusterUpdateBackupShare(ctx, clusterBackupShareUpdateRequest)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GetAllBackupsForUser(username, password string) ([]string, error) {
-	var bkp *api.BackupObject
 	backupNames := make([]string, 0)
 	backupDriver := Inst().Backup
 	ctx, err := backup.GetNonAdminCtx(username, password)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
 	if err != nil {
 		return nil, err
 	}
-	for _, bkp = range curBackups.GetBackups() {
-		backupNames = append(backupNames, bkp.GetName())
+	for _, backup := range currentBackups.GetBackups() {
+		backupNames = append(backupNames, backup.GetName())
 	}
-	return backupNames, err
+	return backupNames, nil
 }
 
 // CreateRestore creates restore
@@ -837,7 +844,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
+			_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
 				if err != nil {

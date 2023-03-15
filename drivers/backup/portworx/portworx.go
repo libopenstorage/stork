@@ -302,6 +302,38 @@ func (p *portworx) WaitForClusterDeletion(
 	return nil
 }
 
+func (p *portworx) GetClusterUID(ctx context.Context, orgID string, clusterName string) (string, error) {
+	clusterEnumerateReq := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateRsp, err := p.EnumerateCluster(ctx, clusterEnumerateReq)
+	if err != nil {
+		return "", err
+	}
+	for _, cluster := range enumerateRsp.GetClusters() {
+		if cluster.GetName() == clusterName {
+			return cluster.GetUid(), nil
+		}
+	}
+	return "", fmt.Errorf("cluster with name '%s' not found for org '%s'", clusterName, orgID)
+}
+
+func (p *portworx) GetClusterName(ctx context.Context, orgID string, clusterUid string) (string, error) {
+	clusterEnumerateReq := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateRsp, err := p.EnumerateCluster(ctx, clusterEnumerateReq)
+	if err != nil {
+		return "", err
+	}
+	for _, cluster := range enumerateRsp.GetClusters() {
+		if cluster.GetUid() == clusterUid {
+			return cluster.GetName(), nil
+		}
+	}
+	return "", fmt.Errorf("cluster with uid '%s' not found for org '%s'", clusterUid, orgID)
+}
+
 func (p *portworx) CreateBackupLocation(ctx context.Context, req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
 	return p.backupLocationManager.Create(ctx, req)
 }
