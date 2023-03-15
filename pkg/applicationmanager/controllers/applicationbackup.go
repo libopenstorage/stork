@@ -438,7 +438,7 @@ func (a *ApplicationBackupController) namespaceBackupAllowed(backup *stork_api.A
 	}
 	// Restrict backups to only the namespace that the object belongs to
 	// except for the namespace designated by the admin
-	if backup.Namespace != a.backupAdminNamespace {
+	if backup.Namespace != a.backupAdminNamespace && backup.Namespace != k8sutils.DefaultAdminNamespace {
 		for _, ns := range backup.Spec.Namespaces {
 			if ns != backup.Namespace {
 				return false

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/kdmp/pkg/jobratelimit"
@@ -435,7 +436,15 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 		}
 	}
 	if count > 0 {
-		resourceNamespace = utils.AdminNamespace
+		storkCm, err := coreops.Instance().GetConfigMap(k8sutils.StorkConfigMapName, k8sutils.DefaultAdminNamespace)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return nil, err
+		}
+		if storkCm.Data[k8sutils.AdminNsKey] != "" {
+			resourceNamespace = storkCm.Data[k8sutils.AdminNsKey]
+		} else {
+			resourceNamespace = utils.AdminNamespace
+		}
 		live = true
 	} else {
 		resourceNamespace = jobOptions.Namespace
