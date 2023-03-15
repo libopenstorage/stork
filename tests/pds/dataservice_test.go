@@ -911,6 +911,19 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			log.FailOnError(err, "Error while genearating workloads")
 		})
 
+		defer func() {
+			Step("Delete the workload generating deployments", func() {
+				if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+					err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+				} else if Contains(dataServicePodWorkloads, ds.Name) {
+					log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+					err = pdslib.DeleteK8sPods(pod.Name, namespace)
+				}
+				log.FailOnError(err, "error deleting workload generating pods for ds %s", dataservice)
+			})
+		}()
+
 		Step("Update the data service patch versions", func() {
 			log.Infof("Version/Build: %v %v", dsVersion, dsBuild)
 			updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
@@ -921,6 +934,16 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+
+			id := pdslib.GetDataServiceID(dataservice)
+			dash.VerifyFatal(id != "", true, "Validating dataservice id")
+			log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
+			for version := range dataServiceVersionBuildMap {
+				delete(dataServiceVersionBuildMap, version)
+			}
+			_, _, dataServiceVersionBuildMap, err := pdslib.GetVersionsImage(dsVersion, dsBuild, id)
+			log.FailOnError(err, "Error while fetching versions/image information")
+
 			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 			dash.VerifyFatal(config.Spec.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
 		})
@@ -932,18 +955,6 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			isDeploymentsDeleted = true
 		})
 
-		defer func() {
-			Step("Delete the workload generating deployments", func() {
-				if !(dataservice == mysql || dataservice == kafka || dataservice == zookeeper || dataservice == mongodb) {
-					if dataservice == cassandra || dataservice == postgresql {
-						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-					} else {
-						err = pdslib.DeleteK8sPods(pod.Name, namespace)
-					}
-					log.FailOnError(err, "error while deleting workload deployments")
-				}
-			})
-		}()
 	})
 }
 

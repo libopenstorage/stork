@@ -2713,13 +2713,13 @@ func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 }
 
 // DeleteBackupLocation deletes backup location
-func DeleteBackupLocation(name string, backupLocationUID string, orgID string) error {
+func DeleteBackupLocation(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool) error {
 
 	backupDriver := Inst().Backup
 	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
 		Name:          name,
 		OrgId:         orgID,
-		DeleteBackups: true,
+		DeleteBackups: DeleteExistingBackups,
 		Uid:           backupLocationUID,
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
