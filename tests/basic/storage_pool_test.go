@@ -5129,7 +5129,8 @@ func inResync(vol string) bool {
 	}
 	for _, v := range volDetails.RuntimeState {
 		log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
-		if v.GetRuntimeState()["RuntimeState"] != "resync" {
+		if v.GetRuntimeState()["RuntimeState"] != "resync" ||
+		    v.GetRuntimeState()["RuntimeState"] != "clean" {
 			return false
 		}
 	}
