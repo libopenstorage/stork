@@ -262,12 +262,6 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 		log.Warnf("ListApplicationRegistrations = %v", list)
 	}
 
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
-		list, err := storkcache.Instance().GetApplicationRegistration("volumesnapshot")
-		log.Warnf("err = %v", err)
-		log.Warnf("GetApplicationRegistration = %v", list)
-	}
-
 	// delete volume attachments if the node is down for this pod
 	err = m.cleanupVolumeAttachmentsByNode(node)
 	if err != nil {

@@ -26,8 +26,6 @@ func testMigrationFailoverFailback(t *testing.T) {
 	// Create secrets on source and destination
 	// Since the secrets need to be created on the destination before migration
 	// is triggered using the API instead of spec factory in torpedo
-	// Add sleep to hault CBT to validate cluster issues
-	// time.Sleep(10 * time.Hour)
 
 	err := setDestinationKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
