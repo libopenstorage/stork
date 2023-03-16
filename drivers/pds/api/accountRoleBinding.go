@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -89,4 +90,18 @@ func (accountRoleBinding *AccountRoleBinding) AddUser(accountID string, email st
 		return err
 	}
 	return nil
+}
+
+// RemoveUser function delete the user from given account.
+func (accountRoleBinding *AccountRoleBinding) RemoveUser(userID string) (*status.Response, error) {
+	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
+	ctx, err := pdsutils.GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("error in getting context for api call: %v", err)
+	}
+	res, err := client.ApiAccountsIdRoleBindingsDelete(ctx, userID).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("error while removing the user: %v", err)
+	}
+	return res, nil
 }
