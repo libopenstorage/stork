@@ -3,12 +3,15 @@ package cache
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	"k8s.io/client-go/rest"
+	controllercache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sync"
 )
 
 // SharedInformerCache  is an eventually consistent cache. The cache interface
@@ -30,10 +33,13 @@ type SharedInformerCache interface {
 
 	// ListApplicationRegistrations lists the application registration CRs from the cache
 	ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegistrationList, error)
+
+	// ListTransformedPods lists the all the Pods from the cache after applying TransformFunc
+	ListTransformedPods() (*corev1.PodList, error)
 }
 
 type cache struct {
-	client client.Client
+	controllerCache controllercache.Cache
 }
 
 var (
@@ -47,9 +53,47 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 	if sharedInformerCache != nil {
 		return fmt.Errorf("shared informer cache already initialized")
 	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return err
+	}
 
-	sharedInformerCache = &cache{
-		client: mgr.GetClient(),
+	// Define a transform map to modify the informer's objects before they're added to the cache.
+	transformMap := controllercache.TransformByObject{
+		&corev1.Pod{}: func(obj interface{}) (interface{}, error) {
+			podResource, ok := obj.(*corev1.Pod)
+			if !ok {
+				return nil, fmt.Errorf("unexpected object type: %T", obj)
+			}
+			currPod := corev1.Pod{}
+			currPod.Name = podResource.Name
+			currPod.Namespace = podResource.Namespace
+
+			currPod.Spec.Volumes = podResource.Spec.Volumes
+			currPod.Spec.Containers = podResource.Spec.Containers
+			currPod.Spec.NodeName = podResource.Spec.NodeName
+
+			currPod.Status.Conditions = podResource.Status.Conditions
+			currPod.Status.Reason = podResource.Status.Reason
+			currPod.Status.Phase = podResource.Status.Phase
+			currPod.Status.HostIP = podResource.Status.HostIP
+			return &currPod, nil
+		},
+	}
+
+	sharedInformerCache = &cache{}
+	sharedInformerCache.controllerCache, err = controllercache.New(config, controllercache.Options{
+		Scheme:            mgr.GetScheme(),
+		TransformByObject: transformMap,
+	})
+	if err != nil {
+		return err
+	}
+	go sharedInformerCache.controllerCache.Start(context.Background())
+
+	synced := sharedInformerCache.controllerCache.WaitForCacheSync(context.Background())
+	if !synced {
+		return fmt.Errorf("error syncing the shared informer cache")
 	}
 	return nil
 }
@@ -63,7 +107,7 @@ func Instance() SharedInformerCache {
 // GetStorageClass returns the storage class if present in the cache.
 func (c *cache) GetStorageClass(storageClassName string) (*storagev1.StorageClass, error) {
 	sc := &storagev1.StorageClass{}
-	if err := c.client.Get(context.Background(), client.ObjectKey{Name: storageClassName}, sc); err != nil {
+	if err := c.controllerCache.Get(context.Background(), client.ObjectKey{Name: storageClassName}, sc); err != nil {
 		return nil, err
 	}
 	return sc, nil
@@ -72,7 +116,7 @@ func (c *cache) GetStorageClass(storageClassName string) (*storagev1.StorageClas
 // ListStorageClasses returns a list of storage classes from the cache
 func (c *cache) ListStorageClasses() (*storagev1.StorageClassList, error) {
 	scList := &storagev1.StorageClassList{}
-	if err := c.client.List(context.Background(), scList); err != nil {
+	if err := c.controllerCache.List(context.Background(), scList); err != nil {
 		return nil, err
 	}
 	return scList, nil
@@ -96,7 +140,7 @@ func (c *cache) GetStorageClassForPVC(pvc *corev1.PersistentVolumeClaim) (*stora
 // GetApplicationRegistration returns the ApplicationRegistration CR from the cache
 func (c *cache) GetApplicationRegistration(name string) (*storkv1alpha1.ApplicationRegistration, error) {
 	appReg := &storkv1alpha1.ApplicationRegistration{}
-	if err := c.client.Get(context.Background(), client.ObjectKey{Name: name}, appReg); err != nil {
+	if err := c.controllerCache.Get(context.Background(), client.ObjectKey{Name: name}, appReg); err != nil {
 		return nil, err
 	}
 	return appReg, nil
@@ -105,8 +149,17 @@ func (c *cache) GetApplicationRegistration(name string) (*storkv1alpha1.Applicat
 // ListApplicationRegistrations lists the application registration CRs from the cache
 func (c *cache) ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegistrationList, error) {
 	appRegList := &storkv1alpha1.ApplicationRegistrationList{}
-	if err := c.client.List(context.Background(), appRegList); err != nil {
+	if err := c.controllerCache.List(context.Background(), appRegList); err != nil {
 		return nil, err
 	}
 	return appRegList, nil
+}
+
+// ListTransformedPods lists the all the Pods from the cache after applying TransformFunc
+func (c *cache) ListTransformedPods() (*corev1.PodList, error) {
+	podList := &corev1.PodList{}
+	if err := c.controllerCache.List(context.Background(), podList); err != nil {
+		return nil, err
+	}
+	return podList, nil
 }

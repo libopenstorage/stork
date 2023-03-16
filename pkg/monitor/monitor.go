@@ -2,11 +2,13 @@ package monitor
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -241,9 +243,17 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	if err == nil {
 		return
 	}
-	pods, err := core.Instance().GetPods("", nil)
+
+	var pods *v1.PodList
+	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		pods, err = storkcache.Instance().ListTransformedPods()
+	} else {
+		log.Warnf("shared informer cache has not been initialized.")
+		pods, err = core.Instance().GetPods("", nil)
+	}
 	if err != nil {
 		log.Errorf("Error getting pods: %v", err)
+		return
 	}
 
 	// delete volume attachments if the node is down for this pod
