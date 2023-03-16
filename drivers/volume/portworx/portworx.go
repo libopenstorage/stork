@@ -2441,10 +2441,6 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 func (p *portworx) Failover(action *storkapi.Action) error {
 	namespace := action.Namespace
 	logrus.Debugf("Failover: namespace %s", namespace)
-	volDriver, err := p.getAdminVolDriver() // TODO(dgoel): admin or user vol driver?
-	if err != nil {
-		return err
-	}
 
 	// TODO(dgoel): when should we return error
 	// and should we just log an error and continue
@@ -2454,41 +2450,30 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 	// for ex: a volume promote failed
 
 	// can we directly fetch PersistentVolumes here?
-	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	pvList, err := core.Instance().GetPersistentVolumes()
 	if err != nil {
 		return fmt.Errorf("error getting list of volumes to migrate: %v", err)
 	}
-	for _, pvc := range pvcList.Items {
-		if !p.OwnsPVC(core.Instance(), &pvc) {
+	for _, pv := range pvList.Items {
+		if !p.OwnsPV(&pv) {
 			continue
 		}
-		if resourcecollector.SkipResource(pvc.Annotations) { // TODO(dgoel): do we need this?
+		if resourcecollector.SkipResource(pv.Annotations) {
 			continue
 		}
 
-		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
-		if err != nil {
-			return fmt.Errorf("error getting volume for PVC: %v", err)
-		}
-		logrus.Debugf("Failover: PV %v", pvName)
-
-		pv, err := core.Instance().GetPersistentVolume(pvName)
+		volDriver, err := p.getUserVolDriver(pv.Annotations, namespace)
 		if err != nil {
 			return err
 		}
-		volID := pv.Spec.PortworxVolume.VolumeID
-		if volID == "" {
-			return fmt.Errorf("PV contains \"\" value for Spec.PortworxVolume.VolumeID")
-		}
-		logrus.Debugf("Failover: volID %v", volID)
 
-		volumes, err := volDriver.Inspect([]string{volID})
+		volumes, err := volDriver.Inspect([]string{pv.Name})
 		if err != nil {
 			return err
 		}
 		if len(volumes) != 1 {
 			return &errors.ErrNotFound{
-				ID:   volID,
+				ID:   pv.Name,
 				Type: "Volume",
 			}
 		}
