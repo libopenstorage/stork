@@ -8325,9 +8325,7 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		// Get PX StorageCluster
 		var dmthinEnabled bool
 		cluster, err := Inst().V.GetDriver()
-		if err != nil {
-			log.FailOnError(err, "Error getting clusterspecs")
-		}
+		log.FailOnError(err, "Error getting clusterspecs")
 		argsList, err := util.MiscArgs(cluster)
 		for _, args := range argsList {
 			if strings.Contains(args, "dmthin") {
@@ -8343,11 +8341,15 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		devicespecjournal := deviceSpec + " --journal"
 		if dmthinEnabled {
 			err := Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
-			re := regexp.MustCompile(".*Journal/Metadata device add not supported for PX-StoreV2*")
-			dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
-				false,
-				"Failed to match the error while adding drive")
-			log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+			if err != nil {
+				re := regexp.MustCompile(".*Journal/Metadata device add not supported for PX-StoreV2*")
+				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
+					false,
+					"Failed to match the error while adding drive")
+				log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+			} else {
+				log.Error("Did not Error out when adding cloud drive as expected")
+			}
 		} else {
 			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
 			log.InfoD("Enter pool Maintenance mode ")
@@ -8355,25 +8357,27 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 			if isjournal {
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
-				re := regexp.MustCompile(".*journal exists*")
-				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
-					false,
-					"Failed to match the error while adding drive")
-				log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+				if err != nil {
+					re := regexp.MustCompile(".*journal exists*")
+					dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
+						false,
+						"Failed to match the error while adding drive")
+					log.InfoD("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name)
+				} else {
+					log.Error("Did not Error out when adding cloud drive as expected")
+				}
 			} else {
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
-				if err != nil {
-					log.FailOnError(err, "journal add failed")
-				} else {
-					isjournal, _ := isJournalEnabled()
-					if isjournal {
-						log.InfoD("journal device added successfully")
-					}
+				log.FailOnError(err, "journal add failed")
+				isjournal, _ := isJournalEnabled()
+				if isjournal {
+					log.InfoD("journal device added successfully")
 				}
 			}
 			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
-			log.InfoD("Enter pool Maintenance mode ")
+			log.FailOnError(err, "Exiting maintenance mode failed")
+			log.InfoD("Enter pool Maintenance mode")
 		}
 	})
 
