@@ -56,6 +56,7 @@ message ClusterInfo {
     BackupShare del_backup_share = 10;
     BackupShareStatusInfo backup_share_status_info = 11;
     repeated string owner_group_list = 12;
+    ObjectRef platform_credential_ref = 13;
     // Message for maintaining status of the cluster.
     message StatusInfo {
         enum Status {
@@ -120,6 +121,14 @@ message IBMConfig {
     ];
 }
 
+message RancherConfig {
+    string endpoint = 1 [ (gogoproto.jsontag) = "endpoint" ];
+    string token = 2 [
+        (gogoproto.jsontag) = "token",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+}
+
 message S3Config {
     string endpoint = 1;
     string region = 2;
@@ -168,6 +177,7 @@ message CloudCredentialInfo {
         Azure = 2;
         Google = 3;
         IBM = 4;
+        Rancher = 5;
     }
 
     Type type = 1;
@@ -176,6 +186,7 @@ message CloudCredentialInfo {
         AzureConfig azure_config = 101;
         GoogleConfig google_config = 102;
         IBMConfig ibm_config = 103;
+        RancherConfig rancher_config = 104;
     }
 }
 
@@ -294,6 +305,8 @@ message BackupScheduleInfo {
     ObjectRef post_exec_rule_ref = 21;
     // To get type of backup (generic or non-generic)
     BackupType backup_type = 22;
+    // Label selectors to choose namespaces
+    string ns_label_selectors = 23;
     message BackupType {
         Type type = 1;
         enum Type {
@@ -346,12 +359,19 @@ message BackupScheduleObject {
     BackupScheduleInfo backup_schedule_info = 2 [ (gogoproto.embed) = true ];
 }
 
+message NFSConfig {
+    string server_addr = 1;
+    string sub_path = 2;
+    string mount_option = 3;
+}
+
 message BackupLocationInfo {
     enum Type {
         Invalid = 0;
         S3 = 1;
         Azure = 2;
         Google = 3;
+        NFS = 4;
     }
 
     Type type = 1;
@@ -366,13 +386,18 @@ message BackupLocationInfo {
     bool delete_backups = 6;
     bool validate_cloud_credential = 7;
     ObjectRef cloud_credential_ref = 8;
-    oneof config { S3Config s3_config = 100; }
+    oneof config {
+        S3Config s3_config = 100;
+        NFSConfig nfs_config = 101;
+    }
     // Message for maintaining status of the object.
     message StatusInfo {
         enum Status {
             Invalid = 0;
             Valid = 1;
             DeletePending = 2;
+            ValidationInProgress = 3;
+            ValidationFailed = 4;
         }
 
         Status status = 1;
@@ -437,6 +462,9 @@ message BackupInfo {
     BackupShare backup_share = 28;
     BackupShare.AccessType user_backupshare_access = 29;
     ObjectRef cluster_ref = 30;
+    string ns_label_selectors = 31;
+    // Name of rancher projects associated with resources
+    map<string, string> rancher_projects = 32;
     message BackupType {
         Type type = 1;
         enum Type {
@@ -568,6 +596,11 @@ message RestoreInfo {
     map<string, string> storage_class_mapping = 16;
     // backup to restore from
     ObjectRef backup_ref = 17;
+    // mapping of the rancher projects from the backup to which restore should
+    // be done
+    map<string, string> rancher_project_mapping = 18;
+    // mapping of source rancher project display names to target rancher project display names
+    map<string, string> rancher_project_name_mapping = 19;
 
     message RestoredResource {
         string name = 1;
@@ -838,6 +871,7 @@ message BackupScheduleCreateRequest {
     ObjectRef post_exec_rule_ref = 16;
     // To get type of backup (generic or non-generic)
     BackupType backup_type = 17;
+    string ns_label_selectors = 18;
     enum BackupType {
         Invalid = 0;
         Generic = 1;
@@ -991,6 +1025,7 @@ message ClusterCreateRequest {
     // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
     ObjectRef cloud_credential_ref = 5;
+    ObjectRef platform_credential_ref = 6;
 }
 
 // Define ClusterCreateResponse struct
@@ -1007,6 +1042,7 @@ message ClusterUpdateRequest {
     // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
     ObjectRef cloud_credential_ref = 5;
+    ObjectRef platform_credential_ref = 6;
 }
 
 // Define ClusterUpdateResponse struct
@@ -1266,6 +1302,9 @@ message BackupLocationEnumerateRequest {
     ObjectRef cloud_credential_ref = 4;
     // enable include_secrets to get the encryptionKey value.
     bool include_secrets = 5;
+    // If true, include backuplocation that are in ValidationInProgress state as
+    // well
+    bool include_validation_state = 6;
 }
 
 // Define BackupLocationEnumerateResponse struct
@@ -1421,6 +1460,7 @@ message BackupCreateRequest {
     // To get type of backup (generic or non-generic)
     BackupType backup_type = 14;
     ObjectRef cluster_ref = 15;
+    string ns_label_selectors = 16;
     enum BackupType {
         Invalid = 0;
         Generic = 1;
@@ -1551,6 +1591,11 @@ message RestoreCreateRequest {
     map<string, string> storage_class_mapping = 8;
     // backup object reference having name and id
     ObjectRef backup_ref = 9;
+    // mapping of the rancher projects from the backup to which restore should
+    // be done
+    map<string, string> rancher_project_mapping = 10;
+    // mapping of source rancher project display names to target rancher project display names
+    map<string, string> rancher_project_name_mapping = 11;
 }
 
 // Define RestoreCreateResponse struct
@@ -1807,7 +1852,7 @@ message LicenseResponseInfo {
     }
 
     message EntitlementInfo {
-        // License count
+        // Entitled count
         int64 count = 1;
         // Expiry time of license
         google.protobuf.Timestamp expires = 3;
