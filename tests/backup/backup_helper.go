@@ -53,6 +53,8 @@ const (
 	lastName                                  = "lastName"
 	password                                  = "Password1"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
+	backupDeleteTimeout                       = 10 * time.Minute
+	backupDeleteRetryTime                     = 30 * time.Second
 )
 
 var (
@@ -846,7 +848,8 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
 				if err != nil {
@@ -857,7 +860,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				}
 				return "", false, nil
 			}
-			_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
@@ -1498,4 +1501,26 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 	}
 	return false
 
+}
+
+func DeleteBackupAndWait(backupName string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+	}
+
+	backupDeletionSuccessCheck := func() (interface{}, bool, error) {
+		currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
+		if err != nil {
+			return "", true, err
+		}
+		for _, backup := range currentBackups.GetBackups() {
+			if backup.Name == backupName {
+				return "", true, fmt.Errorf("backup [%s] is not yet deleted", backup.Name)
+			}
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
+	return err
 }
