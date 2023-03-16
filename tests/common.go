@@ -4662,8 +4662,80 @@ func Contains(app_list []string, app string) bool {
 	return false
 }
 
-// ValidatePoolRebalance checks rebalnce state of pools if running
-func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
+// ValidateDriveRebalance checks rebalance state of new drives added
+func ValidateDriveRebalance(stNode node.Node) error {
+
+	disks := stNode.Disks
+	var err error
+	var drivePath string
+	//2 min wait for new disk to associate with the node
+	time.Sleep(2 * time.Minute)
+
+	t := func() (interface{}, bool, error) {
+		Inst().S.RefreshNodeRegistry()
+		if err != nil {
+			return nil, true, err
+		}
+		err = Inst().V.RefreshDriverEndpoints()
+		if err != nil {
+			return nil, true, err
+		}
+
+		stNode, err = node.GetNodeByName(stNode.Name)
+		if err != nil {
+			return nil, true, err
+		}
+
+		for k := range stNode.Disks {
+			if _, ok := disks[k]; !ok {
+				drivePath = k
+				return nil, false, nil
+			}
+		}
+
+		return nil, true, fmt.Errorf("drive path not found")
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	cmd := fmt.Sprintf("pxctl sv drive add -d %s -o status", drivePath)
+	var prevStatus string
+
+	t = func() (interface{}, bool, error) {
+
+		// Execute the command and check get rebalance status
+		currStatus, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			return "", false, err
+		}
+		log.Infof(fmt.Sprintf("Rebalance Status for drive [%s] in node [%s] : %s", drivePath, stNode.Name, strings.TrimSpace(currStatus)))
+		if strings.Contains(currStatus, "Rebalance done") {
+			return "", false, nil
+		}
+		if prevStatus == currStatus {
+			return "", false, fmt.Errorf("rebalance Status for drive [%s] in node [%s] is not progressing", drivePath, stNode.Name)
+		}
+		prevStatus = currStatus
+		return "", true, fmt.Errorf("wait for pool rebalance to complete for drive [%s]", drivePath)
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 180*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+	// checking all pools are online after drive rebalance
+	expectedStatus := "Online"
+	err = WaitForPoolStatusToUpdate(stNode, expectedStatus)
+	return err
+}
+
+// ValidateRebalanceJobs checks rebalance state of pools if running
+func ValidateRebalanceJobs(stNode node.Node) error {
 
 	rebalanceFunc := func() (interface{}, bool, error) {
 
@@ -4723,68 +4795,6 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 	}
 
 	_, err := task.DoRetryWithTimeout(rebalanceFunc, time.Minute*60, time.Minute*2)
-	if err != nil {
-		return err
-	}
-
-	nodePoolsToValidate := make([]*opsapi.StoragePool, 0)
-	if poolID != -1 {
-		for _, p := range stNode.Pools {
-			if p.ID == poolID {
-				nodePoolsToValidate = append(nodePoolsToValidate, p)
-				break
-			}
-		}
-	} else {
-		//A new pool might be created due to add drive,hence 2 min wait for pool to associate with node
-		time.Sleep(2 * time.Minute)
-		err = Inst().V.RefreshDriverEndpoints()
-		log.FailOnError(err, "error refreshing end points")
-		for _, n := range node.GetStorageNodes() {
-			if n.Id == stNode.Id {
-				stNode = n
-				break
-			}
-		}
-		nodePoolsToValidate = append(nodePoolsToValidate, stNode.Pools...)
-
-	}
-
-	for _, nodePool := range nodePoolsToValidate {
-		currentLastMsg := ""
-		f := func() (interface{}, bool, error) {
-			expandedPool, err := GetStoragePoolByUUID(nodePool.Uuid)
-			if err != nil {
-				return nil, true, fmt.Errorf("error getting pool by using id %s from node %s", nodePool.Uuid, stNode.Name)
-			}
-
-			if expandedPool == nil {
-				return nil, false, fmt.Errorf("expanded pool value is nil")
-			}
-			if expandedPool.LastOperation != nil {
-				log.Infof("Node [%s] Pool [%s] Status : %v, Message : %s", stNode.Name, nodePool.Uuid, expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
-				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-					return nil, false, fmt.Errorf("Pool is failed state. Error: %s", expandedPool.LastOperation)
-				}
-				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
-					if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") || strings.Contains(expandedPool.LastOperation.Msg, "rebalance is running") {
-						if currentLastMsg == expandedPool.LastOperation.Msg {
-							return nil, false, fmt.Errorf("pool reblance is not progressing")
-						} else {
-							currentLastMsg = expandedPool.LastOperation.Msg
-							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
-						}
-					}
-					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
-						strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
-						return nil, false, nil
-					}
-				}
-			}
-			return nil, false, nil
-		}
-		_, err = task.DoRetryWithTimeout(f, time.Minute*180, time.Minute*2)
-	}
 	return err
 }
 
@@ -4968,6 +4978,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
+	var isIOsInProgress bool
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return "", err
@@ -4985,10 +4996,20 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+
+			t := func() (interface{}, bool, error) {
+				isIOsInProgress, err = Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+				if err != nil {
+					return false, true, err
+				}
+				return true, false, nil
+			}
+
+			_, err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if err != nil {
 				return "", err
 			}
+
 			if isIOsInProgress {
 				log.Infof("IOs are in progress for [%v]", vol.Name)
 				poolUuids := appVol.ReplicaSets[0].PoolUuids
@@ -5459,6 +5480,26 @@ func IsPoolInMaintenance(n node.Node) bool {
 		}
 	}
 	return false
+}
+
+// WaitForPoolOffline waits  till pool went to offline status
+func WaitForPoolOffline(n node.Node) error {
+
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+		if err != nil {
+			return nil, true, err
+		}
+
+		for _, v := range poolsStatus {
+			if v == "Offline" {
+				return nil, false, nil
+			}
+		}
+		return nil, true, fmt.Errorf("no pool is offline is node %s", n.Name)
+	}
+	_, err := task.DoRetryWithTimeout(t, time.Minute*360, time.Minute*2)
+	return err
 }
 
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {

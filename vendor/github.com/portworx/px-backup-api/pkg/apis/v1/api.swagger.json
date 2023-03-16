@@ -468,6 +468,13 @@
             "in": "query",
             "required": false,
             "type": "boolean"
+          },
+          {
+            "name": "include_validation_state",
+            "description": "If true, include backuplocation that are in ValidationInProgress state as\nwell.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -2810,6 +2817,9 @@
         },
         "cluster_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "ns_label_selectors": {
+          "type": "string"
         }
       },
       "title": "Request message structure for backup create"
@@ -2971,6 +2981,16 @@
         },
         "cluster_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "ns_label_selectors": {
+          "type": "string"
+        },
+        "rancher_projects": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Name of rancher projects associated with resources"
         }
       }
     },
@@ -3172,6 +3192,9 @@
         "s3_config": {
           "$ref": "#/definitions/S3Config"
         },
+        "nfs_config": {
+          "$ref": "#/definitions/NFSConfig"
+        },
         "object_lock_enabled": {
           "type": "boolean"
         }
@@ -3194,7 +3217,9 @@
       "enum": [
         "Invalid",
         "Valid",
-        "DeletePending"
+        "DeletePending",
+        "ValidationInProgress",
+        "ValidationFailed"
       ],
       "default": "Invalid"
     },
@@ -3204,7 +3229,8 @@
         "Invalid",
         "S3",
         "Azure",
-        "Google"
+        "Google",
+        "NFS"
       ],
       "default": "Invalid"
     },
@@ -3373,6 +3399,9 @@
         "backup_type": {
           "$ref": "#/definitions/BackupScheduleCreateRequestBackupType",
           "title": "To get type of backup (generic or non-generic)"
+        },
+        "ns_label_selectors": {
+          "type": "string"
         }
       },
       "title": "Define BackupScheduleCreateRequest struct"
@@ -3496,6 +3525,10 @@
         "backup_type": {
           "$ref": "#/definitions/BackupScheduleInfoBackupType",
           "title": "To get type of backup (generic or non-generic)"
+        },
+        "ns_label_selectors": {
+          "type": "string",
+          "title": "Label selectors to choose namespaces"
         }
       }
     },
@@ -3817,6 +3850,9 @@
         },
         "ibm_config": {
           "$ref": "#/definitions/IBMConfig"
+        },
+        "rancher_config": {
+          "$ref": "#/definitions/RancherConfig"
         }
       }
     },
@@ -3827,7 +3863,8 @@
         "AWS",
         "Azure",
         "Google",
-        "IBM"
+        "IBM",
+        "Rancher"
       ],
       "default": "Invalid"
     },
@@ -3929,6 +3966,9 @@
         },
         "cloud_credential_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "platform_credential_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       },
       "title": "Define ClusterCreateRequest struct"
@@ -3997,6 +4037,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "platform_credential_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       }
     },
@@ -4087,6 +4130,9 @@
           "description": "cloud_credential is deprecated, not to be used."
         },
         "cloud_credential_ref": {
+          "$ref": "#/definitions/ObjectRef"
+        },
+        "platform_credential_ref": {
           "$ref": "#/definitions/ObjectRef"
         }
       },
@@ -4243,7 +4289,7 @@
         "count": {
           "type": "string",
           "format": "int64",
-          "title": "License count"
+          "title": "Entitled count"
         },
         "expires": {
           "type": "string",
@@ -4306,7 +4352,9 @@
         "AWS",
         "GCP",
         "BaasStd",
-        "UsageBasedAirGapped"
+        "UsageBasedAirGapped",
+        "BaaSFreemium",
+        "AWSSaaS"
       ],
       "default": "Invalid",
       "title": "- BaasStd: In future we might have different baas licensing"
@@ -4649,6 +4697,20 @@
         }
       }
     },
+    "NFSConfig": {
+      "type": "object",
+      "properties": {
+        "server_addr": {
+          "type": "string"
+        },
+        "sub_path": {
+          "type": "string"
+        },
+        "mount_option": {
+          "type": "string"
+        }
+      }
+    },
     "ObjectRef": {
       "type": "object",
       "properties": {
@@ -4779,6 +4841,17 @@
       },
       "title": "Define Permission struct"
     },
+    "RancherConfig": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      }
+    },
     "ReplacePolicyType": {
       "type": "string",
       "enum": [
@@ -4857,6 +4930,20 @@
         "backup_ref": {
           "$ref": "#/definitions/ObjectRef",
           "title": "backup object reference having name and id"
+        },
+        "rancher_project_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "mapping of the rancher projects from the backup to which restore should\nbe done"
+        },
+        "rancher_project_name_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "mapping of source rancher project display names to target rancher project display names"
         }
       },
       "title": "Define RestoreCreateRequest struct"
@@ -4972,6 +5059,20 @@
         "backup_ref": {
           "$ref": "#/definitions/ObjectRef",
           "title": "backup to restore from"
+        },
+        "rancher_project_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "mapping of the rancher projects from the backup to which restore should\nbe done"
+        },
+        "rancher_project_name_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "mapping of source rancher project display names to target rancher project display names"
         }
       },
       "title": "Message for restore info"
