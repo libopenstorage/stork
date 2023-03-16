@@ -436,7 +436,7 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 		}
 	}
 	if count > 0 {
-		storkCm, err := coreops.Instance().GetConfigMap(k8sutils.StorkConfigMapName, k8sutils.DefaultAdminNamespace)
+		storkCm, err := coreops.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, k8sutils.DefaultAdminNamespace)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return nil, err
 		}

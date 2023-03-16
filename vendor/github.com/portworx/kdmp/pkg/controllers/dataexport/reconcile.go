@@ -485,9 +485,9 @@ func (c *Controller) createJobCredCertSecrets(
 			}
 		}
 		if count > 0 {
-			storkCm, err := core.Instance().GetConfigMap(k8sutils.StorkConfigMapName, k8sutils.DefaultAdminNamespace)
+			storkCm, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, k8sutils.DefaultAdminNamespace)
 			if err != nil && !k8sErrors.IsNotFound(err) {
-				msg := fmt.Sprintf("error fetching admin namespace from stork configmap %s/%s: %v", k8sutils.DefaultAdminNamespace, k8sutils.StorkConfigMapName, err)
+				msg := fmt.Sprintf("error fetching admin namespace from stork configmap %s/%s: %v", k8sutils.DefaultAdminNamespace, k8sutils.StorkControllerConfigMapName, err)
 				logrus.Errorf(msg)
 				data := updateDataExportDetail{
 					status: kdmpapi.DataExportStatusFailed,
@@ -1279,7 +1279,7 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 	}
 	var namespace string
 	if len(pods) > 0 {
-		storkCm, err := core.Instance().GetConfigMap(k8sutils.StorkConfigMapName, k8sutils.DefaultAdminNamespace)
+		storkCm, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, k8sutils.DefaultAdminNamespace)
 		if err != nil && !k8sErrors.IsNotFound(err) {
 			return err
 		}
