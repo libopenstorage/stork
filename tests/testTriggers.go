@@ -3874,23 +3874,7 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 			if updatedPoolToBeResized.LastOperation.Status != opsapi.SdkStoragePool_OPERATION_SUCCESSFUL {
 				if updatedPoolToBeResized.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
 					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
-
 				}
-				stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
-				if err != nil {
-					return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", poolToBeResized.Uuid, err)
-				}
-				var poolID int32
-				for _, p := range stNode.StoragePools {
-					if p.Uuid == poolToBeResized.Uuid {
-						poolID = p.ID
-					}
-				}
-				err = ValidatePoolRebalance(*stNode, poolID)
-				if err != nil {
-					return nil, true, err
-				}
-
 				log.InfoD("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
 					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation.Msg)
@@ -3904,6 +3888,28 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 			return false, err
 		}
 
+	}
+	stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+	if err != nil {
+		return false, err
+	}
+
+	t := func() (interface{}, bool, error) {
+		status, err := Inst().V.GetNodePoolsStatus(*stNode)
+		if err != nil {
+			return "", false, err
+		}
+		currStatus := status[poolToBeResized.Uuid]
+
+		if currStatus == "Offline" {
+			return "", true, fmt.Errorf("pool [%s] has current status [%s].Waiting rebalance to complete if in-progress", poolToBeResized.Uuid, currStatus)
+		}
+		return "", false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 120*time.Minute, 2*time.Second)
+	if err != nil {
+		return false, err
 	}
 	return true, nil
 }
@@ -3925,30 +3931,12 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 		}
 
 		newPoolSize := expandedPool.TotalSize / units.GiB
-		stNode, err := GetNodeWithGivenPoolID(expandedPool.Uuid)
-		if err != nil {
-			return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", expandedPool.Uuid, err)
-		}
-		var poolID int32
-		for _, p := range stNode.StoragePools {
-			if p.Uuid == expandedPool.Uuid {
-				poolID = p.ID
-			}
-		}
-
-		err = ValidatePoolRebalance(*stNode, poolID)
-		if err != nil {
-			return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d,Error while pool rebalance: %v", poolIDToResize, newPoolSize, err)
-		}
-
 		if newPoolSize > initialSize {
 			// storage pool resize has been completed
 			return nil, true, nil
 		}
-
 		return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d", poolIDToResize, newPoolSize)
 	}
-
 	_, err := task.DoRetryWithTimeout(f, 10*time.Minute, 1*time.Minute)
 	return err
 }
@@ -4364,9 +4352,7 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 			log.InfoD("Validating PX on node : %s", autoPilotLabelNode.Name)
 			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
 			UpdateOutcome(event, err)
-
-			err = ValidatePoolRebalance(autoPilotLabelNode, -1)
-
+			err = ValidateRebalanceJobs(autoPilotLabelNode)
 			UpdateOutcome(event, err)
 
 		})
