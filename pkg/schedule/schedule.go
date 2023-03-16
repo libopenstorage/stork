@@ -341,11 +341,27 @@ func createDefaultPolicy() error {
 		},
 		Policy: stork_api.SchedulePolicyItem{
 			Interval: &stork_api.IntervalPolicy{
-				IntervalMinutes: 1,
+				IntervalMinutes: 30,
 			}},
 	})
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			// Modify IntervalMinutes to 30
+			schedulePolicy, err := storkops.Instance().GetSchedulePolicy("default-migration-policy")
+			if err != nil {
+				return err
+			}
+			// Only if the interval minutes is 1 (means no update has happened to the default policy by user), update it to 30.
+			if schedulePolicy.Policy.Interval.IntervalMinutes == 1 {
+				schedulePolicy.Policy.Interval.IntervalMinutes = 30
+				_, err := storkops.Instance().UpdateSchedulePolicy(schedulePolicy)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			return err
+		}
 	}
 	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
