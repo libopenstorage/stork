@@ -1219,6 +1219,8 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			// Wait for backups to get synced
 			checkBackupSync := func() (interface{}, bool, error) {
 				fetchedBackupNames, err := GetAllBackupsAdmin()
+				// Debug lines tobe removed in the next patch with the fix
+				log.InfoD(fmt.Sprintf("The list of backups fetched %s", fetchedBackupNames))
 				if err != nil {
 					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
 				}
