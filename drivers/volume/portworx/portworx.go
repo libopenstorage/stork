@@ -2491,7 +2491,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 			volLocator.VolumeLabels = make(map[string]string)
 		}
 		volLocator.VolumeLabels["promote"] = "true"
-		if err := volDriver.Set(vol.GetId(), volLocator, vol.GetSpec()); err != nil {
+		if err := volDriver.Set(vol.GetId(), volLocator, nil); err != nil {
 			return fmt.Errorf("failed to promote %v: %v", vol.GetId(), err)
 		}
 		logrus.Infof("failover: promoted %v", vol.GetId())
