@@ -2440,40 +2440,47 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 
 func (p *portworx) Failover(action *storkapi.Action) error {
 	namespace := action.Namespace
-	logrus.Debugf("Failover: namespace %s", namespace)
+	logrus.Infof("failover: namespace %s", namespace)
 
-	// TODO(dgoel): when should we return error
+	// TODO(dgoel): when should we return error,
+	// for example if a volume promote fails
 	// and should we just log an error and continue
 
 	// TODO(dgoel): show relevant events in the Action CR
 	// return list of errors (as above) - controller can use to log events
 	// for ex: a volume promote failed
 
-	// can we directly fetch PersistentVolumes here?
-	pvList, err := core.Instance().GetPersistentVolumes()
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 	if err != nil {
-		return fmt.Errorf("error getting list of volumes to migrate: %v", err)
+		return fmt.Errorf("error fetching pvcList %v", err)
 	}
-	for _, pv := range pvList.Items {
-		if !p.OwnsPV(&pv) {
+	for _, pvc := range pvcList.Items {
+		if !p.OwnsPVC(core.Instance(), &pvc) {
 			continue
 		}
-		if resourcecollector.SkipResource(pv.Annotations) {
+		if resourcecollector.SkipResource(pvc.Annotations) {
 			continue
 		}
 
-		volDriver, err := p.getUserVolDriver(pv.Annotations, namespace)
+		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		if err != nil {
+			return fmt.Errorf("error fetching volume for PVC: %v", err)
+		}
+
+		logrus.Infof("failover: volume %s", pvName)
+
+		volDriver, err := p.getUserVolDriver(pvc.Annotations, namespace)
 		if err != nil {
 			return err
 		}
 
-		volumes, err := volDriver.Inspect([]string{pv.Name})
+		volumes, err := volDriver.Inspect([]string{pvName})
 		if err != nil {
 			return err
 		}
 		if len(volumes) != 1 {
 			return &errors.ErrNotFound{
-				ID:   pv.Name,
+				ID:   pvName,
 				Type: "Volume",
 			}
 		}
@@ -2485,9 +2492,9 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 		}
 		volLocator.VolumeLabels["promote"] = "true"
 		if err := volDriver.Set(vol.GetId(), volLocator, vol.GetSpec()); err != nil {
-			logrus.Errorf("failed to promote volume %v: %v", vol.GetId(), err)
+			return fmt.Errorf("failed to promote %v: %v", vol.GetId(), err)
 		}
-		logrus.Debugf("Failover: promoted %v", vol.GetId())
+		logrus.Infof("failover: promoted %v", vol.GetId())
 	}
 	return nil
 }
