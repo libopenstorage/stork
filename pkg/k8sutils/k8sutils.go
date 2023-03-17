@@ -35,6 +35,10 @@ const (
 	StorkControllerConfigMapName = "stork-controller-config"
 	// AdminNsKey is the key to hold custom stork admin namespace
 	AdminNsKey = "admin-ns"
+	// StorkServiceAccount is the service account used for stork deployment.
+	StorkServiceAccount = "service-account"
+	// DeployNsKey is the key to hold the stork deployment namespace
+	DeployNsKey = "stork-deploy-ns"
 	// ObjectLockIncrBackupCountKey defines scheduleBackup's incremental backup count
 	ObjectLockIncrBackupCountKey = "object-lock-incr-backup-count"
 	// ObjectLockDefaultIncrementalCount defines default incremental backup count
@@ -229,6 +233,15 @@ func CreateCRDWithAdditionalPrinterColumns(resource apiextensions.CustomResource
 		return err
 	}
 	return nil
+}
+
+// GetServiceAccountFromDeployment - extract service from deployment spec
+func GetServiceAccountFromDeployment(name, namespace string) (string, error) {
+	deploy, err := apps.Instance().GetDeployment(name, namespace)
+	if err != nil {
+		return "", err
+	}
+	return deploy.Spec.Template.Spec.ServiceAccountName, nil
 }
 
 // GetImageRegistryFromDeployment - extract image registry and image registry secret from deployment spec
