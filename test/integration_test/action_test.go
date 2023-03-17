@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"testing"
-	"time"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -21,67 +20,63 @@ import (
 )
 
 func TestAction(t *testing.T) {
-	// Create secrets on source and destination
-	// Since the secrets need to be created on the destination before migration
-	// is triggered using the API instead of spec factory in torpedo
-	secret := createSecret()
-	setSecret(t, secret, "src")
-	setSecret(t, secret, "dest")
+
+	setupOnce(t)
 
 	t.Run("actionFailoverTest", actionFailoverTest)
 }
 
-func createSecret() *v1.Secret {
-	return &v1.Secret{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      "volume-secrets",
-			Namespace: "kube-system",
-		},
-		StringData: map[string]string{
-			"mysql-secret": "supersecretpassphrase",
-		},
+func setupOnce(t *testing.T) {
+	funcCreateSecret := func() {
+		_ = createSecret(
+			t,
+			"volume-secrets",
+			map[string]string{
+				"mysql-secret": "supersecretpassphrase",
+			})
 	}
+	funcCreateSecret()
+	executeOnDestination(t, funcCreateSecret)
 }
 
-func setSecret(t *testing.T, secret *v1.Secret, cluster string) {
-	if cluster == "dest" {
-		logrus.Infof("creating secret in destination")
-		err := setDestinationKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
-
-		defer func() {
-			err := setSourceKubeConfig()
-			require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-		}()
-	} else {
-		logrus.Infof("creating secret in source")
+func createSecret(t *testing.T, secret_name string, secret_map map[string]string) *v1.Secret {
+	secret := &v1.Secret{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      secret_name,
+			Namespace: "kube-system",
+		},
+		StringData: secret_map,
 	}
-
-	_, err := core.Instance().CreateSecret(secret)
+	secretObj, err := core.Instance().CreateSecret(secret)
 	if !errors.IsAlreadyExists(err) {
 		require.NoError(t, err, "failed to create secret for volumes")
 	}
+	return secretObj
 }
 
-func deleteNamespace(t *testing.T, namespace string, cluster string) {
-	if cluster == "dest" {
-		logrus.Infof("deleting namespace %v in destination", namespace)
-		err := setDestinationKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
-
-		defer func() {
-			err := setSourceKubeConfig()
-			require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-		}()
-	} else {
-		logrus.Infof("deleting namespace %v in source", namespace)
+func cleanup(t *testing.T, namespace string) {
+	funcDeleteNamespace := func() {
+		err := core.Instance().DeleteNamespace(namespace)
+		if err != nil {
+			logrus.Infof("Error deleting namespace %s: %v\n", namespace, err)
+		}
 	}
+	funcDeleteNamespace()
+	executeOnDestination(t, funcDeleteNamespace)
+}
 
-	err := core.Instance().DeleteNamespace(namespace)
-	if err != nil {
-		logrus.Infof("Error deleting namespace: %v\n", err)
-	}
-	time.Sleep(10 * time.Second)
+func executeOnDestination(t *testing.T, funcToExecute func()) {
+	err := setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+	logrus.Info("KubeConfig set to Destination")
+
+	defer func() {
+		err := setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		logrus.Info("KubeConfig set to Source")
+	}()
+
+	funcToExecute()
 }
 
 func actionFailoverTest(t *testing.T) {
@@ -92,8 +87,8 @@ func actionFailoverTest(t *testing.T) {
 	actionName := "mysql-action-failover"
 
 	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
-	deleteNamespace(t, namespace, "src")
-	deleteNamespace(t, namespace, "dest")
+
+	defer cleanup(t, namespace)
 
 	// starts the app on src,
 	// sets cluster pair,
@@ -146,25 +141,21 @@ func actionFailoverTest(t *testing.T) {
 	scaleFactor := scaleDownApps(t, ctxs)
 	logrus.Infof("scaleFactor: %v", scaleFactor)
 
-	// TODO(dgoel): add a wrapper method that sets and unsets destKubeConfig
-	// trigger action
-	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+	startAndValidateFailover := func() {
+		_ = createActionCR(t, actionName, namespace, ctxs[0])
 
-	createActionCR(t, actionName, namespace, ctxs[0])
+		// pass preMigrationCtx to only check if the mysql app is running on destination
+		err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "error waiting for app to get to running state")
 
-	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "error waiting for app to get to running state")
-
-	// if above call to WaitForRunning is successful,
-	// then Action validateActionCR should be successful too
-	validateActionCR(t, actionName, namespace)
-
-	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		// if above call to WaitForRunning is successful,
+		// then Action validateActionCR will be successful
+		validateActionCR(t, actionName, namespace)
+	}
+	executeOnDestination(t, startAndValidateFailover)
 }
 
-func createActionCR(t *testing.T, actionAppKey, namespace string, ctx *scheduler.Context) {
+func createActionCR(t *testing.T, actionAppKey, namespace string, ctx *scheduler.Context) *v1alpha1.Action {
 	actionSpec := v1alpha1.Action{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name:      actionAppKey,
@@ -175,9 +166,10 @@ func createActionCR(t *testing.T, actionAppKey, namespace string, ctx *scheduler
 		},
 		Status: v1alpha1.ActionStatusScheduled,
 	}
-	_, err := storkops.Instance().CreateAction(&actionSpec)
+	action, err := storkops.Instance().CreateAction(&actionSpec)
 
 	require.NoError(t, err, "error creating Action CR")
+	return action
 }
 
 func validateActionCR(t *testing.T, actionName, namespace string) {
