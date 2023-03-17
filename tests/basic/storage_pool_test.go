@@ -16,6 +16,7 @@ import (
 
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -5162,11 +5163,12 @@ func inResync(vol string) bool {
 	}
 	for _, v := range volDetails.RuntimeState {
 		log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
-		if v.GetRuntimeState()["RuntimeState"] != "resync" {
-			return false
+		if v.GetRuntimeState()["RuntimeState"] == "resync" ||
+			v.GetRuntimeState()["RuntimeState"] == "clean" {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func WaitTillVolumeInResync(vol string) bool {
@@ -5251,15 +5253,55 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
-			log.InfoD("Restarting the Driver on Node [%s]", restartDriver.Name)
-			err = Inst().N.RebootNode(*restartDriver, node.RebootNodeOpts{
-				Force: true,
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         1 * time.Minute,
-					TimeBeforeRetry: 5 * time.Second,
-				},
-			})
-			log.FailOnError(err, "Rebooting Node failed?")
+			log.InfoD("setting replication on the volumes")
+			setRepl := func(vol *volume.Volume) error {
+				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
+				getReplicaSets, err := Inst().V.GetReplicaSets(vol)
+				log.FailOnError(err, "Failed to get replication factor on the volume")
+				if len(getReplicaSets) == 3 {
+					newRepl := int64(len(getReplicaSets) - 1)
+					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
+					if err != nil {
+						return err
+					}
+				}
+
+				// Change Replica sets of each volumes created to 3
+				var (
+					maxReplicaFactor int64
+					nodesToBeUpdated []string
+					poolsToBeUpdated []string
+				)
+				maxReplicaFactor = 3
+				nodesToBeUpdated = nil
+				poolsToBeUpdated = nil
+				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
+					nodesToBeUpdated, poolsToBeUpdated, true)
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+
+			// Set replicaiton on all volumes in parallel so that multiple volumes will be in resync
+			var wg sync.WaitGroup
+			var m sync.Mutex
+			error_array := []error{}
+			for _, eachVol := range Volumes {
+				log.InfoD("Set replication on the volume [%v]", eachVol.ID)
+				wg.Add(1)
+				go func(eachVol *volume.Volume) {
+					defer wg.Done()
+					err := setRepl(eachVol)
+					if err != nil {
+						m.Lock()
+						error_array = append(error_array, err)
+						m.Unlock()
+					}
+				}(eachVol)
+			}
+			wg.Wait()
+			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
@@ -8018,11 +8060,11 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 			log.FailOnError(err, "Failed to get volumes from context")
 			for _, eachVol := range vols {
 				getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
-				log.FailOnError(err, "Failed to get replication factor on the volume")
+				log.FailOnError(err, "failed to get replication factor of the volume")
 
 				var poolID []string
-				poolID, err = GetPoolIDsFromVolName(eachVol.Name)
-				log.FailOnError(err, "Failed to get PoolID from olume Name [%s]", eachVol.Name)
+				poolID, err = GetPoolIDsFromVolName(eachVol.ID)
+				log.FailOnError(err, "failed to get PoolID from volume Name [%s]", eachVol.Name)
 
 				for _, eachPoolUUID := range poolID {
 					if eachPoolUUID == poolUUID {
