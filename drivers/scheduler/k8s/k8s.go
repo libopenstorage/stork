@@ -6346,6 +6346,43 @@ func getLabelsFromNodeAffinity(nodeAffSpec *v1.NodeAffinity) map[string]string {
 	return label
 }
 
+// AddNamespaceLabel adds a label key=value on the given namespace
+func (k *K8s) AddNamespaceLabel(namespace string, labelMap map[string]string) error {
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
+		return err
+	}
+	ns.SetLabels(labelMap)
+	if _, err := k8sCore.UpdateNamespace(ns); err == nil {
+		return nil
+	}
+	return err
+}
+
+// RemoveNamespaceLabel removes the label with key on given namespace
+func (k *K8s) RemoveNamespaceLabel(namespace string, labelMap map[string]string) error {
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
+		return err
+	}
+	for key := range labelMap {
+		delete(ns.Labels, key)
+	}
+	if _, err = k8sCore.UpdateNamespace(ns); err == nil {
+		return nil
+	}
+	return err
+}
+
+// GetNamespaceLabel gets the labels on given namespace
+func (k *K8s) GetNamespaceLabel(namespace string) (map[string]string, error) {
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
+		return nil, err
+	}
+	return ns.Labels, nil
+}
+
 // rotateTopologyArray Rotates topology arrays by one
 func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 	if len(options.TopologyLabels) > 1 {
