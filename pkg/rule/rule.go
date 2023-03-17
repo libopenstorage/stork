@@ -44,7 +44,6 @@ const (
 	// annotation key value for command executor image registry and image registry secret.
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
 	cmdExecutorImageOverrideSecretKey    = "stork.libopenstorage.org/cmdexecutor-image-secret"
-	storkServiceAccount                  = "stork-account"
 	podsWithRunningCommandsKeyDeprecated = "stork/pods-with-running-cmds"
 	podsWithRunningCommandsKey           = "stork.libopenstorage.org/pods-with-running-cmds"
 
@@ -635,10 +634,18 @@ func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecut
 	labels := map[string]string{
 		"app": "cmdexecutor",
 	}
+	// the stork service account and the stork admin namespace.
+	configData, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, coreapi.NamespaceSystem)
+	if err != nil {
+		return fmt.Errorf("error readig stork controller config map: %v", err)
+	}
+	// adminNamespace := configData.Data[k8sutils.AdminNsKey]
+	storkDeployNamespace := configData.Data[k8sutils.DeployNsKey]
+	storkServiceAccount := configData.Data[k8sutils.StorkServiceAccount]
 	executorPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("pod-cmd-executor-%s", taskID),
-			Namespace: coreapi.NamespaceSystem,
+			Namespace: storkDeployNamespace,
 			Labels:    labels,
 		},
 		Spec: v1.PodSpec{
