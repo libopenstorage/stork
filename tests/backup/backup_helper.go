@@ -55,6 +55,8 @@ const (
 	mongodbStatefulset                        = "pxc-backup-mongodb"
 	backupDeleteTimeout                       = 10 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
+	mongodbPodStatusTimeout                   = 20 * time.Minute
+	mongodbPodStatusRetryTime                 = 30 * time.Second
 )
 
 var (

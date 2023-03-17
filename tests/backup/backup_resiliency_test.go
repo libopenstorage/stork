@@ -817,7 +817,6 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
-
 			}
 		}
 	})
@@ -915,7 +914,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
@@ -976,7 +975,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
