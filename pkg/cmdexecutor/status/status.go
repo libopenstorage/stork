@@ -3,6 +3,7 @@ package status
 import (
 	"fmt"
 
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -21,8 +22,13 @@ func Persist(key, statusToPersist string) error {
 	if len(key) == 0 {
 		return fmt.Errorf("no key provided to persist status")
 	}
-
-	cm, err := core.Instance().GetConfigMap(statusConfigMapName, meta_v1.NamespaceSystem)
+	// get the stork service account and the stork admin namespace.
+	configData, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, meta_v1.NamespaceSystem)
+	if err != nil {
+		return fmt.Errorf("error readig stork controller config map: %v", err)
+	}
+	storkDeployNamespace := configData.Data[k8sutils.DeployNsKey]
+	cm, err := core.Instance().GetConfigMap(statusConfigMapName, storkDeployNamespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create one
@@ -31,7 +37,7 @@ func Persist(key, statusToPersist string) error {
 			}
 			cm = &v1.ConfigMap{
 				ObjectMeta: meta_v1.ObjectMeta{
-					Namespace: meta_v1.NamespaceSystem,
+					Namespace: storkDeployNamespace,
 					Name:      statusConfigMapName,
 				},
 				Data: defaultData,
@@ -60,7 +66,13 @@ func Get(key string) (string, error) {
 		return "", fmt.Errorf("no key provided to get status")
 	}
 
-	cm, err := core.Instance().GetConfigMap(statusConfigMapName, meta_v1.NamespaceSystem)
+	// the stork service account and the stork admin namespace.
+	configData, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, meta_v1.NamespaceSystem)
+	if err != nil {
+		return "", fmt.Errorf("error readig stork controller config map: %v", err)
+	}
+	storkDeployNamespace := configData.Data[k8sutils.DeployNsKey]
+	cm, err := core.Instance().GetConfigMap(statusConfigMapName, storkDeployNamespace)
 	if err != nil {
 		return "", err
 	}
