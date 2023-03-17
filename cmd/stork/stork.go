@@ -244,6 +244,20 @@ func run(c *cli.Context) {
 	storkControllerCm.Namespace = defaultAdminNamespace
 	storkControllerCm.Data = make(map[string]string)
 	storkControllerCm.Data[k8sutils.AdminNsKey] = c.String("admin-namespace")
+	// get the stork deployment namespace
+	storkPodNs, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		log.Warnf("unable to get the stork pod namespace: %v", err)
+	}
+	// get the service account name of stork deployment
+	serviceAccountName, err := k8sutils.GetServiceAccountFromDeployment(k8sutils.StorkDeploymentName, storkPodNs)
+	if err != nil {
+		log.Warnf("unable to get the stork service account: %v", err)
+	}
+
+	storkControllerCm.Data[k8sutils.StorkServiceAccount] = serviceAccountName
+	storkControllerCm.Data[k8sutils.DeployNsKey] = storkPodNs
+
 	_, err = schedops.Instance().CreateConfigMap(storkControllerCm)
 	if k8s_errors.IsAlreadyExists(err) {
 		_, err := schedops.Instance().UpdateConfigMap(storkControllerCm)
