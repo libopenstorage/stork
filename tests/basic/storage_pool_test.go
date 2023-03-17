@@ -8058,11 +8058,11 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 			log.FailOnError(err, "Failed to get volumes from context")
 			for _, eachVol := range vols {
 				getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
-				log.FailOnError(err, "Failed to get replication factor on the volume")
+				log.FailOnError(err, "failed to get replication factor of the volume")
 
 				var poolID []string
 				poolID, err = GetPoolIDsFromVolName(eachVol.ID)
-				log.FailOnError(err, "Failed to get PoolID from olume Name [%s]", eachVol.Name)
+				log.FailOnError(err, "failed to get PoolID from volume Name [%s]", eachVol.Name)
 
 				for _, eachPoolUUID := range poolID {
 					if eachPoolUUID == poolUUID {
