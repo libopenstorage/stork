@@ -5267,9 +5267,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				}
 
 				// Change Replica sets of each volumes created to 3
-				var maxReplicaFactor int64
-				var nodesToBeUpdated []string
-				var poolsToBeUpdated []string
+				var (
+					maxReplicaFactor int64
+					nodesToBeUpdated []string
+					poolsToBeUpdated []string
+				)
 				maxReplicaFactor = 3
 				nodesToBeUpdated = nil
 				poolsToBeUpdated = nil
