@@ -4028,25 +4028,40 @@ var _ = Describe("{SwapShareBackup}", func() {
 			allBackupLocations, err := getAllBackupLocations(ctx)
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 			for backupLocationUid, backupLocationName := range allBackupLocations {
-				if userBackupLocationMapping[userName] == backupLocationName {
-					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
-					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
-				}
+				err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 			}
 
-			backupLocationDeletionSuccess := func() (interface{}, bool, error) {
-				allBackupLocations, err := getAllBackupLocations(ctx)
-				dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-				for _, backupLocationName := range allBackupLocations {
-					if userBackupLocationMapping[userName] == backupLocationName {
-						return "", true, fmt.Errorf("found %s backup locations", backupLocationName)
+			for _, backupLocationName := range allBackupLocations {
+				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+					status, err := IsBackupLocationPresent(backupLocationName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("backup location %s still present with error %v", backupLocationName, err)
 					}
+					if status == true {
+						return "", true, fmt.Errorf("backup location %s is not deleted yet", backupLocationName)
+					}
+					return "", false, nil
 				}
-				return "", false, nil
+				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
 			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 10*time.Minute, 30*time.Second)
-			dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+
+			allCloudCredentials, err := getAllCloudCredentials(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
+			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
+				cloudCredDeleteStatus := func() (interface{}, bool, error) {
+					err := DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
+					if err != nil {
+						return "", true, fmt.Errorf("deleting cloud cred %s", cloudCredentialName)
+					}
+					return "", false, nil
+				}
+				_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
+			}
 		}
+
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
