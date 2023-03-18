@@ -41,8 +41,6 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
-	var retryDuration int
-	var retryInterval int
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
 
@@ -161,9 +159,8 @@ var _ = Describe("{BackupRestartPX}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
 
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
-				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
-				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
+				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+backupName)
 
 			}
 		})
@@ -208,8 +205,6 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces := make([]string, 0)
 	var backupNames []string
-	var retryDuration int
-	var retryInterval int
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819)
@@ -318,9 +313,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
-				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
-				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
+				err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+backupName)
 			}
 		})
 		Step("Validate applications", func() {
@@ -345,9 +339,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore", backupName)
-				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
-				log.FailOnError(err, "Failed while restoring Backup for - %s", backupName)
-				dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restoreName)
+				err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting the restore success for - "+restoreName)
 			}
 		})
 		Step("Validate applications", func() {
@@ -923,9 +916,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupStatus, err := backupSuccessCheck(backupName, orgID, 0, 0, ctx)
-				dash.VerifyFatal(err, nil, "Getting the status for backup- "+backupName)
-				dash.VerifyFatal(backupStatus, true, "Verifying the backup status for backup - "+backupName)
+				err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Verifying the backup status for backup - "+backupName)
 			}
 		})
 		Step("Restoring the backups taken", func() {
@@ -984,9 +976,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, restoreName := range restoreNames {
-				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, 0, 0, ctx)
-				dash.VerifyFatal(err, nil, "Getting the status for restore-"+restoreName)
-				dash.VerifyFatal(restoreStatus, true, "Verifying the restore status for restore-"+restoreName)
+				err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Verifying the restore status for restore-"+restoreName)
 			}
 		})
 	})
