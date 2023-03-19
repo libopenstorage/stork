@@ -446,6 +446,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	var credName string
 	bkpNamespaces = make([]string, 0)
 	backupLocationMap := make(map[string]string)
+	var chosenUser string
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ShareBackupWithUsersAndGroups",
@@ -608,9 +609,10 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		Step("Share Backup with Full access to a user of View Only access group and Validate", func() {
 			log.InfoD("Share Backup with Full access to a user of View Only access group and Validate")
 			// Get user from the view access group
-			username, err := backup.GetRandomUserFromGroup(groups[0])
+			var err error
+			chosenUser, err = backup.GetRandomUserFromGroup(groups[0])
 			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
-			log.Infof("Sharing backup with user - %s", username)
+			log.Infof("Sharing backup with user - %s", chosenUser)
 
 			// Get Admin Context - needed to share backup and get backup UID
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -618,12 +620,12 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Share backup with the user
 			backupName := backupNames[0]
-			err = ShareBackup(backupName, nil, []string{username}, FullAccess, ctx)
+			err = ShareBackup(backupName, nil, []string{chosenUser}, FullAccess, ctx)
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
-			log.FailOnError(err, "Fetching %s ctx", username)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Register Source and Destination cluster
@@ -649,7 +651,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Delete backup to confirm that the user has Full Access
 			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupName, username)
+			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupName, chosenUser)
 			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying backup %s deletion", backupName))
 		})
 
@@ -784,13 +786,11 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		Step("Validate that user with View Only access cannot restore or delete the backup", func() {
 			log.InfoD("Validate that user with View Only access cannot restore or delete the backup")
 			// Get user from the view only access group
-			username, err := backup.GetRandomUserFromGroup(groups[0])
-			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
-			log.Infof("Sharing backup with user - %s", username)
+			log.Infof("Sharing backup with user - %s", chosenUser)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
-			log.FailOnError(err, "Fetching %s ctx", username)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Register Source and Destination cluster
@@ -802,8 +802,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			backupName := backupNames[2]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
+			log.Infof("Error while trying to restore - %s", err.Error())
 			// Restore validation to make sure that the user with View Access cannot restore
-			dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
 
 			// Get Admin Context - needed to get backup UID
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -828,11 +829,6 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
-
-		log.Infof("Deleting registered clusters for non-admin context")
-		for _, ctxNonAdmin := range userContexts {
-			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
 		var wg sync.WaitGroup
@@ -2438,27 +2434,34 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
 		log.Infof("Deleting backup created by px-central-admin")
-		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		log.Infof("Deleting backup created by user")
-		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID of user for backup %s", userBackupName))
-		_, err = DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
-		log.Infof("Cleaning up users")
-		for _, user := range userName {
-			err = backup.DeleteUser(user)
-		}
-		log.FailOnError(err, "Error in deleting user")
+
 		log.Infof("Deleting registered clusters for non-admin context")
 		err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 		err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+
+		backupDriver := Inst().Backup
+
+		log.Infof("Deleting backup created by user - %s", userName[0])
+		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID of user for backup %s", userBackupName))
+		_, err = DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
+		DeleteBackupAndWait(userBackupName, ctxNonAdmin)
+
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+		log.Infof("Cleaning up users")
+		for _, user := range userName {
+			err = backup.DeleteUser(user)
+		}
+		log.FailOnError(err, "Error in deleting user")
 	})
 })
 
@@ -4025,25 +4028,40 @@ var _ = Describe("{SwapShareBackup}", func() {
 			allBackupLocations, err := getAllBackupLocations(ctx)
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 			for backupLocationUid, backupLocationName := range allBackupLocations {
-				if userBackupLocationMapping[userName] == backupLocationName {
-					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
-					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
-				}
+				err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 			}
 
-			backupLocationDeletionSuccess := func() (interface{}, bool, error) {
-				allBackupLocations, err := getAllBackupLocations(ctx)
-				dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-				for _, backupLocationName := range allBackupLocations {
-					if userBackupLocationMapping[userName] == backupLocationName {
-						return "", true, fmt.Errorf("found %s backup locations", backupLocationName)
+			for _, backupLocationName := range allBackupLocations {
+				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+					status, err := IsBackupLocationPresent(backupLocationName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("backup location %s still present with error %v", backupLocationName, err)
 					}
+					if status == true {
+						return "", true, fmt.Errorf("backup location %s is not deleted yet", backupLocationName)
+					}
+					return "", false, nil
 				}
-				return "", false, nil
+				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
 			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 10*time.Minute, 30*time.Second)
-			dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+
+			allCloudCredentials, err := getAllCloudCredentials(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
+			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
+				cloudCredDeleteStatus := func() (interface{}, bool, error) {
+					err := DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
+					if err != nil {
+						return "", true, fmt.Errorf("deleting cloud cred %s", cloudCredentialName)
+					}
+					return "", false, nil
+				}
+				_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
+			}
 		}
+
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {

@@ -78,6 +78,7 @@ var (
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
 	pdsLabels                               = make(map[string]string)
+	accountID                               string
 )
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul}
