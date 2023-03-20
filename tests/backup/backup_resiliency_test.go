@@ -500,7 +500,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				userContexts = append(userContexts, ctxNonAdmin)
 
@@ -554,7 +554,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Validate the shared backup with users", func() {
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 
 				for _, backup := range backupNames {

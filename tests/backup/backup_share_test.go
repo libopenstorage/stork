@@ -70,7 +70,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
 				}(userName, firstName, lastName, email)
@@ -143,7 +143,6 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 	firstName := "firstName"
 	lastName := "lastName"
 	email := "testuser10@cnbu.com"
-	password := "Password1"
 	numberOfBackups := 1
 	var backupName string
 	userContexts := make([]context.Context, 0)
@@ -186,7 +185,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Create User", func() {
-			err = backup.AddUser(userName, firstName, lastName, email, password)
+			err = backup.AddUser(userName, firstName, lastName, email, commonPassword)
 			log.FailOnError(err, "Failed to create user - %s", userName)
 
 		})
@@ -230,13 +229,13 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		Step("Duplicate shared backup", func() {
 			log.InfoD("Validating to duplicate share backup without adding cluster")
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, "Fetching non px-central-admin user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Validate that backups are shared with user
 			log.Infof("Validating that backups are shared with %s user", userName)
-			userBackups1, err := GetAllBackupsForUser(userName, password)
+			userBackups1, err := GetAllBackupsForUser(userName, commonPassword)
 			log.FailOnError(err, "Not able to fetch backup for user %s", userName)
 			dash.VerifyFatal(len(userBackups1), numberOfBackups, fmt.Sprintf("Validating that user [%s] has access to all shared backups [%v]", userName, userBackups1))
 
@@ -384,7 +383,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Share Backup with View Only access to a user of Full access group and Validate", func() {
 			log.InfoD("Backup is shared with Group having FullAccess after it is shared with user having ViewOnlyAccess, therefore user should have FullAccess")
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userNames[0], "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userNames[0], commonPassword)
 			log.FailOnError(err, "Fetching user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 			log.InfoD("Registering Source and Destination clusters from user context")
@@ -482,7 +481,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
 				}(userName, firstName, lastName, email)
@@ -624,7 +623,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -672,7 +671,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -709,7 +708,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -747,7 +746,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.Infof("Sharing backup with user - %s", username)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(username, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", username)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -789,7 +788,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.Infof("Sharing backup with user - %s", chosenUser)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -929,7 +928,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
 				}(userName, firstName, lastName, email)
@@ -1050,7 +1049,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -1100,7 +1099,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 
 			// Start Restore
@@ -1142,7 +1141,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 
 			// Start Restore
@@ -1294,7 +1293,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
 				}(userName, firstName, lastName, email)
@@ -1305,7 +1304,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			firstName := "autogenerated-firstname"
 			lastName := "autogenerated-last name"
 			email := "autogenerated-email@cnbu.com"
-			err := backup.AddUser(individualUser, firstName, lastName, email, "Password1")
+			err := backup.AddUser(individualUser, firstName, lastName, email, commonPassword)
 			log.FailOnError(err, "Failed to create user - %s", individualUser)
 		})
 
@@ -1422,7 +1421,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -1457,7 +1456,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Now validating with individual user who is not part of any group
 			// Get user context
 			log.InfoD("Validate Full Access of backups shared at cluster level for an individual user - %s", individualUser)
-			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, "Password1")
+			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", individualUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -1506,7 +1505,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 
 			// Start Restore
@@ -1533,7 +1532,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Now validating with individual user who is not part of any group
 			// Get user context
 			log.InfoD("Validate Restore Access of backups shared at cluster level for an individual user - %s", individualUser)
-			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, "Password1")
+			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", individualUser)
 
 			// Start Restore
@@ -1574,7 +1573,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(chosenUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", chosenUser)
 
 			// Start Restore
@@ -1597,7 +1596,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Now validating with individual user who is not part of any group
 			// Get user context
 			log.InfoD("Validate View Only Access of backups shared at cluster level for an individual user - %s", individualUser)
-			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, "Password1")
+			ctxNonAdmin, err = backup.GetNonAdminCtx(individualUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", individualUser)
 
 			// Start Restore
@@ -1633,7 +1632,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			var err error
 			noAccessCheck := func() (interface{}, bool, error) {
 				// Enumerate all the backups available to the user
-				userBackups, err = GetAllBackupsForUser(chosenUser, "Password1")
+				userBackups, err = GetAllBackupsForUser(chosenUser, commonPassword)
 				log.FailOnError(err, "Failed to get all backups for user - [%s]", chosenUser)
 				log.Infof("Backups user [%s] has access to - %v", chosenUser, userBackups)
 				if len(userBackups) > 0 {
@@ -1649,7 +1648,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			// Now validating with individual user who is not part of any group
 			// Get user context
 			log.InfoD("Validate no access of backups shared at cluster level for an individual user - %s", individualUser)
-			userBackups1, err := GetAllBackupsForUser(individualUser, "Password1")
+			userBackups1, err := GetAllBackupsForUser(individualUser, commonPassword)
 			log.FailOnError(err, "Failed to get all backups for user - [%s]", individualUser)
 			log.Infof("Backups user [%s] has access to - %v", individualUser, userBackups1)
 			log.InfoD("Checking backups user [%s] has after revoking", individualUser)
@@ -1777,7 +1776,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
 					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
 				}(userName, firstName, lastName, email)
@@ -1846,7 +1845,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			log.Infof("The status after updating backup %s with new cred %v is %v", backupNames[0], newCredName, status)
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], commonPassword)
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -1880,7 +1879,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			log.FailOnError(err, "Failed to share backup %s", backupNames[0])
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], commonPassword)
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -2064,7 +2063,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				userContexts = append(userContexts, ctxNonAdmin)
 
@@ -2120,7 +2119,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			// Get user context
 			for _, user := range users {
 				log.Infof("Validating user %s has access to no backups", user)
-				userBackups1, _ := GetAllBackupsForUser(user, "Password1")
+				userBackups1, _ := GetAllBackupsForUser(user, commonPassword)
 				dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", user))
 			}
 		})
@@ -2229,7 +2228,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			backupClusterName = SourceClusterName
 			clusterStatus, clusterUid := Inst().Backup.RegisterBackupCluster(orgID, backupClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying registration of cluster named [%s] with uid [%s] as backup cluster", backupClusterName, clusterUid))
-			ctxNonAdmin, err := backup.GetNonAdminCtx(username, password)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s ctx", username))
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with [%s] ctx", SourceClusterName, destinationClusterName, username))
@@ -2268,7 +2267,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				err := ClusterUpdateBackupShare(backupClusterName, nil, []string{username}, accessLevel, true, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of all backups of cluster [%s] with [%#v] access level to user [%s]", backupClusterName, accessLevel, username))
 				clusterShareCheck := func() (interface{}, bool, error) {
-					userBackups, err := GetAllBackupsForUser(username, password)
+					userBackups, err := GetAllBackupsForUser(username, commonPassword)
 					if err != nil {
 						return "", false, err
 					}
@@ -2292,7 +2291,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				}
 				log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 				time.Sleep(15 * time.Minute)
-				fetchedUserBackups, err := GetAllBackupsForUser(username, password)
+				fetchedUserBackups, err := GetAllBackupsForUser(username, commonPassword)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backups for user [%s]", username))
 				dash.VerifyFatal(len(fetchedUserBackups), len(userBackups.([]string))+1, "Verifying if new schedule backup is up or not")
 				log.InfoD("All the backups for user [%s] - %v", username, fetchedUserBackups)
@@ -2314,7 +2313,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s]", scheduleName))
 		err = DeleteSchedule(scheduleName, scheduleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] along with its backups %v and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName}))
-		ctxNonAdmin, err := backup.GetNonAdminCtx(username, password)
+		ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching %s ctx", username))
 		for _, restoreName := range restoreNames {
 			err := DeleteRestore(restoreName, orgID, ctxNonAdmin)
@@ -2414,7 +2413,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			log.InfoD("Validating if user with FullAccess cannot duplicate backup shared but can create new backup")
 			// User with FullAccess cannot duplicate will be validated through UI only
 			for _, user := range userName {
-				ctxNonAdmin, err = backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err = backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching user ctx")
 				log.InfoD("Registering Source and Destination clusters from user context")
 				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
@@ -2606,7 +2605,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		wg.Wait()
 		log.Infof("Generating user context")
 		for _, userName := range users {
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching  %s user ctx", userName))
 			userContextsList = append(userContextsList, ctxNonAdmin)
 		}
@@ -2639,7 +2638,6 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	firstName := "firstName"
 	lastName := "lastName"
 	email := "testuser1@cnbu.com"
-	password := "Password1"
 	numberOfBackups := 20
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
@@ -2682,7 +2680,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Create Users", func() {
-			err = backup.AddUser(userName, firstName, lastName, email, password)
+			err = backup.AddUser(userName, firstName, lastName, email, commonPassword)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying user %s creation", userName))
 
 		})
@@ -2750,7 +2748,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			log.InfoD("register the Source and destination cluster of non-px Admin")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, "Fetching non px-central-admin user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -2760,7 +2758,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			// Validate that backups are shared with user
 			log.Infof("Validating that backups are shared with %s user", userName)
-			userBackups1, _ := GetAllBackupsForUser(userName, password)
+			userBackups1, _ := GetAllBackupsForUser(userName, commonPassword)
 			dash.VerifyFatal(len(userBackups1), numberOfBackups, fmt.Sprintf("Validating that user [%s] has access to all shared backups", userName))
 
 			//Start deleting from user with whom the backups are shared
@@ -3028,7 +3026,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 		wg.Wait()
 		log.Infof("Generating user context")
 		for _, userName := range users {
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, fmt.Sprintf("Fetching  %s user ctx", userName))
 			userContextsList = append(userContextsList, ctxNonAdmin)
 		}
@@ -3106,7 +3104,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			firstName := "autogenerated-firstname"
 			lastName := "autogenerated-last name"
 			email := "autogenerated-email@cnbu.com"
-			err := backup.AddUser(individualUser, firstName, lastName, email, "Password1")
+			err := backup.AddUser(individualUser, firstName, lastName, email, commonPassword)
 			log.FailOnError(err, "Failed to create user - %s", individualUser)
 
 		})
@@ -3175,7 +3173,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			log.InfoD("Validate that user with View Only access cannot restore or delete the backup")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(individualUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(individualUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", individualUser)
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -3209,7 +3207,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			log.InfoD("Validate that user with View Only access on full backup and full access to incremental backup can restore")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(individualUser, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(individualUser, commonPassword)
 			log.FailOnError(err, "Fetching %s ctx", individualUser)
 
 			// Start Restore
@@ -3401,7 +3399,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			log.InfoD("Create user")
 			userName = createUsers(numberOfUsers)
 			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
-			userCtx, err = backup.GetNonAdminCtx(userName[0], "Password1")
+			userCtx, err = backup.GetNonAdminCtx(userName[0], commonPassword)
 			dash.VerifyFatal(err, nil, "Getting user context")
 		})
 
@@ -3409,7 +3407,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			log.InfoD("Share backup with user with FullAccess")
 			err = ShareBackup(backupName, nil, userName, FullAccess, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Share backup %s with  user %s having FullAccess", backupName, userName))
-			userBackups1, _ := GetAllBackupsForUser(userName[0], "Password1")
+			userBackups1, _ := GetAllBackupsForUser(userName[0], commonPassword)
 			log.Info(" the backup are", userBackups1)
 			err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster for user")
@@ -3570,7 +3568,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 				go func(userName, firstName, lastName, email string, role backup.PxBackupRole) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					log.InfoD("Adding role %v to user %v ", role, userName)
 					err = backup.AddRoleToUser(userName, role, "")
@@ -3723,7 +3721,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				userContexts = append(userContexts, ctxNonAdmin)
 
@@ -3756,7 +3754,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 			backupDriver := Inst().Backup
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				wg.Add(1)
 				go func(user string) {
@@ -3774,7 +3772,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 			log.InfoD("Validate Restores are successful")
 			for _, user := range users {
 				log.Infof("Validating Restore success for user %s", user)
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				for _, restore := range restoreNames {
 					log.Infof("Validating Restore %s for user %s", restore, user)
@@ -3799,7 +3797,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		}
 		log.InfoD("Deleting restores")
 		for _, user := range users {
-			ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, restore := range restoreNames {
 				if strings.Contains(restore, user) {
@@ -3882,7 +3880,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				go func(userName, firstName, lastName, email string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
 				}(userName, firstName, lastName, email)
@@ -3899,7 +3897,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 					credName := fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
 					err := backup.AddRoleToUser(user, backup.InfrastructureOwner, fmt.Sprintf("Adding Infra Owner role to %s", user))
 					log.FailOnError(err, "Failed to add role to user - %s", user)
-					ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+					ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 					log.FailOnError(err, fmt.Sprintf("Failed to fetch ctx for custom user: [%v]", err))
 					err = CreateCloudCredentialNonAdminUser(provider, credName, cloudCredUID, orgID, ctxNonAdmin)
 					log.FailOnError(err, "Failed to create cloud credential - %s", err)
@@ -3915,7 +3913,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		for _, user := range users {
 			Step(fmt.Sprintf("Register source and destination cluster for backup on %s ", user), func() {
 				log.InfoD("Registering Source and Destination clusters as user : %s and verifying the status", user)
-				ctx, err := backup.GetNonAdminCtx(user, "Password1")
+				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching %s ctx", user)
 				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 				log.FailOnError(err, "Failed creating source and destination cluster for user : %s", user)
@@ -3925,7 +3923,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			Step(fmt.Sprintf("Taking backup of applications as %s", user), func() {
 				log.InfoD("Taking backup of applications as user : %s ", user)
 				backupName = "backup1-82940"
-				ctx, err := backup.GetNonAdminCtx(user, "Password1")
+				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching testuser ctx")
 				err = CreateBackup(backupName, SourceClusterName, userBackupLocationMapping[user], backupLocationUID, []string{bkpNamespaces[0]},
 					nil, orgID, clusterUid, "", "", "", "", ctx)
@@ -3939,14 +3937,14 @@ var _ = Describe("{SwapShareBackup}", func() {
 		}
 		Step(fmt.Sprintf("Share backup with %s", users[1]), func() {
 			log.InfoD(fmt.Sprintf("Share backup from %s to %s and validate", users[0], users[1]))
-			ctx, err := backup.GetNonAdminCtx(users[0], "Password1")
+			ctx, err := backup.GetNonAdminCtx(users[0], commonPassword)
 			log.FailOnError(err, "Fetching testuser ctx")
 			// Share backup with the user
 			err = ShareBackup(backupName, nil, []string{users[1]}, RestoreAccess, ctx)
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 		})
 		Step(fmt.Sprintf("validate the backup shared %s is present in user context %s", backupName, users[1]), func() {
-			userBackups, _ := GetAllBackupsForUser(users[1], "Password1")
+			userBackups, _ := GetAllBackupsForUser(users[1], commonPassword)
 			backupCount := 0
 			for _, backup := range userBackups {
 				if backup == backupName {
@@ -3957,7 +3955,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 		Step(fmt.Sprintf("Restore the shared backup  %s with user context %s", backupName, users[1]), func() {
 			log.InfoD(fmt.Sprintf("Restore the shared backup  %s with user context %s", users[1], users[0]))
-			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], commonPassword)
 			log.FailOnError(err, "Fetching testuser ctx")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[0])
@@ -3965,14 +3963,14 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 		Step(fmt.Sprintf("Share backup with %s", users[0]), func() {
 			log.InfoD(fmt.Sprintf("Share backup from %s to %s and validate", users[1], users[0]))
-			ctx, err := backup.GetNonAdminCtx(users[1], "Password1")
+			ctx, err := backup.GetNonAdminCtx(users[1], commonPassword)
 			log.FailOnError(err, "Fetching testuser ctx")
 			// Share backup with the user
 			err = ShareBackup(backupName, nil, []string{users[0]}, RestoreAccess, ctx)
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 		})
 		Step(fmt.Sprintf("validate the backup shared %s is present in user context %s", backupName, users[0]), func() {
-			userBackups, _ := GetAllBackupsForUser(users[0], "Password1")
+			userBackups, _ := GetAllBackupsForUser(users[0], commonPassword)
 			backupCount := 0
 			for _, backup := range userBackups {
 				if backup == backupName {
@@ -3983,7 +3981,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 		Step(fmt.Sprintf("Restore the shared backup  %s with user context %s", backupName, users[0]), func() {
 			log.InfoD(fmt.Sprintf("Restore the shared backup  %s with user context %s", users[0], users[0]))
-			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], "Password1")
+			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], commonPassword)
 			log.FailOnError(err, "Fetching testuser ctx")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[1])
@@ -4003,7 +4001,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 
 		log.InfoD("Deleting all restores")
 		for _, userName := range users {
-			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, "Fetching nonAdminCtx")
 			allRestores, err := GetAllRestoresNonAdminCtx(ctx)
 			log.FailOnError(err, "Fetching all restores for nonAdminCtx")
@@ -4015,7 +4013,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 
 		log.InfoD("Delete all backups")
 		for i := 0; i <= numberOfUsers-1; i++ {
-			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
+			ctx, err := backup.GetNonAdminCtx(users[i], commonPassword)
 			log.FailOnError(err, "Fetching nonAdminCtx ")
 			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
@@ -4023,7 +4021,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 
 		// Cleanup all backup locations
 		for _, userName := range users {
-			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, "Fetching nonAdminCtx ")
 			allBackupLocations, err := getAllBackupLocations(ctx)
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
