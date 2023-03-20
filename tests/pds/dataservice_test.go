@@ -1049,8 +1049,8 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					log.FailOnError(err, "Error while deploying data services")
+					deployment, _, _, err = DeployandValidateDataServices(ds, nname, tenantID, projectID)
+					log.FailOnError(err, fmt.Sprintf("Error while deploying data services - %v", ds.Name))
 					cleanup = append(cleanup, deployment)
 				})
 			}
@@ -1073,7 +1073,6 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 					err := pdslib.ValidateDataServiceDeploymentNegative(dep, nname)
 					log.FailOnError(err, "Error while cleaning up data services")
 				}
-				isDeploymentsDeleted = true
 			})
 
 		})
