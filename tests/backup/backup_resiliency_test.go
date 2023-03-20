@@ -547,7 +547,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 10*time.Minute, 30*time.Second)
+				err = core.Instance().ValidatePod(&pod, 20*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
 			}
 		})

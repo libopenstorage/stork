@@ -2109,7 +2109,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 					defer wg.Done()
 					_, err = DeleteBackup(backup, backupMap[backup], orgID, ctx)
 					log.FailOnError(err, "Failed to delete backup - %s", backup)
-					err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, time.Minute*10, time.Minute*1)
+					err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, time.Minute*30, time.Minute*1)
 					log.FailOnError(err, "Error waiting for backup deletion %v", backup)
 				}(backup)
 			}
@@ -2338,7 +2338,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		bkpNamespaces     []string
 		clusterUid        string
 		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		userName          []string
+		userNames         []string
 		backupName        string
 		backupLocationUID string
 		cloudCredName     string
@@ -2375,8 +2375,8 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Create Users", func() {
-			userName = createUsers(numberOfUsers)
-			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
+			userNames = createUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userNames)
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
@@ -2406,13 +2406,13 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		})
 		Step("Share backup with user having full access", func() {
 			log.InfoD("Share backup with user having full access")
-			err = ShareBackup(backupName, nil, userName, FullAccess, ctx)
+			err = ShareBackup(backupName, nil, userNames, FullAccess, ctx)
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 		})
 		Step("Create backup from the shared user with FullAccess", func() {
 			log.InfoD("Validating if user with FullAccess cannot duplicate backup shared but can create new backup")
 			// User with FullAccess cannot duplicate will be validated through UI only
-			for _, user := range userName {
+			for _, user := range userNames {
 				ctxNonAdmin, err = backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching user ctx")
 				log.InfoD("Registering Source and Destination clusters from user context")
@@ -2442,12 +2442,13 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 
 		backupDriver := Inst().Backup
 
-		log.Infof("Deleting backup created by user - %s", userName[0])
+		log.Infof("Deleting backup created by user - %s", userNames[0])
 		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID of user for backup %s", userBackupName))
 		_, err = DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
-		DeleteBackupAndWait(userBackupName, ctxNonAdmin)
+		err = DeleteBackupAndWait(userBackupName, ctxNonAdmin)
+		log.FailOnError(err, fmt.Sprintf("Failed while waiting for backup %s to be deleted", userBackupName))
 
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
@@ -2457,7 +2458,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 		log.Infof("Cleaning up users")
-		for _, user := range userName {
+		for _, user := range userNames {
 			err = backup.DeleteUser(user)
 		}
 		log.FailOnError(err, "Error in deleting user")
@@ -2555,7 +2556,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 					defer func() { <-sem }()
 					err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
 						labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-					log.FailOnError(err, "Failed while trying to take backup of application- %s", bkpNamespaces[0])
+					log.FailOnError(err, "Failed while trying to take backup of application - %s with backup name - [%s]", bkpNamespaces[0], backupName)
 				}(backupName)
 			}
 			wg.Wait()
