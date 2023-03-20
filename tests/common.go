@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"regexp"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -331,8 +332,9 @@ var (
 )
 
 const (
-	rootLogDir   = "/root/logs"
-	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	rootLogDir    = "/root/logs"
+	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath = "/tmp/px-backup-test-logs"
 )
 
 type Weekday string
@@ -4397,6 +4399,70 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 	}
 }
 
+// collectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
+func collectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
+	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
+	podList, err := core.Instance().GetPods(namespace, podLabel)
+	if err != nil {
+		log.Errorf("Error in getting pods for the [%s] logs of test case [%s], Err: %v", logLabel, testCaseName, err.Error())
+		return
+	}
+	masterNode := node.GetMasterNodes()[0]
+	err = runCmd("pwd", masterNode)
+	if err != nil {
+		log.Errorf("Error in running [pwd] command in node [%s] for the [%s] logs of test case [%s]", masterNode.Name, logLabel, testCaseName)
+		return
+	}
+	testCaseLogDirPath := fmt.Sprintf("%s/%s-logs", pxbLogDirPath, testCaseName)
+	log.Infof("Creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName)
+	err = runCmd(fmt.Sprintf("mkdir -p %v", testCaseLogDirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]. Err: %v", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName, err.Error())
+		return
+	}
+	for _, pod := range podList.Items {
+		log.Infof("Writing [%s] pod into a %v/%v.log file", pod.Name, testCaseLogDirPath, pod.Name)
+		err = runCmd(fmt.Sprintf("kubectl logs %s -n %s > %s/%s.log", pod.Name, namespace, testCaseLogDirPath, pod.Name), masterNode)
+		if err != nil {
+			log.Errorf("Error in writing [%s] pod into a %v/%v.log file. Err: %v", pod.Name, testCaseLogDirPath, pod.Name, err.Error())
+		}
+	}
+}
+
+// collectStorkLogs collects Stork logs and stores them using the collectLogsFromPods function
+func collectStorkLogs(testCaseName string) {
+	storkLabel := make(map[string]string)
+	storkLabel["name"] = "stork"
+	pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		log.Errorf("Error in getting portworx namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
+}
+
+// collectPxBackupLogs collects Px-Backup logs and stores them using the collectLogsFromPods function
+func collectPxBackupLogs(testCaseName string) {
+	pxbLabel := make(map[string]string)
+	pxbLabel["app"] = "px-backup"
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "px-backup")
+}
+
+// compressSubDirectories compresses all subdirectories within the specified directory on the master node
+func compressSubDirectories(dirPath string) {
+	masterNode := node.GetMasterNodes()[0]
+	log.Infof("Compressing sub-directories in the directory [%s] in node [%s]", dirPath, masterNode.Name)
+	err := runCmdWithNoSudo(fmt.Sprintf("find %s -mindepth 1 -depth -type d -exec sh -c 'tar czf \"${1%%/}.tar.gz\" -C \"$(dirname \"$1\")\" \"$(basename \"$1\")\" && rm -rf \"$1\"' sh {} \\;", dirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in compressing sub-directories in the directory [%s] in node [%s]", dirPath, masterNode.Name)
+	}
+}
+
 func collectAndCopyStorkLogs(issueKey string) {
 
 	storkLabel := make(map[string]string)
@@ -4930,6 +4996,25 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	dash.TestCaseEnd()
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	}
+	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
+	if ginkgoTestDescr.Failed {
+		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+		testCaseName := ginkgoTestDescr.FullTestText
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+		masterNode := node.GetMasterNodes()[0]
+		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
+		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+		if err != nil {
+			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+			return
+		}
+		collectStorkLogs(testCaseName)
+		collectPxBackupLogs(testCaseName)
+		compressSubDirectories(pxbLogDirPath)
 	}
 }
 
