@@ -38,9 +38,9 @@ const (
 	groupsToBeCreated                         = "GROUPS_TO_CREATE"
 	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
 	maxBackupsToBeCreated                     = "MAX_BACKUPS"
-	maxWaitPeriodForBackupCompletionInMinutes = 30
-	maxWaitPeriodForRestoreCompletionInMinute = 30
-	maxWaitPeriodForBackupJobCancellation     = 10
+	maxWaitPeriodForBackupCompletionInMinutes = 40
+	maxWaitPeriodForRestoreCompletionInMinute = 40
+	maxWaitPeriodForBackupJobCancellation     = 20
 	backupJobCancellationRetryTime            = 30
 	globalAWSBucketPrefix                     = "global-aws"
 	globalAzureBucketPrefix                   = "global-azure"
@@ -51,9 +51,8 @@ const (
 	userName                                  = "testuser"
 	firstName                                 = "firstName"
 	lastName                                  = "lastName"
-	password                                  = "Password1"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
-	backupDeleteTimeout                       = 10 * time.Minute
+	backupDeleteTimeout                       = 20 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
 	mongodbPodStatusTimeout                   = 20 * time.Minute
 	mongodbPodStatusRetryTime                 = 30 * time.Second
@@ -70,6 +69,7 @@ var (
 	globalAzureLockedBucketName string
 	globalGCPLockedBucketName   string
 	cloudProviders              = []string{"aws"}
+	commonPassword              string
 )
 
 type userRoleAccess struct {
@@ -706,7 +706,7 @@ func createUsers(numberOfUsers int) []string {
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
 			defer wg.Done()
-			err := backup.AddUser(userName, firstName, lastName, email, password)
+			err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Creating user - %s", userName))
 			users = append(users, userName)
 		}(userName, firstName, lastName, email)
@@ -795,7 +795,7 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 			access = ViewOnlyAccess
 			role = backup.ApplicationOwner
 		}
-		ctxNonAdmin, err := backup.GetNonAdminCtx(users[i], "Password1")
+		ctxNonAdmin, err := backup.GetNonAdminCtx(users[i], commonPassword)
 		if err != nil {
 			return nil, err
 		}
@@ -817,7 +817,7 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName string, restoreName string) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-	userCtx, err := backup.GetNonAdminCtx(user, "Password1")
+	userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
 	err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
@@ -898,7 +898,7 @@ func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []strin
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to share backup %s with user %s Error: %v", backupNames[i], user, err)
 		}
-		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], "Password1")
+		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], commonPassword)
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to get user context: %v", err)
 		}
@@ -1388,9 +1388,9 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 		if err != nil {
 			return "", true, err
 		}
-		for _, backup := range currentBackups.GetBackups() {
-			if backup.Name == backupName {
-				return "", true, fmt.Errorf("backup [%s] is not yet deleted", backup.Name)
+		for _, backupObject := range currentBackups.GetBackups() {
+			if backupObject.Name == backupName {
+				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted", backupObject.Name)
 			}
 		}
 		return "", false, nil

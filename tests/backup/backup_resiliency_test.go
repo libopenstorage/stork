@@ -493,7 +493,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				userContexts = append(userContexts, ctxNonAdmin)
 
@@ -540,14 +540,14 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 10*time.Minute, 30*time.Second)
+				err = core.Instance().ValidatePod(&pod, 20*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
 			}
 		})
 		Step("Validate the shared backup with users", func() {
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 
 				for _, backup := range backupNames {

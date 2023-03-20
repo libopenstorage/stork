@@ -43,7 +43,7 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 	It("User and group role mappings", func() {
 		Step("Create Users", func() {
-			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", "Password1")
+			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", commonPassword)
 			log.FailOnError(err, "Failed to create user")
 		})
 		Step("Create Groups", func() {
