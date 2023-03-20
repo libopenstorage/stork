@@ -4710,7 +4710,11 @@ func ValidateDriveRebalance(stNode node.Node) error {
 			Timeout:         2 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		})
+
 		if err != nil {
+			if strings.Contains(err.Error(), "Device already exists") {
+				return "", false, nil
+			}
 			return "", false, err
 		}
 		log.Infof(fmt.Sprintf("Rebalance Status for drive [%s] in node [%s] : %s", drivePath, stNode.Name, strings.TrimSpace(currStatus)))
