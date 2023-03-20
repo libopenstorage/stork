@@ -8419,33 +8419,63 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 			if err != nil {
 				re := regexp.MustCompile(".*Journal/Metadata device add not supported for PX-StoreV2*")
 				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
-					false,
-					"Failed to match the error while adding drive")
-				log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+					true,
+					fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 			} else {
-				log.Error("Did not Error out when adding cloud drive as expected")
+				dash.VerifyFatal(err, nil, "Did not Error out when adding cloud drive as expected")
 			}
 		} else {
 			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
 			log.InfoD("Enter pool Maintenance mode ")
+			expectedStatus := "In Maintenance"
+			log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
+				fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+
+			//Wait for 7 min to bring up the portworx daemon before trying cloud drive add
+			time.Sleep(7 * time.Minute)
 			isjournal, err := isJournalEnabled()
+			if err != nil {
+				log.FailOnError(err, "Error getting journal status")
+			}
+			fmt.Println(err)
 			if isjournal {
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
 				if err != nil {
 					re := regexp.MustCompile(".*journal exists*")
-					dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
-						false,
-						"Failed to match the error while adding drive")
-					log.InfoD("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name)
+					re1 := regexp.MustCompile(".*is alredy configured*")
+					dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)) || re1.MatchString(fmt.Sprintf("%v", err)),
+						true,
+						fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 				} else {
-					log.Error("Did not Error out when adding cloud drive as expected")
+					dash.VerifyFatal(err, nil, "Did not Error out when adding cloud drive as expected")
 				}
 			} else {
+				systemOpts := node.SystemctlOpts{
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         2 * time.Minute,
+						TimeBeforeRetry: defaultRetryInterval,
+					},
+					Action: "start",
+				}
+				drivesMap, err := Inst().N.GetBlockDrives(*nodeDetail, systemOpts)
+				if err != nil {
+					log.Errorf("error getting block drives from node %s, Err :%v", nodeDetail.Name, err)
+				}
+				blockDeviceBefore := len(drivesMap)
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
 				log.FailOnError(err, "journal add failed")
-				isjournal, _ := isJournalEnabled()
+				drivesMap, err = Inst().N.GetBlockDrives(*nodeDetail, systemOpts)
+				if err != nil {
+					log.Errorf("error getting block drives from node %s, Err :%v", nodeDetail.Name, err)
+				}
+				blockDeviceAfter := len(drivesMap)
+				dash.VerifyFatal(blockDeviceBefore+1 == blockDeviceAfter, true, "adding cloud drive as journal successful")
+				isjournal, err := isJournalEnabled()
+				if err != nil {
+					log.FailOnError(err, "Error getting journal status")
+				}
 				if isjournal {
 					log.InfoD("journal device added successfully")
 				}
