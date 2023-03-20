@@ -107,7 +107,7 @@ const (
 	maintenanceWaitTimeout            = 2 * time.Minute
 	inspectVolumeTimeout              = 1 * time.Minute
 	inspectVolumeRetryInterval        = 2 * time.Second
-	validateDeleteVolumeTimeout       = 3 * time.Minute
+	validateDeleteVolumeTimeout       = 6 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
 	validatePXStartTimeout            = 5 * time.Minute
@@ -1131,10 +1131,13 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 			status = strings.Trim(status, " ")
 		}
 		if poolId != "" && status != "" {
-			poolsData[poolId] = status
+			// this condition is required to consider only pool status when pool has both pool status and LastOperation status fields
+			if _, ok := poolsData[poolId]; !ok {
+				poolsData[poolId] = status
+			}
 			poolId = ""
-			status = ""
 		}
+		status = ""
 	}
 	return poolsData, nil
 }

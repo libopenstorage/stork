@@ -294,6 +294,16 @@ func getExpectedPodHours(contexts []*scheduler.Context, meteringInterval time.Du
 				return 0, err
 			}
 			for _, p := range pods {
+				isReady := true
+				for _, status := range p.Status.ContainerStatuses {
+					if !status.Ready {
+						isReady = false
+						break
+					}
+				}
+				if !isReady {
+					continue
+				}
 				uidStr := string(p.GetUID())
 				totalPods[uidStr] = true
 			}

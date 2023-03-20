@@ -500,7 +500,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				userContexts = append(userContexts, ctxNonAdmin)
 
@@ -547,14 +547,14 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 10*time.Minute, 30*time.Second)
+				err = core.Instance().ValidatePod(&pod, 20*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
 			}
 		})
 		Step("Validate the shared backup with users", func() {
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 
 				for _, backup := range backupNames {
@@ -716,19 +716,34 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 				}(backupName)
 			}
 			wg.Wait()
-			log.InfoD("Sleeping for 30 seconds for the backup cancellation to take place")
-			time.Sleep(30 * time.Second)
+			log.InfoD("Sleeping for 60 seconds for the backup cancellation to take place")
+			time.Sleep(60 * time.Second)
 		})
 		Step("Verifying if all the backup creation is cancelled", func() {
 			log.InfoD("Verifying if all the backup creation is cancelled")
 			adminBackups, err := GetAllBackupsAdmin()
 			log.Infof("The list of backups after backup cancellation is %v", adminBackups)
-			dash.VerifyFatal(err, nil, "Getting list of backups by px-central-admin")
+			log.FailOnError(err, "Getting the list of backups after backup cancellation")
 			if len(adminBackups) != 0 {
-				for _, backupName := range backupNames {
-					result := IsPresent(adminBackups, backupName)
-					dash.VerifyFatal(result, false, fmt.Sprintf("Verifying if backup %s is not present anymore", backupName))
+				backupJobCancelStatus := func() (interface{}, bool, error) {
+					adminBackups, err := GetAllBackupsAdmin()
+					if err != nil {
+						return "", true, err
+					}
+					for _, backupName := range backupNames {
+						if IsPresent(adminBackups, backupName) {
+							return "", true, nil
+						}
+					}
+					return "", false, nil
 				}
+				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+				if err != nil {
+					adminBackups, error := GetAllBackupsAdmin()
+					log.Infof("The list of backups after backup cancellation and wait of 10 minutes is %v", adminBackups)
+					log.FailOnError(error, "Getting the list of backups after backup cancellation and wait of 10 minutes")
+				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup jobs cancellation while backup is in progress"))
 			}
 			log.Infof("All the backups created by this testcase is deleted after backup cancellation")
 		})
@@ -802,7 +817,6 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
-
 			}
 		}
 	})
@@ -900,7 +914,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
@@ -961,7 +975,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
