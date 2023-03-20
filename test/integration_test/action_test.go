@@ -155,6 +155,161 @@ func actionFailoverTest(t *testing.T) {
 	executeOnDestination(t, startAndValidateFailover)
 }
 
+func scheduleAndWait(t *testing.T, instanceID, appKey string) {
+	ctxs, err := schedulerDriver.Schedule(
+		instanceID,
+		scheduler.ScheduleOptions{
+			AppKeys: []string{appKey},
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for app to get to running state")
+
+	return ctxs
+}
+
+func scheduleAndWaitMultiple(t *testing.T, instanceIDList [string], appKey string) {
+	ctxs := []
+	
+	// schedule the app (appKey) in each namespace (instanceID)
+	for _, instanceID := range instanceIDList {		
+		newCtxs, err := schedulerDriver.Schedule(
+			instanceID,
+			scheduler.ScheduleOptions{
+				AppKeys: []string{appKey},
+			})
+		require.NoError(t, err, "Error scheduling task")
+		require.Equal(t, 1, len(ctxs), "Only one task should have started")
+		ctxs.append(newCtxs[0])
+	}
+			
+	// wait for all apps to get to running state
+	for _, ctx := range ctxs {
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for app to get to running state")
+	}
+	return ctxs
+}
+
+func triggerMigrationMultiple(t *testing.T, ctxs []*scheduler.Context, migrationAppKeys []string) {
+	preMigrationCtxs := []
+	for _, ctx := range ctxs {
+		preMigrationCtxs.append(ctx.DeepCopy())
+	
+		// create, apply and validate cluster pair specs
+		err = scheduleClusterPair(
+			ctx, skipStoragePair, true, defaultClusterPairDir, projectIDMappings, pairReverse)
+		require.NoError(t, err, "Error scheduling cluster pair")
+
+		// apply migration specs
+		err = schedulerDriver.AddTasks(
+			ctx, scheduler.ScheduleOptions{AppKeys: migrationAppKeys})
+		require.NoError(t, err, "Error scheduling migration specs")
+	}
+	return ctxs, preMigrationCtx
+}
+
+func testFailoverWithoutMigration(t *testing.T) {
+	appKey := "mysql-enc-pvc"
+	instanceID := "mysql-action"
+	migrationAppId := "mysql-action-migration"
+	actionName := "mysql-action-failover"
+	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
+
+	defer cleanup(t, namespace)
+
+	ctxs := scheduleAndWait(t, instanceID, appKey)
+
+	startAndValidateFailover := func() {
+		_ = createActionCR(t, actionName, namespace, ctxs[0])
+
+		// check mysql app does NOT start on destination
+		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		require.Error(t, err, "error waiting for app to get to running state")
+
+		// Action CR should fail with: No migration found
+		// TODO(dgoel): discuss and handle this error case
+		validateActionCR(t, actionName, namespace)
+	}
+	executeOnDestination(t, startAndValidateFailover)
+}
+
+func testFailoverDependencyOnPromoteVolume(t *testing.T) {
+
+
+}
+
+func testFailoverForNamespaceKubeSystem(t *testing.T) {
+}
+
+func testFailoverForMultipleNamespaces(t *testing.T) {
+	appKey := "mysql-enc-pvc"
+	instanceIDList := ["mysql-action- 1", "mysql-action-2"]
+	migrationAppKey := "mysql-action-migration"
+	actionName := "mysql-action-failover"
+	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
+
+	defer cleanup(t, namespace)
+
+	// TODO(dgoel): change all AppID references to AppKey
+	ctxs := scheduleAndWait(t, instanceIDList, appKey)
+	preMigrationCtxs, ctxs := triggerMigrationMultiple(t, ctxs, [migrationAppKey])
+
+	// TODO(dgoel): break the validateAndDestroyMigration method into smaller methods
+	// namely: scheduleTaskAndWait, deleteApplication
+	for idx, ctx := range ctx {
+		preMigrationCtx := preMigrationCtxs[idx]
+		
+		// validate the following
+		// - migration is successful
+		// - app doesn't start on dest
+		validateAndDestroyMigration(
+			t, [ctx], preMigrationCtx, true, false, true, true, true)
+
+		// extract migrationObj from specList
+		// TODO(dgoel): extract method, getMigrationSpecFromContext
+		var migrationObj *v1alpha1.Migration
+		var ok bool
+		for _, specObj := range ctx.App.SpecList {
+			if migrationObj, ok = specObj.(*v1alpha1.Migration); ok {
+				break
+			}
+		}
+
+		expectedResources := uint64(4) // 1 sts, 1 service, 1 pvc, 1 pv
+		expectedVolumes := uint64(0)   // 0 volume
+		// validate the migration summary based on the application specs that were deployed by the test
+		validateMigrationSummary(
+			t, preMigrationCtx, expectedResources, expectedVolumes, migrationObj.Name, migrationObj.Namespace)
+	}
+
+	startAndValidateFailoverMultiple := func() {
+		for ctx := range ctxs {
+		_ = createActionCR(t, actionName, namespace, ctx)
+		}
+
+		for ctx := range ctxs {
+			// check mysql app does NOT start on destination
+			err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+			require.Error(t, err, "error waiting for app to get to running state")
+			
+			validateActionCR(t, actionName, namespace)
+		}
+	}
+	executeOnDestination(t, startAndValidateFailover)
+}
+
+func testFailoverWithMultipleApplications(t *testing.T) {
+
+}
+
+func testFailoverOneActionPolicy(t *testing.T) {
+}
+func testFailoverWithFailedVolumePromote(t *testing.T) {
+}
+
 func createActionCR(t *testing.T, actionAppKey, namespace string, ctx *scheduler.Context) *v1alpha1.Action {
 	actionSpec := v1alpha1.Action{
 		ObjectMeta: meta_v1.ObjectMeta{
