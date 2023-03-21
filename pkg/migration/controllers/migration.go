@@ -558,6 +558,7 @@ func (m *MigrationController) purgeMigratedResources(
 	destObjects, _, err := rc.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeResources,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false,
@@ -574,6 +575,7 @@ func (m *MigrationController) purgeMigratedResources(
 	srcObjects, _, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeResources,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false,
@@ -963,6 +965,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		allObjects, pvcsWithOwnerRef, err = m.resourceCollector.GetResources(
 			migration.Spec.Namespaces,
 			migration.Spec.Selectors,
+			migration.Spec.ExcludeResources,
 			nil,
 			migration.Spec.IncludeOptionalResourceTypes,
 			false,
@@ -2438,6 +2441,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		nil,
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeResources,
 		nil,
 		false,
 		resourceCollectorOpts,
@@ -2463,6 +2467,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		nil,
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeResources,
 		nil,
 		false,
 		resourceCollectorOpts,

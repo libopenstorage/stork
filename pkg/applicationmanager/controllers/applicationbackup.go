@@ -1484,6 +1484,7 @@ func (a *ApplicationBackupController) backupResources(
 			objects, _, err := a.resourceCollector.GetResources(
 				incResNsBatch,
 				backup.Spec.Selectors,
+				nil,
 				objectMap,
 				optionalBackupResources,
 				true,
@@ -1501,7 +1502,7 @@ func (a *ApplicationBackupController) backupResources(
 				for _, resource := range resourceTypes {
 					if resource.Kind == backupResourceType || (backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
 						log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
-						objects, _, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, true, resourceCollectorOpts)
+						objects, _, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, nil, true, resourceCollectorOpts)
 						if err != nil {
 							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 							return err

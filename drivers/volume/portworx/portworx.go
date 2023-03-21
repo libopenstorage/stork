@@ -2503,6 +2503,11 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 			if resourcecollector.SkipResource(pvc.Annotations) {
 				continue
 			}
+
+			if resourcecollector.SkipBasedOnExcludeResourceLabel(pvc.GetLabels(), migration.Spec.ExcludeResources) {
+				continue
+			}
+
 			volumeInfo := &storkapi.MigrationVolumeInfo{
 				PersistentVolumeClaim: pvc.Name,
 				Namespace:             pvc.Namespace,
