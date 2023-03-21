@@ -1838,7 +1838,7 @@ func PerformSystemCheck() {
 				})
 				if len(file) != 0 || err != nil {
 					log.FailOnError(err, "error checking for cores in node %s", n.Name)
-					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
+					log.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
 					coreNodes = append(coreNodes, n.Name)
 				}
 			}
@@ -4738,10 +4738,6 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	time.Sleep(2 * time.Minute)
 
 	t := func() (interface{}, bool, error) {
-		Inst().S.RefreshNodeRegistry()
-		if err != nil {
-			return nil, true, err
-		}
 		err = Inst().V.RefreshDriverEndpoints()
 		if err != nil {
 			return nil, true, err
@@ -4766,22 +4762,23 @@ func ValidateDriveRebalance(stNode node.Node) error {
 		return err
 	}
 
-	cmd := fmt.Sprintf("pxctl sv drive add -d %s -o status", drivePath)
+	cmd := fmt.Sprintf("sv drive add -d %s -o status", drivePath)
 	var prevStatus string
 
 	t = func() (interface{}, bool, error) {
 
 		// Execute the command and check get rebalance status
-		currStatus, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
+		currStatus, err := Inst().V.GetPxctlCmdOutputConnectionOpts(stNode, cmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, false)
 
 		if err != nil {
 			if strings.Contains(err.Error(), "Device already exists") {
 				return "", false, nil
 			}
-			return "", false, err
+			return "", true, err
 		}
 		log.Infof(fmt.Sprintf("Rebalance Status for drive [%s] in node [%s] : %s", drivePath, stNode.Name, strings.TrimSpace(currStatus)))
 		if strings.Contains(currStatus, "Rebalance done") {
@@ -5733,7 +5730,7 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 		}
 		return nil, false, nil
 	}
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
 	return err
 }
 
