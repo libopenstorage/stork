@@ -7,6 +7,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/pureutils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,10 +15,7 @@ import (
 )
 
 const (
-	pureSecretName   = "px-pure-secret"
-	pureS3SecretName = "px-pure-secret-fbs3"
-	pureJSONKey      = "pure.json"
-	secretNamespace  = "kube-system"
+	secretNamespace = "kube-system"
 
 	// fbS3CredentialName is the name of the credential object created in pxctl
 	// see also formattingPxctlEstablishBackupCredential
@@ -33,7 +31,7 @@ const (
 )
 
 func createCloudsnapCredential() {
-	fbConfigs, err := GetS3Secret()
+	fbConfigs, err := pureutils.GetS3Secret(secretNamespace)
 	Expect(err).NotTo(HaveOccurred())
 	nodes := node.GetStorageDriverNodes()
 	_, err = Inst().N.RunCommand(nodes[0], fmt.Sprintf(formattingPxctlEstablishBackupCredential, fbConfigs.Blades[0].S3AccessKey, fbConfigs.Blades[0].S3SecretKey, fbConfigs.Blades[0].ObjectStoreEndpoint, fbS3CredentialName), node.ConnectionOpts{
@@ -113,5 +111,20 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+// This test validates that, on an FACD installation, drives are located
+// on the correct arrays that match their zone.
+var _ = Describe("{PureFACDTopologyValidateDriveLocations}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PureFACDTopologyValidateDriveLocations", "Test that FACD cloud drive volumes are located on proper FlashArrays", nil, 0)
+	})
+	It("installs with cloud drive volumes on the correct FlashArrays", func() {
+		err := ValidatePureCloudDriveTopologies()
+		Expect(err).NotTo(HaveOccurred(), "unexpected error validating Pure cloud drive topologies")
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
