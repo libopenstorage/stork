@@ -23,7 +23,7 @@ func TestAction(t *testing.T) {
 
 	setupOnce(t)
 
-	t.Run("actionFailoverTest", actionFailoverTest)
+	t.Run("actionFailoverTest", testFailoverBasic)
 }
 
 func setupOnce(t *testing.T) {
@@ -79,47 +79,34 @@ func executeOnDestination(t *testing.T, funcToExecute func()) {
 	funcToExecute()
 }
 
-func actionFailoverTest(t *testing.T) {
+// test basic workflow:
+// 1. start an app on source
+// 2. migrate k8s resources to destination
+// 3. scale down app on source and do failover on dest
+func testFailoverBasic(t *testing.T) {
 
 	appKey := "mysql-enc-pvc"
-	instanceID := "mysql-action"
-	migrationAppId := "mysql-action-migration"
-	actionName := "mysql-action-failover"
+	instanceID := "failover"
+	migrationAppId := "failover-mysql-migration"
+	actionName := "failover-action"
 
 	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
 
-	defer cleanup(t, namespace)
+	cleanup(t, namespace)
 
 	// starts the app on src,
 	// sets cluster pair,
 	// creates a migration
 	ctxs, preMigrationCtx := triggerMigration(
-		t,
-		instanceID,
-		appKey,
-		nil,
-		[]string{migrationAppId},
-		true,
-		true,
-		false,
-		false,
-		"",
-		nil,
-	)
+		t, instanceID, appKey, nil, []string{migrationAppId}, true, true, false, false, "", nil)
 
 	// validate the following
 	// - migration is successful
 	// - app doesn't start on dest
 	validateAndDestroyMigration(
-		t,
-		ctxs,
-		preMigrationCtx,
-		true,
-		false,
-		true,
-		true,
-		true,
-	)
+		t, ctxs, preMigrationCtx, true, false, true, true, true)
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// extract migrationObj from specList
 	var migrationObj *v1alpha1.Migration
@@ -130,13 +117,11 @@ func actionFailoverTest(t *testing.T) {
 		}
 	}
 
-	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-
 	expectedResources := uint64(4) // 1 sts, 1 service, 1 pvc, 1 pv
 	expectedVolumes := uint64(0)   // 0 volume
 	// validate the migration summary based on the application specs that were deployed by the test
-	validateMigrationSummary(t, preMigrationCtx, expectedResources, expectedVolumes, migrationObj.Name, migrationObj.Namespace)
+	validateMigrationSummary(
+		t, preMigrationCtx, expectedResources, expectedVolumes, migrationObj.Name, migrationObj.Namespace)
 
 	scaleFactor := scaleDownApps(t, ctxs)
 	logrus.Infof("scaleFactor: %v", scaleFactor)
