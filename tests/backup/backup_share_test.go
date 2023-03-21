@@ -2297,7 +2297,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				log.InfoD("All the backups for user [%s] - %v", username, fetchedUserBackups)
 				recentBackupName := fetchedUserBackups[len(fetchedUserBackups)-1]
 				log.InfoD("Recent backup name [%s] ", recentBackupName)
-				_, err = backupSuccessCheck(recentBackupName, orgID, 0, 0, ctx)
+				err = backupSuccessCheck(recentBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", recentBackupName))
 			}
 		})
@@ -3646,8 +3646,6 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var credName string
-	var retryDuration int
-	var retryInterval int
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
 		StartTorpedoTest("IssueMultipleDeletesForSharedBackup",
@@ -3778,9 +3776,8 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				for _, restore := range restoreNames {
 					log.Infof("Validating Restore %s for user %s", restore, user)
 					if strings.Contains(restore, user) {
-						restoreStatus, err := restoreSuccessCheck(restore, orgID, retryDuration, retryInterval, ctxNonAdmin)
-						log.FailOnError(err, "Failed while restoring Backup for - %s", restore)
-						dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restore)
+						err = restoreSuccessCheck(restore, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctxNonAdmin)
+						dash.VerifyFatal(err, nil, "Inspecting the Restore success for - "+restore)
 					}
 				}
 			}
