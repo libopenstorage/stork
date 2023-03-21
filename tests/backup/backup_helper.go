@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 20 * time.Minute
+	cloudAccountDeleteTimeout                 = 30 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
 	restoreNamePrefix                         = "tp-restore"
@@ -719,13 +719,15 @@ func createUsers(numberOfUsers int) []string {
 
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
+	var err error
+	var status bool
 	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
-				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+				status, err = IsBackupLocationPresent(bkpLocationName, ctx, orgID)
 				if err != nil {
 					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
 				}
@@ -737,17 +739,22 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
+		err = DeleteCloudCredential(credName, orgID, cloudCredUID)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
-			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+			status, err = IsCloudCredPresent(credName, ctx, orgID)
 			if err != nil {
-				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+				return "", true, fmt.Errorf("cloud cred %s still present with error %v", credName, err)
+			}
+			if status == true {
+				return "", true, fmt.Errorf("cloud cred %s is not deleted yet", credName)
 			}
 			return "", false, nil
 		}
-		_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+		_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
-	err := DeleteCluster(SourceClusterName, orgID, ctx)
+	err = DeleteCluster(SourceClusterName, orgID, ctx)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 	err = DeleteCluster(destinationClusterName, orgID, ctx)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
@@ -1197,6 +1204,25 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 		}
 	}
 	log.Infof("Backup locations fetched - %s", backupLocationNames)
+	return false, nil
+}
+
+// IsCloudCredPresent checks whether the Cloud Cred is present or not
+func IsCloudCredPresent(cloudCredName string, ctx context.Context, orgID string) (bool, error) {
+	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
+		OrgId:          orgID,
+		IncludeSecrets: false,
+	}
+	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredential(ctx, cloudCredEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
+		if cloudCredObj.GetName() == cloudCredName {
+			log.Infof("Cloud Credential [%s] is present", cloudCredName)
+			return true, nil
+		}
+	}
 	return false, nil
 }
 
