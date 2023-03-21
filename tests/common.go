@@ -2894,104 +2894,23 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 }
 
 // CreateCloudCredential creates cloud credetials
-func CreateCloudCredential(provider, name string, uid, orgID string) {
-	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
-		log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
-		backupDriver := Inst().Backup
-		switch provider {
-		case drivers.ProviderAws:
-			log.Infof("Create creds for aws")
-			id := os.Getenv("AWS_ACCESS_KEY_ID")
-			expect(id).NotTo(equal(""),
-				"AWS_ACCESS_KEY_ID Environment variable should not be empty")
-
-			secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
-			expect(secret).NotTo(equal(""),
-				"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
-
-			credCreateRequest := &api.CloudCredentialCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					Uid:   uid,
-					OrgId: orgID,
-				},
-				CloudCredential: &api.CloudCredentialInfo{
-					Type: api.CloudCredentialInfo_AWS,
-					Config: &api.CloudCredentialInfo_AwsConfig{
-						AwsConfig: &api.AWSConfig{
-							AccessKey: id,
-							SecretKey: secret,
-						},
-					},
-				},
-			}
-
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
-
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-			if err != nil && strings.Contains(err.Error(), "already exists") {
-				return
-			}
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
-		// TODO: validate CreateCloudCredentialResponse also
-		case drivers.ProviderAzure:
-			log.Infof("Create creds for azure")
-			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
-			credCreateRequest := &api.CloudCredentialCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					Uid:   uid,
-					OrgId: orgID,
-				},
-				CloudCredential: &api.CloudCredentialInfo{
-					Type: api.CloudCredentialInfo_Azure,
-					Config: &api.CloudCredentialInfo_AzureConfig{
-						AzureConfig: &api.AzureConfig{
-							TenantId:       tenantID,
-							ClientId:       clientID,
-							ClientSecret:   clientSecret,
-							AccountName:    accountName,
-							AccountKey:     accountKey,
-							SubscriptionId: subscriptionID,
-						},
-					},
-				},
-			}
-			ctx, err := backup.GetAdminCtxFromSecret()
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-			if err != nil && strings.Contains(err.Error(), "already exists") {
-				return
-			}
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
-			// TODO: validate CreateCloudCredentialResponse also
-		}
-	})
-}
-
-// CreateCloudCredential creates cloud credetials
-func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string, ctx context1.Context) error {
-	log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
-	backupDriver := Inst().Backup
+func CreateCloudCredential(provider, credName string, uid, orgID string, ctx context1.Context) error {
+	log.Infof("Create cloud credential with name [%s] for org [%s] with [%s] as provider", credName, orgID, provider)
+	var credCreateRequest *api.CloudCredentialCreateRequest
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Create creds for aws")
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
-			return fmt.Errorf("AWS_ACCESS_KEY_ID Environment variable should not be empty")
+			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
-			return fmt.Errorf("AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
 		}
-		credCreateRequest := &api.CloudCredentialCreateRequest{
+		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
+				Name:  credName,
 				Uid:   uid,
 				OrgId: orgID,
 			},
@@ -3005,18 +2924,12 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 				},
 			},
 		}
-		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-		if err != nil && strings.Contains(err.Error(), "already exists") {
-			return nil
-		}
-		return err
-	// TODO: validate CreateCloudCredentialResponse also
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
-		credCreateRequest := &api.CloudCredentialCreateRequest{
+		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
+				Name:  credName,
 				Uid:   uid,
 				OrgId: orgID,
 			},
@@ -3034,11 +2947,15 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 				},
 			},
 		}
-
-		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-		if err != nil && strings.Contains(err.Error(), "already exists") {
+	default:
+		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
+	}
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
 			return nil
 		}
+		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider", credName, orgID, provider)
 		return err
 	}
 	return nil
