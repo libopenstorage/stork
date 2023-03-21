@@ -4013,11 +4013,29 @@ var _ = Describe("{SwapShareBackup}", func() {
 		}
 
 		log.InfoD("Delete all backups")
-		for i := 0; i <= numberOfUsers-1; i++ {
+		for i := numberOfUsers - 1; i >= 0; i-- {
 			ctx, err := backup.GetNonAdminCtx(users[i], commonPassword)
 			log.FailOnError(err, "Fetching nonAdminCtx ")
 			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+			backupDriver := Inst().Backup
+			backupEnumerateReq := &api.BackupEnumerateRequest{
+				OrgId: orgID,
+			}
+			backupDeletionSuccessCheck := func() (interface{}, bool, error) {
+				currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
+				if err != nil {
+					return "", true, err
+				}
+				for _, backupObject := range currentBackups.GetBackups() {
+					if backupObject.Uid == backupUIDList[i] {
+						return "", true, fmt.Errorf("backupObject [%s] is not yet deleted", backupObject.Uid)
+					}
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
+			log.FailOnError(err, fmt.Sprintf("Error deleting backup - %s for user - %s", backupName, users[i]))
 		}
 
 		// Cleanup all backup locations
@@ -4028,6 +4046,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 			for backupLocationUid, backupLocationName := range allBackupLocations {
 				err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
+				log.FailOnError(err, fmt.Sprintf("Error while deleting backup Location - %s ", backupLocationName))
 				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 			}
 
@@ -4042,10 +4061,14 @@ var _ = Describe("{SwapShareBackup}", func() {
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
 			}
+		}
 
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
+			log.FailOnError(err, "Fetching nonAdminCtx ")
 			allCloudCredentials, err := getAllCloudCredentials(ctx)
 			dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
 			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
