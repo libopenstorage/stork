@@ -142,6 +142,14 @@ cmdexecutor:
 		/bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/cmdexecutor && \
 		GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/cmdexecutor;'
 
+resource:
+	@echo "Building resource"
+	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+		/bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/resource; \
+		CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/linux/resource; \
+		CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/darwin/resource; \
+		CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/windows/resource.exe;'
+
 storkctl:
 	@echo "Building storkctl"
 	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
