@@ -56,6 +56,8 @@ const (
 	backupDeleteRetryTime                     = 30 * time.Second
 	mongodbPodStatusTimeout                   = 20 * time.Minute
 	mongodbPodStatusRetryTime                 = 30 * time.Second
+	backupLocationDeleteTimeout               = 30 * time.Minute
+	backupLocationDeleteRetryTime             = 30 * time.Second
 )
 
 var (
