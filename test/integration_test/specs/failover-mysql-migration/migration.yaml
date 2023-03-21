@@ -8,4 +8,4 @@ spec:
   startApplications: false
   includeVolumes: false
   namespaces:
-  - mysql-enc-pvc-mysql-action
+  - mysql-enc-pvc-failover

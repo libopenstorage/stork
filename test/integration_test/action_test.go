@@ -86,13 +86,13 @@ func executeOnDestination(t *testing.T, funcToExecute func()) {
 func testFailoverBasic(t *testing.T) {
 
 	appKey := "mysql-enc-pvc"
-	instanceID := "mysql-action"
-	migrationAppId := "mysql-action-migration"
-	actionName := "mysql-action-failover"
+	instanceID := "failover"
+	migrationAppId := "failover-mysql-migration"
+	actionName := "failover-action"
 
 	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
 
-	defer cleanup(t, namespace)
+	cleanup(t, namespace)
 
 	// starts the app on src,
 	// sets cluster pair,
@@ -105,6 +105,8 @@ func testFailoverBasic(t *testing.T) {
 	// - app doesn't start on dest
 	validateAndDestroyMigration(
 		t, ctxs, preMigrationCtx, true, false, true, true, true)
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// extract migrationObj from specList
 	var migrationObj *v1alpha1.Migration
