@@ -2945,6 +2945,18 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			log.InfoD("Removing backup location after sharing backup with all the users")
 			err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+				}
+				if status == true {
+					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		})
 
 		Step("Adding new backup location to the cluster", func() {
