@@ -263,7 +263,7 @@ func (r *ResourceCollector) GetResourcesForType(
 	objects *Objects,
 	namespaces []string,
 	labelSelectors map[string]string,
-	excludeResourceSelectors map[string]string,
+	excludeSelectors map[string]string,
 	includeObjects map[stork_api.ObjectInfo]bool,
 	allDrivers bool,
 	opts Options,
@@ -321,7 +321,7 @@ func (r *ResourceCollector) GetResourcesForType(
 				return nil, nil, fmt.Errorf("error casting object: %v", o)
 			}
 
-			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, excludeResourceSelectors, objects.resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
+			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, excludeSelectors, objects.resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 			}
@@ -376,7 +376,7 @@ func (r *ResourceCollector) GetResourcesForType(
 func (r *ResourceCollector) GetResources(
 	namespaces []string,
 	labelSelectors map[string]string,
-	excludeResourceSelectors map[string]string,
+	excludeSelectors map[string]string,
 	includeObjects map[stork_api.ObjectInfo]bool,
 	optionalResourceTypes []string,
 	allDrivers bool,
@@ -475,7 +475,7 @@ func (r *ResourceCollector) GetResources(
 					// With this now a user can choose to backup all resources in a ns and some
 					// selected resources from different ns
 
-					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, excludeResourceSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
+					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, excludeSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 					if err != nil {
 						if apierrors.IsForbidden(err) {
 							continue
@@ -566,7 +566,7 @@ func skipOwnerRefCheck(annotations map[string]string) bool {
 func (r *ResourceCollector) objectToBeCollected(
 	includeObjects map[stork_api.ObjectInfo]bool,
 	labelSelectors map[string]string,
-	excludeResourceSelectors map[string]string,
+	excludeSelectors map[string]string,
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
 	namespace string,
@@ -579,8 +579,12 @@ func (r *ResourceCollector) objectToBeCollected(
 		return false, err
 	}
 
-	if exclude, err := r.excludeResource(object, excludeResourceSelectors, namespace); err != nil || exclude {
-		return false, err
+	exclude, err := r.excludeResource(object, excludeSelectors, namespace)
+	if err != nil {
+		return false, fmt.Errorf("failed to determine if object needs to be excluded: %v", err)
+	}
+	if exclude {
+		return false, nil
 	}
 
 	if SkipResource(metadata.GetAnnotations()) {
@@ -806,10 +810,10 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 // based on excludeResources label
 func (r *ResourceCollector) excludeResource(
 	object runtime.Unstructured,
-	excludeResourceSelectors map[string]string,
+	excludeSelectors map[string]string,
 	namespace string,
 ) (bool, error) {
-	if excludeResourceSelectors == nil {
+	if excludeSelectors == nil {
 		return false, nil
 	}
 
@@ -850,14 +854,14 @@ func (r *ResourceCollector) excludeResource(
 		resourceLabels = pvc.Labels
 	}
 
-	return SkipBasedOnExcludeResourceLabel(resourceLabels, excludeResourceSelectors), nil
+	return SkipBasedOnExcludeSelectorsLabel(resourceLabels, excludeSelectors), nil
 }
 
-func SkipBasedOnExcludeResourceLabel(
+func SkipBasedOnExcludeSelectorsLabel(
 	resourceLabels map[string]string,
-	excludeResourceSelectors map[string]string) bool {
+	excludeSelectors map[string]string) bool {
 	for k, v := range resourceLabels {
-		if val, ok := excludeResourceSelectors[k]; ok && val == v {
+		if val, ok := excludeSelectors[k]; ok && val == v {
 			return true
 		}
 	}

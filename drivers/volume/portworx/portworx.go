@@ -2504,7 +2504,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 				continue
 			}
 
-			if resourcecollector.SkipBasedOnExcludeResourceLabel(pvc.GetLabels(), migration.Spec.ExcludeResources) {
+			if resourcecollector.SkipBasedOnExcludeSelectorsLabel(pvc.GetLabels(), migration.Spec.ExcludeSelectors) {
 				continue
 			}
 

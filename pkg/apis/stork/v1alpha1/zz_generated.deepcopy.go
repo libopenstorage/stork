@@ -1833,8 +1833,8 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 			(*out)[key] = val
 		}
 	}
-	if in.ExcludeResources != nil {
-		in, out := &in.ExcludeResources, &out.ExcludeResources
+	if in.ExcludeSelectors != nil {
+		in, out := &in.ExcludeSelectors, &out.ExcludeSelectors
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
