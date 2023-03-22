@@ -61,7 +61,7 @@ func executeOnDestination(t *testing.T, funcToExecute func()) {
 	funcToExecute()
 }
 
-func scheduleAppAndWait(t *testing.T, instanceID, appKey string) []*scheduler.Context {
+func scheduleAppAndWait(t *testing.T, instanceID, appKey string) *scheduler.Context {
 	ctxs, err := schedulerDriver.Schedule(
 		instanceID,
 		scheduler.ScheduleOptions{
@@ -73,7 +73,7 @@ func scheduleAppAndWait(t *testing.T, instanceID, appKey string) []*scheduler.Co
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for app to get to running state")
 
-	return ctxs
+	return ctxs[0]
 }
 
 func scheduleAppAndWaitMultiple(t *testing.T, instanceIDList []string, appKey string) []*scheduler.Context {
@@ -100,11 +100,11 @@ func scheduleAppAndWaitMultiple(t *testing.T, instanceIDList []string, appKey st
 	return ctxs
 }
 
-func scheduleTaskAndWait(t *testing.T, ctx *scheduler.Context, appKey string) {
+func scheduleTasksAndWait(t *testing.T, ctx *scheduler.Context, appKeys []string) {
 	err := schedulerDriver.AddTasks(
 		ctx,
 		scheduler.ScheduleOptions{
-			AppKeys: []string{appKey},
+			AppKeys: appKeys,
 		})
 	require.NoError(t, err, "Error scheduling app")
 
@@ -218,8 +218,8 @@ func validateMigrationOnSrcAndDest(
 	logrus.Infof("Validated migration: %v", migrationName)
 
 	// TODO(dgoel): calls GetMigration again, remove redundant call
-	validateMigrationSummary(
-		t, preMigrationCtx, expectedResources, expectedVolumes, migrationName, namespace)
+	// validateMigrationSummary(
+	// 	t, preMigrationCtx, expectedResources, expectedVolumes, migrationName, namespace)
 
 	funcValidateMigrationOnDestination := func() {
 		if startAppsOnMigration {

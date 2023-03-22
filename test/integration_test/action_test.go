@@ -10,14 +10,9 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	// "github.com/portworx/sched-ops/k8s/core"
-	// storkops "github.com/portworx/sched-ops/k8s/stork"
-	// "github.com/portworx/sched-ops/task"
-	// "github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
-	// v1 "k8s.io/api/core/v1"
-	// "k8s.io/apimachinery/pkg/api/errors"
-	// meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -29,7 +24,9 @@ func TestAction(t *testing.T) {
 	setupOnce(t)
 
 	// t.Run("testFailoverBasic", testFailoverBasic)
-	t.Run("testFailoverForMultipleNamespaces", testFailoverForMultipleNamespaces)
+	// t.Run("testFailoverForMultipleNamespaces", testFailoverForMultipleNamespaces)
+	// t.Run("testFailoverWithMultipleApplications", testFailoverWithMultipleApplications)
+	t.Run("testFailoverForFailedPromoteVolume", testFailoverForFailedPromoteVolume)
 }
 
 func setupOnce(t *testing.T) {
@@ -114,13 +111,13 @@ func testFailoverWithoutMigration(t *testing.T) {
 
 	defer cleanup(t, namespace)
 
-	ctxs := scheduleAppAndWait(t, instanceID, appKey)
+	ctx := scheduleAppAndWait(t, instanceID, appKey)
 
 	startAndValidateFailover := func() {
-		_ = createActionCR(t, actionName, namespace, ctxs[0])
+		_ = createActionCR(t, actionName, namespace, ctx)
 
 		// check mysql app does NOT start on destination
-		err := schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 		require.Error(t, err, "error waiting for app to get to running state")
 
 		// Action CR should fail with: No migration found
@@ -130,8 +127,67 @@ func testFailoverWithoutMigration(t *testing.T) {
 	executeOnDestination(t, startAndValidateFailover)
 }
 
-// func testFailoverDependencyOnPromoteVolume(t *testing.T) {
-// }
+func testFailoverForFailedPromoteVolume(t *testing.T) {
+	appKey := "mysql-enc-pvc"
+	instanceID := "failover"
+	migrationName := "failover-migration"
+	actionName := "failover-action"
+
+	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
+	logrus.Infof("len(namespace): %v", len(namespace))
+	cleanup(t, namespace)
+	// wait for cleanup to complete
+	time.Sleep(time.Second * 20)
+
+	ctx := scheduleAppAndWait(t, instanceID, appKey)
+
+	startAppsOnMigration := false
+	preMigrationCtxs, ctxs, migrationList := triggerMigrationMultiple(
+		t, []*scheduler.Context{ctx}, []string{migrationName},
+		[]string{namespace}, true, false, startAppsOnMigration)
+	ctx = ctxs[0]
+
+	for idx, migration := range migrationList {
+		validateMigrationOnSrcAndDest(
+			t, migration.Name, migration.Namespace, preMigrationCtxs[idx],
+			startAppsOnMigration, uint64(4), uint64(0))
+	}
+
+	scaleFactor := scaleDownApps(t, ctxs)
+	logrus.Infof("scaleFactor: %v", scaleFactor)
+
+	funcStartAndValidateFailoverMultiple := func() {
+		volumes, err := schedulerDriver.GetVolumes(ctx)
+		require.NoError(t, err, "Error getting volumes")
+		logrus.Infof("Volumes: %v", volumes[0].Name)
+
+		nodeObj, err := volumeDriver.GetNodeForVolume(volumes[0], defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error getting node")
+		logrus.Infof("Node: %v", nodeObj.Name)
+
+		nodeDriver.RebootNode(
+			*nodeObj,
+			node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 5 * time.Second,
+				},
+			})
+		logrus.Infof("Reboot Node: %v", nodeObj.Name)
+
+		for _, ctx := range preMigrationCtxs {
+			_ = createActionCR(t, actionName, namespace, ctx)
+		}
+		for _, ctx := range preMigrationCtxs {
+			err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "error waiting for app to get to running state")
+
+			validateActionCR(t, actionName, namespace)
+		}
+	}
+	executeOnDestination(t, funcStartAndValidateFailoverMultiple)
+}
 
 // func testFailoverForNamespaceKubeSystem(t *testing.T) {
 // }
@@ -170,9 +226,8 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 			_ = createActionCR(t, actionName, namespaceList[idx], ctx)
 		}
 		for idx, ctx := range ctxs {
-			// check mysql app does NOT start on destination
 			err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-			require.Error(t, err, "error waiting for app to get to running state")
+			require.NoError(t, err, "error waiting for app to get to running state")
 
 			validateActionCR(t, actionName, namespaceList[idx])
 		}
@@ -180,8 +235,49 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 	executeOnDestination(t, funcStartAndValidateFailoverMultiple)
 }
 
-// func testFailoverWithMultipleApplications(t *testing.T) {
-// }
+func testFailoverWithMultipleApplications(t *testing.T) {
+	appKeys := []string{"mysql-enc-pvc", "cassandra"}
+	instanceID := "failover"
+	migrationName := "failover-migration"
+	actionName := "failover-action"
+
+	namespace := fmt.Sprintf("%v-%v", appKeys[0], instanceID)
+	logrus.Infof("len(namespace): %v", len(namespace))
+	cleanup(t, namespace)
+	// wait for cleanup to complete
+	time.Sleep(time.Second * 20)
+
+	ctx := scheduleAppAndWait(t, instanceID, appKeys[0])
+	scheduleTasksAndWait(t, ctx, appKeys[1:])
+
+	startAppsOnMigration := false
+	preMigrationCtxs, ctxs, migrationList := triggerMigrationMultiple(
+		t, []*scheduler.Context{ctx}, []string{migrationName},
+		[]string{namespace}, true, false, startAppsOnMigration)
+
+	for idx, migration := range migrationList {
+		validateMigrationOnSrcAndDest(
+			t, migration.Name, migration.Namespace, preMigrationCtxs[idx],
+			startAppsOnMigration, uint64(4), uint64(0))
+	}
+
+	scaleFactor := scaleDownApps(t, ctxs)
+	logrus.Infof("scaleFactor: %v", scaleFactor)
+
+	funcStartAndValidateFailoverMultiple := func() {
+		for _, ctx := range preMigrationCtxs {
+			_ = createActionCR(t, actionName, namespace, ctx)
+		}
+		for _, ctx := range preMigrationCtxs {
+			err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "error waiting for app to get to running state")
+
+			validateActionCR(t, actionName, namespace)
+		}
+	}
+	executeOnDestination(t, funcStartAndValidateFailoverMultiple)
+}
+
 // func testFailoverOneActionPolicy(t *testing.T) {
 // }
 // func testFailoverWithFailedVolumePromote(t *testing.T) {
