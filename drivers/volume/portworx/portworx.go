@@ -2454,6 +2454,13 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 	if err != nil {
 		return fmt.Errorf("error fetching pvcList %v", err)
 	}
+
+	count_promoted_volumes := 0
+	count_total_volumes := len(pvcList.Items)
+	defer func() {
+		logrus.Infof("promoted %v/%v volumes", count_promoted_volumes, count_total_volumes)
+	}()
+
 	for _, pvc := range pvcList.Items {
 		if !p.OwnsPVC(core.Instance(), &pvc) {
 			continue
@@ -2464,10 +2471,8 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 
 		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
-			return fmt.Errorf("error fetching volume for PVC: %v", err)
+			return fmt.Errorf("error fetching volume for pvc: %v", err)
 		}
-
-		logrus.Infof("failover: volume %s", pvName)
 
 		volDriver, err := p.getUserVolDriver(pvc.Annotations, namespace)
 		if err != nil {
@@ -2494,7 +2499,8 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 		if err := volDriver.Set(vol.GetId(), volLocator, nil); err != nil {
 			return fmt.Errorf("failed to promote %v: %v", vol.GetId(), err)
 		}
-		logrus.Infof("failover: promoted %v", vol.GetId())
+		count_promoted_volumes += 1
+		logrus.Infof("promoted volume %v", vol.GetId())
 	}
 	return nil
 }
