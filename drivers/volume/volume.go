@@ -150,6 +150,7 @@ type Driver interface {
 	ClusterPairPluginInterface
 	// MigratePluginInterface Interface to migrate data between clusters
 	MigratePluginInterface
+	ActionPluginInterface
 	// ClusterDomainsPluginInterface Interface to manage cluster domains
 	ClusterDomainsPluginInterface
 	// BackupRestorePluginInterface Interface to backup and restore volumes
@@ -196,6 +197,10 @@ type MigratePluginInterface interface {
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
 	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string) (*v1.PersistentVolume, error)
+}
+
+type ActionPluginInterface interface {
+	Failover(*storkapi.Action) error
 }
 
 // ClusterDomainsPluginInterface Interface to manage cluster domains
@@ -437,6 +442,12 @@ func (m *MigrationNotSupported) UpdateMigratedPersistentVolumeSpec(
 	*v1.PersistentVolume,
 ) (*v1.PersistentVolume, error) {
 	return nil, &errors.ErrNotSupported{}
+}
+
+type ActionNotSupported struct{}
+
+func (m *ActionNotSupported) Failover(*storkapi.Action) error {
+	return &errors.ErrNotSupported{}
 }
 
 // GroupSnapshotNotSupported to be used by drivers that don't support group snapshots

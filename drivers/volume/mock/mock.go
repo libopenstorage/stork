@@ -38,6 +38,7 @@ const (
 type Driver struct {
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
+	storkvolume.ActionNotSupported
 	storkvolume.GroupSnapshotNotSupported
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.BackupRestoreNotSupported
