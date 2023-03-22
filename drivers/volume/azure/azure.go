@@ -55,6 +55,7 @@ type azure struct {
 	snapshotClient compute.SnapshotsClient
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
+	storkvolume.ActionNotSupported
 	storkvolume.GroupSnapshotNotSupported
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.CloneNotSupported

@@ -66,6 +66,7 @@ type aws struct {
 	client *ec2.EC2
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
+	storkvolume.ActionNotSupported
 	storkvolume.GroupSnapshotNotSupported
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.CloneNotSupported
