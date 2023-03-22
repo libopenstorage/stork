@@ -547,6 +547,71 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+func ValidatePureCloudDriveTopologies() error {
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil { return err }
+	nodesMap := node.GetNodesByName()
+
+	driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil { return err }
+
+	pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
+	if err != nil { return err }
+
+	endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
+	if len(endpointToZoneMap) == 0 {
+		return fmt.Errorf("parsed px-pure-secret endpoint to zone map, but no arrays in map (len==0)")
+	}
+
+	log.Infof("Endpoint to zone map: %v", endpointToZoneMap)
+
+	for _, node := range nodes {
+		log.Infof("Inspecting drive sets on node %v", node.SchedulerNodeName)
+		nodeFromMap, ok := nodesMap[node.SchedulerNodeName]
+		if !ok {
+			return fmt.Errorf("Failed to find node %s in node map", node.SchedulerNodeName)
+		}
+
+		var nodeZone string
+		if nodeFromMap.SchedulerTopology != nil && nodeFromMap.SchedulerTopology.Labels != nil {
+			if z, ok := nodeFromMap.SchedulerTopology.Labels["topology.portworx.io/zone"]; ok {
+				nodeZone = z
+			}
+		}
+
+		if nodeZone == "" {
+			log.Warnf("Node %s has no zone (missing the topology.portworx.io/zone label), skipping drive set checks for it", node.SchedulerNodeName)
+			continue
+		}
+
+		driveSet, err := Inst().V.GetDriveSet(&nodeFromMap)
+		if err != nil { return err }
+
+		for configID, driveConfig := range driveSet.Configs {
+			err = nil
+			if len(driveConfig.Labels) == 0 {
+				return fmt.Errorf("drive config %s has no labels: validate that you're running on PX master or 3.0+ and using FlashArray cloud drives with topology enabled", configID)
+			}
+
+			var arrayEndpoint string
+			if arrayEndpoint, ok = driveConfig.Labels[pureutils.CloudDriveFAMgmtLabel]; !ok {
+				return fmt.Errorf("drive config %s is missing the '%s' label: validate that you're running PX master or 3.0+ and using FlashArray cloud drives with topology enabled", configID, pureutils.CloudDriveFAMgmtLabel)
+			}
+
+			var driveZone string
+			if driveZone, ok = endpointToZoneMap[arrayEndpoint]; !ok {
+				return fmt.Errorf("drive config %s is on array with endpoint '%s', which is not listed in px-pure-secret", configID, arrayEndpoint)
+			}
+
+			if driveZone != nodeZone {
+				return fmt.Errorf("drive config %s is provisioned on array in zone %s, but node '%s' is in zone %s, which is not topologically correct", configID, driveZone, node.SchedulerNodeName, nodeZone)
+			}
+		}
+	}
+
+	return nil
+}
+
 // ValidateContextForPureVolumesSDK is the ginkgo spec for validating a scheduled context
 func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	defer func() {

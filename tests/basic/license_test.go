@@ -23,7 +23,7 @@ type Label string
 const (
 	defaultReadynessTimeout = 2 * time.Minute
 
-	pureSecretNamespace = "kube-system"
+	PureSecretNamespace = "kube-system"
 	pureSecretDataField = "pure.json"
 	expiredLicString    = "License is expired"
 
@@ -367,17 +367,17 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 
 		Step("Fetch and store Pure secret", func() {
 			var err error
-			pureSecretJSON, err = Inst().S.GetSecretData(pureSecretNamespace, pureSecretName, pureSecretDataField)
+			pureSecretJSON, err = Inst().S.GetSecretData(PureSecretNamespace, PureSecretName, pureSecretDataField)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace. Error: [%v]",
-					pureSecretName, pureSecretNamespace, err))
+					PureSecretName, PureSecretNamespace, err))
 		})
 
 		Step("Delete Pure secret", func() {
-			err := Inst().S.DeleteSecret(pureSecretNamespace, pureSecretName)
+			err := Inst().S.DeleteSecret(PureSecretNamespace, PureSecretName)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace. Error: [%v]",
-					pureSecretName, pureSecretNamespace, err))
+					PureSecretName, PureSecretNamespace, err))
 		})
 
 		Step(fmt.Sprintf("Wait for license expiry timeout of [%v]",
@@ -394,14 +394,14 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
 				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
 			Expect(summary.LicenesConditionMsg).To(ContainSubstring(expiredLicString),
-				fmt.Sprintf("License did not expire after deleting [%s] secret", pureSecretName))
+				fmt.Sprintf("License did not expire after deleting [%s] secret", PureSecretName))
 		})
 
 		Step("Re-create Pure secret", func() {
-			err := Inst().S.CreateSecret(pureSecretNamespace, pureSecretName, pureSecretDataField, pureSecretJSON)
+			err := Inst().S.CreateSecret(PureSecretNamespace, PureSecretName, pureSecretDataField, pureSecretJSON)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create secret [%s] in [%s] namespace. Error: [%v]",
-					pureSecretName, pureSecretNamespace, err))
+					PureSecretName, PureSecretNamespace, err))
 		})
 
 		Step(fmt.Sprintf("Wait for next metering interval which is going to happen in [%v]",
@@ -420,7 +420,7 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
 
 			Expect(summary.LicenesConditionMsg).To(BeEmpty(),
-				fmt.Sprintf("License did not got re-activated after recreating [%s] secret", pureSecretName))
+				fmt.Sprintf("License did not got re-activated after recreating [%s] secret", PureSecretName))
 
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
@@ -491,17 +491,17 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 
 		Step("Fetch and store Pure secret", func() {
 			var err error
-			pureSecretJSON, err = Inst().S.GetSecretData(pureSecretNamespace, pureSecretName, pureSecretDataField)
+			pureSecretJSON, err = Inst().S.GetSecretData(PureSecretNamespace, PureSecretName, pureSecretDataField)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace. Error: [%v]",
-					pureSecretName, pureSecretNamespace, err))
+					PureSecretName, PureSecretNamespace, err))
 		})
 
 		Step("Delete Pure secret", func() {
-			err := Inst().S.DeleteSecret(pureSecretNamespace, pureSecretName)
+			err := Inst().S.DeleteSecret(PureSecretNamespace, PureSecretName)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace. Error: [%v]",
-					pureSecretName, pureSecretNamespace, err))
+					PureSecretName, PureSecretNamespace, err))
 		})
 
 		Step("get all nodes and reboot one by one", func() {
@@ -561,7 +561,7 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
 
 			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
-				fmt.Sprintf("SKU changed after deleting [%s] secret and reboot to [%v]", pureSecretName, summary.SKU))
+				fmt.Sprintf("SKU changed after deleting [%s] secret and reboot to [%v]", PureSecretName, summary.SKU))
 
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
@@ -576,10 +576,10 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 
 		// Perform below steps to recover setup for other tests to continue
 		Step("Re-create Pure secret", func() {
-			err := Inst().S.CreateSecret(pureSecretNamespace, pureSecretName, pureSecretDataField, pureSecretJSON)
+			err := Inst().S.CreateSecret(PureSecretNamespace, PureSecretName, pureSecretDataField, pureSecretJSON)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create secret [%s] in [%s] namespace. Error: [%v]",
-					pureSecretName, pureSecretNamespace, err))
+					PureSecretName, PureSecretNamespace, err))
 		})
 
 		Step("Recover Portworx", func() {
