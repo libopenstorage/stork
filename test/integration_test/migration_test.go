@@ -186,8 +186,11 @@ func validateMigrationSummary(
 	require.Equal(t, migObj.Status.Summary.NumberOfMigratedVolumes, expectedVolumes, "unexpected number of volumes migrated")
 	require.Equal(t, migObj.Status.Summary.TotalNumberOfResources, expectedResources, "unexpected number of total resources")
 	require.Equal(t, migObj.Status.Summary.TotalNumberOfVolumes, expectedVolumes, "unexpected number of total volumes")
-	require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
-
+	if expectedVolumes > 0 {
+		require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
+	} else {
+		require.True(t, migObj.Status.Summary.TotalBytesMigrated == 0, "expected bytes total to be zero")
+	}
 }
 
 func validateAndDestroyMigration(
