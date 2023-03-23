@@ -385,13 +385,13 @@ func (r *ResourceCollector) GetMiniResources(
 	optionalResourceTypes []string,
 	allDrivers bool,
 	opts Options,
-) ([]ObjectInfo, error) {
+) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
 	}
 	allObjects := make([]runtime.Unstructured, 0)
-	miniAllObjects := make([]ObjectInfo, 0)
+	// miniAllObjects := make([]ObjectInfo, 0)
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
@@ -522,6 +522,7 @@ func (r *ResourceCollector) GetMiniResources(
 	if err != nil {
 		return nil, err
 	}
+	/*
 	for _, o := range allObjects {
 		miniObj := ObjectInfo{}
 		metadata, err := meta.Accessor(o)
@@ -533,7 +534,29 @@ func (r *ResourceCollector) GetMiniResources(
 		miniObj.namespace = metadata.GetNamespace()
 		miniAllObjects = append(miniAllObjects, miniObj)
 	}
-	return miniAllObjects, nil
+	*/
+	var updatedObjects []runtime.Unstructured
+	for _, item := range allObjects {
+		// skip pv object
+		if item.GetObjectKind().GroupVersionKind().Kind == "PersistentVolume" {
+			continue
+		}
+		group := item.GetObjectKind().GroupVersionKind().Group
+		version := item.GetObjectKind().GroupVersionKind().Version
+		content := item.UnstructuredContent()
+		if len(namespaces) > 0 {
+			metadataMap := content["metadata"].(map[string]interface{})
+			if _, ok := metadataMap["namespace"]; !ok {
+				metadataMap["namespace"] = namespaces[0]
+			}
+		}
+		content["group"] = group
+		content["version"] = version
+		item.SetUnstructuredContent(content)
+		updatedObjects = append(updatedObjects, item)
+
+	}
+	return updatedObjects, nil
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
