@@ -604,6 +604,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 
 			// Pre-delete resources for CSI driver
+			logrus.Infof("HelloZone: driver name %v : replace policy %v", driverName, restore.Spec.ReplacePolicy)
 			if (driverName == "csi" || driverName == "kdmp") && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
 				logrus.Info("HelloZone: inside csi/kdmp check")
 				objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
@@ -1129,6 +1130,7 @@ func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
 		restoreVolInfo.Status = storkapi.ApplicationRestoreStatusRetained
 		restoreVolInfo.RestoreVolume = pvc.Spec.VolumeName
 		restoreVolInfo.TotalSize = bkupVolInfo.TotalSize
+		restoreVolInfo.Zones = bkupVolInfo.Zones
 		restoreVolInfo.Reason = fmt.Sprintf("Skipped from volume restore as policy is set to %s and pvc already exists", storkapi.ApplicationRestoreReplacePolicyRetain)
 		existingInfos = append(existingInfos, restoreVolInfo)
 	}

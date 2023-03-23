@@ -413,6 +413,7 @@ func (g *gcp) StartRestore(
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 	preRestoreObjects []runtime.Unstructured,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	logrus.Infof("HelloZone: inside StartRestore")
 	gcpSession, err := g.getGCPSession(restore.Spec.BackupLocation, restore.Namespace)
 	if err != nil {
 		return nil, err
@@ -437,6 +438,7 @@ func (g *gcp) StartRestore(
 			DriverName:               storkvolume.GCEDriverName,
 			Zones:                    backupVolumeInfo.Zones,
 		}
+		logrus.Infof("HelloZone: inside StartRestore loop, zone %v :", volumeInfo.Zones)
 		volumeInfos = append(volumeInfos, volumeInfo)
 		labels := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
 		filter := g.getFilterFromMap(labels)
@@ -488,7 +490,9 @@ func (g *gcp) StartRestore(
 				volumeInfo.RestoreVolume = disk.Name
 			}
 			volumeInfo.Zones[0] = destFullZoneName
+			logrus.Infof("HelloZone: destFullZoneName %v :", destFullZoneName)
 		}
+		logrus.Infof("HelloZone: inside StartRestore end loop, zone %v :", volumeInfo.Zones)
 	}
 	return volumeInfos, nil
 }
