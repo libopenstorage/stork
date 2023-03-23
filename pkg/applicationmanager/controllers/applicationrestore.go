@@ -562,7 +562,9 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	namespacedName.Namespace = restore.Namespace
 	namespacedName.Name = restore.Name
 	restoreCompleteList := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
+	logrus.Infof("HelloZone: outside not pvccount %v:%v", restore.Status.Volumes, pvcCount)
 	if len(restore.Status.Volumes) != pvcCount {
+		logrus.Infof("HelloZone: inside not pvccount %v", pvcCount)
 		for driverName, vInfos := range backupVolumeInfoMappings {
 			backupVolInfos := vInfos
 			existingRestoreVolInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
@@ -603,6 +605,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 
 			// Pre-delete resources for CSI driver
 			if (driverName == "csi" || driverName == "kdmp") && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+				logrus.Info("HelloZone: inside csi/kdmp check")
 				objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 				objectBasedOnIncludeResources := make([]runtime.Unstructured, 0)
 				var opts resourcecollector.Options
@@ -704,6 +707,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 
 			status, err := driver.GetRestoreStatus(restore)
+			logrus.Infof("HelloZone: len(restore.Status.Volumes) != 0 %v", status)
 			if err != nil {
 				return fmt.Errorf("error getting restore status for driver %v: %v", driverName, err)
 			}
@@ -760,6 +764,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		if err != nil {
 			return err
 		}
+		logrus.Infof("HelloZone: before restoreResources in restoreVolumes zone %v", restore.Status.Volumes)
 		err = a.restoreResources(restore)
 		if err != nil {
 			log.ApplicationRestoreLog(restore).Errorf("Error restoring resources: %v", err)

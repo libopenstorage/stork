@@ -196,6 +196,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	for _, vol := range vInfo {
 		if vol.RestoreVolume == pv.Name {
 			volumeInfo = vol
+			logrus.Infof("HelloZone: in vol loop in preparePVResourceForApply zone %s", vol.Zones)
 			driverName = vol.DriverName
 			break
 		}
@@ -215,6 +216,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	if err != nil {
 		return false, err
 	}
+	logrus.Infof("HelloZone: before UpdateMigratedPersistentVolumeSpec in preparePVResourceForApply zone %s", volumeInfo.Zones)
 	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo, namespaceMappings)
 	if err != nil {
 		return false, err
