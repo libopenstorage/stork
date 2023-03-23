@@ -107,6 +107,8 @@ func BackupInitInstance() {
 	t.Tags["px-backup-version"] = PxBackupVersion
 	t.Tags["px-backup-build-date"] = fmt.Sprintf("%s", version.GetBuildDate())
 
+	// Setting the common password
+	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
 }
 
 var dash *aetosutil.Dashboard
