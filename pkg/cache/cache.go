@@ -45,6 +45,8 @@ type cache struct {
 var (
 	cacheLock           sync.Mutex
 	sharedInformerCache *cache
+
+	cacheNotInitializedErr = "shared informer cache has not been initialized yet"
 )
 
 func CreateSharedInformerCache(mgr manager.Manager) error {
@@ -106,6 +108,9 @@ func Instance() SharedInformerCache {
 
 // GetStorageClass returns the storage class if present in the cache.
 func (c *cache) GetStorageClass(storageClassName string) (*storagev1.StorageClass, error) {
+	if c == nil || c.controllerCache == nil {
+		return nil, fmt.Errorf(cacheNotInitializedErr)
+	}
 	sc := &storagev1.StorageClass{}
 	if err := c.controllerCache.Get(context.Background(), client.ObjectKey{Name: storageClassName}, sc); err != nil {
 		return nil, err
@@ -115,6 +120,9 @@ func (c *cache) GetStorageClass(storageClassName string) (*storagev1.StorageClas
 
 // ListStorageClasses returns a list of storage classes from the cache
 func (c *cache) ListStorageClasses() (*storagev1.StorageClassList, error) {
+	if c == nil || c.controllerCache == nil {
+		return nil, fmt.Errorf(cacheNotInitializedErr)
+	}
 	scList := &storagev1.StorageClassList{}
 	if err := c.controllerCache.List(context.Background(), scList); err != nil {
 		return nil, err
@@ -124,6 +132,9 @@ func (c *cache) ListStorageClasses() (*storagev1.StorageClassList, error) {
 
 // GetStorageClassForPVC returns the storage class for the provided PVC if present in cache
 func (c *cache) GetStorageClassForPVC(pvc *corev1.PersistentVolumeClaim) (*storagev1.StorageClass, error) {
+	if c == nil || c.controllerCache == nil {
+		return nil, fmt.Errorf(cacheNotInitializedErr)
+	}
 	var scName string
 	if pvc.Spec.StorageClassName != nil && len(*pvc.Spec.StorageClassName) > 0 {
 		scName = *pvc.Spec.StorageClassName
@@ -139,6 +150,9 @@ func (c *cache) GetStorageClassForPVC(pvc *corev1.PersistentVolumeClaim) (*stora
 
 // GetApplicationRegistration returns the ApplicationRegistration CR from the cache
 func (c *cache) GetApplicationRegistration(name string) (*storkv1alpha1.ApplicationRegistration, error) {
+	if c == nil || c.controllerCache == nil {
+		return nil, fmt.Errorf(cacheNotInitializedErr)
+	}
 	appReg := &storkv1alpha1.ApplicationRegistration{}
 	if err := c.controllerCache.Get(context.Background(), client.ObjectKey{Name: name}, appReg); err != nil {
 		return nil, err
@@ -148,6 +162,9 @@ func (c *cache) GetApplicationRegistration(name string) (*storkv1alpha1.Applicat
 
 // ListApplicationRegistrations lists the application registration CRs from the cache
 func (c *cache) ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegistrationList, error) {
+	if c == nil || c.controllerCache == nil {
+		return nil, fmt.Errorf(cacheNotInitializedErr)
+	}
 	appRegList := &storkv1alpha1.ApplicationRegistrationList{}
 	if err := c.controllerCache.List(context.Background(), appRegList); err != nil {
 		return nil, err
@@ -157,6 +174,9 @@ func (c *cache) ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegist
 
 // ListTransformedPods lists the all the Pods from the cache after applying TransformFunc
 func (c *cache) ListTransformedPods() (*corev1.PodList, error) {
+	if c == nil || c.controllerCache == nil {
+		return nil, fmt.Errorf(cacheNotInitializedErr)
+	}
 	podList := &corev1.PodList{}
 	if err := c.controllerCache.List(context.Background(), podList); err != nil {
 		return nil, err

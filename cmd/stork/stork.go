@@ -581,6 +581,7 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 	if err := cache.CreateSharedInformerCache(mgr); err != nil {
 		log.Fatalf("failed to setup shared informer cache: %v", err)
 	}
+	log.Infof("shared informer cache has been intialized")
 
 	go func() {
 		for {
