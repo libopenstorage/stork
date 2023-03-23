@@ -523,17 +523,17 @@ func (r *ResourceCollector) GetMiniResources(
 		return nil, err
 	}
 	/*
-	for _, o := range allObjects {
-		miniObj := ObjectInfo{}
-		metadata, err := meta.Accessor(o)
-		if err != nil {
-			return nil, err
+		for _, o := range allObjects {
+			miniObj := ObjectInfo{}
+			metadata, err := meta.Accessor(o)
+			if err != nil {
+				return nil, err
+			}
+			miniObj.gvk.Kind = o.GetObjectKind().GroupVersionKind().Kind
+			miniObj.name = metadata.GetName()
+			miniObj.namespace = metadata.GetNamespace()
+			miniAllObjects = append(miniAllObjects, miniObj)
 		}
-		miniObj.gvk.Kind = o.GetObjectKind().GroupVersionKind().Kind
-		miniObj.name = metadata.GetName()
-		miniObj.namespace = metadata.GetNamespace()
-		miniAllObjects = append(miniAllObjects, miniObj)
-	}
 	*/
 	var updatedObjects []runtime.Unstructured
 	for _, item := range allObjects {
