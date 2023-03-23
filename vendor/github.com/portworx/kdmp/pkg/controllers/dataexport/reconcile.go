@@ -305,7 +305,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			utils.KdmpConfigmapName,
 			utils.KdmpConfigmapNamespace,
 			backupLocation.Location.NFSConfig.ServerAddr,
-			backupLocation.Location.Path,
+			backupLocation.Location.NFSConfig.SubPath,
 			backupLocation.Location.NFSConfig.MountOptions,
 		)
 		if err != nil && err != utils.ErrJobAlreadyRunning && err != utils.ErrOutOfJobResources {

@@ -305,7 +305,8 @@ func ParseCloudCred() (*Repository, error) {
 	}
 	if storkapi.BackupLocationType(blType) == storkapi.BackupLocationNFS {
 		// For NFS this path need to be absolute path not just a bucket name anymore.
-		repository.Path = drivers.NfsMount + repository.NfsConfig.SubPath + "/"
+		// repository.Path = drivers.NfsMount + repository.NfsConfig.SubPath + "/"
+		repository.Path = drivers.NfsMount + string(bucket) + "/"
 	} else {
 		repository.Path = string(bucket)
 	}
@@ -378,7 +379,8 @@ func parseNfsCreds() (*Repository, error) {
 		logrus.Errorf("%v", errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	subPath, err := os.ReadFile(subPath)
+	// subPath, err := os.ReadFile(subPath)
+	bucket, err := os.ReadFile(bucketPath)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed reading data from file %s : %s", subPath, err)
 		logrus.Errorf("%v", errMsg)
@@ -386,7 +388,8 @@ func parseNfsCreds() (*Repository, error) {
 	}
 
 	repository.NfsConfig.ServerAddr = string(sa)
-	repository.NfsConfig.SubPath = string(subPath)
+	// repository.NfsConfig.SubPath = string(subPath)
+	repository.NfsConfig.SubPath = string(bucket)
 	return repository, nil
 }
 
