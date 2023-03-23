@@ -42,15 +42,14 @@ const (
 	maxWaitPeriodForRestoreCompletionInMinute = 40
 	maxWaitPeriodForBackupJobCancellation     = 20
 	backupJobCancellationRetryTime            = 30
+	K8sNodeReadyTimeout                       = 10
+	K8sNodeRetryInterval                      = 30
 	globalAWSBucketPrefix                     = "global-aws"
 	globalAzureBucketPrefix                   = "global-azure"
 	globalGCPBucketPrefix                     = "global-gcp"
 	globalAWSLockedBucketPrefix               = "global-aws-locked"
 	globalAzureLockedBucketPrefix             = "global-azure-locked"
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
-	userName                                  = "testuser"
-	firstName                                 = "firstName"
-	lastName                                  = "lastName"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
 	backupDeleteTimeout                       = 20 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
@@ -58,6 +57,8 @@ const (
 	mongodbPodStatusRetryTime                 = 30 * time.Second
 	backupLocationDeleteTimeout               = 30 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
+	rebootNodeTimeout                         = 1 * time.Minute
+	rebootNodeTimeBeforeRetry                 = 5 * time.Second
 )
 
 var (

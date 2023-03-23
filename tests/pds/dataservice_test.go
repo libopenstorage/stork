@@ -426,48 +426,46 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 		})
 		Step("Deploy, Validate and Delete Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == postgresql {
-					log.InfoD("Deploying DataService %v ", ds.Name)
-					isDeploymentsDeleted = false
-					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-					log.FailOnError(err, "Error while getting resource template")
-					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.InfoD("Deploying DataService %v ", ds.Name)
+				isDeploymentsDeleted = false
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting resource template")
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
-					dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-					log.FailOnError(err, "Error while getting app configuration template")
-					dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-					log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-					namespaceID, err := pdslib.GetnameSpaceID(ns, deploymentTargetID)
-					log.FailOnError(err, "error while getting namespaceid")
-					deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
-						deploymentTargetID,
-						dnsZone,
-						deploymentName,
-						namespaceID,
-						dataServiceDefaultAppConfigID,
-						int32(ds.Replicas),
-						serviceType,
-						dataServiceDefaultResourceTemplateID,
-						storageTemplateID,
-						ds.Version,
-						ds.Image,
-						ns,
-					)
-					log.FailOnError(err, "Error while deploying data services")
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				namespaceID, err := pdslib.GetnameSpaceID(ns, deploymentTargetID)
+				log.FailOnError(err, "error while getting namespaceid")
+				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceDefaultAppConfigID,
+					int32(ds.Replicas),
+					serviceType,
+					dataServiceDefaultResourceTemplateID,
+					storageTemplateID,
+					ds.Version,
+					ds.Image,
+					ns,
+				)
+				log.FailOnError(err, "Error while deploying data services")
 
-					Step("Validate Storage Configurations", func() {
-						resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns)
-						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
-					})
+				Step("Validate Storage Configurations", func() {
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+				})
 
-					Step("Delete Deployments", func() {
-						log.InfoD("Deleting DataService %v ", ds.Name)
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						log.FailOnError(err, "Error while deleting data services")
-						dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					})
-				}
+				Step("Delete Deployments", func() {
+					log.InfoD("Deleting DataService %v ", ds.Name)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				})
 			}
 		})
 	})

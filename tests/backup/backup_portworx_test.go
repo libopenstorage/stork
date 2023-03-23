@@ -136,7 +136,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	var backupNames []string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58043)
+		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58065)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

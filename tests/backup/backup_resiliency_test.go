@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -742,7 +743,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 					}
 					for _, backupName := range backupNames {
 						if IsPresent(adminBackups, backupName) {
-							return "", true, nil
+							return "", true, fmt.Errorf("%v backup is still present", backupName)
 						}
 					}
 					return "", false, nil
@@ -1042,6 +1043,258 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			}(restoreName)
 		}
 		wg.Wait()
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// RebootNodesWhenBackupsAreInProgress reboots worker nodes from application cluster when backup is in progress
+// source cluster is backup cluster and destination cluster is application cluster for this testcase
+var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
+	var (
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
+		appNamespaces     []string
+		cloudCredName     string
+		cloudCredUID      string
+		bkpLocationName   string
+		backupLocationUID string
+		destClusterUid    string
+		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
+		destClusterStatus api.ClusterInfo_StatusInfo_Status
+		backupNames       []string
+		newBackupNames    []string
+		listOfWorkerNodes []node.Node
+	)
+	labelSelectors := make(map[string]string)
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "2"))
+	backupLocationMap := make(map[string]string)
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootNodesWhenBackupsAreInProgress",
+			"Reboots node when backup is in progress", nil, 55817)
+		log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
+		SetDestinationKubeConfig()
+		log.InfoD("Deploying applications required for the testcase on application cluster")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < numberOfBackups; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+			}
+		}
+		log.Infof("The list of namespaces are %v", appNamespaces)
+	})
+	It("Reboot node when backup is in progress", func() {
+		var sem = make(chan struct{}, numberOfBackups)
+		var wg sync.WaitGroup
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications on destination cluster")
+			ValidateApplications(contexts)
+		})
+		Step("Switching cluster context back to source[backup] cluster", func() {
+			log.InfoD("Switching cluster context back to source[backup] cluster")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+		Step("Adding cloud credential and backup location", func() {
+			log.InfoD("Adding cloud credential and backup location")
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID,
+					getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			srcClusterStatus, _ = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying source cluster %s status", SourceClusterName))
+			destClusterStatus, destClusterUid = Inst().Backup.RegisterBackupCluster(orgID, destinationClusterName, "")
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying destination cluster %s status", destinationClusterName))
+		})
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				sem <- struct{}{}
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupNames = append(backupNames, backupName)
+				wg.Add(1)
+				go func(backupName string, namespace string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					// Here we are using destination cluster as application cluster
+					_, err = CreateBackupWithoutCheck(backupName, destinationClusterName, bkpLocationName, backupLocationUID,
+						[]string{namespace}, labelSelectors, orgID, destClusterUid, "", "", "", "", ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+				}(backupName, namespace)
+			}
+			wg.Wait()
+			log.InfoD("The list of backups taken are: %v", backupNames)
+		})
+		Step("Reboot one worker node on application cluster when backup is in progress", func() {
+			log.InfoD("Switching cluster context to application[destination] cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			err := Inst().N.RebootNode(listOfWorkerNodes[0], node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         rebootNodeTimeout,
+					TimeBeforeRetry: rebootNodeTimeBeforeRetry,
+				},
+			})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+
+		})
+		Step("Check if backup is successful after one worker node on application cluster is rebooted", func() {
+			log.InfoD("Check if backup is successful after one worker node on application cluster is rebooted")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting backup success for - "+backupName)
+			}
+		})
+		Step("Check if the rebooted node on application cluster is up now", func() {
+			log.InfoD("Check if the rebooted node on application cluster is up now")
+			log.InfoD("Switching cluster context to destination cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(listOfWorkerNodes[0])
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[0].Name))
+			err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[0], Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context back to source[backup] cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+		Step("Taking new backup of applications", func() {
+			log.InfoD("Taking new backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				sem <- struct{}{}
+				backupName := fmt.Sprintf("new-%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				newBackupNames = append(newBackupNames, backupName)
+				wg.Add(1)
+				go func(backupName string, namespace string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					// Here we are using destination cluster as application cluster
+					_, err = CreateBackupWithoutCheck(backupName, destinationClusterName, bkpLocationName, backupLocationUID,
+						[]string{namespace}, labelSelectors, orgID, destClusterUid, "", "", "", "", ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+				}(backupName, namespace)
+			}
+			wg.Wait()
+			log.InfoD("The list of new backups taken are: %v", newBackupNames)
+		})
+		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
+			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
+			log.InfoD("Switching cluster context to application[destination] cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			for i := 0; i < 2; i++ {
+				err := Inst().N.RebootNode(listOfWorkerNodes[i], node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         rebootNodeTimeout,
+						TimeBeforeRetry: rebootNodeTimeBeforeRetry,
+					},
+				})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[i].Name))
+			}
+			log.InfoD("Switching cluster context back to source cluster")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+		Step("Check if backup is successful after two worker nodes are rebooted", func() {
+			log.InfoD("Check if backup is successful after two worker nodes are rebooted")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range newBackupNames {
+				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting backup success for - "+backupName)
+			}
+		})
+		Step("Check if the rebooted nodes on application cluster are up now", func() {
+			log.InfoD("Check if the rebooted nodes on application cluster are up now")
+			log.Infof("Switching cluster context to destination cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			for i := 0; i < 2; i++ {
+				nodeReadyStatus := func() (interface{}, bool, error) {
+					err := Inst().S.IsNodeReady(listOfWorkerNodes[i])
+					if err != nil {
+						return "", true, err
+					}
+					return "", false, nil
+				}
+				_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[i].Name))
+				err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[i], Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[i].Name))
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		log.InfoD("Check if the rebooted nodes on application cluster are up now")
+		log.Infof("Switching cluster context to destination cluster")
+		SetDestinationKubeConfig()
+		listOfWorkerNodes = node.GetWorkerNodes()
+		for _, node := range listOfWorkerNodes {
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(node)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", node.Name))
+			err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+		}
+		log.Infof("Deleting the deployed applications on application cluster")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+		log.Infof("Switching cluster context back to source cluster")
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster")
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
