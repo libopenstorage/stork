@@ -37,6 +37,10 @@ const (
 	ObjectLockDefaultIncrementalCount = 5
 	//minProtectionPeriod defines minimum number of days, the backup are protected via object-lock feature
 	minProtectionPeriod = 1
+	// PxServiceEnvName - PX service ENV name
+	PxServiceEnvName = "PX_SERVICE_NAME"
+	// PxNamespaceEnvName - PX namespace ENV name
+	PxNamespaceEnvName = "PX_NAMESPACE"
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
@@ -245,6 +249,24 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 		return registry, imageSecret[0].Name, nil
 	}
 	return registry, "", nil
+}
+
+// GetPxNamespaceFromStorkDeploy - will return the px namespace env from stork deploy
+func GetPxNamespaceFromStorkDeploy(storkDeployName, storkDeployNamespace string) (string, string, error) {
+	deploy, err := apps.Instance().GetDeployment(storkDeployName, storkDeployNamespace)
+	if err != nil {
+		return "", "", err
+	}
+	var service, namespace string
+	for _, envVar := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if envVar.Name == PxServiceEnvName {
+			service = envVar.Value
+		}
+		if envVar.Name == PxNamespaceEnvName {
+			namespace = envVar.Value
+		}
+	}
+	return namespace, service, nil
 }
 
 // GetStorkPodNamespace - will return the stork pod namespace.

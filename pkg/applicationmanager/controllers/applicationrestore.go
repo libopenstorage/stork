@@ -668,10 +668,13 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						return err
 					}
 				}
-				storageClassesBytes, err := a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
-				if err != nil {
-					log.ApplicationRestoreLog(restore).Errorf("Error in a.downloadObject %v", err)
-					return err
+				var storageClassesBytes []byte
+				if driverName == "csi" {
+					storageClassesBytes, err = a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
+					if err != nil {
+						log.ApplicationRestoreLog(restore).Errorf("Error in a.downloadObject %v", err)
+						return err
+					}
 				}
 				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects, storageClassesBytes)
 				if err != nil {
