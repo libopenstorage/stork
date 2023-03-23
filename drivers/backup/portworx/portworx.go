@@ -334,6 +334,22 @@ func (p *portworx) GetClusterName(ctx context.Context, orgID string, clusterUid 
 	return "", fmt.Errorf("cluster with uid '%s' not found for org '%s'", clusterUid, orgID)
 }
 
+func (p *portworx) GetClusterStatus(orgID string, clusterName string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, error) {
+	clusterEnumerateReq := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateRsp, err := p.EnumerateCluster(ctx, clusterEnumerateReq)
+	if err != nil {
+		return api.ClusterInfo_StatusInfo_Invalid, err
+	}
+	for _, cluster := range enumerateRsp.GetClusters() {
+		if cluster.GetName() == clusterName {
+			return cluster.Status.Status, nil
+		}
+	}
+	return api.ClusterInfo_StatusInfo_Invalid, fmt.Errorf("cluster with name '%s' not found for org '%s'", clusterName, orgID)
+}
+
 func (p *portworx) CreateBackupLocation(ctx context.Context, req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
 	return p.backupLocationManager.Create(ctx, req)
 }
@@ -1438,24 +1454,6 @@ func (p *portworx) GetSchedulePolicyUid(orgID string, ctx context.Context, schPo
 		}
 	}
 	return "", fmt.Errorf("Unable to find schedule policy Uid")
-}
-
-func (p *portworx) RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string) {
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
-	clusterResp, err := p.InspectCluster(ctx, clusterReq)
-	log.FailOnError(err, "Cluster Object for cluster %s and Org id %s is empty", clusterName, orgID)
-	clusterObj := clusterResp.GetCluster()
-	return clusterObj.Status.Status, clusterObj.Uid
-}
-
-func (p *portworx) RegisterBackupClusterNonAdminUser(orgID, clusterName, uid string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, string) {
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
-	clusterResp, err := p.InspectCluster(ctx, clusterReq)
-	log.FailOnError(err, "Cluster Object for cluster %s and Org id %s is empty", clusterName, orgID)
-	clusterObj := clusterResp.GetCluster()
-	return clusterObj.Status.Status, clusterObj.Uid
 }
 
 func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error) {
