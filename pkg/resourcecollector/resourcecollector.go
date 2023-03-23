@@ -80,9 +80,9 @@ type ResourceCollector struct {
 }
 
 type ObjectInfo struct {
-	name      string                  `json:"name"`
-	namespace string                  `json:"namespace"`
-	gvk       metav1.GroupVersionKind `json:",inline"`
+	Name      string                  `json:"name"`
+	Namespace string                  `json:"namespace"`
+	Gvk       metav1.GroupVersionKind `json:"gvk"`
 }
 
 // Options are the options passed to the ResourceCollector APIs that dictate how k8s
@@ -385,13 +385,13 @@ func (r *ResourceCollector) GetMiniResources(
 	optionalResourceTypes []string,
 	allDrivers bool,
 	opts Options,
-) ([]runtime.Unstructured, error) {
+) ([]ObjectInfo, []runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	allObjects := make([]runtime.Unstructured, 0)
-	// miniAllObjects := make([]ObjectInfo, 0)
+	miniAllObjects := make([]ObjectInfo, 0)
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
@@ -416,14 +416,14 @@ func (r *ResourceCollector) GetMiniResources(
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		if !apierrors.IsForbidden(err) {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	for _, group := range r.discoveryHelper.Resources() {
 		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		for _, resource := range group.APIResources {
@@ -459,16 +459,16 @@ func (r *ResourceCollector) GetMiniResources(
 					if apierrors.IsForbidden(err) {
 						continue
 					}
-					return nil, err
+					return nil, nil, err
 				}
 				objects, err := meta.ExtractList(objectsList)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				for _, o := range objects {
 					runtimeObject, ok := o.(runtime.Unstructured)
 					if !ok {
-						return nil, fmt.Errorf("error casting object: %v", o)
+						return nil, nil, fmt.Errorf("error casting object: %v", o)
 					}
 
 					var err error
@@ -485,14 +485,14 @@ func (r *ResourceCollector) GetMiniResources(
 						if apierrors.IsForbidden(err) {
 							continue
 						}
-						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
+						return nil, nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
 					if !collect {
 						continue
 					}
 					metadata, err := meta.Accessor(runtimeObject)
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 					allObjects = append(allObjects, runtimeObject)
 					resourceMap[metadata.GetUID()] = true
@@ -503,7 +503,7 @@ func (r *ResourceCollector) GetMiniResources(
 
 	allObjects, _, err = r.pruneOwnedResources(allObjects, resourceMap)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	/*
 		// Creating a list of PVCs with owner reference before calling prepareResourcesForCollection
@@ -520,21 +520,19 @@ func (r *ResourceCollector) GetMiniResources(
 	*/
 	err = r.prepareResourcesForCollection(allObjects, namespaces, opts, crdList)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	/*
-		for _, o := range allObjects {
-			miniObj := ObjectInfo{}
-			metadata, err := meta.Accessor(o)
-			if err != nil {
-				return nil, err
-			}
-			miniObj.gvk.Kind = o.GetObjectKind().GroupVersionKind().Kind
-			miniObj.name = metadata.GetName()
-			miniObj.namespace = metadata.GetNamespace()
-			miniAllObjects = append(miniAllObjects, miniObj)
+	for _, o := range allObjects {
+		miniObj := ObjectInfo{}
+		metadata, err := meta.Accessor(o)
+		if err != nil {
+			return nil, nil, err
 		}
-	*/
+		miniObj.Gvk.Kind = o.GetObjectKind().GroupVersionKind().Kind
+		miniObj.Name = metadata.GetName()
+		miniObj.Namespace = metadata.GetNamespace()
+		miniAllObjects = append(miniAllObjects, miniObj)
+	}
 	var updatedObjects []runtime.Unstructured
 	for _, item := range allObjects {
 		// skip pv object
@@ -556,7 +554,7 @@ func (r *ResourceCollector) GetMiniResources(
 		updatedObjects = append(updatedObjects, item)
 
 	}
-	return updatedObjects, nil
+	return miniAllObjects, updatedObjects, nil
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
