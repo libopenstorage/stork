@@ -549,14 +549,20 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 func ValidatePureCloudDriveTopologies() error {
 	nodes, err := Inst().V.GetDriverNodes()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	nodesMap := node.GetNodesByName()
 
 	driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
 	if len(endpointToZoneMap) == 0 {
@@ -585,7 +591,9 @@ func ValidatePureCloudDriveTopologies() error {
 		}
 
 		driveSet, err := Inst().V.GetDriveSet(&nodeFromMap)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		for configID, driveConfig := range driveSet.Configs {
 			err = nil
@@ -5908,4 +5916,39 @@ func AsgKillNode(nodeToKill node.Node) error {
 	})
 	return err
 
+}
+
+func RefreshDriverEndPoints() error {
+	var err error
+	err = Inst().V.RefreshDriverEndpoints()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*volume.Volume, error) {
+	var volumes []*volume.Volume
+
+	// Refresh driver end points before processing
+	RefreshDriverEndPoints()
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return nil, err
+			}
+			poolUuids := appVol.ReplicaSets[0].PoolUuids
+			for _, p := range poolUuids {
+				if p == poolUuid {
+					volumes = append(volumes, vol)
+				}
+			}
+		}
+	}
+	return volumes, nil
 }
