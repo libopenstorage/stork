@@ -548,6 +548,8 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 
 		Step("Validate Storage Configurations", func() {
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
@@ -825,7 +827,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	Step("Deploy Data Services", func() {
 		log.InfoD("Deploying DataService %v ", ds.Name)
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
@@ -857,12 +859,20 @@ func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, proje
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
+	})
+	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
+}
 
-		Step("Validate Storage Configurations", func() {
-			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-			ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
-		})
+func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := TriggerDeployDataService(ds, namespace, tenantID, projectID)
+	Step("Validate Data Service Configurations", func() {
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
+	Step("Validate Storage Configurations", func() {
+		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	})
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
@@ -895,6 +905,8 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 
 		Step("Validate Storage Configurations", func() {
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)

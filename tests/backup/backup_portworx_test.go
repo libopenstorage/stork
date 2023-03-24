@@ -72,8 +72,11 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s creation", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Taking backup of applications", func() {
@@ -174,8 +177,11 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s creation", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Creating backup location", func() {
@@ -374,8 +380,11 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s creation", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Start backup of application to bucket", func() {
@@ -517,8 +526,11 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s creation", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Taking encrypted and non-encrypted backups", func() {

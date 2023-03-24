@@ -97,5 +97,8 @@
     "ClusterType": "onprem",
     "Namespace": "automation",
     "PxNamespace": "portworx"
+  },
+  "ResiliencyTest": {
+    "CheckTillReplica": 1
   }
 }
