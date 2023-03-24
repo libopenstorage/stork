@@ -8452,9 +8452,7 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 					Action: "start",
 				}
 				drivesMap, err := Inst().N.GetBlockDrives(*nodeDetail, systemOpts)
-				if err != nil {
-					log.FailOnError(err, "error getting block drives from node %s", nodeDetail.Name)
-				}
+				log.FailOnError(err, "error getting block drives from node %s", nodeDetail.Name)
 				blockDeviceBefore := len(drivesMap)
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
@@ -8466,7 +8464,7 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				isjournal, err := isJournalEnabled()
 				log.FailOnError(err, "Error getting journal status")
 				if isjournal {
-					log.InfoD("journal device added successfully")
+					dash.VerifyFatal(err == nil, true, "journal device added successfully")
 				}
 			}
 			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
