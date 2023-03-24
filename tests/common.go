@@ -549,14 +549,20 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 func ValidatePureCloudDriveTopologies() error {
 	nodes, err := Inst().V.GetDriverNodes()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	nodesMap := node.GetNodesByName()
 
 	driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
 	if len(endpointToZoneMap) == 0 {
@@ -585,7 +591,9 @@ func ValidatePureCloudDriveTopologies() error {
 		}
 
 		driveSet, err := Inst().V.GetDriveSet(&nodeFromMap)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		for configID, driveConfig := range driveSet.Configs {
 			err = nil
