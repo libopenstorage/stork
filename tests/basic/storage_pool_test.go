@@ -4651,7 +4651,9 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 			}
 		}
 
+		applist := Inst().AppList
 		defer func() {
+			Inst().AppList = applist
 			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
 			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
 			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
@@ -4668,7 +4670,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		err = adjustReplPools(*selectedNode, secondReplNode, isjournal)
 		log.FailOnError(err, "Error setting pools for clean volumes")
 
-		Inst().AppList = append(Inst().AppList, "fio-fastpath")
+		Inst().AppList = []string{"fio-fastpath"}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullrz-%d", i))...)
@@ -4694,7 +4696,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		var expandedExpectedPoolSize uint64
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) + 500
+			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
 
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
@@ -4753,7 +4755,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 		selectedPool := getPoolWithLeastSize()
 		selectedNode, err := GetNodeWithGivenPoolID(selectedPool.Uuid)
 		log.FailOnError(err, fmt.Sprintf("Failed to get node with pool UUID %s", selectedPool.Uuid))
-		stNodes := node.GetStorageDriverNodes()
+		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
 			if stNode.Name != selectedNode.Name {
@@ -4761,7 +4763,9 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			}
 		}
 
+		applist := Inst().AppList
 		defer func() {
+			Inst().AppList = applist
 			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
 			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
 			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
@@ -4778,7 +4782,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 		err = adjustReplPools(*selectedNode, secondReplNode, isjournal)
 		log.FailOnError(err, "Error setting pools for clean volumes")
 
-		Inst().AppList = append(Inst().AppList, "fio-fastpath")
+		Inst().AppList = []string{"fio-fastpath"}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullad-%d", i))...)
@@ -4805,7 +4809,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 		var expandedExpectedPoolSize uint64
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) + 500
+			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
 
 			log.FailOnError(err, "Failed to check if Journal enabled")
 

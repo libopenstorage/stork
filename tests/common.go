@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"regexp"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -331,8 +332,9 @@ var (
 )
 
 const (
-	rootLogDir   = "/root/logs"
-	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	rootLogDir    = "/root/logs"
+	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath = "/tmp/px-backup-test-logs"
 )
 
 type Weekday string
@@ -543,6 +545,71 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			ValidatePxPodRestartCount(ctx, errChan...)
 		})
 	})
+}
+
+func ValidatePureCloudDriveTopologies() error {
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil { return err }
+	nodesMap := node.GetNodesByName()
+
+	driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil { return err }
+
+	pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
+	if err != nil { return err }
+
+	endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
+	if len(endpointToZoneMap) == 0 {
+		return fmt.Errorf("parsed px-pure-secret endpoint to zone map, but no arrays in map (len==0)")
+	}
+
+	log.Infof("Endpoint to zone map: %v", endpointToZoneMap)
+
+	for _, node := range nodes {
+		log.Infof("Inspecting drive sets on node %v", node.SchedulerNodeName)
+		nodeFromMap, ok := nodesMap[node.SchedulerNodeName]
+		if !ok {
+			return fmt.Errorf("Failed to find node %s in node map", node.SchedulerNodeName)
+		}
+
+		var nodeZone string
+		if nodeFromMap.SchedulerTopology != nil && nodeFromMap.SchedulerTopology.Labels != nil {
+			if z, ok := nodeFromMap.SchedulerTopology.Labels["topology.portworx.io/zone"]; ok {
+				nodeZone = z
+			}
+		}
+
+		if nodeZone == "" {
+			log.Warnf("Node %s has no zone (missing the topology.portworx.io/zone label), skipping drive set checks for it", node.SchedulerNodeName)
+			continue
+		}
+
+		driveSet, err := Inst().V.GetDriveSet(&nodeFromMap)
+		if err != nil { return err }
+
+		for configID, driveConfig := range driveSet.Configs {
+			err = nil
+			if len(driveConfig.Labels) == 0 {
+				return fmt.Errorf("drive config %s has no labels: validate that you're running on PX master or 3.0+ and using FlashArray cloud drives with topology enabled", configID)
+			}
+
+			var arrayEndpoint string
+			if arrayEndpoint, ok = driveConfig.Labels[pureutils.CloudDriveFAMgmtLabel]; !ok {
+				return fmt.Errorf("drive config %s is missing the '%s' label: validate that you're running PX master or 3.0+ and using FlashArray cloud drives with topology enabled", configID, pureutils.CloudDriveFAMgmtLabel)
+			}
+
+			var driveZone string
+			if driveZone, ok = endpointToZoneMap[arrayEndpoint]; !ok {
+				return fmt.Errorf("drive config %s is on array with endpoint '%s', which is not listed in px-pure-secret", configID, arrayEndpoint)
+			}
+
+			if driveZone != nodeZone {
+				return fmt.Errorf("drive config %s is provisioned on array in zone %s, but node '%s' is in zone %s, which is not topologically correct", configID, driveZone, node.SchedulerNodeName, nodeZone)
+			}
+		}
+	}
+
+	return nil
 }
 
 // ValidateContextForPureVolumesSDK is the ginkgo spec for validating a scheduled context
@@ -1836,7 +1903,7 @@ func PerformSystemCheck() {
 				})
 				if len(file) != 0 || err != nil {
 					log.FailOnError(err, "error checking for cores in node %s", n.Name)
-					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
+					log.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
 					coreNodes = append(coreNodes, n.Name)
 				}
 			}
@@ -2892,104 +2959,23 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 }
 
 // CreateCloudCredential creates cloud credetials
-func CreateCloudCredential(provider, name string, uid, orgID string) {
-	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
-		log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
-		backupDriver := Inst().Backup
-		switch provider {
-		case drivers.ProviderAws:
-			log.Infof("Create creds for aws")
-			id := os.Getenv("AWS_ACCESS_KEY_ID")
-			expect(id).NotTo(equal(""),
-				"AWS_ACCESS_KEY_ID Environment variable should not be empty")
-
-			secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
-			expect(secret).NotTo(equal(""),
-				"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
-
-			credCreateRequest := &api.CloudCredentialCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					Uid:   uid,
-					OrgId: orgID,
-				},
-				CloudCredential: &api.CloudCredentialInfo{
-					Type: api.CloudCredentialInfo_AWS,
-					Config: &api.CloudCredentialInfo_AwsConfig{
-						AwsConfig: &api.AWSConfig{
-							AccessKey: id,
-							SecretKey: secret,
-						},
-					},
-				},
-			}
-
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
-
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-			if err != nil && strings.Contains(err.Error(), "already exists") {
-				return
-			}
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
-		// TODO: validate CreateCloudCredentialResponse also
-		case drivers.ProviderAzure:
-			log.Infof("Create creds for azure")
-			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
-			credCreateRequest := &api.CloudCredentialCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					Uid:   uid,
-					OrgId: orgID,
-				},
-				CloudCredential: &api.CloudCredentialInfo{
-					Type: api.CloudCredentialInfo_Azure,
-					Config: &api.CloudCredentialInfo_AzureConfig{
-						AzureConfig: &api.AzureConfig{
-							TenantId:       tenantID,
-							ClientId:       clientID,
-							ClientSecret:   clientSecret,
-							AccountName:    accountName,
-							AccountKey:     accountKey,
-							SubscriptionId: subscriptionID,
-						},
-					},
-				},
-			}
-			ctx, err := backup.GetAdminCtxFromSecret()
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-			if err != nil && strings.Contains(err.Error(), "already exists") {
-				return
-			}
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
-			// TODO: validate CreateCloudCredentialResponse also
-		}
-	})
-}
-
-// CreateCloudCredential creates cloud credetials
-func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string, ctx context1.Context) error {
-	log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
-	backupDriver := Inst().Backup
+func CreateCloudCredential(provider, credName string, uid, orgID string, ctx context1.Context) error {
+	log.Infof("Create cloud credential with name [%s] for org [%s] with [%s] as provider", credName, orgID, provider)
+	var credCreateRequest *api.CloudCredentialCreateRequest
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Create creds for aws")
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
-			return fmt.Errorf("AWS_ACCESS_KEY_ID Environment variable should not be empty")
+			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
-			return fmt.Errorf("AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
 		}
-		credCreateRequest := &api.CloudCredentialCreateRequest{
+		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
+				Name:  credName,
 				Uid:   uid,
 				OrgId: orgID,
 			},
@@ -3003,18 +2989,12 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 				},
 			},
 		}
-		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-		if err != nil && strings.Contains(err.Error(), "already exists") {
-			return nil
-		}
-		return err
-	// TODO: validate CreateCloudCredentialResponse also
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
-		credCreateRequest := &api.CloudCredentialCreateRequest{
+		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
+				Name:  credName,
 				Uid:   uid,
 				OrgId: orgID,
 			},
@@ -3032,11 +3012,15 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 				},
 			},
 		}
-
-		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-		if err != nil && strings.Contains(err.Error(), "already exists") {
+	default:
+		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
+	}
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
 			return nil
 		}
+		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider", credName, orgID, provider)
 		return err
 	}
 	return nil
@@ -4397,6 +4381,70 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 	}
 }
 
+// collectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
+func collectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
+	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
+	podList, err := core.Instance().GetPods(namespace, podLabel)
+	if err != nil {
+		log.Errorf("Error in getting pods for the [%s] logs of test case [%s], Err: %v", logLabel, testCaseName, err.Error())
+		return
+	}
+	masterNode := node.GetMasterNodes()[0]
+	err = runCmd("pwd", masterNode)
+	if err != nil {
+		log.Errorf("Error in running [pwd] command in node [%s] for the [%s] logs of test case [%s]", masterNode.Name, logLabel, testCaseName)
+		return
+	}
+	testCaseLogDirPath := fmt.Sprintf("%s/%s-logs", pxbLogDirPath, testCaseName)
+	log.Infof("Creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName)
+	err = runCmd(fmt.Sprintf("mkdir -p %v", testCaseLogDirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]. Err: %v", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName, err.Error())
+		return
+	}
+	for _, pod := range podList.Items {
+		log.Infof("Writing [%s] pod into a %v/%v.log file", pod.Name, testCaseLogDirPath, pod.Name)
+		err = runCmd(fmt.Sprintf("kubectl logs %s -n %s > %s/%s.log", pod.Name, namespace, testCaseLogDirPath, pod.Name), masterNode)
+		if err != nil {
+			log.Errorf("Error in writing [%s] pod into a %v/%v.log file. Err: %v", pod.Name, testCaseLogDirPath, pod.Name, err.Error())
+		}
+	}
+}
+
+// collectStorkLogs collects Stork logs and stores them using the collectLogsFromPods function
+func collectStorkLogs(testCaseName string) {
+	storkLabel := make(map[string]string)
+	storkLabel["name"] = "stork"
+	pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		log.Errorf("Error in getting portworx namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
+}
+
+// collectPxBackupLogs collects Px-Backup logs and stores them using the collectLogsFromPods function
+func collectPxBackupLogs(testCaseName string) {
+	pxbLabel := make(map[string]string)
+	pxbLabel["app"] = "px-backup"
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "px-backup")
+}
+
+// compressSubDirectories compresses all subdirectories within the specified directory on the master node
+func compressSubDirectories(dirPath string) {
+	masterNode := node.GetMasterNodes()[0]
+	log.Infof("Compressing sub-directories in the directory [%s] in node [%s]", dirPath, masterNode.Name)
+	err := runCmdWithNoSudo(fmt.Sprintf("find %s -mindepth 1 -depth -type d -exec sh -c 'tar czf \"${1%%/}.tar.gz\" -C \"$(dirname \"$1\")\" \"$(basename \"$1\")\" && rm -rf \"$1\"' sh {} \\;", dirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in compressing sub-directories in the directory [%s] in node [%s]", dirPath, masterNode.Name)
+	}
+}
+
 func collectAndCopyStorkLogs(issueKey string) {
 
 	storkLabel := make(map[string]string)
@@ -4672,10 +4720,6 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	time.Sleep(2 * time.Minute)
 
 	t := func() (interface{}, bool, error) {
-		Inst().S.RefreshNodeRegistry()
-		if err != nil {
-			return nil, true, err
-		}
 		err = Inst().V.RefreshDriverEndpoints()
 		if err != nil {
 			return nil, true, err
@@ -4700,18 +4744,23 @@ func ValidateDriveRebalance(stNode node.Node) error {
 		return err
 	}
 
-	cmd := fmt.Sprintf("pxctl sv drive add -d %s -o status", drivePath)
+	cmd := fmt.Sprintf("sv drive add -d %s -o status", drivePath)
 	var prevStatus string
 
 	t = func() (interface{}, bool, error) {
 
 		// Execute the command and check get rebalance status
-		currStatus, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
+		currStatus, err := Inst().V.GetPxctlCmdOutputConnectionOpts(stNode, cmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, false)
+
 		if err != nil {
-			return "", false, err
+			if strings.Contains(err.Error(), "Device already exists") {
+				return "", false, nil
+			}
+			return "", true, err
 		}
 		log.Infof(fmt.Sprintf("Rebalance Status for drive [%s] in node [%s] : %s", drivePath, stNode.Name, strings.TrimSpace(currStatus)))
 		if strings.Contains(currStatus, "Rebalance done") {
@@ -4926,6 +4975,25 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	dash.TestCaseEnd()
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	}
+	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
+	if ginkgoTestDescr.Failed {
+		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+		testCaseName := ginkgoTestDescr.FullTestText
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+		masterNode := node.GetMasterNodes()[0]
+		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
+		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+		if err != nil {
+			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+			return
+		}
+		collectStorkLogs(testCaseName)
+		collectPxBackupLogs(testCaseName)
+		compressSubDirectories(pxbLogDirPath)
 	}
 }
 
@@ -5644,7 +5712,7 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 		}
 		return nil, false, nil
 	}
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
 	return err
 }
 

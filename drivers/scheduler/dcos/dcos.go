@@ -965,6 +965,31 @@ func (d *dcos) GetPodsRestartCount(namespace string, label map[string]string) (m
 		Operation: "GetPodsRestartCoun()",
 	}
 }
+
+func (d *dcos) AddNamespaceLabel(namespace string, labelMap map[string]string) error {
+	// AddNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddNamespaceLabel()",
+	}
+}
+
+func (d *dcos) RemoveNamespaceLabel(namespace string, labelMap map[string]string) error {
+	// RemoveNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveNamespaceLabel()",
+	}
+}
+
+func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
+	// GetNamespaceLabel is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNamespaceLabel()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

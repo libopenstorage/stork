@@ -464,6 +464,14 @@ func (d *DefaultDriver) GetDriverNodes() ([]*api.StorageNode, error) {
 
 }
 
+// GetDriveSet gets the drive set for a given Node
+func (d *DefaultDriver) GetDriveSet(n *node.Node) (*DriveSet, error) {
+	return &DriveSet{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDriveSet()",
+	}
+}
+
 // GetDriverNode return api.Storage Node
 func (d *DefaultDriver) GetDriverNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
 	return &api.StorageNode{}, &errors.ErrNotSupported{

@@ -74,14 +74,17 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
-				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
 		})
@@ -97,7 +100,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		Step("Taking backup of multiple namespaces", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces,
 				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying [%s] backup creation", backupName))
@@ -188,17 +191,21 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				cloudCredUID = uuid.New()
 				CloudCredUIDMap[cloudCredUID] = cloudCredName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 			}
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s creation", SourceClusterName))
@@ -255,7 +262,8 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		ctx, _ := backup.GetAdminCtxFromSecret()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -363,14 +371,17 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		})
 		Step("Creating cloud account and backup location", func() {
 			log.InfoD("Creating cloud account and backup location")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
-				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				log.FailOnError(err, "Creating backup location %s failed", bkpLocationName)
 			}
 		})
@@ -392,7 +403,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			if len(preRuleNameList) > 0 {
 				preRuleUid, err = Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				log.FailOnError(err, "Failed to get UID for rule %s", preRuleNameList[0])
@@ -529,11 +540,14 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		providers := getProviders()
 		Step("Adding Cloud Account", func() {
 			log.InfoD("Adding cloud account")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudAccountName = fmt.Sprintf("%s-%v", provider, timeStamp)
 				cloudCredUID = uuid.New()
 				cloudCredUIDMap[cloudCredUID] = cloudAccountName
-				CreateCloudCredential(provider, cloudAccountName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, cloudAccountName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudAccountName, orgID, provider))
 			}
 		})
 
@@ -559,8 +573,9 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 
 		Step("Adding Clusters for backup", func() {
 			log.InfoD("Adding application clusters")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating source - %s and destination - %s clusters", SourceClusterName, destinationClusterName))
 			clusterStatus, _ = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verification of adding application clusters - %s", SourceClusterName))
@@ -593,7 +608,8 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		ctx, _ := backup.GetAdminCtxFromSecret()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Clean up objects after test execution")
 		log.Info("Deleting backup schedules")
 		scheduleUid, err := GetScheduleUID(backupName, orgID, ctx)
@@ -663,11 +679,14 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		providers := getProviders()
 		Step("Adding Cloud Account", func() {
 			log.InfoD("Adding cloud account")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudAccountName = fmt.Sprintf("%s-%v", provider, timeStamp)
 				cloudCredUID = uuid.New()
 				cloudCredUIDMap[cloudCredUID] = cloudAccountName
-				CreateCloudCredential(provider, cloudAccountName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, cloudAccountName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudAccountName, orgID, provider))
 			}
 		})
 
@@ -692,8 +711,9 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 
 		Step("Adding Clusters for backup", func() {
 			log.InfoD("Adding application clusters")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating source - %s and destination - %s clusters", SourceClusterName, destinationClusterName))
 			clusterStatus, _ = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verification of adding application clusters - %s", SourceClusterName))
@@ -724,7 +744,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		ctx, _ := backup.GetAdminCtxFromSecret()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Clean up objects after test execution")
 		log.Info("Deleting backup schedules")
 		scheduleUid, err := GetScheduleUID(backupName, orgID, ctx)
@@ -797,16 +818,19 @@ var _ = Describe("{CustomResourceRestore}", func() {
 
 		Step("Creating credentials and backup location", func() {
 			log.InfoD("Creating cloud credentials and backup location")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
 				backupLocationUID = uuid.New()
 				credName = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
-				CreateCloudCredential(provider, credName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, credName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", credName, orgID, provider))
 				log.InfoD("Created Cloud Credentials with name - %s", credName)
 				backupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
 				newBackupLocationMap[backupLocationUID] = backupLocationName
-				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				log.FailOnError(err, "Creating Backup location [%v] failed", backupLocationName)
 				log.InfoD("Created Backup Location with name - %s", backupLocationName)
 			}
@@ -814,7 +838,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Register source and destination cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx failed")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			log.FailOnError(err, "Creation of Source and destination cluster failed")
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
@@ -823,7 +847,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx failed")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
@@ -834,7 +858,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		})
 		Step("Restoring the backed up application", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx failed")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Restoring backed up applications")
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
@@ -864,7 +888,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx failed")
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		//Delete Backup
 		log.InfoD("Deleting backup")
@@ -925,23 +949,26 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
 			providers := getProviders()
 			backupLocationMap = make(map[string]string)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				log.InfoD("Creating cloud credential named [%s] and uid [%s] using [%s] as provider", cloudCredUID, cloudCredName, provider)
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = backupLocationName
 				bucketName := getGlobalBucketName(provider)
-				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location named [%s] with uid [%s] of [%s] as provider", backupLocationName, backupLocationUID, provider))
 			}
 		})
 		Step("Configure source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Configuring source and destination clusters with px-central-admin ctx")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
 			appClusterName = destinationClusterName
@@ -951,7 +978,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		Step("Create schedule policy", func() {
 			log.InfoD("Creating a schedule policy")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
@@ -963,7 +990,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		Step("Create schedule backups", func() {
 			log.InfoD("Creating a schedule backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			namespaces := []string{"*"}
 			labelSelectors := make(map[string]string)
@@ -997,7 +1024,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		Step("Verify new application namespaces inclusion in next schedule backup", func() {
 			log.InfoD("Verifying new application namespaces inclusion in next schedule backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching names of all schedule backups of schedule named [%s]", scheduleName))
 			currentScheduleBackupCount := len(allScheduleBackupNames)
@@ -1016,7 +1043,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			nextScheduleBackupName, err = task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
 			log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName.(string))
-			_, err = backupSuccessCheck(nextScheduleBackupName.(string), orgID, 0, 0, ctx)
+			err = backupSuccessCheck(nextScheduleBackupName.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying success of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName.(string), scheduleName))
 			nextScheduleBackupUid, err := Inst().Backup.GetBackupUID(ctx, nextScheduleBackupName.(string), orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
@@ -1036,7 +1063,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		Step("Restore new application namespaces from next schedule backup", func() {
 			log.InfoD("Restoring new application namespaces from next schedule backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			namespaceMapping := make(map[string]string)
 			// Modifying namespaceMapping to restore only new namespaces
 			for _, namespace := range appNamespaces {
@@ -1052,7 +1079,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
-		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
 		allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
@@ -1117,15 +1144,18 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 
 		Step("Adding Credentials and Registering Backup Location", func() {
 			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
 				backupLocationUID = uuid.New()
 				credName = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
-				CreateCloudCredential(provider, credName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, credName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", credName, orgID, provider))
 				log.InfoD("Created Cloud Credentials with name - %s", credName)
 				customBackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
-				err := CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 				log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
 			}
@@ -1178,6 +1208,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			// Wait until backup location is removed
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
 				status, err := IsBackupLocationPresent(customBackupLocationName, ctx, orgID)
 				if err != nil {
 					return "", true, fmt.Errorf("backup location %s still present with error %v", customBackupLocationName, err)
@@ -1203,7 +1234,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 		Step("Taking backup of applications to trigger BackupSync goroutine", func() {
 			log.InfoD("Taking backup of applications to trigger BackupSync goroutine")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx failed")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
@@ -1239,7 +1270,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			bkpEnumerateReq := &api.BackupEnumerateRequest{
 				OrgId: orgID}
 			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx failed")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
 			for _, bkp = range curBackups.GetBackups() {
 				backupInspectRequest := &api.BackupInspectRequest{
