@@ -648,7 +648,7 @@ func nodePoolsExpansion(testName string) {
 
 			for _, poolToBeResized := range poolsToBeResized {
 				drvSize, err := getPoolDiskSize(poolToBeResized)
-				log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+				log.FailOnError(err, fmt.Sprintf("error getting drive size for pool [%s]", poolToBeResized.Uuid))
 				expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
 				poolsExpectedSizeMap[poolToBeResized.Uuid] = expectedSize
 
