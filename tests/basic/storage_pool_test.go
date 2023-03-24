@@ -8432,10 +8432,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 			if len(getReplicaSets[0].Nodes) != 2 {
 				err := Inst().V.SetReplicationFactor(eachVol, 2, nil, nil, true)
 				if err != nil {
-					re := regexp.MustCompile("Failed to update volume: No change requested")
-					if re.MatchString(fmt.Sprintf("%v", err)) == false {
-						log.FailOnError(err, "failed to set replicaiton value of Volume [%v]", eachVol.Name)
-					}
+					log.FailOnError(err, "failed to set replicaiton for Volume [%v]", eachVol.Name)
 				}
 			}
 		}
@@ -8468,8 +8465,6 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to get details of volume [%v]", eachVol.Name))
 
 			if fmt.Sprintf("[%v]", volumeInspect.Status) != "VOLUME_STATUS_UP" {
-
-				fmt.Printf("Volume Details [%v] is [%v]", volumeInspect.Status, volumeInspect.State)
 				log.FailOnError(fmt.Errorf("Volume status did not match "),
 					fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
 			}

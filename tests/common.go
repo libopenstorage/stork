@@ -5931,7 +5931,10 @@ func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*vo
 	var volumes []*volume.Volume
 
 	// Refresh driver end points before processing
-	RefreshDriverEndPoints()
+	err := RefreshDriverEndPoints()
+	if err != nil {
+		return nil, err
+	}
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
