@@ -8467,9 +8467,7 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				dash.VerifyFatal(blockDeviceBefore+1 == blockDeviceAfter, true, "adding cloud drive as journal successful")
 				isjournal, err := isJournalEnabled()
 				log.FailOnError(err, "Error getting journal status")
-				if isjournal {
-					dash.VerifyFatal(err == nil, true, "journal device added successfully")
-				}
+				dash.VerifyFatal(isjournal, true, "journal device added successfully")
 			}
 			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
 			log.FailOnError(err, "Exiting maintenance mode failed")
