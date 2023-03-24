@@ -8466,7 +8466,14 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		for _, eachVol := range volumes {
 			volumeInspect, err := Inst().V.InspectVolume(eachVol.ID)
 			log.FailOnError(err, fmt.Sprintf("Failed to get details of volume [%v]", eachVol.Name))
-			fmt.Printf("Volume Details [%v] is [%v]", volumeInspect.Status, volumeInspect.State)
+
+			if fmt.Sprintf("[%v]", volumeInspect.Status) != "VOLUME_STATUS_UP" {
+
+				fmt.Printf("Volume Details [%v] is [%v]", volumeInspect.Status, volumeInspect.State)
+				log.FailOnError(fmt.Errorf("Volume status did not match "),
+					fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
+			}
+
 		}
 	})
 
