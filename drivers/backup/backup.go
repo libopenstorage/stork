@@ -132,12 +132,6 @@ type Cluster interface {
 		timeBeforeRetry time.Duration,
 	) error
 
-	// RegisterBackupCluster registers backup cluster
-	RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string)
-
-	// RegisterBackupClusterNonAdminUser registers backup cluster with non admin context
-	RegisterBackupClusterNonAdminUser(orgID, clusterName, uid string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, string)
-
 	// ValidateBackupCluster validates if backup pods are up or not
 	ValidateBackupCluster() error
 
@@ -146,6 +140,9 @@ type Cluster interface {
 
 	// GetClusterName returns name of the given cluster uid in an organization
 	GetClusterName(ctx context.Context, orgID string, clusterUid string) (string, error)
+
+	// GetClusterStatus returns status of the given cluster name in an organization
+	GetClusterStatus(orgID string, clusterName string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, error)
 }
 
 // BLocation obj interface
