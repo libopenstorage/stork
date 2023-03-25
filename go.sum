@@ -1851,6 +1851,8 @@ github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e h1:4l9N2Sw8V
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854 h1:QON4dcM6ZHI/VDHcNYreVgRLLfYE7w96VyWyCK4uwHU=
 github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854/go.mod h1:YzzAF0twdm+CWNCy3CEhg2XfCIGnk/uThxct8Zn/1DU=
+github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de h1:OPjzuK6NdJIhHNP+PeHMgZkfqypqC6k1ECAezCKxYi4=
+github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de/go.mod h1:hbTXxljzyn/ACskVxE/dMsO7Ta49XT6FXlCyoAbFG10=
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
 github.com/libopenstorage/operator v0.0.0-20221017204507-4328e80ff06f/go.mod h1:3/4dcNZxQCVcNyf02lyXM0U6lU2HMGjPocx6wn5j1dY=
 github.com/libopenstorage/operator v0.0.0-20230112002659-7e73437e61d4/go.mod h1:/sGycOMcavuKLWm3Vd907luRXZA/mcqFs1AdEbbT5k4=
@@ -2542,6 +2544,8 @@ github.com/stretchr/testify v1.7.5/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
 github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKsk=
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+github.com/stretchr/testify v1.8.2 h1:+h33VjcLVPDHtOdpUCuF+7gSuG3yGIftsP1YvFihtJ8=
+github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/subosito/gotenv v1.3.0/go.mod h1:YzJjq/33h7nrwdY+iHMhEOEEbW0ovIz0tB6t6PwAXzs=
 github.com/subosito/gotenv v1.4.0/go.mod h1:mZd6rFysKEcUhUHXJk0C/08wAgyDBFuwEYL7vWWGaGo=
