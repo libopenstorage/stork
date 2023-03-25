@@ -3,10 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/go-version"
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/torpedo/pkg/osutils"
-	batchv1 "k8s.io/api/batch/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -17,22 +13,32 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/apps"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/torpedo/pkg/osutils"
+	batchv1 "k8s.io/api/batch/v1"
 
+	"github.com/hashicorp/go-version"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
 	cloudAccountDeleteTimeout                 = 30 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
-	storkDeploymentNamespace                  = "kube-system"
+	storkDeploymentName                       = "stork"
+	defaultStorkDeploymentNamespace           = "kube-system"
+	upgradeStorkImage                         = "UPGRADE_STORK_IMAGE"
+	latestStorkImage                          = "openstorage/stork:23.2.0"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
@@ -132,7 +138,7 @@ func getPXNamespace() string {
 	if namespace != "" {
 		return namespace
 	}
-	return storkDeploymentNamespace
+	return defaultStorkDeploymentNamespace
 }
 
 // CreateBackup creates backup
@@ -1669,5 +1675,97 @@ func ValidateAllPodsInPxBackupNamespace() error {
 			return err
 		}
 	}
+	return nil
+}
+
+// getStorkImageVersion returns current stork image version.
+func getStorkImageVersion() (string, error) {
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return "", err
+	}
+	storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return "", err
+	}
+	storkImage := storkDeployment.Spec.Template.Spec.Containers[0].Image
+	storkImageVersion := strings.Split(storkImage, ":")[len(strings.Split(storkImage, ":"))-1]
+	return storkImageVersion, nil
+}
+
+// upgradeStorkVersion upgrades the stork to the provided version.
+func upgradeStorkVersion(storkImageToUpgrade string) error {
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return err
+	}
+	currentStorkImageStr, err := getStorkImageVersion()
+	if err != nil {
+		return err
+	}
+	currentStorkVersion, err := version.NewSemver(currentStorkImageStr)
+	if err != nil {
+		return err
+	}
+
+	storkImageVersionToUpgradeStr := strings.Split(storkImageToUpgrade, ":")[len(strings.Split(storkImageToUpgrade, ":"))-1]
+	storkImageVersionToUpgrade, err := version.NewSemver(storkImageVersionToUpgradeStr)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Current stork version : %s", currentStorkVersion)
+	log.Infof("Upgrading stork version to : %s", storkImageVersionToUpgrade)
+
+	if currentStorkVersion.GreaterThanOrEqual(storkImageVersionToUpgrade) {
+		return fmt.Errorf("Cannot upgrade stork version from %s to %s as the current version is higher than the provided version", currentStorkVersion, storkImageVersionToUpgrade)
+	}
+
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	if isOpBased {
+		log.Infof("Operator based Portworx deployment, Upgrading stork via StorageCluster")
+		storageSpec, err := Inst().V.GetDriver()
+		if err != nil {
+			return err
+		}
+		storageSpec.Spec.Stork.Image = storkImageToUpgrade
+		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Infof("Non-Operator based Portworx deployment, Upgrading stork via Deployment")
+		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+		if err != nil {
+			return err
+		}
+
+		storkDeployment.Spec.Template.Spec.Containers[0].Image = storkImageToUpgrade
+		_, err = apps.Instance().UpdateDeployment(storkDeployment)
+		if err != nil {
+			return err
+		}
+	}
+
+	// validate stork pods after upgrade
+	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return err
+	}
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
+	if err != nil {
+		return err
+	}
+
+	postUpgradeStorkImageVersionStr, err := getStorkImageVersion()
+	if err != nil {
+		return err
+	}
+
+	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageVersionToUpgradeStr) {
+		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageVersionToUpgradeStr, postUpgradeStorkImageVersionStr)
+	}
+
+	log.Infof("Succesfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
 	return nil
 }
