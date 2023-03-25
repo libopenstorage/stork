@@ -256,13 +256,9 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		//Deleting user
 		err := backup.DeleteUser(userName)
@@ -837,13 +833,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
@@ -1186,13 +1178,10 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
@@ -1696,13 +1685,10 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
@@ -1953,13 +1939,9 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
@@ -2167,13 +2149,9 @@ var _ = Describe("{SharedBackupDelete}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
@@ -2864,13 +2842,9 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
@@ -3325,13 +3299,9 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -3880,13 +3850,10 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
 		log.InfoD("Deleting restores")
 		for _, user := range users {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -4086,13 +4053,9 @@ var _ = Describe("{SwapShareBackup}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		log.InfoD("Deleting all restores")
 		for _, userName := range users {

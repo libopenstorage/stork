@@ -133,6 +133,30 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 			log.InfoD("List of Incremental backups Set 1 - %v", incrementalBackupNames)
 			log.InfoD("List of Incremental backups Set 2 - %v", incrementalBackupNames2)
 		})
+
+		Step("Check if backups are full backups or not", func() {
+			log.InfoD("Check if backups are full backups or not")
+			backupDriver := Inst().Backup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, fullbackup := range backupNames {
+				bkpUid, err := backupDriver.GetBackupUID(ctx, fullbackup, orgID)
+				log.FailOnError(err, "Unable to fetch backup UID - %s", fullbackup)
+				bkpInspectReq := &api.BackupInspectRequest{
+					Name:  fullbackup,
+					OrgId: orgID,
+					Uid:   bkpUid,
+				}
+				bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
+				log.FailOnError(err, "Unable to fetch backup - %s", fullbackup)
+				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
+					backupId := vol.GetBackupId()
+					dash.VerifyFatal(strings.Contains(backupId, "incr"), false,
+						fmt.Sprintf("Check if the backup %s is full or not", fullbackup))
+				}
+			}
+		})
+
 		Step("Deleting incremental backup", func() {
 			log.InfoD("Deleting incremental backups")
 			backupDriver := Inst().Backup

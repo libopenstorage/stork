@@ -175,13 +175,9 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		log.InfoD("Deleting backup location and cloud setting")
 		for backupLocationUID, backupLocationName := range BackupLocationMap {
@@ -406,13 +402,10 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
