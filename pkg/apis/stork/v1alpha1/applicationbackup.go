@@ -28,16 +28,18 @@ type ApplicationBackup struct {
 
 // ApplicationBackupSpec is the spec used to backup applications
 type ApplicationBackupSpec struct {
-	Namespaces         []string                           `json:"namespaces"`
-	BackupLocation     string                             `json:"backupLocation"`
-	PlatformCredential string                             `json:"platformCredential"`
-	RancherProjects    map[string]string                  `json:"rancherProjects"`
-	Selectors          map[string]string                  `json:"selectors"`
-	NamespaceSelector  string                             `json:"namespaceSelector"`
-	PreExecRule        string                             `json:"preExecRule"`
-	PostExecRule       string                             `json:"postExecRule"`
-	ReclaimPolicy      ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
-	SkipServiceUpdate  bool                               `json:"skipServiceUpdate"`
+	Namespaces           []string                           `json:"namespaces"`
+	BackupLocation       string                             `json:"backupLocation"`
+	PlatformCredential   string                             `json:"platformCredential"`
+	RancherProjects      map[string]string                  `json:"rancherProjects"`
+	Selectors            map[string]string                  `json:"selectors"`
+	NamespaceSelector    string                             `json:"namespaceSelector"`
+	PreExecRule          string                             `json:"preExecRule"`
+	PostExecRule         string                             `json:"postExecRule"`
+	ReclaimPolicy        ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	SkipServiceUpdate    bool                               `json:"skipServiceUpdate"`
+	ResourceCount        int                                `json:"resourceCount"`
+	LargeResourceEnabled bool                               `json:"largeResourceEnabled"`
 	// Options to be passed in to the driver
 	Options          map[string]string `json:"options"`
 	IncludeResources []ObjectInfo      `json:"includeResources"`
