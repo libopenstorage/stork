@@ -32,6 +32,8 @@ type ApplicationRestoreSpec struct {
 	IncludeResources             []ObjectInfo                        `json:"includeResources"`
 	StorageClassMapping          map[string]string                   `json:"storageClassMapping"`
 	RancherProjectMapping        map[string]string                   `json:"rancherProjectMapping"`
+	ResourceCount                int                                 `json:"resourceCount"`
+	LargeResourceEnabled         bool                                `json:"largeResourceEnabled"`
 }
 
 // ApplicationRestoreReplacePolicyType is the replace policy for the application restore
