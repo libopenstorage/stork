@@ -19,6 +19,7 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -97,6 +98,7 @@ func (s *VolumeServer) create(
 	locator *api.VolumeLocator,
 	source *api.Source,
 	spec *api.VolumeSpec,
+	additionalCloneLabels map[string]string,
 ) (string, error) {
 
 	// Check if the volume has already been created or is in process of creation
@@ -167,8 +169,16 @@ func (s *VolumeServer) create(
 			Name: volName,
 		}, false)
 		if err != nil {
+			if err == kvdb.ErrNotFound {
+				return "", status.Errorf(
+					codes.Aborted,
+					"unable to create snapshot with parent ID %s: %v",
+					parent.GetId(),
+					err.Error())
+			}
+
 			return "", status.Errorf(
-				codes.Internal,
+				codes.Aborted,
 				"unable to create snapshot: %s",
 				err.Error())
 		}
@@ -181,18 +191,44 @@ func (s *VolumeServer) create(
 			return "", err
 		}
 
-		newOwnership, updateNeeded := clone.Volume.Spec.GetCloneCreatorOwnership(ctx)
-		if updateNeeded {
-			// Set no authentication so that we can override the ownership
-			ctxNoAuth := context.Background()
+		// Generate update request based on input to create w/ parentID
+		updateReq := &api.SdkVolumeUpdateRequest{
+			VolumeId: id,
+		}
+		newOwnership, ownershipUpdateNeeded := clone.Volume.Spec.GetCloneCreatorOwnership(ctx)
+		if ownershipUpdateNeeded {
+			// Set no authentication so that we can override the ownership.
+			// TODO: this should be fixed to only remove auth metadata
+			ctx = context.Background()
+			updateReq.Spec = &api.VolumeSpecUpdate{
+				Ownership: newOwnership,
+			}
+		}
 
-			// New owner for the snapshot, let's make the change
-			_, err := s.Update(ctxNoAuth, &api.SdkVolumeUpdateRequest{
-				VolumeId: id,
-				Spec: &api.VolumeSpecUpdate{
-					Ownership: newOwnership,
-				},
-			})
+		additionalLabelsNeeded := len(additionalCloneLabels) > 0
+		if additionalLabelsNeeded {
+			mergedLabels := make(map[string]string)
+			clonedLabels := make(map[string]string)
+			// Cloned volume may not have locator or volume.
+			// This is unlikely, but we'll avoid a panic here.
+			if clone.GetVolume() != nil && clone.GetVolume().GetLocator() != nil {
+				clonedLabels = clone.GetVolume().GetLocator().GetVolumeLabels()
+			}
+
+			// add existing labels first from our earlier inspect
+			for k, v := range clonedLabels {
+				mergedLabels[k] = v
+			}
+			// override existing labels if there's a conflict
+			for k, v := range additionalCloneLabels {
+				mergedLabels[k] = v
+			}
+			updateReq.Labels = mergedLabels
+		}
+
+		// Only update if required.
+		if ownershipUpdateNeeded || additionalLabelsNeeded {
+			_, err = s.Update(ctx, updateReq)
 			if err != nil {
 				return "", err
 			}
@@ -262,7 +298,7 @@ func (s *VolumeServer) Create(
 	}
 
 	// Create volume
-	id, err := s.create(ctx, locator, source, spec)
+	id, err := s.create(ctx, locator, source, spec, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +345,7 @@ func (s *VolumeServer) Clone(
 	}
 
 	// Create the clone
-	id, err := s.create(ctx, locator, source, parentVol.GetVolume().GetSpec())
+	id, err := s.create(ctx, locator, source, parentVol.GetVolume().GetSpec(), req.GetAdditionalLabels())
 	if err != nil {
 		return nil, err
 	}
@@ -552,6 +588,78 @@ func (s *VolumeServer) EnumerateWithFilters(
 	}, nil
 }
 
+// mask all unmodified attributes of the spec before calling Set/Update
+func maskUnModified(spec *api.VolumeSpec, req *api.VolumeSpecUpdate) {
+	// spec has been updated fully for all attributes inclusive of requested attr.
+	// But it is possible for the current state to be stale and so requesting update with
+	// all attributes may have a side affect.
+	// For ex: a size update of the volume, could result in a ha-update
+	// So clear other attributes, so as not to cause side effect while applying
+	// the update.
+	// All state based conditionals are set only for requested attribs.
+	// boolean based state can still be stale, but the chances are low, because
+	// they are immediately handled within px, unlike HA updates which needs acknowledgement
+	// from px-storage to complete processing.
+
+	// ScanPolicy
+	if req.GetScanPolicy() == nil {
+		spec.ScanPolicy = nil
+	}
+
+	if req.GetSnapshotIntervalOpt() == nil {
+		spec.SnapshotInterval = math.MaxUint32
+	}
+
+	if req.GetSnapshotScheduleOpt() == nil {
+		spec.SnapshotSchedule = ""
+	}
+
+	// HA Level
+	if req.GetHaLevelOpt() == nil {
+		spec.HaLevel = 0
+	}
+
+	/*
+	 * immediately applied, hence never stale.
+	 * can carry part of the spec always safely.
+	 */
+	// if req.GetSizeOpt() == nil {
+	//   spec.Size = 0
+	// }
+
+	if req.GetCosOpt() == nil {
+		spec.Cos = api.CosType_NONE
+	}
+
+	if req.GetExportSpec() == nil {
+		spec.ExportSpec = nil
+	}
+
+	if req.GetMountOptSpec() == nil {
+		spec.MountOptions = nil
+	}
+
+	if req.GetSharedv4MountOptSpec() == nil {
+		spec.Sharedv4MountOptions = nil
+	}
+
+	if req.GetSharedv4ServiceSpec() == nil {
+		spec.Sharedv4ServiceSpec = nil
+	}
+
+	if req.GetSharedv4Spec() == nil {
+		spec.Sharedv4Spec = nil
+	}
+
+	if req.GetGroupOpt() == nil {
+		spec.Group = nil
+	}
+
+	if req.GetIoStrategy() == nil {
+		spec.IoStrategy = nil
+	}
+}
+
 // Update allows the caller to change values in the volume specification
 func (s *VolumeServer) Update(
 	ctx context.Context,
@@ -609,6 +717,11 @@ func (s *VolumeServer) Update(
 	if err != nil {
 		return nil, err
 	}
+
+	// avoid side effect while applying with stale config by masking
+	// other parts of the spec.
+	maskUnModified(updatedSpec, req.GetSpec())
+
 	// Send to driver
 	if err := s.driver(ctx).Set(req.GetVolumeId(), locator, updatedSpec); err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to update volume: %v", err)
@@ -863,6 +976,13 @@ func (s *VolumeServer) mergeVolumeSpecs(vol *api.VolumeSpec, req *api.VolumeSpec
 		spec.IoThrottle = req.GetIoThrottle()
 	} else {
 		spec.IoThrottle = vol.GetIoThrottle()
+	}
+
+	// NearSyncReplicationStrategy
+	if req.GetNearSyncReplicationStrategyOpt() != nil {
+		spec.NearSyncReplicationStrategy = req.GetNearSyncReplicationStrategy()
+	} else {
+		spec.NearSyncReplicationStrategy = vol.GetNearSyncReplicationStrategy()
 	}
 
 	return spec
