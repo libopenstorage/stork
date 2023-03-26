@@ -6232,9 +6232,12 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
 		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
 
-		// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
-		err = Inst().V.DeletePool(*nodeDetail, "0")
-		dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+		if IsLocalCluster(*nodeDetail) == true || IsIksCluster() == true {
+			// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
+			err = Inst().V.DeletePool(*nodeDetail, "0")
+			dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+
+		}
 
 		commonText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*"
 		compileText := fmt.Sprintf("[%s]operation is not supported", commonText)

@@ -5918,6 +5918,7 @@ func AsgKillNode(nodeToKill node.Node) error {
 
 }
 
+// RefreshDriverEndPoints returns nil if refreshing driver endpoint is successful
 func RefreshDriverEndPoints() error {
 	var err error
 	err = Inst().V.RefreshDriverEndpoints()
@@ -5927,6 +5928,7 @@ func RefreshDriverEndPoints() error {
 	return nil
 }
 
+// GetVolumesFromPoolID returns list of volumes from pool uuid
 func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*volume.Volume, error) {
 	var volumes []*volume.Volume
 
