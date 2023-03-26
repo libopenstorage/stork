@@ -46,7 +46,8 @@ import (
 )
 
 const (
-	defaultStorageClass = "use-default-storage-class"
+	defaultStorageClass         = "use-default-storage-class"
+	UpdateRestoreTimestamplimit = 3000
 )
 
 // isStorageClassMappingContainsDefault - will check whether any storageclass has use-default-storage-class
@@ -940,13 +941,14 @@ func (a *ApplicationRestoreController) updateResourceStatus(
 	object runtime.Unstructured,
 	status storkapi.ApplicationRestoreStatusType,
 	reason string,
-) error {
+	tempResourceList []*storkapi.ApplicationRestoreResourceInfo,
+) ([]*storkapi.ApplicationRestoreResourceInfo, error) {
 	var updatedResource *storkapi.ApplicationRestoreResourceInfo
 	gkv := object.GetObjectKind().GroupVersionKind()
 	metadata, err := meta.Accessor(object)
 	if err != nil {
 		log.ApplicationRestoreLog(restore).Errorf("Error getting metadata for object %v %v", object, err)
-		return err
+		return nil, err
 	}
 	for _, resource := range restore.Status.Resources {
 		if resource.Name == metadata.GetName() &&
@@ -970,7 +972,13 @@ func (a *ApplicationRestoreController) updateResourceStatus(
 				},
 			},
 		}
-		restore.Status.Resources = append(restore.Status.Resources, updatedResource)
+		// During apply of PV PVC resource, we don't need to have tremporary list for lazy update of resource list
+		// and apply timestamp updation to restore CR after every apply of 3000 resource.
+		if tempResourceList != nil {
+			tempResourceList = append(tempResourceList, updatedResource)
+		} else {
+			restore.Status.Resources = append(restore.Status.Resources, updatedResource)
+		}
 	}
 
 	updatedResource.Status = status
@@ -985,7 +993,7 @@ func (a *ApplicationRestoreController) updateResourceStatus(
 		updatedResource.Name,
 		reason)
 	a.recorder.Event(restore, eventType, string(status), eventMessage)
-	return nil
+	return tempResourceList, nil
 }
 
 func (a *ApplicationRestoreController) getPVNameMappings(
@@ -1266,8 +1274,23 @@ func (a *ApplicationRestoreController) applyResources(
 			return err
 		}
 	}
-
+	tempResourceList := make([]*storkapi.ApplicationRestoreResourceInfo, 0)
+	appliedResourceCount := 0
 	for _, o := range objects {
+		// every 3000 thousand resource application update the restore CR timestamp
+		if appliedResourceCount == UpdateRestoreTimestamplimit {
+			log.ApplicationRestoreLog(restore).Infof("Completed applying %d number of resources and total number of resource applied %v",
+				UpdateRestoreTimestamplimit, len(tempResourceList))
+			restore.Status.LastUpdateTimestamp = metav1.Now()
+			// Store the new status
+
+			err = a.client.Update(context.TODO(), restore)
+			if err != nil {
+				log.ApplicationRestoreLog(restore).Errorf("Failed to update restore CR timestamp: %v, the resource len %v", err, len(restore.Status.Resources))
+				return err
+			}
+			appliedResourceCount = 0
+		}
 		metadata, err := meta.Accessor(o)
 		if err != nil {
 			return err
@@ -1295,33 +1318,40 @@ func (a *ApplicationRestoreController) applyResources(
 				err = nil
 			}
 		}
-
 		if err != nil {
-			if err := a.updateResourceStatus(
+			if tempResourceList, err = a.updateResourceStatus(
 				restore,
 				o,
 				storkapi.ApplicationRestoreStatusFailed,
-				fmt.Sprintf("Error applying resource: %v", err)); err != nil {
+				fmt.Sprintf("Error applying resource: %v", err),
+				tempResourceList); err != nil {
 				return err
 			}
 		} else if retained {
-			if err := a.updateResourceStatus(
+			if tempResourceList, err = a.updateResourceStatus(
 				restore,
 				o,
 				storkapi.ApplicationRestoreStatusRetained,
-				"Resource restore skipped as it was already present and ReplacePolicy is set to Retain"); err != nil {
+				"Resource restore skipped as it was already present and ReplacePolicy is set to Retain",
+				tempResourceList); err != nil {
 				return err
 			}
 		} else {
-			if err := a.updateResourceStatus(
+			if tempResourceList, err = a.updateResourceStatus(
 				restore,
 				o,
 				storkapi.ApplicationRestoreStatusSuccessful,
-				"Resource restored successfully"); err != nil {
+				"Resource restored successfully",
+				tempResourceList); err != nil {
 				return err
 			}
 		}
+		appliedResourceCount++
 	}
+	//append the temp slice to the final restore resouce list,
+	// By replacing it can lose the previously added resources.
+	log.ApplicationRestoreLog(restore).Infof("number of resources in the restore cr %v , additional resources to be appened: %v", len(restore.Status.Resources), len(tempResourceList))
+	restore.Status.Resources = append(restore.Status.Resources, tempResourceList...)
 	return nil
 }
 
@@ -1369,6 +1399,21 @@ func (a *ApplicationRestoreController) restoreResources(
 	}
 
 	restore.Status.LastUpdateTimestamp = metav1.Now()
+	restoreCrSize, err := utils.GetSizeOfObject(restore)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("failed to obtain size of restore CR")
+		return err
+	}
+	if restoreCrSize > oneMBSizeBytes {
+		logrus.Infof("The size of application restore CR obtained %v bytes", restoreCrSize)
+		logrus.Infof("Stripping all the resource info from Restore CR %v in namespace %v", backup.GetName(), backup.GetNamespace())
+		resourceCount := len(restore.Status.Resources)
+		// update the flag and resource-count.
+		// Strip off the resource info it contributes to bigger size of application restore CR in case of large number of resource
+		restore.Status.Resources = make([]*storkapi.ApplicationRestoreResourceInfo, 0)
+		restore.Spec.ResourceCount = resourceCount
+		restore.Spec.LargeResourceEnabled = true
+	}
 	if err := a.client.Update(context.TODO(), restore); err != nil {
 		return err
 	}
@@ -1398,11 +1443,11 @@ func (a *ApplicationRestoreController) addCSIVolumeResources(restore *storkapi.A
 			Version: "v1",
 			Group:   "core",
 		})
-		if err := a.updateResourceStatus(
+		if _, err := a.updateResourceStatus(
 			restore,
 			pvObj,
 			vrInfo.Status,
-			"Resource restored successfully"); err != nil {
+			"Resource restored successfully", nil); err != nil {
 			return err
 		}
 
@@ -1427,11 +1472,11 @@ func (a *ApplicationRestoreController) addCSIVolumeResources(restore *storkapi.A
 			Group:   "core",
 		})
 
-		if err := a.updateResourceStatus(
+		if _, err := a.updateResourceStatus(
 			restore,
 			pvcObj,
 			vrInfo.Status,
-			"Resource restored successfully"); err != nil {
+			"Resource restored successfully", nil); err != nil {
 			return err
 		}
 	}
