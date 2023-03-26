@@ -6382,10 +6382,14 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
 			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 			// Now trying to Expand Pool with Invalid Pool UUID
-			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID,
+				api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
 
 			// Verify error on pool expansion failure
 			var errMatch error
@@ -6396,6 +6400,16 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 				errMatch = fmt.Errorf("failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
 			}
 			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
+
+			// retry pool resize but with valid pool UUID
+			// Now trying to Expand Pool with Invalid Pool UUID
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
+				api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			log.FailOnError(err, "Failed to resize pool with UUID [%s]", poolToBeResized.Uuid)
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil,
+				fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", poolUUID, nodeDetail.Name))
 
 			endTime = time.Now()
 
