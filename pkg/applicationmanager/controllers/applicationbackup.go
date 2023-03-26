@@ -72,6 +72,7 @@ const (
 	kdmpDriverOnly                = "kdmp"
 	nonKdmpDriverOnly             = "nonkdmp"
 	mixedDriver                   = "mixed"
+	oneMBSizeBytes                = 1 << (10 * 2)
 )
 
 var (
@@ -1563,6 +1564,20 @@ func (a *ApplicationBackupController) backupResources(
 		}
 		backup.Status.Resources = resourceInfos
 		backup.Status.LastUpdateTimestamp = metav1.Now()
+		backupCrSize, err := utils.GetSizeOfObject(backup)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("Failed to calculate size of resource info array for backup %v", backup.GetName())
+			return err
+		}
+		if backupCrSize > oneMBSizeBytes {
+			logrus.Infof("The size of application backup CR obtained %v bytes", backupCrSize)
+			logrus.Infof("Stripping all the resource info from Application backup-cr %v in namespace %v", backup.GetName(), backup.GetNamespace())
+			// update the flag and resource-count.
+			// Strip off the resource info it contributes to bigger size of AB CR in case of large number of resource
+			backup.Status.Resources = make([]*stork_api.ApplicationBackupResourceInfo, 0)
+			backup.Spec.ResourceCount = len(resourceInfos)
+			backup.Spec.LargeResourceEnabled = true
+		}
 		// Store the new status
 		err = a.client.Update(context.TODO(), backup)
 		if err != nil {

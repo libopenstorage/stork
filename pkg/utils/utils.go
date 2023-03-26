@@ -1,12 +1,15 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
+	"strings"
+
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	"strings"
 )
 
 const (
@@ -96,4 +99,15 @@ func ParseRancherProjectMapping(
 			}
 		}
 	}
+}
+
+// GetSizeOfObject - Gets the in-memory size of a object
+// It may include the golang runtime headers related to GC
+// If the structure object contains unexported field, then encoder will fail.
+func GetSizeOfObject(object interface{}) (int, error) {
+	buf := new(bytes.Buffer)
+	if err := gob.NewEncoder(buf).Encode(object); err != nil {
+		return 0, err
+	}
+	return buf.Len(), nil
 }
