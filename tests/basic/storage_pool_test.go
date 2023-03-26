@@ -648,7 +648,7 @@ func nodePoolsExpansion(testName string) {
 
 			for _, poolToBeResized := range poolsToBeResized {
 				drvSize, err := getPoolDiskSize(poolToBeResized)
-				log.FailOnError(err, fmt.Sprintf("error getting drive size for pool [%s]", poolToBeResized.Uuid))
+				log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 				expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
 				poolsExpectedSizeMap[poolToBeResized.Uuid] = expectedSize
 
@@ -664,7 +664,7 @@ func nodePoolsExpansion(testName string) {
 				//this condition is skip error where drive is size is small and resize completes very fast
 				if err != nil {
 					expandedPool, err := GetStoragePoolByUUID(poolToBeResized.Uuid)
-					log.FailOnError(err, fmt.Sprintf("error getting pool using uuid [%s]", poolToBeResized.Uuid))
+					log.FailOnError(err, "error getting pool using uuid [%s]", poolToBeResized.Uuid)
 					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_SUCCESSFUL {
 						// storage pool resize expansion completed
 						err = nil
