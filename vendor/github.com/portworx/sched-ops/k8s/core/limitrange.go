@@ -71,6 +71,7 @@ func (c *Client) DeleteLimitRange(name, namespace string) error {
 	})
 }
 
+// WatchLimitRange changes and callback fn
 func (c *Client) WatchLimitRange(limitrange *corev1.LimitRange, fn WatchFunc) error {
 	if err := c.initClient(); err != nil {
 		return err
