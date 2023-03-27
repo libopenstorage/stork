@@ -648,7 +648,7 @@ func nodePoolsExpansion(testName string) {
 
 			for _, poolToBeResized := range poolsToBeResized {
 				drvSize, err := getPoolDiskSize(poolToBeResized)
-				log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+				log.FailOnError(err, fmt.Sprintf("error getting drive size for pool [%s]", poolToBeResized.Uuid))
 				expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
 				poolsExpectedSizeMap[poolToBeResized.Uuid] = expectedSize
 
@@ -664,7 +664,7 @@ func nodePoolsExpansion(testName string) {
 				//this condition is skip error where drive is size is small and resize completes very fast
 				if err != nil {
 					expandedPool, err := GetStoragePoolByUUID(poolToBeResized.Uuid)
-					log.FailOnError(err, "error getting pool using uuid [%s]", poolToBeResized.Uuid)
+					log.FailOnError(err, fmt.Sprintf("error getting pool using uuid [%s]", poolToBeResized.Uuid))
 					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_SUCCESSFUL {
 						// storage pool resize expansion completed
 						err = nil
@@ -6232,9 +6232,12 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
 		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
 
-		// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
-		err = Inst().V.DeletePool(*nodeDetail, "0")
-		dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+		if IsLocalCluster(*nodeDetail) == true || IsIksCluster() == true {
+			// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
+			err = Inst().V.DeletePool(*nodeDetail, "0")
+			dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+
+		}
 
 		commonText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*"
 		compileText := fmt.Sprintf("[%s]operation is not supported", commonText)
@@ -6379,10 +6382,14 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
 			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 			// Now trying to Expand Pool with Invalid Pool UUID
-			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID,
+				api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
 
 			// Verify error on pool expansion failure
 			var errMatch error
@@ -6393,6 +6400,16 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 				errMatch = fmt.Errorf("failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
 			}
 			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
+
+			// retry pool resize but with valid pool UUID
+			// Now trying to Expand Pool with Invalid Pool UUID
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
+				api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			log.FailOnError(err, "Failed to resize pool with UUID [%s]", poolToBeResized.Uuid)
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil,
+				fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", poolUUID, nodeDetail.Name))
 
 			endTime = time.Now()
 
@@ -8482,4 +8499,121 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 
+})
+
+var _ = Describe("{ReplResyncOnPoolExpand}", func() {
+	/*
+		PTX-15696 -> PWX-26967
+		Deploy IO aggressive application using repl-2 volumes
+		Identify the pools of this volume
+		Invoke pool expand is one pool of this volume and wait for pool expand to be completed
+		Volume status will be degraded when pool expand is going on for one of the pool
+		Volume repl resync should not fail after pool expand is done (This behavior after fix)
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ReplResyncOnPoolExpand",
+			"Resync failed for a volume after pool came out of rebalance",
+			nil, 0)
+	})
+
+	Inst().AppList = []string{}
+	var ioIntensiveApp = []string{"fio", "fio-writes"}
+
+	for _, eachApp := range ioIntensiveApp {
+		Inst().AppList = append(Inst().AppList, eachApp)
+	}
+	var contexts []*scheduler.Context
+	stepLog := "Resync volume after rebalance"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("replresyncpoolexpand-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get a pool with running IO
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		// Get All Volumes from the pool
+		volumes, err := GetVolumesFromPoolID(contexts, poolUUID)
+		log.FailOnError(err, "Failed to get list of volumes from the poolIDs")
+
+		// Change replication factor to 2 on all the volumes
+		volumeReplicaMap := make(map[string]int)
+		revertReplica := func() {
+			for _, eachvol := range volumes {
+				for volName, replcount := range volumeReplicaMap {
+					if eachvol.Name == volName {
+						getReplicaSets, err := Inst().V.GetReplicaSets(eachvol)
+						log.FailOnError(err, "Failed to get replication factor on the volume")
+						if len(getReplicaSets[0].Nodes) != replcount {
+							err := Inst().V.SetReplicationFactor(eachvol, 2, nil, nil, true)
+							log.FailOnError(err, "failed to set replicaiton value of Volume [%v]", volName)
+						}
+					}
+				}
+			}
+		}
+
+		defer revertReplica()
+		for _, eachVol := range volumes {
+			getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
+			log.FailOnError(err, "Failed to get replication factor on the volume")
+			volumeReplicaMap[eachVol.Name] = len(getReplicaSets[0].Nodes)
+
+			if len(getReplicaSets[0].Nodes) != 2 {
+				err := Inst().V.SetReplicationFactor(eachVol, 2, nil, nil, true)
+				if err != nil {
+					log.FailOnError(err, "failed to set replicaiton for Volume [%v]", eachVol.Name)
+				}
+			}
+		}
+
+		// Wait for some time for ingest to continue and add up some more data to it
+		time.Sleep(10 * time.Minute)
+
+		// Invoke pool expand in one pool of this volume and wait for pool expand to be completed
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+
+		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		dash.VerifyFatal(resizeErr, nil,
+			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+
+		// Validate if Px is Up and running as well as Volume is in online mode
+		expectedStatus := "Online"
+		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
+		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+		for _, eachVol := range volumes {
+			volumeInspect, err := Inst().V.InspectVolume(eachVol.ID)
+			log.FailOnError(err, fmt.Sprintf("Failed to get details of volume [%v]", eachVol.Name))
+
+			if fmt.Sprintf("[%v]", volumeInspect.Status) != "VOLUME_STATUS_UP" {
+				log.FailOnError(fmt.Errorf("Volume status did not match "),
+					fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
+			}
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })

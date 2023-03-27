@@ -5904,3 +5904,43 @@ func AsgKillNode(nodeToKill node.Node) error {
 	return err
 
 }
+
+// RefreshDriverEndPoints returns nil if refreshing driver endpoint is successful
+func RefreshDriverEndPoints() error {
+	var err error
+	err = Inst().V.RefreshDriverEndpoints()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetVolumesFromPoolID returns list of volumes from pool uuid
+func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*volume.Volume, error) {
+	var volumes []*volume.Volume
+
+	// Refresh driver end points before processing
+	err := RefreshDriverEndPoints()
+	if err != nil {
+		return nil, err
+	}
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return nil, err
+			}
+			poolUuids := appVol.ReplicaSets[0].PoolUuids
+			for _, p := range poolUuids {
+				if p == poolUuid {
+					volumes = append(volumes, vol)
+				}
+			}
+		}
+	}
+	return volumes, nil
+}
