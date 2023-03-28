@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/common"
@@ -69,12 +70,26 @@ type PodOps interface {
 	WaitForPodDeletion(uid types.UID, namespace string, timeout time.Duration) error
 	// RunCommandInPod runs given command in the given pod
 	RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error)
+	// RunCommandInPodEx is extended version of RunCommandInPod
+	RunCommandInPodEx(*RunCommandInPodExRequest) error
 	// ValidatePod validates the given pod if it's ready
 	ValidatePod(pod *corev1.Pod, timeout, retryInterval time.Duration) error
 	// WatchPods sets up a watcher that listens for the changes to pods in given namespace
 	WatchPods(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 	// GetPodLogs returns the logs of a POD as a string
 	GetPodLog(podName string, namespace string, podLogOptions *corev1.PodLogOptions) (string, error)
+}
+
+// RunCommandInPodExRequest is a request structure for the RunCommandInPodEx func
+type RunCommandInPodExRequest struct {
+	Command       []string
+	PODName       string
+	ContainerName string
+	Namespace     string
+	UseTTY        bool
+	Stdin         io.Reader
+	Stdout        io.Writer
+	Stderr        io.Writer
 }
 
 // CreatePod creates the given pod.
@@ -114,7 +129,7 @@ func (c *Client) GetPods(namespace string, labelSelector map[string]string) (*co
 }
 
 // GetPodsByNode returns all pods in given namespace and given k8s node name.
-//  If namespace is empty, it will return pods from all namespaces
+// If namespace is empty, it will return pods from all namespaces
 func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, error) {
 	if len(nodeName) == 0 {
 		return nil, fmt.Errorf("node name is required for this API")
@@ -128,7 +143,7 @@ func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, err
 }
 
 // GetPodsByNodeAndLabels returns all pods in given namespace and given k8s node name for the given labels
-//  If namespace is empty, it will return pods from all namespaces
+// If namespace is empty, it will return pods from all namespaces
 func (c *Client) GetPodsByNodeAndLabels(nodeName, namespace string, labels map[string]string) (*corev1.PodList, error) {
 	if len(nodeName) == 0 {
 		return nil, fmt.Errorf("node name is required for this API")
@@ -217,8 +232,16 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 	for _, p := range pods.Items {
 		for _, v := range p.Spec.Volumes {
 			if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == pvcName {
-				retList = append(retList, p)
-				break
+				// Along PVC present in the volume list, we also checking whether any of the container in the
+				// pod is really using it by mount them.
+				for _, container := range p.Spec.Containers {
+					for _, mount := range container.VolumeMounts {
+						if mount.Name == v.Name {
+							retList = append(retList, p)
+							break
+						}
+					}
+				}
 			}
 		}
 	}
@@ -435,55 +458,66 @@ func (c *Client) WaitForPodDeletion(uid types.UID, namespace string, timeout tim
 	return nil
 }
 
-// RunCommandInPod runs given command in the given pod
-func (c *Client) RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error) {
+// RunCommandInPodEx runs given command in the given pod  (extended syntax)
+func (c *Client) RunCommandInPodEx(req *RunCommandInPodExRequest) error {
+	if c == nil || req == nil {
+		return os.ErrInvalid
+	}
+
 	err := c.initClient()
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	var (
-		execOut bytes.Buffer
-		execErr bytes.Buffer
-	)
-
-	pod, err := c.kubernetes.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-
-	if len(containerName) == 0 {
-		if len(pod.Spec.Containers) != 1 {
-			return "", fmt.Errorf("could not determine which container to use")
+	if len(req.ContainerName) == 0 {
+		pod, err := c.kubernetes.CoreV1().Pods(req.Namespace).Get(context.TODO(), req.PODName, metav1.GetOptions{})
+		if err != nil {
+			return err
 		}
 
-		containerName = pod.Spec.Containers[0].Name
+		if len(pod.Spec.Containers) != 1 {
+			return fmt.Errorf("could not determine which container to use")
+		}
+
+		req.ContainerName = pod.Spec.Containers[0].Name
 	}
 
-	req := c.kubernetes.CoreV1().RESTClient().Post().
+	post := c.kubernetes.CoreV1().RESTClient().Post().
 		Resource("pods").
-		Name(podName).
-		Namespace(namespace).
+		Name(req.PODName).
+		Namespace(req.Namespace).
 		SubResource("exec")
 
-	req.VersionedParams(&corev1.PodExecOptions{
-		Container: containerName,
-		Command:   cmds,
-		Stdout:    true,
-		Stderr:    true,
+	post.VersionedParams(&corev1.PodExecOptions{
+		Container: req.ContainerName,
+		Command:   req.Command,
+		Stdin:     (req.Stdin != nil),
+		Stdout:    (req.Stdout != nil),
+		Stderr:    (req.Stderr != nil),
 	}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", post.URL())
 	if err != nil {
-		return "", fmt.Errorf("failed to init executor: %v", err)
+		return fmt.Errorf("failed to init executor: %v", err)
 	}
 
 	err = exec.Stream(remotecommand.StreamOptions{
-		Stdout: &execOut,
-		Stderr: &execErr,
-		Tty:    false,
+		Stdin:  req.Stdin,
+		Stdout: req.Stdout,
+		Stderr: req.Stderr,
+		Tty:    req.UseTTY,
 	})
 
+	return err
+}
+
+// RunCommandInPod runs given command in the given pod  (simplified syntax)
+func (c *Client) RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error) {
+	var execOut, execErr bytes.Buffer
+
+	err := c.RunCommandInPodEx(&RunCommandInPodExRequest{
+		cmds, podName, containerName, namespace, false, nil, &execOut, &execErr,
+	})
 	if err != nil {
 		return execErr.String(), fmt.Errorf("could not execute: %v: %v %v", err, execErr.String(), execOut.String())
 	}
@@ -519,8 +553,8 @@ func (c *Client) GetPodLog(podName string, ns string, podLogOptions *corev1.PodL
 }
 
 // isAnyVolumeUsingVolumePlugin returns true if any of the given volumes is using a storage class for the given plugin
-//	In case errors are found while looking up a particular volume, the function ignores the errors as the goal is to
-//	find if there is any match or not
+// In case errors are found while looking up a particular volume, the function ignores the errors as the goal is to
+// find if there is any match or not
 func (c *Client) isAnyVolumeUsingVolumePlugin(volumes []corev1.Volume, volumeNamespace, plugin string) bool {
 	for _, v := range volumes {
 		if v.PersistentVolumeClaim != nil {

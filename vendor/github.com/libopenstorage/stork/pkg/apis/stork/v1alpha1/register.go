@@ -60,6 +60,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ApplicationRegistrationList{},
 		&BackupLocation{},
 		&BackupLocationList{},
+		&PlatformCredential{},
+		&PlatformCredentialList{},
 		&VolumeSnapshotRestore{},
 		&VolumeSnapshotRestoreList{},
 		&ApplicationBackupSchedule{},
