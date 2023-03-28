@@ -45,8 +45,7 @@ var _ = BeforeSuite(func() {
 	steplog = "Check and Register Target Cluster to ControlPlane"
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		infraParams := params.InfraToTest
-		err = pdslib.RegisterClusterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
+		err = pdslib.RegisterClusterToControlPlane(params, tenantID, false)
 		log.FailOnError(err, "Target Cluster Registeration failed")
 	})
 
