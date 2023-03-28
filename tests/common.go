@@ -2179,14 +2179,20 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 	var kubeConfigPath string
 	var err error
 	if reverse {
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 		// get the kubeconfig path to get the correct pairing info
 		kubeConfigPath, err = GetSourceClusterConfigPath()
 		if err != nil {
 			return err
 		}
 	} else {
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 		// get the kubeconfig path to get the correct pairing info
 		kubeConfigPath, err = GetDestinationClusterConfigPath()
 		if err != nil {
@@ -2213,9 +2219,15 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 
 	// Set the correct cluster context to apply the cluster pair spec
 	if reverse {
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 	} else {
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	err = Inst().S.AddTasks(ctx,
@@ -2273,10 +2285,16 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 
 	if resetConfig {
 		// storkctl generate command sets sched-ops to source cluster config
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 	} else {
 		// Change kubeconfig to destination cluster config
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	if skipStorage {

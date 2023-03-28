@@ -1040,7 +1040,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		
+
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
 			wg.Add(1)
@@ -1081,7 +1081,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		StartTorpedoTest("RebootNodesWhenBackupsAreInProgress",
 			"Reboots node when backup is in progress", nil, 55817)
 		log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
-		SetDestinationKubeConfig()
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.InfoD("Deploying applications required for the testcase on application cluster")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < numberOfBackups; i++ {
@@ -1165,9 +1166,10 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Reboot one worker node on application cluster when backup is in progress", func() {
 			log.InfoD("Switching cluster context to application[destination] cluster")
-			SetDestinationKubeConfig()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			listOfWorkerNodes = node.GetWorkerNodes()
-			err := Inst().N.RebootNode(listOfWorkerNodes[0], node.RebootNodeOpts{
+			err = Inst().N.RebootNode(listOfWorkerNodes[0], node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         rebootNodeTimeout,
@@ -1192,7 +1194,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		Step("Check if the rebooted node on application cluster is up now", func() {
 			log.InfoD("Check if the rebooted node on application cluster is up now")
 			log.InfoD("Switching cluster context to destination cluster")
-			SetDestinationKubeConfig()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			listOfWorkerNodes = node.GetWorkerNodes()
 			nodeReadyStatus := func() (interface{}, bool, error) {
 				err := Inst().S.IsNodeReady(listOfWorkerNodes[0])
@@ -1201,7 +1204,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				}
 				return "", false, nil
 			}
-			_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			_, err = task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[0].Name))
 			err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[0], Inst().DriverStartTimeout)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[0].Name))
@@ -1234,7 +1237,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
 			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
 			log.InfoD("Switching cluster context to application[destination] cluster")
-			SetDestinationKubeConfig()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			listOfWorkerNodes = node.GetWorkerNodes()
 			for i := 0; i < 2; i++ {
 				err := Inst().N.RebootNode(listOfWorkerNodes[i], node.RebootNodeOpts{
@@ -1247,7 +1251,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[i].Name))
 			}
 			log.InfoD("Switching cluster context back to source cluster")
-			err := SetSourceKubeConfig()
+			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster")
 		})
 		Step("Check if backup is successful after two worker nodes are rebooted", func() {
@@ -1262,7 +1266,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		Step("Check if the rebooted nodes on application cluster are up now", func() {
 			log.InfoD("Check if the rebooted nodes on application cluster are up now")
 			log.Infof("Switching cluster context to destination cluster")
-			SetDestinationKubeConfig()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			listOfWorkerNodes = node.GetWorkerNodes()
 			for i := 0; i < 2; i++ {
 				nodeReadyStatus := func() (interface{}, bool, error) {
@@ -1284,7 +1289,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Check if the rebooted nodes on application cluster are up now")
 		log.Infof("Switching cluster context to destination cluster")
-		SetDestinationKubeConfig()
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
 		listOfWorkerNodes = node.GetWorkerNodes()
 		for _, node := range listOfWorkerNodes {
 			nodeReadyStatus := func() (interface{}, bool, error) {
@@ -1304,7 +1310,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
 		log.Infof("Switching cluster context back to source cluster")
-		err := SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
