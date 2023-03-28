@@ -11,6 +11,8 @@ import (
 type NamespaceOps interface {
 	// ListNamespaces returns all the namespaces
 	ListNamespaces(labelSelector map[string]string) (*corev1.NamespaceList, error)
+	// ListNamespacesV2 returns all the namespaces when the labelSlector is a String
+	ListNamespacesV2(labelSelector string) (*corev1.NamespaceList, error)
 	// GetNamespace returns a namespace object for given name
 	GetNamespace(name string) (*corev1.Namespace, error)
 	// CreateNamespace creates a namespace with given name and metadata
@@ -29,6 +31,17 @@ func (c *Client) ListNamespaces(labelSelector map[string]string) (*corev1.Namesp
 
 	return c.kubernetes.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{
 		LabelSelector: mapToCSV(labelSelector),
+	})
+}
+
+// ListNamespacesV2 returns all the namespaces when the labelSlector is a String
+func (c *Client) ListNamespacesV2(labelSelector string) (*corev1.NamespaceList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubernetes.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labelSelector,
 	})
 }
 
