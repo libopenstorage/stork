@@ -5,28 +5,24 @@ package integrationtest
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"testing"
-	"time"
-
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-)
-
-var (
-	appKeyMySQL = "mysql-enc-pvc"
+	"testing"
+	"time"
 )
 
 func TestAction(t *testing.T) {
 
 	setupOnce(t)
 
-	// t.Run("testFailoverBasic", testFailoverBasic)
-	// t.Run("testFailoverForMultipleNamespaces", testFailoverForMultipleNamespaces)
-	// t.Run("testFailoverWithMultipleApplications", testFailoverWithMultipleApplications)
-	t.Run("testFailoverForFailedPromoteVolume", testFailoverForFailedPromoteVolume)
+	t.Run("testFailoverBasic", testFailoverBasic)
+	t.Run("testFailoverWithoutMigration", testFailoverWithoutMigration)
+	t.Run("testFailoverForMultipleNamespaces", testFailoverForMultipleNamespaces)
+	t.Run("testFailoverWithMultipleApplications", testFailoverWithMultipleApplications)
+	// t.Run("testFailoverForFailedPromoteVolume", testFailoverForFailedPromoteVolume)
 }
 
 func setupOnce(t *testing.T) {
@@ -47,238 +43,215 @@ func setupOnce(t *testing.T) {
 // 2. migrate k8s resources to destination
 // 3. scale down app on source and do failover on dest
 func testFailoverBasic(t *testing.T) {
-
-	appKey := "mysql-enc-pvc"
-	instanceID := "failover"
-	migrationAppKey := "failover-mysql-migration"
+	appKey := "mysql-nearsync"
+	instanceIDs := []string{"failover"}
+	storageClass := "px-sc"
+	migrationName := "failover-migration"
 	actionName := "failover-action"
+	namespaces := getNamespaces(instanceIDs, appKey)
+	cleanup(t, namespaces[0], storageClass)
 
-	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
+	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
-	cleanup(t, namespace)
+	startAppsOnMigration := false
+	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
-	// starts the app on src,
-	// sets cluster pair,
-	// creates a migration
-	ctxs, preMigrationCtx := triggerMigration(
-		t, instanceID, appKey, nil, []string{migrationAppKey}, true, true, false, false, "", nil)
-
-	// validate the following
-	// - migration is successful
-	// - app doesn't start on dest
-	validateAndDestroyMigration(
-		t, ctxs, preMigrationCtx, true, false, true, true, true)
-	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-
-	// extract migrationObj from specList
-	var migrationObj *v1alpha1.Migration
-	var ok bool
-	for _, specObj := range ctxs[0].App.SpecList {
-		if migrationObj, ok = specObj.(*v1alpha1.Migration); ok {
-			break
-		}
-	}
-
-	expectedResources := uint64(4) // 1 sts, 1 service, 1 pvc, 1 pv
-	expectedVolumes := uint64(0)   // 0 volume
-	// validate the migration summary based on the application specs that were deployed by the test
-	validateMigrationSummary(
-		t, preMigrationCtx, expectedResources, expectedVolumes, migrationObj.Name, migrationObj.Namespace)
+	validateMigrationOnSrcAndDest(
+		t, migrationName, namespaces[0], preMigrationCtxs[0],
+		startAppsOnMigration, uint64(4), uint64(0))
 
 	scaleFactor := scaleDownApps(t, ctxs)
 	logrus.Infof("scaleFactor: %v", scaleFactor)
 
-	startAndValidateFailover := func() {
-		_ = createActionCR(t, actionName, namespace, ctxs[0])
-
-		// pass preMigrationCtx to only check if the mysql app is running on destination
-		err := schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "error waiting for app to get to running state")
-
-		// if above call to WaitForRunning is successful,
-		// then Action validateActionCR will be successful
-		validateActionCR(t, actionName, namespace)
-	}
-	executeOnDestination(t, startAndValidateFailover)
+	executeOnDestination(t, func() {
+		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
+	})
 }
 
 func testFailoverWithoutMigration(t *testing.T) {
-	appKey := "mysql-enc-pvc"
-	instanceID := "failover"
+	appKey := "mysql-nearsync"
+	instanceIDs := []string{"failover"}
+	storageClass := "px-sc"
 	actionName := "failover-action"
-	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
+	namespaces := getNamespaces(instanceIDs, appKey)
+	cleanup(t, namespaces[0], storageClass)
 
-	defer cleanup(t, namespace)
+	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
-	ctx := scheduleAppAndWait(t, instanceID, appKey)
-
-	startAndValidateFailover := func() {
-		_ = createActionCR(t, actionName, namespace, ctx)
-
-		// check mysql app does NOT start on destination
-		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-		require.Error(t, err, "error waiting for app to get to running state")
-
-		// Action CR should fail with: No migration found
-		// TODO(dgoel): discuss and handle this error case
-		validateActionCR(t, actionName, namespace)
-	}
-	executeOnDestination(t, startAndValidateFailover)
+	executeOnDestination(t, func() {
+		_, err := createActionCR(t, actionName, namespaces[0], ctxs[0])
+		require.Error(t, err, "create action CR should have errored out")
+		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/4, defaultWaitInterval/4)
+		require.Error(t, err, "did not expect app to start")
+	})
 }
 
-func testFailoverForFailedPromoteVolume(t *testing.T) {
-	appKey := "mysql-enc-pvc"
-	instanceID := "failover"
+func testFailoverForMultipleNamespaces(t *testing.T) {
+	appKey := "mysql-nearsync"
+	instanceIDs := []string{"failover-1", "failover-2"}
+	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
+	namespaces := getNamespaces(instanceIDs, appKey)
+	for _, namespace := range namespaces {
+		cleanup(t, namespace, storageClass)
+	}
 
-	namespace := fmt.Sprintf("%v-%v", appKey, instanceID)
-	logrus.Infof("len(namespace): %v", len(namespace))
-	cleanup(t, namespace)
-	// wait for cleanup to complete
-	time.Sleep(time.Second * 20)
-
-	ctx := scheduleAppAndWait(t, instanceID, appKey)
+	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, migrationList := triggerMigrationMultiple(
-		t, []*scheduler.Context{ctx}, []string{migrationName},
-		[]string{namespace}, true, false, startAppsOnMigration)
-	ctx = ctxs[0]
+	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
-	for idx, migration := range migrationList {
+	for idx, namespace := range namespaces {
 		validateMigrationOnSrcAndDest(
-			t, migration.Name, migration.Namespace, preMigrationCtxs[idx],
+			t, migrationName, namespace, preMigrationCtxs[idx],
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
 	scaleFactor := scaleDownApps(t, ctxs)
 	logrus.Infof("scaleFactor: %v", scaleFactor)
 
-	funcStartAndValidateFailoverMultiple := func() {
-		volumes, err := schedulerDriver.GetVolumes(ctx)
-		require.NoError(t, err, "Error getting volumes")
-		logrus.Infof("Volumes: %v", volumes[0].Name)
-
-		nodeObj, err := volumeDriver.GetNodeForVolume(volumes[0], defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error getting node")
-		logrus.Infof("Node: %v", nodeObj.Name)
-
-		nodeDriver.RebootNode(
-			*nodeObj,
-			node.RebootNodeOpts{
-				Force: true,
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         1 * time.Minute,
-					TimeBeforeRetry: 5 * time.Second,
-				},
-			})
-		logrus.Infof("Reboot Node: %v", nodeObj.Name)
-
-		for _, ctx := range preMigrationCtxs {
-			_ = createActionCR(t, actionName, namespace, ctx)
-		}
-		for _, ctx := range preMigrationCtxs {
-			err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "error waiting for app to get to running state")
-
-			validateActionCR(t, actionName, namespace)
-		}
-	}
-	executeOnDestination(t, funcStartAndValidateFailoverMultiple)
-}
-
-// func testFailoverForNamespaceKubeSystem(t *testing.T) {
-// }
-
-func testFailoverForMultipleNamespaces(t *testing.T) {
-	appKey := "mysql-enc-pvc"
-	instanceIDList := []string{"failover-1", "failover-2"}
-	migrationAppKey := "failover-mysql-migration"
-	actionName := "failover-action"
-	var namespaceList []string
-
-	for _, instanceID := range instanceIDList {
-		namespaceList = append(namespaceList, fmt.Sprintf("%v-%v", appKey, instanceID))
-		logrus.Infof("len(namespaceList): %v", len(namespaceList))
-		cleanup(t, namespaceList[len(namespaceList)-1])
-	}
-	// wait for cleanup to complete
-	time.Sleep(time.Second * 20)
-
-	ctxs := scheduleAppAndWaitMultiple(t, instanceIDList, appKey)
-
-	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, migrationList := triggerMigrationMultiple(
-		t, ctxs, []string{migrationAppKey}, namespaceList, true, false, startAppsOnMigration)
-
-	for idx, migration := range migrationList {
-		validateMigrationOnSrcAndDest(
-			t, migration.Name, migration.Namespace, preMigrationCtxs[idx], startAppsOnMigration, uint64(4), uint64(0))
-	}
-
-	scaleFactor := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactor: %v", scaleFactor)
-
-	funcStartAndValidateFailoverMultiple := func() {
-		for idx, ctx := range preMigrationCtxs {
-			_ = createActionCR(t, actionName, namespaceList[idx], ctx)
-		}
-		for idx, ctx := range ctxs {
-			err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "error waiting for app to get to running state")
-
-			validateActionCR(t, actionName, namespaceList[idx])
-		}
-	}
-	executeOnDestination(t, funcStartAndValidateFailoverMultiple)
+	executeOnDestination(t, func() {
+		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
+	})
 }
 
 func testFailoverWithMultipleApplications(t *testing.T) {
-	appKeys := []string{"mysql-enc-pvc", "cassandra"}
-	instanceID := "failover"
+	appKey := "mysql-nearsync"
+	additionalAppKeys := []string{"cassandra"}
+	instanceIDs := []string{"failover"}
+	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
+	namespaces := getNamespaces(instanceIDs, appKey)
+	cleanup(t, namespaces[0], storageClass)
 
-	namespace := fmt.Sprintf("%v-%v", appKeys[0], instanceID)
-	logrus.Infof("len(namespace): %v", len(namespace))
-	cleanup(t, namespace)
-	// wait for cleanup to complete
-	time.Sleep(time.Second * 20)
-
-	ctx := scheduleAppAndWait(t, instanceID, appKeys[0])
-	scheduleTasksAndWait(t, ctx, appKeys[1:])
+	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
+	scheduleTasksAndWait(t, ctxs[0], additionalAppKeys)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, migrationList := triggerMigrationMultiple(
-		t, []*scheduler.Context{ctx}, []string{migrationName},
-		[]string{namespace}, true, false, startAppsOnMigration)
+	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
-	for idx, migration := range migrationList {
+	for idx, namespace := range namespaces {
 		validateMigrationOnSrcAndDest(
-			t, migration.Name, migration.Namespace, preMigrationCtxs[idx],
+			t, migrationName, namespace, preMigrationCtxs[idx],
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
 	scaleFactor := scaleDownApps(t, ctxs)
 	logrus.Infof("scaleFactor: %v", scaleFactor)
 
-	funcStartAndValidateFailoverMultiple := func() {
-		for _, ctx := range preMigrationCtxs {
-			_ = createActionCR(t, actionName, namespace, ctx)
-		}
-		for _, ctx := range preMigrationCtxs {
-			err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "error waiting for app to get to running state")
-
-			validateActionCR(t, actionName, namespace)
-		}
-	}
-	executeOnDestination(t, funcStartAndValidateFailoverMultiple)
+	executeOnDestination(t, func() {
+		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
+	})
 }
 
-// func testFailoverOneActionPolicy(t *testing.T) {
-// }
-// func testFailoverWithFailedVolumePromote(t *testing.T) {
-// }
+func testFailoverForFailedPromoteVolume(t *testing.T) {
+	appKey := "mysql-nearsync"
+	instanceIDs := []string{"failover"}
+	storageClass := "px-sc"
+	migrationName := "failover-migration"
+	actionName := "failover-action"
+	namespaces := getNamespaces(instanceIDs, appKey)
+	cleanup(t, namespaces[0], storageClass)
+
+	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
+
+	startAppsOnMigration := false
+	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
+
+	for idx, namespace := range namespaces {
+		validateMigrationOnSrcAndDest(
+			t, migrationName, namespace, preMigrationCtxs[idx],
+			startAppsOnMigration, uint64(4), uint64(0))
+	}
+
+	scaleFactor := scaleDownApps(t, ctxs)
+	logrus.Infof("scaleFactor: %v", scaleFactor)
+
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespaces[0], map[string]string{})
+	require.NoError(t, err, "Error getting pvcList")
+	logrus.Infof("pvc: %v", pvcList.Items[0].Name)
+
+	pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvcList.Items[0])
+	require.NoError(t, err, "Error getting volume for pvc")
+	logrus.Infof("pvName: %v", pvName)
+
+	volume, err := volumeDriver.InspectVolume(pvName)
+	require.NoError(t, err, "Error getting inspect volume for %v", pvName)
+
+	nearSyncTargetMid, ok := volume.RuntimeState[0].RuntimeState["ReplicaSetNearSyncMid"]
+	require.Equal(t, true, ok)
+	logrus.Infof("nearSyncTargetMid: %v", nearSyncTargetMid)
+
+	funcRestartNode := func() {
+		mapNodeIDToNode := node.GetNodesByVoDriverNodeID()
+		logrus.Infof("mapNodeIDToNode: %v", mapNodeIDToNode)
+		nodeObj, _ := mapNodeIDToNode[nearSyncTargetMid]
+		logrus.Infof("node: %v", nodeObj)
+
+		nodeDriver.RunCommand(
+			nodeObj,
+			"touch /root/whatAboutNow.txt",
+			node.ConnectionOpts{
+				Timeout:         1 * time.Minute,
+				TimeBeforeRetry: 5 * time.Second,
+			},
+		)
+		logrus.Infof("run command on node: %v", nodeObj.Name)
+
+		volumeDriver.StopDriver([]node.Node{nodeObj}, false, nil)
+
+		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		validateFailover(t, actionName, namespaces, preMigrationCtxs, false)
+
+		volumeDriver.StartDriver(nodeObj)
+	}
+	executeOnDestination(t, funcRestartNode)
+}
+
+func startFailover(
+	t *testing.T,
+	actionName string,
+	namespaces []string,
+	preMigrationCtxs []*scheduler.Context,
+) {
+	for idx, ctx := range preMigrationCtxs {
+		_, err := createActionCR(t, actionName, namespaces[idx], ctx)
+		require.NoError(t, err, "error creating Action CR")
+	}
+}
+
+func validateFailover(
+	t *testing.T,
+	actionName string,
+	namespaces []string,
+	preMigrationCtxs []*scheduler.Context,
+	isSuccessful bool,
+) {
+	for idx, ctx := range preMigrationCtxs {
+		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		if isSuccessful {
+			require.NoError(t, err, "error waiting for app to get to running state")
+			validateActionCR(t, actionName, namespaces[idx], true)
+		} else {
+			require.Error(t, err, "error waiting for app to get to running state")
+			validateActionCR(t, actionName, namespaces[idx], false)
+		}
+	}
+}
+
+func getNamespaces(instanceIDs []string, appKey string) []string {
+	var namespaces []string
+	for _, instanceID := range instanceIDs {
+		namespaces = append(namespaces, fmt.Sprintf("%v-%v", appKey, instanceID))
+	}
+	return namespaces
+}
