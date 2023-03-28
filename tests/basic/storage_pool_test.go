@@ -6339,11 +6339,13 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 		alertsBefore, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_POOL,
 			startMinusTenHours,
 			endTime)
+		alertErrored := false
 		if err != nil {
 			// Ignoring the error as it is quite possible that no
 			// alerts for resource type pool is seen on the fresh installed cluster
 			// instead of failing the test here , we will verify the alerts post
 			// after running the script with some negative scenarios
+			alertErrored = true
 			log.Errorf("failed to fetch alerts between startTime [%v] and endTime [%v]",
 				startMinusTenHours,
 				endTime)
@@ -6423,10 +6425,14 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			// alerts generated for resource type pool
 			log.FailOnError(err, "Failed to fetch alerts between startTime [%v] and endTime [%v]",
 				startMinusTenHours, endTime)
-			dash.VerifyFatal(len(alertsBefore.Alerts) < len(alerts.Alerts),
-				true,
-				fmt.Sprintf("did alert generated for resource type [%v] with time specified?",
-					api.ResourceType_RESOURCE_TYPE_POOL))
+			alertErrorMessage := fmt.Sprintf("did alert generated for resource type [%v] with time specified?",
+				api.ResourceType_RESOURCE_TYPE_POOL)
+			if alertErrored == true {
+				dash.VerifyFatal(len(alerts.Alerts) > 0, true, alertErrorMessage)
+			} else {
+				dash.VerifyFatal(len(alertsBefore.Alerts) < len(alerts.Alerts),
+					true, alertErrorMessage)
+			}
 		})
 	})
 
