@@ -8516,16 +8516,16 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 			nil, 0)
 	})
 
-	Inst().AppList = []string{}
-	var ioIntensiveApp = []string{"fio", "fio-writes"}
-
-	for _, eachApp := range ioIntensiveApp {
-		Inst().AppList = append(Inst().AppList, eachApp)
-	}
 	var contexts []*scheduler.Context
 	stepLog := "Resync volume after rebalance"
 	It(stepLog, func() {
 		contexts = make([]*scheduler.Context, 0)
+		Inst().AppList = []string{}
+		var ioIntensiveApp = []string{"fio", "fio-writes"}
+
+		for _, eachApp := range ioIntensiveApp {
+			Inst().AppList = append(Inst().AppList, eachApp)
+		}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("replresyncpoolexpand-%d", i))...)
 		}
