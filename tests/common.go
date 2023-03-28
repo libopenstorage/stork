@@ -1456,7 +1456,51 @@ func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
 	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
 }
 
-// ScheduleApplications schedules but does not wait for applications
+// CreateScheduleOptions uses the current Context (kubeconfig) to generate schedule options
+// NOTE: When using a ScheduleOption that was created during a context (kubeconfig)
+// that is different from the current context, make sure to re-generate ScheduleOptions
+func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
+	log.Infof("Creating ScheduleOptions")
+
+		//if not hyper converged set up deploy apps only on storageless nodes
+		if !Inst().IsHyperConverged {
+		var err error
+
+		log.Infof("ScheduleOptions: Scheduling apps only on storageless nodes")
+			storagelessNodes := node.GetStorageLessNodes()
+			if len(storagelessNodes) == 0 {
+			log.Info("ScheduleOptions: No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				Inst().IsHyperConverged = true
+			}
+			for _, storagelessNode := range storagelessNodes {
+				if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
+				err = fmt.Errorf("ScheduleOptions: failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
+						"storage", "NO", storagelessNode.Name, err)
+					processError(err, errChan...)
+				}
+			}
+			storageLessNodeLabels := make(map[string]string)
+			storageLessNodeLabels["storage"] = "NO"
+
+		options := scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Inst().Provisioner,
+				Nodes:              storagelessNodes,
+				Labels:             storageLessNodeLabels,
+			}
+		return options
+
+		} else {
+		options := scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+		}
+		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
+		return options
+	}
+}
+
+// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
 func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -1467,38 +1511,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var err error
 
 	Step("schedule applications", func() {
-		options := scheduler.ScheduleOptions{
-			AppKeys:            Inst().AppList,
-			StorageProvisioner: Inst().Provisioner,
-		}
-		//if not hyper converged set up deploy apps only on storageless nodes
-		if !Inst().IsHyperConverged {
-			log.Infof("Scheduling apps only on storageless nodes")
-			storagelessNodes := node.GetStorageLessNodes()
-			if len(storagelessNodes) == 0 {
-				log.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
-				Inst().IsHyperConverged = true
-			}
-			for _, storagelessNode := range storagelessNodes {
-				if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
-					err = fmt.Errorf("failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
-						"storage", "NO", storagelessNode.Name, err)
-					processError(err, errChan...)
-				}
-			}
-			storageLessNodeLabels := make(map[string]string)
-			storageLessNodeLabels["storage"] = "NO"
-
-			options = scheduler.ScheduleOptions{
-				AppKeys:            Inst().AppList,
-				StorageProvisioner: Inst().Provisioner,
-				Nodes:              storagelessNodes,
-				Labels:             storageLessNodeLabels,
-			}
-
-		} else {
-			log.Infof("Scheduling Apps with hyper-converged")
-		}
+		options := CreateScheduleOptions(errChan...)
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
 		// Need to check err != nil before calling processError
