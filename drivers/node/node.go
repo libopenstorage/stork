@@ -220,6 +220,12 @@ type Driver interface {
 
 	//GetBlockDrives returns the block drives on the node
 	GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error)
+
+	// RebalanceWorkerPool initiates worker pool rebalance for IBM cluster
+	RebalanceWorkerPool() error
+
+	// GetNodeState returns current state of the given node
+	GetNodeState(n Node) (string, error)
 }
 
 // Register registers the given node driver
@@ -456,5 +462,19 @@ func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "InjectNetworkError()",
+	}
+}
+
+func (d *notSupportedDriver) RebalanceWorkerPool() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RebalanceWorkerPool()",
+	}
+}
+
+func (d *notSupportedDriver) GetNodeState(Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodeState()",
 	}
 }
