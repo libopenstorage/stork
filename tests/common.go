@@ -2001,11 +2001,11 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.Service); ok {
+	} else if specObj, ok := in.(*corev1.Service); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
+	} else if specObj, ok := in.(*corev1.PersistentVolumeClaim); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2021,11 +2021,11 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.Secret); ok {
+	} else if specObj, ok := in.(*corev1.Secret); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.ConfigMap); ok {
+	} else if specObj, ok := in.(*corev1.ConfigMap); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2033,7 +2033,7 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.Pod); ok {
+	} else if specObj, ok := in.(*corev1.Pod); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2077,7 +2077,7 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.ServiceAccount); ok {
+	} else if specObj, ok := in.(*corev1.ServiceAccount); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2349,7 +2349,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 		wg.Add(1)
 		go func(wg *sync.WaitGroup, ctx *scheduler.Context) {
 			defer wg.Done()
-			namespace := ctx.App.SpecList[0].(*v1.PersistentVolumeClaim).Namespace
+			namespace := ctx.App.SpecList[0].(*corev1.PersistentVolumeClaim).Namespace
 			if err, ok := bkpErrors[namespace]; ok {
 				log.Infof("Skipping validating namespace %s because %s", namespace, err)
 			} else {
@@ -2714,7 +2714,7 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 
 // DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
 func DeleteLabelFromResource(spec interface{}, key string) {
-	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
@@ -2723,7 +2723,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 				core.Instance().UpdatePersistentVolumeClaim(obj)
 			}
 		}
-	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+	} else if obj, ok := spec.(*corev1.ConfigMap); ok {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
@@ -2732,7 +2732,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 				core.Instance().UpdateConfigMap(obj)
 			}
 		}
-	} else if obj, ok := spec.(*v1.Secret); ok {
+	} else if obj, ok := spec.(*corev1.Secret); ok {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
@@ -3305,7 +3305,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 
 // AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
 func AddLabelToResource(spec interface{}, key string, val string) error {
-	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
@@ -3313,7 +3313,7 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		obj.Labels[key] = val
 		core.Instance().UpdatePersistentVolumeClaim(obj)
 		return nil
-	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+	} else if obj, ok := spec.(*corev1.ConfigMap); ok {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
@@ -3321,7 +3321,7 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		obj.Labels[key] = val
 		core.Instance().UpdateConfigMap(obj)
 		return nil
-	} else if obj, ok := spec.(*v1.Secret); ok {
+	} else if obj, ok := spec.(*corev1.Secret); ok {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
