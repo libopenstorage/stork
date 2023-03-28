@@ -2811,7 +2811,7 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 }
 
 // DeleteSchedule deletes backup schedule
-func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID, OrgID string) error {
+func DeleteSchedule(backupScheduleName, backupScheduleUID, OrgID string) error {
 	backupDriver := Inst().Backup
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: OrgID,
@@ -2840,19 +2840,6 @@ func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, s
 		clusterObj,
 		BackupRestoreCompletionTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
-	if err != nil {
-		return err
-	}
-	schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
-		OrgId: OrgID,
-		Name:  schedulePolicyName,
-		Uid:   schedulePolicyUID,
-	}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
 	if err != nil {
 		return err
 	}

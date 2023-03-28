@@ -33,6 +33,7 @@ const (
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
+	PDSChartRepo = "https://portworx.github.io/pds-charts"
 )
 
 var (
@@ -48,6 +49,63 @@ type TargetCluster struct {
 	kubeconfig string
 }
 
+func (targetCluster *TargetCluster) IsLatestPDSHelm(helmChartversion string) (bool, error) {
+	cmd := "helm ls --all -n pds-system | grep pds-target"
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return false, err
+	}
+	output = strings.ReplaceAll(output, "\t", " ")
+	bfr, pdsHelmVersion, found := strings.Cut(output, "pds-target-")
+	log.Debugf("Get pds chart: %q, %q, %v\n", bfr, pdsHelmVersion, found)
+	helmVersion, after, found := strings.Cut(pdsHelmVersion, " ")
+	log.Debugf("Get pds chart version: %q, %q, %v\n", helmVersion, after, found)
+	helmVersion = strings.TrimSpace(helmVersion)
+	helmChartversion = strings.TrimSpace(helmChartversion)
+	log.Debugf("Installed PDS Helm version %s and helm chart version passed %s", helmVersion, helmChartversion)
+	return strings.EqualFold(helmVersion, helmChartversion), nil
+}
+
+func (targetCluster *TargetCluster) DeRegisterFromControlPlane() error {
+	pods, err := k8sCore.GetPods(PDSNamespace, nil)
+	if err != nil {
+		return err
+	}
+	if len(pods.Items) > 0 {
+		log.InfoD("Uninstalling PDS from the Target cluster")
+		cmd := fmt.Sprintf("helm uninstall  pds --namespace %v", PDSNamespace)
+		output, _, err := osutils.ExecShell(cmd)
+		if err != nil {
+			return fmt.Errorf("error occured while removing the pds helm chart: %v", err)
+		}
+		log.InfoD("helm uninstall output: %v", output)
+	} else {
+		log.InfoD("No pods are avaialble in the %s namespace", PDSNamespace)
+		cmd := "helm list -A"
+		output, _, err := osutils.ExecShell(cmd)
+		if err != nil {
+			return fmt.Errorf("error occured while listing helm installations: %v", err)
+		}
+		log.InfoD("helm list output: %v", output)
+	}
+	//TODO: Add a method to remove CRD's
+	log.Infof("wait till all the pds-system pods are deleted")
+	err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+		pods, err := k8sCore.GetPods(PDSNamespace, nil)
+		if err != nil {
+			return false, nil
+		}
+		if len(pods.Items) == 0 {
+			log.InfoD("pds is uninstalled")
+			return true, nil
+		}
+		log.Infof("There are %d pods present in the namespace %s", len(pods.Items), PDSNamespace)
+		return false, nil
+	})
+
+	return nil
+}
+
 // RegisterToControlPlane register the target cluster to control plane.
 func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantId string, clusterType string) error {
 	var cmd string
@@ -59,10 +117,20 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	}
 	if len(pods.Items) > 0 {
 		log.InfoD("Target cluster is already registered to control plane.")
+		cmd = "helm list -A "
+		isLatest, err := targetCluster.IsLatestPDSHelm(helmChartversion)
+		if err != nil {
+			return err
+		}
+		if !isLatest {
+			log.InfoD("Upgrading PDS helm chart to %v", helmChartversion)
+			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s --set tenantId=%s "+
+				"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
+		}
 		isRegistered = true
 	}
 	if !isRegistered {
-		log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
+		log.InfoD("Installing PDS ( helm version -  %v)", helmChartversion)
 		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
 			"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		if strings.EqualFold(clusterType, "ocp") {

@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
 
@@ -18,6 +17,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/aututils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 	appsapi "k8s.io/api/apps/v1"
@@ -46,11 +47,15 @@ var autopilotruleBasicTestCases = []apapi.AutopilotRule{
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
+	var testrailID = 85442
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85442
+	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest(fmt.Sprintf("{%sPvcBasic}", testSuiteName), "Perform basic scenarios with Autopilot", nil, 0)
+		StartTorpedoTest(fmt.Sprintf("{%sPvcBasic}", testSuiteName), "Perform basic scenarios with Autopilot", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
+	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
-		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
 
 		Step("schedule applications", func() {
@@ -107,7 +112,8 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 		})
 	})
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -115,15 +121,17 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 // schedules apps and wait until workload is completed on the volumes. Restarts volume
 // driver and validates PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
-
+	var testrailID = 85443
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85443
+	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), "Perform basic scenarios with Autopilot and restart volume driver ", nil, 0)
+		StartTorpedoTest(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), "Perform basic scenarios with Autopilot and restart volume driver ", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
+	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
 		var err error
-		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sVolumeDriverDown", testSuiteName))
-
 		Step("schedule applications", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for id, apRule := range autopilotruleBasicTestCases {
@@ -199,7 +207,8 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 		})
 	})
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -403,11 +412,15 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 // schedules apps and wait until workload is completed on the volumes and then validates
 // sizes of storage pools by adding new disks to the nodes where volumes reside
 var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
+	var testrailID = 85448
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85448
+	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest(fmt.Sprintf("{%sPoolExpand}", testSuiteName), "Pool expansion test on autopilot", nil, 0)
+		StartTorpedoTest(fmt.Sprintf("{%sPoolExpand}", testSuiteName), "Pool expansion test on autopilot", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
+	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
-		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandAddDisk", testSuiteName))
 
 		type testCase struct {
@@ -513,7 +526,8 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 
 	})
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -585,12 +599,15 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName)
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes and sizes of storage pools
 var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
+	var testrailID = 85449
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85449
+	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), "PVC and Pool expand test on autopilot", nil, 0)
+		StartTorpedoTest(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), "PVC and Pool expand test on autopilot", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
+	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
-		var contexts []*scheduler.Context
-
 		testName := strings.ToLower(fmt.Sprintf("%sPvcAndPoolExpand", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
 		pvcLabel := map[string]string{"autopilot": "pvc-expand"}
@@ -677,7 +694,8 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 		})
 	})
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
