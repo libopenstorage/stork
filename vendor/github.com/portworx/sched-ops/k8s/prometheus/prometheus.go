@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portworx/sched-ops/k8s/common"
 	prometheusclient "github.com/prometheus-operator/prometheus-operator/pkg/client/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -143,7 +144,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.prometheus, err = prometheusclient.NewForConfig(c.config)
 	if err != nil {
 		return err
