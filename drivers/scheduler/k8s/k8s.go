@@ -34,6 +34,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -200,6 +201,7 @@ var (
 	k8sBatch           = batch.Instance()
 	k8sMonitoring      = prometheus.Instance()
 	k8sPolicy          = policy.Instance()
+	k8sApiExtensions   = apiextensions.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
@@ -345,6 +347,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sRbac.SetConfig(config)
 	k8sMonitoring.SetConfig(config)
 	k8sPolicy.SetConfig(config)
+	k8sApiExtensions.SetConfig(config)
 
 	return nil
 }
@@ -847,6 +850,40 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createMigrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCRDObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCRDObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -2095,6 +2132,36 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 }
 
+// destroyCRDObjects is used to destroy Resources in the group `apiextensions` (like CRDs)
+func (k *K8s) destroyCRDObjects(spec interface{}, app *spec.AppSpec) error {
+
+	if obj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
+		err := k8sApiExtensions.DeleteCRD(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy CRD: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed CRD: %v", app.Key, obj.Name)
+			return nil
+		}
+	} else if obj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		err := k8sApiExtensions.DeleteCRDV1beta1(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy CRDV1beta1: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed CRDV1beta1: %v", app.Key, obj.Name)
+			return nil
+		}
+	}
+
+	return nil
+}
+
 func (k *K8s) substituteNamespaceInContainers(containers []corev1.Container, ns string) []corev1.Container {
 	var updatedContainers []corev1.Container
 	for _, container := range containers {
@@ -2526,6 +2593,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			return nil, false, nil
 		}
 
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyCRDObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
 		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
 			return err
 		}
@@ -4074,6 +4155,95 @@ func (k *K8s) GetTokenFromConfigMap(configMapName string) (string, error) {
 	}
 	log.Infof("Token from secret: %s", token)
 	return token, err
+}
+
+// createCRDObjects is used to create Resources in the group `apiextensions` group (like CRDs)
+func (k *K8s) createCRDObjects(
+	specObj interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+
+	// Add security annotations if running with auth-enabled
+	configMapName := k.secretConfigMapName
+	if configMapName != "" {
+		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		if err != nil {
+			return nil, &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+		err = k.addSecurityAnnotation(specObj, configMap, app)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
+		}
+
+	}
+
+	if obj, ok := specObj.(*apiextensionsv1.CustomResourceDefinition); ok {
+		obj.Namespace = ns.Name
+		err := k8sApiExtensions.RegisterCRD(obj)
+
+		if k8serrors.IsAlreadyExists(err) {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
+				log.Infof("[%v] Found existing CRD: %v", app.Key, crd.Name)
+				return crd, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Register CRD: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
+				log.Infof("[%v] Registered CRD: %v", app.Key, crd.Name)
+				return crd, nil
+			} else {
+				// if it fails, then you need to `validate` before `get`
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to Get CRD after Registration: %v. Err: %v", obj.Name, err),
+				}
+			}
+		}
+	} else if obj, ok := specObj.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		obj.Namespace = ns.Name
+		err := k8sApiExtensions.RegisterCRDV1beta1(obj)
+
+		if k8serrors.IsAlreadyExists(err) {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
+				log.Infof("[%v] Found existing CRDV1beta1: %v", app.Key, crd.Name)
+				return crd, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Register CRDV1beta1: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
+				log.Infof("[%v] Registered CRDV1beta1: %v", app.Key, crd.Name)
+				return crd, nil
+			} else {
+				// if it fails, then you need to `validate` before `get`
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to Get CRDV1beta1 after Registration: %v. Err: %v", obj.Name, err),
+				}
+			}
+		}
+	}
+
+	return nil, nil
 }
 
 func (k *K8s) createMigrationObjects(
