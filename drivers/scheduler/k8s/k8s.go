@@ -34,6 +34,8 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -58,6 +60,8 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -189,17 +193,18 @@ var (
 	defaultTorpedoLabel = map[string]string{
 		"creator": "torpedo",
 	}
-	k8sCore            = core.Instance()
-	k8sApps            = apps.Instance()
-	k8sStork           = stork.Instance()
-	k8sStorage         = storage.Instance()
-	k8sExternalStorage = externalstorage.Instance()
-	k8sAutopilot       = autopilot.Instance()
-	k8sRbac            = rbac.Instance()
-	k8sNetworking      = networking.Instance()
-	k8sBatch           = batch.Instance()
-	k8sMonitoring      = prometheus.Instance()
-	k8sPolicy          = policy.Instance()
+	k8sCore                  = core.Instance()
+	k8sApps                  = apps.Instance()
+	k8sStork                 = stork.Instance()
+	k8sStorage               = storage.Instance()
+	k8sExternalStorage       = externalstorage.Instance()
+	k8sAutopilot             = autopilot.Instance()
+	k8sRbac                  = rbac.Instance()
+	k8sNetworking            = networking.Instance()
+	k8sBatch                 = batch.Instance()
+	k8sMonitoring            = prometheus.Instance()
+	k8sPolicy                = policy.Instance()
+	k8sAdmissionRegistration = admissionregistration.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
@@ -345,6 +350,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sRbac.SetConfig(config)
 	k8sMonitoring.SetConfig(config)
 	k8sPolicy.SetConfig(config)
+	k8sAdmissionRegistration.SetConfig(config)
 
 	return nil
 }
@@ -685,6 +691,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*storkapi.ResourceTransformation); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfigurationList); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
@@ -1024,6 +1034,23 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 			return nil, err
 		}
 
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
 		if obj != nil {
 			specObjects = append(specObjects, obj)
 		}
@@ -2095,6 +2122,36 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 }
 
+// destroyAdmissionRegistrationObjects destroys objects in the `AdmissionRegistration` group (like ValidatingWebhookConfiguration)
+func (k *K8s) destroyAdmissionRegistrationObjects(spec interface{}, app *spec.AppSpec) error {
+
+	if obj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		err := k8sAdmissionRegistration.DeleteValidatingWebhookConfiguration(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ValidatingWebhookConfiguration: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ValidatingWebhookConfiguration: %v", app.Key, obj.Name)
+			return nil
+		}
+	} else if obj, ok := spec.(admissionregistrationv1beta1.ValidatingWebhookConfiguration); ok {
+		err := k8sAdmissionRegistration.DeleteValidatingWebhookConfigurationV1beta1(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ValidatingWebhookConfigurationV1beta1: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ValidatingWebhookConfigurationV1beta1: %v", app.Key, obj.Name)
+			return nil
+		}
+	}
+
+	return nil
+}
+
 func (k *K8s) substituteNamespaceInContainers(containers []corev1.Container, ns string) []corev1.Container {
 	var updatedContainers []corev1.Container
 	for _, container := range containers {
@@ -2439,6 +2496,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 		}
 	}
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyAdmissionRegistrationObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			currPods, err := k.destroyCoreObject(appSpec, opts, ctx.App)
@@ -4074,6 +4145,82 @@ func (k *K8s) GetTokenFromConfigMap(configMapName string) (string, error) {
 	}
 	log.Infof("Token from secret: %s", token)
 	return token, err
+}
+
+// createAdmissionRegistrationObjects creates objects in the `AdmissionRegistration` group (like ValidatingWebhookConfiguration)
+func (k *K8s) createAdmissionRegistrationObjects(
+	specObj interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	k8sOps := k8sAdmissionRegistration
+
+	// Add security annotations if running with auth-enabled
+	configMapName := k.secretConfigMapName
+	if configMapName != "" {
+		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		if err != nil {
+			return nil, &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+		err = k.addSecurityAnnotation(specObj, configMap, app)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
+		}
+
+	}
+
+	if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		obj.Namespace = ns.Name
+		for i := range obj.Webhooks {
+			obj.Webhooks[i].ClientConfig.Service.Namespace = ns.Name
+		}
+
+		vbc, err := k8sOps.CreateValidatingWebhookConfiguration(obj)
+
+		if k8serrors.IsAlreadyExists(err) {
+			if vbc, err := k8sOps.GetValidatingWebhookConfiguration(obj.Name); err == nil {
+				log.Infof("[%v] Found existing ValidatingWebhookConfiguration: %v", app.Key, vbc.Name)
+				return vbc, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Create ValidatingWebhookConfiguration: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created ValidatingWebhookConfiguration: %v", app.Key, vbc.Name)
+		return vbc, nil
+	} else if obj, ok := specObj.(*admissionregistrationv1beta1.ValidatingWebhookConfiguration); ok {
+		obj.Namespace = ns.Name
+		for i := range obj.Webhooks {
+			obj.Webhooks[i].ClientConfig.Service.Namespace = ns.Name
+		}
+
+		vbc, err := k8sOps.CreateValidatingWebhookConfigurationV1beta1(obj)
+
+		if k8serrors.IsAlreadyExists(err) {
+			if vbc, err := k8sOps.GetValidatingWebhookConfigurationV1beta1(obj.Name); err == nil {
+				log.Infof("[%v] Found existing ValidatingWebhookConfiguration: %v", app.Key, vbc.Name)
+				return vbc, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Create ValidatingWebhookConfiguration: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created ValidatingWebhookConfiguration: %v", app.Key, vbc.Name)
+		return vbc, nil
+	}
+
+	return nil, nil
 }
 
 func (k *K8s) createMigrationObjects(
