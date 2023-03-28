@@ -69,6 +69,8 @@ import (
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
+	"github.com/portworx/torpedo/drivers/node/ssh"
+
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
@@ -318,6 +320,7 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
+	CurrentClusterConfigPath             = ""
 )
 
 var (
@@ -2111,19 +2114,43 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 
 // SetClusterContext sets context to clusterConfigPath
 func SetClusterContext(clusterConfigPath string) error {
+	// an empty string indicates the default kubeconfig.
+	// This variable is used to clearly indicate that in logs
+	var clusterConfigPathOrDefault = clusterConfigPath
+	if clusterConfigPathOrDefault == "" {
+		clusterConfigPathOrDefault = "default"
+	}
+	log.InfoD("Switching context to [%s]", clusterConfigPathOrDefault)
+	if clusterConfigPath == CurrentClusterConfigPath {
+		log.InfoD("Switching context: The context is already [%s]", clusterConfigPathOrDefault)
+		return nil
+	}
+
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. Set Config Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
+
 	err = Inst().S.RefreshNodeRegistry()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
 	}
 
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
+
+	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
+		err = ssh.RefreshDriver(sshNodeDriver)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	}
+
+	CurrentClusterConfigPath = clusterConfigPath
+	log.InfoD("Switched context to [%s]", clusterConfigPath)
+
 	return nil
 }
 
@@ -2133,15 +2160,18 @@ func SetSourceKubeConfig() error {
 	if err != nil {
 		return err
 	}
-	SetClusterContext(sourceClusterConfigPath)
-	return nil
+	err = SetClusterContext(sourceClusterConfigPath)
+	return err
 }
 
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
-func SetDestinationKubeConfig() {
+func SetDestinationKubeConfig() error {
 	destClusterConfigPath, err := GetDestinationClusterConfigPath()
-	expect(err).NotTo(haveOccurred())
-	SetClusterContext(destClusterConfigPath)
+	if err != nil {
+		return err
+	}
+	err = SetClusterContext(destClusterConfigPath)
+	return err
 }
 
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
