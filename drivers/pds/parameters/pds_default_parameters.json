@@ -100,5 +100,9 @@
   },
   "ResiliencyTest": {
     "CheckTillReplica": 1
+  },
+  "PDSHelmVersions": {
+    "LatestHelmVersion": "1.14.4",
+    "PreviousHelmVersion": "1.14.3"
   }
 }

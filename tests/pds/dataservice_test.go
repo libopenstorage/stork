@@ -3,6 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"net/http"
 	"os"
 	"strconv"
@@ -95,6 +96,115 @@ var _ = Describe("{DeletePDSPods}", func() {
 				log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 			}
 		}()
+	})
+})
+
+var _ = Describe("{UpdatePDSHelmVersion}", func() {
+	steplog := "Validate Data service pods post helm upgrade"
+	var deps []*pds.ModelsDeployment
+	var wlparams pdslib.WorkloadGenerationParams
+	var dataservices []PDSDataService
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpdatePDSHelmVersion", steplog, pdsLabels, 0)
+	})
+
+	It(steplog, func() {
+		steplog = "Install older helm verison"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+			target := tc.NewTargetCluster(ctx)
+			isOldversion, err := target.IsLatestPDSHelm(params.PDSHelmVersions.PreviousHelmVersion)
+			if !isOldversion {
+				err = target.DeRegisterFromControlPlane()
+				log.FailOnError(err, "Target Cluster DeRegisteration failed")
+
+				err = pdslib.RegisterClusterToControlPlane(params, tenantID, true)
+				log.FailOnError(err, "Target Cluster Registeration failed")
+			} else {
+				log.InfoD("Target Cluster is with old pds helm version %s", params.PDSHelmVersions.PreviousHelmVersion)
+			}
+		})
+
+		steplog = "Deploy and validate data service"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			deps = DeployInANamespaceAndVerify(params.InfraToTest.Namespace)
+		})
+
+		defer func() {
+			steplog = "Delete created dataservice deployments"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				for _, dep := range deps {
+					_, err := pdslib.DeleteDeployment(*dep.Id)
+					log.FailOnError(err, "error while deleting deployments")
+				}
+				isDeploymentsDeleted = true
+			})
+		}()
+
+		log.InfoD("List of created deployments")
+		for _, deployment := range deps {
+			log.InfoD("%v ", *deployment.ClusterResourceName)
+		}
+
+		steplog = "Running Workloads before scaling up of dataservices"
+		Step(steplog, func() {
+			for _, ds := range params.DataServiceToTest {
+				dataservices = append(dataservices, ds)
+			}
+			for index, deployment := range deps {
+				log.InfoD("Running Workloads on deployment %v ", *deployment.ClusterResourceName)
+				pod, dep, err = RunWorkloads(wlparams, dataservices[index], deployment, namespace)
+				log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", dataservices[index].Name))
+			}
+		})
+
+		defer func() {
+			Step("Delete the workload generating deployments", func() {
+				for _, ds := range params.DataServiceToTest {
+					if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else if Contains(dataServicePodWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				}
+			})
+		}()
+
+		steplog = "Upgrade to latest pds helm verison"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			err = pdslib.RegisterClusterToControlPlane(params, tenantID, false)
+			log.FailOnError(err, "Target Cluster Registeration failed")
+		})
+
+		steplog = "Validate Deployments after pds-system pods are up"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			for _, dep := range deps {
+				err = pdslib.ValidateDataServiceDeployment(dep, namespace)
+				log.FailOnError(err, "Error while validating data services")
+				log.InfoD("Deployments pods are up and healthy")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			for _, dep := range deps {
+				resp, err := pdslib.DeleteDeployment(*dep.Id)
+				log.FailOnError(err, "error while deleting deployments")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}
 	})
 })
 
@@ -1000,17 +1110,21 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 		time.Sleep(10 * time.Second)
 
 		Step("Deploy All Supported Data Services", func() {
-			var cleanupall []string
+			var cleanupall []*pds.ModelsDeployment
 			for _, namespace := range namespaces {
 				log.InfoD("Deploying dataservices in namespace: %v", namespace.Name)
 				deps := DeployInANamespaceAndVerify(namespace.Name)
 				cleanupall = append(cleanupall, deps...)
 			}
 
-			log.InfoD("List of created deployments: %v ", cleanupall)
+			log.InfoD("List of created deployments")
+			for _, dep := range cleanupall {
+				log.InfoD("%v ", dep.ClusterResourceName)
+			}
+
 			Step("Delete created deployments", func() {
 				for _, dep := range cleanupall {
-					_, err := pdslib.DeleteDeployment(dep)
+					_, err := pdslib.DeleteDeployment(*dep.Id)
 					log.FailOnError(err, "error while deleting deployments")
 				}
 			})
@@ -1260,13 +1374,14 @@ func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp 
 	}
 }
 
-func DeployInANamespaceAndVerify(nname string) []string {
-	var cleanup []string
+func DeployInANamespaceAndVerify(nname string) []*pds.ModelsDeployment {
+	var cleanup []*pds.ModelsDeployment
 	for _, ds := range params.DataServiceToTest {
 		Step("Deploy and validate data service", func() {
 			isDeploymentsDeleted = false
 			deployment, _, _, err = DeployandValidateDataServices(ds, nname, tenantID, projectID)
 			log.FailOnError(err, "Error while deploying data services")
+			cleanup = append(cleanup, deployment)
 		})
 	}
 	return cleanup
