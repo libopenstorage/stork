@@ -883,23 +883,6 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createCRDObjects(appSpec, ns, app)
-			if err != nil {
-				return nil, true, err
-			}
-			return obj, false, nil
-		}
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
-		if err != nil {
-			return nil, err
-		}
-		if obj != nil {
-			specObjects = append(specObjects, obj)
-		}
-	}
-
-	for _, appSpec := range app.SpecList {
-		t := func() (interface{}, bool, error) {
 			obj, err := k.createVolumeSnapshotRestore(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
