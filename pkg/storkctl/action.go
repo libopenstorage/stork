@@ -7,6 +7,7 @@ import (
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -14,20 +15,22 @@ import (
 )
 
 const (
-	failoverCommand             = "failover"
-	nameTimeSuffixFormat string = "2006-01-02-150405"
+	failoverCommand                    = "failover"
+	nameTimeSuffixFormat string        = "2006-01-02-150405"
+	actionWaitTimeout    time.Duration = 1 * time.Microsecond
+	actionWaitInterval   time.Duration = 10 * time.Second
 )
 
-func newPerformCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	performCommands := &cobra.Command{
-		Use:   "perform",
-		Short: "Perform actions",
+func newDoCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	doCommands := &cobra.Command{
+		Use:   "Do",
+		Short: "do actions",
 	}
 
-	performCommands.AddCommand(
+	doCommands.AddCommand(
 		newFailoverCommand(cmdFactory, ioStreams),
 	)
-	return performCommands
+	return doCommands
 }
 
 func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
@@ -40,10 +43,13 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 				util.CheckErr(err)
 				return
 			}
+			var actions []storkv1.Action
 			for _, namespace := range namespaces {
 				if anyActionIncomplete(namespace) {
 					printMsg(
-						fmt.Sprintf("Cannot perform new action as an action is already scheduled/in-progress for %v", namespace),
+						fmt.Sprintf(
+							"failed to start failover for namespace %v as an action is already in scheduled/in-progress",
+							namespace),
 						ioStreams.Out)
 					continue
 				}
@@ -59,13 +65,50 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 				}
 				_, err = storkops.Instance().CreateAction(&action)
 				if err != nil {
-					util.CheckErr(err)
-					return
+					printMsg(
+						fmt.Sprintf(
+							"failed to start failover for namespace %v due to error %v",
+							namespace, err),
+						ioStreams.ErrOut)
+				}
+				printMsg(fmt.Sprintf("started failover for namespace %v", namespace), ioStreams.Out)
+				actions = append(actions, action)
+			}
+			for _, action := range actions {
+				isSuccessful, err := waitForActionToComplete(action.Name, action.Namespace)
+				if err != nil {
+					var errorMessage string
+					if _, ok := err.(*task.ErrTimedOut); ok {
+						errorMessage = fmt.Sprintf(
+							"timed out waiting for action %v/%v to complete; action might still be scheduled/in-progress\n",
+							action.Namespace, action.Name) +
+							getDebugMessage(action.Name, action.Namespace)
+					} else {
+						errorMessage = fmt.Sprintf(
+							"received error when trying to get the action %v/%v: %v",
+							action.Namespace, action.Name, err)
+					}
+					printMsg(errorMessage, ioStreams.ErrOut)
+				}
+				if isSuccessful {
+					printMsg(
+						fmt.Sprintf("successfully completed action %v/%v\n", action.Namespace, action.Name),
+						ioStreams.Out)
+				} else {
+					printMsg(
+						fmt.Sprintf("failed to complete action %v/%v\n", action.Namespace, action.Name)+
+							getDebugMessage(action.Name, action.Namespace),
+						ioStreams.Out)
 				}
 			}
+
 		},
 	}
 	return getClusterPairCommand
+}
+
+func isActionIncomplete(action *storkv1.Action) bool {
+	return action.Status == storkv1.ActionStatusScheduled || action.Status == storkv1.ActionStatusInProgress
 }
 
 // check if there is already an Action scheduled or in-progress
@@ -76,7 +119,7 @@ func anyActionIncomplete(namespace string) bool {
 		return false
 	}
 	for _, action := range actionList.Items {
-		if action.Status == storkv1.ActionStatusScheduled || action.Status == storkv1.ActionStatusInProgress {
+		if isActionIncomplete(&action) {
 			return true
 		}
 	}
@@ -85,4 +128,33 @@ func anyActionIncomplete(namespace string) bool {
 
 func newActionName(action storkv1.ActionType) string {
 	return strings.Join([]string{string(action), time.Now().Format(nameTimeSuffixFormat)}, "-")
+}
+
+func waitForActionToComplete(actionName, namespace string) (bool, error) {
+	action, err := task.DoRetryWithTimeout(
+		func() (interface{}, bool, error) {
+			action, err := storkops.Instance().GetAction(actionName, namespace)
+			if err != nil {
+				return nil, true, err
+			}
+			return action, isActionIncomplete(action), nil
+		},
+		actionWaitTimeout,
+		actionWaitInterval)
+	if err != nil {
+		return false, err
+	}
+	if action.(*storkv1.Action).Status == storkv1.ActionStatusFailed {
+		return false, nil
+	}
+	return true, nil
+}
+
+func getDebugMessage(actionName, namespace string) string {
+	return "For details on the action, use:" + getCmdDescribeAction(actionName, namespace) +
+		"\nTo view stork logs, use: kubectl -n kube-system logs -l name=stork"
+}
+
+func getCmdDescribeAction(actionName, namespace string) string {
+	return fmt.Sprintf("kubectl describe action %v -n %v", actionName, namespace)
 }

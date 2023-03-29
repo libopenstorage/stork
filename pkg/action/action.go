@@ -10,9 +10,12 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/rest"
@@ -25,6 +28,7 @@ import (
 const (
 	validateCRDInterval time.Duration = 5 * time.Second
 	validateCRDTimeout  time.Duration = 1 * time.Minute
+	actionExpiryTime    time.Duration = 24 * time.Hour
 )
 
 func NewActionController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *ActionController {
@@ -67,10 +71,13 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 
 	if action.Status == storkv1.ActionStatusScheduled {
 		if err = ac.handle(context.TODO(), action); err != nil {
-			logrus.Errorf("%s: %s: %s", reflect.TypeOf(ac), action.Name, err)
+			log.ActionLog(action).Errorf("ActionController handle failed with %s", err)
+			ac.recorder.Event(action, v1.EventTypeWarning, "ActionController", err.Error())
 			return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 		}
 	}
+
+	ac.pruneActions(action.Namespace)
 
 	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
@@ -79,12 +86,13 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 	ac.updateStatus(action, storkv1.ActionStatusInProgress)
 	switch action.Spec.ActionType {
 	case storkv1.ActionTypeFailover:
+		log.ActionLog(action).Info("started failover")
 		err := ac.volDriver.Failover(action)
 		if err != nil {
 			ac.updateStatus(action, storkv1.ActionStatusFailed)
 			return err
 		}
-		resourceutils.ScaleReplicas(action.Namespace, true, printFunc, ac.config)
+		resourceutils.ScaleReplicas(action.Namespace, true, ac.printFunc(action, "ScaleReplicas"), ac.config)
 		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
@@ -93,15 +101,21 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 	return nil
 }
 
-func printFunc(msg, stream string) {
-	switch stream {
-	case "out":
-		logrus.Infof(msg)
-	case "err":
-		logrus.Errorf(msg)
-	default:
-		logrus.Errorf("printFunc received invalid stream")
-		logrus.Errorf(msg)
+func (ac *ActionController) printFunc(action *storkv1.Action, reason string) func(string, string) {
+	return func(msg, stream string) {
+		actionLog := log.ActionLog(action)
+		switch stream {
+		case "out":
+			actionLog.Infof(msg)
+			ac.recorder.Event(action, v1.EventTypeNormal, reason, msg)
+		case "err":
+			actionLog.Errorf(msg)
+			ac.recorder.Event(action, v1.EventTypeWarning, reason, msg)
+		default:
+			actionLog.Errorf("printFunc received invalid stream")
+			actionLog.Errorf(msg)
+			ac.recorder.Event(action, v1.EventTypeWarning, reason, msg)
+		}
 	}
 }
 
@@ -109,7 +123,23 @@ func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus st
 	action.Status = actionStatus
 	err := ac.client.Update(context.TODO(), action)
 	if err != nil {
-		logrus.Errorf("failed to update Action status %v/%v with error %v", action.Name, actionStatus, err)
+		log.ActionLog(action).Errorf("failed to update action status to %v with error %v", action.Status, err)
+	}
+}
+
+// delete any action older than actionExpiryTime
+func (ac *ActionController) pruneActions(namespace string) {
+	actionList, err := storkops.Instance().ListActions(namespace)
+	if err != nil {
+		logrus.Errorf("call to fetch ActionList to prune older actions failed with error %v", err)
+	}
+	for _, action := range actionList.Items {
+		if time.Now().Sub(action.CreationTimestamp.Local()) >= actionExpiryTime {
+			err = storkops.Instance().DeleteAction(action.Name, namespace)
+			if err != nil {
+				log.ActionLog(&action).Errorf("received error when deleting expired action %v", err)
+			}
+		}
 	}
 }
 

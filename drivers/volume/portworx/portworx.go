@@ -2440,15 +2440,7 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 
 func (p *portworx) Failover(action *storkapi.Action) error {
 	namespace := action.Namespace
-	logrus.Infof("failover: namespace %s", namespace)
-
-	// TODO(dgoel): when should we return error,
-	// for example if a volume promote fails
-	// and should we just log an error and continue
-
-	// TODO(dgoel): show relevant events in the Action CR
-	// return list of errors (as above) - controller can use to log events
-	// for ex: a volume promote failed
+	logrus.Infof("volumeDriver failover for namespace %s", namespace)
 
 	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 	if err != nil {
@@ -2471,7 +2463,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 
 		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
-			return fmt.Errorf("error fetching volume for pvc: %v", err)
+			return fmt.Errorf("error fetching volume for pvc %v", err)
 		}
 
 		volDriver, err := p.getUserVolDriver(pvc.Annotations, namespace)
@@ -2497,7 +2489,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 		}
 		volLocator.VolumeLabels["promote"] = "true"
 		if err := volDriver.Set(vol.GetId(), volLocator, nil); err != nil {
-			return fmt.Errorf("failed to promote %v: %v", vol.GetId(), err)
+			return fmt.Errorf("failed to promote volume %v with error %v", vol.GetId(), err)
 		}
 		count_promoted_volumes += 1
 		logrus.Infof("promoted volume %v", vol.GetId())
