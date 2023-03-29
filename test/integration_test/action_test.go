@@ -38,10 +38,7 @@ func setupOnce(t *testing.T) {
 	executeOnDestination(t, funcCreateSecret)
 }
 
-// test basic workflow:
-// 1. start an app on source
-// 2. migrate k8s resources to destination
-// 3. scale down app on source and do failover on dest
+// Simple failover with one namespace and one app
 func testFailoverBasic(t *testing.T) {
 	appKey := "mysql-nearsync"
 	instanceIDs := []string{"failover"}
@@ -65,11 +62,12 @@ func testFailoverBasic(t *testing.T) {
 	logrus.Infof("scaleFactor: %v", scaleFactor)
 
 	executeOnDestination(t, func() {
-		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
 	})
 }
 
+// Failover namespace without a migration on the destination
 func testFailoverWithoutMigration(t *testing.T) {
 	appKey := "mysql-nearsync"
 	instanceIDs := []string{"failover"}
@@ -81,13 +79,14 @@ func testFailoverWithoutMigration(t *testing.T) {
 	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
 	executeOnDestination(t, func() {
-		_, err := createActionCR(t, actionName, namespaces[0], ctxs[0])
+		_, err := createActionCR(t, actionName, namespaces[0])
 		require.Error(t, err, "create action CR should have errored out")
 		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/4, defaultWaitInterval/4)
 		require.Error(t, err, "did not expect app to start")
 	})
 }
 
+// Failover multiple namespaces simultaneously
 func testFailoverForMultipleNamespaces(t *testing.T) {
 	appKey := "mysql-nearsync"
 	instanceIDs := []string{"failover-1", "failover-2"}
@@ -111,15 +110,16 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
-	scaleFactor := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactor: %v", scaleFactor)
+	scaleFactors := scaleDownApps(t, ctxs)
+	logrus.Infof("scaleFactors: %v", scaleFactors)
 
 	executeOnDestination(t, func() {
-		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
 	})
 }
 
+// Failover a namespace with multiple running applications
 func testFailoverWithMultipleApplications(t *testing.T) {
 	appKey := "mysql-nearsync"
 	additionalAppKeys := []string{"cassandra"}
@@ -143,15 +143,19 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
-	scaleFactor := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactor: %v", scaleFactor)
+	scaleFactors := scaleDownApps(t, ctxs)
+	logrus.Infof("scaleFactors: %v", scaleFactors)
 
 	executeOnDestination(t, func() {
-		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
 	})
 }
 
+// Failover a namespace when the nearsync node for a volume is down
+// TODO(horntail): this test still needs to be tested and the enabled
+// It depends on a change that will prevent promote call from going
+// through if PX is down on the nearsync node for a volume
 func testFailoverForFailedPromoteVolume(t *testing.T) {
 	appKey := "mysql-nearsync"
 	instanceIDs := []string{"failover"}
@@ -209,7 +213,7 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 
 		volumeDriver.StopDriver([]node.Node{nodeObj}, false, nil)
 
-		startFailover(t, actionName, namespaces, preMigrationCtxs)
+		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, false)
 
 		volumeDriver.StartDriver(nodeObj)
@@ -221,10 +225,9 @@ func startFailover(
 	t *testing.T,
 	actionName string,
 	namespaces []string,
-	preMigrationCtxs []*scheduler.Context,
 ) {
-	for idx, ctx := range preMigrationCtxs {
-		_, err := createActionCR(t, actionName, namespaces[idx], ctx)
+	for _, namespace := range namespaces {
+		_, err := createActionCR(t, actionName, namespace)
 		require.NoError(t, err, "error creating Action CR")
 	}
 }
@@ -242,7 +245,7 @@ func validateFailover(
 			require.NoError(t, err, "error waiting for app to get to running state")
 			validateActionCR(t, actionName, namespaces[idx], true)
 		} else {
-			require.Error(t, err, "error waiting for app to get to running state")
+			require.Error(t, err, "did not expect app to get to running state")
 			validateActionCR(t, actionName, namespaces[idx], false)
 		}
 	}

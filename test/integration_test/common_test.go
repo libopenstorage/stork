@@ -1048,13 +1048,12 @@ func triggerMigrationMultiple(
 
 func createActionCR(
 	t *testing.T,
-	actionAppKey,
+	actionName,
 	namespace string,
-	ctx *scheduler.Context,
 ) (*storkv1.Action, error) {
 	actionSpec := storkv1.Action{
 		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      actionAppKey,
+			Name:      actionName,
 			Namespace: namespace,
 		},
 		Spec: storkv1.ActionSpec{
@@ -1078,37 +1077,41 @@ func validateActionCR(t *testing.T, actionName, namespace string, isSuccessful b
 func scaleDownApps(
 	t *testing.T,
 	ctxs []*scheduler.Context,
-) map[string]int32 {
-	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
-	require.NoError(t, err, "unexpected error on GetScaleFactorMap")
+) []map[string]int32 {
+	var scaleFactors []map[string]int32
 
-	newScaleFactor := make(map[string]int32) // scale down
-	for k := range scaleFactor {
-		newScaleFactor[k] = 0
-	}
+	for _, ctx := range ctxs {
+		scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctx)
+		require.NoError(t, err, "unexpected error on GetScaleFactorMap")
+		scaleFactors = append(scaleFactors, scaleFactor)
 
-	err = schedulerDriver.ScaleApplication(ctxs[0], newScaleFactor)
-	require.NoError(t, err, "unexpected error on ScaleApplication")
+		zeroScaleFactor := make(map[string]int32) // scale down
+		for k := range scaleFactor {
+			zeroScaleFactor[k] = 0
+		}
 
-	// check if the app is scaled down
-	_, err = task.DoRetryWithTimeout(
-		func() (interface{}, bool, error) {
-			newScaleFactor, err = schedulerDriver.GetScaleFactorMap(ctxs[0])
-			if err != nil {
-				return "", true, err
-			}
-			for k := range newScaleFactor {
-				if int(newScaleFactor[k]) != 0 {
-					return "", true, fmt.Errorf("expected scale to be 0")
+		err = schedulerDriver.ScaleApplication(ctx, zeroScaleFactor)
+		require.NoError(t, err, "unexpected error on ScaleApplication")
+
+		// check if the app is scaled down
+		_, err = task.DoRetryWithTimeout(
+			func() (interface{}, bool, error) {
+				updatedScaleFactor, err := schedulerDriver.GetScaleFactorMap(ctx)
+				if err != nil {
+					return "", true, err
 				}
-			}
-			return "", false, nil
-		},
-		defaultWaitTimeout,
-		defaultWaitInterval)
-	require.NoError(t, err, "unexpected error on scaling down application.")
-
-	return scaleFactor
+				for k := range updatedScaleFactor {
+					if int(updatedScaleFactor[k]) != 0 {
+						return "", true, fmt.Errorf("expected scale to be 0")
+					}
+				}
+				return "", false, nil
+			},
+			defaultWaitTimeout,
+			defaultWaitInterval)
+		require.NoError(t, err, "unexpected error on scaling down application.")
+	}
+	return scaleFactors
 }
 
 func validateMigrationOnSrcAndDest(
