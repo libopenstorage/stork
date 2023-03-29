@@ -31,7 +31,7 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
-RELEASE_VER := 23.3.0
+RELEASE_VER := 23.3.1
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
 BIN         :=$(BASE_DIR)/bin
