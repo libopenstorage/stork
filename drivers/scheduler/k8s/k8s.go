@@ -1072,6 +1072,8 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		}
 	}
 
+	// creation of CustomResourceObjects must most likely be done *last*,
+	// as it may have resources that depend on other resources, which should be create *before* this
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createCustomResourceObjects(appSpec, ns, app)
@@ -2504,6 +2506,22 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []corev1.Pod
 
+	// destruction of CustomResourceObjects must most likely be done *first*,
+	// as it may have resources that depend on other resources, which should be deleted *after* this
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyCustomResourceObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
 	var removeSpecs []interface{}
 	for _, appSpec := range ctx.App.SpecList {
 		if repoInfo, ok := appSpec.(*scheduler.HelmRepo); ok {
@@ -2527,20 +2545,6 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			if err != nil {
 				return err
 			}
-		}
-	}
-
-	for _, appSpec := range ctx.App.SpecList {
-		t := func() (interface{}, bool, error) {
-			err := k.destroyCustomResourceObjects(appSpec, ctx.App)
-			if err != nil {
-				return nil, true, err
-			} else {
-				return nil, false, nil
-			}
-		}
-		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
-			return err
 		}
 	}
 
