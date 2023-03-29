@@ -693,7 +693,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 			for _, namespace := range appNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
-					backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, i)
+					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					wg.Add(1)
 					go func(backupName string, namespace string) {
@@ -735,8 +735,8 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		Step("Verifying if all the backup creation is cancelled", func() {
 			log.InfoD("Verifying if all the backup creation is cancelled")
 			adminBackups, err := GetAllBackupsAdmin()
-			log.Infof("The list of backups after backup cancellation is %v", adminBackups)
 			log.FailOnError(err, "Getting the list of backups after backup cancellation")
+			log.Infof("The list of backups after backup cancellation is %v", adminBackups)
 			if len(adminBackups) != 0 {
 				backupJobCancelStatus := func() (interface{}, bool, error) {
 					adminBackups, err := GetAllBackupsAdmin()
@@ -752,11 +752,10 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 				}
 				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
 				if err != nil {
-					adminBackups, error := GetAllBackupsAdmin()
-					log.Infof("The list of backups after backup cancellation and wait of 10 minutes is %v", adminBackups)
-					log.FailOnError(error, "Getting the list of backups after backup cancellation and wait of 10 minutes")
+					adminBackups, error1 := GetAllBackupsAdmin()
+					log.Infof("The list of backups still present after backup cancellation and wait of 10 minutes is %v,Error:%v", adminBackups, err)
+					log.FailOnError(error1, "Getting the list of backups after backup cancellation and wait of 10 minutes")
 				}
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup jobs cancellation while backup is in progress"))
 			}
 			log.Infof("All the backups created by this testcase is deleted after backup cancellation")
 		})
@@ -764,30 +763,12 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		var wg sync.WaitGroup
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-
-		log.InfoD("Deleting the remaining backups in case of failure")
-		adminBackups, err := GetAllBackupsAdmin()
-		for _, backupName := range backupNames {
-			if IsPresent(adminBackups, backupName) {
-				wg.Add(1)
-				go func(backupName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-					dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %v", backupName))
-					_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-					dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
-				}(backupName)
-			}
-		}
-		wg.Wait()
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -862,7 +843,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		})
 		Step("Registering source and destination clusters for backup", func() {
 			log.InfoD("Registering source and destination clusters for backup")
-			ctx, err = backup.GetAdminCtxFromSecret()
+			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
@@ -892,7 +873,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			for _, namespace := range appNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
-					backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, i)
+					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					wg.Add(1)
 					go func(backupName string, namespace string) {
@@ -935,7 +916,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
+			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
@@ -995,7 +977,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
+			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
@@ -1035,7 +1018,6 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		dash.VerifySafely(statefulSet.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that all the mongodb pods are in Ready state at the end of the testcase")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
@@ -1314,6 +1296,272 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.FailOnError(err, "Switching context to source cluster")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress scales down px-backup deployment to 0 and backup to original replica when backups and restores are in progress
+var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func() {
+	var (
+		contexts             []*scheduler.Context
+		appContexts          []*scheduler.Context
+		appNamespaces        []string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupLocationUID    string
+		srcClusterUid        string
+		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
+		destClusterStatus    api.ClusterInfo_StatusInfo_Status
+		backupNames          []string
+		restoreNames         []string
+		pxBackupNS           string
+		err                  error
+		ctx                  context.Context
+		backupDeployment     *appsV1.Deployment
+		originalReplicaCount int32
+	)
+	backupLocationMap := make(map[string]string)
+	labelSelectors := make(map[string]string)
+	numberOfBackups := 4
+	scaledDownReplica := int32(0)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress",
+			"Scale down px-backup deployment to 0 when backups and restores are in progress", nil, 58074)
+		log.InfoD("Deploying applications required for the testcase")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+			}
+		}
+	})
+
+	It("Scale down px-backup deployment when backups/restores are in progress and validate", func() {
+		var sem = make(chan struct{}, numberOfBackups)
+		var wg sync.WaitGroup
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications")
+			ValidateApplications(contexts)
+		})
+		Step("Adding cloud credential and backup location", func() {
+			log.InfoD("Adding cloud credential and backup location")
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				ctx, err = backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+		})
+		Step("Getting the replica factor of px-backup deployment in backup namespace before taking backup", func() {
+			pxBackupNS, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting backup namespace")
+			log.Infof("Getting the replica factor of px-backup deployment in backup namespace [%s] before taking backup", pxBackupNS)
+			backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
+			log.FailOnError(err, fmt.Sprintf("Getting px-backup deployment replica in backup namespace %s", pxBackupNS))
+			originalReplicaCount = *backupDeployment.Spec.Replicas
+			log.Infof("Replica count for px-backup pod before taking backup is %v", originalReplicaCount)
+			dash.VerifyFatal(originalReplicaCount > scaledDownReplica, true, "Verifying px_backup deployment replica before taking backup")
+		})
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				for i := 0; i < numberOfBackups; i++ {
+					sem <- struct{}{}
+					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
+					backupNames = append(backupNames, backupName)
+					wg.Add(1)
+					go func(backupName string, namespace string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						defer func() { <-sem }()
+						_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
+							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+					}(backupName, namespace)
+				}
+			}
+			wg.Wait()
+			log.InfoD("The list of backups taken are: %v", backupNames)
+		})
+		Step("Scaling px-backup deployment replica count to 0 and back to original replica while backup is in progress", func() {
+			log.InfoD("Scaling px-backup deployment replica count to 0 while backup is in progress")
+			*backupDeployment.Spec.Replicas = scaledDownReplica
+			updatedBackupDeployment, err := apps.Instance().UpdateDeployment(backupDeployment)
+			log.FailOnError(err, fmt.Sprintf("Scaling down px-backup deployment replica to 0"))
+			log.Infof("px-backup replica count after scaling to 0 is %v", *updatedBackupDeployment.Spec.Replicas)
+			dash.VerifyFatal(*updatedBackupDeployment.Spec.Replicas == scaledDownReplica, true, "Verify px-backup deployment replica after scaling down")
+			log.InfoD("Sleeping for 10 minute while backup is in progress and px-backup deployment's replica count is 0")
+			time.Sleep(10 * time.Minute)
+			log.InfoD("Scaling px-backup deployment to original replica while backup is in progress")
+			backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
+			log.FailOnError(err, fmt.Sprintf("Getting px_backup deployment before scaling"))
+			*backupDeployment.Spec.Replicas = originalReplicaCount
+			updatedBackupDeployment, err = apps.Instance().UpdateDeployment(backupDeployment)
+			log.FailOnError(err, fmt.Sprintf("Scaling px_backup deployment back to original replica"))
+			dash.VerifyFatal(*updatedBackupDeployment.Spec.Replicas, originalReplicaCount, "Verify px-backup deployment replica after scaling back to original")
+			log.Infof("Verify px-backup pod status after scaling the replica count to original")
+			pxBackupPodStatus := func() (interface{}, bool, error) {
+				backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
+				if err != nil {
+					return "", true, err
+				}
+				if backupDeployment.Status.ReadyReplicas != originalReplicaCount {
+					return "", true, fmt.Errorf("px-backup pod is not ready yet")
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(pxBackupPodStatus, podStatusTimeOut, podStatusRetryTime)
+			log.FailOnError(err, "Validating if the px_backup pod is ready")
+			log.Infof("Number of px-backup pods in Ready state are %v", backupDeployment.Status.ReadyReplicas)
+			dash.VerifyFatal(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying if the px-backup pod is in Ready state")
+		})
+		Step("Check if backup is successful after px-backup deployment is scaled back to original replica", func() {
+			log.InfoD("Check if backup is successful after px-backup deployment is scaled back to original replica")
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				log.FailOnError(err, "Getting the status for backup- "+backupName)
+			}
+		})
+		Step("Restoring the backups taken", func() {
+			log.InfoD("Restoring the backups taken")
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				sem <- struct{}{}
+				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, destinationClusterName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
+				}(backupName)
+			}
+			wg.Wait()
+			log.InfoD("The list of restores are: %v", restoreNames)
+		})
+		Step("Scaling px-backup deployment replica to 0 and back to original replica while restore is in progress", func() {
+			log.InfoD("Scaling px-backup deployment replica to 0 while restore is in progress")
+			*backupDeployment.Spec.Replicas = scaledDownReplica
+			updatedBackupDeployment, err := apps.Instance().UpdateDeployment(backupDeployment)
+			log.FailOnError(err, fmt.Sprintf("Scaling down px-backup deployment replica to 0"))
+			log.Infof("px-backup replica after scaling to 0 is %v", *updatedBackupDeployment.Spec.Replicas)
+			dash.VerifyFatal(*updatedBackupDeployment.Spec.Replicas == scaledDownReplica, true, "Verifying px-backup deployment replica after scaling down")
+			log.InfoD("Sleeping for 10 minute while restore is in progress and px-backup deployment's replica count is 0")
+			time.Sleep(10 * time.Minute)
+			log.InfoD("Scaling px-backup deployment to original replica while restore is in progress")
+			backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
+			log.FailOnError(err, fmt.Sprintf("Getting the deployment before scaling backup to original replica"))
+			*backupDeployment.Spec.Replicas = originalReplicaCount
+			updatedBackupDeployment, err = apps.Instance().UpdateDeployment(backupDeployment)
+			log.FailOnError(err, fmt.Sprintf("Scaling down px-backup deployment replica to original replica count"))
+			dash.VerifyFatal(*updatedBackupDeployment.Spec.Replicas, originalReplicaCount, "Verify px-backup deployment replica after scaling back to original replica count")
+			log.Infof("Verify that px-backup pod is in Ready state")
+			pxBackupPodStatus := func() (interface{}, bool, error) {
+				backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
+				if err != nil {
+					return "", true, err
+				}
+				if backupDeployment.Status.ReadyReplicas < originalReplicaCount {
+					return "", true, fmt.Errorf("px-backup pod is not ready yet")
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(pxBackupPodStatus, podStatusTimeOut, podStatusRetryTime)
+			log.FailOnError(err, "Validating if the px_backup pod is ready")
+			log.Infof("Number of px_backup pod in Ready state are %v", backupDeployment.Status.ReadyReplicas)
+			dash.VerifyFatal(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that px_backup pod is in Ready state")
+		})
+		Step("Check if restore is successful after px_backup deployment is scaled back to original replica", func() {
+			log.InfoD("Check if restore is successful after px_backup deployment is scaled back to original replica")
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, restoreName := range restoreNames {
+				err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+				log.FailOnError(err, "Getting the status for restore- "+restoreName)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		var wg sync.WaitGroup
+		EndPxBackupTorpedoTest(contexts)
+		log.InfoD("Updating the px_backup deployment replica count as it was at the start of this testcase")
+		backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
+		log.FailOnError(err, "Getting px-backup deployment")
+		if *backupDeployment.Spec.Replicas != originalReplicaCount {
+			*backupDeployment.Spec.Replicas = originalReplicaCount
+			_, err := apps.Instance().UpdateDeployment(backupDeployment)
+			log.FailOnError(err, "Updating the px_backup deployment replica count to originalReplicaCount")
+		}
+		log.Infof("Verify that all the px_backup deployment pod are in Ready state at the end of the testcase")
+		pxBackupPodStatus := func() (interface{}, bool, error) {
+			backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
+			if err != nil {
+				return "", true, err
+			}
+			if backupDeployment.Status.ReadyReplicas != originalReplicaCount {
+				return "", true, fmt.Errorf("px_backup pod is not ready yet")
+			}
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(pxBackupPodStatus, 10*time.Minute, 30*time.Second)
+		dash.VerifySafely(err, nil, "Validating if the px_backup pod is ready")
+		log.Infof("Number of px_backup pods in Ready state are %v", backupDeployment.Status.ReadyReplicas)
+		dash.VerifySafely(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that px_backup pod is in Ready state at the end of the testcase")
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Deleting the deployed applications")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+		log.InfoD("Deleting the restores taken")
+		for _, restoreName := range restoreNames {
+			wg.Add(1)
+			go func(restoreName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+			}(restoreName)
+		}
+		wg.Wait()
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })

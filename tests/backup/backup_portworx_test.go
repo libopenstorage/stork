@@ -137,6 +137,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	labelSelectors := make(map[string]string)
 	params := make(map[string]string)
 	var backupNames []string
+	var scName string
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58065)
@@ -209,7 +210,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		})
 		Step("Create new storage class for restore", func() {
 			log.InfoD("Create new storage class for restore")
-			scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
+			scName = fmt.Sprintf("replica-sc-%v", time.Now().Unix())
 			params["repl"] = "2"
 			k8sStorage := storage.Instance()
 			v1obj := metaV1.ObjectMeta{
@@ -235,7 +236,6 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			for _, namespace := range bkpNamespaces {
 				for _, backupName := range backupNames {
 					restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
-					scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
 					pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace [%s]. Total PVCs - %d", namespace, len(pvcs.Items)))
 					singlePvc := pvcs.Items[0]

@@ -763,9 +763,6 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 
 	for _, line := range strings.Split(strings.TrimSpace(driveOutput), "\n") {
 		drive := &node.BlockDrive{}
-		if strings.Contains(line, "mapper") {
-			continue
-		}
 		columns := strings.Split(line, " ")
 		for _, col := range columns {
 			if ok, _ := regexp.MatchString("^NAME", col); ok {

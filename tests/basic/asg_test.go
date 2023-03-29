@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"time"
@@ -244,6 +246,34 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
 	})
 
+	if Inst().N.String() == ibm.DriverName {
+
+		t := func() (interface{}, bool, error) {
+
+			currState, err := Inst().N.GetNodeState(nodeToKill)
+			if err != nil {
+				return "", true, err
+			}
+			if currState == ibm.DELETED {
+				return "", false, nil
+			}
+
+			return "", true, fmt.Errorf("node [%s] not deleted yet, current state : %s", nodeToKill.Hostname, currState)
+
+		}
+
+		_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+		log.FailOnError(err, "failed to kill node [%s]", nodeToKill.Hostname)
+
+		log.InfoD("Initiating IBM worker pool rebalance")
+		err = Inst().N.RebalanceWorkerPool()
+		log.FailOnError(err, "Failed to rebalance worker pool")
+		log.Infof("Sleeping for 2 mins for new node to start deploying")
+		time.Sleep(2 * time.Minute)
+		err = waitforIBMNodeTODeploy()
+		log.FailOnError(err, "Failed to deploy new worker")
+	}
+
 	stepLog = "Wait for 10 min. to node get replaced by autoscalling group"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -261,4 +291,42 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 		log.InfoD(stepLog)
 		ValidateClusterSize(int64(len(storageDriverNodes)))
 	})
+}
+
+func waitforIBMNodeTODeploy() error {
+
+	workers, err := ibm.GetWorkers()
+	if err != nil {
+		return err
+	}
+
+	var newWorkerID string
+	for _, w := range workers {
+		if w.Lifecycle.ActualState == ibm.DEPLOYING || w.Lifecycle.ActualState == ibm.PROVISIONING {
+			newWorkerID = w.WorkerID
+			break
+		}
+	}
+
+	if newWorkerID == "" {
+		return fmt.Errorf("no new worker found")
+	}
+
+	n := node.Node{}
+	n.StorageNode = &api.StorageNode{Hostname: newWorkerID}
+	t := func() (interface{}, bool, error) {
+
+		currState, err := Inst().N.GetNodeState(n)
+		if err != nil {
+			return "", true, err
+		}
+		if currState == ibm.DEPLOYED {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("node [%s] not deployed yet, current state : %s", n.Hostname, currState)
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 20*time.Minute, 1*time.Minute)
+
+	return err
 }
