@@ -2160,8 +2160,7 @@ func SetSourceKubeConfig() error {
 	if err != nil {
 		return err
 	}
-	err = SetClusterContext(sourceClusterConfigPath)
-	return err
+	return SetClusterContext(sourceClusterConfigPath)
 }
 
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
@@ -2170,8 +2169,7 @@ func SetDestinationKubeConfig() error {
 	if err != nil {
 		return err
 	}
-	err = SetClusterContext(destClusterConfigPath)
-	return err
+	return SetClusterContext(destClusterConfigPath)
 }
 
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it

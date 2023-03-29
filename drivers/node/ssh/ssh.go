@@ -202,7 +202,7 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	return s.updateDriver()
 }
 
-// RefreshDriver Refreshes the driver on a context switch
+// RefreshDriver refreshes the driver on a context switch
 func RefreshDriver(s *SSH) error {
 	return s.updateDriver()
 }
