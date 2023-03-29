@@ -61,10 +61,9 @@ const (
 	globalAzureLockedBucketPrefix             = "global-azure-locked"
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
+	pxBackupDeployment                        = "px-backup"
 	backupDeleteTimeout                       = 20 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
-	mongodbPodStatusTimeout                   = 20 * time.Minute
-	mongodbPodStatusRetryTime                 = 30 * time.Second
 	backupLocationDeleteTimeout               = 30 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
 	rebootNodeTimeout                         = 1 * time.Minute
@@ -76,6 +75,8 @@ const (
 	fullMaintenancePod                        = "full-maintenance-repo"
 	jobDeleteTimeout                          = 5 * time.Minute
 	jobDeleteRetryTime                        = 10 * time.Second
+	podStatusTimeOut                          = 20 * time.Minute
+	podStatusRetryTime                        = 30 * time.Second
 )
 
 var (
