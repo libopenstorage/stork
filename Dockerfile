@@ -16,6 +16,11 @@ RUN mkdir bin && \
     chmod a+x aws-iam-authenticator && \
     mv aws-iam-authenticator bin
 
+# Install IBM Cloud SDK
+RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
+    ibmcloud plugin install -f vpc-infrastructure && \
+    ibmcloud plugin install -f container-service
+
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
 COPY Makefile Makefile
@@ -58,6 +63,8 @@ WORKDIR /go/src/github.com/portworx/torpedo
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
 COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
 COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator /bin/aws-iam-authenticator
+COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
+COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 
 ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
