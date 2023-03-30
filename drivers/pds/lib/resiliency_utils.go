@@ -85,7 +85,6 @@ func CloseResiliencyChannel() {
 	}
 }
 
-//
 func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, namespace string, CheckTillReplica int32) error {
 	switch FailureType.Type {
 	// Case when we want to reboot a node onto which a deployment pod is coming up

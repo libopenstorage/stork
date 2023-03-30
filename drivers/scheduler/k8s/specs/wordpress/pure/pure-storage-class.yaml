@@ -21,3 +21,5 @@ parameters:
   # * Default export rules
   backend: "pure_file"
 allowVolumeExpansion: true
+mountOptions:
+  - nosuid
