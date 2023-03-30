@@ -10,7 +10,6 @@ import (
 	snapclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
-	"github.com/portworx/sched-ops/k8s/common"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +43,6 @@ type Ops interface {
 	VolumeSnapshotRestoreOps
 	ApplicationRegistrationOps
 	ResourceTransformOps
-	PlatformCredentialOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
@@ -177,10 +175,7 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-	err = common.SetRateLimiter(c.config)
-	if err != nil {
-		return err
-	}
+
 	c.kube, err = kubernetes.NewForConfig(c.config)
 	if err != nil {
 		return err

@@ -40,7 +40,6 @@ type StorkV1alpha1Interface interface {
 	MigrationsGetter
 	MigrationSchedulesGetter
 	NamespacedSchedulePoliciesGetter
-	PlatformCredentialsGetter
 	ResourceTransformationsGetter
 	RulesGetter
 	SchedulePoliciesGetter
@@ -107,10 +106,6 @@ func (c *StorkV1alpha1Client) MigrationSchedules(namespace string) MigrationSche
 
 func (c *StorkV1alpha1Client) NamespacedSchedulePolicies(namespace string) NamespacedSchedulePolicyInterface {
 	return newNamespacedSchedulePolicies(c, namespace)
-}
-
-func (c *StorkV1alpha1Client) PlatformCredentials(namespace string) PlatformCredentialInterface {
-	return newPlatformCredentials(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) ResourceTransformations(namespace string) ResourceTransformationInterface {

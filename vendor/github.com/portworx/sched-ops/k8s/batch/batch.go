@@ -5,7 +5,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/portworx/sched-ops/k8s/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	batchv1client "k8s.io/client-go/kubernetes/typed/batch/v1"
 	batchv1beta1client "k8s.io/client-go/kubernetes/typed/batch/v1beta1"
@@ -145,10 +144,7 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-	err = common.SetRateLimiter(c.config)
-	if err != nil {
-		return err
-	}
+
 	c.batch, err = batchv1client.NewForConfig(c.config)
 	if err != nil {
 		return err
