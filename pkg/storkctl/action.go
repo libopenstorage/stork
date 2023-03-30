@@ -6,10 +6,12 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
 )
@@ -17,13 +19,13 @@ import (
 const (
 	failoverCommand                    = "failover"
 	nameTimeSuffixFormat string        = "2006-01-02-150405"
-	actionWaitTimeout    time.Duration = 1 * time.Microsecond
+	actionWaitTimeout    time.Duration = 10 * time.Minute
 	actionWaitInterval   time.Duration = 10 * time.Second
 )
 
 func newDoCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	doCommands := &cobra.Command{
-		Use:   "Do",
+		Use:   "do",
 		Short: "do actions",
 	}
 
@@ -70,6 +72,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 							"failed to start failover for namespace %v due to error %v",
 							namespace, err),
 						ioStreams.ErrOut)
+					continue
 				}
 				printMsg(fmt.Sprintf("started failover for namespace %v", namespace), ioStreams.Out)
 				actions = append(actions, action)
@@ -80,7 +83,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 					var errorMessage string
 					if _, ok := err.(*task.ErrTimedOut); ok {
 						errorMessage = fmt.Sprintf(
-							"timed out waiting for action %v/%v to complete; action might still be scheduled/in-progress\n",
+							"timed out waiting for action %v/%v to complete\naction might still be scheduled/in-progress\n",
 							action.Namespace, action.Name) +
 							getDebugMessage(action.Name, action.Namespace)
 					} else {
@@ -89,16 +92,36 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 							action.Namespace, action.Name, err)
 					}
 					printMsg(errorMessage, ioStreams.ErrOut)
-				}
-				if isSuccessful {
-					printMsg(
-						fmt.Sprintf("successfully completed action %v/%v\n", action.Namespace, action.Name),
-						ioStreams.Out)
 				} else {
-					printMsg(
-						fmt.Sprintf("failed to complete action %v/%v\n", action.Namespace, action.Name)+
-							getDebugMessage(action.Name, action.Namespace),
-						ioStreams.Out)
+					if isSuccessful {
+						printMsg(
+							fmt.Sprintf("successfully completed action %v/%v", action.Namespace, action.Name),
+							ioStreams.Out)
+					} else {
+						printMsg(
+							fmt.Sprintf("failed to complete action %v/%v\n", action.Namespace, action.Name)+
+								getDebugMessage(action.Name, action.Namespace),
+							ioStreams.Out)
+					}
+
+					listOptions := metav1.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("involvedObject.name", action.Name).String(),
+						Watch:         false,
+					}
+					actionEvents, err := core.Instance().ListEvents(action.Namespace, listOptions)
+					if err != nil {
+						fmt.Printf("Error in listing events: %v", err)
+					} else if len(actionEvents.Items) >= 0 {
+						printEvents := ""
+						for _, item := range actionEvents.Items {
+							printEvents += "\n- " + item.Message
+						}
+						printMsg(
+							fmt.Sprintf(
+								"events for the action:%v\nfor details, use: %v",
+								printEvents, getCmdDescribeAction(action.Name, action.Namespace)),
+							ioStreams.Out)
+					}
 				}
 			}
 
@@ -151,8 +174,9 @@ func waitForActionToComplete(actionName, namespace string) (bool, error) {
 }
 
 func getDebugMessage(actionName, namespace string) string {
-	return "For details on the action, use:" + getCmdDescribeAction(actionName, namespace) +
-		"\nTo view stork logs, use: kubectl -n kube-system logs -l name=stork"
+	return "debug info:\n" +
+		"- for details on the action, use: " + getCmdDescribeAction(actionName, namespace) +
+		"\n- to view stork logs, use: kubectl -n kube-system logs -l name=stork"
 }
 
 func getCmdDescribeAction(actionName, namespace string) string {
