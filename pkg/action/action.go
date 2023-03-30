@@ -134,7 +134,7 @@ func (ac *ActionController) pruneActions(namespace string) {
 		logrus.Errorf("call to fetch ActionList to prune older actions failed with error %v", err)
 	}
 	for _, action := range actionList.Items {
-		if time.Now().Sub(action.CreationTimestamp.Local()) >= actionExpiryTime {
+		if time.Since(action.CreationTimestamp.Local()) >= actionExpiryTime {
 			err = storkops.Instance().DeleteAction(action.Name, namespace)
 			if err != nil {
 				log.ActionLog(&action).Errorf("received error when deleting expired action %v", err)
