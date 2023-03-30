@@ -106,6 +106,13 @@ func BackupInitInstance() {
 
 	// Setting the common password
 	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
+	// Dumping source and destination kubeconfig to file system path
+	log.Infof("Dumping source and destination kubeconfig to file system path")
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
+	DumpKubeconfigs(kubeconfigList)
 }
 
 var dash *aetosutil.Dashboard
