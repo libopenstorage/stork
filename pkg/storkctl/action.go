@@ -6,12 +6,10 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
 )
@@ -101,25 +99,6 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 						printMsg(
 							fmt.Sprintf("failed to complete action %v/%v\n", action.Namespace, action.Name)+
 								getDebugMessage(action.Name, action.Namespace),
-							ioStreams.Out)
-					}
-
-					listOptions := metav1.ListOptions{
-						FieldSelector: fields.OneTermEqualSelector("involvedObject.name", action.Name).String(),
-						Watch:         false,
-					}
-					actionEvents, err := core.Instance().ListEvents(action.Namespace, listOptions)
-					if err != nil {
-						fmt.Printf("Error in listing events: %v", err)
-					} else if len(actionEvents.Items) >= 0 {
-						printEvents := ""
-						for _, item := range actionEvents.Items {
-							printEvents += "\n- " + item.Message
-						}
-						printMsg(
-							fmt.Sprintf(
-								"events for the action:%v\nfor details, use: %v",
-								printEvents, getCmdDescribeAction(action.Name, action.Namespace)),
 							ioStreams.Out)
 					}
 				}
