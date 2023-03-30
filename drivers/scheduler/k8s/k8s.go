@@ -4147,23 +4147,6 @@ func (k *K8s) createCRDObjects(
 	app *spec.AppSpec,
 ) (interface{}, error) {
 
-	// Add security annotations if running with auth-enabled
-	configMapName := k.secretConfigMapName
-	if configMapName != "" {
-		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
-		if err != nil {
-			return nil, &scheduler.ErrFailedToGetConfigMap{
-				Name:  configMapName,
-				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
-			}
-		}
-		err = k.addSecurityAnnotation(specObj, configMap, app)
-		if err != nil {
-			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
-		}
-
-	}
-
 	if obj, ok := specObj.(*apiextensionsv1.CustomResourceDefinition); ok {
 		obj.Namespace = ns.Name
 		err := k8sApiExtensions.RegisterCRD(obj)
