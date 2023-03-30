@@ -302,6 +302,7 @@ var (
 	contain       = gomega.ContainSubstring
 	beTrue        = gomega.BeTrue
 	beNumerically = gomega.BeNumerically
+	k8sCore       = core.Instance()
 )
 
 // Backup vars
@@ -704,6 +705,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 					err := Inst().V.ValidateVolumeSetup(vol)
 					processError(err, errChan...)
 				})
+			}
+		})
+
+		Step("validate mount options for pure volumes", func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
 	})
@@ -1195,6 +1202,32 @@ func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			}
 		}
 	})
+
+}
+
+// ValidateMountOptionsWithPureVolumes is the ginkgo spec for executing a check for mountOptions flag
+func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	var requiredMountOptions = []string{"nosuid"}
+	vols, err := Inst().S.GetVolumes(ctx)
+	processError(err, errChan...)
+	for _, vol := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+		if err != nil {
+			log.FailOnError(err, " Failed to get pvc for volume %s", vol)
+		}
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
+		}
+		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
+			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+			err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
+			dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+		} else {
+			log.Infof("There is no nosuid mount option in this volume %s", vol)
+		}
+	}
 
 }
 

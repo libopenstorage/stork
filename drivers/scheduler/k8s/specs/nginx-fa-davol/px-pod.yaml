@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mount-fa-pod
+spec:
+  # Specify a volume that uses the claim defined in pvc.yaml
+  volumes:
+  - name: nginx-vol
+    persistentVolumeClaim:
+        claimName: mount-fa-pvc
+  containers:
+  - name: nginx
+    image: nginx
+    # Configure a mount for the volume We define above
+    volumeMounts:
+    - name: nginx-vol
+      mountPath: /data
+    ports:
+    - containerPort: 80
