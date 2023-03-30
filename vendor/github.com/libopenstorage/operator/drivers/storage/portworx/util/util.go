@@ -142,8 +142,6 @@ const (
 	AnnotationPreflightCheck = pxAnnotationPrefix + "/preflight-check"
 	// AnnotationDisableCSRAutoApprove annotation will disable CSR auto-approval
 	AnnotationDisableCSRAutoApprove = pxAnnotationPrefix + "/disable-csr-approve"
-	// AnnotationDisableCSRAutoApprove annotation to set priority for SCCs.
-	AnnotationSCCPriority = pxAnnotationPrefix + "/scc-priority"
 
 	// EnvKeyPXImage key for the environment variable that specifies Portworx image
 	EnvKeyPXImage = "PX_IMAGE"
@@ -1276,18 +1274,6 @@ func CountStorageNodes(
 
 	logrus.Debugf("storageNodesCount: %d, k8sNodesStoragePodCouldRun: %d", storageNodesCount, len(k8sNodesStoragePodCouldRun))
 	return storageNodesCount, nil
-}
-
-func CleanupObject(obj client.Object) {
-	obj.SetGenerateName("")
-	obj.SetUID("")
-	obj.SetResourceVersion("")
-	obj.SetGeneration(0)
-	obj.SetSelfLink("")
-	obj.SetCreationTimestamp(metav1.Time{})
-	obj.SetFinalizers(nil)
-	obj.SetOwnerReferences(nil)
-	obj.SetManagedFields(nil)
 }
 
 // IsFreshInstall checks whether it's a fresh Portworx install

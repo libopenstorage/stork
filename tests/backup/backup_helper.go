@@ -1770,3 +1770,193 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	log.Infof("Succesfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
 	return nil
 }
+
+// CreateBackupWithNamespaceLabel creates a backup with Namespace label
+func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
+	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
+	postRuleUid string, namespaceLabel string, ctx context.Context) error {
+
+	backupDriver := Inst().Backup
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bkpLocation,
+			Uid:  bkpLocationUID,
+		},
+		Cluster:        clusterName,
+		LabelSelectors: labelSelectors,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  uid,
+		},
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		NsLabelSelectors: namespaceLabel,
+	}
+	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	if err != nil {
+		return err
+	}
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Successfully created backup [%s] with namespace label [%s]", backupName, namespaceLabel)
+	return nil
+}
+
+// CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label
+func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string,
+	labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string,
+	postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context.Context) error {
+
+	var firstScheduleBackupName string
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bkpLocation,
+			Uid:  bkpLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		NsLabelSelectors: namespaceLabel,
+	}
+	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return err
+	}
+	firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return err
+	}
+	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Successfully created schedule backup [%s] with namespace label [%s]", firstScheduleBackupName, namespaceLabel)
+	return nil
+}
+
+// CreateNamespaceLabelBackupWithoutCheck creates backup with namespace label filter without waiting for success
+func CreateNamespaceLabelBackupWithoutCheck(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
+	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
+	postRuleUid string, namespaceLabel string, ctx context.Context) (*api.BackupInspectResponse, error) {
+
+	backupDriver := Inst().Backup
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bkpLocation,
+			Uid:  bkpLocationUID,
+		},
+		Cluster:        clusterName,
+		LabelSelectors: labelSelectors,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  uid,
+		},
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		NsLabelSelectors: namespaceLabel,
+	}
+	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// CreateNamespaceLabelScheduleBackupWithoutCheck creates a schedule backup with namespace label filter without waiting for success
+func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string,
+	labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string,
+	schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bkpLocation,
+			Uid:  bkpLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		NsLabelSelectors: namespaceLabel,
+	}
+	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  scheduleName,
+		Uid:   "",
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}

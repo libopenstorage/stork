@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/portworx/sched-ops/k8s/common"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -224,10 +223,7 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-	err = common.SetRateLimiter(c.config)
-	if err != nil {
-		return err
-	}
+
 	c.client, err = dynamic.NewForConfig(c.config)
 	if err != nil {
 		return err
