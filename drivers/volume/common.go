@@ -813,6 +813,14 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 	}
 }
 
+// ValidateMountOptions for pure volumes
+func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateMountOptions",
+	}
+}
+
 // Contains return
 func (d *DefaultDriver) Contains(nodes []*api.StorageNode, n *api.StorageNode) bool {
 	return false

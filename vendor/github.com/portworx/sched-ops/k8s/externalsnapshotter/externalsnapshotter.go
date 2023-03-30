@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1beta1"
-	"github.com/portworx/sched-ops/k8s/common"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -139,10 +138,7 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-	err = common.SetRateLimiter(c.config)
-	if err != nil {
-		return err
-	}
+
 	c.client, err = v1beta1.NewForConfig(c.config)
 	if err != nil {
 		return err

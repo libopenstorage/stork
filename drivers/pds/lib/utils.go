@@ -1329,7 +1329,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 }
 
 // RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
-//func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string, installOldVersion bool) error {
+// func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string, installOldVersion bool) error {
 func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, installOldVersion bool) error {
 	log.InfoD("Test control plane url connectivity.")
 	var helmChartversion string

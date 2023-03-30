@@ -26,7 +26,6 @@ type CronOps interface {
 	ListCronJobs(namespace string, filterOptions metav1.ListOptions) (*v1.CronJobList, error)
 }
 
-// NamespaceDefault is a default namespace for cronjob
 var NamespaceDefault = "default"
 
 // CreateCronJob creates the given cronJob
