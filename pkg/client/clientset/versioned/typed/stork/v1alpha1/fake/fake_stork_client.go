@@ -28,6 +28,10 @@ type FakeStorkV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeStorkV1alpha1) Actions(namespace string) v1alpha1.ActionInterface {
+	return &FakeActions{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) ApplicationBackups(namespace string) v1alpha1.ApplicationBackupInterface {
 	return &FakeApplicationBackups{c, namespace}
 }
