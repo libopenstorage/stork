@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -1079,10 +1080,17 @@ func (r *ResourceCollector) ApplyResource(
 func (r *ResourceCollector) DeleteResources(
 	dynamicInterface dynamic.Interface,
 	objects []runtime.Unstructured,
+	updateTimestamp chan int,
 ) error {
 	// First delete all the objects
 	deleteStart := metav1.Now()
+	startTime := time.Now()
 	for _, object := range objects {
+		elapsedTime := time.Since(startTime)
+		if elapsedTime > utils.FifteenMinuteWait {
+			updateTimestamp <- utils.UpdateRestoreCrTimestamp
+			startTime = time.Now()
+		}
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
 			continue
@@ -1108,6 +1116,11 @@ func (r *ResourceCollector) DeleteResources(
 
 	// Then wait for them to actually be deleted
 	for _, object := range objects {
+		elapsedTime := time.Since(startTime)
+		if elapsedTime > utils.FifteenMinuteWait {
+			updateTimestamp <- utils.UpdateRestoreCrTimestamp
+			startTime = time.Now()
+		}
 		// Objects that support merging aren't deleted
 		if r.mergeSupportedForResource(object) {
 			continue
