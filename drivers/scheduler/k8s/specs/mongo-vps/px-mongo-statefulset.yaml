@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  labels:
+    name: mongo
+spec:
+  ports:
+  - port: 27017
+    targetPort: 27017
+  clusterIP: None
+  selector:
+    role: mongo
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+spec:
+  serviceName: "mongo"
+  replicas: 2
+  selector:
+    matchLabels:
+      role: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo-sts
+        role: mongo
+        environment: test
+        replicaset: MainRepSet
+    spec:
+      schedulerName: stork
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: mongo
+          image: mongo
+          command:
+            - "mongod"
+            - "--bind_ip"
+            - "0.0.0.0"
+            - "--replSet"
+            - "MainRepSet"
+          resources:
+            requests:
+              memory: 200Mi
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+            - name: mongodb-journal
+              mountPath: /var/lib/mongodb/journal
+  volumeClaimTemplates:
+  - metadata:
+      name: mongodb-data
+      labels:
+        app: "mongo-sts"
+      annotations:
+        volume.beta.kubernetes.io/storage-class: "px-sc-repl-1"
+        placement_strategy: "mongo-vps"
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+  - metadata:
+      name: mongodb-journal
+      labels:
+        app: "mongo-sts"
+      annotations:
+        volume.beta.kubernetes.io/storage-class: "px-sc-repl-1"
+        placement_strategy: "mongo-vps"
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi

@@ -886,7 +886,17 @@ github.com/portworx/sched-ops/k8s/prometheus
 github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
+github.com/portworx/sched-ops/k8s/talisman
 github.com/portworx/sched-ops/task
+# github.com/portworx/talisman v1.1.3
+## explicit; go 1.13
+github.com/portworx/talisman/pkg/apis/portworx
+github.com/portworx/talisman/pkg/apis/portworx/v1beta1
+github.com/portworx/talisman/pkg/apis/portworx/v1beta2
+github.com/portworx/talisman/pkg/client/clientset/versioned
+github.com/portworx/talisman/pkg/client/clientset/versioned/scheme
+github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta1
+github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta2
 # github.com/pquerna/cachecontrol v0.1.0
 ## explicit; go 1.16
 github.com/pquerna/cachecontrol
