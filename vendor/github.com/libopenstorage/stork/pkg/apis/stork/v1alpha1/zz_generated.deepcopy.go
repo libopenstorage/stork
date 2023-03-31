@@ -233,15 +233,15 @@ func (in *ApplicationBackupSpec) DeepCopyInto(out *ApplicationBackupSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.Selectors != nil {
-		in, out := &in.Selectors, &out.Selectors
+	if in.RancherProjects != nil {
+		in, out := &in.RancherProjects, &out.RancherProjects
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}
 	}
-	if in.NamespaceSelector != nil {
-		in, out := &in.NamespaceSelector, &out.NamespaceSelector
+	if in.Selectors != nil {
+		in, out := &in.Selectors, &out.Selectors
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
@@ -713,6 +713,13 @@ func (in *ApplicationRestoreSpec) DeepCopyInto(out *ApplicationRestoreSpec) {
 	}
 	if in.StorageClassMapping != nil {
 		in, out := &in.StorageClassMapping, &out.StorageClassMapping
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.RancherProjectMapping != nil {
+		in, out := &in.RancherProjectMapping, &out.RancherProjectMapping
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
@@ -1826,6 +1833,13 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.ExcludeSelectors != nil {
+		in, out := &in.ExcludeSelectors, &out.ExcludeSelectors
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.IncludeOptionalResourceTypes != nil {
 		in, out := &in.IncludeOptionalResourceTypes, &out.IncludeOptionalResourceTypes
 		*out = make([]string, len(*in))
@@ -2113,7 +2127,6 @@ func (in *PlatformCredential) DeepCopyInto(out *PlatformCredential) {
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	in.Spec.DeepCopyInto(&out.Spec)
-	in.Cluster.DeepCopyInto(&out.Cluster)
 	return
 }
 

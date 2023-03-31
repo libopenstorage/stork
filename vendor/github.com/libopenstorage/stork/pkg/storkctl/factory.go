@@ -73,12 +73,12 @@ func NewFactory() Factory {
 
 func (f *factory) BindFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&f.namespace, "namespace", "n", "default", "If present, the namespace scope for this CLI request")
-	flags.StringVar(&f.kubeconfig, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests")
-	flags.StringVar(&f.context, "context", "", "The name of the kubeconfig context to use")
-	flags.StringVarP(&f.outputFormat, "output", "o", outputFormatTable, "Output format. One of: table|json|yaml")
-	flags.BoolVarP(&f.watch, "watch", "w", false, "watch stork resourrces")
-	flags.IntVarP(&f.qps, "qps", "", 100, "Restrict number of k8s api requests from stork")
-	flags.IntVarP(&f.burst, "burst", "", 100, "Restrict number of k8s api requests from stork")
+	flags.StringVar(&f.kubeconfig, "kubeconfig", "", "path to the kubeconfig file to use for CLI requests")
+	flags.StringVar(&f.context, "context", "", "name of the kubeconfig context to use")
+	flags.StringVarP(&f.outputFormat, "output", "o", outputFormatTable, "output format. One of: table|json|yaml")
+	flags.BoolVarP(&f.watch, "watch", "w", false, "watch stork resources")
+	flags.IntVarP(&f.qps, "qps", "", 100, "restrict number of k8s API requests from stork")
+	flags.IntVarP(&f.burst, "burst", "", 100, "restrict number of k8s API requests from stork")
 }
 
 func (f *factory) BindGetFlags(flags *pflag.FlagSet) {

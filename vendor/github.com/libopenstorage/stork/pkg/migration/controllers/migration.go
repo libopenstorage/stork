@@ -3,23 +3,21 @@ package controllers
 import (
 	"context"
 	"fmt"
-	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/utils"
-
-	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/mitchellh/hashstructure"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -55,6 +53,8 @@ const (
 	// StorkMigrationName is the annotation used to identify resource migrated by
 	// migration CRD name
 	StorkMigrationName = "stork.libopenstorage.org/migrationName"
+	// StorkMigrationNamespace is the annotation used to identify migration CRD's namespace
+	StorkMigrationNamespace = "stork.libopenstorage.org/migrationNamespace"
 	// StorkMigrationTime is the annotation used to specify time of migration
 	StorkMigrationTime = "stork.libopenstorage.org/migrationTime"
 	// StorkMigrationCRDActivateAnnotation is the annotation used to keep track of
@@ -69,11 +69,18 @@ const (
 	StorkAnnotationPrefix = "stork.libopenstorage.org/"
 	// StorkNamespacePrefix for namespace created for applying dry run resources
 	StorkNamespacePrefix = "stork-transform"
-	// Max number of times to retry applying resources on the desination
+	// Max number of times to retry applying resources on the destination
 	maxApplyRetries      = 10
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
 	boundRetryInterval   = 5 * time.Second
+	applyRetryInterval   = 5 * time.Second
+)
+
+var (
+	AutoCreatedPrefixes = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+
+	ErrReapplyLatestVersionMsg = "please apply your changes to the latest version and try again"
 )
 
 // NewMigration creates a new instance of MigrationController.
@@ -95,6 +102,15 @@ type MigrationController struct {
 	resourceCollector       resourcecollector.ResourceCollector
 	migrationAdminNamespace string
 	migrationMaxThreads     int
+}
+
+// RemoteConfig contains config and clients to interact with destination cluster
+type RemoteClient struct {
+	remoteConfig         *rest.Config
+	remoteAdminConfig    *rest.Config
+	adminClient          *kubernetes.Clientset
+	remoteInterface      dynamic.Interface
+	remoteAdminInterface dynamic.Interface
 }
 
 // Init Initialize the migration controller
@@ -472,11 +488,14 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			if err != nil {
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
 				log.MigrationLog(migration).Errorf(message)
-				m.recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					message)
-				return nil
+				// Don't need to log this event as Stork retries if it fails to update
+				if !strings.Contains(message, ErrReapplyLatestVersionMsg) {
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						message)
+					return nil
+				}
 			}
 		} else {
 			migration.Status.Stage = stork_api.MigrationStageApplications
@@ -498,11 +517,14 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		if err != nil {
 			message := fmt.Sprintf("Error migrating resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
-			m.recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				message)
-			return nil
+			// Don't need to log this event as Stork retries if it fails to update
+			if !strings.Contains(message, ErrReapplyLatestVersionMsg) {
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					message)
+				return nil
+			}
 		}
 	case stork_api.MigrationStageFinal:
 		return nil
@@ -533,9 +555,10 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
 		return err
 	}
-	destObjects, err := rc.GetResources(
+	destObjects, _, err := rc.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false,
@@ -549,9 +572,10 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
-	srcObjects, err := m.resourceCollector.GetResources(
+	srcObjects, _, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false,
@@ -913,8 +937,10 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			return fmt.Errorf("scheduler in Admin Cluster pair is not ready. Status: %v", schedulerStatus)
 		}
 	}
-	resKinds := make(map[string]string)
+	resGroups := make(map[string]string)
 	var updateObjects, allObjects []runtime.Unstructured
+
+	var pvcsWithOwnerRef []v1.PersistentVolumeClaim
 	// Don't modify resources if mentioned explicitly in specs
 	resourceCollectorOpts := resourcecollector.Options{}
 	if *migration.Spec.SkipServiceUpdate {
@@ -930,15 +956,16 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		resourceCollectorOpts.IncludeAllNetworkPolicies = true
 	}
 	if volumesOnly {
-		allObjects, err = m.getVolumeOnlyMigrationResources(migration, resourceCollectorOpts)
+		allObjects, pvcsWithOwnerRef, err = m.getVolumeOnlyMigrationResources(migration, resourceCollectorOpts)
 		if err != nil {
 			// already raised event in getVolumeOnlyMigrationResources()
 			return err
 		}
 	} else {
-		allObjects, err = m.resourceCollector.GetResources(
+		allObjects, pvcsWithOwnerRef, err = m.resourceCollector.GetResources(
 			migration.Spec.Namespaces,
 			migration.Spec.Selectors,
+			migration.Spec.ExcludeSelectors,
 			nil,
 			migration.Spec.IncludeOptionalResourceTypes,
 			false,
@@ -983,7 +1010,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			resourceInfo.Group = "core"
 		}
 		resourceInfo.Version = gvk.Version
-		resKinds[gvk.Kind] = gvk.Version
+		resGroups[gvk.Group] = gvk.Version
 		resourceInfos = append(resourceInfos, resourceInfo)
 		updateObjects = append(updateObjects, obj)
 	}
@@ -1013,13 +1040,34 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, updateObjects, resKinds, clusterPair, crdList)
+
+	err = m.applyResources(migration, updateObjects, resGroups, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error applying resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error applying resources: %v", err)
+		return err
+	}
+
+	err = m.updateOwnerReferenceOnPVC(migration, updateObjects, clusterPair, pvcsWithOwnerRef)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error updating PVC resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error updating PVC resource:: %v", err)
+		return err
+	}
+
+	err = m.updateStorageClassOnPV(migration, updateObjects, clusterPair)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error updating StorageClass on PV: %v", err))
+		log.MigrationLog(migration).Errorf("Error updating Storageclass for PV: %v", err)
 		return err
 	}
 
@@ -1170,7 +1218,7 @@ func (m *MigrationController) updateResourceStatus(
 	}
 }
 
-func (m *MigrationController) getRemoteAdminConfig(migration *stork_api.Migration) (*kubernetes.Clientset, error) {
+func (m *MigrationController) getRemoteClient(migration *stork_api.Migration) (*RemoteClient, error) {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, err
@@ -1183,15 +1231,32 @@ func (m *MigrationController) getRemoteAdminConfig(migration *stork_api.Migratio
 			return nil, err
 		}
 	}
-
 	adminClient, err := kubernetes.NewForConfig(remoteAdminConfig)
 	if err != nil {
 		return nil, err
 	}
-	return adminClient, nil
+	remoteInterface, err := dynamic.NewForConfig(remoteConfig)
+	if err != nil {
+		return nil, err
+	}
+	remoteAdminInterface := remoteInterface
+	if migration.Spec.AdminClusterPair != "" {
+		remoteAdminInterface, err = dynamic.NewForConfig(remoteAdminConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+	remoteClient := RemoteClient{
+		remoteConfig:         remoteConfig,
+		remoteAdminConfig:    remoteAdminConfig,
+		adminClient:          adminClient,
+		remoteInterface:      remoteInterface,
+		remoteAdminInterface: remoteAdminInterface,
+	}
+	return &remoteClient, err
 }
 
-func (m *MigrationController) checkAndUpdateService(
+func (m *MigrationController) isServiceUpdated(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
 	objHash uint64,
@@ -1204,13 +1269,13 @@ func (m *MigrationController) checkAndUpdateService(
 		// older behaviour where we delete and create svc resources
 		return false, nil
 	}
-	adminClient, err := m.getRemoteAdminConfig(migration)
+	remoteClient, err := m.getRemoteClient(migration)
 	if err != nil {
 		return false, err
 	}
 
 	// compare and decide if update to svc is required on dest cluster
-	curr, err := adminClient.CoreV1().Services(svc.GetNamespace()).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+	curr, err := remoteClient.adminClient.CoreV1().Services(svc.GetNamespace()).Get(context.TODO(), svc.Name, metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -1226,23 +1291,18 @@ func (m *MigrationController) checkAndUpdateService(
 			log.MigrationLog(migration).Infof("skipping service update, no changes found since last migration %d/%d", old, objHash)
 			return true, nil
 		}
+		return false, nil
 	}
-	// update annotations
-	for k, v := range svc.Annotations {
-		curr.Annotations[k] = v
+	return false, nil
+}
+
+func (m *MigrationController) secretToBeMigrated(name string) bool {
+	for _, prefix := range AutoCreatedPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return false
+		}
 	}
-	// update selectors
-	if curr.Spec.Selector == nil {
-		curr.Spec.Selector = make(map[string]string)
-	}
-	for k, v := range svc.Spec.Selector {
-		curr.Spec.Selector[k] = v
-	}
-	_, err = adminClient.CoreV1().Services(svc.GetNamespace()).Update(context.TODO(), curr, metav1.UpdateOptions{})
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return true
 }
 
 func (m *MigrationController) checkAndUpdateDefaultSA(
@@ -1253,14 +1313,14 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &sourceSA); err != nil {
 		return fmt.Errorf("error converting to serviceAccount: %v", err)
 	}
-	adminClient, err := m.getRemoteAdminConfig(migration)
+	remoteClient, err := m.getRemoteClient(migration)
 	if err != nil {
 		return err
 	}
 
 	log.MigrationLog(migration).Infof("Updating service account(namespace/name : %s/%s) with image pull secrets", sourceSA.GetNamespace(), sourceSA.GetName())
 	// merge service account resource for default namespaces
-	destSA, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Get(context.TODO(), sourceSA.GetName(), metav1.GetOptions{})
+	destSA, err := remoteClient.adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Get(context.TODO(), sourceSA.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -1277,6 +1337,24 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 			destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, s)
 		}
 	}
+
+	for _, s := range sourceSA.Secrets {
+		if !m.secretToBeMigrated(s.Name) {
+			continue
+		}
+		found := false
+		for _, d := range destSA.Secrets {
+			if d.Name == s.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			destSA.Secrets = append(destSA.Secrets, s)
+		}
+	}
+	destSA.AutomountServiceAccountToken = sourceSA.AutomountServiceAccountToken
+
 	// merge annotation for SA
 	log.MigrationLog(migration).Infof("Updating service account(namespace/name : %s/%s) annotations", sourceSA.GetNamespace(), sourceSA.GetName())
 	if destSA.Annotations != nil {
@@ -1287,7 +1365,7 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 			destSA.Annotations[k] = v
 		}
 	}
-	_, err = adminClient.CoreV1().ServiceAccounts(destSA.GetNamespace()).Update(context.TODO(), destSA, metav1.UpdateOptions{})
+	_, err = remoteClient.adminClient.CoreV1().ServiceAccounts(destSA.GetNamespace()).Update(context.TODO(), destSA, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -1499,43 +1577,184 @@ func (m *MigrationController) getParsedLabels(
 	return m.getParsedMap(labels, clusterPair)
 }
 
-func (m *MigrationController) applyResources(
+// updateStorageClassOnPV updates StorageClass on PV object
+// StorageClass is created on destination if it doesn't exist
+func (m *MigrationController) updateStorageClassOnPV(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
-	resKinds map[string]string,
 	clusterPair *stork_api.ClusterPair,
-	crdList *stork_api.ApplicationRegistrationList,
 ) error {
-	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+	remoteClient, err := m.getRemoteClient(migration)
 	if err != nil {
 		return err
 	}
-	remoteAdminConfig := remoteConfig
-	// Use the admin cluter pair for cluster scoped resources if it has been configured
-	if migration.Spec.AdminClusterPair != "" {
-		remoteAdminConfig, err = getClusterPairSchedulerConfig(migration.Spec.AdminClusterPair, m.migrationAdminNamespace)
+	// Get a list of StorageClasses from destination
+	destStorageClasses, err := remoteClient.adminClient.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	destScExists := make(map[string]bool)
+	for _, sc := range destStorageClasses.Items {
+		destScExists[sc.Name] = true
+	}
+
+	for _, obj := range objects {
+		metadata, err := meta.Accessor(obj)
 		if err != nil {
 			return err
 		}
+		if obj.GetObjectKind().GroupVersionKind().Kind != "PersistentVolume" {
+			continue
+		}
+		destPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if scName, ok := destPV.Annotations[resourcecollector.CurrentStorageClassName]; ok {
+			// Create StorageClass on destination if it doesn't exist
+			if _, ok := destScExists[scName]; !ok {
+				// Get StorageClass from source
+				sc, err := storkcache.Instance().GetStorageClass(scName)
+				if err != nil {
+					return err
+				}
+				sc.UID = ""
+				sc.ResourceVersion = ""
+				log.MigrationLog(migration).Infof("Applying %v %v", sc.Kind, sc.Name)
+				for retries := 0; retries < maxApplyRetries; retries++ {
+					_, err = remoteClient.adminClient.StorageV1().StorageClasses().Create(context.TODO(), sc, metav1.CreateOptions{})
+					if err == nil || errors.IsAlreadyExists(err) {
+						// Update the map to reflect the new StorageClass that was created on destination
+						destScExists[scName] = true
+						break
+					}
+					log.MigrationLog(migration).Infof("Unable to create %v %v on destination due to err: %v. Retrying.", sc.Kind, sc.Name, err)
+					time.Sleep(applyRetryInterval)
+				}
+				if err != nil {
+					log.MigrationLog(migration).Errorf("All attempts to create %v %v on destination failed due to err: %v", sc.Kind, sc.Name, err)
+					return err
+				}
+			}
+			// IF StorageClass is already updated on destination PV, then no need to update
+			// It is possible that StorageClass was deleted manually on destination cluster while PV was present with StorageClass name
+			// To make sure such inconsistencies get fixed in subsequent migration, this check is being done after StorageClass creation
+			if scName == destPV.Spec.StorageClassName {
+				continue
+			}
+			// Update StorageClass on destination PV
+			destPV.Spec.StorageClassName = scName
+			log.MigrationLog(migration).Infof("Updating %v %v with StorageClass %v", destPV.Kind, destPV.Name, scName)
+			if _, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), destPV, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+		}
 	}
+	return nil
+}
 
-	adminClient, err := kubernetes.NewForConfig(remoteAdminConfig)
+// updateOwnerReferenceOnPVC updates owner reference on PVC objects
+// on destination cluster
+func (m *MigrationController) updateOwnerReferenceOnPVC(
+	migration *stork_api.Migration,
+	objects []runtime.Unstructured,
+	clusterPair *stork_api.ClusterPair,
+	pvcsWithOwnerRef []v1.PersistentVolumeClaim,
+) error {
+	remoteClient, err := m.getRemoteClient(migration)
 	if err != nil {
 		return err
 	}
-	// TODO: we should use k8s code generator logic to pluralize
-	// crd resources instead of depending on inflect lib
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
+
+	ruleset := resourcecollector.GetDefaultRuleSet()
+	for _, srcPvc := range pvcsWithOwnerRef {
+		destPvc, err := remoteClient.adminClient.CoreV1().PersistentVolumeClaims(srcPvc.GetNamespace()).Get(context.TODO(), srcPvc.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		destPvcOwnersList := make([]metav1.OwnerReference, 0)
+
+		// This loop finds the owner reference for the current pvc owner
+		for _, pvcOwner := range srcPvc.GetOwnerReferences() {
+			var dynamicClient dynamic.ResourceInterface
+			ownerName := ""
+			for _, o := range objects {
+				metadata, err := meta.Accessor(o)
+				if err != nil {
+					return err
+				}
+				objectType, err := meta.TypeAccessor(o)
+				if err != nil {
+					return err
+				}
+				// Found the source object which is the parent of the source pvc resource
+				if metadata.GetName() == pvcOwner.Name && objectType.GetKind() == pvcOwner.Kind {
+					ownerName = metadata.GetName()
+					resource := &metav1.APIResource{
+						Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
+						Namespaced: len(metadata.GetNamespace()) > 0,
+					}
+					if resource.Namespaced {
+						dynamicClient = remoteClient.remoteInterface.Resource(
+							o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+					} else {
+						dynamicClient = remoteClient.remoteAdminInterface.Resource(
+							o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
+					}
+					break
+				}
+			}
+
+			if len(ownerName) == 0 {
+				continue
+			}
+			destinationParentResourceUnstructured, err := dynamicClient.Get(context.TODO(), ownerName, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+
+			currOwner := metav1.OwnerReference{
+				APIVersion:         pvcOwner.APIVersion,
+				Kind:               pvcOwner.Kind,
+				Name:               pvcOwner.Name,
+				UID:                destinationParentResourceUnstructured.GetUID(),
+				Controller:         pvcOwner.Controller,
+				BlockOwnerDeletion: pvcOwner.BlockOwnerDeletion,
+			}
+			// There can be multiple owners for one resource. Update the current owner
+			// details in the list of owner references
+			destPvcOwnersList = append(destPvcOwnersList, currOwner)
+		}
+		if len(destPvcOwnersList) > 0 {
+			destPvc.SetOwnerReferences(destPvcOwnersList)
+			if _, err = remoteClient.adminClient.CoreV1().PersistentVolumeClaims(destPvc.GetNamespace()).Update(context.TODO(), destPvc, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m *MigrationController) applyResources(
+	migration *stork_api.Migration,
+	objects []runtime.Unstructured,
+	resGroups map[string]string,
+	clusterPair *stork_api.ClusterPair,
+	crdList *stork_api.ApplicationRegistrationList,
+) error {
+	remoteClient, err := m.getRemoteClient(migration)
+	if err != nil {
+		return err
+	}
+
+	ruleset := resourcecollector.GetDefaultRuleSet()
+
 	// create CRD on destination cluster
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
 			// only create relevant crds on dest cluster
-			if _, ok := resKinds[v.Kind]; !ok {
+			if _, ok := resGroups[v.Group]; !ok {
 				continue
 			}
 			config, err := rest.InClusterConfig()
@@ -1547,7 +1766,7 @@ func (m *MigrationController) applyResources(
 			if err != nil {
 				return err
 			}
-			destClnt, err := apiextensionsclient.NewForConfig(remoteAdminConfig)
+			destClnt, err := apiextensionsclient.NewForConfig(remoteClient.remoteAdminConfig)
 			if err != nil {
 				return err
 			}
@@ -1626,14 +1845,14 @@ func (m *MigrationController) applyResources(
 		}
 
 		// Don't create if the namespace already exists on the remote cluster
-		_, err = adminClient.CoreV1().Namespaces().Get(context.TODO(), namespace.Name, metav1.GetOptions{})
+		_, err = remoteClient.adminClient.CoreV1().Namespaces().Get(context.TODO(), namespace.Name, metav1.GetOptions{})
 		if err == nil {
 			continue
 		}
 
 		annotations := m.getParsedAnnotations(namespace.Annotations, clusterPair)
 		labels := m.getParsedLabels(namespace.Labels, clusterPair)
-		_, err = adminClient.CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
+		_, err = remoteClient.adminClient.CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        namespace.Name,
 				Labels:      labels,
@@ -1645,17 +1864,6 @@ func (m *MigrationController) applyResources(
 		}
 	}
 
-	remoteInterface, err := dynamic.NewForConfig(remoteConfig)
-	if err != nil {
-		return err
-	}
-	remoteAdminInterface := remoteInterface
-	if migration.Spec.AdminClusterPair != "" {
-		remoteAdminInterface, err = dynamic.NewForConfig(remoteAdminConfig)
-		if err != nil {
-			return err
-		}
-	}
 	var pvObjects, pvcObjects, updatedObjects []runtime.Unstructured
 	pvMapping := make(map[string]v1.ObjectReference)
 	// collect pv,pvc separately
@@ -1691,14 +1899,15 @@ func (m *MigrationController) applyResources(
 		}
 		pv.Annotations[StorkMigrationAnnotation] = "true"
 		pv.Annotations[StorkMigrationName] = migration.GetName()
+		pv.Annotations[StorkMigrationNamespace] = migration.GetNamespace()
 		pv.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		pv.Annotations = m.getParsedAnnotations(pv.Annotations, clusterPair)
 		pv.Labels = m.getParsedLabels(pv.Labels, clusterPair)
-		_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
+		_, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
 		if err != nil {
 			if err != nil && errors.IsAlreadyExists(err) {
 				var respPV *v1.PersistentVolume
-				respPV, err = adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
+				respPV, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
 				if err == nil {
 					// allow only annotation and reclaim policy update
 					// TODO: idle way should be to use Patch
@@ -1708,7 +1917,7 @@ func (m *MigrationController) applyResources(
 					respPV.Annotations = pv.Annotations
 					respPV.Spec.PersistentVolumeReclaimPolicy = pv.Spec.PersistentVolumeReclaimPolicy
 					respPV.ResourceVersion = ""
-					_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{})
+					_, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{})
 				}
 			}
 		}
@@ -1757,7 +1966,7 @@ func (m *MigrationController) applyResources(
 				fmt.Sprintf("Error applying resource: %v", msg))
 			continue
 		}
-		resp, err := adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+		resp, err := remoteClient.adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
 		if err == nil && resp != nil {
 			if hash, ok := resp.Annotations[resourcecollector.StorkResourceHash]; ok {
 				old, err := strconv.ParseUint(hash, 10, 64)
@@ -1777,7 +1986,7 @@ func (m *MigrationController) applyResources(
 		pvMapping[pvc.Spec.VolumeName] = objRef
 		deleteStart := metav1.Now()
 		isDeleted := false
-		err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Delete(context.TODO(), pvc.Name, metav1.DeleteOptions{})
+		err = remoteClient.adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Delete(context.TODO(), pvc.Name, metav1.DeleteOptions{})
 		if err != nil && !errors.IsNotFound(err) {
 			msg := fmt.Errorf("error deleting %v %v during migrate: %v", pvc.Kind, pvc.GetName(), err)
 			m.updateResourceStatus(
@@ -1788,7 +1997,7 @@ func (m *MigrationController) applyResources(
 			continue
 		} else {
 			for i := 0; i < deletedMaxRetries; i++ {
-				obj, err := adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+				obj, err := remoteClient.adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
 				if err != nil && errors.IsNotFound(err) {
 					isDeleted = true
 					break
@@ -1817,11 +2026,12 @@ func (m *MigrationController) applyResources(
 		}
 		pvc.Annotations[StorkMigrationAnnotation] = "true"
 		pvc.Annotations[StorkMigrationName] = migration.GetName()
+		pvc.Annotations[StorkMigrationNamespace] = migration.GetNamespace()
 		pvc.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		pvc.Annotations[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
 		pvc.Annotations = m.getParsedAnnotations(pvc.Annotations, clusterPair)
 		pvc.Labels = m.getParsedLabels(pvc.Labels, clusterPair)
-		_, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Create(context.TODO(), &pvc, metav1.CreateOptions{})
+		_, err = remoteClient.adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Create(context.TODO(), &pvc, metav1.CreateOptions{})
 		if err != nil {
 			msg := fmt.Errorf("error in recreating pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
 			m.updateResourceStatus(
@@ -1851,7 +2061,7 @@ func (m *MigrationController) applyResources(
 			continue
 		}
 		if pvcObj, ok := pvMapping[pv.Name]; ok {
-			pvc, err = adminClient.CoreV1().PersistentVolumeClaims(pvcObj.Namespace).Get(context.TODO(), pvcObj.Name, metav1.GetOptions{})
+			pvc, err = remoteClient.adminClient.CoreV1().PersistentVolumeClaims(pvcObj.Namespace).Get(context.TODO(), pvcObj.Name, metav1.GetOptions{})
 			if err != nil {
 				msg := fmt.Errorf("error in retriving pvc info %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
 				m.updateResourceStatus(
@@ -1862,7 +2072,7 @@ func (m *MigrationController) applyResources(
 				continue
 			}
 			if pvcObj.UID != pvc.GetUID() {
-				respPV, err := adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
+				respPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
 				if err != nil {
 					msg := fmt.Errorf("error in reading pv %s during migration: %v", pv.GetName(), err)
 					m.updateResourceStatus(
@@ -1880,7 +2090,7 @@ func (m *MigrationController) applyResources(
 				}
 				respPV.Spec.ClaimRef.UID = pvc.GetUID()
 				respPV.ResourceVersion = ""
-				if _, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
+				if _, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
 					msg := fmt.Errorf("error in updating pvc UID in pv %s during migration: %v", pv.GetName(), err)
 					m.updateResourceStatus(
 						migration,
@@ -1893,7 +2103,7 @@ func (m *MigrationController) applyResources(
 				isBound := false
 				for i := 0; i < deletedMaxRetries*2; i++ {
 					var resp *v1.PersistentVolumeClaim
-					resp, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+					resp, err = remoteClient.adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
 					if err != nil {
 						msg := fmt.Errorf("error in retriving pvc %s/%s during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)
 						m.updateResourceStatus(
@@ -1921,7 +2131,7 @@ func (m *MigrationController) applyResources(
 				}
 			}
 		}
-		respPV, err := adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
+		respPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
 		if err != nil {
 			msg := fmt.Errorf("error in reading pv %s during migration: %v", pv.GetName(), err)
 			m.updateResourceStatus(
@@ -1939,7 +2149,7 @@ func (m *MigrationController) applyResources(
 			respPV.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
 		}
 		respPV.ResourceVersion = ""
-		if _, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
+		if _, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), respPV, metav1.UpdateOptions{}); err != nil {
 			msg := fmt.Errorf("error in updating pv %s during migration: %v", pv.GetName(), err)
 			m.updateResourceStatus(
 				migration,
@@ -1972,10 +2182,10 @@ func (m *MigrationController) applyResources(
 			}
 			var dynamicClient dynamic.ResourceInterface
 			if resource.Namespaced {
-				dynamicClient = remoteInterface.Resource(
+				dynamicClient = remoteClient.remoteInterface.Resource(
 					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
 			} else {
-				dynamicClient = remoteAdminInterface.Resource(
+				dynamicClient = remoteClient.remoteAdminInterface.Resource(
 					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
 			}
 
@@ -1991,6 +2201,7 @@ func (m *MigrationController) applyResources(
 			}
 			migrAnnot[StorkMigrationAnnotation] = "true"
 			migrAnnot[StorkMigrationName] = migration.GetName()
+			migrAnnot[StorkMigrationNamespace] = migration.GetNamespace()
 			migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 			migrAnnot = m.getParsedAnnotations(migrAnnot, clusterPair)
 
@@ -2018,7 +2229,7 @@ func (m *MigrationController) applyResources(
 						err = m.checkAndUpdateDefaultSA(migration, o)
 					case "Service":
 						var skipUpdate bool
-						skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
+						skipUpdate, err = m.isServiceUpdated(migration, o, objHash)
 						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
 							break
 						}
@@ -2043,6 +2254,13 @@ func (m *MigrationController) applyResources(
 									log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
 										obj.GetName(), deleteStart, createTime)
 									break
+								}
+								if obj.GetFinalizers() != nil {
+									obj.SetFinalizers(nil)
+									_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
+									if err != nil {
+										log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+									}
 								}
 								log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
 								time.Sleep(deletedRetryInterval)
@@ -2208,8 +2426,9 @@ func (m *MigrationController) createCRD() error {
 func (m *MigrationController) getVolumeOnlyMigrationResources(
 	migration *stork_api.Migration,
 	resourceCollectorOpts resourcecollector.Options,
-) ([]runtime.Unstructured, error) {
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
 	var resources []runtime.Unstructured
+	var pvcWithOwnerRef []v1.PersistentVolumeClaim
 	// add pv objects
 	resource := metav1.APIResource{
 		Name:       "persistentvolumes",
@@ -2217,11 +2436,12 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		Version:    "v1",
 		Namespaced: false,
 	}
-	objects, err := m.resourceCollector.GetResourcesForType(
+	objects, _, err := m.resourceCollector.GetResourcesForType(
 		resource,
 		nil,
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		false,
 		resourceCollectorOpts,
@@ -2232,7 +2452,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error getting pv resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
-		return resources, err
+		return resources, nil, err
 	}
 	resources = append(resources, objects.Items...)
 	// add pvcs to resource list
@@ -2242,11 +2462,12 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		Version:    "v1",
 		Namespaced: true,
 	}
-	objects, err = m.resourceCollector.GetResourcesForType(
+	objects, pvcWithOwnerRef, err = m.resourceCollector.GetResourcesForType(
 		resource,
 		nil,
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		false,
 		resourceCollectorOpts,
@@ -2257,8 +2478,8 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error getting pv resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error getting pv resources: %v", err)
-		return resources, err
+		return resources, nil, err
 	}
 	resources = append(resources, objects.Items...)
-	return resources, nil
+	return resources, pvcWithOwnerRef, nil
 }
