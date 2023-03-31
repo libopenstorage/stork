@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	snapclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
+	"github.com/portworx/sched-ops/k8s/common"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -135,7 +136,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.snap, _, err = snapclient.NewClient(c.config)
 	if err != nil {
 		return err
