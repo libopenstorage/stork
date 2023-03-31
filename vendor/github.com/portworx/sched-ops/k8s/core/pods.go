@@ -234,11 +234,12 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 			if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == pvcName {
 				// Along PVC present in the volume list, we also checking whether any of the container in the
 				// pod is really using it by mount them.
+			containerLoop:
 				for _, container := range p.Spec.Containers {
 					for _, mount := range container.VolumeMounts {
 						if mount.Name == v.Name {
 							retList = append(retList, p)
-							break
+							break containerLoop
 						}
 					}
 				}

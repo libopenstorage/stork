@@ -34,7 +34,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71
 	github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230326023818-02601cc1bedc
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.14.0
@@ -277,7 +277,7 @@ replace (
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230207013129-a31284f0e973
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230326023818-02601cc1bedc
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency

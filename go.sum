@@ -2179,8 +2179,8 @@ github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba h1:gfjvrZ
 github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba/go.mod h1:fwJb8kCDTvEwzQbId6jJL+z6GX6m6acfHgPBFncZJGE=
 github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987/go.mod h1:g3pw2lI2AjqAixUCRhaBdKTY98znsCPR7NGRrlpimVU=
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20230326023818-02601cc1bedc h1:c3p0uxgY6UHJifuk8Cax5gieQnHf8TC1YEgCLeNvz90=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20230326023818-02601cc1bedc/go.mod h1:4Tm81DwlMhF4kNT+6toXeLnxGrqacMHtgz6x2FfFUnQ=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6 h1:cosC+5q7JPJkYO1M/NToIu21xMiFF/n4g9Q4Zcb4ffQ=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6/go.mod h1:4Tm81DwlMhF4kNT+6toXeLnxGrqacMHtgz6x2FfFUnQ=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/talisman v1.1.3 h1:XrDE0fs4UACgDGi5bvt04uePC+QbhbA5YXozGYg5tr8=
 github.com/portworx/talisman v1.1.3/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
