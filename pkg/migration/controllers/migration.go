@@ -596,7 +596,7 @@ func (m *MigrationController) purgeMigratedResources(
 	if err != nil {
 		return err
 	}
-	err = m.resourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
+	err = m.resourceCollector.DeleteResources(dynamicInterface, toBeDeleted, nil)
 	if err != nil {
 		return err
 	}
