@@ -107,12 +107,9 @@ func updateCRDObjects(ns string, activate bool, printFunc func(string, string), 
 		util.CheckErr(err)
 		return
 	}
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
+
+	ruleset := resourcecollector.GetDefaultRuleSet()
+
 	for _, res := range crdList.Items {
 		for _, crd := range res.Resources {
 			var client k8sdynamic.ResourceInterface

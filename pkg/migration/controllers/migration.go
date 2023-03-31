@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
@@ -75,6 +74,7 @@ const (
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
 	boundRetryInterval   = 5 * time.Second
+	applyRetryInterval   = 5 * time.Second
 )
 
 var (
@@ -558,6 +558,7 @@ func (m *MigrationController) purgeMigratedResources(
 	destObjects, _, err := rc.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false,
@@ -574,6 +575,7 @@ func (m *MigrationController) purgeMigratedResources(
 	srcObjects, _, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false,
@@ -963,6 +965,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		allObjects, pvcsWithOwnerRef, err = m.resourceCollector.GetResources(
 			migration.Spec.Namespaces,
 			migration.Spec.Selectors,
+			migration.Spec.ExcludeSelectors,
 			nil,
 			migration.Spec.IncludeOptionalResourceTypes,
 			false,
@@ -1055,6 +1058,16 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error updating PVC resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error updating PVC resource:: %v", err)
+		return err
+	}
+
+	err = m.updateStorageClassOnPV(migration, updateObjects, clusterPair)
+	if err != nil {
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error updating StorageClass on PV: %v", err))
+		log.MigrationLog(migration).Errorf("Error updating Storageclass for PV: %v", err)
 		return err
 	}
 
@@ -1564,6 +1577,82 @@ func (m *MigrationController) getParsedLabels(
 	return m.getParsedMap(labels, clusterPair)
 }
 
+// updateStorageClassOnPV updates StorageClass on PV object
+// StorageClass is created on destination if it doesn't exist
+func (m *MigrationController) updateStorageClassOnPV(
+	migration *stork_api.Migration,
+	objects []runtime.Unstructured,
+	clusterPair *stork_api.ClusterPair,
+) error {
+	remoteClient, err := m.getRemoteClient(migration)
+	if err != nil {
+		return err
+	}
+	// Get a list of StorageClasses from destination
+	destStorageClasses, err := remoteClient.adminClient.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	destScExists := make(map[string]bool)
+	for _, sc := range destStorageClasses.Items {
+		destScExists[sc.Name] = true
+	}
+
+	for _, obj := range objects {
+		metadata, err := meta.Accessor(obj)
+		if err != nil {
+			return err
+		}
+		if obj.GetObjectKind().GroupVersionKind().Kind != "PersistentVolume" {
+			continue
+		}
+		destPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if scName, ok := destPV.Annotations[resourcecollector.CurrentStorageClassName]; ok {
+			// Create StorageClass on destination if it doesn't exist
+			if _, ok := destScExists[scName]; !ok {
+				// Get StorageClass from source
+				sc, err := storkcache.Instance().GetStorageClass(scName)
+				if err != nil {
+					return err
+				}
+				sc.UID = ""
+				sc.ResourceVersion = ""
+				log.MigrationLog(migration).Infof("Applying %v %v", sc.Kind, sc.Name)
+				for retries := 0; retries < maxApplyRetries; retries++ {
+					_, err = remoteClient.adminClient.StorageV1().StorageClasses().Create(context.TODO(), sc, metav1.CreateOptions{})
+					if err == nil || errors.IsAlreadyExists(err) {
+						// Update the map to reflect the new StorageClass that was created on destination
+						destScExists[scName] = true
+						break
+					}
+					log.MigrationLog(migration).Infof("Unable to create %v %v on destination due to err: %v. Retrying.", sc.Kind, sc.Name, err)
+					time.Sleep(applyRetryInterval)
+				}
+				if err != nil {
+					log.MigrationLog(migration).Errorf("All attempts to create %v %v on destination failed due to err: %v", sc.Kind, sc.Name, err)
+					return err
+				}
+			}
+			// IF StorageClass is already updated on destination PV, then no need to update
+			// It is possible that StorageClass was deleted manually on destination cluster while PV was present with StorageClass name
+			// To make sure such inconsistencies get fixed in subsequent migration, this check is being done after StorageClass creation
+			if scName == destPV.Spec.StorageClassName {
+				continue
+			}
+			// Update StorageClass on destination PV
+			destPV.Spec.StorageClassName = scName
+			log.MigrationLog(migration).Infof("Updating %v %v with StorageClass %v", destPV.Kind, destPV.Name, scName)
+			if _, err = remoteClient.adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), destPV, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // updateOwnerReferenceOnPVC updates owner reference on PVC objects
 // on destination cluster
 func (m *MigrationController) updateOwnerReferenceOnPVC(
@@ -1577,7 +1666,7 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 		return err
 	}
 
-	ruleset := m.getDefaultRuleSet()
+	ruleset := resourcecollector.GetDefaultRuleSet()
 	for _, srcPvc := range pvcsWithOwnerRef {
 		destPvc, err := remoteClient.adminClient.CoreV1().PersistentVolumeClaims(srcPvc.GetNamespace()).Get(context.TODO(), srcPvc.Name, metav1.GetOptions{})
 		if err != nil {
@@ -1659,7 +1748,7 @@ func (m *MigrationController) applyResources(
 		return err
 	}
 
-	ruleset := m.getDefaultRuleSet()
+	ruleset := resourcecollector.GetDefaultRuleSet()
 
 	// create CRD on destination cluster
 	for _, crd := range crdList.Items {
@@ -2352,6 +2441,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		nil,
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		false,
 		resourceCollectorOpts,
@@ -2377,6 +2467,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 		nil,
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		migration.Spec.ExcludeSelectors,
 		nil,
 		false,
 		resourceCollectorOpts,
@@ -2391,16 +2482,4 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	}
 	resources = append(resources, objects.Items...)
 	return resources, pvcWithOwnerRef, nil
-}
-
-func (m *MigrationController) getDefaultRuleSet() *inflect.Ruleset {
-	// TODO: we should use k8s code generator logic to pluralize
-	// crd resources instead of depending on inflect lib
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-	ruleset.AddPlural("mongodbopsmanager", "opsmanagers")
-	ruleset.AddPlural("mongodb", "mongodb")
-	return ruleset
 }

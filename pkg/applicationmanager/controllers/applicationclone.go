@@ -759,6 +759,7 @@ func (a *ApplicationCloneController) cloneResources(
 		[]string{clone.Spec.SourceNamespace},
 		clone.Spec.Selectors,
 		nil,
+		nil,
 		clone.Spec.IncludeOptionalResourceTypes,
 		false,
 		resourcecollector.Options{},

@@ -243,6 +243,35 @@ func run(c *cli.Context) {
 	} else if err != nil {
 		log.Warnf("Unable to create stork version configmap: %v", err)
 	}
+	// create configmap to store stork admin namespace details.
+	storkControllerCm := &api_v1.ConfigMap{}
+	storkControllerCm.Name = k8sutils.StorkControllerConfigMapName
+	storkControllerCm.Namespace = defaultAdminNamespace
+	storkControllerCm.Data = make(map[string]string)
+	storkControllerCm.Data[k8sutils.AdminNsKey] = c.String("admin-namespace")
+	// get the stork deployment namespace
+	storkPodNs, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		log.Warnf("unable to get the stork pod namespace: %v", err)
+	}
+	// get the service account name of stork deployment
+	serviceAccountName, err := k8sutils.GetServiceAccountFromDeployment(k8sutils.StorkDeploymentName, storkPodNs)
+	if err != nil {
+		log.Warnf("unable to get the stork service account: %v", err)
+	}
+
+	storkControllerCm.Data[k8sutils.StorkServiceAccount] = serviceAccountName
+	storkControllerCm.Data[k8sutils.DeployNsKey] = storkPodNs
+
+	_, err = schedops.Instance().CreateConfigMap(storkControllerCm)
+	if k8s_errors.IsAlreadyExists(err) {
+		_, err := schedops.Instance().UpdateConfigMap(storkControllerCm)
+		if err != nil {
+			log.Warnf("unable to update stork controller configmap: %v", err)
+		}
+	} else if err != nil {
+		log.Warnf("Unable to create stork controller configmap: %v", err)
+	}
 	marketPlace := os.Getenv("MARKET_PLACE")
 	kdmpConfig := &api_v1.ConfigMap{}
 	kdmpConfig.Name = stork_driver.KdmpConfigmapName
@@ -324,13 +353,6 @@ func run(c *cli.Context) {
 		// Context is closed. Shutdown
 		os.Exit(0)
 	}()
-
-	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
-	// In this way, even the stork extender code can use this cache, since the extender filter/process
-	// requests can land on any stork pod.
-	if err := cache.CreateSharedInformerCache(mgr); err != nil {
-		log.Fatalf("failed to setup shared informer cache: %v", err)
-	}
 
 	// Setup scheme for all stork resources
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
@@ -564,6 +586,14 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 			log.Fatalf("Error initializing kdmp controller: %v", err)
 		}
 	}
+
+	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
+	// In this way, even the stork extender code can use this cache, since the extender filter/process
+	// requests can land on any stork pod.
+	if err := cache.CreateSharedInformerCache(mgr); err != nil {
+		log.Fatalf("failed to setup shared informer cache: %v", err)
+	}
+	log.Infof("shared informer cache has been intialized")
 
 	go func() {
 		for {
