@@ -359,7 +359,9 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
+				log.FailOnError(err, "Failed to issue delete backup for - %s", backupName)
+				err = DeleteBackupAndWait(backupName, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleted backup - [%s]", backupName))
 			}
 		})
 		Step("Taking incremental backups of applications again", func() {
@@ -394,8 +396,59 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
 					backupId := vol.GetBackupId()
 					log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
-					dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
-						fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+					if strings.Contains(backupId, "incr") {
+						dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
+							fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+					} else {
+						// Attempting to take backups and checking if they are incremental or not
+						// as the original incremental backup which we took has taken a full backup this is mostly
+						// because CloudSnap is taking full backup instead of incremental backup as it's hitting one of
+						// the if else condition in CloudSnap which forces it to take full instead of incremental backup
+						log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
+						for _, namespace := range bkpNamespaces {
+							listOfVolumes := make(map[string]bool)
+							noFailures := true
+							for maxBackupsBeforeIncremental := 0; maxBackupsBeforeIncremental < 4; maxBackupsBeforeIncremental++ {
+								log.InfoD(fmt.Sprintf("Recreate incremental backup iteration: %d", maxBackupsBeforeIncremental))
+								// Create a new incremental backups
+								incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
+								incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
+								err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
+									labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying incremental backup [%s] creation", incrementalBackupName))
+
+								// Check if they are incremental or not
+								bkpUid, err = backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
+								log.FailOnError(err, "Unable to fetch backup UID - %s", incrementalBackupName)
+								bkpInspectReq := &api.BackupInspectRequest{
+									Name:  incrementalBackupName,
+									OrgId: orgID,
+									Uid:   bkpUid,
+								}
+								bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectReq)
+								log.FailOnError(err, "Unable to fetch backup - %s", incrementalBackupName)
+								for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
+									backupId := vol.GetBackupId()
+									log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
+									if !strings.Contains(backupId, "incr") {
+										listOfVolumes[backupId] = false
+									} else {
+										listOfVolumes[backupId] = true
+									}
+								}
+								for id, isIncremental := range listOfVolumes {
+									if isIncremental == false {
+										log.InfoD(fmt.Sprintf("Backup %s wasn't a incremental backup", id))
+										noFailures = false
+									}
+								}
+								if noFailures {
+									break
+								}
+							}
+							dash.VerifyFatal(noFailures, true, "Check if the backups are incremental or not")
+						}
+					}
 				}
 			}
 		})
