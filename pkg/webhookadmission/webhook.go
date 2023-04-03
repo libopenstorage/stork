@@ -293,7 +293,9 @@ func (c *Controller) Start() error {
 		log.Warnf("Failed to delete old webhook secret: %v", err)
 	}
 	c.server = &http.Server{Addr: ":443",
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{tlsCert}}}
+		TLSConfig: &tls.Config{
+			MinVersion:   tls.VersionTLS12,
+			Certificates: []tls.Certificate{tlsCert}}}
 
 	http.HandleFunc("/mutate", c.serveHTTP)
 	go func() {

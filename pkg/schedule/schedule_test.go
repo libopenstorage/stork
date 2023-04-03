@@ -42,6 +42,18 @@ func TestSchedule(t *testing.T) {
 func createDefaultPoliciesTest(t *testing.T) {
 	err := createDefaultPolicy()
 	require.NoError(t, err, "Error creating default policies")
+	err = createDefaultPolicy()
+	require.NoError(t, err, "Error recreating default policies")
+	schedulePolicy, err := storkops.Instance().GetSchedulePolicy("default-migration-policy")
+	require.NoError(t, err, "Error getting default-migration-policy")
+	schedulePolicy.Policy.Interval.IntervalMinutes = 1
+	_, err = storkops.Instance().UpdateSchedulePolicy(schedulePolicy)
+	require.NoError(t, err, "Error updating default-migration-policy")
+	err = createDefaultPolicy()
+	require.NoError(t, err, "Error recreating default policies after modifying default-migration-policy")
+	schedulePolicy, err = storkops.Instance().GetSchedulePolicy("default-migration-policy")
+	require.NoError(t, err, "Error getting default-migration-policy")
+	require.Equal(t, 30, schedulePolicy.Policy.Interval.IntervalMinutes, "Error updating the existing default-migration-policy's interval time")
 }
 
 func triggerIntervalRequiredTest(t *testing.T) {
