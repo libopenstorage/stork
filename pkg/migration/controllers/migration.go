@@ -1881,7 +1881,7 @@ func (m *MigrationController) applyResources(
 
 	// find out the csi PVs and if the volumeHandle does not match with pv Name , delete those.
 	// https://portworx.atlassian.net/browse/PWX-30157
-	pvToPVCMapping := getpvToPVCMappingFromPVCObjects(pvcObjects)
+	pvToPVCMapping := getPVToPVCMappingFromPVCObjects(pvcObjects)
 	var csiPVCAndPVObjects []runtime.Unstructured
 	for _, obj := range pvObjects {
 		var pv v1.PersistentVolume
@@ -1898,6 +1898,7 @@ func (m *MigrationController) applyResources(
 			respPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
 			if err != nil {
 				logrus.Errorf("error getting pv %s: %v", pv.Name, err)
+				continue
 			}
 			if respPV.Spec.CSI != nil && respPV.Spec.CSI.VolumeHandle != pv.Name {
 				// Add the pvc object related to the PV for deleting
@@ -1910,13 +1911,10 @@ func (m *MigrationController) applyResources(
 		}
 	}
 	if len(csiPVCAndPVObjects) > 0 {
-		dynamicInterface, err := dynamic.NewForConfig(remoteClient.remoteAdminConfig)
-		if err != nil {
-			return err
-		}
 		err = m.resourceCollector.DeleteResources(
-			dynamicInterface,
-			csiPVCAndPVObjects)
+			remoteClient.remoteAdminInterface,
+			csiPVCAndPVObjects,
+			nil)
 		if err != nil {
 			logrus.Errorf("error deleting csi pvcs and pvs: %v ", err)
 			return err
@@ -2524,7 +2522,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	return resources, pvcWithOwnerRef, nil
 }
 
-func getpvToPVCMappingFromPVCObjects(pvcObjects []runtime.Unstructured) map[string]runtime.Unstructured {
+func getPVToPVCMappingFromPVCObjects(pvcObjects []runtime.Unstructured) map[string]runtime.Unstructured {
 	pvToPVCMapping := make(map[string]runtime.Unstructured)
 	for _, obj := range pvcObjects {
 		var pvc v1.PersistentVolumeClaim
