@@ -612,17 +612,17 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 // CancelAllRunningBackupJobs cancels all the running backup jobs while backups are in progress
 var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		appNamespaces     []string
 		cloudCredName     string
 		cloudCredUID      string
 		bkpLocationName   string
 		backupLocationUID string
 		srcClusterUid     string
+		appNamespaces     []string
+		backupNames       []string
 		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
 		destClusterStatus api.ClusterInfo_StatusInfo_Status
-		backupNames       []string
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -708,22 +708,43 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 			}
 			wg.Wait()
 			log.Infof("The list of backups taken are: %v", backupNames)
-			log.InfoD("Sleeping for 20 seconds so that the request reaches stork and the backup creation process is started")
-			time.Sleep(20 * time.Second)
 		})
 		Step("Cancelling the ongoing backups", func() {
 			log.InfoD("Cancelling the ongoing backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupInProgressStatus := api.BackupInfo_StatusInfo_InProgress
+			backupPendingStatus := api.BackupInfo_StatusInfo_Pending
 			for _, backupName := range backupNames {
-				sem <- struct{}{}
 				wg.Add(1)
 				go func(backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					defer func() { <-sem }()
 					backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting UID for backup %v", backupName))
+					log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   backupUID,
+						OrgId: orgID,
+					}
+					backupProgressCheckFunc := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+						if err != nil {
+							return "", false, err
+						}
+						actual := resp.GetBackup().GetStatus().Status
+						if actual == backupInProgressStatus {
+							return "", false, nil
+						}
+						if actual == backupPendingStatus {
+							return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
+						} else {
+							return "", false, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
+						}
+					}
+					_, err = task.DoRetryWithTimeout(backupProgressCheckFunc, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verfiying backup %s is in progress", backupName))
+
 					_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s while backup is in progress", backupName))
 				}(backupName)
@@ -750,12 +771,13 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, backupDeleteTimeout, backupDeleteRetryTime)
 				if err != nil {
 					adminBackups, error1 := GetAllBackupsAdmin()
-					log.Infof("The list of backups still present after backup cancellation and wait of 10 minutes is %v,Error:%v", adminBackups, err)
-					log.FailOnError(error1, "Getting the list of backups after backup cancellation and wait of 10 minutes")
+					log.FailOnError(error1, "Getting the list of backups after backup cancellation")
+					log.Infof("The list of backups still present after backup cancellation is %v,Error:%v", adminBackups, err)
 				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup jobs cancellation while backups are in progress"))
 			}
 			log.Infof("All the backups created by this testcase is deleted after backup cancellation")
 		})
