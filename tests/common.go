@@ -3032,7 +3032,7 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 	return nil
 }
 
-// CreateCloudCredential creates cloud credetials
+// CreateCloudCredential creates cloud credentials
 func CreateCloudCredential(provider, credName string, uid, orgID string, ctx context1.Context) error {
 	log.Infof("Create cloud credential with name [%s] for org [%s] with [%s] as provider", credName, orgID, provider)
 	var credCreateRequest *api.CloudCredentialCreateRequest
