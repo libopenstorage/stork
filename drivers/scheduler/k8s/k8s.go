@@ -6492,13 +6492,22 @@ func getLabelsFromNodeAffinity(nodeAffSpec *v1.NodeAffinity) map[string]string {
 	return label
 }
 
+// MergeMaps merges two maps
+func MergeMaps(m1 map[string]string, m2 map[string]string) map[string]string {
+	for k, v := range m2 {
+		m1[k] = v
+	}
+	return m1
+}
+
 // AddNamespaceLabel adds a label key=value on the given namespace
 func (k *K8s) AddNamespaceLabel(namespace string, labelMap map[string]string) error {
 	ns, err := k8sCore.GetNamespace(namespace)
 	if err != nil {
 		return err
 	}
-	ns.SetLabels(labelMap)
+	newLabels := MergeMaps(ns.Labels, labelMap)
+	ns.SetLabels(newLabels)
 	if _, err := k8sCore.UpdateNamespace(ns); err == nil {
 		return nil
 	}
