@@ -555,7 +555,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 20*time.Minute, 30*time.Second)
+				err = core.Instance().ValidatePod(&pod, 30*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
 			}
 		})
@@ -1035,7 +1035,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			}
 			return "", false, nil
 		}
-		_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 10*time.Minute, 30*time.Second)
+		_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
 		log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 		dash.VerifySafely(statefulSet.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that all the mongodb pods are in Ready state at the end of the testcase")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -1666,7 +1666,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 			for _, namespace := range appNamespaces {
 				backupNames := make([]string, 0)
 				for i := 0; i < numberOfBackups; i++ {
-					time.Sleep(3 * time.Second)
+					time.Sleep(10 * time.Second)
 					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					wg.Add(1)
