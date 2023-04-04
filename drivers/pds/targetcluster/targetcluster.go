@@ -30,6 +30,7 @@ const (
 
 	// DefaultTimeout default timeout
 	DefaultTimeout = 10 * time.Minute
+	MaxTimeout     = 30 * time.Minute
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
@@ -88,9 +89,9 @@ func (targetCluster *TargetCluster) DeRegisterFromControlPlane() error {
 		}
 		log.InfoD("helm list output: %v", output)
 	}
-	//TODO: Add a method to remove CRD's
+
 	log.Infof("wait till all the pds-system pods are deleted")
-	err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+	err = wait.Poll(DefaultRetryInterval, MaxTimeout, func() (bool, error) {
 		pods, err := k8sCore.GetPods(PDSNamespace, nil)
 		if err != nil {
 			return false, nil
@@ -103,7 +104,7 @@ func (targetCluster *TargetCluster) DeRegisterFromControlPlane() error {
 		return false, nil
 	})
 
-	return nil
+	return err
 }
 
 // RegisterToControlPlane register the target cluster to control plane.

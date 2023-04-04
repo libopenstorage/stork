@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portworx/sched-ops/k8s/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rbacv1client "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
@@ -141,7 +142,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.rbac, err = rbacv1client.NewForConfig(c.config)
 	if err != nil {
 		return err

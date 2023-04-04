@@ -3,6 +3,10 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/torpedo/pkg/osutils"
+	batchv1 "k8s.io/api/batch/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -12,10 +16,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/torpedo/pkg/osutils"
-	batchv1 "k8s.io/api/batch/v1"
 
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -51,7 +51,10 @@ const (
 	maxWaitPeriodForBackupCompletionInMinutes = 40
 	maxWaitPeriodForRestoreCompletionInMinute = 40
 	maxWaitPeriodForBackupJobCancellation     = 20
-	backupJobCancellationRetryTime            = 30
+	maxWaitPeriodForRestoreJobCancellation    = 20
+	restoreJobCancellationRetryTime           = 30
+	restoreJobProgressRetryTime               = 1
+	backupJobCancellationRetryTime            = 5
 	K8sNodeReadyTimeout                       = 10
 	K8sNodeRetryInterval                      = 30
 	globalAWSBucketPrefix                     = "global-aws"
@@ -1851,6 +1854,7 @@ func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName str
 	if err != nil {
 		return err
 	}
+	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return err
@@ -1959,4 +1963,66 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 		return resp, err
 	}
 	return resp, nil
+}
+
+// NamespaceLabelBackupSuccessCheck verifies if the labeled namespaces are backed up and checks for labels applied to backups
+func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, listOfLabelledNamespaces []string, namespaceLabel string) error {
+	backupDriver := Inst().Backup
+	log.Infof("Getting the Uid of backup %v", backupName)
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	namespaceList := resp.GetBackup().GetNamespaces()
+	log.Infof("The list of namespaces backed up are %v", namespaceList)
+	if !reflect.DeepEqual(namespaceList, listOfLabelledNamespaces) {
+		return fmt.Errorf("list of namespaces backed up are %v which is not same as expected %v", namespaceList, listOfLabelledNamespaces)
+	}
+	backupLabels := resp.GetBackup().GetNsLabelSelectors()
+	log.Infof("The list of labels applied to backup are %v", backupLabels)
+	if !reflect.DeepEqual(backupLabels, namespaceLabel) {
+		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", backupLabels, namespaceLabel)
+	}
+	return nil
+}
+
+// AddLabelsToMultipleNamespaces add labels to multiple namespace
+func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GenerateRandomLabels creates random label
+func GenerateRandomLabels(number int) map[string]string {
+	labels := make(map[string]string)
+	randomString := uuid.New()
+	for i := 0; i < number; i++ {
+		key := fmt.Sprintf("%v-%v", i, randomString)
+		value := randomString
+		labels[key] = value
+	}
+	return labels
+}
+
+// MapToKeyValueString converts a map of string keys and value to a comma separated string of "key=value"
+func MapToKeyValueString(m map[string]string) string {
+	var pairs []string
+	for k, v := range m {
+		pairs = append(pairs, k+"="+v)
+	}
+	return strings.Join(pairs, ",")
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -122,19 +121,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 		if _, ok := migrationSchedule.GetAnnotations()[StorkMigrationScheduleCopied]; ok {
 			// check status of all migrated app in cluster
 			logrus.Infof("Migration schedule is on dr cluster, checking migrated app status")
-			isActivated, err := getMigratedAppStatus(migrationSchedule)
-			if err != nil {
-				return err
-			}
-			migrationSchedule.Status.ApplicationActivated = isActivated
-			msg := fmt.Sprintf("Setting AppActive status to: %v", isActivated)
-			m.recorder.Event(migrationSchedule,
-				v1.EventTypeWarning,
-				"AppsActivated",
-				msg)
-			log.MigrationScheduleLog(migrationSchedule).Warn(msg)
 			return m.client.Update(context.TODO(), migrationSchedule)
-
 		}
 	}
 	if !(*migrationSchedule.Spec.Suspend) {
@@ -281,12 +268,15 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 	err = m.pruneMigrations(migrationSchedule)
 	if err != nil {
 		msg := fmt.Sprintf("Error pruning old migrations: %v", err)
-		m.recorder.Event(migrationSchedule,
-			v1.EventTypeWarning,
-			string(stork_api.MigrationStatusFailed),
-			msg)
-		log.MigrationScheduleLog(migrationSchedule).Error(msg)
-		return err
+		// Don't need to log this event as Stork retries if it fails to update
+		if !strings.Contains(msg, ErrReapplyLatestVersionMsg) {
+			m.recorder.Event(migrationSchedule,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				msg)
+			log.MigrationScheduleLog(migrationSchedule).Error(msg)
+			return err
+		}
 	}
 
 	return nil
@@ -535,40 +525,4 @@ func (m *MigrationScheduleController) createCRD() error {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
-}
-
-func getMigratedAppStatus(migrationSchedule *stork_api.MigrationSchedule) (bool, error) {
-	for _, ns := range migrationSchedule.Spec.Template.Spec.Namespaces {
-		deployList, err := apps.Instance().ListDeployments(ns, meta.ListOptions{LabelSelector: fmt.Sprintf("%v=%v", StorkMigrationAnnotation, "true")})
-		if err != nil {
-			return false, err
-		}
-		for _, deploy := range deployList.Items {
-			logrus.Debugf("Checking deploy %v/%v", deploy.Name, deploy.GetLabels()[StorkMigrationAnnotation])
-			if *deploy.Spec.Replicas > 0 {
-				logrus.Warnf("Deploy active %v/%v", deploy.Name, deploy.Namespace)
-				return true, nil
-			}
-			if deploy.Status.ObservedGeneration > 1 {
-				logrus.Warnf("Deploy updated %v/%v", deploy.Name, deploy.Namespace)
-				return true, nil
-			}
-		}
-
-		// check statefulset status
-		stsList, err := apps.Instance().ListStatefulSets(ns, meta.ListOptions{LabelSelector: fmt.Sprintf("%v=%v", StorkMigrationAnnotation, "true")})
-		if err != nil {
-			return false, err
-		}
-		for _, sts := range stsList.Items {
-			if *sts.Spec.Replicas > 0 {
-				return true, nil
-			}
-			if sts.Status.ObservedGeneration > 1 {
-				logrus.Warnf("Deploy updated %v/%v", sts.Name, sts.Namespace)
-				return true, nil
-			}
-		}
-	}
-	return false, nil
 }

@@ -218,7 +218,7 @@ func (c *Client) GetPersistentVolumes() (*corev1.PersistentVolumeList, error) {
 	return c.kubernetes.CoreV1().PersistentVolumes().List(context.TODO(), metav1.ListOptions{})
 }
 
-// UpdatePersistentVolumeClaim updates an existing persistent volume claim
+// UpdatePersistentVolume updates an existing persistent volume claim
 func (c *Client) UpdatePersistentVolume(pv *corev1.PersistentVolume) (*corev1.PersistentVolume, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err

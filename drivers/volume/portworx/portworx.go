@@ -4664,7 +4664,13 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 
 	for _, drv := range blockDrives {
 		if !strings.Contains(drv.Path, "pxd") && drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
-			eligibleDrives[drv.Path] = drv
+			isPartitioned, err := isDiskPartitioned(*n, drv.Path, d)
+			if err != nil {
+				return err
+			}
+			if !isPartitioned {
+				eligibleDrives[drv.Path] = drv
+			}
 		}
 	}
 
@@ -4698,6 +4704,25 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		}
 	}
 	return nil
+}
+
+func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error) {
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf("ls -l %s*", drivePath), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return false, fmt.Errorf("error checking drive partition for [%s] in node [%s], Err: %v", drivePath, n.Name, err)
+	}
+
+	drvs := strings.Split(strings.TrimSpace(out), "\n")
+
+	if len(drvs) > 1 {
+		return true, nil
+	}
+	return false, nil
+
 }
 
 // GetPoolDrives returns the map of poolID and drive name

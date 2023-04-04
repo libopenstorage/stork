@@ -74,6 +74,18 @@ type NodeStatus struct {
 	Geo Geography `json:"geography,omitempty"`
 	// Conditions is an array of current node conditions
 	Conditions []NodeCondition `json:"conditions,omitempty"`
+	// Checks are a list of pre or post flight checks that are performed by the Operator
+	Checks []CheckResult `json:"checks,omitempty"`
+}
+
+// CheckResult captures result of a pre or post flight check
+type CheckResult struct {
+	// Type is the type of check that was performed
+	Type string `json:"type,omitempty"`
+	// Reason is the reason for success or failure
+	Reason string `json:"reason,omitempty"`
+	// Success indicates if the check was successful or failed
+	Success bool `json:"success,omitempty"`
 }
 
 // NetworkStatus network status of the storage node
