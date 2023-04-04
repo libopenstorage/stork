@@ -612,17 +612,17 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 // CancelAllRunningBackupJobs cancels all the running backup jobs while backups are in progress
 var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		appNamespaces     []string
 		cloudCredName     string
 		cloudCredUID      string
 		bkpLocationName   string
 		backupLocationUID string
 		srcClusterUid     string
+		appNamespaces     []string
+		backupNames       []string
 		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
 		destClusterStatus api.ClusterInfo_StatusInfo_Status
-		backupNames       []string
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -708,22 +708,43 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 			}
 			wg.Wait()
 			log.Infof("The list of backups taken are: %v", backupNames)
-			log.InfoD("Sleeping for 20 seconds so that the request reaches stork and the backup creation process is started")
-			time.Sleep(20 * time.Second)
 		})
 		Step("Cancelling the ongoing backups", func() {
 			log.InfoD("Cancelling the ongoing backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupInProgressStatus := api.BackupInfo_StatusInfo_InProgress
+			backupPendingStatus := api.BackupInfo_StatusInfo_Pending
 			for _, backupName := range backupNames {
-				sem <- struct{}{}
 				wg.Add(1)
 				go func(backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					defer func() { <-sem }()
 					backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting UID for backup %v", backupName))
+					log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   backupUID,
+						OrgId: orgID,
+					}
+					backupProgressCheckFunc := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+						if err != nil {
+							return "", false, err
+						}
+						actual := resp.GetBackup().GetStatus().Status
+						if actual == backupInProgressStatus {
+							return "", false, nil
+						}
+						if actual == backupPendingStatus {
+							return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
+						} else {
+							return "", false, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
+						}
+					}
+					_, err = task.DoRetryWithTimeout(backupProgressCheckFunc, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verfiying backup %s is in progress", backupName))
+
 					_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s while backup is in progress", backupName))
 				}(backupName)
@@ -750,12 +771,13 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, backupDeleteTimeout, backupDeleteRetryTime)
 				if err != nil {
 					adminBackups, error1 := GetAllBackupsAdmin()
-					log.Infof("The list of backups still present after backup cancellation and wait of 10 minutes is %v,Error:%v", adminBackups, err)
-					log.FailOnError(error1, "Getting the list of backups after backup cancellation and wait of 10 minutes")
+					log.FailOnError(error1, "Getting the list of backups after backup cancellation")
+					log.Infof("The list of backups still present after backup cancellation is %v,Error:%v", adminBackups, err)
 				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup jobs cancellation while backups are in progress"))
 			}
 			log.Infof("All the backups created by this testcase is deleted after backup cancellation")
 		})
@@ -1563,5 +1585,218 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		}
 		wg.Wait()
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// CancelAllRunningRestoreJobs cancels all the running restore jobs while restores are in progress
+var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
+	var (
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
+		appNamespaces     []string
+		cloudAccountName  string
+		cloudAccountUID   string
+		bkpLocationName   string
+		backupLocationUID string
+		srcClusterUid     string
+		backupNames       []string
+		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
+		destClusterStatus api.ClusterInfo_StatusInfo_Status
+		restoreNames      []string
+	)
+	backupLocationMap := make(map[string]string)
+	labelSelectors := make(map[string]string)
+	backupNamesMap := make(map[string][]string)
+	numberOfBackups := 4
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CancelAllRunningRestoreJobs", "Cancel all the running restore jobs while restores are in progress", nil, 58058)
+		log.InfoD("Deploying applications required for the testcase")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+			}
+		}
+	})
+
+	It("Cancel All Running Restore Jobs and validate", func() {
+		var wg sync.WaitGroup
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications")
+			ValidateApplications(contexts)
+		})
+		Step("Adding cloud account and backup location", func() {
+			log.InfoD("Adding cloud account and backup location")
+			providers := getProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudAccountUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudAccountName, cloudAccountUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud account named [%s] for org [%s] with [%s] as provider", cloudAccountName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudAccountName, cloudAccountUID,
+					getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+		})
+
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				backupNames := make([]string, 0)
+				for i := 0; i < numberOfBackups; i++ {
+					time.Sleep(3 * time.Second)
+					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
+					backupNames = append(backupNames, backupName)
+					wg.Add(1)
+					go func(backupName string, namespace string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
+							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+					}(backupName, namespace)
+				}
+				backupNamesMap[namespace] = backupNames
+			}
+			wg.Wait()
+			log.Infof("The list of backups taken are: %v", backupNames)
+		})
+
+		Step("Restoring the backed up applications", func() {
+			log.InfoD("Restoring the backed up applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				namespaceMapping := make(map[string]string)
+				for _, backupName := range backupNamesMap[namespace] {
+					restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+					restoreNames = append(restoreNames, restoreName)
+					customNamespace := fmt.Sprintf("new-namespace-%s", RandomString(10))
+					namespaceMapping[namespace] = customNamespace
+					wg.Add(1)
+					go func(restoreName string, backupName string, namespaceMapping map[string]string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
+					}(restoreName, backupName, namespaceMapping)
+				}
+			}
+			wg.Wait()
+			log.Infof("The list of restores taken are: %v", restoreNames)
+		})
+
+		Step("Cancelling the ongoing restores", func() {
+			log.InfoD("Cancelling the ongoing restores")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, restoreName := range restoreNames {
+				wg.Add(1)
+				go func(restoreName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  restoreName,
+						OrgId: orgID,
+					}
+					restoreInProgressStatus := api.RestoreInfo_StatusInfo_InProgress
+					restorePendingStatus := api.RestoreInfo_StatusInfo_Pending
+					restoreProgressCheckFunc := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+						if err != nil {
+							return "", false, err
+						}
+						actual := resp.GetRestore().GetStatus().Status
+						if actual == restoreInProgressStatus {
+							return "", false, nil
+						}
+						if actual == restorePendingStatus {
+							return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
+						} else {
+							return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
+						}
+					}
+					_, err := task.DoRetryWithTimeout(restoreProgressCheckFunc, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Second)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verfiying restore %s is in progress", restoreName))
+					err = DeleteRestore(restoreName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore %s while restore is in progress", restoreName))
+				}(restoreName)
+			}
+			wg.Wait()
+		})
+
+		Step("Verifying if all the restore creation is cancelled", func() {
+			log.InfoD("Verifying if all the restore creation is cancelled")
+			adminRestores, err := GetAllRestoresAdmin()
+			log.FailOnError(err, "Getting the list of restores after restore cancellation")
+			log.Infof("The list of restore after restore cancellation is %v", adminRestores)
+			if len(adminRestores) != 0 {
+				restoreJobCancelStatus := func() (interface{}, bool, error) {
+					adminRestores, err := GetAllRestoresAdmin()
+					if err != nil {
+						return "", true, err
+					}
+					for _, restoreName := range restoreNames {
+						if IsPresent(adminRestores, restoreName) {
+							return "", true, fmt.Errorf("%v restore is still present", restoreName)
+						}
+					}
+					return "", false, nil
+				}
+				_, err = task.DoRetryWithTimeout(restoreJobCancelStatus, maxWaitPeriodForRestoreJobCancellation*time.Minute, restoreJobCancellationRetryTime*time.Second)
+				if err != nil {
+					adminRestores, err := GetAllRestoresAdmin()
+					log.FailOnError(err, "Getting the list of restores after restore cancellation")
+					log.Infof("The list of restores after restore cancellation  %v", adminRestores)
+				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore jobs cancellation while restores is in progress"))
+			}
+			log.Infof("All the restores created by this testcase are deleted after restore cancellation")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Deleting the deployed applications")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+		log.InfoD("Deleting the remaining restores in case of failure")
+		adminRestores, err := GetAllRestoresAdmin()
+		for _, restoreName := range adminRestores {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user restore %s", restoreName))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
 	})
 })

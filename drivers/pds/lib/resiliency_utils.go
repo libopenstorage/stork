@@ -2,6 +2,7 @@ package lib
 
 import (
 	"errors"
+	"strings"
 	"sync"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -17,7 +18,9 @@ import (
 )
 
 const (
-	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
+	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
+	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
+	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
 )
 
 // PDS vars
@@ -56,9 +59,9 @@ func ExecuteInParallel(functions ...func()) {
 }
 
 // Function to enable Resiliency Test
-func MarkResiliencyTC(resiliency bool) {
+func MarkResiliencyTC(resiliency bool, node_ops bool) {
 	ResiliencyFlag = resiliency
-	if resiliency {
+	if node_ops {
 		tests.InitInstance()
 	}
 }
@@ -91,6 +94,22 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 	case ActiveNodeRebootDuringDeployment:
 		checkTillReplica = CheckTillReplica
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+		if conditionError != nil {
+			return conditionError
+		}
+		if testError != nil {
+			return testError
+		}
+	case KillDeploymentControllerPod:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
 		func1 := func() {
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
 		}
@@ -168,6 +187,32 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 			}
 			log.Infof("Node %v rebooted successfully", pod.Spec.NodeName)
 		}
+	}
+	return testError
+}
+
+// Kill the Deployment Controller Pod while Data Service is coming up
+func KillDeploymentPodDuringDeployment(ns string) error {
+	var deploymentControllerPods []corev1.Pod
+	// Fetch All the pods in pds-system namespace
+	podList, testError := GetPods(ns)
+	if testError != nil {
+		return testError
+	}
+	// Get List of All Pods matching with the name : deployment controller manager pod
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, PdsDeploymentControllerManagerPod) {
+			log.Infof("Deployment Controller Pod Name is : %v", pod.Name)
+			deploymentControllerPods = append(deploymentControllerPods, pod)
+		}
+	}
+	// Kill All Deployment Controller Pods
+	for _, pod := range deploymentControllerPods {
+		testError = DeleteK8sPods(pod.Name, ns)
+		if testError != nil {
+			return testError
+		}
+		log.InfoD("Successfully Killed Pod: %v", pod.Name)
 	}
 	return testError
 }
