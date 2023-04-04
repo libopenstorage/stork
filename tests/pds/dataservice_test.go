@@ -208,6 +208,91 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 	})
 })
 
+var _ = Describe("{DeregisterTargetCluster}", func() {
+	steplog := "Deregister target cluster"
+	var deps []*pds.ModelsDeployment
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeregisterTargetCluster", steplog, pdsLabels, 0)
+	})
+
+	It(steplog, func() {
+		steplog = "Deploy and validate data service"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			deps = DeployInANamespaceAndVerify(params.InfraToTest.Namespace)
+		})
+
+		log.InfoD("List of created deployments")
+		for _, deployment := range deps {
+			log.InfoD("%v ", *deployment.ClusterResourceName)
+		}
+
+		steplog = "Delete created dataservice deployments"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			for _, dep := range deps {
+				_, err := pdslib.DeleteDeployment(*dep.Id)
+				log.FailOnError(err, "error while deleting deployments")
+			}
+			isDeploymentsDeleted = true
+		})
+
+		steplog = "Remove backup and deployment CRD's"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			apiGroups := []string{BackUpCRD, DeploymentCRD}
+			err = pdslib.DeletePDSCRDs(apiGroups)
+			log.FailOnError(err, "Error while getting crd information")
+		})
+
+		steplog = "De-Register Target Cluster"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+			target := tc.NewTargetCluster(ctx)
+			err = target.DeRegisterFromControlPlane()
+			log.FailOnError(err, "Error occurred while de-registering target cluster")
+		})
+
+		defer func() {
+			steplog = "Check and Register Target Cluster to ControlPlane"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err = pdslib.RegisterClusterToControlPlane(params, tenantID, false)
+				log.FailOnError(err, "Target Cluster Registeration failed")
+
+				deploymentTarget, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+				log.FailOnError(err, "Error while getting deployment target status")
+				dash.VerifyFatal(deploymentTarget.GetStatus(), "healthy", "Validating Deployment Target health status")
+			})
+		}()
+
+		steplog = "Validate the health status of target cluster"
+		Step(steplog, func() {
+			log.InfoD("Getting status for Deployment Target ID: %v", deploymentTargetID)
+			deploymentTarget, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "unhealthy")
+			log.FailOnError(err, "Error while getting deployment target status")
+
+			dash.VerifyFatal(deploymentTarget.GetStatus(), "unhealthy", "Validating Deployment Target health status")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			for _, dep := range deps {
+				resp, err := pdslib.DeleteDeployment(*dep.Id)
+				log.FailOnError(err, "error while deleting deployments")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}
+
+	})
+})
+
 var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 	steplog := "Validate Health of PDS services in case of failures"
 

@@ -88,7 +88,7 @@ func (targetCluster *TargetCluster) DeRegisterFromControlPlane() error {
 		}
 		log.InfoD("helm list output: %v", output)
 	}
-	//TODO: Add a method to remove CRD's
+
 	log.Infof("wait till all the pds-system pods are deleted")
 	err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
 		pods, err := k8sCore.GetPods(PDSNamespace, nil)
