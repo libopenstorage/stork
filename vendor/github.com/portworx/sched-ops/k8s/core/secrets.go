@@ -103,6 +103,7 @@ func (c *Client) DeleteSecret(name, namespace string) error {
 	})
 }
 
+// WatchSecret changes and callback fn
 func (c *Client) WatchSecret(secret *v1.Secret, fn WatchFunc) error {
 	if err := c.initClient(); err != nil {
 		return err
