@@ -68,6 +68,7 @@ func testMigration(t *testing.T) {
 	// TODO: waiting for https://portworx.atlassian.net/browse/STOR-281 to be resolved
 	if authTokenConfigMap == "" {
 		t.Run("labelSelectorTest", migrationLabelSelectorTest)
+		t.Run("labelExcludeSelectorTest", migrationLabelExcludeSelectorTest)
 		t.Run("intervalScheduleTest", migrationIntervalScheduleTest)
 		t.Run("dailyScheduleTest", migrationDailyScheduleTest)
 		t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
@@ -436,6 +437,19 @@ func migrationLabelSelectorTest(t *testing.T) {
 		"cassandra",
 		[]string{"mysql-1-pvc"},
 		"label-selector-migration",
+		true,
+		false,
+		true,
+	)
+}
+
+func migrationLabelExcludeSelectorTest(t *testing.T) {
+	triggerMigrationTest(
+		t,
+		"migration-label-exclude-selector-test",
+		"cassandra",
+		[]string{"mysql-1-pvc"},
+		"label-exclude-selector-migration",
 		true,
 		false,
 		true,
