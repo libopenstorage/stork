@@ -321,7 +321,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 					v1.EventTypeWarning,
 					string(stork_api.ApplicationBackupStatusFailed),
 					err.Error())
-				err = a.client.Update(context.TODO(), backup)
+				err = a.client.Status().Update(context.TODO(), backup)
 				if err != nil {
 					log.ApplicationBackupLog(backup).Errorf("Error updating: %v", err)
 				}
@@ -384,7 +384,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 			backup.Status.Reason = message
 			backup.Status.LastUpdateTimestamp = metav1.Now()
-			err = a.client.Update(context.TODO(), backup)
+			err = a.client.Status().Update(context.TODO(), backup)
 			if err != nil {
 				return err
 			}
@@ -498,7 +498,7 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 		if volumeInfos != nil {
 			backup.Status.Volumes = append(backup.Status.Volumes, volumeInfos...)
 		}
-		err = a.client.Update(context.TODO(), backup)
+		err = a.client.Status().Update(context.TODO(), backup)
 		if err != nil {
 			time.Sleep(retrySleep)
 			continue
@@ -707,7 +707,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					backup.Status.LastUpdateTimestamp = metav1.Now()
 					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 					backup.Status.Reason = message
-					err = a.client.Update(context.TODO(), backup)
+					err = a.client.Status().Update(context.TODO(), backup)
 					if err != nil {
 						return err
 					}
@@ -768,7 +768,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			volumeInfos := backup.Status.Volumes
 			backup.Status.LastUpdateTimestamp = metav1.Now()
 			// Store the new status
-			err = a.client.Update(context.TODO(), backup)
+			err = a.client.Status().Update(context.TODO(), backup)
 			if err != nil {
 				for i := 0; i < maxRetry; i++ {
 					err = a.client.Get(context.TODO(), namespacedName, backup)
@@ -781,7 +781,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 					backup.Status.Volumes = volumeInfos
 					backup.Status.LastUpdateTimestamp = metav1.Now()
-					err = a.client.Update(context.TODO(), backup)
+					err = a.client.Status().Update(context.TODO(), backup)
 					if err != nil {
 						time.Sleep(retrySleep)
 						continue
@@ -816,7 +816,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			backup.Status.LastUpdateTimestamp = metav1.Now()
 			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 			backup.Status.Reason = message
-			err = a.client.Update(context.TODO(), backup)
+			err = a.client.Status().Update(context.TODO(), backup)
 			if err != nil {
 				return err
 			}
@@ -832,7 +832,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// temporarily store the volume status, So that it will be used during retry.
 		volumeInfos := backup.Status.Volumes
 		// Update the current state and then move on to backing up resources
-		err := a.client.Update(context.TODO(), backup)
+		err := a.client.Status().Update(context.TODO(), backup)
 		if err != nil {
 			for i := 0; i < maxRetry; i++ {
 				err = a.client.Get(context.TODO(), namespacedName, backup)
@@ -849,7 +849,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				backup.Status.Reason = "Application resources backup is in progress"
 				backup.Status.LastUpdateTimestamp = metav1.Now()
 				backup.Status.Volumes = volumeInfos
-				err = a.client.Update(context.TODO(), backup)
+				err = a.client.Status().Update(context.TODO(), backup)
 				if err != nil {
 					time.Sleep(retrySleep)
 					continue
@@ -875,7 +875,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}
 
 	backup.Status.LastUpdateTimestamp = metav1.Now()
-	err = a.client.Update(context.TODO(), backup)
+	err = a.client.Status().Update(context.TODO(), backup)
 	if err != nil {
 		return err
 	}
