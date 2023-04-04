@@ -43,6 +43,7 @@ const (
 	maxtimeInterval                  = 30 * time.Second
 	timeInterval                     = 1 * time.Second
 	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
+	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
 )
 
 var (

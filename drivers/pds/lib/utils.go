@@ -57,6 +57,7 @@ type Parameter struct {
 		ClusterType     string `json:"ClusterType"`
 		Namespace       string `json:"Namespace"`
 		PxNamespace     string `json:"PxNamespace"`
+		PDSNamespace    string `json:"PDSNamespace"`
 	} `json:"InfraToTest"`
 	PDSHelmVersions struct {
 		LatestHelmVersion   string `json:"LatestHelmVersion"`
@@ -817,6 +818,11 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
 		return false, nil
 	})
+	if conditionError != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+		}
+	}
 	return conditionError
 }
 
