@@ -94,7 +94,7 @@ const (
 	DefaultPxVsphereSecretName = "px-vsphere-secret"
 
 	// PxMasterVersion is a tag for Portworx master version
-	PxMasterVersion = "3.0.0.0"
+	PxMasterVersion = "4.0.0.0"
 
 	// PxOperatorMasterVersion is a tag for PX Operator master version
 	PxOperatorMasterVersion = "99.9.9"

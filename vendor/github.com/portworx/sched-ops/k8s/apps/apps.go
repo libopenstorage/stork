@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portworx/sched-ops/k8s/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -153,7 +154,10 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
 	c.apps, err = appsv1client.NewForConfig(c.config)
 	if err != nil {
 		return err

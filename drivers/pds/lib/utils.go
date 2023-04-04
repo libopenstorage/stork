@@ -19,6 +19,7 @@ import (
 	state "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
@@ -32,12 +33,6 @@ import (
 )
 
 type PDS_Health_Status string
-
-const (
-	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
-	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
-	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
-)
 
 type Parameter struct {
 	DataServiceToTest []struct {
@@ -57,6 +52,7 @@ type Parameter struct {
 		ClusterType     string `json:"ClusterType"`
 		Namespace       string `json:"Namespace"`
 		PxNamespace     string `json:"PxNamespace"`
+		PDSNamespace    string `json:"PDSNamespace"`
 	} `json:"InfraToTest"`
 	PDSHelmVersions struct {
 		LatestHelmVersion   string `json:"LatestHelmVersion"`
@@ -100,6 +96,7 @@ type WorkloadGenerationParams struct {
 	Iterations                   string
 	Namespace                    string
 	UseSSL, VerifyCerts, TimeOut string
+	Replicas                     int
 }
 
 // StorageOptions struct used to store template values
@@ -163,6 +160,10 @@ type StorageClassConfig struct {
 
 // PDS const
 const (
+	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
+	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
+	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
+
 	defaultCommandRetry   = 5 * time.Second
 	defaultCommandTimeout = 1 * time.Minute
 	storageTemplateName   = "QaDefault"
@@ -200,16 +201,23 @@ const (
 	configmapNamespace    = "default"
 )
 
+// K8s/PDS Instances
+var (
+	k8sCore       = core.Instance()
+	k8sApps       = apps.Instance()
+	apiExtentions = apiextensions.Instance()
+	serviceType   = "LoadBalancer"
+)
+
 // PDS vars
 var (
-	k8sCore = core.Instance()
-	k8sApps = apps.Instance()
+	components    *pdsapi.Components
+	deployment    *pds.ModelsDeployment
+	apiClient     *pds.APIClient
+	ns            *corev1.Namespace
+	pdsAgentpod   corev1.Pod
+	ApiComponents *pdsapi.Components
 
-	components                            *pdsapi.Components
-	deployment                            *pds.ModelsDeployment
-	apiClient                             *pds.APIClient
-	ns                                    *corev1.Namespace
-	pdsAgentpod                           corev1.Pod
 	err                                   error
 	isavailable                           bool
 	isTemplateavailable                   bool
@@ -228,7 +236,6 @@ var (
 	istargetclusterAvailable              bool
 	isAccountAvailable                    bool
 	isStorageTemplateAvailable            bool
-	serviceType                           = "LoadBalancer"
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
 	dataServiceNameIDMap                    = make(map[string]string)
@@ -239,7 +246,6 @@ var (
 	namespaceNameIDMap                      = make(map[string]string)
 	dataServiceVersionBuildMap              = make(map[string][]string)
 	dataServiceImageMap                     = make(map[string][]string)
-	ApiComponents                           *pdsapi.Components
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable.
@@ -817,6 +823,11 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
 		return false, nil
 	})
+	if conditionError != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+		}
+	}
 	return conditionError
 }
 
@@ -1328,6 +1339,54 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	return accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err
 }
 
+func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus string) (*pds.ModelsDeploymentTarget, error) {
+	var deploymentTarget *pds.ModelsDeploymentTarget
+
+	waiError := wait.Poll(timeInterval, timeOut, func() (bool, error) {
+		deploymentTarget, err = components.DeploymentTarget.GetTarget(DeploymentTargetID)
+		log.FailOnError(err, "Error occurred while getting deployment target")
+		if deploymentTarget.GetStatus() == healthStatus {
+			return true, nil
+		}
+		log.Infof("deployment target status %s", deploymentTarget.GetStatus())
+		return false, nil
+	})
+	log.Infof("deployment target status %s", deploymentTarget.GetStatus())
+
+	return deploymentTarget, waiError
+}
+
+func DeletePDSCRDs(pdsApiGroups []string) error {
+	var isCrdsAvailable bool
+	crdList, err := apiExtentions.ListCRDs()
+	if err != nil {
+		return fmt.Errorf("error while listing crds: %v", err)
+	}
+	isCrdsAvailable = false
+	for index := range pdsApiGroups {
+		for _, crd := range crdList.Items {
+			log.Debugf("CRD NAMES %s", crd.Name)
+			if strings.Contains(crd.Name, pdsApiGroups[index]) {
+				crdInfo, err := apiExtentions.GetCRD(crd.Name, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("error while getting crd information: %v", err)
+				}
+				log.InfoD("Deleting crd: %s", crdInfo.Name)
+				err = apiExtentions.DeleteCRD(crd.Name)
+				if err != nil {
+					return fmt.Errorf("error while deleting crd: %v", err)
+				}
+				isCrdsAvailable = true
+			}
+		}
+		if !isCrdsAvailable {
+			log.InfoD("No crd's found for api groups %s", pdsApiGroups[index])
+		}
+		isCrdsAvailable = false
+	}
+	return nil
+}
+
 // RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
 // func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string, installOldVersion bool) error {
 func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, installOldVersion bool) error {
@@ -1696,8 +1755,9 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 				{
 					Name:    name,
 					Image:   image,
-					Command: []string{"/bin/sh", "-c", command},
+					Command: []string{"/bin/sh", "-c"},
 					Env:     make([]corev1.EnvVar, 3),
+					Args:    []string{command},
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyOnFailure,
@@ -1873,8 +1933,12 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		}
 
 	case redis:
+		var command string
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
-		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster --user ${PDS_USER}"
+		command = fmt.Sprintf("redis-benchmark --user ${PDS_USER} -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q")
+		if params.Replicas > 1 {
+			command = fmt.Sprintf("%s %s", command, "--cluster")
+		}
 		pod, err = CreateRedisWorkload(params.DeploymentName, redisStressImage, dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
