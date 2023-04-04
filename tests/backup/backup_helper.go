@@ -51,6 +51,9 @@ const (
 	maxWaitPeriodForBackupCompletionInMinutes = 40
 	maxWaitPeriodForRestoreCompletionInMinute = 40
 	maxWaitPeriodForBackupJobCancellation     = 20
+	maxWaitPeriodForRestoreJobCancellation    = 20
+	restoreJobCancellationRetryTime           = 30
+	restoreJobProgressRetryTime               = 1
 	backupJobCancellationRetryTime            = 5
 	K8sNodeReadyTimeout                       = 10
 	K8sNodeRetryInterval                      = 30
