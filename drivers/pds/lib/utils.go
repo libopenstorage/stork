@@ -96,6 +96,7 @@ type WorkloadGenerationParams struct {
 	Iterations                   string
 	Namespace                    string
 	UseSSL, VerifyCerts, TimeOut string
+	Replicas                     int
 }
 
 // StorageOptions struct used to store template values
@@ -1754,8 +1755,9 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 				{
 					Name:    name,
 					Image:   image,
-					Command: []string{"/bin/sh", "-c", command},
+					Command: []string{"/bin/sh", "-c"},
 					Env:     make([]corev1.EnvVar, 3),
+					Args:    []string{command},
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyOnFailure,
@@ -1931,8 +1933,12 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		}
 
 	case redis:
+		var command string
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
-		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster --user ${PDS_USER}"
+		command = fmt.Sprintf("redis-benchmark --user ${PDS_USER} -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q")
+		if params.Replicas > 1 {
+			command = fmt.Sprintf("%s %s", command, "--cluster")
+		}
 		pod, err = CreateRedisWorkload(params.DeploymentName, redisStressImage, dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)

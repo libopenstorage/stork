@@ -112,7 +112,9 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 	}
 	if ds.Name == redis {
 		params.DeploymentName = "redisbench"
+		params.Replicas = ds.Replicas
 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+
 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
 
 	}
