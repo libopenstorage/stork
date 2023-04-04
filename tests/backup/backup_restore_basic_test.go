@@ -1117,7 +1117,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 // BackupSyncBasicTest take a good number of backups check if backup sync is working
 var _ = Describe("{BackupSyncBasicTest}", func() {
 	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "10"))
-	timeBetweenConsecutiveBackups := 4 * time.Second
+	timeBetweenConsecutiveBackups := 10 * time.Second
 	backupNames := make([]string, 0)
 	numberOfSimultaneousBackups := 20
 	var contexts []*scheduler.Context
