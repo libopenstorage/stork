@@ -1448,8 +1448,8 @@ func (a *ApplicationRestoreController) restoreResources(
 		// update the flag and resource-count.
 		// Strip off the resource info it contributes to bigger size of application restore CR in case of large number of resource
 		restore.Status.Resources = make([]*storkapi.ApplicationRestoreResourceInfo, 0)
-		restore.Spec.ResourceCount = resourceCount
-		restore.Spec.LargeResourceEnabled = true
+		restore.Status.ResourceCount = resourceCount
+		restore.Status.LargeResourceEnabled = true
 	}
 	if err := a.client.Update(context.TODO(), restore); err != nil {
 		return err

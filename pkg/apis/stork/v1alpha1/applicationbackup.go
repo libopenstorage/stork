@@ -28,18 +28,16 @@ type ApplicationBackup struct {
 
 // ApplicationBackupSpec is the spec used to backup applications
 type ApplicationBackupSpec struct {
-	Namespaces           []string                           `json:"namespaces"`
-	BackupLocation       string                             `json:"backupLocation"`
-	PlatformCredential   string                             `json:"platformCredential"`
-	RancherProjects      map[string]string                  `json:"rancherProjects"`
-	Selectors            map[string]string                  `json:"selectors"`
-	NamespaceSelector    string                             `json:"namespaceSelector"`
-	PreExecRule          string                             `json:"preExecRule"`
-	PostExecRule         string                             `json:"postExecRule"`
-	ReclaimPolicy        ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
-	SkipServiceUpdate    bool                               `json:"skipServiceUpdate"`
-	ResourceCount        int                                `json:"resourceCount"`
-	LargeResourceEnabled bool                               `json:"largeResourceEnabled"`
+	Namespaces         []string                           `json:"namespaces"`
+	BackupLocation     string                             `json:"backupLocation"`
+	PlatformCredential string                             `json:"platformCredential"`
+	RancherProjects    map[string]string                  `json:"rancherProjects"`
+	Selectors          map[string]string                  `json:"selectors"`
+	NamespaceSelector  string                             `json:"namespaceSelector"`
+	PreExecRule        string                             `json:"preExecRule"`
+	PostExecRule       string                             `json:"postExecRule"`
+	ReclaimPolicy      ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	SkipServiceUpdate  bool                               `json:"skipServiceUpdate"`
 	// Options to be passed in to the driver
 	Options          map[string]string `json:"options"`
 	IncludeResources []ObjectInfo      `json:"includeResources"`
@@ -61,16 +59,18 @@ const (
 
 // ApplicationBackupStatus is the status of a application backup operation
 type ApplicationBackupStatus struct {
-	Stage               ApplicationBackupStageType       `json:"stage"`
-	Status              ApplicationBackupStatusType      `json:"status"`
-	Reason              string                           `json:"reason"`
-	Resources           []*ApplicationBackupResourceInfo `json:"resources"`
-	Volumes             []*ApplicationBackupVolumeInfo   `json:"volumes"`
-	BackupPath          string                           `json:"backupPath"`
-	TriggerTimestamp    metav1.Time                      `json:"triggerTimestamp"`
-	LastUpdateTimestamp metav1.Time                      `json:"lastUpdateTimestamp"`
-	FinishTimestamp     metav1.Time                      `json:"finishTimestamp"`
-	TotalSize           uint64                           `json:"totalSize"`
+	Stage                ApplicationBackupStageType       `json:"stage"`
+	Status               ApplicationBackupStatusType      `json:"status"`
+	Reason               string                           `json:"reason"`
+	Resources            []*ApplicationBackupResourceInfo `json:"resources"`
+	Volumes              []*ApplicationBackupVolumeInfo   `json:"volumes"`
+	BackupPath           string                           `json:"backupPath"`
+	TriggerTimestamp     metav1.Time                      `json:"triggerTimestamp"`
+	LastUpdateTimestamp  metav1.Time                      `json:"lastUpdateTimestamp"`
+	FinishTimestamp      metav1.Time                      `json:"finishTimestamp"`
+	TotalSize            uint64                           `json:"totalSize"`
+	ResourceCount        int                              `json:"resourceCount"`
+	LargeResourceEnabled bool                             `json:"largeResourceEnabled"`
 }
 
 // ObjectInfo contains info about an object being backed up or restored
