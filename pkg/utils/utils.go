@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-
 	"github.com/aquilax/truncate"
 	"github.com/libopenstorage/stork/drivers"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"

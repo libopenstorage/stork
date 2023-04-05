@@ -714,14 +714,14 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					}
 					err = a.resourceCollector.DeleteResources(
 						a.dynamicInterface,
-						tempObjects)
+						tempObjects, updateCr)
 					if err != nil {
 						return err
 					}
 				}
 				// pvc creation is not part of kdmp
 				if driverName != volume.KDMPDriverName {
-					if err := a.applyResources(restore, preRestoreObjects); err != nil {
+					if err := a.applyResources(restore, preRestoreObjects, updateCr); err != nil {
 						return err
 					}
 				}
@@ -1635,7 +1635,7 @@ func (a *ApplicationRestoreController) restoreResources(
 			return err
 		}
 
-		if err := a.applyResources(restore, objects); err != nil {
+		if err := a.applyResources(restore, objects, updateCr); err != nil {
 			return err
 		}
 	} else {

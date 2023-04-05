@@ -75,7 +75,7 @@ const (
 	kdmpDriverOnly                  = "kdmp"
 	nonKdmpDriverOnly               = "nonkdmp"
 	mixedDriver                     = "mixed"
-	oneMBSizeBytes                = 1 << (10 * 2)
+	oneMBSizeBytes                  = 1 << (10 * 2)
 	prefixBackup                    = "backup"
 	prefixRestore                   = "restore"
 	applicationBackupCRNameKey      = kdmpAnnotationPrefix + "applicationbackup-cr-name"
