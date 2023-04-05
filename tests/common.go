@@ -181,6 +181,7 @@ const (
 	remoteFilePath         = "/tmp/kubeconfig"
 	appReadinessTimeout    = 10 * time.Minute
 	migrationKey           = "async-dr-"
+	metromigrationKey      = "metro-dr-"
 	migrationRetryTimeout  = 10 * time.Minute
 	migrationRetryInterval = 10 * time.Second
 	defaultClusterPairDir  = "cluster-pair"

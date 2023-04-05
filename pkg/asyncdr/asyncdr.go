@@ -2,7 +2,6 @@ package asyncdr
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/pkg/log"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -69,6 +69,7 @@ func CreateMigration(
 	namespace string,
 	clusterPair string,
 	migrationNamespace string,
+	includeVolumes *bool,
 	includeResources *bool,
 	startApplications *bool,
 ) (*storkapi.Migration, error) {
@@ -80,6 +81,7 @@ func CreateMigration(
 		},
 		Spec: storkapi.MigrationSpec{
 			ClusterPair:       clusterPair,
+			IncludeVolumes:    includeVolumes,
 			IncludeResources:  includeResources,
 			StartApplications: startApplications,
 			Namespaces:        []string{migrationNamespace},

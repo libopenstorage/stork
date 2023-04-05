@@ -89,6 +89,7 @@ var _ = Describe("{Longevity}", func() {
 		Trashcan:               TriggerTrashcan,
 		KVDBFailover:           TriggerKVDBFailover,
 		ValidateDeviceMapper:   TriggerValidateDeviceMapperCleanup,
+		MetroDR:                TriggerMetroDR,
 		AsyncDR:                TriggerAsyncDR,
 		AsyncDRVolumeOnly:      TriggerAsyncDRVolumeOnly,
 		StorkApplicationBackup: TriggerStorkApplicationBackup,
@@ -619,6 +620,7 @@ func populateIntervals() {
 	triggerInterval[Trashcan] = make(map[int]time.Duration)
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
+	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
@@ -752,6 +754,17 @@ func populateIntervals() {
 	triggerInterval[BackupRestartNode][7] = 4 * baseInterval
 	triggerInterval[BackupRestartNode][6] = 5 * baseInterval
 	triggerInterval[BackupRestartNode][5] = 6 * baseInterval
+
+	triggerInterval[MetroDR][10] = 1 * baseInterval
+	triggerInterval[MetroDR][9] = 3 * baseInterval
+	triggerInterval[MetroDR][8] = 6 * baseInterval
+	triggerInterval[MetroDR][7] = 9 * baseInterval
+	triggerInterval[MetroDR][6] = 12 * baseInterval
+	triggerInterval[MetroDR][5] = 15 * baseInterval
+	triggerInterval[MetroDR][4] = 18 * baseInterval
+	triggerInterval[MetroDR][3] = 21 * baseInterval
+	triggerInterval[MetroDR][2] = 24 * baseInterval
+	triggerInterval[MetroDR][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDR][10] = 1 * baseInterval
 	triggerInterval[AsyncDR][9] = 3 * baseInterval
