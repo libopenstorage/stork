@@ -2,12 +2,14 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/talisman"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
@@ -70,10 +72,26 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 			testValidateVPS()
 		})
 
-		// test mongo volume anti affinity
+		// test mongo volume affinity
 		Context("{VPSMongVolumeoAffinity}", func() {
 			BeforeEach(func() {
 				vpsTestCase = &mongoVolumeAffinity{}
+			})
+			testValidateVPS()
+		})
+
+		// test mongo replica affinity
+		Context("{VPSMongoReplicaAffinity}", func() {
+			BeforeEach(func() {
+				vpsTestCase = &mongoVPSReplicaAffinity{}
+			})
+			testValidateVPS()
+		})
+
+		// test mongo replica anti affinity
+		Context("{VPSMongoReplicaAntiAffinity}", func() {
+			BeforeEach(func() {
+				vpsTestCase = &mongoVPSReplicaAntiAffinity{}
 			})
 			testValidateVPS()
 		})
@@ -202,6 +220,155 @@ func (m *mongoVolumeAffinity) ValidateVPSDeployment(contexts []*scheduler.Contex
 	volumeLabelKey := "app"
 
 	return vpsutil.ValidateVolumeAffinityByNode(apiVols, volumeLabelKey)
+}
+
+type mongoVPSReplicaAffinity struct {
+	VolumePlacementStrategySpec
+	deployedNode node.Node
+}
+
+func (m *mongoVPSReplicaAffinity) TestName() string {
+	return "mongovpsreplicaaffinity"
+}
+
+func putNodeLabels(node node.Node, nodeLabels map[string]string) error {
+	for key, value := range nodeLabels {
+		err := Inst().S.AddLabelOnNode(node, key, value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func removeNodeLabels(node node.Node, nodeLabels map[string]string) error {
+	for key := range nodeLabels {
+		err := Inst().S.RemoveLabelOnNode(node, key)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *mongoVPSReplicaAffinity) getNodeLabels() map[string]string {
+	return map[string]string{
+		"nodelabel": "affinity",
+	}
+}
+
+func (m *mongoVPSReplicaAffinity) DeployVPS() error {
+	storageNodes := node.GetStorageDriverNodes()
+	m.deployedNode = storageNodes[rand.Intn(len(storageNodes))]
+
+	err := putNodeLabels(m.deployedNode, m.getNodeLabels())
+	if err != nil {
+		return err
+	}
+
+	matchExpression := []*v1beta1.LabelSelectorRequirement{
+		{
+			Key:      "nodelabel",
+			Operator: v1beta1.LabelSelectorOpIn,
+			Values:   []string{"affinity"},
+		},
+	}
+
+	vpsSpec := vpsutil.ReplicaAffinityByMatchExpression("mongo-vps", matchExpression)
+	_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+	m.spec = &vpsSpec
+	return err
+}
+
+func (m *mongoVPSReplicaAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
+	vols, err := Inst().S.GetVolumes(contexts[0])
+	if err != nil {
+		return err
+	}
+
+	apiVols, err := getApiVols(vols)
+	if err != nil {
+		return err
+	}
+
+	return vpsutil.ValidateReplicaAffinityByNode(apiVols, m.deployedNode)
+}
+
+func (m *mongoVPSReplicaAffinity) DestroyVPSDeployment() error {
+	err := removeNodeLabels(m.deployedNode, m.getNodeLabels())
+	if err != nil {
+		return err
+	}
+	return talisman.Instance().DeleteVolumePlacementStrategy(m.spec.Name)
+}
+
+type mongoVPSReplicaAntiAffinity struct {
+	VolumePlacementStrategySpec
+	deployedNode node.Node
+}
+
+func (m *mongoVPSReplicaAntiAffinity) TestName() string {
+	return "mongovpsreplicaantiaffinity"
+}
+
+func (m *mongoVPSReplicaAntiAffinity) getNodeLabels() map[string]string {
+	return map[string]string{
+		"nodelabel": "antiaffinity",
+	}
+}
+
+func (m *mongoVPSReplicaAntiAffinity) DeployVPS() error {
+	storageNodes := node.GetStorageDriverNodes()
+	m.deployedNode = storageNodes[rand.Intn(len(storageNodes))]
+
+	for _, labeledNode := range storageNodes {
+		if labeledNode.Name != m.deployedNode.Name {
+			err := putNodeLabels(labeledNode, m.getNodeLabels())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	matchExpression := []*v1beta1.LabelSelectorRequirement{
+		{
+			Key:      "nodelabel",
+			Operator: v1beta1.LabelSelectorOpIn,
+			Values:   []string{"antiaffinity"},
+		},
+	}
+	vpsSpec := vpsutil.ReplicaAntiAffinityByMatchExpression("mongo-vps", matchExpression)
+	_, err := talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+	m.spec = &vpsSpec
+	return err
+}
+
+func (m *mongoVPSReplicaAntiAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
+	vols, err := Inst().S.GetVolumes(contexts[0])
+	if err != nil {
+		return err
+	}
+
+	apiVols, err := getApiVols(vols)
+	if err != nil {
+		return err
+	}
+
+	return vpsutil.ValidateReplicaAffinityByNode(apiVols, m.deployedNode)
+}
+
+func (m *mongoVPSReplicaAntiAffinity) DestroyVPSDeployment() error {
+	storageNodes := node.GetStorageDriverNodes()
+
+	for _, labeledNode := range storageNodes {
+		if labeledNode.Name != m.deployedNode.Name {
+			err := removeNodeLabels(labeledNode, m.getNodeLabels())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return talisman.Instance().DeleteVolumePlacementStrategy(m.spec.Name)
 }
 
 func getApiVols(vols []*volume.Volume) ([]*api.Volume, error) {

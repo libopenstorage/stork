@@ -6,6 +6,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/tests"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,6 +45,42 @@ func VolumeAffinityByMatchExpression(name string, matchExpression []*v1beta1.Lab
 				{
 					Enforcement:      v1beta1.EnforcementRequired,
 					MatchExpressions: matchExpression,
+				},
+			},
+		},
+	}
+}
+
+func ReplicaAntiAffinityByMatchExpression(name string, matchExpression []*v1beta1.LabelSelectorRequirement) talisman_v1beta2.VolumePlacementStrategy {
+	return talisman_v1beta2.VolumePlacementStrategy{
+		ObjectMeta: v1.ObjectMeta{
+			Name: name,
+		},
+		Spec: talisman_v1beta2.VolumePlacementSpec{
+			ReplicaAntiAffinity: []*talisman_v1beta2.ReplicaPlacementSpec{
+				{
+					CommonPlacementSpec: talisman_v1beta2.CommonPlacementSpec{
+						Enforcement:      v1beta1.EnforcementRequired,
+						MatchExpressions: matchExpression,
+					},
+				},
+			},
+		},
+	}
+}
+
+func ReplicaAffinityByMatchExpression(name string, matchExpression []*v1beta1.LabelSelectorRequirement) talisman_v1beta2.VolumePlacementStrategy {
+	return talisman_v1beta2.VolumePlacementStrategy{
+		ObjectMeta: v1.ObjectMeta{
+			Name: name,
+		},
+		Spec: talisman_v1beta2.VolumePlacementSpec{
+			ReplicaAffinity: []*talisman_v1beta2.ReplicaPlacementSpec{
+				{
+					CommonPlacementSpec: talisman_v1beta2.CommonPlacementSpec{
+						Enforcement:      v1beta1.EnforcementRequired,
+						MatchExpressions: matchExpression,
+					},
 				},
 			},
 		},
@@ -103,6 +140,20 @@ func ValidateVolumeAffinityByNode(vols []*api.Volume, label string) error {
 	for _, nodes := range volToNodeMap {
 		if len(nodes) != 1 {
 			return fmt.Errorf("failed to validate vps deployment, expecting label to exist in %v unique nodes, but got length %v and nodes %v .... data: %v", 1, len(nodes), nodes, volToNodeMap)
+		}
+	}
+	return nil
+}
+
+// ValidateReplicaAffinityByNode validated the volumes are only placed on `deployedNode`.
+func ValidateReplicaAffinityByNode(vols []*api.Volume, deployedNode node.Node) error {
+	for _, vol := range vols {
+		nodeList := getNodePlacement(vol)
+
+		for _, node := range nodeList {
+			if node != deployedNode.Id {
+				return fmt.Errorf("failed to validate vps replica affinity deployment, expecting volume to be deployed on %v (hostname: %v), but was deployed on %v", deployedNode.Id, deployedNode.Hostname, node)
+			}
 		}
 	}
 	return nil
