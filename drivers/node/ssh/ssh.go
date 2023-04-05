@@ -2,6 +2,14 @@ package ssh
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -13,16 +21,9 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	ssh_pkg "golang.org/x/crypto/ssh"
-	"io/ioutil"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"net"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -154,16 +155,17 @@ func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, e
 	return count, nil
 }
 
-// Init initializes SSH node driver
-func (s *SSH) Init(nodeOpts node.InitOptions) error {
+// updateDriver updates the information stored in the driver w.r.t. current context
+func (s *SSH) updateDriver() error {
 	var err error
-	s.specDir = nodeOpts.SpecDir
 
+	// The namespace of the portworx-service in the current context
 	execPodNamespace, err := getExecPodNamespace()
 	if err != nil {
 		return err
 	}
 	s.execPodNamespace = execPodNamespace
+	log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", execPodNamespace)
 
 	nodes := node.GetWorkerNodes()
 	if s.IsUsingSSH() {
@@ -192,6 +194,17 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	}
 
 	return nil
+}
+
+// Init initializes SSH node driver
+func (s *SSH) Init(nodeOpts node.InitOptions) error {
+	s.specDir = nodeOpts.SpecDir
+	return s.updateDriver()
+}
+
+// RefreshDriver refreshes the driver on a context switch
+func RefreshDriver(s *SSH) error {
+	return s.updateDriver()
 }
 
 func (s *SSH) initExecPod() error {

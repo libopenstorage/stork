@@ -67,7 +67,8 @@ var _ = Describe("{MigrateDeployment}", func() {
 	It("has to deploy app, create cluster pair, migrate app", func() {
 		Step("Deploy applications", func() {
 
-			SetSourceKubeConfig()
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 				log.Infof("Task name %s\n", taskName)

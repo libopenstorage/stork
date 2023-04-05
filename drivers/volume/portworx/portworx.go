@@ -422,6 +422,15 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
+
+	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
+	namespace, err := d.GetVolumeDriverNamespace()
+	if err != nil {
+		return err
+	}
+	d.namespace = namespace
+	log.InfoD("RefreshDriverEndpoints: volume driver's namespace (portworx namespace) is updated to [%s]", namespace)
+
 	// Force update px endpoints
 	d.refreshEndpoint = true
 	storageNodes, err := d.getStorageNodesOnStart()
