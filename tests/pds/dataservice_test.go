@@ -654,37 +654,9 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 			for _, ds := range params.DataServiceToTest {
 				log.InfoD("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
-				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-				log.FailOnError(err, "Error while getting resource template")
-				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
-
-				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-				log.FailOnError(err, "Error while getting app configuration template")
-				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-				namespaceID, err := pdslib.GetnameSpaceID(ns, deploymentTargetID)
-				log.FailOnError(err, "error while getting namespaceid")
-				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
-					deploymentTargetID,
-					dnsZone,
-					deploymentName,
-					namespaceID,
-					dataServiceDefaultAppConfigID,
-					int32(ds.Replicas),
-					serviceType,
-					dataServiceDefaultResourceTemplateID,
-					storageTemplateID,
-					ds.Version,
-					ds.Image,
-					ns,
-				)
-				log.FailOnError(err, "Error while deploying data services")
-
-				Step("Validate Storage Configurations", func() {
-					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns)
-					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
-				})
+				deployment, _, _, err = DeployandValidateDataServices(ds, ns, tenantID, projectID)
+				log.FailOnError(err, fmt.Sprintf("Error while deploying data services %s", ds.Name))
+				log.InfoD("Data service %v deployed successfully", ds.Name)
 
 				Step("Delete Deployments", func() {
 					log.InfoD("Deleting DataService %v ", ds.Name)
