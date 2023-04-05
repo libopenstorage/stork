@@ -622,6 +622,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
+	triggerInterval[ConfluentAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
 	triggerInterval[StorkAppBkpVolResize] = make(map[int]time.Duration)
@@ -776,6 +777,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][3] = 21 * baseInterval
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[ConfluentAsyncDR][10] = 1 * baseInterval
+	triggerInterval[ConfluentAsyncDR][9] = 3 * baseInterval
+	triggerInterval[ConfluentAsyncDR][8] = 6 * baseInterval
+	triggerInterval[ConfluentAsyncDR][7] = 9 * baseInterval
+	triggerInterval[ConfluentAsyncDR][6] = 12 * baseInterval
+	triggerInterval[ConfluentAsyncDR][5] = 15 * baseInterval
+	triggerInterval[ConfluentAsyncDR][4] = 18 * baseInterval
+	triggerInterval[ConfluentAsyncDR][3] = 21 * baseInterval
+	triggerInterval[ConfluentAsyncDR][2] = 24 * baseInterval
+	triggerInterval[ConfluentAsyncDR][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDRVolumeOnly][10] = 1 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][9] = 3 * baseInterval
@@ -1322,6 +1334,7 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[ConfluentAsyncDR][0] = 0
 	triggerInterval[AsyncDRVolumeOnly][0] = 0
 	triggerInterval[StorkApplicationBackup][0] = 0
 	triggerInterval[StorkAppBkpVolResize][0] = 0

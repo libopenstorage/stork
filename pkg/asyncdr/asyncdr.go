@@ -7,11 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
+	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -176,4 +180,96 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 		}
 	}
 	return nil
+}
+
+func HelmRepoAddandCrInstall(helm_repo_name string, helm_repo_url string, namespace string, operator_name string, operator_path string, app_yaml_url string) (*v1.PodList, error) {
+	cmd := fmt.Sprintf("helm repo add %v %v", helm_repo_name, helm_repo_url)
+	log.InfoD("Running command: %v", cmd)
+	_, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		log.Errorf("Error running command: %v and err is: %v", cmd, err)
+		return nil, err
+	}
+	cmd = "helm repo update"
+	_, _, err = osutils.ExecShell(cmd)
+	if err != nil {
+		log.Errorf("Error running command: %v and err is: %v", cmd, err)
+		return nil, err
+	}
+	if operator_name != "" && operator_path != "" {
+		cmd = fmt.Sprintf("helm upgrade --install %v %v -n %v", operator_name, operator_path, namespace)
+		log.InfoD("Running command: %v", cmd)
+		_, _, err = osutils.ExecShell(cmd)
+		if err != nil {
+			log.Errorf("Error running command: %v and err is: %v", cmd, err)
+			return nil, err
+		}
+	}
+	if app_yaml_url != "" {
+		cmd = fmt.Sprintf("kubectl apply -f %v -n %v", app_yaml_url, namespace)
+		log.InfoD("Running command: %v", cmd)
+		_, _, err = osutils.ExecShell(cmd)
+		if err != nil {
+			log.Errorf("Error running command: %v and err is: %v", cmd, err)
+			return nil, err
+		}
+		// Sleeping here, as apps deploys one by one, which takes time to collect all pods
+		time.Sleep(5 * time.Minute)
+		podList, err := core.Instance().GetPods(namespace, nil)
+		if err != nil {
+			log.Errorf("Error getting podlist: %v and err is: %v", cmd, err)
+			return nil, err
+		}
+		err = WaitForPodToBeRunning(podList)
+		if err != nil {
+			return nil, err
+		}
+		return podList, nil
+	}
+	return nil, err
+}
+
+func ValidateCRD(crdList []string, sourceClusterConfigPath string) error {
+	//Generate source config path and provide to api extension
+	apiExt, err := apiextensions.NewInstanceFromConfigFile(sourceClusterConfigPath)
+	if err != nil {
+		log.Errorf("Failed to get new config instance")
+		return err
+	}
+	for _, crd := range crdList {
+		err = apiExt.ValidateCRD(crd, time.Duration(1)*time.Minute, time.Duration(1)*time.Minute)
+		if err != nil {
+			log.Errorf("Verifying CRD %s failed on cluster, err is: %s", crd, err)
+			return err
+		}
+	}
+	return err
+}
+
+func DeleteCRAndUninstallCRD(helm_release_name string, app_yaml_url string, namespace string) {
+	cmd := fmt.Sprintf("kubectl delete -f %v -n %v", app_yaml_url, namespace)
+	log.InfoD("Running command: %v", cmd)
+	_, _, _ = osutils.ExecShell(cmd)
+	// TODO: Need to add code for making sure the apps got del
+	cmd = fmt.Sprintf("helm uninstall %v -n %v", helm_release_name, namespace)
+	log.InfoD("Running command: %v", cmd)
+	_, _, _ = osutils.ExecShell(cmd)
+}
+
+func WaitForPodToBeRunning(pods *v1.PodList) error {
+	checkPods := func() (interface{}, bool, error) {
+		isRunning := true
+		for _, p := range pods.Items {
+			if p.Status.Phase != v1.PodRunning {
+				log.Infof("Pod %s in namespace %s is pending", p.Name, p.Namespace)
+				isRunning = false
+			}
+		}
+		if isRunning {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("some pods are still pending...")
+	}
+	_, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval)
+	return err
 }
