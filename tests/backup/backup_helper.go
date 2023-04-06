@@ -707,7 +707,7 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 
 func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
 	var number int
-	ret, err := kubectlExec([]string{podName, "-n", namespace, "--kubeconfig=", kubeConfigFile, " -- /bin/df"})
+	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
@@ -727,9 +727,10 @@ func kubectlExec(arguments []string) (string, error) {
 	if len(arguments) == 0 {
 		return "", fmt.Errorf("no arguments supplied for kubectl command")
 	}
-	cmd := exec.Command("kubectl exec -it", arguments...)
+	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	log.Debugf("command output for '%s': %s", cmd.String(), string(output))
+	log.InfoD("Command '%s'", cmd.String())
+	log.Infof("Command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
