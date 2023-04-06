@@ -5963,24 +5963,21 @@ var _ = Describe("{PoolResizeSameSize}", func() {
 
 		var expectedSize uint64
 
+
 		stepLog = "trigger pool resize with the same size"
 		Step(stepLog, func() {
 			expectedSize = (poolToBeResized.TotalSize / units.GiB) + 2
 
 			log.InfoD("Current Size of the pool %s is %d", selectedNodePool.Uuid, poolToBeResized.TotalSize/units.GiB)
 
+			// expand pool should error when trying to expand pool of 2 GiB size when minimum expansion size is 4.0 GiB
 			err = Inst().V.ExpandPool(selectedNodePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			dash.VerifyFatal(err != nil, true,
+				fmt.Sprintf("verify pool expansion using resize-disk with same size failed on pool [%s] in node [%s]",
+					selectedNodePool.Uuid, stNode.Name))
 
-			resizeErr := waitForPoolToBeResized(expectedSize, selectedNodePool.Uuid, true)
-			dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("verify pool expansion using resize-disk with same size failed on pool [%s] in node [%s]", selectedNodePool.Uuid, stNode.Name))
-			expandedPool, err := GetStoragePoolByUUID(selectedNodePool.Uuid)
-			log.FailOnError(err, "error getting storage pool")
-			if expandedPool.LastOperation != nil {
-				log.Infof("pool last operation status: %v", expandedPool.LastOperation.Status)
-				log.Infof("pool last operation msg: %s", expandedPool.LastOperation.Msg)
-			}
 		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
