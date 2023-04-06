@@ -1441,6 +1441,30 @@ func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, inst
 	return nil
 }
 
+// Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
+func DeletePvandPVCs(resourceName string) error {
+	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
+	pv_list, err := k8sCore.GetPersistentVolumes()
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
+		}
+		return err
+	}
+	for _, vol := range pv_list.Items {
+		claimName := vol.Spec.ClaimRef.Name
+		if strings.Contains(claimName, resourceName) {
+			log.Debugf("claim :%s is identified", claimName)
+			err := CheckAndDeleteIndependentPV(vol.Name)
+			if err != nil {
+				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", err)
+			}
+			log.Debugf("The PV : %v and its associated PVC : %v is deleted !", vol.Name, claimName)
+		}
+	}
+	return nil
+}
+
 // Check if PV and associated PVC is still present. If yes then delete both of them
 func CheckAndDeleteIndependentPV(name string) error {
 	pv_check, err := k8sCore.GetPersistentVolume(name)
