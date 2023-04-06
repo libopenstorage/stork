@@ -1575,8 +1575,8 @@ func (a *ApplicationBackupController) backupResources(
 			// update the flag and resource-count.
 			// Strip off the resource info it contributes to bigger size of AB CR in case of large number of resource
 			backup.Status.Resources = make([]*stork_api.ApplicationBackupResourceInfo, 0)
-			backup.Spec.ResourceCount = len(resourceInfos)
-			backup.Spec.LargeResourceEnabled = true
+			backup.Status.ResourceCount = len(resourceInfos)
+			backup.Status.LargeResourceEnabled = true
 		}
 		// Store the new status
 		err = a.client.Update(context.TODO(), backup)

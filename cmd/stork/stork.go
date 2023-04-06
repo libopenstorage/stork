@@ -186,12 +186,12 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:  "k8s-api-qps",
-			Value: 100,
+			Value: 1000,
 			Usage: "Restrict number of k8s API requests from stork (default: 100 QPS)",
 		},
 		cli.IntFlag{
 			Name:  "k8s-api-burst",
-			Value: 100,
+			Value: 2000,
 			Usage: "Restrict number of k8s API requests from stork (default: 100 Burst)",
 		},
 		cli.BoolTFlag{

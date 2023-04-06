@@ -32,8 +32,6 @@ type ApplicationRestoreSpec struct {
 	IncludeResources             []ObjectInfo                        `json:"includeResources"`
 	StorageClassMapping          map[string]string                   `json:"storageClassMapping"`
 	RancherProjectMapping        map[string]string                   `json:"rancherProjectMapping"`
-	ResourceCount                int                                 `json:"resourceCount"`
-	LargeResourceEnabled         bool                                `json:"largeResourceEnabled"`
 }
 
 // ApplicationRestoreReplacePolicyType is the replace policy for the application restore
@@ -53,14 +51,16 @@ const (
 
 // ApplicationRestoreStatus is the status of a application restore operation
 type ApplicationRestoreStatus struct {
-	Stage               ApplicationRestoreStageType       `json:"stage"`
-	Status              ApplicationRestoreStatusType      `json:"status"`
-	Reason              string                            `json:"reason"`
-	Resources           []*ApplicationRestoreResourceInfo `json:"resources"`
-	Volumes             []*ApplicationRestoreVolumeInfo   `json:"volumes"`
-	FinishTimestamp     metav1.Time                       `json:"finishTimestamp"`
-	LastUpdateTimestamp metav1.Time                       `json:"lastUpdateTimestamp"`
-	TotalSize           uint64                            `json:"totalSize"`
+	Stage                ApplicationRestoreStageType       `json:"stage"`
+	Status               ApplicationRestoreStatusType      `json:"status"`
+	Reason               string                            `json:"reason"`
+	Resources            []*ApplicationRestoreResourceInfo `json:"resources"`
+	Volumes              []*ApplicationRestoreVolumeInfo   `json:"volumes"`
+	FinishTimestamp      metav1.Time                       `json:"finishTimestamp"`
+	LastUpdateTimestamp  metav1.Time                       `json:"lastUpdateTimestamp"`
+	TotalSize            uint64                            `json:"totalSize"`
+	ResourceCount        int                               `json:"resourceCount"`
+	LargeResourceEnabled bool                              `json:"largeResourceEnabled"`
 }
 
 // ApplicationRestoreResourceInfo is the info for the restore of a resource

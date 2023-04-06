@@ -1881,6 +1881,49 @@ func (m *MigrationController) applyResources(
 			updatedObjects = append(updatedObjects, o)
 		}
 	}
+
+	// find out the csi PVs and if the volumeHandle does not match with pv Name , delete those.
+	// https://portworx.atlassian.net/browse/PWX-30157
+	pvToPVCMapping := getPVToPVCMappingFromPVCObjects(pvcObjects)
+	var csiPVCAndPVObjects []runtime.Unstructured
+	for _, obj := range pvObjects {
+		var pv v1.PersistentVolume
+		var err error
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pv); err != nil {
+			m.updateResourceStatus(
+				migration,
+				obj,
+				stork_api.MigrationStatusFailed,
+				fmt.Sprintf("Error unmarshalling pv resource: %v", err))
+			continue
+		}
+		if pv.Spec.CSI != nil {
+			respPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
+			if err != nil {
+				logrus.Errorf("error getting pv %s: %v", pv.Name, err)
+				continue
+			}
+			if respPV.Spec.CSI != nil && respPV.Spec.CSI.VolumeHandle != pv.Name {
+				// Add the pvc object related to the PV for deleting
+				if _, ok := pvToPVCMapping[pv.Name]; ok {
+					csiPVCAndPVObjects = append(csiPVCAndPVObjects, pvToPVCMapping[pv.Name])
+				}
+				// Add the pv object to the list also for getting deleted
+				csiPVCAndPVObjects = append(csiPVCAndPVObjects, obj)
+			}
+		}
+	}
+	if len(csiPVCAndPVObjects) > 0 {
+		err = m.resourceCollector.DeleteResources(
+			remoteClient.remoteAdminInterface,
+			csiPVCAndPVObjects,
+			nil)
+		if err != nil {
+			logrus.Errorf("error deleting csi pvcs and pvs: %v ", err)
+			return err
+		}
+	}
+
 	// create/update pv object with updated policy
 	for _, obj := range pvObjects {
 		var pv v1.PersistentVolume
@@ -2482,4 +2525,20 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	}
 	resources = append(resources, objects.Items...)
 	return resources, pvcWithOwnerRef, nil
+}
+
+func getPVToPVCMappingFromPVCObjects(pvcObjects []runtime.Unstructured) map[string]runtime.Unstructured {
+	pvToPVCMapping := make(map[string]runtime.Unstructured)
+	for _, obj := range pvcObjects {
+		var pvc v1.PersistentVolumeClaim
+		var err error
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pvc); err != nil {
+			logrus.Errorf("Error unmarshalling pvc resource: %v", err)
+			continue
+		}
+		if len(pvc.Spec.VolumeName) > 0 {
+			pvToPVCMapping[pvc.Spec.VolumeName] = obj
+		}
+	}
+	return pvToPVCMapping
 }
