@@ -1360,15 +1360,21 @@ var _ = Describe("{AddDriveMaintenanceMode}", func() {
 		stNode, err := GetRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
 		err = Inst().V.EnterMaintenance(stNode)
-		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(stNode)
 		log.Infof(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		defer func() {
-			err = ExitFromMaintenanceMode(stNode)
-			log.FailOnError(err, fmt.Sprintf("failed to exit maintenance mode in node %s", stNode.Name))
-			status, err = Inst().V.GetNodeStatus(stNode)
-			log.FailOnError(err, fmt.Sprintf("err getting node [%s] status", stNode.Name))
-			log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
+			status, err := Inst().V.GetNodeStatus(stNode)
+			log.FailOnError(err, fmt.Sprintf("error getting node %s status", stNode.Name))
+			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
+			if *status == api.Status_STATUS_MAINTENANCE {
+				log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
+				err = Inst().V.ExitMaintenance(stNode)
+				log.FailOnError(err, fmt.Sprintf("fail to exit node %s in maintenance mode", stNode.Name))
+				status, err = Inst().V.GetNodeStatus(stNode)
+				log.FailOnError(err, fmt.Sprintf("err getting node [%s] status", stNode.Name))
+				log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
+			}
 		}()
 		stepLog = fmt.Sprintf("add cloud drive to the node %s", stNode.Name)
 		Step(stepLog, func() {
@@ -3402,9 +3408,9 @@ var _ = Describe("{NodeMaintenanceResize}", func() {
 
 		stNode, err := GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "error identifying node to run test")
-		log.InfoD(fmt.Sprintf("Entering maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Entering maintenance mode on node %s", stNode.Name))
 		err = Inst().V.EnterMaintenance(*stNode)
-		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
 		log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		stepLog = fmt.Sprintf("pool expansion to the node %s", stNode.Name)
@@ -3420,16 +3426,26 @@ var _ = Describe("{NodeMaintenanceResize}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 		})
 
-		log.InfoD(fmt.Sprintf("Exiting maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
 		t := func() (interface{}, bool, error) {
-			if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+
+			status, err := Inst().V.GetNodeStatus(*stNode)
+			if err != nil {
 				return nil, true, err
 			}
+			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
+			if *status == api.Status_STATUS_MAINTENANCE {
+				log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
+				if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+					return nil, true, err
+				}
+			}
+
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
-		log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
+		log.FailOnError(err, fmt.Sprintf("fail to exit maintenance mode in node %s", stNode.Name))
+		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after exiting maintenance on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
@@ -3511,9 +3527,9 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 
 		stNode, err := GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "error identifying node to run test")
-		log.InfoD(fmt.Sprintf("Entering maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Entering maintenance mode on node %s", stNode.Name))
 		err = Inst().V.EnterMaintenance(*stNode)
-		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
 		log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		stepLog = fmt.Sprintf("pool expansion to the node %s", stNode.Name)
@@ -3529,16 +3545,26 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 		})
-		log.InfoD(fmt.Sprintf("Exiting maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
 		t := func() (interface{}, bool, error) {
-			if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+
+			status, err := Inst().V.GetNodeStatus(*stNode)
+			if err != nil {
 				return nil, true, err
 			}
+			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
+			if *status == api.Status_STATUS_MAINTENANCE {
+				log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
+				if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+					return nil, true, err
+				}
+			}
+
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
-		log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
+		log.FailOnError(err, fmt.Sprintf("fail to exit maintenance mode in node %s", stNode.Name))
+		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after exiting maintenance on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
@@ -3617,9 +3643,9 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 
 		stNode, err := GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "error identifying node to run test")
-		log.InfoD(fmt.Sprintf("Entering pool maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", stNode.Name))
 		err = Inst().V.EnterPoolMaintenance(*stNode)
-		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
 		log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		stepLog = fmt.Sprintf("pool expansion to the node %s", stNode.Name)
@@ -3639,10 +3665,20 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
-		log.InfoD(fmt.Sprintf("Exiting pool maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+
 		t := func() (interface{}, bool, error) {
-			if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+
+			status, err := Inst().V.GetNodePoolsStatus(*stNode)
+			if err != nil {
 				return nil, true, err
+			}
+			log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
+			if status[poolToBeResized.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+				if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+					return nil, true, err
+				}
 			}
 			return nil, false, nil
 		}
@@ -3716,9 +3752,9 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 
 		stNode, err := GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "error identifying node to run test")
-		log.InfoD(fmt.Sprintf("Entering maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Entering maintenance mode on node %s", stNode.Name))
 		err = Inst().V.EnterPoolMaintenance(*stNode)
-		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
 		log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		stepLog = fmt.Sprintf("pool expansion to the node %s", stNode.Name)
@@ -3738,11 +3774,21 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
-		log.InfoD(fmt.Sprintf("Exiting pool maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
 		t := func() (interface{}, bool, error) {
-			if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+
+			status, err := Inst().V.GetNodePoolsStatus(*stNode)
+			if err != nil {
 				return nil, true, err
 			}
+			log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
+			if status[poolToBeResized.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+				if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+					return nil, true, err
+				}
+			}
+
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
@@ -3830,9 +3876,9 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			err = WaitForExpansionToStart(poolToBeResized.Uuid)
 			log.FailOnError(err, "pool expansion not started")
-			log.InfoD(fmt.Sprintf("Entering maintenence mode on node %s", stNode.Name))
+			log.InfoD(fmt.Sprintf("Entering maintenance mode on node %s", stNode.Name))
 			err = Inst().V.EnterMaintenance(*stNode)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 			status, err := Inst().V.GetNodeStatus(*stNode)
 			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 
@@ -3841,9 +3887,19 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 
 			log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
 			t := func() (interface{}, bool, error) {
-				if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+
+				status, err := Inst().V.GetNodeStatus(*stNode)
+				if err != nil {
 					return nil, true, err
 				}
+				log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
+				if *status == api.Status_STATUS_MAINTENANCE {
+					log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
+					if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+						return nil, true, err
+					}
+				}
+
 				return nil, false, nil
 			}
 			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
@@ -3940,22 +3996,32 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			err = WaitForExpansionToStart(poolToBeResized.Uuid)
 			log.FailOnError(err, "pool expansion not started")
-			log.InfoD(fmt.Sprintf("Entering maintenence mode on node %s", stNode.Name))
+			log.InfoD(fmt.Sprintf("Entering maintenance mode on node %s", stNode.Name))
 			err = Inst().V.EnterMaintenance(*stNode)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s into maintenence mode", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to enter node %s into maintenance mode", stNode.Name))
 			status, err := Inst().V.GetNodeStatus(*stNode)
 			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 			//wait for 1 minute before existing maintenance
 			time.Sleep(1 * time.Minute)
-			log.InfoD(fmt.Sprintf("Exiting maintenence mode on node %s", stNode.Name))
+			log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
 			t := func() (interface{}, bool, error) {
-				if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+
+				status, err := Inst().V.GetNodeStatus(*stNode)
+				if err != nil {
 					return nil, true, err
 				}
+				log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
+				if *status == api.Status_STATUS_MAINTENANCE {
+					log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
+					if err := Inst().V.ExitMaintenance(*stNode); err != nil {
+						return nil, true, err
+					}
+				}
+
 				return nil, false, nil
 			}
 			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
-			log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode on node %s", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to exit maintenance mode on node %s", stNode.Name))
 			err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("verify PX is up after exiting maintenance on node %s", stNode.Name))
 			status, err = Inst().V.GetNodeStatus(*stNode)
@@ -4044,9 +4110,9 @@ var _ = Describe("{ResizePoolMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			err = WaitForExpansionToStart(poolToBeResized.Uuid)
 			log.FailOnError(err, "pool expansion not started")
-			log.InfoD(fmt.Sprintf("Entering pool maintenence mode on node %s", stNode.Name))
+			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", stNode.Name))
 			err = Inst().V.EnterPoolMaintenance(*stNode)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 			status, err := Inst().V.GetNodeStatus(*stNode)
 			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 
@@ -4054,10 +4120,18 @@ var _ = Describe("{ResizePoolMaintenanceMode}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
-		log.InfoD(fmt.Sprintf("Exiting pool maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
 		t := func() (interface{}, bool, error) {
-			if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+			status, err := Inst().V.GetNodePoolsStatus(*stNode)
+			if err != nil {
 				return nil, true, err
+			}
+			log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
+			if status[poolToBeResized.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+				if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+					return nil, true, err
+				}
 			}
 			return nil, false, nil
 		}
@@ -4148,9 +4222,9 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			err = WaitForExpansionToStart(poolToBeResized.Uuid)
 			log.FailOnError(err, "pool expansion not started")
-			log.InfoD(fmt.Sprintf("Entering pool maintenence mode on node %s", stNode.Name))
+			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", stNode.Name))
 			err = Inst().V.EnterPoolMaintenance(*stNode)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", stNode.Name))
 			status, err := Inst().V.GetNodeStatus(*stNode)
 			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 
@@ -4158,10 +4232,18 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
-		log.InfoD(fmt.Sprintf("Exiting pool maintenence mode on node %s", stNode.Name))
+		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
 		t := func() (interface{}, bool, error) {
-			if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+			status, err := Inst().V.GetNodePoolsStatus(*stNode)
+			if err != nil {
 				return nil, true, err
+			}
+			log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
+			if status[poolToBeResized.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+				if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+					return nil, true, err
+				}
 			}
 			return nil, false, nil
 		}
@@ -4458,7 +4540,9 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", secondNodePool.Uuid))
 		}
 
+		appList := Inst().AppList
 		defer func() {
+			Inst().AppList = appList
 			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
 			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
 			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
@@ -4470,7 +4554,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 		err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
 		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
 
-		Inst().AppList = append(Inst().AppList, "fio-fastpath")
+		Inst().AppList = []string{"fio-fastpath"}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nwplfullad-%d", i))...)
@@ -4516,7 +4600,25 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
 		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
 
-		stepLog = fmt.Sprintf("expand pool %s using resize-disk", selectedPool.Uuid)
+		defer func() {
+			status, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+			log.InfoD(fmt.Sprintf("Pool %s has status %s", selectedNode.Name, status[selectedPool.Uuid]))
+			if status[selectedPool.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+			}
+		}()
+
+		log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", selectedNode.Name))
+		err = Inst().V.EnterPoolMaintenance(*selectedNode)
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", selectedNode.Name))
+		status, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+		log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+		log.InfoD(fmt.Sprintf("pool %s status %s", selectedNode.Name, status[selectedPool.Uuid]))
+
+		stepLog = fmt.Sprintf("expand pool %s using add-disk", selectedPool.Uuid)
 		var expandedExpectedPoolSize uint64
 		Step("", func() {
 			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
@@ -4804,6 +4906,24 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 		}
 		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
 		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
+
+		defer func() {
+			status, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+			log.InfoD(fmt.Sprintf("Pool %s has status %s", selectedNode.Name, status[selectedPool.Uuid]))
+			if status[selectedPool.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+			}
+		}()
+
+		log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", selectedNode.Name))
+		err = Inst().V.EnterPoolMaintenance(*selectedNode)
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", selectedNode.Name))
+		status, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+		log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+		log.InfoD(fmt.Sprintf("pool %s status %s", selectedNode.Name, status[selectedPool.Uuid]))
 
 		stepLog = fmt.Sprintf("expand pool %s using add-disk", selectedPool.Uuid)
 		var expandedExpectedPoolSize uint64
@@ -5546,7 +5666,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 })
 var _ = Describe("{PoolDelete}", func() {
 	/*
-		1) Place pool on maintenence mode
+		1) Place pool on maintenance mode
 		2) Delete the pool
 		3) Add new pool
 		4) expand newly added pool
@@ -7984,7 +8104,7 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", func() {
 			}
 
 			err = Inst().V.EnterMaintenance(maintenanceNode)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", maintenanceNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", maintenanceNode.Name))
 			//maintenance mode takes few seconds to be updated even though node has returned maintenance status,hence the wait
 			time.Sleep(1 * time.Minute)
 			status, err := Inst().V.GetNodeStatus(maintenanceNode)
