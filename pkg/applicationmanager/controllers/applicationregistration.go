@@ -8,6 +8,7 @@ import (
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/appregistration"
+	"github.com/libopenstorage/stork/pkg/pluralmap"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -170,12 +171,24 @@ func RegisterDefaultCRDs() error {
 			if err := registerCRDV1(*crd); err != nil {
 				logrus.WithError(err).Error("unable to create appreg for v1 crd")
 			}
+			if len(crd.Spec.Names.Kind) > 0 {
+				if _, ok := pluralmap.Instance().GetCRDKindToPluralMap()[strings.ToLower(crd.Spec.Names.Kind)]; !ok {
+					pluralmap.Instance().SetPluralForCRDKind(crd.Spec.Names.Kind, crd.Spec.Names.Plural)
+					logrus.Infof("Adding new crd to plural map %s/%s", crd.Spec.Names.Kind, crd.Spec.Names.Plural)
+				}
+			}
 		} else if crd, ok := object.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 			if _, ok := skipCrds[crd.Spec.Group]; ok {
 				return
 			}
 			if err := registerCRD(*crd); err != nil {
 				logrus.WithError(err).Error("unable to create appreg for v1beta1 crd")
+			}
+			if len(crd.Spec.Names.Kind) > 0 {
+				if _, ok := pluralmap.Instance().GetCRDKindToPluralMap()[strings.ToLower(crd.Spec.Names.Kind)]; !ok {
+					pluralmap.Instance().SetPluralForCRDKind(crd.Spec.Names.Kind, crd.Spec.Names.Plural)
+					logrus.Infof("Adding new crd to plural map %s/%s", crd.Spec.Names.Kind, crd.Spec.Names.Plural)
+				}
 			}
 
 		} else {
