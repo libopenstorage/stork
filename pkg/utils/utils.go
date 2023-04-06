@@ -14,12 +14,9 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-<<<<<<< HEAD
 	"k8s.io/apimachinery/pkg/api/meta"
-=======
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
->>>>>>> Changes required in backuplocation CR definition of NFS type.
 )
 
 const (
