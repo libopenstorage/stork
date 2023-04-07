@@ -272,7 +272,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 	It(stepLog, func() {
 		contexts = make([]*scheduler.Context, 0)
 		Inst().AppList = []string{}
-		var ioIntensiveApp = []string{"fio", "mongodb", "fio-writes"}
+		var ioIntensiveApp = []string{"fio", "fio-writes"}
 		for _, eachApp := range ioIntensiveApp {
 			Inst().AppList = append(Inst().AppList, eachApp)
 		}
