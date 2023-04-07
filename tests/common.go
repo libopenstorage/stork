@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -5993,4 +5994,88 @@ func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*vo
 		}
 	}
 	return volumes, nil
+}
+
+// GetVolumesInDegradedState Get the list of volumes in degraded state
+func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume, error) {
+	var volumes []*volume.Volume
+	err := RefreshDriverEndPoints()
+	if err != nil {
+		return nil, err
+	}
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return nil, err
+			}
+			log.InfoD(fmt.Sprintf("[%v]", appVol.Status))
+			if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_DEGRADED" {
+				volumes = append(volumes, vol)
+			}
+		}
+	}
+	return volumes, nil
+}
+
+type kvdbNode struct {
+	PeerUrls   []string `json:"PeerUrls"`
+	ClientUrls []string `json:"ClientUrls"`
+	Leader     bool     `json:"Leader"`
+	DbSize     int      `json:"DbSize"`
+	IsHealthy  bool     `json:"IsHealthy"`
+	ID         string   `json:"ID"`
+}
+
+type KvdbNodes []map[string]kvdbNode
+
+// GetAllKvdbNodes returns list of all kvdb nodes present in the cluster
+func GetAllKvdbNodes() ([]kvdbNode, error) {
+	storageNodes := node.GetStorageNodes()
+	randomIndex := rand.Intn(len(storageNodes))
+	randomNode := storageNodes[randomIndex]
+
+	jsonConvert := func(jsonString string) ([]kvdbNode, error) {
+		var nodes KvdbNodes
+		var kvdb kvdbNode
+		var kvdbNodes []kvdbNode
+
+		err := json.Unmarshal([]byte(fmt.Sprintf("[%s]", jsonString)), &nodes)
+		if err != nil {
+			return nil, err
+		}
+		for _, nodeMap := range nodes {
+			for id, value := range nodeMap {
+				kvdb.ID = id
+				kvdb.Leader = value.Leader
+				kvdb.IsHealthy = value.IsHealthy
+				kvdb.ClientUrls = value.ClientUrls
+				kvdb.DbSize = value.DbSize
+				kvdb.PeerUrls = value.PeerUrls
+				kvdbNodes = append(kvdbNodes, kvdb)
+			}
+		}
+		return kvdbNodes, nil
+	}
+
+	var allKvdbNodes []kvdbNode
+	// Execute the command and check the alerts of type POOL
+	command := "pxctl service kvdb members list -j"
+	out, err := Inst().N.RunCommandWithNoRetry(randomNode, command, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	//log.FailOnError(err, "Unable to get KVDB members from the command [%s]", command)
+	log.InfoD("List of KVDBMembers in the cluster [%v]", out)
+
+	// Convert KVDB members to map
+	allKvdbNodes, err = jsonConvert(out)
+	if err != nil {
+		return nil, err
+	}
+	return allKvdbNodes, nil
 }

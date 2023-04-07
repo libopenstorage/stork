@@ -5969,17 +5969,12 @@ var _ = Describe("{PoolResizeSameSize}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", selectedNodePool.Uuid, poolToBeResized.TotalSize/units.GiB)
 
+			// expand pool should error when trying to expand pool of 2 GiB size when minimum expansion size is 4.0 GiB
 			err = Inst().V.ExpandPool(selectedNodePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			dash.VerifyFatal(err != nil, true,
+				fmt.Sprintf("verify pool expansion using resize-disk with same size failed on pool [%s] in node [%s]",
+					selectedNodePool.Uuid, stNode.Name))
 
-			resizeErr := waitForPoolToBeResized(expectedSize, selectedNodePool.Uuid, true)
-			dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("verify pool expansion using resize-disk with same size failed on pool [%s] in node [%s]", selectedNodePool.Uuid, stNode.Name))
-			expandedPool, err := GetStoragePoolByUUID(selectedNodePool.Uuid)
-			log.FailOnError(err, "error getting storage pool")
-			if expandedPool.LastOperation != nil {
-				log.Infof("pool last operation status: %v", expandedPool.LastOperation.Status)
-				log.Infof("pool last operation msg: %s", expandedPool.LastOperation.Msg)
-			}
 		})
 	})
 	JustAfterEach(func() {
@@ -8507,6 +8502,43 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 
 })
 
+func waitTillVolumeUP(vol string) bool {
+	now := time.Now()
+	targetTime := now.Add(30 * time.Minute)
+
+	for {
+		if now.After(targetTime) {
+			log.Error("Failed as the timeout of 0 Min is reached before resync triggered")
+			return false
+		} else {
+			if inResync(vol) {
+				return true
+			}
+		}
+	}
+}
+
+func waitTillVolumeStatusUp(vol *volume.Volume) error {
+	now := time.Now()
+	targetTime := now.Add(30 * time.Minute)
+
+	for {
+		if now.After(targetTime) {
+			log.Error("Failed as the timeout of 0 Min is reached before resync triggered")
+			return fmt.Errorf("Failed to get volume status to UP")
+		} else {
+			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return err
+			}
+			if fmt.Sprintf("[%v]", volumeInspect.Status) == "VOLUME_STATUS_UP" {
+				return nil
+			}
+
+		}
+	}
+}
+
 var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 	/*
 		PTX-15696 -> PWX-26967
@@ -8607,14 +8639,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
 		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 		for _, eachVol := range volumes {
-			volumeInspect, err := Inst().V.InspectVolume(eachVol.ID)
-			log.FailOnError(err, fmt.Sprintf("Failed to get details of volume [%v]", eachVol.Name))
-
-			if fmt.Sprintf("[%v]", volumeInspect.Status) != "VOLUME_STATUS_UP" {
-				log.FailOnError(fmt.Errorf("Volume status did not match "),
-					fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
-			}
-
+			log.FailOnError(waitTillVolumeStatusUp(eachVol), fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
 		}
 	})
 
