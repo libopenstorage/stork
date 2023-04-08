@@ -388,13 +388,18 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// Reverting back Zone1 iptables set
 		revertZone1()
 
-		log.InfoD("Killing KVDB PID from KVDB Master Node")
-		log.FailOnError(killKvdbNode(getKvdbLeaderNode), "failed to Kill Kvdb Node")
-
-		// Block IPtable rules on the kvdb node to all the nodes in zone 1
-		kvdb := []node.Node{getKvdbLeaderNode}
 		// Reverting back zone2 iptable set
 		revertZone2()
+		err = blockIptableRules(zone2, zone1, false)
+		if err != nil {
+			err := blockIptableRules(zone2, zone1, true)
+			log.FailOnError(err, "Failed to revert IPtable Rules on zone2")
+		}
+
+		log.InfoD("Killing KVDB PID from KVDB Master Node")
+		log.FailOnError(killKvdbNode(getKvdbLeaderNode), "failed to Kill Kvdb Node")
+		// Block IPtable rules on the kvdb node to all the nodes in zone 1
+		kvdb := []node.Node{getKvdbLeaderNode}
 
 		time.Sleep(2 * time.Minute)
 
@@ -415,6 +420,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		for _, eachNode := range node.GetNodes() {
+			log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
+		}
 		AfterEachTest(contexts)
 	})
 })
