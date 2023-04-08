@@ -44,6 +44,8 @@ const (
 	timeInterval                     = 1 * time.Second
 	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
+	BackUpCRD                        = "backups.pds.io"
+	DeploymentCRD                    = "deployments.pds.io"
 )
 
 var (
@@ -110,7 +112,9 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 	}
 	if ds.Name == redis {
 		params.DeploymentName = "redisbench"
+		params.Replicas = ds.Replicas
 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+
 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
 
 	}
