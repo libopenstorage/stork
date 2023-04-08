@@ -370,31 +370,24 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// From Zone 2 block all the traffic to systems under zone1
 		log.InfoD("blocking iptables from all nodes present in zone1 from accessing zone2")
 		err = blockIptableRules(zone1, zone2, false)
-		if err != nil {
-			err := blockIptableRules(zone1, zone2, true)
-			log.FailOnError(err, "Failed to revert IPtable Rules on Zone1")
-		}
+		log.FailOnError(err, "Failed to revert IPtable Rules on Zone1")
 
 		time.Sleep(20 * time.Minute)
 
 		log.InfoD("blocking iptables from all nodes present in zone2 from accessing zone1 ")
-
 		err = blockIptableRules(zone2, zone1, false)
-		if err != nil {
-			err := blockIptableRules(zone2, zone1, true)
-			log.FailOnError(err, "Failed to revert IPtable Rules on zone2")
-		}
+		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
 
 		// Reverting back Zone1 iptables set
 		revertZone1()
 
-		// Reverting back zone2 iptable set
-		revertZone2()
-		err = blockIptableRules(zone2, zone1, false)
-		if err != nil {
-			err := blockIptableRules(zone2, zone1, true)
-			log.FailOnError(err, "Failed to revert IPtable Rules on zone2")
+		for _, each := range zone2 {
+			log.FailOnError(flushIptableRules(each), "Failed to flush iptable rules")
 		}
+
+		// Reset iptable rules on vms under zone2
+		err = blockIptableRules(zone2, zone1, false)
+		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
 
 		log.InfoD("Killing KVDB PID from KVDB Master Node")
 		log.FailOnError(killKvdbNode(getKvdbLeaderNode), "failed to Kill Kvdb Node")
