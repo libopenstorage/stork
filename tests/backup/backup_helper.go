@@ -2052,3 +2052,23 @@ func VerifyLicenseConsumedCount(ctx context.Context, OrgId string, expectedLicen
 	}
 	return err
 }
+
+// FetchNamespacesFromBackup fetches the namespace from backup
+func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID string) ([]string, error) {
+	var backedUpNamespaces []string
+	backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, err
+	}
+	backedUpNamespaces = resp.GetBackup().GetNamespaces()
+	return backedUpNamespaces, err
+}
