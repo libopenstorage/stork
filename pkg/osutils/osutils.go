@@ -41,7 +41,7 @@ func Wget(URL string, filename string, verifyFile bool) error {
 	return nil
 }
 
-// FileExists returns true if file exists
+// FileExists returns file info if file exists
 func FileExists(filename string) (os.FileInfo, error) {
 	if filename == "" {
 		return nil, fmt.Errorf("no filename supplied for file existence check")
@@ -53,6 +53,18 @@ func FileExists(filename string) (os.FileInfo, error) {
 	} else {
 		return nil, err
 	}
+}
+
+// DeleteFile returns true if file is deleted successfully
+func DeleteFile(filename string) (bool, error) {
+	if filename == "" {
+		return false, fmt.Errorf("no filename supplied for file deletion")
+	}
+	err := os.Remove(filename)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // FileEmpty verifies if file is empty
