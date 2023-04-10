@@ -91,25 +91,26 @@ func (s *SSH) IsUsingSSH() bool {
 func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duration) (bool, error) {
 	log.Infof("Checking the uptime for a node %s", n.SchedulerNodeName)
 	uptimeCmd := "sudo uptime -s"
-
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, node.ConnectionOpts{
 			Timeout:         1 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		}, uptimeCmd, true)
-		return out, true, err
+		if err != nil {
+			return out, true, fmt.Errorf("Error while getting uptime %v ", err)
+		} else if len(out) == 0 {
+			return out, true, fmt.Errorf("No uptime available")
+		}
+		return out, false, nil
 	}
-
-	out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
 	if err != nil {
 		return false, &node.ErrFailedToRunCommand{
 			Node:  n,
 			Cause: fmt.Sprintf("Failed to run uptime command in node %v", n),
 		}
 	}
-
 	upTime := strings.Fields(strings.TrimSpace(out.(string)))
-
 	// Converting the unix date to timestamp
 	thetime, err := time.Parse(time.RFC3339, upTime[0]+"T"+upTime[1]+"+00:00")
 	if err != nil {
@@ -475,7 +476,6 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	if err != nil {
 		return "", err
 	}
-
 	return output.(string), nil
 }
 

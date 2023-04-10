@@ -419,7 +419,7 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	d.VerifySafely(actual, expected, description)
 	var err error
 	if actual != expected {
-		err = fmt.Errorf(description)
+		err = fmt.Errorf("error: %v, Description: %s", actual, description)
 	}
 	expect(err).NotTo(haveOccurred())
 }

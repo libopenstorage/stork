@@ -80,6 +80,8 @@ const (
 	jobDeleteRetryTime                        = 10 * time.Second
 	podStatusTimeOut                          = 20 * time.Minute
 	podStatusRetryTime                        = 30 * time.Second
+	licenseCountUpdateTimeout                 = 15 * time.Minute
+	licenseCountUpdateRetryTime               = 1 * time.Minute
 )
 
 var (
@@ -707,7 +709,7 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 
 func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
 	var number int
-	ret, err := kubectlExec([]string{podName, "-n", namespace, "--kubeconfig=", kubeConfigFile, " -- /bin/df"})
+	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
@@ -727,9 +729,10 @@ func kubectlExec(arguments []string) (string, error) {
 	if len(arguments) == 0 {
 		return "", fmt.Errorf("no arguments supplied for kubectl command")
 	}
-	cmd := exec.Command("kubectl exec -it", arguments...)
+	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	log.Debugf("command output for '%s': %s", cmd.String(), string(output))
+	log.InfoD("Command '%s'", cmd.String())
+	log.Infof("Command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
@@ -2025,4 +2028,47 @@ func MapToKeyValueString(m map[string]string) string {
 		pairs = append(pairs, k+"="+v)
 	}
 	return strings.Join(pairs, ",")
+}
+
+// VerifyLicenseConsumedCount verifies the consumed license count for px-backup
+func VerifyLicenseConsumedCount(ctx context.Context, OrgId string, expectedLicenseConsumedCount int64) error {
+	licenseInspectRequestObject := &api.LicenseInspectRequest{
+		OrgId: OrgId,
+	}
+	licenseCountCheck := func() (interface{}, bool, error) {
+		licenseInspectResponse, err := Inst().Backup.InspectLicense(ctx, licenseInspectRequestObject)
+		if err != nil {
+			return "", false, err
+		}
+		licenseResponseInfoFeatureInfo := licenseInspectResponse.GetLicenseRespInfo().GetFeatureInfo()
+		if licenseResponseInfoFeatureInfo[0].Consumed == expectedLicenseConsumedCount {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("actual license count:%v, expected license count: %v", licenseInspectResponse.GetLicenseRespInfo().GetFeatureInfo()[0].Consumed, expectedLicenseConsumedCount)
+	}
+	_, err := task.DoRetryWithTimeout(licenseCountCheck, licenseCountUpdateTimeout, licenseCountUpdateRetryTime)
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+// FetchNamespacesFromBackup fetches the namespace from backup
+func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID string) ([]string, error) {
+	var backedUpNamespaces []string
+	backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, err
+	}
+	backedUpNamespaces = resp.GetBackup().GetNamespaces()
+	return backedUpNamespaces, err
 }
