@@ -1014,7 +1014,7 @@ func (r *ResourceCollector) DeleteResources(
 	for _, object := range objects {
 		elapsedTime := time.Since(startTime)
 		if elapsedTime > utils.FifteenMinuteWait {
-			updateTimestamp <- utils.UpdateRestoreCrTimestamp
+			updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
 			startTime = time.Now()
 		}
 		// Don't delete objects that support merging
@@ -1044,7 +1044,7 @@ func (r *ResourceCollector) DeleteResources(
 	for _, object := range objects {
 		elapsedTime := time.Since(startTime)
 		if elapsedTime > utils.FifteenMinuteWait {
-			updateTimestamp <- utils.UpdateRestoreCrTimestamp
+			updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
 			startTime = time.Now()
 		}
 		// Objects that support merging aren't deleted
