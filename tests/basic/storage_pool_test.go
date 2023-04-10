@@ -8502,22 +8502,6 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 
 })
 
-func waitTillVolumeUP(vol string) bool {
-	now := time.Now()
-	targetTime := now.Add(30 * time.Minute)
-
-	for {
-		if now.After(targetTime) {
-			log.Error("Failed as the timeout of 0 Min is reached before resync triggered")
-			return false
-		} else {
-			if inResync(vol) {
-				return true
-			}
-		}
-	}
-}
-
 func waitTillVolumeStatusUp(vol *volume.Volume) error {
 	now := time.Now()
 	targetTime := now.Add(30 * time.Minute)
