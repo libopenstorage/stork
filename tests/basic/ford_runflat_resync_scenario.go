@@ -281,25 +281,36 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		}
 
 		time.Sleep(2 * time.Minute)
-		//ValidateApplications(contexts)
-		//defer appsValidateAndDestroy(contexts)
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		// Check if the cluster consists of 10 nodes
 		log.InfoD("Get all nodes present in the cluster")
-		storageNodes := node.GetStorageNodes()[0:4]
-		//storageLessNodes := node.GetStorageLessNodes()[5:9]
-		storageLessNodes := node.GetStorageNodes()[5:10]
-		/*
-			if len(storageNodes) != 6 || len(storageLessNodes) != 4 {
-				err := fmt.Errorf("need minimum of [6/4] Storage/Storageless nodes. "+
-					"Total nodes present [%v/%v] Storage/Storageless nodes",
-					len(storageNodes),
-					len(storageLessNodes))
-				log.FailOnError(err, "Required Node does not exists")
-			}*/
+
+		allNodes := []node.Node{}
+		// create an array with storage and storage less nodes added
+		for _, each := range node.GetStorageNodes() {
+			allNodes = append(allNodes, each)
+		}
+
+		for _, each := range node.GetStorageLessNodes() {
+			allNodes = append(allNodes, each)
+		}
+
+		// Verify total nodes available is 10
+		dash.VerifyFatal(len(allNodes) == 10, true, "required minimum of 10 nodes for the test to run")
+
+		var nodesSplit1 = []node.Node{}
+		var nodesSplit2 = []node.Node{}
+		if len(node.GetStorageLessNodes()) != 4 && len(node.GetStorageNodes()) > 6 {
+			nodesSplit1 = allNodes[0:4]
+			nodesSplit2 = allNodes[5:10]
+		} else {
+			nodesSplit1 = node.GetStorageNodes()
+			nodesSplit2 = node.GetStorageLessNodes()
+		}
 
 		var getKvdbLeaderNode node.Node
-
 		allkvdbNodes, err := GetAllKvdbNodes()
 		log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
 
@@ -313,7 +324,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		log.InfoD("KVDB Leader node is [%v]", getKvdbLeaderNode.Addresses)
 		var allStorageExceptKVDB []node.Node
-		for _, each := range storageNodes {
+		for _, each := range nodesSplit1 {
 			if each.Id != getKvdbLeaderNode.Id {
 				allStorageExceptKVDB = append(allStorageExceptKVDB, each)
 			}
@@ -332,12 +343,12 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			zone2 = append(zone2, allStorageExceptKVDB[each])
 		}
 
-		zone1StorageLessEle, zone2StorageLessEle := getRandomNumbersFromArrLength(len(storageLessNodes), len(storageLessNodes)/2)
+		zone1StorageLessEle, zone2StorageLessEle := getRandomNumbersFromArrLength(len(nodesSplit2), len(nodesSplit2)/2)
 		for _, each := range zone1StorageLessEle {
-			zone1 = append(zone1, storageLessNodes[each])
+			zone1 = append(zone1, nodesSplit2[each])
 		}
 		for _, each := range zone2StorageLessEle {
-			zone2 = append(zone2, storageLessNodes[each])
+			zone2 = append(zone2, nodesSplit2[each])
 		}
 
 		// Set Volume replica on the nodes so that each zone will contribute to replica on the volumes
@@ -363,9 +374,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			log.FailOnError(blockIptableRules(zone1, zone2, true), "Failed to unblock IPTable rules on target Nodes")
 		}
 
-		revertZone2 := func() {
-			log.FailOnError(blockIptableRules(zone2, zone1, true), "Failed to unblock IPTable rules on target Nodes")
-		}
 		// From Zone 1 block all the traffic to systems under zone2
 		// From Zone 2 block all the traffic to systems under zone1
 		log.InfoD("blocking iptables from all nodes present in zone1 from accessing zone2")
