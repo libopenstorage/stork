@@ -40,6 +40,27 @@ type Image struct {
 	Version string
 }
 
+type DriveSet struct {
+	Configs           map[string]DriveConfig
+	NodeID            string
+	SchedulerNodeName string
+	InstanceID        string
+	Zone              string
+	State             string
+	Labels            map[string]string
+}
+
+type DriveConfig struct {
+	Type   string
+	Size   uint
+	ID     string
+	Path   string
+	IOPS   int
+	PXType string
+	State  string
+	Labels map[string]string
+}
+
 // Options to pass to APIs
 type Options struct {
 	ValidateReplicationUpdateTimeout time.Duration
@@ -219,6 +240,8 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
+	GetDriveSet(n *node.Node) (*DriveSet, error)
+
 	//IsDriverInstalled checks for driver to be installed on a node
 	IsDriverInstalled(n node.Node) (bool, error)
 
@@ -313,6 +336,9 @@ type Driver interface {
 	//UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
 
+	//validate mount options by executing mount command
+	ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error
+
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
 
@@ -364,6 +390,9 @@ type Driver interface {
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
+	//GetAutoFsTrimUsage get usage stats of autofstrim
+	GetAutoFsTrimUsage(pxEndpoint string) (map[string]*api.FstrimVolumeUsageInfo, error)
+
 	// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
 	GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error)
 
@@ -394,6 +423,9 @@ type Driver interface {
 	// GetPoolsUsedSize returns map of pool id and current used size
 	GetPoolsUsedSize(n *node.Node) (map[string]string, error)
 
+	// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+	IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error)
+
 	// GetRebalanceJobs returns the list of rebalance jobs
 	GetRebalanceJobs() ([]*api.StorageRebalanceJob, error)
 
@@ -411,6 +443,12 @@ type Driver interface {
 
 	// IsNodeOutOfMaintenance returns true if Node in out of Maintenance
 	IsNodeOutOfMaintenance(n node.Node) (bool, error)
+
+	// GetAlertsUsingResourceTypeByTime returns all the alerts by resource type filtered by time
+	GetAlertsUsingResourceTypeByTime(resourceType api.ResourceType, startTime time.Time, endTime time.Time) (*api.SdkAlertsEnumerateWithFiltersResponse, error)
+
+	// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
+	GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

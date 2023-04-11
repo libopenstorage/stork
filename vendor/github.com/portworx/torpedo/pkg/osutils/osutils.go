@@ -41,7 +41,7 @@ func Wget(URL string, filename string, verifyFile bool) error {
 	return nil
 }
 
-// FileExists returns true if file exists
+// FileExists returns file info if file exists
 func FileExists(filename string) (os.FileInfo, error) {
 	if filename == "" {
 		return nil, fmt.Errorf("no filename supplied for file existence check")
@@ -55,6 +55,18 @@ func FileExists(filename string) (os.FileInfo, error) {
 	}
 }
 
+// DeleteFile returns true if file is deleted successfully
+func DeleteFile(filename string) (bool, error) {
+	if filename == "" {
+		return false, fmt.Errorf("no filename supplied for file deletion")
+	}
+	err := os.Remove(filename)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // FileEmpty verifies if file is empty
 func FileEmpty(filename os.FileInfo) bool {
 	fileSize := filename.Size()
@@ -62,6 +74,34 @@ func FileEmpty(filename os.FileInfo) bool {
 		return true
 	}
 	return false
+}
+
+func ExecTorpedoShell(command string, arguments ...string) (string, string, error) {
+	var stout, sterr []byte
+	for _, value := range arguments {
+		command += " " + value
+	}
+	cmd := exec.Command("sh", "-c", command)
+	log.Debugf("Command %s ", cmd)
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	if err := cmd.Start(); err != nil {
+		log.Debugf("Command %s failed to start. Cause: %v", cmd, err)
+		return "", "", err
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		stout, _ = copyAndCapture(os.Stdout, stdout)
+		wg.Done()
+	}()
+
+	sterr, _ = copyAndCapture(os.Stderr, stderr)
+
+	wg.Wait()
+
+	err := cmd.Wait()
+	return string(stout), string(sterr), err
 }
 
 // Sh run sh command with arguments

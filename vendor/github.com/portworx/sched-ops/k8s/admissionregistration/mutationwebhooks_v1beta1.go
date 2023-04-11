@@ -24,7 +24,7 @@ func (c *Client) GetMutatingWebhookConfigurationV1beta1(name string) (*hook.Muta
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.admission.MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
+	return c.admissionv1beta1.MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateMutatingWebhookConfigurationV1beta1 creates given MutatingWebhookConfiguration
@@ -32,7 +32,7 @@ func (c *Client) CreateMutatingWebhookConfigurationV1beta1(cfg *hook.MutatingWeb
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.admission.MutatingWebhookConfigurations().Create(context.TODO(), cfg, metav1.CreateOptions{})
+	return c.admissionv1beta1.MutatingWebhookConfigurations().Create(context.TODO(), cfg, metav1.CreateOptions{})
 }
 
 // UpdateMutatingWebhookConfigurationV1beta1 updates given MutatingWebhookConfiguration
@@ -40,7 +40,7 @@ func (c *Client) UpdateMutatingWebhookConfigurationV1beta1(cfg *hook.MutatingWeb
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.admission.MutatingWebhookConfigurations().Update(context.TODO(), cfg, metav1.UpdateOptions{})
+	return c.admissionv1beta1.MutatingWebhookConfigurations().Update(context.TODO(), cfg, metav1.UpdateOptions{})
 }
 
 // DeleteMutatingWebhookConfigurationV1beta1 deletes given MutatingWebhookConfiguration
@@ -48,5 +48,5 @@ func (c *Client) DeleteMutatingWebhookConfigurationV1beta1(name string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.admission.MutatingWebhookConfigurations().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return c.admissionv1beta1.MutatingWebhookConfigurations().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }

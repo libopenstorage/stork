@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/portworx/torpedo/pkg/log"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 
@@ -51,6 +53,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -87,6 +90,7 @@ const (
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
 	pxctlDriveAddStart                        = "%s -j service drive add %s -o start"
 	pxctlDriveAddStatus                       = "%s -j service drive add %s -o status"
+	pxctlCloudDriveInspect                    = "%s -j cd inspect --node %s"
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
@@ -95,6 +99,7 @@ const (
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
+	mountGrepVolume                           = "mount | grep %s"
 )
 
 const (
@@ -105,7 +110,7 @@ const (
 	maintenanceWaitTimeout            = 2 * time.Minute
 	inspectVolumeTimeout              = 1 * time.Minute
 	inspectVolumeRetryInterval        = 2 * time.Second
-	validateDeleteVolumeTimeout       = 3 * time.Minute
+	validateDeleteVolumeTimeout       = 6 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
 	validatePXStartTimeout            = 5 * time.Minute
@@ -417,6 +422,15 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
+
+	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
+	namespace, err := d.GetVolumeDriverNamespace()
+	if err != nil {
+		return err
+	}
+	d.namespace = namespace
+	log.InfoD("RefreshDriverEndpoints: volume driver's namespace (portworx namespace) is updated to [%s]", namespace)
+
 	// Force update px endpoints
 	d.refreshEndpoint = true
 	storageNodes, err := d.getStorageNodesOnStart()
@@ -1129,10 +1143,13 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 			status = strings.Trim(status, " ")
 		}
 		if poolId != "" && status != "" {
-			poolsData[poolId] = status
+			// this condition is required to consider only pool status when pool has both pool status and LastOperation status fields
+			if _, ok := poolsData[poolId]; !ok {
+				poolsData[poolId] = status
+			}
 			poolId = ""
-			status = ""
 		}
+		status = ""
 	}
 	return poolsData, nil
 }
@@ -1338,10 +1355,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
-				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
-				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
+			if requestedSpec.IoProfile != vol.DerivedIoProfile &&
+				vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE {
+				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
+				log.Infof("requested Spec: %+v", requestedSpec)
+				log.Infof("actual Spec: %+v", vol)
+				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 			}
 		case api.SpecSize:
 			if requestedSpec.Size != vol.Spec.Size {
@@ -1418,6 +1437,29 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 		return fmt.Errorf("failed setting IO priority, Err: %v", err)
 	}
 	return nil
+}
+
+func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
+	cmd := fmt.Sprintf(mountGrepVolume, volumeName)
+	out, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get mount response for volume %s", volumeName)
+	}
+	for _, m := range mountoption {
+		if strings.Contains(out, m) {
+			log.Infof("%s option is available in the mount options of volume %s", m, volumeName)
+		} else {
+			return fmt.Errorf("Failed to get %s option in the mount options", m)
+		}
+	}
+	return nil
+
 }
 
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
@@ -1614,7 +1656,7 @@ func errIsNotFound(err error) bool {
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: vol.ID})
 		if err != nil && errIsNotFound(err) {
 			return nil, false, nil
 		} else if err != nil {
@@ -1622,7 +1664,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		}
 		// TODO remove shared validation when PWX-6894 and PWX-8790 are fixed
 		if volumeInspectResponse.Volume != nil && !vol.Shared {
-			return nil, true, fmt.Errorf("Volume [%s] is not yet removed from the system", volumeName)
+			return nil, true, fmt.Errorf("volume [%s] with ID [%s] in namespace [%s] is not yet removed from the system", volumeName, vol.ID, vol.Namespace)
 		}
 		return nil, false, nil
 	}
@@ -1866,6 +1908,23 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 		nodes = append(nodes, nodeResp.(*api.SdkNodeInspectResponse).Node)
 	}
 	return nodes, nil
+}
+
+// GetDriveSet runs `pxctl cd i --node <node ID>` on the given node
+func (d *portworx) GetDriveSet(n *node.Node) (*torpedovolume.DriveSet, error) {
+	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, fmt.Sprintf(pxctlCloudDriveInspect, d.getPxctlPath(*n), n.VolDriverNodeID), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error when inspecting drive sets for node ID [%s] using PXCTL, Err: %v", n.VolDriverNodeID, err)
+	}
+	var driveSetInspect torpedovolume.DriveSet
+	err = json.Unmarshal([]byte(out), &driveSetInspect)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal drive set inspect, Err: %v", err)
+	}
+	return &driveSetInspect, nil
 }
 
 // WaitDriverUpOnNode waits for PX to be up on a given node
@@ -2126,6 +2185,24 @@ func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.Filesyst
 	}
 	log.Infof("Trim Status is [%v]", autoFstrimResp.GetTrimStatus())
 	return autoFstrimResp.GetTrimStatus(), nil
+}
+
+// GetAutoFsTrimUsage get status of autofstrim
+func (d *portworx) GetAutoFsTrimUsage(endpoint string) (map[string]*api.FstrimVolumeUsageInfo, error) {
+	sdkport, _ := d.getSDKPort()
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
+	newConn, err := grpc.Dial(pxEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to set the connection endpoint [%s], Err: %v", endpoint, err)
+	}
+	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
+
+	autoFstrimResp, err := d.autoFsTrimManager.AutoFSTrimUsage(d.getContext(), &api.SdkAutoFSTrimUsageRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auto fstrim usage stats, Err: %v", err)
+	}
+	log.Infof("Trim Usage is [%v]", autoFstrimResp.GetUsage())
+	return autoFstrimResp.GetUsage(), nil
 }
 
 // pickAlternateClusterManager returns a different node than given one, useful in case you want to skip nodes which are down
@@ -4596,7 +4673,13 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 
 	for _, drv := range blockDrives {
 		if !strings.Contains(drv.Path, "pxd") && drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
-			eligibleDrives[drv.Path] = drv
+			isPartitioned, err := isDiskPartitioned(*n, drv.Path, d)
+			if err != nil {
+				return err
+			}
+			if !isPartitioned {
+				eligibleDrives[drv.Path] = drv
+			}
 		}
 	}
 
@@ -4630,6 +4713,25 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		}
 	}
 	return nil
+}
+
+func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error) {
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf("ls -l %s*", drivePath), node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return false, fmt.Errorf("error checking drive partition for [%s] in node [%s], Err: %v", drivePath, n.Name, err)
+	}
+
+	drvs := strings.Split(strings.TrimSpace(out), "\n")
+
+	if len(drvs) > 1 {
+		return true, nil
+	}
+	return false, nil
+
 }
 
 // GetPoolDrives returns the map of poolID and drive name
@@ -4780,6 +4882,34 @@ func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 	return poolsData, nil
 }
 
+// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+func (d *portworx) IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error) {
+
+	log.Infof("Got vol-id [%s] for checking IOs", volumeNameOrID)
+	cmd := fmt.Sprintf("%s v i %s| grep -e 'IOs in progress'", d.getPxctlPath(*n), volumeNameOrID)
+
+	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+
+	if err != nil {
+		return false, err
+	}
+	line := strings.Trim(out, " ")
+	data := strings.Split(line, ":")[1]
+	data = strings.Trim(data, "\n")
+	data = strings.Trim(data, " ")
+	val, err := strconv.Atoi(data)
+	if err != nil {
+		return false, err
+	}
+	if val > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
 // GetRebalanceJobs returns the list of rebalance jobs
 func (d *portworx) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
 	jobsResp, err := d.storagePoolManager.EnumerateRebalanceJobs(d.getContext(), &api.SdkEnumerateRebalanceJobsRequest{})
@@ -4802,12 +4932,16 @@ func init() {
 // UpdatePoolLabels updates the pool label for a particular pool id
 func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
 
-	labelsString := ""
+	labelStrings := make([]string, 0)
 	for k, v := range labels {
-		labelsString += fmt.Sprintf("%s=%s,", k, v)
+		labelString := fmt.Sprintf("%s=%s", k, v)
+		labelStrings = append(labelStrings, labelString)
 	}
-	labelsString = strings.Trim(labelsString, ",")
-	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsString)
+
+	labelsStr := strings.Join(labelStrings, ",")
+	fmt.Printf("label string is %s\n", labelsStr)
+	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsStr)
+	fmt.Printf("cmd: %s\n", cmd)
 	_, err := d.nodeDriver.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
 		Timeout:         2 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,
@@ -4871,4 +5005,89 @@ func (d *portworx) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
+func (d *portworx) GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	/*
+		resourceType : RESOURCE_TYPE_NONE | RESOURCE_TYPE_VOLUME | RESOURCE_TYPE_NODE | RESOURCE_TYPE_CLUSTER | RESOURCE_TYPE_DRIVE | RESOURCE_TYPE_POOL
+		SeverityType : SEVERITY_TYPE_NONE | SEVERITY_TYPE_ALARM | SEVERITY_TYPE_WARNING | SEVERITY_TYPE_NOTIFY
+		e.x :
+			var resourceType api.ResourceType
+			var severity api.SeverityType
+			resourceType = api.ResourceType_RESOURCE_TYPE_POOL
+			severity = api.SeverityType_SEVERITY_TYPE_ALARM
+			alerts, err := Inst().V.GetAlertsUsingResourceTypeBySeverity(resourceType, severity)
+	*/
+	alerts, err := d.alertsManager.EnumerateWithFilters(d.getContext(), &api.SdkAlertsEnumerateWithFiltersRequest{
+		Queries: []*api.SdkAlertsQuery{
+			{
+				Query: &api.SdkAlertsQuery_ResourceTypeQuery{
+					ResourceTypeQuery: &api.SdkAlertsResourceTypeQuery{
+						ResourceType: resourceType,
+					},
+				},
+				Opts: []*api.SdkAlertsOption{
+					{Opt: &api.SdkAlertsOption_MinSeverityType{
+						MinSeverityType: severity,
+					}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	alertsResp, err := alerts.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	return alertsResp, nil
+}
+
+// GetAlertsUsingResourceTypeByTime returns all the alerts by resource type filtered by starttime and endtime
+func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceType, startTime time.Time, endTime time.Time) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	/*
+		resourceType : RESOURCE_TYPE_NONE | RESOURCE_TYPE_VOLUME | RESOURCE_TYPE_NODE | RESOURCE_TYPE_CLUSTER | RESOURCE_TYPE_DRIVE | RESOURCE_TYPE_POOL
+		e.x:
+			var resourceType api.ResourceType
+			var startTime time.Time
+			var endTime time.Time
+
+			startTime = time.Now()
+			endTime = time.Now()
+			resourceType = api.ResourceType_RESOURCE_TYPE_POOL
+			alerts, err := Inst().V.GetAlertsUsingResourceTypeByTime(resourceType, startTime, endTime)
+	*/
+
+	alerts, err := d.alertsManager.EnumerateWithFilters(d.getContext(), &api.SdkAlertsEnumerateWithFiltersRequest{
+		Queries: []*api.SdkAlertsQuery{
+			{
+				Query: &api.SdkAlertsQuery_ResourceTypeQuery{
+					ResourceTypeQuery: &api.SdkAlertsResourceTypeQuery{
+						ResourceType: resourceType,
+					},
+				},
+				Opts: []*api.SdkAlertsOption{
+					{Opt: &api.SdkAlertsOption_TimeSpan{
+						TimeSpan: &api.SdkAlertsTimeSpan{
+							StartTime: timestamppb.New(startTime.UTC()),
+							EndTime:   timestamppb.New(endTime.UTC()),
+						},
+					}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	alertsResp, err := alerts.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	return alertsResp, nil
 }
