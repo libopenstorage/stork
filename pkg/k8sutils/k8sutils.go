@@ -45,6 +45,12 @@ const (
 	ObjectLockDefaultIncrementalCount = 5
 	//minProtectionPeriod defines minimum number of days, the backup are protected via object-lock feature
 	minProtectionPeriod = 1
+	// RestoreVolumeBatchCountKey - restore volume batch count value
+	RestoreVolumeBatchCountKey = "restore-volume-backup-count"
+	// DefaultRestoreVolumeBatchCount - default value for restore volume batch count
+	DefaultRestoreVolumeBatchCount = 25
+	// RestoreVolumeBatchSleepInterval - restore volume batch sleep interval
+	RestoreVolumeBatchSleepInterval = 20 * time.Second
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
