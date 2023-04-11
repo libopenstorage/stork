@@ -351,6 +351,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			zone2 = append(zone2, nodesSplit2[each])
 		}
 
+		// The below lines are intentionally commented out , will be either uncommented / deleted after debugging new scenarios
 		/*
 			// Set Volume replica on the nodes so that each zone will contribute to replica on the volumes
 			for _, ctx := range contexts {
@@ -364,6 +365,16 @@ var _ = Describe("{FordRunFlatResync}", func() {
 					log.FailOnError(setVolumesWithReplicaOnBothZones(eachVol, zone1, zone2), fmt.Sprintf("Failed to set Replica on the volume [%v]", eachVol.Name))
 				}
 			}*/
+
+		flushiptables := func() {
+			// Flush all iptables from all the nodes available forcefully
+			for _, eachNode := range allNodes {
+				log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
+			}
+		}
+
+		// force flush iptables on all the nodes at the end
+		defer flushiptables()
 
 		volumeState, err := GetVolumesInDegradedState(contexts)
 		if err != nil {
@@ -416,19 +427,30 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// Revert back the iptable rules from the kvdb node
 		log.FailOnError(blockIptableRules(kvdb, zone1, true), "Reverting back IPTable rules on kvdb node failed")
 
+		// Flushing iptables rules on all the nodes present in the cluster before making sure that nodes to come up online
+		flushiptables()
+
 		// Wait for some time for system to be up and all nodes drivers up and running
 		for _, each := range node.GetStorageNodes() {
 			err = Inst().V.WaitDriverUpOnNode(each, 2*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", each.Name))
 		}
+
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				log.FailOnError(err, "failed to get volumes from the contexts")
+			}
+
+			// This is done to make sure that volumes should have replica on nodes from both zones
+			for _, eachVol := range vols {
+				log.FailOnError(VerifyVolumeStatusOnline(eachVol), fmt.Sprintf("Volume [%v] is not in expected state", eachVol.Name))
+			}
+		}
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		/*
-			for _, eachNode := range node.GetNodes() {
-				log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
-			}*/
 		AfterEachTest(contexts)
 	})
 })
