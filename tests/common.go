@@ -6368,10 +6368,10 @@ func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*vo
 }
 
 // DoRetryWithTimeoutWithGinkgoRecover calls `task.DoRetryWithTimeout` along with `ginkgo.GinkgoRecover()`, to be used in callbacks with panics or ginkgo assertions
-func DoRetryWithTimeoutWithGinkgoRecover(t func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
-	cb := func() (interface{}, bool, error) {
+func DoRetryWithTimeoutWithGinkgoRecover(taskFunc func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
+	taskFuncWithGinkgoRecover := func() (interface{}, bool, error) {
 		defer ginkgo.GinkgoRecover()
-		return t()
+		return taskFunc()
 	}
-	return task.DoRetryWithTimeout(cb, timeout, timeBeforeRetry)
+	return task.DoRetryWithTimeout(taskFuncWithGinkgoRecover, timeout, timeBeforeRetry)
 }
