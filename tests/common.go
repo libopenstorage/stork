@@ -6022,6 +6022,18 @@ func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume,
 	return volumes, nil
 }
 
+// VerifyVolumeStatusOnline returns true is volume status is up
+func VerifyVolumeStatusOnline(vol *volume.Volume) error {
+	appVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return err
+	}
+	if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_UP" {
+		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status)
+	}
+	return nil
+}
+
 type kvdbNode struct {
 	PeerUrls   []string `json:"PeerUrls"`
 	ClientUrls []string `json:"ClientUrls"`
