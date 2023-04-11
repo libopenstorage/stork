@@ -177,6 +177,7 @@ case $i in
         px_namespace=$2
         shift
         shift
+        ;;		
 esac
 done
 
@@ -303,6 +304,15 @@ sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml
 sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-test-pod.yaml
+
+# testrail params
+sed -i 's/testrail_run_name/'"$TESTRAIL_RUN_NAME"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/testrail_run_id/'"\"$TESTRAIL_RUN_ID\""'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/testrail_jenkins_build_url/'"$TESTRAIL_JENKINS_BUILD_URL"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/testrail_host/'"$TESTRAIL_HOST"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/testrail_uame/'"$TESTRAIL_USERNAME"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/testrail_pwd/'"$TESTRAIL_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/testrail_milestone/'"$TESTRAIL_MILESTONE"'/g' /testspecs/stork-test-pod.yaml
 
 # Add AWS creds to stork-test pod
 sed -i 's/'aws_access_key_id'/'"$aws_id"'/g' /testspecs/stork-test-pod.yaml

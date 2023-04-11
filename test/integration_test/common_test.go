@@ -48,6 +48,8 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/pkg/log"
+	testrailutils "github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
@@ -117,6 +119,17 @@ const (
 	tokenKey    = "token"
 	clusterIP   = "ip"
 	clusterPort = "port"
+
+	testResultPass = "Pass"
+	testResultFail = "Fail"
+
+	testrailRunNameVar         = "TESTRAIL_RUN_NAME"
+	testrailRunIDVar           = "TESTRAIL_RUN_ID"
+	testrailJenkinsBuildURLVar = "TESTRAIL_JENKINS_BUILD_URL"
+	testrailHostVar            = "TESTRAIL_HOST"
+	testrailUserNameVar        = "TESTRAIL_USERNAME"
+	testrailPasswordVar        = "TESTRAIL_PASSWORD"
+	testrailMilestoneVar       = "TESTRAIL_MILESTONE"
 )
 
 var nodeDriver node.Driver
@@ -140,6 +153,11 @@ var storkVersionCheck bool
 var cloudDeletionValidate bool
 var isInternalLBAws bool
 var pxNamespace string
+var storkVersion string
+var testrailHostname string
+var testrailUsername string
+var testrailPassword string
+var testrailSetupSuccessful bool
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -248,13 +266,16 @@ func setup() error {
 	if err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("Unable to get stork version configmap: %v", err)
 	}
-	if cm != nil && storkVersionCheck == true {
+	if cm != nil {
 		ver, ok := cm.Data["version"]
 		if !ok {
 			return fmt.Errorf("stork version not found in configmap: %s", cmName)
 		}
-		if getStorkVersion(ver) != getStorkVersion(version.Version) {
-			return fmt.Errorf("stork version mismatch, found: %s, expected: %s", getStorkVersion(ver), getStorkVersion(version.Version))
+		storkVersion = getStorkVersion(ver)
+		if storkVersionCheck == true {
+			if getStorkVersion(ver) != getStorkVersion(version.Version) {
+				return fmt.Errorf("stork version mismatch, found: %s, expected: %s", getStorkVersion(ver), getStorkVersion(version.Version))
+			}
 		}
 	}
 
@@ -286,6 +307,8 @@ func setup() error {
 	if err != nil {
 		return fmt.Errorf("at the end of setup, setting kubeconfig to source failed in setup: %v", err)
 	}
+
+	SetupTestRail()
 
 	return nil
 }
@@ -1060,6 +1083,86 @@ func IsEks() bool {
 		}
 	}
 	return false
+}
+
+// SetupTestRail checks if the required parameters for testrail are passed, verifies connectivity and creates milestone if it does not exist
+func SetupTestRail() {
+	if testrailutils.RunName = os.Getenv(testrailRunNameVar); testrailutils.RunName != "" {
+		logrus.Infof("Testrail Run name: %s", testrailutils.RunName)
+	}
+	if testrailutils.JobRunID = os.Getenv(testrailRunIDVar); testrailutils.JobRunID != "" {
+		logrus.Infof("Testrail Run ID: %s", testrailutils.JobRunID)
+	}
+	if testrailutils.MilestoneName = os.Getenv(testrailMilestoneVar); testrailutils.MilestoneName != "" {
+		logrus.Infof("Testrail Milestone  %s", testrailutils.MilestoneName)
+	}
+	if testrailutils.JenkinsBuildURL = os.Getenv(testrailJenkinsBuildURLVar); testrailutils.JenkinsBuildURL != "" {
+		logrus.Infof("Testrail Jenkins Build URL: %s", testrailutils.JenkinsBuildURL)
+	}
+	if testrailHostname = os.Getenv(testrailHostVar); testrailHostname != "" {
+		logrus.Infof("Testrail Host: %s", testrailHostname)
+	}
+	if testrailUsername = os.Getenv(testrailUserNameVar); testrailUsername != "" {
+		logrus.Infof("Testrail Host: %s", testrailUsername)
+	}
+	if testrailPassword = os.Getenv(testrailPasswordVar); testrailPassword != "" {
+		logrus.Infof("Testrail run name: %s", testrailPassword)
+	}
+	if testrailHostname != "" && testrailUsername != "" && testrailPassword != "" {
+		err := testrailutils.Init(testrailHostname, testrailUsername, testrailPassword)
+		if err == nil {
+			if testrailutils.MilestoneName == "" || testrailutils.RunName == "" || testrailutils.JobRunID == "" {
+				err = fmt.Errorf("not all details provided to update testrail")
+				log.FailOnError(err, "Error occurred while testrail initialization")
+			}
+			testrailutils.CreateMilestone()
+			testrailSetupSuccessful = true
+		}
+		logrus.Infof("Testrail setup is successful, will log results to testrail automatically. Details:\nMilestone: %s, Testrun: %s",
+			testrailutils.MilestoneName, testrailutils.RunName)
+	} else {
+		logrus.Warn("Not all information to connect to testrail is provided, skipping updates to testrail")
+	}
+}
+
+func updateTestRail(testStatus *string, ids ...int) {
+	if ids[0] != 0 && ids[1] != 0 {
+		testrailObject := testrailutils.Testrail{
+			Status:        *testStatus,
+			TestID:        ids[0],
+			RunID:         ids[1],
+			DriverVersion: storkVersion,
+		}
+		testrailutils.AddTestEntry(testrailObject)
+		log.Infof("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testrailHostname, ids[1], testrailutils.PwxProjectID)
+	} else {
+		logrus.Warnf("Skipping testrail update for this case, testID: %d, testrun: %d", ids[0], ids[1])
+	}
+}
+
+func testrailSetupForTest(testrailID int, testResult *string) int {
+	runID, err := addRunToMilestone(testrailID, testResult)
+	if err != nil {
+		logrus.Warnf("For current case: %d, not adding this run to testrail", testrailID)
+		return 0
+	}
+	return runID
+}
+
+func addRunToMilestone(testrailID int, testResult *string) (int, error) {
+	var runID int
+	var err error
+	if testrailutils.JobRunID != "" {
+		if testrailID == 0 {
+			return 0, fmt.Errorf("invalid testcase ID: %v", testrailID)
+		}
+		runID, err = strconv.Atoi(testrailutils.JobRunID)
+		if err != nil {
+			return 0, fmt.Errorf("invalid testrail run ID: %v", testrailutils.JobRunID)
+		}
+	}
+	runID = testrailutils.AddRunsToMilestone(testrailID)
+	return runID, nil
 }
 
 func TestMain(m *testing.M) {
