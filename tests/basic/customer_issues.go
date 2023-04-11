@@ -425,9 +425,10 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		for _, eachNode := range node.GetNodes() {
-			log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
-		}
+		/*
+			for _, eachNode := range node.GetNodes() {
+				log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
+			}*/
 		AfterEachTest(contexts)
 	})
 })
