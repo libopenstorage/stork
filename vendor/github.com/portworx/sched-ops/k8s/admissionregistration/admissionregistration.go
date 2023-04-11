@@ -7,7 +7,7 @@ import (
 
 	"github.com/portworx/sched-ops/k8s/common"
 	apiadmissionsclientv1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1"
-	apiadmissionsclient "k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1"
+	apiadmissionsclientv1beta1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,6 +22,8 @@ var (
 type Ops interface {
 	MutatingWebhookConfigurationOps
 	MutatingWebhookConfigurationV1beta1Ops
+	ValidatingWebhookConfigurationOps
+	ValidatingWebhookConfigurationV1beta1Ops
 
 	// SetConfig sets the config and resets the client.
 	SetConfig(config *rest.Config)
@@ -43,16 +45,16 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new admissionregistration client.
-func New(client apiadmissionsclient.AdmissionregistrationV1beta1Interface, clientv1 apiadmissionsclientv1.AdmissionregistrationV1Interface) *Client {
+func New(client apiadmissionsclientv1beta1.AdmissionregistrationV1beta1Interface, clientv1 apiadmissionsclientv1.AdmissionregistrationV1Interface) *Client {
 	return &Client{
-		admission:   client,
-		admissionv1: clientv1,
+		admissionv1beta1: client,
+		admissionv1:      clientv1,
 	}
 }
 
 // NewForConfig builds a new admissionregistration client for the given config.
 func NewForConfig(c *rest.Config) (*Client, error) {
-	client, err := apiadmissionsclient.NewForConfig(c)
+	client, err := apiadmissionsclientv1beta1.NewForConfig(c)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +64,8 @@ func NewForConfig(c *rest.Config) (*Client, error) {
 	}
 
 	return &Client{
-		admission:   client,
-		admissionv1: clientv1,
+		admissionv1beta1: client,
+		admissionv1:      clientv1,
 	}, nil
 }
 
@@ -80,21 +82,21 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 
 // Client provides a wrapper for kubernetes admission interface.
 type Client struct {
-	config      *rest.Config
-	admission   apiadmissionsclient.AdmissionregistrationV1beta1Interface
-	admissionv1 apiadmissionsclientv1.AdmissionregistrationV1Interface
+	config           *rest.Config
+	admissionv1beta1 apiadmissionsclientv1beta1.AdmissionregistrationV1beta1Interface
+	admissionv1      apiadmissionsclientv1.AdmissionregistrationV1Interface
 }
 
 // SetConfig sets the config and resets the client.
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
-	c.admission = nil
+	c.admissionv1beta1 = nil
 	c.admissionv1 = nil
 }
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.admission != nil && c.admissionv1 != nil {
+	if c.admissionv1beta1 != nil && c.admissionv1 != nil {
 		return nil
 	}
 
@@ -151,7 +153,7 @@ func (c *Client) loadClient() error {
 	if err != nil {
 		return err
 	}
-	c.admission, err = apiadmissionsclient.NewForConfig(c.config)
+	c.admissionv1beta1, err = apiadmissionsclientv1beta1.NewForConfig(c.config)
 	if err != nil {
 		return err
 	}

@@ -12,9 +12,11 @@ import (
 
 	"github.com/hashicorp/go-version"
 	"github.com/sirupsen/logrus"
+	apps "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
@@ -67,6 +69,8 @@ const (
 	StoragelessNodeValue = "storageless"
 	// StoragePartitioningEnvKey is the storage spec environment variable used to set storage/storageless node type
 	StoragePartitioningEnvKey = "ENABLE_ASG_STORAGE_PARTITIONING"
+	// DefaultStorageClusterUniqueLabelKey is the controller revision hash of storage cluster
+	DefaultStorageClusterUniqueLabelKey = apps.ControllerRevisionHashLabelKey
 )
 
 var (
@@ -532,6 +536,31 @@ func UpdateStorageClusterCondition(
 		indexSorted++
 	}
 	cluster.Status.Conditions = sortedConditions
+}
+
+// UpdateLiveStorageClusterLifecycle updates live storage cluster phase only to report cluster lifecycle
+func UpdateLiveStorageClusterLifecycle(
+	k8sClient client.Client,
+	cluster *corev1.StorageCluster,
+	clusterState corev1.ClusterState,
+) error {
+	cluster.Status.Phase = string(clusterState)
+	toUpdate := &corev1.StorageCluster{}
+	if err := k8sClient.Get(
+		context.TODO(),
+		types.NamespacedName{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		toUpdate,
+	); err != nil {
+		return err
+	} else if toUpdate.Status.Phase == string(clusterState) {
+		return nil
+	}
+
+	toUpdate.Status.Phase = string(clusterState)
+	return k8sClient.Status().Update(context.TODO(), toUpdate)
 }
 
 // GetStorageClusterCondition returns the condition based on source and type

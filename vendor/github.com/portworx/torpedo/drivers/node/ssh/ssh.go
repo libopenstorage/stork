@@ -2,6 +2,14 @@ package ssh
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -13,16 +21,9 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	ssh_pkg "golang.org/x/crypto/ssh"
-	"io/ioutil"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"net"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -90,25 +91,26 @@ func (s *SSH) IsUsingSSH() bool {
 func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duration) (bool, error) {
 	log.Infof("Checking the uptime for a node %s", n.SchedulerNodeName)
 	uptimeCmd := "sudo uptime -s"
-
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, node.ConnectionOpts{
 			Timeout:         1 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		}, uptimeCmd, true)
-		return out, true, err
+		if err != nil {
+			return out, true, fmt.Errorf("Error while getting uptime %v ", err)
+		} else if len(out) == 0 {
+			return out, true, fmt.Errorf("No uptime available")
+		}
+		return out, false, nil
 	}
-
-	out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
 	if err != nil {
 		return false, &node.ErrFailedToRunCommand{
 			Node:  n,
 			Cause: fmt.Sprintf("Failed to run uptime command in node %v", n),
 		}
 	}
-
 	upTime := strings.Fields(strings.TrimSpace(out.(string)))
-
 	// Converting the unix date to timestamp
 	thetime, err := time.Parse(time.RFC3339, upTime[0]+"T"+upTime[1]+"+00:00")
 	if err != nil {
@@ -154,16 +156,17 @@ func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, e
 	return count, nil
 }
 
-// Init initializes SSH node driver
-func (s *SSH) Init(nodeOpts node.InitOptions) error {
+// updateDriver updates the information stored in the driver w.r.t. current context
+func (s *SSH) updateDriver() error {
 	var err error
-	s.specDir = nodeOpts.SpecDir
 
+	// The namespace of the portworx-service in the current context
 	execPodNamespace, err := getExecPodNamespace()
 	if err != nil {
 		return err
 	}
 	s.execPodNamespace = execPodNamespace
+	log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", execPodNamespace)
 
 	nodes := node.GetWorkerNodes()
 	if s.IsUsingSSH() {
@@ -192,6 +195,17 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	}
 
 	return nil
+}
+
+// Init initializes SSH node driver
+func (s *SSH) Init(nodeOpts node.InitOptions) error {
+	s.specDir = nodeOpts.SpecDir
+	return s.updateDriver()
+}
+
+// RefreshDriver refreshes the driver on a context switch
+func RefreshDriver(s *SSH) error {
+	return s.updateDriver()
 }
 
 func (s *SSH) initExecPod() error {
@@ -462,7 +476,6 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	if err != nil {
 		return "", err
 	}
-
 	return output.(string), nil
 }
 
@@ -731,7 +744,7 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 // GetBlockDrives returns the block drives on the node
 func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
 	drives := make(map[string]*node.BlockDrive)
-	driveCmd := fmt.Sprintf("sudo /bin/lsblk -f -P -s -d -p -o NAME,LABEL,SIZE,MOUNTPOINT,FSTYPE,TYPE")
+	driveCmd := fmt.Sprintf("sudo /bin/lsblk -f -P -s -p -o NAME,LABEL,SIZE,MOUNTPOINT,FSTYPE,TYPE")
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, driveCmd, false)
 		if err != nil {
@@ -766,6 +779,18 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 					if labelBin != -1 {
 						kv := strings.Split(label, "=")
 						driveLabels[kv[0]] = kv[1]
+					} else {
+						if label != "" {
+							// this logic is required for identifying pools disks in case of DMthin using labels
+							val := "any:pwx"
+							if strings.Contains(label, val) {
+								pos := strings.LastIndex(label, val)
+								adjustedPos := pos + len(val)
+								driveLabels["pxpool"] = label[adjustedPos:]
+							} else {
+								driveLabels[label] = "true"
+							}
+						}
 					}
 				}
 				drive.Labels = driveLabels

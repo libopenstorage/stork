@@ -388,6 +388,15 @@ type Driver interface {
 
 	// GetPodsRestartCount gets restart count maps for pods in given namespace
 	GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error)
+
+	// AddNamespaceLabel adds a label key=value on the given namespace
+	AddNamespaceLabel(namespace string, labelMap map[string]string) error
+
+	// RemoveNamespaceLabel removes the label with key on given namespace
+	RemoveNamespaceLabel(namespace string, labelMap map[string]string) error
+
+	// GetNamespaceLabel gets the labels on given namespace
+	GetNamespaceLabel(namespace string) (map[string]string, error)
 }
 
 var (
