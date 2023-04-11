@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/task"
 	"sync"
 	"time"
 
@@ -806,7 +805,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 						}
 						return ordinalScheduleBackupName, false, nil
 					}
-					nextScheduleBackupNameRef, err = task.DoRetryWithTimeout(checkNextScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					nextScheduleBackupNameRef, err = DoRetryWithTimeoutWithGinkgoRecover(checkNextScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
 					nextScheduleBackupName = nextScheduleBackupNameRef.(string)
 					log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
