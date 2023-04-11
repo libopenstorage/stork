@@ -806,7 +806,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 // Function to check for set amount of Replica Pods
 func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
-	conditionError = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+	conditionError := wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
@@ -826,6 +826,7 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	if conditionError != nil {
 		if ResiliencyFlag {
 			ResiliencyCondition <- false
+			CapturedErrors <- conditionError
 		}
 	}
 	return conditionError
