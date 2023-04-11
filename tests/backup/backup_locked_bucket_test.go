@@ -425,6 +425,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		backupLocation             string
 		appList                    = Inst().AppList
 		contexts                   []*scheduler.Context
+		scheduleNames              []string
 		preRuleNameList            []string
 		postRuleNameList           []string
 		appNamespaces              []string
@@ -603,10 +604,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
 						labelSelectors, orgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
-					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
-					err = backupSuccessCheck(firstScheduleBackupName, orgID, 30, 5, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", firstScheduleBackupName))
+					scheduleNames = append(scheduleNames, scheduleName)
 				})
 				Step("Verifying backup success after initializing volume resize", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
@@ -618,9 +616,9 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
 					log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 					time.Sleep(15 * time.Minute)
-					secondScheduleBackupName, err := GetOrdinalScheduleBackupUID(ctx, scheduleName, 2, orgID)
+					secondScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching recent backup %v", secondScheduleBackupName))
-					err = backupSuccessCheck(secondScheduleBackupName, orgID, 30, 5, ctx)
+					err = backupSuccessCheck(secondScheduleBackupName, orgID, 5, 30, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", secondScheduleBackupName))
 				})
 			}
@@ -630,13 +628,14 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
-		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleUid))
-		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s]", scheduleName))
-		policyList := []string{periodicSchedulePolicyName}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
+		for _, scheduleName := range scheduleNames {
+			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+			log.FailOnError(err, "Error while getting schedule uid %s", scheduleName)
+			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
