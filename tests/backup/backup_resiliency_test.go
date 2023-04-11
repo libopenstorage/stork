@@ -13,7 +13,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/node"
@@ -742,7 +741,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 							return "", false, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
 						}
 					}
-					_, err = task.DoRetryWithTimeout(backupProgressCheckFunc, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+					_, err = DoRetryWithTimeoutWithGinkgoRecover(backupProgressCheckFunc, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verfiying backup %s is in progress", backupName))
 
 					_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
@@ -771,7 +770,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(backupJobCancelStatus, backupDeleteTimeout, backupDeleteRetryTime)
+				_, err = DoRetryWithTimeoutWithGinkgoRecover(backupJobCancelStatus, backupDeleteTimeout, backupDeleteRetryTime)
 				if err != nil {
 					adminBackups, error1 := GetAllBackupsAdmin()
 					log.FailOnError(error1, "Getting the list of backups after backup cancellation")
@@ -938,7 +937,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
 			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
@@ -999,7 +998,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
 			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
@@ -1035,7 +1034,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			}
 			return "", false, nil
 		}
-		_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
 		log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 		dash.VerifySafely(statefulSet.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that all the mongodb pods are in Ready state at the end of the testcase")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -1208,7 +1207,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[0].Name))
 			err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[0], Inst().DriverStartTimeout)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[0].Name))
@@ -1281,7 +1280,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 					}
 					return "", false, nil
 				}
-				_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[i].Name))
 				err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[i], Inst().DriverStartTimeout)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[i].Name))
@@ -1304,7 +1303,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				}
 				return "", false, nil
 			}
-			_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", node.Name))
 			err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
@@ -1464,7 +1463,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(pxBackupPodStatus, podStatusTimeOut, podStatusRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(pxBackupPodStatus, podStatusTimeOut, podStatusRetryTime)
 			log.FailOnError(err, "Validating if the px_backup pod is ready")
 			log.Infof("Number of px-backup pods in Ready state are %v", backupDeployment.Status.ReadyReplicas)
 			dash.VerifyFatal(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying if the px-backup pod is in Ready state")
@@ -1525,7 +1524,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(pxBackupPodStatus, podStatusTimeOut, podStatusRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(pxBackupPodStatus, podStatusTimeOut, podStatusRetryTime)
 			log.FailOnError(err, "Validating if the px_backup pod is ready")
 			log.Infof("Number of px_backup pod in Ready state are %v", backupDeployment.Status.ReadyReplicas)
 			dash.VerifyFatal(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that px_backup pod is in Ready state")
@@ -1563,7 +1562,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 			}
 			return "", false, nil
 		}
-		_, err = task.DoRetryWithTimeout(pxBackupPodStatus, 10*time.Minute, 30*time.Second)
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(pxBackupPodStatus, 10*time.Minute, 30*time.Second)
 		dash.VerifySafely(err, nil, "Validating if the px_backup pod is ready")
 		log.Infof("Number of px_backup pods in Ready state are %v", backupDeployment.Status.ReadyReplicas)
 		dash.VerifySafely(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that px_backup pod is in Ready state at the end of the testcase")
@@ -1745,7 +1744,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 							return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
 						}
 					}
-					_, err := task.DoRetryWithTimeout(restoreProgressCheckFunc, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Second)
+					_, err := DoRetryWithTimeoutWithGinkgoRecover(restoreProgressCheckFunc, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Second)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verfiying restore %s is in progress", restoreName))
 					err = DeleteRestore(restoreName, orgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore %s while restore is in progress", restoreName))
@@ -1772,7 +1771,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(restoreJobCancelStatus, maxWaitPeriodForRestoreJobCancellation*time.Minute, restoreJobCancellationRetryTime*time.Second)
+				_, err = DoRetryWithTimeoutWithGinkgoRecover(restoreJobCancelStatus, maxWaitPeriodForRestoreJobCancellation*time.Minute, restoreJobCancellationRetryTime*time.Second)
 				if err != nil {
 					adminRestores, err := GetAllRestoresAdmin()
 					log.FailOnError(err, "Getting the list of restores after restore cancellation")

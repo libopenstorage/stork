@@ -14,7 +14,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -1669,7 +1668,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(noAccessCheck, 5*time.Minute, 30*time.Second)
 			log.FailOnError(err, "Validate no groups or users have access to backups shared at cluster level")
 			dash.VerifyFatal(len(userBackups), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", chosenUser))
 
@@ -1687,7 +1686,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(noAccessCheck, 5*time.Minute, 30*time.Second)
 			log.FailOnError(err, "Validate no groups or users have access to backups shared at cluster level")
 			dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", individualUser))
 		})
@@ -2321,7 +2320,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 					}
 					return userBackups, false, nil
 				}
-				userBackups, err := task.DoRetryWithTimeout(clusterShareCheck, 2*time.Minute, 10*time.Second)
+				userBackups, err := DoRetryWithTimeoutWithGinkgoRecover(clusterShareCheck, 2*time.Minute, 10*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backups from shared cluster named [%s] for user [%s]", backupClusterName, username))
 				log.InfoD("User backups - %v", userBackups.([]string))
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -3021,7 +3020,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		})
 
@@ -4113,7 +4112,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 			log.FailOnError(err, fmt.Sprintf("Error deleting backup - %s for user - %s", backupName, users[i]))
 		}
 
@@ -4140,7 +4139,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
+				_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
 			}
 		}
@@ -4158,7 +4157,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 					}
 					return "", false, nil
 				}
-				_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
 			}
 		}

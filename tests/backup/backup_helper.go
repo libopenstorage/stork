@@ -123,6 +123,14 @@ var storkLabel = map[string]string{
 
 type BackupAccess int32
 
+type ReplacePolicy_Type int32
+
+const (
+	ReplacePolicy_Invalid ReplacePolicy_Type = 0
+	ReplacePolicy_Retain  ReplacePolicy_Type = 1
+	ReplacePolicy_Delete  ReplacePolicy_Type = 2
+)
+
 const (
 	ViewOnlyAccess BackupAccess = 1
 	RestoreAccess               = 2
@@ -621,6 +629,53 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 		return err
 	}
 	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
+// CreateRestoreWithReplacePolicy Creates in-place restore and waits for it to complete
+func CreateRestoreWithReplacePolicy(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		ReplacePolicy: api.ReplacePolicy_Type(replacePolicy),
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	err = restoreSuccessWithReplacePolicy(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx, replacePolicy)
 	if err != nil {
 		return err
 	}
@@ -1225,6 +1280,45 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		return err
 	}
 	return nil
+}
+
+// restoreSuccessWithReplacePolicy inspects restore task status as per ReplacePolicy_Type
+func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context, replacePolicy ReplacePolicy_Type) error {
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	var statusesExpected api.RestoreInfo_StatusInfo_Status
+	if replacePolicy == ReplacePolicy_Delete {
+		statusesExpected = api.RestoreInfo_StatusInfo_Success
+	} else if replacePolicy == ReplacePolicy_Retain {
+		statusesExpected = api.RestoreInfo_StatusInfo_PartialSuccess
+	}
+	statusesUnexpected := [...]api.RestoreInfo_StatusInfo_Status{
+		api.RestoreInfo_StatusInfo_Invalid,
+		api.RestoreInfo_StatusInfo_Aborted,
+		api.RestoreInfo_StatusInfo_Failed,
+	}
+	restoreSuccessCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetRestore().GetStatus().Status
+		reason := resp.GetRestore().GetStatus().Reason
+		if actual == statusesExpected {
+			return "", false, nil
+		}
+
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
+			}
+		}
+		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
+	}
+	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
+	return err
 }
 
 // IsBackupLocationPresent checks whether the backup location is present or not
