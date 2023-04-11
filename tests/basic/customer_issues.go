@@ -277,7 +277,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			Inst().AppList = append(Inst().AppList, eachApp)
 		}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("replresyncpoolexpand-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("runflatresync-%d", i))...)
 		}
 
 		time.Sleep(2 * time.Minute)
@@ -370,10 +370,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		}
 		fmt.Println(volumeState)
 
-		revertZone1 := func() {
-			log.FailOnError(blockIptableRules(zone1, zone2, true), "Failed to unblock IPTable rules on target Nodes")
-		}
-
 		// From Zone 1 block all the traffic to systems under zone2
 		// From Zone 2 block all the traffic to systems under zone1
 		log.InfoD("blocking iptables from all nodes present in zone1 from accessing zone2")
@@ -387,13 +383,15 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
 
 		// Reverting back Zone1 iptables set
-		revertZone1()
-
-		for _, each := range zone2 {
-			log.FailOnError(flushIptableRules(each), "Failed to flush iptable rules")
+		for _, each := range zone1 {
+			log.FailOnError(flushIptableRules(each), "failed to flush iptable rules on node from zone1 [%v]", each.Name)
 		}
 
-		// Reset iptable rules on vms under zone2
+		for _, each := range zone2 {
+			log.FailOnError(flushIptableRules(each), "failed to flush iptable rules on node from zone2 [%v]", each.Name)
+		}
+
+		// set iptable rules on vms under zone2 slowly one after other to restrict connection to the vm's under zone1
 		err = blockIptableRules(zone2, zone1, false)
 		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
 
@@ -422,6 +420,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		for _, eachNode := range node.GetNodes() {
+			log.InfoD("flushing all iptable rules on node [%v]", eachNode.Name)
 			log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
 		}
 		AfterEachTest(contexts)
