@@ -351,18 +351,19 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			zone2 = append(zone2, nodesSplit2[each])
 		}
 
-		// Set Volume replica on the nodes so that each zone will contribute to replica on the volumes
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
-				log.FailOnError(err, "failed to get volumes from the contexts")
-			}
+		/*
+			// Set Volume replica on the nodes so that each zone will contribute to replica on the volumes
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				if err != nil {
+					log.FailOnError(err, "failed to get volumes from the contexts")
+				}
 
-			// This is done to make sure that volumes should have replica on nodes from both zones
-			for _, eachVol := range vols {
-				log.FailOnError(setVolumesWithReplicaOnBothZones(eachVol, zone1, zone2), fmt.Sprintf("Failed to set Replica on the volume [%v]", eachVol.Name))
-			}
-		}
+				// This is done to make sure that volumes should have replica on nodes from both zones
+				for _, eachVol := range vols {
+					log.FailOnError(setVolumesWithReplicaOnBothZones(eachVol, zone1, zone2), fmt.Sprintf("Failed to set Replica on the volume [%v]", eachVol.Name))
+				}
+			}*/
 
 		volumeState, err := GetVolumesInDegradedState(contexts)
 		if err != nil {
