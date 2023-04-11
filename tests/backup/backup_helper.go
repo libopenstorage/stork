@@ -2081,13 +2081,15 @@ func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, li
 	}
 	namespaceList := resp.GetBackup().GetNamespaces()
 	log.Infof("The list of namespaces backed up are %v", namespaceList)
-	if !reflect.DeepEqual(namespaceList, listOfLabelledNamespaces) {
+	if !AreSlicesEqual(namespaceList, listOfLabelledNamespaces) {
 		return fmt.Errorf("list of namespaces backed up are %v which is not same as expected %v", namespaceList, listOfLabelledNamespaces)
 	}
 	backupLabels := resp.GetBackup().GetNsLabelSelectors()
 	log.Infof("The list of labels applied to backup are %v", backupLabels)
-	if !reflect.DeepEqual(backupLabels, namespaceLabel) {
-		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", backupLabels, namespaceLabel)
+	expectedLabels := strings.Split(namespaceLabel, ",")
+	actualLabels := strings.Split(backupLabels, ",")
+	if !AreSlicesEqual(expectedLabels, actualLabels) {
+		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", actualLabels, expectedLabels)
 	}
 	return nil
 }
@@ -2165,4 +2167,24 @@ func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID str
 	}
 	backedUpNamespaces = resp.GetBackup().GetNamespaces()
 	return backedUpNamespaces, err
+}
+
+// AreSlicesEqual verifies if two slices are equal or not
+func AreSlicesEqual(slice1, slice2 interface{}) bool {
+	v1 := reflect.ValueOf(slice1)
+	v2 := reflect.ValueOf(slice2)
+	if v1.Len() != v2.Len() {
+		return false
+	}
+	m := make(map[interface{}]int)
+	for i := 0; i < v2.Len(); i++ {
+		m[v2.Index(i).Interface()]++
+	}
+	for i := 0; i < v1.Len(); i++ {
+		if m[v1.Index(i).Interface()] == 0 {
+			return false
+		}
+		m[v1.Index(i).Interface()]--
+	}
+	return true
 }
