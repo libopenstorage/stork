@@ -707,7 +707,7 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 // WaitForPDSDeploymentToBeDown Checks for the deployment health status(Down/Degraded)
 func WaitForPDSDeploymentToBeDown(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
 	// validate the deployments in pds
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+	err = wait.PollImmediate(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
@@ -733,7 +733,7 @@ func WaitForPDSDeploymentToBeDown(deployment *pds.ModelsDeployment, maxtimeInter
 // WaitForPDSDeploymentToBeUp Checks for the any given deployment health status
 func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
 	// validate the deployments in pds
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+	err = wait.PollImmediate(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		if err != nil {
 			return false, fmt.Errorf("get deployment status is failing with error: %v", err)
