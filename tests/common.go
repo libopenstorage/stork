@@ -5996,6 +5996,15 @@ func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*vo
 	return volumes, nil
 }
 
+// DoRetryWithTimeoutWithGinkgoRecover calls `task.DoRetryWithTimeout` along with `ginkgo.GinkgoRecover()`, to be used in callbacks with panics or ginkgo assertions
+func DoRetryWithTimeoutWithGinkgoRecover(taskFunc func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
+	taskFuncWithGinkgoRecover := func() (interface{}, bool, error) {
+		defer ginkgo.GinkgoRecover()
+		return taskFunc()
+	}
+	return task.DoRetryWithTimeout(taskFuncWithGinkgoRecover, timeout, timeBeforeRetry)
+}
+
 // GetVolumesInDegradedState Get the list of volumes in degraded state
 func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume, error) {
 	var volumes []*volume.Volume
@@ -6090,4 +6099,28 @@ func GetAllKvdbNodes() ([]kvdbNode, error) {
 		return nil, err
 	}
 	return allKvdbNodes, nil
+}
+
+// GetKvdbMasterPID returns the PID of KVDB master node
+func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
+	var processPid string
+	command := "ps -ef | grep -i px-etcd"
+	out, err := Inst().N.RunCommand(kvdbNode, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "px-etcd start") && !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+	return processPid, err
 }

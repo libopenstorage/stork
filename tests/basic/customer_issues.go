@@ -9,7 +9,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
-	"strings"
 	"time"
 )
 
@@ -57,33 +56,9 @@ func getRandomNumbersFromArrLength(arrayLength int, splitLength int) ([]int, []i
 	return resultSnode, resultSlessnode
 }
 
-// getKvdbMasterPID returns the PID of KVDB master node
-func getKvdbMasterPID(kvdbNode node.Node) (string, error) {
-	var processPid string
-	command := "ps -ef | grep -i px-etcd"
-	out, err := Inst().N.RunCommand(kvdbNode, command, node.ConnectionOpts{
-		Timeout:         20 * time.Second,
-		TimeBeforeRetry: 5 * time.Second,
-		Sudo:            true,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "px-etcd start") && !strings.Contains(line, "grep") {
-			fields := strings.Fields(line)
-			processPid = fields[1]
-			break
-		}
-	}
-	return processPid, err
-}
-
-// killKvdbNode return error in case of command failure
-func killKvdbNode(kvdbNode node.Node) error {
-	pid, err := getKvdbMasterPID(kvdbNode)
+// KillKvdbNode return error in case of command failure
+func KillKvdbNode(kvdbNode node.Node) error {
+	pid, err := GetKvdbMasterPID(kvdbNode)
 	if err != nil {
 		return err
 	}
@@ -418,7 +393,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
 
 		log.InfoD("Killing KVDB PID from KVDB Master Node")
-		log.FailOnError(killKvdbNode(getKvdbLeaderNode), "failed to Kill Kvdb Node")
+		log.FailOnError(KillKvdbNode(getKvdbLeaderNode), "failed to Kill Kvdb Node")
 		// Block IPtable rules on the kvdb node to all the nodes in zone 1
 		kvdb := []node.Node{getKvdbLeaderNode}
 
@@ -428,7 +403,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// Wait for some time before checking for file system goes back online
 		time.Sleep(30 * time.Minute)
 
-		// Revert back the iptable rules from the kvdb node
+		// Revert back the iptables rules from the kvdb node
 		log.FailOnError(blockIptableRules(kvdb, zone1, true), "Reverting back IPTable rules on kvdb node failed")
 
 		// Flushing iptables rules on all the nodes present in the cluster before making sure that nodes to come up online
