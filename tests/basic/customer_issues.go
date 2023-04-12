@@ -270,6 +270,8 @@ var _ = Describe("{FordRunFlatResync}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "Ford customer issue for runflat and resync failed"
 	It(stepLog, func() {
+		var iptablesflushed bool
+		iptablesflushed = false
 		contexts = make([]*scheduler.Context, 0)
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"fio", "fio-writes"}
@@ -367,9 +369,12 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			}*/
 
 		flushiptables := func() {
-			// Flush all iptables from all the nodes available forcefully
-			for _, eachNode := range allNodes {
-				log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
+			if !iptablesflushed {
+				// Flush all iptables from all the nodes available forcefully
+				for _, eachNode := range allNodes {
+					log.InfoD("Flushing iptables rules on node [%v]", eachNode.Name)
+					log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
+				}
 			}
 		}
 
@@ -417,18 +422,18 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// Block IPtable rules on the kvdb node to all the nodes in zone 1
 		kvdb := []node.Node{getKvdbLeaderNode}
 
-		time.Sleep(2 * time.Minute)
-
+		time.Sleep(10 * time.Minute)
 		log.FailOnError(blockIptableRules(kvdb, zone1, false), "Set IPTable rules on kvdb node failed")
 
 		// Wait for some time before checking for file system goes back online
-		time.Sleep(5 * time.Minute)
+		time.Sleep(30 * time.Minute)
 
 		// Revert back the iptable rules from the kvdb node
 		log.FailOnError(blockIptableRules(kvdb, zone1, true), "Reverting back IPTable rules on kvdb node failed")
 
 		// Flushing iptables rules on all the nodes present in the cluster before making sure that nodes to come up online
 		flushiptables()
+		iptablesflushed = true
 
 		// Wait for some time for system to be up and all nodes drivers up and running
 		for _, each := range node.GetStorageNodes() {
