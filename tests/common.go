@@ -6022,7 +6022,7 @@ func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume,
 			if err != nil {
 				return nil, err
 			}
-			log.InfoD(fmt.Sprintf("[%v]", appVol.Status))
+			log.InfoD(fmt.Sprintf("Current Status of the volume [%v] is [%v]", vol.Name, appVol.Status))
 			if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_DEGRADED" {
 				volumes = append(volumes, vol)
 			}
