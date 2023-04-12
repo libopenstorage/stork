@@ -43,6 +43,10 @@ const (
 	ObjectLockIncrBackupCountKey = "object-lock-incr-backup-count"
 	// ObjectLockDefaultIncrementalCount defines default incremental backup count
 	ObjectLockDefaultIncrementalCount = 5
+	//LargeResourceSizeLimit defines the maximum size of CR beyond which the backup and restores will be treated as Large resource type.
+	LargeResourceSizeLimitName = "large-resource-size-limit"
+	//LargeResourceSizeLimitDefault defines the default size of CR beyond which the backup and restores will be treated as Large resource type.
+	LargeResourceSizeLimitDefault = 1 << (10 * 2)
 	//minProtectionPeriod defines minimum number of days, the backup are protected via object-lock feature
 	minProtectionPeriod = 1
 	// RestoreVolumeBatchCountKey - restore volume batch count value

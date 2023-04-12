@@ -41,6 +41,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	coreapi "k8s.io/kubernetes/pkg/apis/core"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -1345,7 +1346,7 @@ func (a *ApplicationRestoreController) applyResources(
 	go a.restoreCrTimestampUpdate(restore, updateCr)
 	for _, o := range objects {
 		elapsedTime := time.Since(startTime)
-		if elapsedTime > utils.FifteenMinuteWait {
+		if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
 			updateCr <- utils.UpdateRestoreCrTimestampInPrepareResourcePath
 			startTime = time.Now()
 		}
@@ -1386,10 +1387,10 @@ func (a *ApplicationRestoreController) applyResources(
 	}
 	tempResourceList := make([]*storkapi.ApplicationRestoreResourceInfo, 0)
 	for _, o := range objects {
-		// every fifteen minutes once, we need to update the restore CR timestamp
+		// every five minutes once, we need to update the restore CR timestamp
 		// this is to prevent stale CR timeout to evict the restore CR
 		elapsedTime := time.Since(startTime)
-		if elapsedTime > utils.FiveMinuteWait {
+		if elapsedTime > utils.TimeoutUpdateRestoreCrProgress {
 			restore, err = a.updateRestoreCR(restore, namespacedName,
 				len(tempResourceList),
 				string(storkapi.ApplicationRestoreResourceApplying))
@@ -1483,16 +1484,15 @@ func (a *ApplicationRestoreController) updateRestoreCR(
 	//restore := &storkapi.ApplicationRestore{}
 	var err error
 	for i := 0; i < maxRetry; i++ {
-		log.ApplicationRestoreLog(restore).Warnf("%v updating ", fn, err)
 		restore.Status.RestoredResourceCount = restoredCount
 		restore.Status.ResourceRestoreState = storkapi.ApplicationRestoreResourceStateType(resourceRestoreStage)
 		restore.Status.LastUpdateTimestamp = metav1.Now()
 		err = a.client.Update(context.TODO(), restore)
 		if err != nil {
-			log.ApplicationRestoreLog(restore).Warnf("%v Failed to update restore cr", fn, err)
+			log.ApplicationRestoreLog(restore).Warnf("%v Failed to update restore cr %v", fn, err)
 			err = a.client.Get(context.TODO(), namespacedName, restore)
 			if err != nil {
-				log.ApplicationRestoreLog(restore).Warnf("%v Failed to get restore cr", fn, err)
+				log.ApplicationRestoreLog(restore).Warnf("%v Failed to get restore cr %v", fn, err)
 			}
 			time.Sleep(retrySleep)
 			continue
@@ -1557,54 +1557,33 @@ func (a *ApplicationRestoreController) restoreResources(
 		log.ApplicationRestoreLog(restore).Errorf("failed to obtain size of restore CR")
 		return err
 	}
-	var resourceCount int
-	if restoreCrSize > oneMBSizeBytes {
-		log.ApplicationRestoreLog(restore).Infof("The size of application restore CR obtained %v bytes", restoreCrSize)
+	var largeResourceSizeLimit int64
+	largeResourceSizeLimit = k8sutils.LargeResourceSizeLimitDefault
+	configData, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, coreapi.NamespaceSystem)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("failed to read config map %v for large resource size limit", k8sutils.StorkControllerConfigMapName)
+	}
+	if configData.Data[k8sutils.LargeResourceSizeLimitName] != "" {
+		largeResourceSizeLimit, err = strconv.ParseInt(configData.Data[k8sutils.LargeResourceSizeLimitName], 0, 64)
+		if err != nil {
+			log.ApplicationRestoreLog(restore).Errorf("failed to read config map %v's key %v, setting default value of 1MB", k8sutils.StorkControllerConfigMapName,
+				k8sutils.LargeResourceSizeLimitName)
+		}
+	}
+
+	log.ApplicationRestoreLog(restore).Infof("The size of application restore CR obtained %v bytes", restoreCrSize)
+	if restoreCrSize > int(largeResourceSizeLimit) {
 		log.ApplicationRestoreLog(restore).Infof("Stripping all the resource info from restore cr as it is a large resource based restore")
-		resourceCount = len(restore.Status.Resources)
+		resourceCount := len(restore.Status.Resources)
 		// update the flag and resource-count.
 		// Strip off the resource info it contributes to bigger size of application restore CR in case of large number of resource
 		restore.Status.Resources = make([]*storkapi.ApplicationRestoreResourceInfo, 0)
 		restore.Status.ResourceCount = resourceCount
 		restore.Status.LargeResourceEnabled = true
 	}
-	// Lets replace the resource version optimisitcally to avoid any CR update failure due to version mismatch.
-	// namespacedName := types.NamespacedName{}
-	// namespacedName.Namespace = restore.Namespace
-	// namespacedName.Name = restore.Name
-	// for i := 0; i < maxRetry; i++ {
-	// 	newRestore := &storkapi.ApplicationRestore{}
-	// 	err := a.client.Get(context.TODO(), namespacedName, newRestore)
-	// 	if err != nil {
-	// 		time.Sleep(retrySleep)
-	// 		continue
-	// 	}
-	// 	// Check if *restore.Status.DeepCopy() can help here.
-	// 	newRestore.Status.Stage = restore.Status.Stage
-	// 	newRestore.Status.FinishTimestamp = metav1.Now()
-	// 	newRestore.Status.Status = restore.Status.Status
-	// 	newRestore.Status.Reason = restore.Status.Reason
-	// 	newRestore.Status.LargeResourceEnabled = restore.Status.LargeResourceEnabled
-	// 	newRestore.Status.ResourceCount = resourceCount
-	// 	newRestore.Status.ResourceRestoreState = restore.Status.ResourceRestoreState
-	// 	newRestore.Status.RestoredResourceCount = restore.Status.RestoredResourceCount
-	// 	newRestore.Status.LastUpdateTimestamp = metav1.Now()
-	// 	newRestore.Status.TotalSize = restore.Status.TotalSize
-	// 	newRestore.Status.Volumes = make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
-	// 	newRestore.Status.Volumes = append(newRestore.Status.Volumes, restore.Status.Volumes...)
-	// 	newRestore.Status.Resources = make([]*storkapi.ApplicationRestoreResourceInfo, 0)
-	// 	newRestore.Status.Resources = append(newRestore.Status.Resources, restore.Status.Resources...)
-
-	// 	err = a.client.Update(context.TODO(), newRestore)
-	// 	if err != nil {
-	// 		time.Sleep(retrySleep)
-	// 		continue
-	// 	} else {
-	// 		break
-	// 	}
-	// }
+	err = a.client.Update(context.TODO(), restore)
 	if err != nil {
-		log.ApplicationRestoreLog(restore).Infof("DAS ******* Failed at a wrong place...%v", err)
+		log.ApplicationRestoreLog(restore).Infof("completed applying resources but failed to update restore CR: %v", err)
 		return err
 	}
 

@@ -31,10 +31,10 @@ const (
 	UpdateRestoreCrTimestampInPrepareResourcePath = 17
 	// UpdateRestoreCrTimestampInApplyResourcePath is sent in channel to signify go routine to update the timestamp
 	UpdateRestoreCrTimestampInApplyResourcePath = 19
-	// duration in which the restore CR to be updated
-	FifteenMinuteWait = 5 * time.Minute
+	// duration in which the restore CR to be updated with timestamp
+	TimeoutUpdateRestoreCrTimestamp = 15 * time.Minute
 	// duration in which the restore CR to be updated for resource Count progress
-	FiveMinuteWait = 5 * time.Minute
+	TimeoutUpdateRestoreCrProgress = 5 * time.Minute
 	// sleep interval for restore time stamp update go-routine to check channel for any data
 	SleepIntervalForCheckingChannel = 10 * time.Second
 	// RestoreCrChannelBufferSize is the count of maximum signals it can hold in restore CR update related channel

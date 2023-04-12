@@ -1087,7 +1087,7 @@ func (r *ResourceCollector) DeleteResources(
 	startTime := time.Now()
 	for _, object := range objects {
 		elapsedTime := time.Since(startTime)
-		if elapsedTime > utils.FifteenMinuteWait {
+		if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
 			updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
 			startTime = time.Now()
 		}
@@ -1117,7 +1117,7 @@ func (r *ResourceCollector) DeleteResources(
 	// Then wait for them to actually be deleted
 	for _, object := range objects {
 		elapsedTime := time.Since(startTime)
-		if elapsedTime > utils.FifteenMinuteWait {
+		if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
 			updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
 			startTime = time.Now()
 		}
