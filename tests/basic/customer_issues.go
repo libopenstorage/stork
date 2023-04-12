@@ -327,6 +327,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		flushiptables()
 		iptablesflushed = true
 
+		// Wait for some more time for nodes to get settled
+		time.Sleep(15 * time.Minute)
+
 		// Wait for some time for system to be up and all nodes drivers up and running
 		for _, each := range node.GetStorageNodes() {
 			err = Inst().V.WaitDriverUpOnNode(each, 2*time.Minute)
