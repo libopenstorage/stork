@@ -871,7 +871,13 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			log.FailOnError(err, "error getting node using name [%s]", nodeName)
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
+			//validating add-disk rebalance
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "is journal enabled check failed")
+			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
+			log.FailOnError(err, "Error waiting for poor resize")
 
+			//validating new pool rebalance
 			log.InfoD("Validate pool rebalance after drive add")
 			err = ValidateDriveRebalance(nodeSelected)
 			if err != nil && strings.Contains(err.Error(), "Device already exists") {
@@ -879,10 +885,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				err = nil
 			}
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
-			isjournal, err := isJournalEnabled()
-			log.FailOnError(err, "is journal enabled check failed")
-			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
-			log.FailOnError(err, "Error waiting for poor resize")
+
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			log.FailOnError(err, fmt.Sprintf("error get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
@@ -6083,7 +6086,6 @@ var _ = Describe("{PoolResizeSameSize}", func() {
 
 		var expectedSize uint64
 
-
 		stepLog = "trigger pool resize with the same size"
 		Step(stepLog, func() {
 			expectedSize = (poolToBeResized.TotalSize / units.GiB) + 2
@@ -7190,7 +7192,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 			poolToBeResized.TotalSize/units.GiB)
 
 		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
-			api.SdkStoragePool_RESIZE_TYPE_AUTO,
+			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK,
 			expectedSize)
 		dash.VerifyFatal(err,
 			nil,
@@ -7200,21 +7202,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolToBeResized.Uuid))
 
-		// Restart Px and wait for Driver to come up after pool expanded
-		restartPx := func() error {
-			stepLog = fmt.Sprintf("Restart PX on node %s", nodeDetail.Name)
-			err := Inst().V.RestartDriver(*nodeDetail, nil)
-			if err != nil {
-				return err
-			}
-			err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-		// Restarting Px after expanding the pool
-		log.FailOnError(restartPx(), fmt.Sprintf("Failed to restart Px on the Node [%v]", nodeDetail.Name))
+		expectedSize += drvSize
 
 		// Expand Pool using Add Drive and verify if the Pool is expanded successfully
 		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
@@ -7227,9 +7215,6 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		resizeErr = waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolUUID))
-
-		// Restarting Px after pool is resizied
-		log.FailOnError(restartPx(), fmt.Sprintf("Failed to restart Px on the Node [%v]", nodeDetail.Name))
 
 		allPoolsOnNodeAfterResize, err := GetPoolsDetailsOnNode(*nodeDetail)
 		log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))

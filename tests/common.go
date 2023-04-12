@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
 	"errors"
@@ -722,6 +723,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
+
+		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
+			}
+		})
 	})
 }
 
@@ -1238,6 +1245,43 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 		}
 	}
 
+}
+
+// ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing file system options check for the given volume
+func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	vols, err := Inst().S.GetVolumes(ctx)
+	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+	for _, v := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
+		if err != nil {
+			err = fmt.Errorf("Failed to get pvc for volume %s. Err: %v", v, err)
+			processError(err, errChan...)
+		}
+
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			err = fmt.Errorf("Error Occured while getting storage class for pvc %s. Err: %v", pvcObj, err)
+			processError(err, errChan...)
+		}
+
+		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+		if err != nil {
+			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+			processError(err, errChan...)
+		}
+		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+			if ok {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+			} else {
+				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+			}
+		} else {
+			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+		}
+	}
 }
 
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
@@ -4223,8 +4267,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 // DumpKubeconfigs gets kubeconfigs from configmap
 func DumpKubeconfigs(kubeconfigList []string) {
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
+	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
 
 // Inst returns the Torpedo instances
@@ -4429,8 +4472,8 @@ func ParseFlags() {
 		apl, err := splitCsv(repl1AppsCSV)
 		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
 		repl1AppList = append(repl1AppList, apl...)
-		log.Infof("volume repl 1  apps : %+v", secureAppList)
-		//Adding repl 1 apps as part of app list for deployment
+		log.Infof("volume repl 1 apps : %+v", secureAppList)
+		//Adding repl-1 apps as part of app list for deployment
 		appList = append(appList, repl1AppList...)
 	}
 
@@ -4622,8 +4665,13 @@ func printFlags() {
 
 func isDashboardReachable() bool {
 	timeout := 15 * time.Second
-	client := http.Client{
+	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 	aboutURL := strings.Replace(aetosutil.DashBoardBaseURL, "dashboard", "datamodel/about", -1)
 	log.Infof("Checking URL: %s", aboutURL)

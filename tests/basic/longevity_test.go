@@ -102,6 +102,7 @@ var _ = Describe("{Longevity}", func() {
 		AddDiskAndReboot:       TriggerPoolAddDiskAndReboot,
 		ResizeDiskAndReboot:    TriggerPoolResizeDiskAndReboot,
 		AutopilotRebalance:     TriggerAutopilotPoolRebalance,
+		VolumeCreatePxRestart:  TriggerVolumeCreatePXRestart,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
