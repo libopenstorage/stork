@@ -151,73 +151,6 @@ func WaitForReplicationComplete(vol *volume.Volume, replFactor int64) error {
 	return nil
 }
 
-// setVolumesWithReplicaOnBothZones Configure volume to have replicas spread across zones
-func setVolumesWithReplicaOnBothZones(vol *volume.Volume, zone1 []node.Node, zone2 []node.Node) error {
-
-	// setting replica 2 on the volumes
-	matchedZone1Nodes := []node.Node{}
-	matchedZone2Nodes := []node.Node{}
-	replicaNodes, err := getReplicaNodes(vol)
-	if err != nil {
-		return err
-	}
-	for _, eachRf := range replicaNodes {
-		for _, eachNode := range zone1 {
-			if eachRf == eachNode.VolDriverNodeID {
-				matchedZone1Nodes = append(matchedZone1Nodes, eachNode)
-			}
-		}
-		for _, eachNode := range zone2 {
-			if eachRf == eachNode.VolDriverNodeID {
-				matchedZone2Nodes = append(matchedZone2Nodes, eachNode)
-			}
-		}
-	}
-	if len(matchedZone1Nodes) >= 1 && len(matchedZone2Nodes) >= 1 {
-		log.InfoD(fmt.Sprintf("Volume [%v] is having repl nodes from both zones", vol.Name))
-		return nil
-	} else if len(matchedZone1Nodes) >= 1 && len(matchedZone2Nodes) == 0 {
-		log.InfoD(fmt.Sprintf("Volume [%v] is having repl nodes from Zone1 but not from zone2", vol.Name))
-		// Pick the random node from Zone2 and append it to be part of node which can have repl
-		randomIndex := rand.Intn(len(zone2))
-		randomNode := zone2[randomIndex]
-		replNode := []string{randomNode.VolDriverNodeID}
-
-		log.InfoD(fmt.Sprintf("[%s]", replNode))
-		replNodes, err := getReplicaNodes(vol)
-		if err != nil {
-			return err
-		}
-
-		if len(replNodes) != 3 {
-			err = Inst().V.SetReplicationFactor(vol, 3, replNode, nil, false)
-			if err != nil {
-				return err
-			}
-		}
-
-	} else {
-		log.InfoD(fmt.Sprintf("Volume [%v] is having repl nodes from Zone2 but not from zone1", vol.Name))
-		// Pick the random node from Zone2 and append it to be part of node which can have repl
-		randomIndex := rand.Intn(len(zone1))
-		randomNode := zone1[randomIndex]
-		replNode := []string{randomNode.VolDriverNodeID}
-		replNodes, err := getReplicaNodes(vol)
-		if err != nil {
-			return err
-		}
-		if len(replNodes) != 3 {
-			log.InfoD(fmt.Sprintf("[%s]", replNode))
-			err = Inst().V.SetReplicationFactor(vol, 3, replNode, nil, false)
-			if err != nil {
-				return err
-			}
-		}
-
-	}
-	return nil
-}
-
 var _ = Describe("{FordRunFlatResync}", func() {
 	/*
 		Test Needs 10 VM's running with Internal KVDB
@@ -308,7 +241,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		}
 
 		// Create 2 zones from the Storage and storageless Node
-		// Each Zone will have 3 storage and 2 Storageless Node
 		zone1 := []node.Node{}
 		zone2 := []node.Node{}
 
@@ -327,21 +259,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		for _, each := range zone2StorageLessEle {
 			zone2 = append(zone2, nodesSplit2[each])
 		}
-
-		// The below lines are intentionally commented out , will be either uncommented / deleted after debugging new scenarios
-		/*
-			// Set Volume replica on the nodes so that each zone will contribute to replica on the volumes
-			for _, ctx := range contexts {
-				vols, err := Inst().S.GetVolumes(ctx)
-				if err != nil {
-					log.FailOnError(err, "failed to get volumes from the contexts")
-				}
-
-				// This is done to make sure that volumes should have replica on nodes from both zones
-				for _, eachVol := range vols {
-					log.FailOnError(setVolumesWithReplicaOnBothZones(eachVol, zone1, zone2), fmt.Sprintf("Failed to set Replica on the volume [%v]", eachVol.Name))
-				}
-			}*/
 
 		flushiptables := func() {
 			if !iptablesflushed {
