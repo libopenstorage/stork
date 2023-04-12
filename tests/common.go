@@ -6037,7 +6037,7 @@ func VerifyVolumeStatusOnline(vol *volume.Volume) error {
 	if err != nil {
 		return err
 	}
-	if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_UP" {
+	if fmt.Sprintf("%v", appVol.Status) != "VOLUME_STATUS_UP" {
 		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status)
 	}
 	return nil
