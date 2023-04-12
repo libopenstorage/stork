@@ -64,7 +64,7 @@ func TestBasic(t *testing.T) {
 func BackupInitInstance() {
 	var err error
 	var token string
-	log.Info("Inside BackupInitInstance")
+	log.Infof("Inside BackupInitInstance")
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:            Inst().SpecDir,
 		VolDriverName:      Inst().V.String(),
@@ -104,6 +104,8 @@ func BackupInitInstance() {
 	t.Tags["px-backup-version"] = PxBackupVersion
 	t.Tags["px-backup-build-date"] = PxBackupBuildDate
 
+	Inst().Dash.TestSetUpdate(t)
+
 	// Setting the common password
 	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
 	// Dumping source and destination kubeconfig to file system path
@@ -118,9 +120,9 @@ func BackupInitInstance() {
 var dash *aetosutil.Dashboard
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
+	dash.TestSetBegin(dash.TestSet)
 	log.Infof("Backup Init instance")
 	BackupInitInstance()
-	dash.TestSetBegin(dash.TestSet)
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
 	// Create the first bucket from the list to be used as generic bucket

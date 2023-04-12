@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
 	"errors"
@@ -4266,8 +4267,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 // DumpKubeconfigs gets kubeconfigs from configmap
 func DumpKubeconfigs(kubeconfigList []string) {
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
+	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
 
 // Inst returns the Torpedo instances
@@ -4472,8 +4472,8 @@ func ParseFlags() {
 		apl, err := splitCsv(repl1AppsCSV)
 		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
 		repl1AppList = append(repl1AppList, apl...)
-		log.Infof("volume repl 1  apps : %+v", secureAppList)
-		//Adding repl 1 apps as part of app list for deployment
+		log.Infof("volume repl 1 apps : %+v", secureAppList)
+		//Adding repl-1 apps as part of app list for deployment
 		appList = append(appList, repl1AppList...)
 	}
 
@@ -4665,8 +4665,13 @@ func printFlags() {
 
 func isDashboardReachable() bool {
 	timeout := 15 * time.Second
-	client := http.Client{
+	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 	aboutURL := strings.Replace(aetosutil.DashBoardBaseURL, "dashboard", "datamodel/about", -1)
 	log.Infof("Checking URL: %s", aboutURL)
