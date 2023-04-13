@@ -109,8 +109,8 @@ const (
 	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
 	maintenanceWaitTimeout            = 2 * time.Minute
-	inspectVolumeTimeout              = 1 * time.Minute
-	inspectVolumeRetryInterval        = 2 * time.Second
+	inspectVolumeTimeout              = 2 * time.Minute
+	inspectVolumeRetryInterval        = 3 * time.Second
 	validateDeleteVolumeTimeout       = 6 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
