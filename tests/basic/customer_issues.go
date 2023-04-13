@@ -119,6 +119,7 @@ func flushIptableRules(n node.Node) error {
 		}
 		return nil
 	}
+	return nil
 }
 
 func getVolumeRuntimeState(vol *volume.Volume) (string, error) {
