@@ -54,7 +54,9 @@ const (
 	// DefaultRestoreVolumeBatchCount - default value for restore volume batch count
 	DefaultRestoreVolumeBatchCount = 25
 	// RestoreVolumeBatchSleepInterval - restore volume batch sleep interval
-	RestoreVolumeBatchSleepInterval = 20 * time.Second
+	DefaultRestoreVolumeBatchSleepInterval = "20s"
+	// RestoreVolumeBatchSleepIntervalKey - restore volume batch sleep interval key
+	RestoreVolumeBatchSleepIntervalKey = "restore-volume-sleep-interval"
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
