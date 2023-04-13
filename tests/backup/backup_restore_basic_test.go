@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/blang/semver"
 	"strconv"
 	"strings"
 	"sync"
@@ -2616,5 +2617,149 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
 		ValidateAndDestroy(contexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+	})
+})
+
+// BackupRestoreOnDifferentK8sVersions Restores from a duplicate backup on a cluster with a different kubernetes version
+var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
+	var (
+		cloudCredUID       string
+		cloudCredName      string
+		backupLocationUID  string
+		backupLocationName string
+		clusterUid         string
+		appNamespaces      []string
+		restoreNames       []string
+		backupLocationMap  map[string]string
+		srcVersion         semver.Version
+		destVersion        semver.Version
+		contexts           []*scheduler.Context
+		clusterStatus      api.ClusterInfo_StatusInfo_Status
+	)
+	namespaceMapping := make(map[string]string)
+	duplicateBackupNameMap := make(map[string]string)
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupRestoreOnDifferentK8sVersions", "Restoring from a duplicate backup on a cluster with a different kubernetes version", nil, 83721)
+		log.InfoD("Scheduling applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				log.Infof("Scheduled application with namespace [%s]", namespace)
+				appNamespaces = append(appNamespaces, namespace)
+			}
+		}
+	})
+	It("Restoring from a duplicate backup on a cluster with a different kubernetes version", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+		})
+		Step("Configure source and destination clusters with px-central-admin", func() {
+			log.InfoD("Configuring source and destination clusters with px-central-admin")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+		})
+		Step("Fetching destination cluster kubernetes version", func() {
+			log.InfoD("Fetching destination cluster kubernetes version")
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Unable to switch context to destination cluster %s", destinationClusterName)
+			version, err := k8s.ClusterVersion()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching destination cluster version %v", version))
+			destVersion, err = semver.Make(version)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching destination cluster version %v", destVersion))
+		})
+		Step("Switching context to source cluster for backup creation", func() {
+			log.InfoD("Switching context to source cluster for backup creation")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Unable to switch context to source cluster %s", SourceClusterName)
+		})
+		Step("Fetching source cluster kubernetes version", func() {
+			log.InfoD("Fetching source cluster kubernetes version")
+			version, err := k8s.ClusterVersion()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching source cluster version %v", version))
+			srcVersion, err = semver.Make(version)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching source cluster version %v", srcVersion))
+		})
+		Step("Compare source and destination cluster version", func() {
+			log.InfoD("Source cluster version: %s ; destination cluster version: %s", srcVersion.String(), destVersion.String())
+			isTrue := srcVersion.LT(destVersion)
+			dash.VerifyFatal(isTrue, true, "Verifying if source cluster's kubernetes version is lesser than the destination cluster's kubernetes version")
+		})
+		Step("Creating cloud credentials and registering Backup location", func() {
+			log.InfoD("Creating cloud credentials and registering Backup location")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			providers := getProviders()
+			backupLocationMap = make(map[string]string)
+			for _, provider := range providers {
+				cloudCredUID = uuid.New()
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				log.InfoD("Creating cloud credential named [%s] and uid [%s] using [%s] as provider", cloudCredUID, cloudCredName, provider)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating cloud credentials %v", cloudCredName))
+				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				bucketName := getGlobalBucketName(provider)
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location named [%s] with uid [%s] of [%s] as provider", backupLocationName, backupLocationUID, provider))
+			}
+		})
+		Step("Taking backup of applications and duplicating it", func() {
+			log.InfoD("Taking backup of applications and duplicating it")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, nil, orgID, clusterUid, "", "", "", "", ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
+				duplicateBackupName := fmt.Sprintf("%s-duplicate-%v", BackupNamePrefix, time.Now().Unix())
+				duplicateBackupNameMap[duplicateBackupName] = namespace
+				err = CreateBackup(duplicateBackupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, nil, orgID, clusterUid, "", "", "", "", ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying duplicate backup creation: %s", duplicateBackupName))
+			}
+		})
+		Step("Restoring duplicate backup on destination cluster with different kubernetes version", func() {
+			log.InfoD("Restoring duplicate backup on destination cluster with different kubernetes version")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Unable to switch context to destination cluster %s", destinationClusterName)
+			for duplicateBackupName, namespace := range duplicateBackupNameMap {
+				restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, duplicateBackupName, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
+				namespaceMapping[namespace] = namespace
+				err := CreateRestore(restoreName, duplicateBackupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from duplicate backup [%s]", restoreName))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		err := SetSourceKubeConfig()
+		dash.VerifyFatal(err, nil, "Switching context to source cluster")
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s] in ctx", restoreName))
+		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
+		ValidateAndDestroy(contexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
