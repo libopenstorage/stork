@@ -122,10 +122,9 @@ func flushIptableRules(n node.Node) error {
 	return nil
 }
 
-func getVolumeRuntimeState(vol *volume.Volume) (string, error) {
-	volDetails, err := Inst().V.InspectVolume(vol.Name)
+func getVolumeRuntimeState(vol string) (string, error) {
+	volDetails, err := Inst().V.InspectVolume(vol)
 	if err != nil {
-		log.Error("not in Resync State")
 		return "", err
 	}
 	var runTimeStat string
@@ -142,10 +141,10 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		Test Needs 10 VM's running with Internal KVDB
 		Cluster should have 6 StorageNodes and 4 Storageless nodes
 		App Used Mongodb on multiple Namespace would be running on both storage and storage-less nodes
-		Set the IPtables rules in some nodes  of that subnet such that they will not reachable from all nodes in second subnet
+		Set the IPtables rules in some nodes  of that subnet such that they will not be reachable from all nodes in second subnet
 		Make sure cluster is up and IOs are running for MongoDB apps. Most of the volumes will go into degraded state
-		Wait around a 30 minutes to hours for more IOs.
-		Now set IPtables rules in another subnet subnet
+		Wait for around 30 minutes to hours for more IOs.
+		Now set IPtables rules in another subnet
 		Remove the Iptables rules from all  nodes in subnet 1 and wait for them to join the cluster back.
 		Slowly remove IPtables rules from subnet2 nodes such that some volumes
 		 	will be in sync and IO started running. Now immediately block it again on few nodes so
@@ -176,6 +175,20 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		time.Sleep(2 * time.Minute)
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+
+		var volumesPresent []*volume.Volume
+
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				log.FailOnError(err, "failed to get volumes from the contexts")
+			}
+
+			// This is done to make sure that volumes should have replica on nodes from both zones
+			for _, eachVol := range vols {
+				volumesPresent = append(volumesPresent, eachVol)
+			}
+		}
 
 		// Check if the cluster consists of 10 nodes
 		log.InfoD("Get all nodes present in the cluster")
@@ -313,18 +326,11 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// Wait for some more time for nodes to get settled
 		time.Sleep(15 * time.Minute)
 
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
-				log.FailOnError(err, "failed to get volumes from the contexts")
-			}
-
-			// This is done to make sure that volumes should have replica on nodes from both zones
-			for _, eachVol := range vols {
-				volStat, err := getVolumeRuntimeState(eachVol)
-				log.FailOnError(err, "Failed to get Run time stat of the volume")
-				log.InfoD("Volume runtimeState of Volume [%v] is [%v]", eachVol, volStat)
-			}
+		// This is done to make sure that volumes should have replica on nodes from both zones
+		for _, eachVol := range volumesPresent {
+			volStat, err := getVolumeRuntimeState(eachVol.Name)
+			log.FailOnError(err, "Failed to get Run time stat of the volume")
+			log.InfoD("Volume runtimeState of Volume [%v] is [%v]", eachVol, volStat)
 		}
 
 		// Wait for some time for system to be up and all nodes drivers up and running
@@ -333,17 +339,10 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", each.Name))
 		}
 
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
-				log.FailOnError(err, "failed to get volumes from the contexts")
-			}
-
-			// This is done to make sure that volumes should have replica on nodes from both zones
-			for _, eachVol := range vols {
-				log.FailOnError(VerifyVolumeStatusOnline(eachVol), fmt.Sprintf("Volume [%v] is not in expected state", eachVol.Name))
-			}
+		for _, eachVol := range volumesPresent {
+			log.FailOnError(VerifyVolumeStatusOnline(eachVol), fmt.Sprintf("Volume [%v] is not in expected state", eachVol.Name))
 		}
+
 	})
 
 	JustAfterEach(func() {
