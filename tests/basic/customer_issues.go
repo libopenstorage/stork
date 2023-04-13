@@ -111,7 +111,7 @@ func blockIptableRules(zones []node.Node, targetZones []node.Node, revertRules b
 
 // flushIptableRules flushes all IPtable rules on the node specified
 func flushIptableRules(n node.Node) error {
-	command := "iptables -F"
+	command := "iptables -f"
 	err := runCommand(command, n)
 	if err != nil {
 		return err
