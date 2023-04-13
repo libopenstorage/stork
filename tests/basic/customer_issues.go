@@ -166,6 +166,21 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		var iptablesflushed bool
 		iptablesflushed = false
 
+		// Check if the cluster consists of 10 nodes
+		log.InfoD("Get all nodes present in the cluster")
+		allNodes := []node.Node{}
+		// create an array with storage and storage less nodes added
+		for _, each := range node.GetStorageDriverNodes() {
+			allNodes = append(allNodes, each)
+		}
+
+		for _, each := range node.GetStorageLessNodes() {
+			allNodes = append(allNodes, each)
+		}
+
+		// Verify total nodes available is 10
+		dash.VerifyFatal(len(allNodes) >= 10, true, "required minimum of 10 nodes for the test to run")
+
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -190,29 +205,13 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			}
 		}
 
-		// Check if the cluster consists of 10 nodes
-		log.InfoD("Get all nodes present in the cluster")
-
-		allNodes := []node.Node{}
-		// create an array with storage and storage less nodes added
-		for _, each := range node.GetStorageNodes() {
-			allNodes = append(allNodes, each)
-		}
-
-		for _, each := range node.GetStorageLessNodes() {
-			allNodes = append(allNodes, each)
-		}
-
-		// Verify total nodes available is 10
-		dash.VerifyFatal(len(allNodes) == 10, true, "required minimum of 10 nodes for the test to run")
-
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
-		if len(node.GetStorageLessNodes()) != 4 && len(node.GetStorageNodes()) > 6 {
+		if len(node.GetStorageLessNodes()) != 4 && len(node.GetStorageDriverNodes()) > 6 {
 			nodesSplit1 = allNodes[0:4]
 			nodesSplit2 = allNodes[5:10]
 		} else {
-			nodesSplit1 = node.GetStorageNodes()
+			nodesSplit1 = node.GetStorageDriverNodes()
 			nodesSplit2 = node.GetStorageLessNodes()
 		}
 
@@ -269,12 +268,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// force flush iptables on all the nodes at the end
 		defer flushiptables()
 
-		volumeState, err := GetVolumesInDegradedState(contexts)
-		if err != nil {
-			fmt.Println("Error not Nil")
-		}
-		fmt.Println(volumeState)
-
 		revertZone1 := func() {
 			log.FailOnError(blockIptableRules(zone1, zone2, true), "Failed to unblock IPTable rules on target Nodes")
 		}
@@ -310,10 +303,12 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// Block IPtable rules on the kvdb node to all the nodes in zone 1
 		kvdb := []node.Node{getKvdbLeaderNode}
 
+		log.Infof("Waiting for 10 minutes after killing kvdb nodes and wait for new kvdb nodes to get created")
 		time.Sleep(10 * time.Minute)
 		log.FailOnError(blockIptableRules(kvdb, zone1, false), "Set IPTable rules on kvdb node failed")
 
 		// Wait for some time before checking for file system goes back online
+		log.Infof("Waiting for 30 minutes before checking for file system goes back online")
 		time.Sleep(30 * time.Minute)
 
 		// Revert back the iptables rules from the kvdb node
@@ -324,6 +319,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		iptablesflushed = true
 
 		// Wait for some more time for nodes to get settled
+		log.Infof("Waiting for 15 minutes for nodes to get settled back after reverting iptable rules on kvdb nodes")
 		time.Sleep(15 * time.Minute)
 
 		// This is done to make sure that volumes should have replica on nodes from both zones

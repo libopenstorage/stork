@@ -8509,7 +8509,6 @@ func waitTillVolumeStatusUp(vol *volume.Volume) error {
 
 	for {
 		if now.After(targetTime) {
-			log.Error("Failed as the timeout of 0 Min is reached before resync triggered")
 			return fmt.Errorf("Failed to get volume status to UP")
 		} else {
 			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
