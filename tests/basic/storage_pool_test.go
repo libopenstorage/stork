@@ -2886,7 +2886,8 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 	var runID int
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeWithJrnlAndMeta", "Initiate pool expansion using resize-disk for the pool the with journal and metadata devices", nil, testrailID)
+		StartTorpedoTest("ResizeWithJrnlAndMeta", "Initiate pool expansion using resize-disk for "+
+			"the pool the with journal and metadata devices", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -6235,8 +6236,8 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		}
 
 		commonText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*"
-		compileText := fmt.Sprintf("[%s]operation is not supported", commonText)
-		compileTextMaintenanceError := fmt.Sprintf("[%s]Requires pool maintenance mode", commonText)
+		compileText := fmt.Sprintf("%soperation is not supported", commonText)
+		compileTextMaintenanceError := fmt.Sprintf("%sRequires pool maintenance mode", commonText)
 
 		err = nil
 		for _, each := range []string{compileText, compileTextMaintenanceError} {

@@ -77,6 +77,16 @@ func GetMasterNodes() []Node {
 	return nodeList
 }
 
+// IsMasterNode returns true is node is Masternode
+func IsMasterNode(n Node) bool {
+	for _, each := range GetMasterNodes() {
+		if each.uuid == n.uuid {
+			return true
+		}
+	}
+	return false
+}
+
 // GetStorageDriverNodes returns only the worker node where storage
 // driver is installed
 func GetStorageDriverNodes() []Node {

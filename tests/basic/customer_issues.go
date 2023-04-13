@@ -111,12 +111,14 @@ func blockIptableRules(zones []node.Node, targetZones []node.Node, revertRules b
 
 // flushIptableRules flushes all IPtable rules on the node specified
 func flushIptableRules(n node.Node) error {
-	command := "iptables -f"
-	err := runCommand(command, n)
-	if err != nil {
-		return err
+	command := "iptables -F"
+	if !node.IsMasterNode(n) {
+		err := runCommand(command, n)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-	return nil
 }
 
 func getVolumeRuntimeState(vol *volume.Volume) (string, error) {

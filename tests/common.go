@@ -6124,3 +6124,12 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	}
 	return processPid, err
 }
+
+// getReplicaNodes returns the list of nodes which has replicas
+func getReplicaNodes(vol *volume.Volume) ([]string, error) {
+	getReplicaSets, err := Inst().V.GetReplicaSets(vol)
+	if err != nil {
+		return nil, err
+	}
+	return getReplicaSets[0].Nodes, nil
+}
