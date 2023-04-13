@@ -53,13 +53,15 @@ const (
 	RestoreVolumeBatchCountKey = "restore-volume-backup-count"
 	// DefaultRestoreVolumeBatchCount - default value for restore volume batch count
 	DefaultRestoreVolumeBatchCount = 25
-	// RestoreVolumeBatchSleepInterval - restore volume batch sleep interval
-	RestoreVolumeBatchSleepInterval = 20 * time.Second
 	// ResourceCountLimitKeyName defines the number of resources to be read via one List API call.
 	// It is assigned to Limit field of ListOption structure
 	ResourceCountLimitKeyName = "resource-count-limit"
 	// DefaultResourceCountLimit defines the default value for resource count for list api
 	DefaultResourceCountLimit = int64(500)
+	// DefaultRestoreVolumeBatchSleepInterval - restore volume batch sleep interval
+	DefaultRestoreVolumeBatchSleepInterval = "20s"
+	// RestoreVolumeBatchSleepIntervalKey - restore volume batch sleep interval key
+	RestoreVolumeBatchSleepIntervalKey = "restore-volume-sleep-interval"
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
