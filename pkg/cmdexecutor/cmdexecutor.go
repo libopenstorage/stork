@@ -90,10 +90,10 @@ func (c *cmdExecutor) Start(stdoutChan chan string, errChan chan error) error {
 			err = fmt.Errorf("failed to run command: %s in pod: [%s] %s due to err: %v",
 				command, c.podNamespace, c.podName, err)
 			logrus.Errorf(err.Error())
+			errChan <- err
 		}
 
 		stdoutChan <- stdout
-		errChan <- err
 		close(stdoutChan)
 	}()
 
@@ -122,7 +122,11 @@ func (c *cmdExecutor) Wait(timeout time.Duration) error {
 		c.podNamespace, c.podName, cmdCheckBackoff, c.statusFile)
 
 	statusCmd := fmt.Sprintf(cmdStatusFormat, c.statusFile)
+	cmdCheckBackoff.Step()
 	if err := wait.ExponentialBackoff(cmdCheckBackoff, func() (bool, error) {
+		// todo include some additional info about the number of attempts if possible
+		logrus.Infof("checking status on pod: [%s] %s",
+			c.podNamespace, c.podName)
 		_, err := core.Instance().RunCommandInPod([]string{"/bin/sh", "-c", statusCmd},
 			c.podName, c.container, c.podNamespace)
 		if err != nil {

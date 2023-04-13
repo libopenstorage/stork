@@ -199,7 +199,9 @@ Loop:
 			if isDone {
 				// as each executor is done, track how many are done
 				doneCount++
-				if doneCount == len(executors) {
+				notFinished := len(executors) - doneCount
+				logrus.Infof("finished waiting for pod, still waiting for %d pods to finish", notFinished)
+				if notFinished == 0 {
 					logrus.Infof("successfully executed command: %s on all pods: %v", command, podNames)
 					_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
 					if err != nil {
