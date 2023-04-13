@@ -672,6 +672,22 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					}
 				}
 			}
+			// Get restore volume batch sleep interval
+			volumeBatchSleepInterval, err := time.ParseDuration(k8sutils.DefaultRestoreVolumeBatchSleepInterval)
+			if err != nil {
+				logrus.Infof("error in parsing default restore volume sleep interval %s", k8sutils.DefaultRestoreVolumeBatchSleepInterval)
+			}
+			RestoreVolumeBatchSleepInterval, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.RestoreVolumeBatchSleepIntervalKey)
+			if err != nil {
+				logrus.Infof("error in reading %v cm, switching to default restore volume sleep interval", k8sutils.StorkControllerConfigMapName)
+			} else {
+				if len(RestoreVolumeBatchSleepInterval) != 0 {
+					volumeBatchSleepInterval, err = time.ParseDuration(RestoreVolumeBatchSleepInterval)
+					if err != nil {
+						logrus.Infof("error in conversion of volumeBatchSleepInterval: %v", err)
+					}
+				}
+			}
 
 			for i := 0; i < len(backupVolInfos); i += batchCount {
 				batchVolInfo := backupVolInfos[i:min(i+batchCount, len(backupVolInfos))]
@@ -708,7 +724,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
 					return err
 				}
-				time.Sleep(k8sutils.RestoreVolumeBatchSleepInterval)
+				time.Sleep(volumeBatchSleepInterval)
 				restore, err = a.updateRestoreCRInVolumeStage(
 					namespacedName,
 					storkapi.ApplicationRestoreStatusInProgress,
