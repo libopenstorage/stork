@@ -119,36 +119,19 @@ func flushIptableRules(n node.Node) error {
 	return nil
 }
 
-// getReplicaNodes returns the list of nodes which has replicas
-func getReplicaNodes(vol *volume.Volume) ([]string, error) {
-	getReplicaSets, err := Inst().V.GetReplicaSets(vol)
+func getVolumeRuntimeState(vol *volume.Volume) (string, error) {
+	volDetails, err := Inst().V.InspectVolume(vol.Name)
 	if err != nil {
-		return nil, err
+		log.Error("not in Resync State")
+		return "", err
 	}
-	return getReplicaSets[0].Nodes, nil
-}
-
-// setReplicaFactorToReplThreeVol Set the replication factor of the volume to 3 , this is needed as a pre-requisites
-func setReplicaFactorToReplThreeVol(vol *volume.Volume) error {
-	getReplicaSets, err := Inst().V.GetReplicaSets(vol)
-	log.FailOnError(err, fmt.Sprintf("Failed to get replication factor on the volume [%v]", vol.Name))
-	if len(getReplicaSets[0].Nodes) != 3 {
-		log.InfoD(fmt.Sprintf("setting replication factor of volume [%v] to 3", vol.Name))
-		err := Inst().V.SetReplicationFactor(vol, 3, nil, nil, false)
-		if err != nil {
-			return err
-		}
+	var runTimeStat string
+	runTimeStat = ""
+	for _, v := range volDetails.RuntimeState {
+		log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
+		runTimeStat = v.GetRuntimeState()["RuntimeState"]
 	}
-	return nil
-}
-
-func WaitForReplicationComplete(vol *volume.Volume, replFactor int64) error {
-	replicationUpdateTimeout := 60 * time.Minute
-	err := Inst().V.WaitForReplicationToComplete(vol, replFactor, replicationUpdateTimeout)
-	if err != nil {
-		return err
-	}
-	return nil
+	return runTimeStat, nil
 }
 
 var _ = Describe("{FordRunFlatResync}", func() {
@@ -329,6 +312,20 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		// Wait for some more time for nodes to get settled
 		time.Sleep(15 * time.Minute)
+
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				log.FailOnError(err, "failed to get volumes from the contexts")
+			}
+
+			// This is done to make sure that volumes should have replica on nodes from both zones
+			for _, eachVol := range vols {
+				volStat, err := getVolumeRuntimeState(eachVol)
+				log.FailOnError(err, "Failed to get Run time stat of the volume")
+				log.InfoD("Volume runtimeState of Volume [%v] is [%v]", eachVol, volStat)
+			}
+		}
 
 		// Wait for some time for system to be up and all nodes drivers up and running
 		for _, each := range node.GetStorageNodes() {
