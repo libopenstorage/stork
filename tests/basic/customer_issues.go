@@ -130,7 +130,7 @@ func getVolumeRuntimeState(vol string) (string, error) {
 	var runTimeStat string
 	runTimeStat = ""
 	for _, v := range volDetails.RuntimeState {
-		log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
+		log.InfoD("RuntimeState is in state %V", v.GetRuntimeState())
 		runTimeStat = v.GetRuntimeState()["RuntimeState"]
 	}
 	return runTimeStat, nil
@@ -294,6 +294,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		// Reverting back zone2 iptables set
 		revertZone2()
+
+		log.InfoD("Sleeping for 20 minutes before resetting iptables rules on zone2")
+		time.Sleep(20 * time.Minute)
 
 		// Reset iptables rules on vms under zone2
 		err = blockIptableRules(zone2, zone1, false)
