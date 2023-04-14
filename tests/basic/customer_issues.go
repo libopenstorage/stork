@@ -283,7 +283,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		log.FailOnError(err, "Failed to revert IPtable Rules on Zone1")
 
 		log.InfoD("Sleeping for 20 minutes for IO to generate on volumes")
-		time.Sleep(20 * time.Minute)
+		time.Sleep(10 * time.Minute)
 
 		log.InfoD("blocking iptables from all nodes present in zone2 from accessing zone1")
 		err = blockIptableRules(zone2, zone1, false)
@@ -296,7 +296,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		revertZone2()
 
 		log.InfoD("Sleeping for 20 minutes before resetting iptables rules on zone2")
-		time.Sleep(20 * time.Minute)
+		time.Sleep(10 * time.Minute)
 
 		// Reset iptables rules on vms under zone2
 		err = blockIptableRules(zone2, zone1, false)
@@ -310,7 +310,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		// Wait for some time before checking for file system goes back online
 		log.Infof("Waiting for 30 minutes before checking for file system goes back online")
-		time.Sleep(30 * time.Minute)
+		time.Sleep(15 * time.Minute)
 
 		// Revert back the iptables rules from the kvdb node
 		log.FailOnError(blockIptableRules(kvdb, zone1, true), "Reverting back IPTable rules on kvdb node failed")
