@@ -282,9 +282,10 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		err = blockIptableRules(zone1, zone2, false)
 		log.FailOnError(err, "Failed to revert IPtable Rules on Zone1")
 
+		log.InfoD("Sleeping for 20 minutes for IO to generate on volumes")
 		time.Sleep(20 * time.Minute)
 
-		log.InfoD("blocking iptables from all nodes present in zone2 from accessing zone1 ")
+		log.InfoD("blocking iptables from all nodes present in zone2 from accessing zone1")
 		err = blockIptableRules(zone2, zone1, false)
 		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
 
@@ -324,7 +325,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		// This is done to make sure that volumes should have replica on nodes from both zones
 		for _, eachVol := range volumesPresent {
-			volStat, err := getVolumeRuntimeState(eachVol.Name)
+			volStat, err := getVolumeRuntimeState(eachVol.ID)
 			log.FailOnError(err, "Failed to get Run time stat of the volume")
 			log.InfoD("Volume runtimeState of Volume [%v] is [%v]", eachVol, volStat)
 		}

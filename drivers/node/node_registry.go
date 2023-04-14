@@ -77,7 +77,7 @@ func GetMasterNodes() []Node {
 	return nodeList
 }
 
-// IsMasterNode returns true is node is Masternode
+// IsMasterNode returns true if node is a Masternode
 func IsMasterNode(n Node) bool {
 	for _, each := range GetMasterNodes() {
 		if each.uuid == n.uuid {
