@@ -122,17 +122,16 @@ func (c *cmdExecutor) Wait(timeout time.Duration) error {
 		c.podNamespace, c.podName, cmdCheckBackoff, c.statusFile)
 
 	statusCmd := fmt.Sprintf(cmdStatusFormat, c.statusFile)
-	cmdCheckBackoff.Step()
 	if err := wait.ExponentialBackoff(cmdCheckBackoff, func() (bool, error) {
-		// todo include some additional info about the number of attempts if possible
-		logrus.Infof("checking status on pod: [%s] %s",
-			c.podNamespace, c.podName)
 		_, err := core.Instance().RunCommandInPod([]string{"/bin/sh", "-c", statusCmd},
 			c.podName, c.container, c.podNamespace)
 		if err != nil {
+			logrus.Infof("checked status on pod: [%s] %s with result: job not finished yet, will retry later",
+				c.podNamespace, c.podName)
 			return false, nil
 		}
-
+		logrus.Infof("checked status on pod: [%s] %s with result: job finished",
+			c.podNamespace, c.podName)
 		return true, nil
 	}); err != nil {
 		err = fmt.Errorf("status command: %s failed to run in pod: [%s] %s due to %v",
