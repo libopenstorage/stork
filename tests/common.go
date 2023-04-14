@@ -6043,7 +6043,7 @@ func VerifyVolumeStatusOnline(vol *volume.Volume) error {
 	return nil
 }
 
-type kvdbNode struct {
+type KvdbNode struct {
 	PeerUrls   []string `json:"PeerUrls"`
 	ClientUrls []string `json:"ClientUrls"`
 	Leader     bool     `json:"Leader"`
@@ -6052,18 +6052,17 @@ type kvdbNode struct {
 	ID         string   `json:"ID"`
 }
 
-type KvdbNodes []map[string]kvdbNode
-
 // GetAllKvdbNodes returns list of all kvdb nodes present in the cluster
-func GetAllKvdbNodes() ([]kvdbNode, error) {
+func GetAllKvdbNodes() ([]KvdbNode, error) {
+	type kvdbNodes []map[string]KvdbNode
 	storageNodes := node.GetStorageNodes()
 	randomIndex := rand.Intn(len(storageNodes))
 	randomNode := storageNodes[randomIndex]
 
-	jsonConvert := func(jsonString string) ([]kvdbNode, error) {
-		var nodes KvdbNodes
-		var kvdb kvdbNode
-		var kvdbNodes []kvdbNode
+	jsonConvert := func(jsonString string) ([]KvdbNode, error) {
+		var nodes kvdbNodes
+		var kvdb KvdbNode
+		var kvdbNodes []KvdbNode
 
 		err := json.Unmarshal([]byte(fmt.Sprintf("[%s]", jsonString)), &nodes)
 		if err != nil {
@@ -6083,7 +6082,7 @@ func GetAllKvdbNodes() ([]kvdbNode, error) {
 		return kvdbNodes, nil
 	}
 
-	var allKvdbNodes []kvdbNode
+	var allKvdbNodes []KvdbNode
 	// Execute the command and check the alerts of type POOL
 	command := "pxctl service kvdb members list -j"
 	out, err := Inst().N.RunCommandWithNoRetry(randomNode, command, node.ConnectionOpts{
