@@ -1443,7 +1443,7 @@ func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, inst
 }
 
 // Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
-func DeletePvandPVCs(resourceName string) error {
+func DeletePvandPVCs(resourceName string, delPod bool) error {
 	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
 	pv_list, err := k8sCore.GetPersistentVolumes()
 	if err != nil {
@@ -1454,9 +1454,9 @@ func DeletePvandPVCs(resourceName string) error {
 	}
 	for _, vol := range pv_list.Items {
 		claimName := vol.Spec.ClaimRef.Name
-		if strings.Contains(claimName, resourceName) {
-			log.Debugf("claim :%s is identified", claimName)
-			err := CheckAndDeleteIndependentPV(vol.Name)
+		flag := strings.Contains(claimName, resourceName)
+		if flag {
+			err := CheckAndDeleteIndependentPV(vol.Name, delPod)
 			if err != nil {
 				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", err)
 			}
@@ -1467,7 +1467,7 @@ func DeletePvandPVCs(resourceName string) error {
 }
 
 // Check if PV and associated PVC is still present. If yes then delete both of them
-func CheckAndDeleteIndependentPV(name string) error {
+func CheckAndDeleteIndependentPV(name string, delPod bool) error {
 	pv_check, err := k8sCore.GetPersistentVolume(name)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -1489,10 +1489,13 @@ func CheckAndDeleteIndependentPV(name string) error {
 			for _, pod := range podList.Items {
 				newPods = append(newPods, pod)
 			}
-			err = DeletePods(newPods)
-			if err != nil {
-				return err
+			if delPod {
+				err = DeletePods(newPods)
+				if err != nil {
+					return err
+				}
 			}
+
 			// Delete PVC from figured out namespace
 			err = k8sCore.DeletePersistentVolumeClaim(pvc_name, namespace)
 			if err != nil {
@@ -1510,7 +1513,7 @@ func CheckAndDeleteIndependentPV(name string) error {
 
 // Create a Persistent Vol of 5G manual Storage Class
 func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
-	err := CheckAndDeleteIndependentPV(name)
+	err := CheckAndDeleteIndependentPV(name, true)
 	if err != nil {
 		return nil, err
 	}
