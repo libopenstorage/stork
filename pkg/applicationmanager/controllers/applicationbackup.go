@@ -1764,6 +1764,10 @@ func (a *ApplicationBackupController) backupResources(
 			case kdmpapi.ResourceExportStatusInProgress:
 				backup.Status.LastUpdateTimestamp = metav1.Now()
 			}
+			err = a.client.Update(context.TODO(), backup)
+			if err != nil {
+				return err
+			}
 			return nil
 		}
 	}
