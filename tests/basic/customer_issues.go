@@ -129,6 +129,7 @@ func getVolumeRuntimeState(vol string) (string, error) {
 	}
 	var runTimeStat string
 	runTimeStat = ""
+	log.InfoD("VolumeDetails [%v]", volDetails)
 	for _, v := range volDetails.RuntimeState {
 		log.InfoD("RuntimeState is in state %v", v)
 		runTimeStat = v.GetRuntimeState()["RuntimeState"]
