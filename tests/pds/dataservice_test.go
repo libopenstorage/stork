@@ -559,17 +559,19 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 			Step("Running Workloads before scaling up of dataservices ", func() {
 				for ds, deployment := range deployments {
-					log.InfoD("Running Workloads on DataService %v ", ds.Name)
-					var params pdslib.WorkloadGenerationParams
-					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
-					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
-					if dep == nil {
-						generateWorkloads[ds.Name] = pod.Name
-					} else {
-						generateWorkloads[ds.Name] = dep.Name
-					}
-					for dsName, workloadContainer := range generateWorkloads {
-						log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+						log.InfoD("Running Workloads on DataService %v ", ds.Name)
+						var params pdslib.WorkloadGenerationParams
+						pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+						log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+						if dep == nil {
+							generateWorkloads[ds.Name] = pod.Name
+						} else {
+							generateWorkloads[ds.Name] = dep.Name
+						}
+						for dsName, workloadContainer := range generateWorkloads {
+							log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+						}
 					}
 				}
 			})
