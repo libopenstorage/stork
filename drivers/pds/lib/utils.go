@@ -707,7 +707,7 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 // WaitForPDSDeploymentToBeDown Checks for the deployment health status(Down/Degraded)
 func WaitForPDSDeploymentToBeDown(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
 	// validate the deployments in pds
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+	err = wait.PollImmediate(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
@@ -733,7 +733,7 @@ func WaitForPDSDeploymentToBeDown(deployment *pds.ModelsDeployment, maxtimeInter
 // WaitForPDSDeploymentToBeUp Checks for the any given deployment health status
 func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterval time.Duration, timeout time.Duration) error {
 	// validate the deployments in pds
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+	err = wait.PollImmediate(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		if err != nil {
 			return false, fmt.Errorf("get deployment status is failing with error: %v", err)
@@ -806,7 +806,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 // Function to check for set amount of Replica Pods
 func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
-	conditionError = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+	conditionError := wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
@@ -826,6 +826,7 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	if conditionError != nil {
 		if ResiliencyFlag {
 			ResiliencyCondition <- false
+			CapturedErrors <- conditionError
 		}
 	}
 	return conditionError
@@ -1437,6 +1438,30 @@ func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, inst
 	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
 	if err != nil {
 		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
+	}
+	return nil
+}
+
+// Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
+func DeletePvandPVCs(resourceName string) error {
+	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
+	pv_list, err := k8sCore.GetPersistentVolumes()
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
+		}
+		return err
+	}
+	for _, vol := range pv_list.Items {
+		claimName := vol.Spec.ClaimRef.Name
+		if strings.Contains(claimName, resourceName) {
+			log.Debugf("claim :%s is identified", claimName)
+			err := CheckAndDeleteIndependentPV(vol.Name)
+			if err != nil {
+				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", err)
+			}
+			log.Debugf("The PV : %v and its associated PVC : %v is deleted !", vol.Name, claimName)
+		}
 	}
 	return nil
 }

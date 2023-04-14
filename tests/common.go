@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
 	"errors"
@@ -77,6 +78,8 @@ import (
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
+	"github.com/portworx/torpedo/drivers/node/ssh"
+
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
@@ -328,6 +331,7 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
+	CurrentClusterConfigPath             = ""
 )
 
 var (
@@ -717,6 +721,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		Step("validate mount options for pure volumes", func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
 	})
@@ -1237,6 +1247,43 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 
 }
 
+// ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing file system options check for the given volume
+func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	vols, err := Inst().S.GetVolumes(ctx)
+	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+	for _, v := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
+		if err != nil {
+			err = fmt.Errorf("Failed to get pvc for volume %s. Err: %v", v, err)
+			processError(err, errChan...)
+		}
+
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			err = fmt.Errorf("Error Occured while getting storage class for pvc %s. Err: %v", pvcObj, err)
+			processError(err, errChan...)
+		}
+
+		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+		if err != nil {
+			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+			processError(err, errChan...)
+		}
+		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+			if ok {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+			} else {
+				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+			}
+		} else {
+			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+		}
+	}
+}
+
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
 		return errUnexpectedSizeChangeAfterPureIO
@@ -1470,35 +1517,35 @@ func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
 func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
 	log.Infof("Creating ScheduleOptions")
 
-		//if not hyper converged set up deploy apps only on storageless nodes
-		if !Inst().IsHyperConverged {
+	//if not hyper converged set up deploy apps only on storageless nodes
+	if !Inst().IsHyperConverged {
 		var err error
 
 		log.Infof("ScheduleOptions: Scheduling apps only on storageless nodes")
-			storagelessNodes := node.GetStorageLessNodes()
-			if len(storagelessNodes) == 0 {
+		storagelessNodes := node.GetStorageLessNodes()
+		if len(storagelessNodes) == 0 {
 			log.Info("ScheduleOptions: No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
-				Inst().IsHyperConverged = true
-			}
-			for _, storagelessNode := range storagelessNodes {
-				if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
+			Inst().IsHyperConverged = true
+		}
+		for _, storagelessNode := range storagelessNodes {
+			if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
 				err = fmt.Errorf("ScheduleOptions: failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
-						"storage", "NO", storagelessNode.Name, err)
-					processError(err, errChan...)
-				}
+					"storage", "NO", storagelessNode.Name, err)
+				processError(err, errChan...)
 			}
-			storageLessNodeLabels := make(map[string]string)
-			storageLessNodeLabels["storage"] = "NO"
+		}
+		storageLessNodeLabels := make(map[string]string)
+		storageLessNodeLabels["storage"] = "NO"
 
 		options := scheduler.ScheduleOptions{
-				AppKeys:            Inst().AppList,
-				StorageProvisioner: Inst().Provisioner,
-				Nodes:              storagelessNodes,
-				Labels:             storageLessNodeLabels,
-			}
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+			Nodes:              storagelessNodes,
+			Labels:             storageLessNodeLabels,
+		}
 		return options
 
-		} else {
+	} else {
 		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
@@ -2467,19 +2514,46 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 
 // SetClusterContext sets context to clusterConfigPath
 func SetClusterContext(clusterConfigPath string) error {
+	// an empty string indicates the default kubeconfig.
+	// This variable is used to clearly indicate that in logs
+	var clusterConfigPathForLog string
+	if clusterConfigPath == "" {
+		clusterConfigPathForLog = "default"
+	} else {
+		clusterConfigPathForLog = clusterConfigPath
+	}
+
+	if clusterConfigPath == CurrentClusterConfigPath {
+		log.InfoD("Switching context: The context is already [%s]", clusterConfigPathForLog)
+		return nil
+	}
+
+	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. Set Config Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
+
 	err = Inst().S.RefreshNodeRegistry()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
 	}
 
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
+
+	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
+		err = ssh.RefreshDriver(sshNodeDriver)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	}
+
+	CurrentClusterConfigPath = clusterConfigPath
+	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
+
 	return nil
 }
 
@@ -2489,15 +2563,16 @@ func SetSourceKubeConfig() error {
 	if err != nil {
 		return err
 	}
-	SetClusterContext(sourceClusterConfigPath)
-	return nil
+	return SetClusterContext(sourceClusterConfigPath)
 }
 
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
-func SetDestinationKubeConfig() {
+func SetDestinationKubeConfig() error {
 	destClusterConfigPath, err := GetDestinationClusterConfigPath()
-	expect(err).NotTo(haveOccurred())
-	SetClusterContext(destClusterConfigPath)
+	if err != nil {
+		return err
+	}
+	return SetClusterContext(destClusterConfigPath)
 }
 
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
@@ -2505,14 +2580,20 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 	var kubeConfigPath string
 	var err error
 	if reverse {
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 		// get the kubeconfig path to get the correct pairing info
 		kubeConfigPath, err = GetSourceClusterConfigPath()
 		if err != nil {
 			return err
 		}
 	} else {
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 		// get the kubeconfig path to get the correct pairing info
 		kubeConfigPath, err = GetDestinationClusterConfigPath()
 		if err != nil {
@@ -2539,9 +2620,15 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 
 	// Set the correct cluster context to apply the cluster pair spec
 	if reverse {
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 	} else {
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	err = Inst().S.AddTasks(ctx,
@@ -2599,10 +2686,16 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 
 	if resetConfig {
 		// storkctl generate command sets sched-ops to source cluster config
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 	} else {
 		// Change kubeconfig to destination cluster config
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	if skipStorage {
@@ -4174,8 +4267,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 // DumpKubeconfigs gets kubeconfigs from configmap
 func DumpKubeconfigs(kubeconfigList []string) {
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
+	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
 
 // Inst returns the Torpedo instances
@@ -4380,8 +4472,8 @@ func ParseFlags() {
 		apl, err := splitCsv(repl1AppsCSV)
 		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
 		repl1AppList = append(repl1AppList, apl...)
-		log.Infof("volume repl 1  apps : %+v", secureAppList)
-		//Adding repl 1 apps as part of app list for deployment
+		log.Infof("volume repl 1 apps : %+v", secureAppList)
+		//Adding repl-1 apps as part of app list for deployment
 		appList = append(appList, repl1AppList...)
 	}
 
@@ -4573,8 +4665,13 @@ func printFlags() {
 
 func isDashboardReachable() bool {
 	timeout := 15 * time.Second
-	client := http.Client{
+	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 	aboutURL := strings.Replace(aetosutil.DashBoardBaseURL, "dashboard", "datamodel/about", -1)
 	log.Infof("Checking URL: %s", aboutURL)
@@ -6316,4 +6413,13 @@ func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*vo
 		}
 	}
 	return volumes, nil
+}
+
+// DoRetryWithTimeoutWithGinkgoRecover calls `task.DoRetryWithTimeout` along with `ginkgo.GinkgoRecover()`, to be used in callbacks with panics or ginkgo assertions
+func DoRetryWithTimeoutWithGinkgoRecover(taskFunc func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
+	taskFuncWithGinkgoRecover := func() (interface{}, bool, error) {
+		defer ginkgo.GinkgoRecover()
+		return taskFunc()
+	}
+	return task.DoRetryWithTimeout(taskFuncWithGinkgoRecover, timeout, timeBeforeRetry)
 }
