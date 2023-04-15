@@ -175,10 +175,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			allNodes = append(allNodes, each)
 		}
 
-		for _, each := range node.GetStorageLessNodes() {
-			allNodes = append(allNodes, each)
-		}
-
 		// Verify total nodes available is 10
 		dash.VerifyFatal(len(allNodes) >= 10, true, "required minimum of 10 nodes for the test to run")
 
@@ -196,10 +192,8 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		for _, ctx := range contexts {
 			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
-				log.FailOnError(err, "failed to get volumes from the contexts")
-			}
-
+			log.FailOnError(err, "failed to get volumes from the contexts")
+			
 			// This is done to make sure that volumes should have replica on nodes from both zones
 			for _, eachVol := range vols {
 				volumesPresent = append(volumesPresent, eachVol)
