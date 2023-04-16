@@ -236,10 +236,15 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		zone1StorageEle, zone2StorageEle := getRandomNumbersFromArrLength(len(allStorageExceptKVDB), len(allStorageExceptKVDB)/2)
 		for _, each := range zone1StorageEle {
-			zone1 = append(zone1, allStorageExceptKVDB[each])
+			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
+				zone1 = append(zone1, allStorageExceptKVDB[each])
+			}
+
 		}
 		for _, each := range zone2StorageEle {
-			zone2 = append(zone2, allStorageExceptKVDB[each])
+			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
+				zone2 = append(zone2, allStorageExceptKVDB[each])
+			}
 		}
 
 		zone1StorageLessEle, zone2StorageLessEle := getRandomNumbersFromArrLength(len(nodesSplit2), len(nodesSplit2)/2)
