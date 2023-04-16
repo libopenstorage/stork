@@ -293,13 +293,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// Reverting back zone2 iptables set
 		revertZone2()
 
-		// This is done to make sure that volumes should have replica on nodes from both zones
-		for _, eachVol := range volumesPresent {
-			volStat, _ := getVolumeRuntimeState(eachVol.ID)
-			//log.FailOnError(err, "Failed to get Run time stat of the volume")
-			log.InfoD("Volume runtimeState of Volume [%v] is [%v]", eachVol, volStat)
-		}
-
 		// Reset iptables rules on vms under zone2
 		err = blockIptableRules(zone2, zone1, false)
 		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
