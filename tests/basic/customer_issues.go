@@ -129,9 +129,8 @@ func getVolumeRuntimeState(vol string) (string, error) {
 	}
 	var runTimeStat string
 	runTimeStat = ""
-	log.InfoD("VolumeDetails [%v]", volDetails)
+	log.Debugf("VolumeDetails [%v]", volDetails)
 	for _, v := range volDetails.RuntimeState {
-		log.InfoD("RuntimeState is in state %v", v)
 		runTimeStat = v.GetRuntimeState()["RuntimeState"]
 	}
 	return runTimeStat, nil
@@ -311,14 +310,16 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		// Block IPtable rules on the kvdb node to all the nodes in zone 1
 		kvdb := []node.Node{getKvdbLeaderNode}
-		log.FailOnError(blockIptableRules(kvdb, zone1, false), "Set IPTable rules on kvdb node failed")
+		log.FailOnError(blockIptableRules(kvdb, zone1, false),
+			"Set IPTable rules on kvdb node failed")
 
 		// Wait for some time before checking for file system goes back online
 		log.Infof("Waiting for 10 minutes before checking for file system goes back online")
 		time.Sleep(10 * time.Minute)
 
 		// Revert back the iptables rules from the kvdb node
-		log.FailOnError(blockIptableRules(kvdb, zone1, true), "Reverting back IPTable rules on kvdb node failed")
+		log.FailOnError(blockIptableRules(kvdb, zone1, true),
+			"Reverting back IPTable rules on kvdb node failed")
 
 		// Flushing iptables rules on all the nodes present in the cluster before making sure that nodes to come up online
 		flushiptables()
