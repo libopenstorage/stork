@@ -308,13 +308,14 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		log.InfoD("Killing KVDB PID from KVDB Master Node")
 		log.FailOnError(KillKvdbNode(getKvdbLeaderNode), "failed to Kill Kvdb Node")
+
 		// Block IPtable rules on the kvdb node to all the nodes in zone 1
 		kvdb := []node.Node{getKvdbLeaderNode}
 		log.FailOnError(blockIptableRules(kvdb, zone1, false), "Set IPTable rules on kvdb node failed")
 
 		// Wait for some time before checking for file system goes back online
-		log.Infof("Waiting for 30 minutes before checking for file system goes back online")
-		time.Sleep(15 * time.Minute)
+		log.Infof("Waiting for 10 minutes before checking for file system goes back online")
+		time.Sleep(10 * time.Minute)
 
 		// Revert back the iptables rules from the kvdb node
 		log.FailOnError(blockIptableRules(kvdb, zone1, true), "Reverting back IPTable rules on kvdb node failed")
