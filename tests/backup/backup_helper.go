@@ -2211,7 +2211,7 @@ func CreateBackupWithNamespaceLabelWithValidation(ctx context.Context, backupNam
 
 // CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label and checks for success
 func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context.Context) error {
-	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, schPolicyName, schPolicyUID, ctx)
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
 	if err != nil {
 		return err
 	}
@@ -2416,14 +2416,15 @@ func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, li
 	}
 	namespaceList := resp.GetBackup().GetNamespaces()
 	log.Infof("The list of namespaces backed up are %v", namespaceList)
-	if !AreSlicesEqual(namespaceList, listOfLabelledNamespaces) {
+	if !AreStringSlicesEqual(namespaceList, listOfLabelledNamespaces) {
 		return fmt.Errorf("list of namespaces backed up are %v which is not same as expected %v", namespaceList, listOfLabelledNamespaces)
 	}
 	backupLabels := resp.GetBackup().GetNsLabelSelectors()
 	log.Infof("The list of labels applied to backup are %v", backupLabels)
 	expectedLabels := strings.Split(namespaceLabel, ",")
 	actualLabels := strings.Split(backupLabels, ",")
-	if !AreSlicesEqual(expectedLabels, actualLabels) {
+	AreStringSlicesEqual(expectedLabels, actualLabels)
+	if !AreStringSlicesEqual(expectedLabels, actualLabels) {
 		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", actualLabels, expectedLabels)
 	}
 	return nil
@@ -2662,6 +2663,21 @@ func AreSlicesEqual(slice1, slice2 interface{}) bool {
 	return true
 }
 
+// AreStringSlicesEqual compares two slices of string
+func AreStringSlicesEqual(slice1 []string, slice2 []string) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	sort.Sort(sort.StringSlice(slice1))
+	sort.Sort(sort.StringSlice(slice2))
+	for i, v := range slice1 {
+		if v != slice2[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // GetNextScheduleBackupName returns the upcoming schedule backup after it has been initiated
 func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
 	var nextScheduleBackupName string
@@ -2715,6 +2731,37 @@ func GetNextCompletedScheduleBackupNameWithValidation(ctx context.Context, sched
 	if err != nil {
 		return "", err
 	}
+	return nextScheduleBackupName, nil
+}
+
+// GetNextPeriodicScheduleBackupName returns next periodic schedule backup name with the given interval
+func GetNextPeriodicScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
+	var nextScheduleBackupName string
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	currentScheduleBackupCount := len(allScheduleBackupNames)
+	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		return ordinalScheduleBackupName, false, nil
+	}
+	log.InfoD("Waiting for %v minutes for the next schedule backup to be triggered", scheduleInterval)
+	time.Sleep(scheduleInterval * time.Minute)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
+	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	nextScheduleBackupName = nextScheduleBackup.(string)
 	return nextScheduleBackupName, nil
 }
 
