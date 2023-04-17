@@ -122,14 +122,17 @@ func main() {
 	}
 
 	executors := make([]cmdexecutor.Executor, 0)
+	stdoutChans := make(map[string]chan string)
 	errChans := make(map[string]chan error)
 	// Start the commands
 	for _, pod := range podNames {
 		executor := cmdexecutor.Init(pod.Namespace, pod.Name, podContainer, command, taskID)
+		stdoutChan := make(chan string)
 		errChan := make(chan error)
 		errChans[createPodStringFromNameAndNamespace(pod.Namespace, pod.Name)] = errChan
+		stdoutChans[createPodStringFromNameAndNamespace(pod.Namespace, pod.Name)] = stdoutChan
 
-		err = executor.Start(errChan)
+		err = executor.Start(stdoutChan, errChan)
 		if err != nil {
 			msg := fmt.Sprintf("failed to run command in pod: [%s] %s due to: %v", pod.Namespace, pod.Name, err)
 			persistStatusErr := status.Persist(hostname, msg)
@@ -148,6 +151,16 @@ func main() {
 		go func(c chan error) {
 			for err := range c {
 				aggErrorChan <- err
+			}
+		}(ch)
+	}
+
+	// Create an aggregrate channel for all stdout channels for above executors
+	aggStdoutChan := make(chan string)
+	for _, ch := range stdoutChans {
+		go func(c chan string) {
+			for stdout := range c {
+				aggStdoutChan <- stdout
 			}
 		}(ch)
 	}
@@ -184,6 +197,8 @@ Loop:
 			}
 
 			logrus.Fatalf(err.Error())
+		case stdout := <-aggStdoutChan:
+			logrus.Info(stdout)
 		case isDone := <-done:
 			if isDone {
 				// as each executor is done, track how many are done
