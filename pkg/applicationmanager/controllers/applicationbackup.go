@@ -1451,6 +1451,21 @@ func (a *ApplicationBackupController) backupResources(
 
 	// Don't modify resources if mentioned explicitly in specs
 	resourceCollectorOpts := resourcecollector.Options{}
+	resourceCollectorOpts.ResourceCountLimit = k8sutils.DefaultResourceCountLimit
+	// Read configMap for any user provided value. this will be used in to List call of getResource eventually.
+	resourceCountLimitString, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.ResourceCountLimitKeyName)
+	if err != nil {
+		logrus.Warnf("error in reading %v cm for the key %v, switching to default value passed to GetResource API: %v",
+			k8sutils.StorkControllerConfigMapName, k8sutils.ResourceCountLimitKeyName, err)
+	} else {
+		if len(resourceCountLimitString) != 0 {
+			resourceCollectorOpts.ResourceCountLimit, err = strconv.ParseInt(resourceCountLimitString, 10, 64)
+			if err != nil {
+				logrus.Warnf("error in conversion of resourceCountLimit: %v", err)
+				resourceCollectorOpts.ResourceCountLimit = k8sutils.DefaultResourceCountLimit
+			}
+		}
+	}
 	if backup.Spec.SkipServiceUpdate {
 		resourceCollectorOpts.SkipServices = true
 	}
@@ -1580,6 +1595,7 @@ func (a *ApplicationBackupController) backupResources(
 			if err != nil {
 				log.ApplicationBackupLog(backup).Errorf("failed to read config map %v's key %v, setting default value of 1MB", k8sutils.StorkControllerConfigMapName,
 					k8sutils.LargeResourceSizeLimitName)
+				largeResourceSizeLimit = k8sutils.LargeResourceSizeLimitDefault
 			}
 		}
 

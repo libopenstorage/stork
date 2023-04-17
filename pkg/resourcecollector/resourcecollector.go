@@ -93,6 +93,11 @@ type Options struct {
 	// resource collector to perform transformations on certain k8s resources.
 	// TODO: temporary change required to handle project related transformations
 	RancherProjectMappings map[string]string
+	// limit ensures the k8s APIs will use this value in ListOption while fetching
+	// the resources from cluster. In case of Large number of resources with substantial
+	// content in them, the etcd Server times-out, hence limit will be used to reduce
+	// the number of resources fetched in a single call.
+	ResourceCountLimit int64
 }
 
 // Objects Collection of objects
@@ -307,9 +312,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		default:
 			selectors = labels.Set(labelSelectors).String()
 		}
-		objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
-			LabelSelector: selectors,
-		})
+		objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error listing objects for %v: %v", gvr, err)
 		}
@@ -449,9 +452,7 @@ func (r *ResourceCollector) GetResources(
 				default:
 					selectors = labels.Set(labelSelectors).String()
 				}
-				objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
-					LabelSelector: selectors,
-				})
+				objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
 				if err != nil {
 					if apierrors.IsForbidden(err) {
 						continue
@@ -521,6 +522,38 @@ func (r *ResourceCollector) GetResources(
 	}
 
 	return allObjects, pvcsWithOwnerReference, nil
+}
+
+// gatherResourceInChunks() collects all the resources present per ns or resource types.
+// It does it in batch of 500 unless specified by user via a config-map. This function
+// primarily helps in avoiding server timeout error when the number of resource or size
+// of it large.
+func gatherResourceInChunks(dynamicClient dynamic.ResourceInterface, opts Options, selectors string) (*unstructured.UnstructuredList, error) {
+	var err error
+	fn := "gatherResourceInChunks"
+	objectsList := &unstructured.UnstructuredList{}
+	var temp *unstructured.UnstructuredList
+	listOps := metav1.ListOptions{
+		LabelSelector: selectors,
+		Limit:         opts.ResourceCountLimit,
+	}
+	for {
+		temp, err = dynamicClient.List(context.TODO(), listOps)
+		if err != nil {
+			logrus.Warnf("%v: failed to list resources", fn)
+			return nil, err
+		}
+		if len(temp.GetContinue()) != 0 {
+			listOps.Continue = temp.GetContinue()
+			objectsList.Items = append(objectsList.Items, temp.Items...)
+			continue
+		} else {
+			// Append the final set of data left...
+			objectsList.Items = append(objectsList.Items, temp.Items...)
+			break
+		}
+	}
+	return objectsList, err
 }
 
 // IsNsPresentInIncludeResource checks if a given ns is present in the IncludeResource object
