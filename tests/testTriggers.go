@@ -383,9 +383,14 @@ const (
 	KVDBFailover = "kvdbFailover"
 	// ValidateDeviceMapper validate device mapper cleanup
 	ValidateDeviceMapper = "validateDeviceMapper"
+	// MetroDR runs Metro DR between two clusters
+	MetroDR = "metrodr"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
+	ConfluentAsyncDR = "ConfluentAsyncDR"
 	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
+
 	AsyncDRVolumeOnly = "asyncdrvolumeonly"
 	// stork application backup runs stork backups for applications
 	StorkApplicationBackup = "storkapplicationbackup"
@@ -5736,6 +5741,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		migrationNamespaces   []string
 		taskNamePrefix        = "async-dr-mig"
 		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
 		includeResourcesFlag  = true
 		startApplicationsFlag = false
 	)
@@ -5780,7 +5786,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -5793,8 +5799,116 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		}
+	}
+	updateMetrics(*event)
+}
+
+func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(MetroDR)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Metro DR test triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: MetroDR,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[MetroDR]
+	var (
+		migrationNamespaces      []string
+		taskNamePrefix           = "metro-dr-mig"
+		allMigrations            []*storkapi.Migration
+		includeVolumesFlag       = false
+		includeResourcesFlag     = true
+		startApplicationsFlag    = false
+		clusterDomainWaitTimeout = 10 * time.Minute
+		defaultWaitInterval      = 10 * time.Second
+	)
+
+	listCdsTask := func() (interface{}, bool, error) {
+		// Fetch the cluster domains
+		cdses, err := storkops.Instance().ListClusterDomainStatuses()
+		if err != nil || len(cdses.Items) == 0 {
+			log.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		cds := cdses.Items[0]
+		if len(cds.Status.ClusterDomainInfos) == 0 {
+			log.Infof("Found 0 cluster domain info objects in cluster domain status.")
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		return "", false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to get cluster domains status, Please check metro DR setup"))
+		return
+	}
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			return
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], true, true, defaultClusterPairDir, false)
+			})
+		}
+
+		log.Infof("Migration Namespaces: %v", migrationNamespaces)
+
+	})
+
+	time.Sleep(5 * time.Minute)
+	log.InfoD("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := metromigrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
-			UpdateOutcome(event, err)
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 		}
 	}
 	updateMetrics(*event)
@@ -5826,6 +5940,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		migrationNamespaces   []string
 		taskNamePrefix        = "adr-vonly"
 		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
 		includeResourcesFlag  = false
 		startApplicationsFlag = false
 	)
@@ -5870,7 +5985,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -6423,6 +6538,157 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 			}
 		}
 		updateMetrics(*event)
+	})
+}
+
+func TriggerConfluentAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(ConfluentAsyncDR)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Confluent CRD Async DR triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ConfluentAsyncDR,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[ConfluentAsyncDR]
+	var (
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = true
+		ns_name               = "confluent"
+		repoName              = "confluentinc"
+		operatorName          = "confluent-operator"
+		migrationList         []*storkapi.Migration
+		app_url               = "https://raw.githubusercontent.com/confluentinc/confluent-kubernetes-examples/master/quickstart-deploy/confluent-platform.yaml"
+	)
+
+	Step(fmt.Sprint("Export kubeconfigs"), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			return
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			return
+		}
+	})
+	Step(fmt.Sprintf("Deploy applications with %v chaos level", chaosLevel), func() {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			//taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			ns, err := core.Instance().GetNamespace(ns_name)
+			if err != nil {
+				log.InfoD("Creating namespace %v", ns_name)
+				nsSpec := &v1.Namespace{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: ns_name,
+					},
+				}
+				ns, err = core.Instance().CreateNamespace(nsSpec)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Failed to create namespace, err: %v", err))
+					return
+				}
+
+			}
+			log.InfoD("Pods Creation Started")
+			pods_created, err := asyncdr.HelmRepoAddandCrInstall(repoName, "https://packages.confluent.io/helm", ns.Name, operatorName, fmt.Sprintf("%v/confluent-for-kubernetes", repoName), app_url)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("Failed to create app pods, err: %v", err))
+				return
+			}
+			pods_created_len := len(pods_created.Items)
+			log.InfoD("Num of Pods on source: %v", pods_created_len)
+			expected_kafka_crd_list := []string{"clusterlinks.platform.confluent.io", "confluentrolebindings.platform.confluent.io", "connectors.platform.confluent.io", "connects.platform.confluent.io",
+				"controlcenters.platform.confluent.io", "kafkarestclasses.platform.confluent.io", "kafkarestproxies.platform.confluent.io", "kafkas.platform.confluent.io",
+				"kafkatopics.platform.confluent.io", "ksqldbs.platform.confluent.io", "schemaexporters.platform.confluent.io", "schemaregistries.platform.confluent.io", "schemas.platform.confluent.io", "zookeepers.platform.confluent.io"}
+			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("Failed to get cluster config path: %v", err))
+				return
+			}
+			err = asyncdr.ValidateCRD(expected_kafka_crd_list, sourceClusterConfigPath)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("CRD validation failed on source, err: %v", err))
+				return
+			}
+			options := scheduler.ScheduleOptions{Namespace: ns.Name}
+			var emptyCtx = &scheduler.Context{
+				UID:             "",
+				ScheduleOptions: options,
+				App: &spec.AppSpec{
+					Key:      "",
+					SpecList: []interface{}{},
+				}}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				log.InfoD("ClusterPairing Started")
+				ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
+			})
+			Step("Start migration and validate", func() {
+				log.InfoD("Migration Started")
+				mig_name := migrationKey + "confluent-" + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+				mig, err := asyncdr.CreateMigration(mig_name, ns.Name, asyncdr.DefaultClusterPairName, ns.Name, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Failed to create migration: %v", err))
+					return
+				}
+				migrationList = append(migrationList, mig)
+				err = asyncdr.WaitForMigration(migrationList)
+				if err == nil {
+					// Sleeping here, as apps deploys one by one, which takes time to collect all pods
+					time.Sleep(5 * time.Minute)
+					SetDestinationKubeConfig()
+					pods_migrated, err := core.Instance().GetPods(ns.Name, nil)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("Not able to get migrated pods, err: %v", err))
+						return
+					}
+					pods_migrated_len := len(pods_migrated.Items)
+					log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
+					if pods_created_len != pods_migrated_len {
+						UpdateOutcome(event, fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len))
+						return
+					}
+					destClusterConfigPath, err := GetDestinationClusterConfigPath()
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
+						return
+					}
+					err = asyncdr.ValidateCRD(expected_kafka_crd_list, destClusterConfigPath)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
+						return
+					}
+					log.InfoD("Starting crd deletion")
+					asyncdr.DeleteCRAndUninstallCRD(operatorName, app_url, ns.Name)
+				} else {
+					UpdateOutcome(event, fmt.Errorf("Migration failed"))
+					return
+				}
+				SetSourceKubeConfig()
+				err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Migrations are not deleted on source, err: %v", err))
+				}
+				asyncdr.DeleteCRAndUninstallCRD(operatorName, app_url, ns.Name)
+			})
+		}
 	})
 }
 

@@ -6689,3 +6689,12 @@ func init() {
 	k := &K8s{}
 	scheduler.Register(SchedName, k)
 }
+
+// ClusterVersion returns the cluster version of the kubernetes cluster as a string (like "1.23.0")
+func ClusterVersion() (string, error) {
+	ver, err := k8sCore.GetVersion()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimLeft(ver.String(), "v"), nil
+}
