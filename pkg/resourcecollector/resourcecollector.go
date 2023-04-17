@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
+	"github.com/libopenstorage/stork/pkg/pluralmap"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
@@ -1278,6 +1279,7 @@ func (r *ResourceCollector) prepareRancherApplicationResource(
 }
 
 func GetDefaultRuleSet() *inflect.Ruleset {
+
 	// TODO: we should use k8s code generator logic to pluralize
 	// crd resources instead of depending on inflect lib
 	ruleset := inflect.NewDefaultRuleset()
@@ -1298,5 +1300,8 @@ func GetDefaultRuleSet() *inflect.Ruleset {
 	ruleset.AddPlural("scheduling", "scheduling")
 	ruleset.AddPlural("spss", "spss")
 
+	for kind, group := range pluralmap.Instance().GetCRDKindToPluralMap() {
+		ruleset.AddPlural(kind, group)
+	}
 	return ruleset
 }

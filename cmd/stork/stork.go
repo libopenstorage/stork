@@ -33,6 +33,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/objectcontroller"
+	"github.com/libopenstorage/stork/pkg/pluralmap"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
@@ -475,6 +476,12 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 	if adminNamespace == "" {
 		adminNamespace = c.String("migration-admin-namespace")
 	}
+
+	// Setting up the pluralmap. It has the right plural for a crd kind installed in the cluster.
+	if err := pluralmap.CreateCRDPlurals(); err != nil {
+		log.Fatalf("failed to setup crd plural map: %v", err)
+	}
+	log.Infof("crd plural map has been intialized")
 
 	monitor := &monitor.Monitor{
 		Driver:      d,
