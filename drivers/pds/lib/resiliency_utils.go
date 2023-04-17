@@ -2,6 +2,7 @@ package lib
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -29,8 +30,7 @@ var (
 	ResiliencyFlag            = false
 	hasResiliencyConditionMet = false
 	FailureType               TypeOfFailure
-	testError                 error
-	conditionError            error
+	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
 )
@@ -72,7 +72,7 @@ func InduceFailure(failure string, ns string) {
 	if isResiliencyConditionset {
 		FailureType.Method()
 	} else {
-		testError = errors.New("Resiliency Condition did not meet. Failing this test case.")
+		CapturedErrors <- errors.New("Resiliency Condition did not meet. Failing this test case.")
 		return
 	}
 	return
@@ -101,12 +101,6 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
-		if conditionError != nil {
-			return conditionError
-		}
-		if testError != nil {
-			return testError
-		}
 	case KillDeploymentControllerPod:
 		checkTillReplica = CheckTillReplica
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
@@ -117,12 +111,15 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
-		if conditionError != nil {
-			return conditionError
+	}
+	var aggregatedError error
+	for w := 1; w <= len(CapturedErrors); w++ {
+		if err := <-CapturedErrors; err != nil {
+			aggregatedError = fmt.Errorf("%v : %v", aggregatedError, err)
 		}
-		if testError != nil {
-			return testError
-		}
+	}
+	if aggregatedError != nil {
+		return aggregatedError
 	}
 	err := ValidateDataServiceDeployment(deployment, namespace)
 	return err
@@ -132,17 +129,20 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 func RebootActiveNodeDuringDeployment(ns string) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
+	var testError error
 
 	// Waiting till atleast first pod have a node assigned
 	var pods []corev1.Pod
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if testError != nil {
+			CapturedErrors <- testError
 			return false, testError
 		}
 		// Get Pods of this StatefulSet
 		pods, testError = k8sApps.GetStatefulSetPods(ss)
 		if testError != nil {
+			CapturedErrors <- testError
 			return false, testError
 		}
 		// Check if Pods have a node assigned or it's in a window where it's just coming up
@@ -166,12 +166,14 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 			continue
 		} else {
 			var nodeToReboot node.Node
-			nodeToReboot, testError = node.GetNodeByName(pod.Spec.NodeName)
+			nodeToReboot, testError := node.GetNodeByName(pod.Spec.NodeName)
 			if testError != nil {
+				CapturedErrors <- testError
 				return testError
 			}
 			if nodeToReboot.Name == "" {
 				testError = errors.New("Something happened and node is coming out to be empty from Node registry")
+				CapturedErrors <- testError
 				return testError
 			}
 			log.Infof("Going ahead and rebooting the node %v as there is an application pod thats coming up on this node", pod.Spec.NodeName)
@@ -183,6 +185,7 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 				},
 			})
 			if testError != nil {
+				CapturedErrors <- testError
 				return testError
 			}
 			log.Infof("Node %v rebooted successfully", pod.Spec.NodeName)
@@ -197,6 +200,7 @@ func KillDeploymentPodDuringDeployment(ns string) error {
 	// Fetch All the pods in pds-system namespace
 	podList, testError := GetPods(ns)
 	if testError != nil {
+		CapturedErrors <- testError
 		return testError
 	}
 	// Get List of All Pods matching with the name : deployment controller manager pod
@@ -210,6 +214,7 @@ func KillDeploymentPodDuringDeployment(ns string) error {
 	for _, pod := range deploymentControllerPods {
 		testError = DeleteK8sPods(pod.Name, ns)
 		if testError != nil {
+			CapturedErrors <- testError
 			return testError
 		}
 		log.InfoD("Successfully Killed Pod: %v", pod.Name)
