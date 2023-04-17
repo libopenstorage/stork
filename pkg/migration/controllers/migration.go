@@ -593,7 +593,7 @@ func (m *MigrationController) purgeMigratedResources(
 	if err != nil {
 		return err
 	}
-	toBeDeleted := objectTobeDeleted(srcObjects, obj)
+	toBeDeleted := m.resourceCollector.ObjectTobeDeleted(srcObjects, obj)
 	dynamicInterface, err := dynamic.NewForConfig(remoteConfig)
 	if err != nil {
 		return err
@@ -605,7 +605,7 @@ func (m *MigrationController) purgeMigratedResources(
 
 	// update status of cleaned up objects migration info
 	for _, r := range toBeDeleted {
-		nm, ns, kind, err := getObjectDetails(r)
+		nm, ns, kind, err := utils.GetObjectDetails(r)
 		if err != nil {
 			// log error and skip adding object to status
 			log.MigrationLog(migration).Errorf("Unable to get object details: %v", err)
@@ -621,18 +621,6 @@ func (m *MigrationController) purgeMigratedResources(
 	}
 
 	return nil
-}
-
-func getObjectDetails(o interface{}) (name, namespace, kind string, err error) {
-	metadata, err := meta.Accessor(o)
-	if err != nil {
-		return "", "", "", err
-	}
-	objType, err := meta.TypeAccessor(o)
-	if err != nil {
-		return "", "", "", err
-	}
-	return metadata.GetName(), metadata.GetNamespace(), objType.GetKind(), nil
 }
 
 func objectToCollect(destObject []runtime.Unstructured) ([]runtime.Unstructured, error) {
@@ -651,35 +639,6 @@ func objectToCollect(destObject []runtime.Unstructured) ([]runtime.Unstructured,
 		}
 	}
 	return objects, nil
-}
-
-func objectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
-	var deleteObjects []runtime.Unstructured
-	for _, o := range destObjects {
-		name, namespace, kind, err := getObjectDetails(o)
-		if err != nil {
-			// skip purging if we are not able to get object details
-			logrus.Errorf("Unable to get object details %v", err)
-			continue
-		}
-		isPresent := false
-		for _, s := range srcObjects {
-			sname, snamespace, skind, err := getObjectDetails(s)
-			if err != nil {
-				// skip purging if we are not able to get object details
-				continue
-			}
-			if skind == kind && snamespace == namespace && sname == name {
-				isPresent = true
-				break
-			}
-		}
-		if !isPresent {
-			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
-			deleteObjects = append(deleteObjects, o)
-		}
-	}
-	return deleteObjects
 }
 
 func (m *MigrationController) namespaceMigrationAllowed(migration *stork_api.Migration) bool {

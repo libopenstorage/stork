@@ -1156,6 +1156,40 @@ func (r *ResourceCollector) DeleteResources(
 	return nil
 }
 
+// ObjectTobeDeleted returns list of objects present on destination but not on source
+func (r *ResourceCollector) ObjectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
+	var deleteObjects []runtime.Unstructured
+	for _, o := range destObjects {
+		name, namespace, kind, err := utils.GetObjectDetails(o)
+		if err != nil {
+			// skip purging if we are not able to get object details
+			logrus.Errorf("Unable to get object details %v", err)
+			continue
+		}
+		// Don't return objects that support merging
+		if r.mergeSupportedForResource(o) {
+			continue
+		}
+		isPresent := false
+		for _, s := range srcObjects {
+			sname, snamespace, skind, err := utils.GetObjectDetails(s)
+			if err != nil {
+				// skip purging if we are not able to get object details
+				continue
+			}
+			if skind == kind && snamespace == namespace && sname == name {
+				isPresent = true
+				break
+			}
+		}
+		if !isPresent {
+			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
+			deleteObjects = append(deleteObjects, o)
+		}
+	}
+	return deleteObjects
+}
+
 func (r *ResourceCollector) getDynamicClient(
 	dynamicInterface dynamic.Interface,
 	object runtime.Unstructured,
