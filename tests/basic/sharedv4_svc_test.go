@@ -2,8 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"path"
 	"strconv"
@@ -11,9 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
+
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/errors"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -761,7 +763,20 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 						Step(fmt.Sprintf("get counters from node %s before %s", attachedNode.Name, restartLog),
 							func() {
-								countersBefore = getAppCounters(apiVol, attachedNode, 3*time.Duration(numPods)*time.Second)
+								_, err := task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+									countersBefore = getAppCounters(apiVol, attachedNode, 3*time.Duration(numPods)*time.Second)
+									activePods := getActivePods(countersBefore)
+
+									if len(activePods) != numPods {
+										return nil, true, fmt.Errorf("number of active keys did not match for volume %v (%v) for app %v. countersBefore map: %v",
+											vol.ID, apiVol.Id, ctx.App.Key, countersBefore)
+									}
+
+									return nil, false, nil
+
+								}, 3*time.Minute, 10*time.Second)
+
+								log.FailOnError(err, "Failed to verify counter in get counter before")
 							})
 
 						Step(restartLog,
