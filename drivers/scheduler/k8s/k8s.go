@@ -213,6 +213,14 @@ var (
 	SnapshotAPIGroup = "snapshot.storage.k8s.io"
 )
 
+// CustomResourceObjectYAML	Used as spec object for all CRs
+type CustomResourceObjectYAML struct {
+	Path string
+	// Namespace will only be assigned DURING creation
+	Namespace string
+	Name      string
+}
+
 // K8s  The kubernetes structure
 type K8s struct {
 	SpecFactory                      *spec.Factory
@@ -414,7 +422,16 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 		if err != nil {
 			return nil, err
 		}
-		if !isHelmChart {
+
+		splitPath := strings.Split(fileName, "/")
+		if strings.HasPrefix(splitPath[len(splitPath)-1], "cr-") {
+			// TODO: process with templates
+			specObj := &CustomResourceObjectYAML{
+				Path: fileName,
+			}
+			specs = append(specs, specObj)
+			log.Warnf("custom res: %v", specObj) //TODO: remove
+		} else if !isHelmChart {
 			file, err := ioutil.ReadFile(fileName)
 			if err != nil {
 				return nil, err
@@ -1061,6 +1078,25 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	// creation of CustomResourceObjects must most likely be done *last*,
+	// as it may have resources that depend on other resources, which should be create *before* this
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCustomResourceObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -2520,6 +2556,22 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []corev1.Pod
 
+	// destruction of CustomResourceObjects must most likely be done *first*,
+	// as it may have resources that depend on other resources, which should be deleted *after* this
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyCustomResourceObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
 	var removeSpecs []interface{}
 	for _, appSpec := range ctx.App.SpecList {
 		if repoInfo, ok := appSpec.(*scheduler.HelmRepo); ok {
@@ -2545,6 +2597,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 		}
 	}
+
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyAdmissionRegistrationObjects(appSpec, ctx.App)
@@ -4298,6 +4351,60 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	}
 
 	return nil, nil
+}
+
+// createCustomResourceObjects is used to create objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl apply -f` command instead of the conventional method of using an api library
+func (k *K8s) createCustomResourceObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+
+	if obj, ok := spec.(*CustomResourceObjectYAML); ok {
+		log.Warn("applying custom resources")
+		cryaml := obj.Path
+		if _, err := os.Stat(cryaml); baseErrors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("Cannot find yaml in path %s", cryaml)
+		}
+		cmdArgs := []string{"apply", "-f", cryaml, "-n", ns.Name}
+		err := osutils.Kubectl(cmdArgs)
+		if err != nil {
+			return nil, fmt.Errorf("Error applying spec [%s], Error: %s", cryaml, err)
+		}
+		obj.Namespace = ns.Name
+		obj.Name = "placeholder" //TODO1
+		return obj, nil
+	}
+
+	return nil, nil
+}
+
+// destroyCustomResourceObjects is used to delete objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl delete -f` command instead of the conventional method of using an api library
+func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) error {
+
+	if obj, ok := spec.(*CustomResourceObjectYAML); ok {
+		cryaml := obj.Path
+		if _, err := os.Stat(cryaml); baseErrors.Is(err, os.ErrNotExist) {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy Custom Resource Object: %v. Err: Cannot find yaml in path: %v", obj.Name, cryaml),
+			}
+		}
+
+		cmdArgs := []string{"delete", "-f", cryaml, "-n", obj.Namespace}
+		err := osutils.Kubectl(cmdArgs)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy Custom Resource Object: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed CustomResourceObject: %v", app.Key, obj.Name)
+			return nil
+		}
+	}
+
+	return nil
 }
 
 // createCRDObjects is used to create Resources in the group `apiextensions` group (like CRDs)
