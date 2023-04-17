@@ -167,24 +167,36 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		var iptablesflushed bool
 		iptablesflushed = false
 
+		var getKvdbLeaderNode node.Node
+		allkvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+
+		for _, each := range allkvdbNodes {
+			if each.Leader {
+				getKvdbLeaderNode, err = node.GetNodeDetailsByNodeID(each.ID)
+				log.FailOnError(err, "Unable to get the node details from NodeID [%v]", each.ID)
+				break
+			}
+		}
+
 		// Check if the cluster consists of 10 nodes
 		log.InfoD("Get all nodes present in the cluster")
 		allNodes := []node.Node{}
 		// create an array with storage and storage less nodes added
 		for _, each := range node.GetStorageDriverNodes() {
-			allNodes = append(allNodes, each)
+			if each.Id != getKvdbLeaderNode.Id {
+				allNodes = append(allNodes, each)
+			}
 		}
 
-		// Verify total nodes available is 10
-		dash.VerifyFatal(len(allNodes) >= 10, true, "required minimum of 10 nodes for the test to run")
+		// Verify total nodes available is minimum of 9
+		dash.VerifyFatal(len(allNodes) >= 9, true, "required minimum of 10 nodes for the test to run")
 
 		contexts = make([]*scheduler.Context, 0)
-
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fordflatresync-%d", i))...)
 		}
 
-		time.Sleep(2 * time.Minute)
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
@@ -202,24 +214,13 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
-		if len(node.GetStorageNodes()) != 6 && len(node.GetStorageLessNodes()) != 4 {
-			nodesSplit1 = allNodes[0:4]
-			nodesSplit2 = allNodes[5:10]
-		} else {
+
+		if len(node.GetStorageNodes()) == 6 && len(node.GetStorageLessNodes()) == 6 {
 			nodesSplit1 = node.GetStorageNodes()
 			nodesSplit2 = node.GetStorageLessNodes()
-		}
-
-		var getKvdbLeaderNode node.Node
-		allkvdbNodes, err := GetAllKvdbNodes()
-		log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
-
-		for _, each := range allkvdbNodes {
-			if each.Leader {
-				getKvdbLeaderNode, err = node.GetNodeDetailsByNodeID(each.ID)
-				log.FailOnError(err, "Unable to get the node details from NodeID [%v]", each.ID)
-				break
-			}
+		} else {
+			nodesSplit1 = allNodes[0:4]
+			nodesSplit2 = allNodes[5:9]
 		}
 
 		log.InfoD("KVDB Leader node is [%v]", getKvdbLeaderNode.Addresses)
@@ -236,27 +237,22 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		zone1StorageEle, zone2StorageEle := getRandomNumbersFromArrLength(len(allStorageExceptKVDB), len(allStorageExceptKVDB)/2)
 		for _, each := range zone1StorageEle {
-			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
-				zone1 = append(zone1, allStorageExceptKVDB[each])
-			}
-
+			log.InfoD(fmt.Sprintf("Adding [%v] to zone1", allStorageExceptKVDB[each].Name))
+			zone1 = append(zone1, allStorageExceptKVDB[each])
 		}
 		for _, each := range zone2StorageEle {
-			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
-				zone2 = append(zone2, allStorageExceptKVDB[each])
-			}
+			log.InfoD(fmt.Sprintf("Adding [%v] to zone2", allStorageExceptKVDB[each].Name))
+			zone2 = append(zone2, allStorageExceptKVDB[each])
 		}
 
 		zone1StorageLessEle, zone2StorageLessEle := getRandomNumbersFromArrLength(len(nodesSplit2), len(nodesSplit2)/2)
 		for _, each := range zone1StorageLessEle {
-			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
-				zone1 = append(zone1, nodesSplit2[each])
-			}
+			log.InfoD(fmt.Sprintf("Adding [%v] to zone1", nodesSplit2[each].Name))
+			zone1 = append(zone1, nodesSplit2[each])
 		}
 		for _, each := range zone2StorageLessEle {
-			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
-				zone2 = append(zone2, nodesSplit2[each])
-			}
+			log.InfoD(fmt.Sprintf("Adding [%v] to zone2", nodesSplit2[each].Name))
+			zone2 = append(zone2, nodesSplit2[each])
 		}
 
 		flushiptables := func() {
@@ -268,17 +264,18 @@ var _ = Describe("{FordRunFlatResync}", func() {
 				}
 			}
 		}
-
-		// force flush iptables on all the nodes at the end
-		defer flushiptables()
-
 		revertZone1 := func() {
 			log.FailOnError(blockIptableRules(zone1, zone2, true), "Failed to unblock IPTable rules on target Nodes")
 		}
-
 		revertZone2 := func() {
 			log.FailOnError(blockIptableRules(zone2, zone1, true), "Failed to unblock IPTable rules on target Nodes")
 		}
+
+		// Flush all IPtables on all nodes before running the scripts
+		flushiptables()
+
+		// force flush iptables on all the nodes at the end
+		defer flushiptables()
 
 		// From Zone 1 block all the traffic to systems under zone2
 		// From Zone 2 block all the traffic to systems under zone1
@@ -293,13 +290,16 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		err = blockIptableRules(zone2, zone1, false)
 		log.FailOnError(err, "Failed to set IPtable Rules on zone2")
 
+		log.InfoD("Sleeping for 10 minute before resetting iptables rules")
+		time.Sleep(10 * time.Minute)
+
 		// Reverting back Zone1 iptables set
 		revertZone1()
 
 		// Reverting back zone2 iptables set
 		revertZone2()
 
-		log.InfoD("Sleeping for 10 minute before resetting iptables rules on zone2")
+		log.InfoD("Sleeping for 10 minute before set iptables rules on zone2")
 		time.Sleep(10 * time.Minute)
 
 		// Reset iptables rules on vms under zone2
@@ -331,7 +331,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		for _, eachVol := range volumesPresent {
 			volStat, err := getVolumeRuntimeState(eachVol.ID)
 			log.FailOnError(err, "Failed to get Run time stat of the volume")
-			log.InfoD("Volume runtimeState of Volume [%v] is [%v]", eachVol, volStat)
+			if volStat != "clean" {
+				log.FailOnError(fmt.Errorf("volume [%v] state is not in Clean state. current state is [%s]", eachVol.Name, volStat), "is volume state clean?")
+			}
 		}
 
 		// Wait for some time for system to be up and all nodes drivers up and running
