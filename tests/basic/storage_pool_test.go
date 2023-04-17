@@ -2895,7 +2895,8 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 	var runID int
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeWithJrnlAndMeta", "Initiate pool expansion using resize-disk for the pool the with journal and metadata devices", nil, testrailID)
+		StartTorpedoTest("ResizeWithJrnlAndMeta", "Initiate pool expansion using resize-disk for "+
+			"the pool the with journal and metadata devices", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -6359,8 +6360,8 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		}
 
 		commonText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*"
-		compileText := fmt.Sprintf("[%s]operation is not supported", commonText)
-		compileTextMaintenanceError := fmt.Sprintf("[%s]Requires pool maintenance mode", commonText)
+		compileText := fmt.Sprintf("%soperation is not supported", commonText)
+		compileTextMaintenanceError := fmt.Sprintf("%sRequires pool maintenance mode", commonText)
 
 		err = nil
 		for _, each := range []string{compileText, compileTextMaintenanceError} {
@@ -8609,6 +8610,26 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 
 })
 
+func waitTillVolumeStatusUp(vol *volume.Volume) error {
+	now := time.Now()
+	targetTime := now.Add(30 * time.Minute)
+
+	for {
+		if now.After(targetTime) {
+			return fmt.Errorf("Failed to get volume status to UP")
+		} else {
+			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return err
+			}
+			if fmt.Sprintf("[%v]", volumeInspect.Status) == "VOLUME_STATUS_UP" {
+				return nil
+			}
+
+		}
+	}
+}
+
 var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 	/*
 		PTX-15696 -> PWX-26967
@@ -8709,14 +8730,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
 		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 		for _, eachVol := range volumes {
-			volumeInspect, err := Inst().V.InspectVolume(eachVol.ID)
-			log.FailOnError(err, fmt.Sprintf("Failed to get details of volume [%v]", eachVol.Name))
-
-			if fmt.Sprintf("[%v]", volumeInspect.Status) != "VOLUME_STATUS_UP" {
-				log.FailOnError(fmt.Errorf("Volume status did not match "),
-					fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
-			}
-
+			log.FailOnError(waitTillVolumeStatusUp(eachVol), fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
 		}
 	})
 
