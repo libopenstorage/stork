@@ -788,6 +788,10 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		restore.Status.Status = storkapi.ApplicationRestoreStatusInProgress
 		restore.Status.Reason = "Application resources restore is in progress"
 		restore.Status.LastUpdateTimestamp = metav1.Now()
+		// Only on success compute the total restore size
+		for _, vInfo := range restore.Status.Volumes {
+			restore.Status.TotalSize += vInfo.TotalSize
+		}
 		// Update the current state and then move on to restoring resources
 		err := a.client.Update(context.TODO(), restore)
 		if err != nil {
@@ -801,13 +805,10 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	}
 
 	restore.Status.LastUpdateTimestamp = metav1.Now()
-	// Only on success compute the total restore size
-	for _, vInfo := range restore.Status.Volumes {
-		restore.Status.TotalSize += vInfo.TotalSize
-	}
 
 	err = a.client.Update(context.TODO(), restore)
 	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error updating resotre CR in volume restore after invoking restoreResources: %v", err)
 		return err
 	}
 	return nil
