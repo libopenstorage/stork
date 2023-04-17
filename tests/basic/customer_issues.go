@@ -202,11 +202,11 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
-		if len(node.GetStorageLessNodes()) != 4 && len(node.GetStorageDriverNodes()) > 6 {
+		if len(node.GetStorageNodes()) != 6 && len(node.GetStorageLessNodes()) != 4 {
 			nodesSplit1 = allNodes[0:4]
 			nodesSplit2 = allNodes[5:10]
 		} else {
-			nodesSplit1 = node.GetStorageDriverNodes()
+			nodesSplit1 = node.GetStorageNodes()
 			nodesSplit2 = node.GetStorageLessNodes()
 		}
 
@@ -249,10 +249,14 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		zone1StorageLessEle, zone2StorageLessEle := getRandomNumbersFromArrLength(len(nodesSplit2), len(nodesSplit2)/2)
 		for _, each := range zone1StorageLessEle {
-			zone1 = append(zone1, nodesSplit2[each])
+			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
+				zone1 = append(zone1, nodesSplit2[each])
+			}
 		}
 		for _, each := range zone2StorageLessEle {
-			zone2 = append(zone2, nodesSplit2[each])
+			if allStorageExceptKVDB[each].Id != getKvdbLeaderNode.Id {
+				zone2 = append(zone2, nodesSplit2[each])
+			}
 		}
 
 		flushiptables := func() {
