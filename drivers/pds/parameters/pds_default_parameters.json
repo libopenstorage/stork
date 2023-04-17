@@ -96,7 +96,8 @@
     "ProjectName": "Default",
     "ClusterType": "onprem",
     "Namespace": "automation",
-    "PxNamespace": "portworx"
+    "PxNamespace": "portworx",
+    "PDSNamespace": "pds-system"
   },
   "ResiliencyTest": {
     "CheckTillReplica": 1

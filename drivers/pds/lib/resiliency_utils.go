@@ -2,6 +2,8 @@ package lib
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -17,7 +19,9 @@ import (
 )
 
 const (
-	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
+	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
+	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
+	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
 )
 
 // PDS vars
@@ -26,8 +30,7 @@ var (
 	ResiliencyFlag            = false
 	hasResiliencyConditionMet = false
 	FailureType               TypeOfFailure
-	testError                 error
-	conditionError            error
+	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
 )
@@ -56,9 +59,9 @@ func ExecuteInParallel(functions ...func()) {
 }
 
 // Function to enable Resiliency Test
-func MarkResiliencyTC(resiliency bool) {
+func MarkResiliencyTC(resiliency bool, node_ops bool) {
 	ResiliencyFlag = resiliency
-	if resiliency {
+	if node_ops {
 		tests.InitInstance()
 	}
 }
@@ -69,7 +72,7 @@ func InduceFailure(failure string, ns string) {
 	if isResiliencyConditionset {
 		FailureType.Method()
 	} else {
-		testError = errors.New("Resiliency Condition did not meet. Failing this test case.")
+		CapturedErrors <- errors.New("Resiliency Condition did not meet. Failing this test case.")
 		return
 	}
 	return
@@ -98,12 +101,25 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
-		if conditionError != nil {
-			return conditionError
+	case KillDeploymentControllerPod:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
 		}
-		if testError != nil {
-			return testError
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
 		}
+		ExecuteInParallel(func1, func2)
+	}
+	var aggregatedError error
+	for w := 1; w <= len(CapturedErrors); w++ {
+		if err := <-CapturedErrors; err != nil {
+			aggregatedError = fmt.Errorf("%v : %v", aggregatedError, err)
+		}
+	}
+	if aggregatedError != nil {
+		return aggregatedError
 	}
 	err := ValidateDataServiceDeployment(deployment, namespace)
 	return err
@@ -113,17 +129,20 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 func RebootActiveNodeDuringDeployment(ns string) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
+	var testError error
 
 	// Waiting till atleast first pod have a node assigned
 	var pods []corev1.Pod
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if testError != nil {
+			CapturedErrors <- testError
 			return false, testError
 		}
 		// Get Pods of this StatefulSet
 		pods, testError = k8sApps.GetStatefulSetPods(ss)
 		if testError != nil {
+			CapturedErrors <- testError
 			return false, testError
 		}
 		// Check if Pods have a node assigned or it's in a window where it's just coming up
@@ -147,12 +166,14 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 			continue
 		} else {
 			var nodeToReboot node.Node
-			nodeToReboot, testError = node.GetNodeByName(pod.Spec.NodeName)
+			nodeToReboot, testError := node.GetNodeByName(pod.Spec.NodeName)
 			if testError != nil {
+				CapturedErrors <- testError
 				return testError
 			}
 			if nodeToReboot.Name == "" {
 				testError = errors.New("Something happened and node is coming out to be empty from Node registry")
+				CapturedErrors <- testError
 				return testError
 			}
 			log.Infof("Going ahead and rebooting the node %v as there is an application pod thats coming up on this node", pod.Spec.NodeName)
@@ -164,10 +185,39 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 				},
 			})
 			if testError != nil {
+				CapturedErrors <- testError
 				return testError
 			}
 			log.Infof("Node %v rebooted successfully", pod.Spec.NodeName)
 		}
+	}
+	return testError
+}
+
+// Kill the Deployment Controller Pod while Data Service is coming up
+func KillDeploymentPodDuringDeployment(ns string) error {
+	var deploymentControllerPods []corev1.Pod
+	// Fetch All the pods in pds-system namespace
+	podList, testError := GetPods(ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	// Get List of All Pods matching with the name : deployment controller manager pod
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, PdsDeploymentControllerManagerPod) {
+			log.Infof("Deployment Controller Pod Name is : %v", pod.Name)
+			deploymentControllerPods = append(deploymentControllerPods, pod)
+		}
+	}
+	// Kill All Deployment Controller Pods
+	for _, pod := range deploymentControllerPods {
+		testError = DeleteK8sPods(pod.Name, ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return testError
+		}
+		log.InfoD("Successfully Killed Pod: %v", pod.Name)
 	}
 	return testError
 }

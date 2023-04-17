@@ -2,6 +2,7 @@ package restutil
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"github.com/sirupsen/logrus"
 	"io"
@@ -22,8 +23,8 @@ const (
 	defaultRestTimeOut = 10 * time.Second
 )
 
-// Get rest get call
-func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error) {
+// GET rest get call
+func GET(url string, auth *Auth, headers map[string]string) ([]byte, int, error) {
 
 	respBody, respStatusCode, err := getResponse(http.MethodGet, url, nil, auth, headers)
 	if err != nil {
@@ -97,6 +98,11 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 	setBasicAuthAndHeaders(req, auth, headers)
 	client := &http.Client{
 		Timeout: defaultRestTimeOut,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 	var resp *http.Response
 	resp, err = client.Do(req)

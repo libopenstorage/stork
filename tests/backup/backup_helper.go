@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/torpedo/pkg/osutils"
 	batchv1 "k8s.io/api/batch/v1"
@@ -51,7 +52,10 @@ const (
 	maxWaitPeriodForBackupCompletionInMinutes = 40
 	maxWaitPeriodForRestoreCompletionInMinute = 40
 	maxWaitPeriodForBackupJobCancellation     = 20
-	backupJobCancellationRetryTime            = 30
+	maxWaitPeriodForRestoreJobCancellation    = 20
+	restoreJobCancellationRetryTime           = 30
+	restoreJobProgressRetryTime               = 1
+	backupJobCancellationRetryTime            = 5
 	K8sNodeReadyTimeout                       = 10
 	K8sNodeRetryInterval                      = 30
 	globalAWSBucketPrefix                     = "global-aws"
@@ -77,6 +81,8 @@ const (
 	jobDeleteRetryTime                        = 10 * time.Second
 	podStatusTimeOut                          = 20 * time.Minute
 	podStatusRetryTime                        = 30 * time.Second
+	licenseCountUpdateTimeout                 = 15 * time.Minute
+	licenseCountUpdateRetryTime               = 1 * time.Minute
 )
 
 var (
@@ -117,6 +123,14 @@ var storkLabel = map[string]string{
 }
 
 type BackupAccess int32
+
+type ReplacePolicy_Type int32
+
+const (
+	ReplacePolicy_Invalid ReplacePolicy_Type = 0
+	ReplacePolicy_Retain  ReplacePolicy_Type = 1
+	ReplacePolicy_Delete  ReplacePolicy_Type = 2
+)
 
 const (
 	ViewOnlyAccess BackupAccess = 1
@@ -623,6 +637,53 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 	return nil
 }
 
+// CreateRestoreWithReplacePolicy Creates in-place restore and waits for it to complete
+func CreateRestoreWithReplacePolicy(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		ReplacePolicy: api.ReplacePolicy_Type(replacePolicy),
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	err = restoreSuccessWithReplacePolicy(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx, replacePolicy)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
 // CreateRestoreWithUID creates restore with UID
 func CreateRestoreWithUID(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string, backupUID string) error {
@@ -704,7 +765,7 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 
 func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
 	var number int
-	ret, err := kubectlExec([]string{podName, "-n", namespace, "--kubeconfig=", kubeConfigFile, " -- /bin/df"})
+	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
@@ -724,9 +785,10 @@ func kubectlExec(arguments []string) (string, error) {
 	if len(arguments) == 0 {
 		return "", fmt.Errorf("no arguments supplied for kubectl command")
 	}
-	cmd := exec.Command("kubectl exec -it", arguments...)
+	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	log.Debugf("command output for '%s': %s", cmd.String(), string(output))
+	log.InfoD("Command '%s'", cmd.String())
+	log.Infof("Command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
@@ -1219,6 +1281,45 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		return err
 	}
 	return nil
+}
+
+// restoreSuccessWithReplacePolicy inspects restore task status as per ReplacePolicy_Type
+func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context, replacePolicy ReplacePolicy_Type) error {
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	var statusesExpected api.RestoreInfo_StatusInfo_Status
+	if replacePolicy == ReplacePolicy_Delete {
+		statusesExpected = api.RestoreInfo_StatusInfo_Success
+	} else if replacePolicy == ReplacePolicy_Retain {
+		statusesExpected = api.RestoreInfo_StatusInfo_PartialSuccess
+	}
+	statusesUnexpected := [...]api.RestoreInfo_StatusInfo_Status{
+		api.RestoreInfo_StatusInfo_Invalid,
+		api.RestoreInfo_StatusInfo_Aborted,
+		api.RestoreInfo_StatusInfo_Failed,
+	}
+	restoreSuccessCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetRestore().GetStatus().Status
+		reason := resp.GetRestore().GetStatus().Reason
+		if actual == statusesExpected {
+			return "", false, nil
+		}
+
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
+			}
+		}
+		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
+	}
+	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
+	return err
 }
 
 // IsBackupLocationPresent checks whether the backup location is present or not
@@ -1851,6 +1952,7 @@ func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName str
 	if err != nil {
 		return err
 	}
+	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return err
@@ -1959,4 +2061,225 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 		return resp, err
 	}
 	return resp, nil
+}
+
+// suspendBackupSchedule will suspend backup schedule
+func suspendBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        true,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
+}
+
+// resumeBackupSchedule will resume backup schedule
+func resumeBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        false,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
+}
+
+// NamespaceLabelBackupSuccessCheck verifies if the labeled namespaces are backed up and checks for labels applied to backups
+func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, listOfLabelledNamespaces []string, namespaceLabel string) error {
+	backupDriver := Inst().Backup
+	log.Infof("Getting the Uid of backup %v", backupName)
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	namespaceList := resp.GetBackup().GetNamespaces()
+	log.Infof("The list of namespaces backed up are %v", namespaceList)
+	if !AreSlicesEqual(namespaceList, listOfLabelledNamespaces) {
+		return fmt.Errorf("list of namespaces backed up are %v which is not same as expected %v", namespaceList, listOfLabelledNamespaces)
+	}
+	backupLabels := resp.GetBackup().GetNsLabelSelectors()
+	log.Infof("The list of labels applied to backup are %v", backupLabels)
+	expectedLabels := strings.Split(namespaceLabel, ",")
+	actualLabels := strings.Split(backupLabels, ",")
+	if !AreSlicesEqual(expectedLabels, actualLabels) {
+		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", actualLabels, expectedLabels)
+	}
+	return nil
+}
+
+// AddLabelsToMultipleNamespaces add labels to multiple namespace
+func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GenerateRandomLabels creates random label
+func GenerateRandomLabels(number int) map[string]string {
+	labels := make(map[string]string)
+	randomString := uuid.New()
+	for i := 0; i < number; i++ {
+		key := fmt.Sprintf("%v-%v", i, randomString)
+		value := randomString
+		labels[key] = value
+	}
+	return labels
+}
+
+// MapToKeyValueString converts a map of string keys and value to a comma separated string of "key=value"
+func MapToKeyValueString(m map[string]string) string {
+	var pairs []string
+	for k, v := range m {
+		pairs = append(pairs, k+"="+v)
+	}
+	return strings.Join(pairs, ",")
+}
+
+// VerifyLicenseConsumedCount verifies the consumed license count for px-backup
+func VerifyLicenseConsumedCount(ctx context.Context, OrgId string, expectedLicenseConsumedCount int64) error {
+	licenseInspectRequestObject := &api.LicenseInspectRequest{
+		OrgId: OrgId,
+	}
+	licenseCountCheck := func() (interface{}, bool, error) {
+		licenseInspectResponse, err := Inst().Backup.InspectLicense(ctx, licenseInspectRequestObject)
+		if err != nil {
+			return "", false, err
+		}
+		licenseResponseInfoFeatureInfo := licenseInspectResponse.GetLicenseRespInfo().GetFeatureInfo()
+		if licenseResponseInfoFeatureInfo[0].Consumed == expectedLicenseConsumedCount {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("actual license count:%v, expected license count: %v", licenseInspectResponse.GetLicenseRespInfo().GetFeatureInfo()[0].Consumed, expectedLicenseConsumedCount)
+	}
+	_, err := task.DoRetryWithTimeout(licenseCountCheck, licenseCountUpdateTimeout, licenseCountUpdateRetryTime)
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+// FetchNamespacesFromBackup fetches the namespace from backup
+func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID string) ([]string, error) {
+	var backedUpNamespaces []string
+	backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, err
+	}
+	backedUpNamespaces = resp.GetBackup().GetNamespaces()
+	return backedUpNamespaces, err
+}
+
+// AreSlicesEqual verifies if two slices are equal or not
+func AreSlicesEqual(slice1, slice2 interface{}) bool {
+	v1 := reflect.ValueOf(slice1)
+	v2 := reflect.ValueOf(slice2)
+	if v1.Len() != v2.Len() {
+		return false
+	}
+	m := make(map[interface{}]int)
+	for i := 0; i < v2.Len(); i++ {
+		m[v2.Index(i).Interface()]++
+	}
+	for i := 0; i < v1.Len(); i++ {
+		if m[v1.Index(i).Interface()] == 0 {
+			return false
+		}
+		m[v1.Index(i).Interface()]--
+	}
+	return true
+}
+
+// GetNextScheduleBackupName returns the upcoming schedule backup when this function is called
+func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
+	var nextScheduleBackupName string
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	currentScheduleBackupCount := len(allScheduleBackupNames)
+	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		return ordinalScheduleBackupName, false, nil
+	}
+	log.InfoD("Waiting for the next schedule backup to be triggered")
+	time.Sleep(scheduleInterval * time.Minute)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
+	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	nextScheduleBackupName = nextScheduleBackup.(string)
+	return nextScheduleBackupName, nil
+}
+
+// RemoveElementByValue remove the first occurence of the element from the array.Pass a pointer to the array and the element by value.
+func RemoveElementByValue(arr interface{}, value interface{}) error {
+	v := reflect.ValueOf(arr)
+	if v.Kind() != reflect.Ptr {
+		return fmt.Errorf("removeElementByValue: not a pointer")
+	}
+	v = v.Elem()
+	if v.Kind() != reflect.Slice {
+		return fmt.Errorf("removeElementByValue: not a slice pointer")
+	}
+	for i := 0; i < v.Len(); i++ {
+		if v.Index(i).Interface() == value {
+			v.Set(reflect.AppendSlice(v.Slice(0, i), v.Slice(i+1, v.Len())))
+			break
+		}
+	}
+	return nil
 }

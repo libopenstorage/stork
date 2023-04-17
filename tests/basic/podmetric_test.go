@@ -218,7 +218,7 @@ func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
 
 	headers := make(map[string]string)
 	headers["Authorization"] = fmt.Sprintf("Bearer %v", logglyToken)
-	return rest.Get(fmt.Sprintf("%v?%v", logglyIterateUrl, query), nil, headers)
+	return rest.GET(fmt.Sprintf("%v?%v", logglyIterateUrl, query), nil, headers)
 }
 
 func getClusterID() (string, error) {
