@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
 	"errors"
@@ -62,13 +63,23 @@ import (
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
+	"github.com/portworx/torpedo/drivers/node/ssh"
+
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
@@ -181,6 +192,7 @@ const (
 	remoteFilePath         = "/tmp/kubeconfig"
 	appReadinessTimeout    = 10 * time.Minute
 	migrationKey           = "async-dr-"
+	metromigrationKey      = "metro-dr-"
 	migrationRetryTimeout  = 10 * time.Minute
 	migrationRetryInterval = 10 * time.Second
 	defaultClusterPairDir  = "cluster-pair"
@@ -319,6 +331,7 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
+	CurrentClusterConfigPath             = ""
 )
 
 var (
@@ -708,6 +721,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		Step("validate mount options for pure volumes", func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
 	})
@@ -1228,6 +1247,43 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 
 }
 
+// ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing file system options check for the given volume
+func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	vols, err := Inst().S.GetVolumes(ctx)
+	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+	for _, v := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
+		if err != nil {
+			err = fmt.Errorf("Failed to get pvc for volume %s. Err: %v", v, err)
+			processError(err, errChan...)
+		}
+
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			err = fmt.Errorf("Error Occured while getting storage class for pvc %s. Err: %v", pvcObj, err)
+			processError(err, errChan...)
+		}
+
+		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+		if err != nil {
+			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+			processError(err, errChan...)
+		}
+		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+			if ok {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+			} else {
+				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+			}
+		} else {
+			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+		}
+	}
+}
+
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
 		return errUnexpectedSizeChangeAfterPureIO
@@ -1455,7 +1511,51 @@ func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
 	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
 }
 
-// ScheduleApplications schedules but does not wait for applications
+// CreateScheduleOptions uses the current Context (kubeconfig) to generate schedule options
+// NOTE: When using a ScheduleOption that was created during a context (kubeconfig)
+// that is different from the current context, make sure to re-generate ScheduleOptions
+func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
+	log.Infof("Creating ScheduleOptions")
+
+	//if not hyper converged set up deploy apps only on storageless nodes
+	if !Inst().IsHyperConverged {
+		var err error
+
+		log.Infof("ScheduleOptions: Scheduling apps only on storageless nodes")
+		storagelessNodes := node.GetStorageLessNodes()
+		if len(storagelessNodes) == 0 {
+			log.Info("ScheduleOptions: No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+			Inst().IsHyperConverged = true
+		}
+		for _, storagelessNode := range storagelessNodes {
+			if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
+				err = fmt.Errorf("ScheduleOptions: failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
+					"storage", "NO", storagelessNode.Name, err)
+				processError(err, errChan...)
+			}
+		}
+		storageLessNodeLabels := make(map[string]string)
+		storageLessNodeLabels["storage"] = "NO"
+
+		options := scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+			Nodes:              storagelessNodes,
+			Labels:             storageLessNodeLabels,
+		}
+		return options
+
+	} else {
+		options := scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+		}
+		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
+		return options
+	}
+}
+
+// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
 func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -1466,38 +1566,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var err error
 
 	Step("schedule applications", func() {
-		options := scheduler.ScheduleOptions{
-			AppKeys:            Inst().AppList,
-			StorageProvisioner: Inst().Provisioner,
-		}
-		//if not hyper converged set up deploy apps only on storageless nodes
-		if !Inst().IsHyperConverged {
-			log.Infof("Scheduling apps only on storageless nodes")
-			storagelessNodes := node.GetStorageLessNodes()
-			if len(storagelessNodes) == 0 {
-				log.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
-				Inst().IsHyperConverged = true
-			}
-			for _, storagelessNode := range storagelessNodes {
-				if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
-					err = fmt.Errorf("failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
-						"storage", "NO", storagelessNode.Name, err)
-					processError(err, errChan...)
-				}
-			}
-			storageLessNodeLabels := make(map[string]string)
-			storageLessNodeLabels["storage"] = "NO"
-
-			options = scheduler.ScheduleOptions{
-				AppKeys:            Inst().AppList,
-				StorageProvisioner: Inst().Provisioner,
-				Nodes:              storagelessNodes,
-				Labels:             storageLessNodeLabels,
-			}
-
-		} else {
-			log.Infof("Scheduling Apps with hyper-converged")
-		}
+		options := CreateScheduleOptions(errChan...)
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
 		// Need to check err != nil before calling processError
@@ -1965,7 +2034,7 @@ func ChangeNamespaces(contexts []*scheduler.Context,
 
 	for _, ctx := range contexts {
 		for _, spec := range ctx.App.SpecList {
-			err := updateNamespace(spec, namespaceMapping)
+			err := UpdateNamespace(spec, namespaceMapping)
 			if err != nil {
 				return err
 			}
@@ -1974,7 +2043,149 @@ func ChangeNamespaces(contexts []*scheduler.Context,
 	return nil
 }
 
-func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
+// CloneSpec clones a given spec and returns it. It returns an error if the object (spec) provided is not supported by this function
+func CloneSpec(spec interface{}) (interface{}, error) {
+	if specObj, ok := spec.(*appsapi.Deployment); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*appsapi.DaemonSet); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Service); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storageapi.StorageClass); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*snapv1.VolumeSnapshot); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Secret); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.ConfigMap); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.Rule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Pod); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ClusterPair); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.Migration); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.MigrationSchedule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.BackupLocation); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationBackup); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.SchedulePolicy); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationRestore); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationClone); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.VolumeSnapshotRestore); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*apapi.AutopilotRule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.ServiceAccount); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.Role); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.RoleBinding); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.ClusterRole); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*batchv1beta1.CronJob); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*batchv1.Job); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.LimitRange); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*networkingv1beta1.Ingress); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*monitoringv1.Prometheus); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*monitoringv1.PrometheusRule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Namespace); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*netv1.NetworkPolicy); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Endpoints); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ResourceTransformation); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		clone := *specObj
+		webhooks := make([]admissionregistrationv1.ValidatingWebhook, 0)
+		for i := range specObj.Webhooks {
+			webhook := specObj.Webhooks[i]
+			serviceClone := *specObj.Webhooks[i].ClientConfig.Service
+			webhook.ClientConfig.Service = &serviceClone
+			webhooks = append(webhooks, webhook)
+		}
+		clone.Webhooks = webhooks
+		return &clone, nil
+	}
+
+	return nil, fmt.Errorf("unsupported object while cloning spec: %v", reflect.TypeOf(spec))
+}
+
+// UpdateNamespace updates the namespace for a given `spec` based on the `namespaceMapping` (which is a map of the map[old]new namespace). It returns an error if the object (spec) provided is not supported by this function
+func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 	if specObj, ok := in.(*appsapi.Deployment); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
@@ -1987,11 +2198,11 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.Service); ok {
+	} else if specObj, ok := in.(*corev1.Service); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
+	} else if specObj, ok := in.(*corev1.PersistentVolumeClaim); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2007,11 +2218,11 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.Secret); ok {
+	} else if specObj, ok := in.(*corev1.Secret); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.ConfigMap); ok {
+	} else if specObj, ok := in.(*corev1.ConfigMap); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2019,7 +2230,7 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.Pod); ok {
+	} else if specObj, ok := in.(*corev1.Pod); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2063,7 +2274,7 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
-	} else if specObj, ok := in.(*v1.ServiceAccount); ok {
+	} else if specObj, ok := in.(*corev1.ServiceAccount); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
@@ -2075,9 +2286,168 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		namespace := namespaceMapping[specObj.GetNamespace()]
 		specObj.SetNamespace(namespace)
 		return nil
+	} else if specObj, ok := in.(*rbacv1.ClusterRole); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*rbacv1.ClusterRoleBinding); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*batchv1.Job); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*corev1.LimitRange); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*monitoringv1.Prometheus); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*monitoringv1.PrometheusRule); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*monitoringv1.ServiceMonitor); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*corev1.Namespace); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*policyv1beta1.PodDisruptionBudget); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*netv1.NetworkPolicy); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*corev1.Endpoints); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*storkapi.ResourceTransformation); ok {
+		namespace := namespaceMapping[specObj.GetNamespace()]
+		specObj.SetNamespace(namespace)
+		return nil
+	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		for i := range specObj.Webhooks {
+			oldns := specObj.Webhooks[i].ClientConfig.Service.Namespace
+			specObj.Webhooks[i].ClientConfig.Service.Namespace = namespaceMapping[oldns]
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
+}
+
+// GetSpecNameKindNamepace returns the (name, kind, namespace) for a given `spec`. It returns an error if the object (spec) provided is not supported by this function
+func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error) {
+	if obj, ok := specObj.(*appsapi.Deployment); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*appsapi.DaemonSet); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Service); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storageapi.StorageClass); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Secret); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.ConfigMap); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.Rule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Pod); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ClusterPair); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.Migration); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.MigrationSchedule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.BackupLocation); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ApplicationBackup); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.SchedulePolicy); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ApplicationRestore); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ApplicationClone); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*apapi.AutopilotRule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.ServiceAccount); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.ClusterRole); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.ClusterRoleBinding); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.Role); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.RoleBinding); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*batchv1beta1.CronJob); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*batchv1.Job); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.LimitRange); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*networkingv1beta1.Ingress); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*monitoringv1.Prometheus); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*monitoringv1.PrometheusRule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*monitoringv1.ServiceMonitor); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Namespace); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*apiextensionsv1.CustomResourceDefinition); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*policyv1beta1.PodDisruptionBudget); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*netv1.NetworkPolicy); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Endpoints); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		return obj.Name, obj.Kind, "", nil
+	}
+
+	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
 }
 
 // DeleteCloudCredential deletes cloud credentials
@@ -2144,19 +2514,46 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 
 // SetClusterContext sets context to clusterConfigPath
 func SetClusterContext(clusterConfigPath string) error {
+	// an empty string indicates the default kubeconfig.
+	// This variable is used to clearly indicate that in logs
+	var clusterConfigPathForLog string
+	if clusterConfigPath == "" {
+		clusterConfigPathForLog = "default"
+	} else {
+		clusterConfigPathForLog = clusterConfigPath
+	}
+
+	if clusterConfigPath == CurrentClusterConfigPath {
+		log.InfoD("Switching context: The context is already [%s]", clusterConfigPathForLog)
+		return nil
+	}
+
+	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. Set Config Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
+
 	err = Inst().S.RefreshNodeRegistry()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
 	}
 
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
+
+	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
+		err = ssh.RefreshDriver(sshNodeDriver)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	}
+
+	CurrentClusterConfigPath = clusterConfigPath
+	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
+
 	return nil
 }
 
@@ -2166,15 +2563,16 @@ func SetSourceKubeConfig() error {
 	if err != nil {
 		return err
 	}
-	SetClusterContext(sourceClusterConfigPath)
-	return nil
+	return SetClusterContext(sourceClusterConfigPath)
 }
 
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
-func SetDestinationKubeConfig() {
+func SetDestinationKubeConfig() error {
 	destClusterConfigPath, err := GetDestinationClusterConfigPath()
-	expect(err).NotTo(haveOccurred())
-	SetClusterContext(destClusterConfigPath)
+	if err != nil {
+		return err
+	}
+	return SetClusterContext(destClusterConfigPath)
 }
 
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
@@ -2182,14 +2580,20 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 	var kubeConfigPath string
 	var err error
 	if reverse {
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 		// get the kubeconfig path to get the correct pairing info
 		kubeConfigPath, err = GetSourceClusterConfigPath()
 		if err != nil {
 			return err
 		}
 	} else {
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 		// get the kubeconfig path to get the correct pairing info
 		kubeConfigPath, err = GetDestinationClusterConfigPath()
 		if err != nil {
@@ -2216,9 +2620,15 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 
 	// Set the correct cluster context to apply the cluster pair spec
 	if reverse {
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 	} else {
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	err = Inst().S.AddTasks(ctx,
@@ -2276,10 +2686,16 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 
 	if resetConfig {
 		// storkctl generate command sets sched-ops to source cluster config
-		SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
 	} else {
 		// Change kubeconfig to destination cluster config
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	if skipStorage {
@@ -2335,7 +2751,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 		wg.Add(1)
 		go func(wg *sync.WaitGroup, ctx *scheduler.Context) {
 			defer wg.Done()
-			namespace := ctx.App.SpecList[0].(*v1.PersistentVolumeClaim).Namespace
+			namespace := ctx.App.SpecList[0].(*corev1.PersistentVolumeClaim).Namespace
 			if err, ok := bkpErrors[namespace]; ok {
 				log.Infof("Skipping validating namespace %s because %s", namespace, err)
 			} else {
@@ -2700,7 +3116,7 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 
 // DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
 func DeleteLabelFromResource(spec interface{}, key string) {
-	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
@@ -2709,7 +3125,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 				core.Instance().UpdatePersistentVolumeClaim(obj)
 			}
 		}
-	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+	} else if obj, ok := spec.(*corev1.ConfigMap); ok {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
@@ -2718,7 +3134,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 				core.Instance().UpdateConfigMap(obj)
 			}
 		}
-	} else if obj, ok := spec.(*v1.Secret); ok {
+	} else if obj, ok := spec.(*corev1.Secret); ok {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
@@ -3291,7 +3707,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 
 // AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
 func AddLabelToResource(spec interface{}, key string, val string) error {
-	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
@@ -3299,7 +3715,7 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		obj.Labels[key] = val
 		core.Instance().UpdatePersistentVolumeClaim(obj)
 		return nil
-	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+	} else if obj, ok := spec.(*corev1.ConfigMap); ok {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
@@ -3307,7 +3723,7 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		obj.Labels[key] = val
 		core.Instance().UpdateConfigMap(obj)
 		return nil
-	} else if obj, ok := spec.(*v1.Secret); ok {
+	} else if obj, ok := spec.(*corev1.Secret); ok {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
@@ -3851,8 +4267,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 // DumpKubeconfigs gets kubeconfigs from configmap
 func DumpKubeconfigs(kubeconfigList []string) {
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
+	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
 
 // Inst returns the Torpedo instances
@@ -4057,8 +4472,8 @@ func ParseFlags() {
 		apl, err := splitCsv(repl1AppsCSV)
 		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
 		repl1AppList = append(repl1AppList, apl...)
-		log.Infof("volume repl 1  apps : %+v", secureAppList)
-		//Adding repl 1 apps as part of app list for deployment
+		log.Infof("volume repl 1 apps : %+v", secureAppList)
+		//Adding repl-1 apps as part of app list for deployment
 		appList = append(appList, repl1AppList...)
 	}
 
@@ -4250,8 +4665,13 @@ func printFlags() {
 
 func isDashboardReachable() bool {
 	timeout := 15 * time.Second
-	client := http.Client{
+	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 	aboutURL := strings.Replace(aetosutil.DashBoardBaseURL, "dashboard", "datamodel/about", -1)
 	log.Infof("Checking URL: %s", aboutURL)
@@ -5993,4 +6413,13 @@ func GetVolumesFromPoolID(contexts []*scheduler.Context, poolUuid string) ([]*vo
 		}
 	}
 	return volumes, nil
+}
+
+// DoRetryWithTimeoutWithGinkgoRecover calls `task.DoRetryWithTimeout` along with `ginkgo.GinkgoRecover()`, to be used in callbacks with panics or ginkgo assertions
+func DoRetryWithTimeoutWithGinkgoRecover(taskFunc func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
+	taskFuncWithGinkgoRecover := func() (interface{}, bool, error) {
+		defer ginkgo.GinkgoRecover()
+		return taskFunc()
+	}
+	return task.DoRetryWithTimeout(taskFuncWithGinkgoRecover, timeout, timeBeforeRetry)
 }

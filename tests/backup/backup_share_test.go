@@ -14,7 +14,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -49,6 +48,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(groupName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
@@ -69,6 +69,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -484,6 +485,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 				email := fmt.Sprintf("testuser%v_%v@cnbu.com", i, time.Now().Unix())
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -500,6 +502,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
 				go func(groupName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
@@ -516,6 +519,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 				groupIndex := i / groupSize
 				wg.Add(1)
 				go func(userName string, groupIndex int) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddGroupToUser(userName, groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
@@ -573,7 +577,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			for _, namespace := range bkpNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
-					time.Sleep(3 * time.Second)
+					time.Sleep(10 * time.Second)
 					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					wg.Add(1)
@@ -841,6 +845,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				log.FailOnError(err, "Error deleting user %v", userName)
@@ -852,6 +857,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		for _, groupName := range groups {
 			wg.Add(1)
 			go func(groupName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteGroup(groupName)
 				log.FailOnError(err, "Error deleting user %v", groupName)
@@ -879,7 +885,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	numberOfGroups, _ := strconv.Atoi(getEnv(groupsToBeCreated, "100"))
 	groupSize, _ := strconv.Atoi(getEnv(maxUsersInGroup, "2"))
 	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "100"))
-	timeBetweenConsecutiveBackups := 4 * time.Second
+	timeBetweenConsecutiveBackups := 10 * time.Second
 	users := make([]string, 0)
 	groups := make([]string, 0)
 	backupNames := make([]string, 0)
@@ -948,6 +954,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
 				go func(groupName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
@@ -964,6 +971,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 				groupIndex := i / groupSize
 				wg.Add(1)
 				go func(userName string, groupIndex int) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddGroupToUser(userName, groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
@@ -1185,6 +1193,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				log.FailOnError(err, "Error deleting user %v", userName)
@@ -1196,6 +1205,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		for _, groupName := range groups {
 			wg.Add(1)
 			go func(groupName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteGroup(groupName)
 				log.FailOnError(err, "Error deleting user %v", groupName)
@@ -1265,6 +1275,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 	individualUser := "autogenerated-user"
 	bkpNamespaces = make([]string, 0)
 	backupLocationMap := make(map[string]string)
+	noAccessCheckTimeout := 5 * time.Minute
+	noAccessCheckRetryDuration := 30 * time.Second
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("CancelClusterBackupShare",
@@ -1300,6 +1312,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				time.Sleep(2 * time.Second)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -1323,6 +1336,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
 				go func(groupName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
@@ -1340,6 +1354,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				groupIndex := i / groupSize
 				wg.Add(1)
 				go func(userName string, groupIndex int) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddGroupToUser(userName, groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
@@ -1397,7 +1412,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 
 			for i := 0; i < numberOfBackups; i++ {
 				sem <- struct{}{}
-				time.Sleep(3 * time.Second)
+				time.Sleep(10 * time.Second)
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 				backupNames = append(backupNames, backupName)
 				wg.Add(1)
@@ -1640,44 +1655,82 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 
 		Step("Validate that no groups or users have access to backups shared at cluster level", func() {
 			log.InfoD("Validate no groups or users have access to backups shared at cluster level")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("User chosen to validate no access - %s", chosenUser)
 			log.InfoD("Checking backups user [%s] has after revoking", chosenUser)
-			var userBackups []string
-			var err error
+			userBackups, err := GetAllBackupsForUser(chosenUser, commonPassword)
+			log.FailOnError(err, "Failed to get all backups for user - [%s]", chosenUser)
 			noAccessCheck := func() (interface{}, bool, error) {
-				// Enumerate all the backups available to the user
-				userBackups, err = GetAllBackupsForUser(chosenUser, commonPassword)
-				log.FailOnError(err, "Failed to get all backups for user - [%s]", chosenUser)
-				log.Infof("Backups user [%s] has access to - %v", chosenUser, userBackups)
 				if len(userBackups) > 0 {
-					return "", true, fmt.Errorf("waiting for all backup access - [%v] to be revoked for user = [%s]",
-						userBackups, chosenUser)
+					log.Infof("Backups user [%s] has access to - %v", chosenUser, userBackups)
+					for _, backupName := range userBackups {
+						backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+						log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+						backupInspectRequest := &api.BackupInspectRequest{
+							Name:  backupName,
+							Uid:   backupUID,
+							OrgId: orgID,
+						}
+						resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+						log.FailOnError(err, fmt.Sprintf("error inspecting backup %v", backupName))
+						deletePendingStatus := api.BackupInfo_StatusInfo_DeletePending
+						deletingStatus := api.BackupInfo_StatusInfo_Deleting
+						actual := resp.GetBackup().GetStatus().Status
+						reason := resp.GetBackup().GetStatus().Reason
+						if actual == deletePendingStatus || actual == deletingStatus {
+							log.Infof("Ignoring the backup from user access as the backup is in [%s] state ,Reason:[%s]", actual, reason)
+							RemoveElementByValue(&userBackups, backupName)
+							continue
+						} else {
+							return "", true, fmt.Errorf("waiting for backup access - [%v] to be revoked for user = [%s], The backup is in [%s] state",
+								backupName, chosenUser, actual)
+						}
+					}
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
-			log.FailOnError(err, "Validate no groups or users have access to backups shared at cluster level")
-			dash.VerifyFatal(len(userBackups), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", chosenUser))
-
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(noAccessCheck, noAccessCheckTimeout, noAccessCheckRetryDuration)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating that user [%s] has access to no backups", chosenUser))
 			// Now validating with individual user who is not part of any group
 			// Get user context
 			log.InfoD("Validate no access of backups shared at cluster level for an individual user - %s", individualUser)
+			log.InfoD("Checking backups user [%s] has after revoking", individualUser)
 			userBackups1, err := GetAllBackupsForUser(individualUser, commonPassword)
 			log.FailOnError(err, "Failed to get all backups for user - [%s]", individualUser)
-			log.Infof("Backups user [%s] has access to - %v", individualUser, userBackups1)
-			log.InfoD("Checking backups user [%s] has after revoking", individualUser)
 			noAccessCheck = func() (interface{}, bool, error) {
 				if len(userBackups1) > 0 {
-					return "", true, fmt.Errorf("waiting for all backup access - [%v] to be revoked for user = [%s]",
-						userBackups1, individualUser)
+					log.Infof("Backups user [%s] has access to - %v", individualUser, userBackups1)
+					for _, backupName := range userBackups1 {
+						backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+						log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+						backupInspectRequest := &api.BackupInspectRequest{
+							Name:  backupName,
+							Uid:   backupUID,
+							OrgId: orgID,
+						}
+						resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+						log.FailOnError(err, fmt.Sprintf("error inspecting backup %v", backupName))
+						deletePendingStatus := api.BackupInfo_StatusInfo_DeletePending
+						deletingStatus := api.BackupInfo_StatusInfo_Deleting
+						actual := resp.GetBackup().GetStatus().Status
+						reason := resp.GetBackup().GetStatus().Reason
+						if actual == deletePendingStatus || actual == deletingStatus {
+							log.Infof("Ignoring the backup from user access as the backup is in [%s] state ,Reason:[%s]", actual, reason)
+							err = RemoveElementByValue(&userBackups1, backupName)
+							log.FailOnError(err, fmt.Sprintf("error removing backup [%s] from the list", backupName))
+							continue
+						} else {
+							return "", true, fmt.Errorf("waiting for backup access - [%v] to be revoked for user = [%s], The backup is in [%s] state ",
+								backupName, individualUser, actual)
+						}
+					}
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
-			log.FailOnError(err, "Validate no groups or users have access to backups shared at cluster level")
-			dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", individualUser))
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(noAccessCheck, noAccessCheckTimeout, noAccessCheckRetryDuration)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating that individual user [%s] has access to no backups", individualUser))
 		})
-
 	})
 
 	JustAfterEach(func() {
@@ -1692,6 +1745,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %v", userName))
@@ -1705,6 +1759,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		for _, groupName := range groups {
 			wg.Add(1)
 			go func(groupName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteGroup(groupName)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting group %v", groupName))
@@ -1786,6 +1841,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
@@ -1951,6 +2007,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				log.FailOnError(err, "Error deleting user %v", userName)
@@ -2051,7 +2108,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			for _, namespace := range bkpNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
-					time.Sleep(3 * time.Second)
+					time.Sleep(10 * time.Second)
 					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					wg.Add(1)
@@ -2126,6 +2183,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			for _, backup := range backupNames {
 				wg.Add(1)
 				go func(backup string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					_, err = DeleteBackup(backup, backupMap[backup], orgID, ctx)
 					log.FailOnError(err, "Failed to delete backup - %s", backup)
@@ -2161,6 +2219,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				log.FailOnError(err, "Error deleting user %v", userName)
@@ -2301,7 +2360,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 					}
 					return userBackups, false, nil
 				}
-				userBackups, err := task.DoRetryWithTimeout(clusterShareCheck, 2*time.Minute, 10*time.Second)
+				userBackups, err := DoRetryWithTimeoutWithGinkgoRecover(clusterShareCheck, 2*time.Minute, 10*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backups from shared cluster named [%s] for user [%s]", backupClusterName, username))
 				log.InfoD("User backups - %v", userBackups.([]string))
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -2585,7 +2644,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 			var wg sync.WaitGroup
 			for i := 0; i < numberOfUsers; i++ {
 				sem <- struct{}{}
-				time.Sleep(3 * time.Second)
+				time.Sleep(10 * time.Second)
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 				backupNames = append(backupNames, backupName)
 				wg.Add(1)
@@ -2662,6 +2721,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %s", userName))
@@ -2760,7 +2820,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			for _, namespace := range bkpNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
-					time.Sleep(3 * time.Second)
+					time.Sleep(10 * time.Second)
 					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					wg.Add(1)
@@ -2812,6 +2872,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			for _, backup := range backupNames {
 				wg.Add(1)
 				go func(backup string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					log.InfoD("Backup deletion started")
 					backupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, backup, orgID)
@@ -2962,7 +3023,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			var wg sync.WaitGroup
 			for i := 0; i < numberOfUsers; i++ {
 				sem <- struct{}{}
-				time.Sleep(3 * time.Second)
+				time.Sleep(10 * time.Second)
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 				backupNames = append(backupNames, backupName)
 				wg.Add(1)
@@ -2999,7 +3060,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		})
 
@@ -3020,7 +3081,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			var wg sync.WaitGroup
 			for i := 0; i < numberOfUsers; i++ {
 				sem <- struct{}{}
-				time.Sleep(3 * time.Second)
+				time.Sleep(10 * time.Second)
 				backupName := fmt.Sprintf("%s-%s-%v", "new", BackupNamePrefix, time.Now().Unix())
 				newBackupNames = append(newBackupNames, backupName)
 				wg.Add(1)
@@ -3100,6 +3161,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %v", userName))
@@ -3410,7 +3472,8 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on source cluster %s", scName, SourceClusterName))
 
 			log.InfoD("Switching cluster context to destination cluster")
-			SetDestinationKubeConfig()
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to set destination kubeconfig")
 			log.InfoD("Create new storage class on destination cluster for storage class mapping for restore")
 			_, err = k8sStorage.CreateStorageClass(&scObj)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", scName, destinationClusterName))
@@ -3571,6 +3634,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		for _, restoreName := range restoreList {
 			wg.Add(1)
 			go func(restoreName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err = DeleteRestore(restoreName, orgID, userCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
@@ -3581,7 +3645,8 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		err = k8sStorage.DeleteStorageClass(scName)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting storage class %s from source cluster", scName))
 		log.InfoD("Switching cluster context to destination cluster")
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Failed to set destination kubeconfig")
 		err = k8sStorage.DeleteStorageClass(scName)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting storage class %s from destination cluster", scName))
 		log.InfoD("Switching cluster context back to source cluster")
@@ -3655,7 +3720,6 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		})
 		Step("Delete users", func() {
 			for userName := range userRoleMapping {
-				log.Infof("This is the user : ", userName)
 				err := backup.DeleteUser(userName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
@@ -3816,6 +3880,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				log.FailOnError(err, "Fetching non admin ctx")
 				wg.Add(1)
 				go func(user string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					_, err = DeleteBackup(backupName, backupMap[backupName], orgID, ctxNonAdmin)
 					log.FailOnError(err, "Failed to delete backup - %s", backupName)
@@ -3875,6 +3940,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		for _, userName := range users {
 			wg.Add(1)
 			go func(userName string) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				err := backup.DeleteUser(userName)
 				log.FailOnError(err, "Error deleting user %v", userName)
@@ -4086,7 +4152,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 			log.FailOnError(err, fmt.Sprintf("Error deleting backup - %s for user - %s", backupName, users[i]))
 		}
 
@@ -4113,7 +4179,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
+				_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
 			}
 		}
@@ -4131,7 +4197,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 					}
 					return "", false, nil
 				}
-				_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
 			}
 		}

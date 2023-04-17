@@ -31,8 +31,8 @@ var (
 
 const (
 	//DashBoardBaseURL for posting logs
-	DashBoardBaseURL = "http://aetos.pwx.purestorage.com/dashboard" //"http://aetos-dm.pwx.purestorage.com:3939/dashboard"
-	AetosBaseURL     = "http://aetos.pwx.purestorage.com"
+	DashBoardBaseURL = "https://aetos.pwx.purestorage.com/dashboard" //"http://aetos-dm.pwx.purestorage.com:3939/dashboard"
+	AetosBaseURL     = "https://aetos.pwx.purestorage.com"
 )
 
 const (
@@ -163,9 +163,11 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 			if err != nil {
 				logrus.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
-			dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
-			os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 		}
+	}
+	if d.TestSetID != 0 {
+		dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
+		os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 	}
 	logrus.Info(dashURL)
 }
@@ -260,7 +262,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 		resp, respStatusCode, err := rest.PUT(updateTestSetURL, testSet, nil, nil)
 
 		if err != nil {
-			logrus.Errorf("Error in updating TestSet, Caose: %v", err)
+			logrus.Errorf("Error in updating TestSet, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Failed to update TestSet, Resp : %s", string(resp))
 		}
@@ -419,7 +421,7 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	d.VerifySafely(actual, expected, description)
 	var err error
 	if actual != expected {
-		err = fmt.Errorf(description)
+		err = fmt.Errorf("error: %v, Description: %s", actual, description)
 	}
 	expect(err).NotTo(haveOccurred())
 }
