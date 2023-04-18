@@ -82,8 +82,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 			}
 
@@ -91,16 +89,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-				log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
-			}
-		}()
 	})
 })
 
@@ -372,8 +360,6 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 
 			})
@@ -382,15 +368,6 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
 	})
 })
 
@@ -403,7 +380,6 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
-					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
@@ -453,7 +429,6 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
 				})
 			}
 		})
@@ -461,15 +436,6 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
 	})
 })
 
@@ -801,7 +767,6 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			log.InfoD("Getting all PV and associated PVCs and deleting them")
 			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 			log.FailOnError(err, "Error while deleting PV and PVCs")
-			isDeploymentsDeleted = true
 		})
 
 	})
@@ -1057,21 +1022,11 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-
 		defer EndTorpedoTest()
 	})
 })
@@ -1295,7 +1250,6 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			log.InfoD("Getting all PV and associated PVCs and deleting them")
 			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 			log.FailOnError(err, "Error while deleting PV and PVCs")
-			isDeploymentsDeleted = true
 		})
 
 	})
@@ -1560,23 +1514,12 @@ var _ = Describe("{RestartPXPods}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
 				})
 			}
 		})
 	})
 
 	JustAfterEach(func() {
-		//TODO: Write a wrapper method for defer func
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "error deleting deployment")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-
 		defer EndTorpedoTest()
 	})
 
