@@ -155,31 +155,25 @@ func main() {
 		}(ch)
 	}
 
-	// Create an aggregrate channel for all stdout channels for above executors
-	aggStdoutChan := make(chan string)
-	for _, ch := range stdoutChans {
-		go func(c chan string) {
-			for stdout := range c {
-				aggStdoutChan <- stdout
-			}
-		}(ch)
-	}
-
 	// Check command status
 	done := make(chan bool)
 	logrus.Infof("Checking status on command: %s", command)
 	for _, executor := range executors {
 		ns, name := executor.GetPod()
 		podKey := createPodStringFromNameAndNamespace(ns, name)
-		go func(errChan chan error, doneChan chan bool, execInst cmdexecutor.Executor) {
+		go func(errChan chan error, stdoutChans map[string]chan string, doneChan chan bool, execInst cmdexecutor.Executor) {
 			err := execInst.Wait(time.Duration(statusCheckTimeout) * time.Second)
+			// log the output of command execution before returning/marking it done
+			for stdout := range stdoutChans[podKey] {
+				logrus.Infof("[%s] :: %s", podKey, stdout)
+			}
 			if err != nil {
 				errChan <- err
 				return
 			}
 
 			doneChan <- true
-		}(errChans[podKey], done, executor)
+		}(errChans[podKey], stdoutChans, done, executor)
 	}
 
 	// Now go into a wait loop which will exit if either of the 2 things happen
@@ -191,14 +185,14 @@ Loop:
 		select {
 		case err := <-aggErrorChan:
 			// If we hit any error, persist the error using hostname as key and then exit
-			persistStatusErr := status.Persist(hostname, err.Error())
-			if persistStatusErr != nil {
-				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
-			}
+			if err != nil {
+				persistStatusErr := status.Persist(hostname, err.Error())
+				if persistStatusErr != nil {
+					logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
+				}
 
-			logrus.Fatalf(err.Error())
-		case stdout := <-aggStdoutChan:
-			logrus.Info(stdout)
+				logrus.Fatalf(err.Error())
+			}
 		case isDone := <-done:
 			if isDone {
 				// as each executor is done, track how many are done

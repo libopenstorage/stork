@@ -94,6 +94,7 @@ func (c *cmdExecutor) Start(stdoutChan chan string, errChan chan error) error {
 
 		stdoutChan <- stdout
 		errChan <- err
+		close(stdoutChan)
 	}()
 
 	return nil
