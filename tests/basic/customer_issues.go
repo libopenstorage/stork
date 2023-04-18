@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -163,6 +164,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "Ford customer issue for runflat and resync failed"
 	It(stepLog, func() {
+
+		var wg sync.WaitGroup
+
 		var iptablesflushed bool
 		iptablesflushed = false
 
@@ -210,6 +214,11 @@ var _ = Describe("{FordRunFlatResync}", func() {
 				volumesPresent = append(volumesPresent, eachVol)
 			}
 		}
+
+		done := make(chan bool)
+
+		defer wg.Wait()
+		wg.Add(1)
 
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
@@ -261,6 +270,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 					log.InfoD("Flushing iptables rules on node [%v]", eachNode.Name)
 					log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
 				}
+				done <- true
 			}
 		}
 		revertZone1 := func() {
@@ -275,6 +285,26 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		// force flush iptables on all the nodes at the end
 		defer flushiptables()
+
+		// Run inspect continuously in the background
+		go func(volumes []*volume.Volume) {
+			defer wg.Done()
+			for {
+				select {
+				case <-done:
+					return
+				default:
+
+					for _, each := range volumes {
+						vid := each.ID
+						_, err := getVolumeRuntimeState(vid)
+						if err != nil {
+							fmt.Printf("Error while fetching the volume info")
+						}
+					}
+				}
+			}
+		}(volumesPresent)
 
 		// From Zone 1 block all the traffic to systems under zone2
 		// From Zone 2 block all the traffic to systems under zone1
@@ -347,6 +377,8 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		for _, eachVol := range volumesPresent {
 			log.FailOnError(VerifyVolumeStatusOnline(eachVol), fmt.Sprintf("Volume [%v] is not in expected state", eachVol.Name))
 		}
+
+		done <- true
 
 	})
 
