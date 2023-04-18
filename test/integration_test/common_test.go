@@ -948,23 +948,22 @@ func createSecret(t *testing.T, secret_name string, secret_map map[string]string
 }
 
 func cleanup(t *testing.T, namespace string, storageClass string) {
-	funcDeleteNamespace := func() {
+	funcCleanup := func() {
 		err := core.Instance().DeleteNamespace(namespace)
 		if err != nil {
 			logrus.Infof("Error deleting namespace %s: %v\n", namespace, err)
 		}
-
 		if storageClass != "" {
 			err = storage.Instance().DeleteStorageClass(storageClass)
 			if err != nil {
-				logrus.Infof("Error deleting namespace %s: %v\n", namespace, err)
+				logrus.Infof("Error deleting storage class %s: %v\n", namespace, err)
 			}
 		}
 
 	}
-	funcDeleteNamespace()
-	executeOnDestination(t, funcDeleteNamespace)
-	// time to let deletion terminate
+	funcCleanup()
+	executeOnDestination(t, funcCleanup)
+	// time to let deletion finish
 	time.Sleep(time.Second * 20)
 }
 
@@ -1004,7 +1003,7 @@ func scheduleAppAndWait(t *testing.T, instanceIDs []string, appKey string) []*sc
 	return ctxs
 }
 
-func scheduleTasksAndWait(t *testing.T, ctx *scheduler.Context, appKeys []string) {
+func addTasksAndWait(t *testing.T, ctx *scheduler.Context, appKeys []string) {
 	err := schedulerDriver.AddTasks(
 		ctx,
 		scheduler.ScheduleOptions{
