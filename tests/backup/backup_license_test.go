@@ -7,6 +7,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -19,6 +20,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		totalNumberOfWorkerNodes      []node.Node
 		srcClusterStatus              api.ClusterInfo_StatusInfo_Status
 		destClusterStatus             api.ClusterInfo_StatusInfo_Status
+		contexts                      []*scheduler.Context
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("NodeCountForLicensing",
@@ -101,9 +103,11 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		SetDestinationKubeConfig()
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
 		nodeLabels, err := core.Instance().GetLabelsOnNode(destinationClusterWorkerNodes[0].Name)
 		if err != nil {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Getting label from worker node %v", destinationClusterWorkerNodes[0].Name))

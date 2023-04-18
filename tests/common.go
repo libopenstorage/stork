@@ -6425,7 +6425,6 @@ func DoRetryWithTimeoutWithGinkgoRecover(taskFunc func() (interface{}, bool, err
 	return task.DoRetryWithTimeout(taskFuncWithGinkgoRecover, timeout, timeBeforeRetry)
 }
 
-
 // GetVolumesInDegradedState Get the list of volumes in degraded state
 func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume, error) {
 	var volumes []*volume.Volume

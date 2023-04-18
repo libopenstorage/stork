@@ -1016,7 +1016,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Updating the mongodb statefulset replica count as it was at the start of this testcase")
 		statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
 		if *statefulSet.Spec.Replicas != originalReplicaCount {
@@ -1542,7 +1542,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Updating the px_backup deployment replica count as it was at the start of this testcase")
 		backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
 		log.FailOnError(err, "Getting px-backup deployment")
