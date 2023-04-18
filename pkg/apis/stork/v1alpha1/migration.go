@@ -23,6 +23,7 @@ type MigrationSpec struct {
 	SkipServiceUpdate            *bool             `json:"skipServiceUpdate"`
 	IncludeNetworkPolicyWithCIDR *bool             `json:"includeNetworkPolicyWithCIDR"`
 	Selectors                    map[string]string `json:"selectors"`
+	ExcludeSelectors             map[string]string `json:"excludeSelectors"`
 	PreExecRule                  string            `json:"preExecRule"`
 	PostExecRule                 string            `json:"postExecRule"`
 	IncludeOptionalResourceTypes []string          `json:"includeOptionalResourceTypes"`

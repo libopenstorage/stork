@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: debug
+  namespace: kube-system
+spec:
+  minReadySeconds: 0
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: debug
+  template:
+    metadata:
+      labels:
+        name: debug
+    spec:
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+      - operator: Exists
+      priorityClassName: system-cluster-critical
+      containers:
+      - name: debug
+        image: ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        command: [ "sleep" ]
+        args: [ "infinity" ]
+        env:
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: etcpwx
+          mountPath: /etc/pwx
+        - name: optpwx
+          mountPath: /opt/pwx
+        - name: dev
+          mountPath: /dev
+        - name: hostproc
+          mountPath: /hostproc
+        - name: varcore
+          mountPath: /var/cores/
+      restartPolicy: Always
+      volumes:
+      - name: etcpwx
+        hostPath:
+          path: /etc/pwx
+      - name: optpwx
+        hostPath:
+          path: /opt/pwx
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: hostproc
+        hostPath:
+          path: /proc
+      - name: varcore
+        hostPath:
+          path: /var/cores/

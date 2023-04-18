@@ -14,6 +14,8 @@ import (
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
@@ -30,6 +32,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/openshift"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -77,6 +80,19 @@ const (
 	defaultSchedulerName        = "default-scheduler"
 	bucketPrefix                = "stork-test"
 	adminTokenSecretName        = "px-admin-token"
+	pxStcServiceTypeKey         = "portworx.io/service-type"
+	stcLoadBalancerValue        = "LoadBalancer"
+	pxStcServiceKey             = "service/portworx-service"
+	awsInternalLBKey            = "service.beta.kubernetes.io/aws-load-balancer-internal"
+	awsInternalLBValue          = "true"
+	awsLBTypeKey                = "service.beta.kubernetes.io/aws-load-balancer-type"
+	awsLBTypeVal                = "nlb"
+	awsNLBTargetTypeKey         = "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"
+	awsNLBTargetTypeVal         = "ip"
+	awsLBSubnetKey              = "service.beta.kubernetes.io/aws-load-balancer-subnets"
+	awsLBSubnetVal              = "subnet-0758f16bc3ca384e0"
+
+	pxServiceName = "portworx-service"
 
 	// TODO: Figure out a way to communicate with PX nodes from other cluster
 	nodeScore   = 100
@@ -96,6 +112,8 @@ const (
 	backupPathVar            = "BACKUP_LOCATION_PATH"
 	externalTestCluster      = "EXTERNAL_TEST_CLUSTER"
 	cloudDeletionValidation  = "CLOUD_DELETION_VALIDATION"
+	internalLBAws            = "INTERNAL_AWS_LB"
+	portworxNamespace        = "PX_NAMESPACE"
 
 	tokenKey    = "token"
 	clusterIP   = "ip"
@@ -121,6 +139,8 @@ var genericCsiConfigMap string
 var externalTest bool
 var storkVersionCheck bool
 var cloudDeletionValidate bool
+var isInternalLBAws bool
+var pxNamespace string
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -165,6 +185,7 @@ func setup() error {
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	provisioner := os.Getenv(storageProvisioner)
 	backupLocationPath = addTimestampSuffix(os.Getenv(backupPathVar))
+
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
 		return fmt.Errorf("Error getting stork volume driver %s: %v", volumeDriverName, err)
 	}
@@ -177,6 +198,7 @@ func setup() error {
 		return fmt.Errorf("Error getting node driver %v: %v", nodeDriverName, err)
 	}
 
+	logrus.Infof("Initializing node driver")
 	if err = nodeDriver.Init(node.InitOptions{}); err != nil {
 		return fmt.Errorf("Error initializing node driver %v: %v", nodeDriverName, err)
 	}
@@ -191,7 +213,7 @@ func setup() error {
 
 	cloudDeletionValidate, err = strconv.ParseBool(os.Getenv(cloudDeletionValidation))
 	if err == nil {
-		logrus.Infof("Three cluster config mode has been activated for test: %t", externalTest)
+		logrus.Infof("cloud deletion validation flag has been set to: %t", cloudDeletionValidate)
 	}
 	if objectStoreDriver, err = objectstore.Get(); err != nil {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
@@ -236,6 +258,36 @@ func setup() error {
 			return fmt.Errorf("stork version mismatch, found: %s, expected: %s", getStorkVersion(ver), getStorkVersion(version.Version))
 		}
 	}
+
+	isInternalLBAws, err = strconv.ParseBool(os.Getenv(internalLBAws))
+	if err == nil {
+		logrus.Infof("Internal AWS Load Balancer is being used: %t", isInternalLBAws)
+	}
+	// On source cluster, change PX service to type LoadBalancer if it is an EKS cluster
+	pxNamespace = os.Getenv(portworxNamespace)
+	logrus.Infof("PX has been deployed in namespace: %s", pxNamespace)
+	if volumeDriverName == storkdriver.PortworxDriverName && IsEks() {
+		if err = changePxServiceToLoadBalancer(isInternalLBAws); err != nil {
+			return fmt.Errorf("failed to change PX service to LoadBalancer on source cluster: %v", err)
+		}
+	}
+	err = setDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("while PX service to LoadBalancer, setting kubeconfig to destination failed %v", err)
+	}
+
+	// On destination cluster, change PX service to type LoadBalancer if it is an EKS cluster
+	if volumeDriverName == storkdriver.PortworxDriverName && IsEks() {
+		if err = changePxServiceToLoadBalancer(isInternalLBAws); err != nil {
+			return fmt.Errorf("failed to change PX service to LoadBalancer on destination cluster: %v", err)
+		}
+	}
+
+	err = setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("at the end of setup, setting kubeconfig to source failed in setup: %v", err)
+	}
+
 	return nil
 }
 
@@ -435,6 +487,10 @@ func setRemoteConfig(kubeConfig string) error {
 
 	rbacOps := rbac.Instance()
 	rbacOps.SetConfig(config)
+
+	operatorOps := operator.Instance()
+	operatorOps.SetConfig(config)
+
 	return nil
 }
 
@@ -547,6 +603,7 @@ func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool
 func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir, projectIDMappings string, reverse bool) error {
 	var token string
 	var err error
+
 	if reverse {
 		// For auth-enabled clusters first get admin token for destination cluster
 		err := setSourceKubeConfig()
@@ -568,7 +625,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		}
 	}
 
-	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath, token)
+	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath, token, IsEks(), reverse)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -659,7 +716,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	// Get cluster pair details for source cluster
-	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcKubeconfigPath, token)
+	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcKubeconfigPath, token, IsEks(), true)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -699,7 +756,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	// Get cluster pair details for destination cluster
-	destInfo, err := volumeDriver.GetClusterPairingInfo(destKubeconfigPath, token)
+	destInfo, err := volumeDriver.GetClusterPairingInfo(destKubeconfigPath, token, IsEks(), false)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -1136,6 +1193,83 @@ func validateMigrationOnSrcAndDest(
 		}
 	}
 	executeOnDestination(t, funcValidateMigrationOnDestination)
+}
+
+func changePxServiceToLoadBalancer(internalLB bool) error {
+	// Check if service is already of type loadbalancer
+	pxService, err := core.Instance().GetService(pxServiceName, pxNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to get portworx service before changing it to load balancer: %v", err)
+	}
+	if pxService.Spec.Type == v1.ServiceTypeLoadBalancer {
+		logrus.Infof("portworx service is already of type LoadBalancer")
+		return nil
+	}
+
+	if volumeDriverName == storkdriver.PortworxDriverName {
+		stc, err := operator.Instance().ListStorageClusters(pxNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to list PX storage cluster on EKS: %v", err)
+		}
+		if len(stc.Items) > 0 {
+			pxStc := (*stc).Items[0]
+			// Change portworx service to LoadBalancer, since this is an EKS with PX operator install for Portworx
+			if pxStc.ObjectMeta.Annotations == nil {
+				pxStc.ObjectMeta.Annotations = make(map[string]string)
+			}
+			pxStc.ObjectMeta.Annotations[pxStcServiceTypeKey] = stcLoadBalancerValue
+
+			if internalLB {
+				// Add LoadBalancer annotations specific to EKS ELB
+				if pxStc.Spec.Metadata == nil {
+					pxStc.Spec.Metadata = &opcorev1.Metadata{}
+					pxStc.Spec.Metadata.Annotations = make(map[string]map[string]string)
+					pxStc.Spec.Metadata.Annotations[pxStcServiceKey] = make(map[string]string)
+				}
+				if pxStc.Spec.Metadata.Annotations == nil {
+					pxStc.Spec.Metadata.Annotations = make(map[string]map[string]string)
+				}
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey] = make(map[string]string)
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsInternalLBKey] = awsInternalLBValue
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsLBTypeKey] = awsLBTypeVal
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsNLBTargetTypeKey] = awsNLBTargetTypeVal
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsLBSubnetKey] = awsLBSubnetVal
+			}
+			_, err = operator.Instance().UpdateStorageCluster(&pxStc)
+			if err != nil {
+				return fmt.Errorf("failed to update PX service type to LoadBalancer on EKS: %v", err)
+			}
+
+		} else {
+			return fmt.Errorf("No storage clusters found")
+		}
+
+		time.Sleep(15 * time.Second)
+
+		// Check if service has been changed to type loadbalancer
+		pxService, err := core.Instance().GetService(pxServiceName, pxNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to get portworx service after changing it to load balancer: %v", err)
+		}
+
+		if pxService.Spec.Type != v1.ServiceTypeLoadBalancer {
+			return fmt.Errorf("failed to set portworx service to type %s", v1.ServiceTypeLoadBalancer)
+		}
+
+	}
+	return nil
+}
+
+func IsEks() bool {
+	stc, err := operator.Instance().ListStorageClusters(defaultAdminNamespace)
+	if err == nil {
+		logrus.Infof("Storage cluster name: %s", stc.Items[0].Name)
+		if len(stc.Items) > 0 && oputils.IsEKS(&stc.Items[0]) {
+			logrus.Infof("EKS installation detected.")
+			return true
+		}
+	}
+	return false
 }
 
 func TestMain(m *testing.M) {
