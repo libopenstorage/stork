@@ -1331,7 +1331,6 @@ func (a *ApplicationRestoreController) applyResources(
 			continue
 		}
 		restore.Status.LastUpdateTimestamp = metav1.Now()
-		restore.Status.ResourceCount = len(objects)
 		restore.Status.RestoredResourceCount = 0
 		err = a.client.Update(context.TODO(), restore)
 		if err != nil {
@@ -1386,6 +1385,8 @@ func (a *ApplicationRestoreController) applyResources(
 			return err
 		}
 	}
+
+	restore.Status.ResourceCount = len(objects)
 	tempResourceList := make([]*storkapi.ApplicationRestoreResourceInfo, 0)
 	for _, o := range objects {
 		// every five minutes once, we need to update the restore CR timestamp
