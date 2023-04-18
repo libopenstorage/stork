@@ -22,6 +22,7 @@ const (
 	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
 	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
+	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
 )
 
 // PDS vars
@@ -101,6 +102,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
+	case RestartPxDuringDSScaleUp:
+		log.InfoD("Entering to check if Data service has %v active pods. "+
+			"Once it does, we restart portworx", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, CheckTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
 	case KillDeploymentControllerPod:
 		checkTillReplica = CheckTillReplica
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
@@ -112,6 +123,7 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		}
 		ExecuteInParallel(func1, func2)
 	}
+
 	var aggregatedError error
 	for w := 1; w <= len(CapturedErrors); w++ {
 		if err := <-CapturedErrors; err != nil {
@@ -123,6 +135,66 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 	}
 	err := ValidateDataServiceDeployment(deployment, namespace)
 	return err
+}
+
+func RestartPXDuringDSScaleUp(ns string) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+
+	//Waiting till pod have a node assigned
+	var pods []corev1.Pod
+	var nodeToRestartPX node.Node
+	var nodeName string
+	var podName string
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if the new Pod have a node assigned or it's in a window where it's just coming up
+		podCount := 0
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				podCount += 1
+				log.Debugf("No of pods that has node assigned: %d", podCount)
+			}
+			if int32(podCount) == *ss.Spec.Replicas {
+				log.Debugf("Expected pod %v has node %v assigned", pod.Name, pod.Spec.NodeName)
+				nodeName = pod.Spec.NodeName
+				podName = pod.Name
+				return true, nil
+			}
+		}
+		return true, nil
+	})
+	nodeToRestartPX, testError = node.GetNodeByName(nodeName)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("Going ahead and restarting PX the node %v as there is an "+
+		"application pod %v that's coming up on this node", nodeName, podName)
+	testError = tests.Inst().V.RestartDriver(nodeToRestartPX, nil)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("PX restarted successfully on node %v", podName)
+	return testError
 }
 
 // Reboot the Active Node onto which the application pod is coming up

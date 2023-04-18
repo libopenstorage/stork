@@ -616,6 +616,9 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 					log.FailOnError(err, "Error while updating dataservices")
 
+					err = pdslib.ValidateDataServiceDeployment(updatedDeployment, namespace)
+					log.FailOnError(err, "Error while validating data service deployment")
+
 					_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 					dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
@@ -1191,6 +1194,7 @@ func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID 
 }
 
 func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+	log.InfoD("Data Service Deployment Triggered")
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := TriggerDeployDataService(ds, namespace, tenantID, projectID)
 	Step("Validate Data Service Configurations", func() {
 		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)

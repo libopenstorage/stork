@@ -44,6 +44,7 @@ const (
 	timeInterval                     = 1 * time.Second
 	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
+	RestartPxDuringDSScaleUp         = "restart-portworx-during-ds-scaleup"
 	BackUpCRD                        = "backups.pds.io"
 	DeploymentCRD                    = "deployments.pds.io"
 )

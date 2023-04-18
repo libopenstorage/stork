@@ -806,12 +806,14 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 // Function to check for set amount of Replica Pods
 func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
+	log.Debugf("expected replica %v", checkTillReplica)
 	conditionError := wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
 			return false, nil
 		}
+		log.Debugf("pods current replica %v", ss.Status.Replicas)
 		if ss.Status.Replicas >= checkTillReplica {
 			// Checking If this is a resiliency test case
 			if ResiliencyFlag {
@@ -2226,11 +2228,6 @@ func UpdateDataServices(deploymentID string, appConfigID string, imageID string,
 		}
 		return true, nil
 	})
-
-	err = ValidateDataServiceDeployment(deployment, namespace)
-	if err != nil {
-		return nil, err
-	}
 
 	return deployment, nil
 }
