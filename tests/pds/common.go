@@ -47,6 +47,8 @@ const (
 	RestartPxDuringDSScaleUp         = "restart-portworx-during-ds-scaleup"
 	BackUpCRD                        = "backups.pds.io"
 	DeploymentCRD                    = "deployments.pds.io"
+	RebootNodesDuringDeployment      = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment     = "kill-agent-pod-during-deployment"
 )
 
 var (
