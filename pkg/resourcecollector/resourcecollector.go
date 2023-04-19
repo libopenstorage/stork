@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
+	"github.com/libopenstorage/stork/pkg/pluralmap"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
@@ -1188,6 +1189,40 @@ func (r *ResourceCollector) DeleteResources(
 	return nil
 }
 
+// ObjectTobeDeleted returns list of objects present on destination but not on source
+func (r *ResourceCollector) ObjectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
+	var deleteObjects []runtime.Unstructured
+	for _, o := range destObjects {
+		name, namespace, kind, err := utils.GetObjectDetails(o)
+		if err != nil {
+			// skip purging if we are not able to get object details
+			logrus.Errorf("Unable to get object details %v", err)
+			continue
+		}
+		// Don't return objects that support merging
+		if r.mergeSupportedForResource(o) {
+			continue
+		}
+		isPresent := false
+		for _, s := range srcObjects {
+			sname, snamespace, skind, err := utils.GetObjectDetails(s)
+			if err != nil {
+				// skip purging if we are not able to get object details
+				continue
+			}
+			if skind == kind && snamespace == namespace && sname == name {
+				isPresent = true
+				break
+			}
+		}
+		if !isPresent {
+			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
+			deleteObjects = append(deleteObjects, o)
+		}
+	}
+	return deleteObjects
+}
+
 func (r *ResourceCollector) getDynamicClient(
 	dynamicInterface dynamic.Interface,
 	object runtime.Unstructured,
@@ -1277,6 +1312,7 @@ func (r *ResourceCollector) prepareRancherApplicationResource(
 }
 
 func GetDefaultRuleSet() *inflect.Ruleset {
+
 	// TODO: we should use k8s code generator logic to pluralize
 	// crd resources instead of depending on inflect lib
 	ruleset := inflect.NewDefaultRuleset()
@@ -1297,5 +1333,8 @@ func GetDefaultRuleSet() *inflect.Ruleset {
 	ruleset.AddPlural("scheduling", "scheduling")
 	ruleset.AddPlural("spss", "spss")
 
+	for kind, group := range pluralmap.Instance().GetCRDKindToPluralMap() {
+		ruleset.AddPlural(kind, group)
+	}
 	return ruleset
 }

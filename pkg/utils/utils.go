@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 const (
@@ -127,4 +128,17 @@ func GetSizeOfObject(object interface{}) (int, error) {
 		return 0, err
 	}
 	return buf.Len(), nil
+}
+
+// Get ObjectDetails returns name, namespace, kind of the given object
+func GetObjectDetails(o interface{}) (name, namespace, kind string, err error) {
+	metadata, err := meta.Accessor(o)
+	if err != nil {
+		return "", "", "", err
+	}
+	objType, err := meta.TypeAccessor(o)
+	if err != nil {
+		return "", "", "", err
+	}
+	return metadata.GetName(), metadata.GetNamespace(), objType.GetKind(), nil
 }
