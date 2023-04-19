@@ -9,7 +9,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
-	"sync"
 	"time"
 )
 
@@ -165,8 +164,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 	stepLog := "Ford customer issue for runflat and resync failed"
 	It(stepLog, func() {
 
-		var wg sync.WaitGroup
-
 		var iptablesflushed bool
 		iptablesflushed = false
 
@@ -216,7 +213,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		}
 
 		done := make(chan bool)
-
+		
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
 
