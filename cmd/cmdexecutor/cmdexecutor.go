@@ -163,13 +163,15 @@ func main() {
 		podKey := createPodStringFromNameAndNamespace(ns, name)
 		go func(errChan chan error, stdoutChan chan string, doneChan chan bool, execInst cmdexecutor.Executor) {
 			err := execInst.Wait(time.Duration(statusCheckTimeout) * time.Second)
-			// log the output of command execution before returning/marking it done
-			for stdout := range stdoutChan {
-				logrus.Infof("[%s] :: %s", podKey, stdout)
-			}
+
 			if err != nil {
 				errChan <- err
 				return
+			}
+			// log the output of command execution before marking it done
+			// note: if wait is returning err, it won't log output
+			for stdout := range stdoutChan {
+				logrus.Infof("[%s] :: %s", podKey, stdout)
 			}
 
 			doneChan <- true
