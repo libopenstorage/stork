@@ -1886,7 +1886,7 @@ func ValidateClusterSize(count int64) {
 	storageNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Storage nodes are empty")
 
-	log.Info("List of storage nodes:[%v]", storageNodes)
+	log.Infof("List of storage nodes:[%v]", storageNodes)
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
 }
 
@@ -4471,9 +4471,9 @@ func ParseFlags() {
 		repl1AppList = append(repl1AppList, appList...)
 	} else if len(repl1AppsCSV) > 0 {
 		apl, err := splitCsv(repl1AppsCSV)
-		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
+		log.FailOnError(err, fmt.Sprintf("failed to parse repl-1 app list: %v", repl1AppsCSV))
 		repl1AppList = append(repl1AppList, apl...)
-		log.Infof("volume repl 1 apps : %+v", secureAppList)
+		log.Infof("volume repl 1 apps : %+v", repl1AppList)
 		//Adding repl-1 apps as part of app list for deployment
 		appList = append(appList, repl1AppList...)
 	}

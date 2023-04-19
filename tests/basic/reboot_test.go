@@ -259,8 +259,6 @@ var _ = Describe("{ClusterPxRestart}", func() {
 	var testrailID = 60042
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/60042
 	var runID int
-	loc, _ := time.LoadLocation("UTC")
-	t1 := time.Now().In(loc)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ClusterPxRestart", "Validate restart of PX in cluster", nil, testrailID)
@@ -285,6 +283,8 @@ var _ = Describe("{ClusterPxRestart}", func() {
 
 			Step("get all PX nodes and restart PX one by one", func() {
 				nodesToPXRestart := node.GetWorkerNodes()
+				loc, _ := time.LoadLocation("UTC")
+				t1 := time.Now().In(loc)
 
 				// Reboot node and check driver status
 				Step(fmt.Sprintf("restart px one at a time on node(s): %v", nodesToPXRestart), func() {
@@ -301,16 +301,16 @@ var _ = Describe("{ClusterPxRestart}", func() {
 								log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", n.Name))
 							})
 
-							Step("validate apps", func() {
-								for _, ctx := range contexts {
-									ValidateContext(ctx)
-								}
-							})
 						}
 					}
 					t2 := time.Now()
+					Step("validate apps", func() {
+						for _, ctx := range contexts {
+							ValidateContext(ctx)
+						}
+					})
 					log.InfoD(fmt.Sprintf("Time taken to reboot all the PX is: %fsecs", t2.Sub(t1).Seconds()))
-					dash.VerifyFatal(((t2.Sub(t1).Seconds()) <= (float64(len(nodesToPXRestart) * 240))), true, fmt.Sprintf("Time taken to reboot all the PX is: %fsecs which is less than the timeout of %fsecs", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
+					dash.VerifyFatal((t2.Sub(t1).Seconds()) <= (float64(len(nodesToPXRestart)*240)), true, fmt.Sprintf("Time taken to reboot all the PX is: %fsecs which is less than the timeout of %fsecs", t2.Sub(t1).Seconds(), float64(len(nodesToPXRestart)*240)))
 				})
 			})
 		})
