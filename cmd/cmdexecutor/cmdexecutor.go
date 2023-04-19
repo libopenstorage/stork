@@ -161,10 +161,10 @@ func main() {
 	for _, executor := range executors {
 		ns, name := executor.GetPod()
 		podKey := createPodStringFromNameAndNamespace(ns, name)
-		go func(errChan chan error, stdoutChans map[string]chan string, doneChan chan bool, execInst cmdexecutor.Executor) {
+		go func(errChan chan error, stdoutChan chan string, doneChan chan bool, execInst cmdexecutor.Executor) {
 			err := execInst.Wait(time.Duration(statusCheckTimeout) * time.Second)
 			// log the output of command execution before returning/marking it done
-			for stdout := range stdoutChans[podKey] {
+			for stdout := range stdoutChan {
 				logrus.Infof("[%s] :: %s", podKey, stdout)
 			}
 			if err != nil {
@@ -173,7 +173,7 @@ func main() {
 			}
 
 			doneChan <- true
-		}(errChans[podKey], stdoutChans, done, executor)
+		}(errChans[podKey], stdoutChans[podKey], done, executor)
 	}
 
 	// Now go into a wait loop which will exit if either of the 2 things happen
