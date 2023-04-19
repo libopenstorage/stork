@@ -43,6 +43,7 @@ const (
 	maxtimeInterval                  = 30 * time.Second
 	timeInterval                     = 1 * time.Second
 	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
+	RebootNodeDuringAppVersionUpdate = "reboot-node-during-app-version-update"
 	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
 	RestartPxDuringDSScaleUp         = "restart-portworx-during-ds-scaleup"
 	RestartAppDuringResourceUpdate   = "restart-app-during-resource-update"

@@ -30,6 +30,7 @@ const (
 	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
 	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
 	UpdateTemplate                    = "medium"
+	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
 )
 
 // PDS vars
@@ -104,6 +105,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", checkTillReplica)
 		func1 := func() {
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case RebootNodeDuringAppVersionUpdate:
+		log.InfoD("Entering to check if Data service pods started update " +
+			"Once it does, we restart portworx")
+		func1 := func() {
+			CheckPodIsTerminating(deployment.GetClusterResourceName(), namespace)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -231,6 +242,63 @@ func RestartPXDuringDSScaleUp(ns string) error {
 	}
 
 	log.InfoD("PX restarted successfully on node %v", podName)
+	return testError
+}
+
+func NodeRebootDurinAppVersionUpdate(ns string) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+	var nodeToReboot node.Node
+	var nodeName, podName string
+
+	// Waiting till atleast first pod have a node assigned
+	var pods []corev1.Pod
+	err = wait.PollImmediate(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if Pods have a node assigned or it's in a window where it's just coming up
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is %v and deletiontimestamp is %v", pod.Name, pod.Spec.NodeName, pod.DeletionTimestamp)
+			if pod.DeletionTimestamp != nil {
+				podName = pod.Name
+				nodeName = pod.Spec.NodeName
+				return true, nil
+			} else {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	nodeToReboot, testError = node.GetNodeByName(nodeName)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	log.InfoD("Going ahead and restarting PX the node %v as there is an "+
+		"application pod %v that's coming up on this node", nodeName, podName)
+
+	testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         defaultCommandTimeout,
+			TimeBeforeRetry: defaultCommandRetry,
+		},
+	})
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	log.Infof("Node %v rebooted successfully", nodeName)
 	return testError
 }
 
