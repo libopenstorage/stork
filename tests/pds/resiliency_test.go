@@ -2,13 +2,12 @@ package tests
 
 import (
 	"fmt"
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"net/http"
-
 	. "github.com/onsi/ginkgo"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"net/http"
 )
 
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
@@ -170,7 +169,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 		StartTorpedoTest("KillDeploymentControllerDuringDeployment", "Kill Deployment Controller Pod when a DS Deployment is happening", pdsLabels, 0)
 	})
 
-	It("Deploy Dataservices", func() {
+	It("Deploy Data Services", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Start deployment, Kill Deployment Controller Pod while deployment is ongoing and validate data service", func() {
@@ -294,5 +293,58 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 			log.FailOnError(err, "Error while deleting data services")
 			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 		}
+	})
+})
+
+var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartAppDuringResourceUpdate", "Restart application pod during resource update", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true, false)
+	})
+
+	It("Deploy Data Services", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+
+		Step("Update the resource and Restart application pods", func() {
+			for _, deployment := range deployments {
+				failureType := pdslib.TypeOfFailure{
+					Type: RestartAppDuringResourceUpdate,
+					Method: func() error {
+						return pdslib.RestartApplicationDuringResourceUpdate(params.InfraToTest.Namespace)
+					},
+				}
+				pdslib.DefineFailureType(failureType)
+
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, 0)
+				log.FailOnError(err, fmt.Sprintf("Error while pod restart during Resource update %v", *deployment.ClusterResourceName))
+
+				err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+				log.FailOnError(err, "error on ValidateDataServiceDeployment")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		pdslib.CloseResiliencyChannel()
 	})
 })

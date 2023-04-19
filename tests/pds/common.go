@@ -45,6 +45,7 @@ const (
 	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
 	RestartPxDuringDSScaleUp         = "restart-portworx-during-ds-scaleup"
+	RestartAppDuringResourceUpdate   = "restart-app-during-resource-update"
 	BackUpCRD                        = "backups.pds.io"
 	DeploymentCRD                    = "deployments.pds.io"
 	RebootNodesDuringDeployment      = "reboot-multiple-nodes-during-deployment"

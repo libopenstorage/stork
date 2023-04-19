@@ -3,8 +3,10 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
@@ -26,6 +28,8 @@ const (
 	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
 	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
+	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
+	UpdateTemplate                    = "medium"
 )
 
 // PDS vars
@@ -120,6 +124,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
 		func1 := func() {
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case RestartAppDuringResourceUpdate:
+		log.InfoD("Entering to check if Data service has %v active pods. "+
+			"Once it does, we restart application pods", checkTillReplica)
+		func1 := func() {
+			UpdateDeploymentResourceConfig(deployment, namespace, UpdateTemplate)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -374,6 +388,30 @@ func KillPodsInNamespace(ns string, podName string) error {
 			return testError
 		}
 		log.InfoD("Successfully Killed Pod: %v", pod.Name)
+	}
+	return testError
+}
+
+func RestartApplicationDuringResourceUpdate(ns string) error {
+	var ss *v1.StatefulSet
+	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	// Get Pods of this StatefulSet
+	pods, testError := k8sApps.GetStatefulSetPods(ss)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	rand.Seed(time.Now().Unix())
+	pod := pods[rand.Intn(len(pods))]
+	// Delete the deployment Pods during update.
+	testError = DeleteK8sPods(pod.Name, ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
 	}
 	return testError
 }

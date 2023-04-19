@@ -2592,3 +2592,73 @@ func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]core
 	}
 	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
 }
+
+func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string) error {
+	var resourceTemplateId string
+	var cpuLimits int64
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	for _, template := range resourceTemplates {
+		log.Debugf("template - %v", template.GetName())
+		if template.GetDataServiceId() == deployment.GetDataServiceId() && strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
+			cpuLimits, _ = strconv.ParseInt(template.GetCpuLimit(), 10, 64)
+			log.Debugf("CpuLimit - %v, %T", cpuLimits, cpuLimits)
+			resourceTemplateId = template.GetId()
+		}
+	}
+	if resourceTemplateId == "" {
+		return fmt.Errorf("resource template - {%v} , not found", resourceTemplate)
+	}
+	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
+	_, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if testError != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- testError
+		}
+		return testError
+	}
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		// Get Pods of this StatefulSet
+		pods, testError := k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			if ResiliencyFlag {
+				CapturedErrors <- testError
+			}
+			return false, testError
+		}
+		for _, pod := range pods {
+			for _, container := range pod.Spec.Containers {
+				if container.Resources.Limits.Cpu().Value() == cpuLimits {
+					if ResiliencyFlag {
+						ResiliencyCondition <- true
+					}
+					return true, nil
+				} else {
+					return false, nil
+				}
+			}
+		}
+		return false, fmt.Errorf("no pods has been updated to required resource configuration")
+	})
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	return nil
+}
