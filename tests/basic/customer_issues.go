@@ -217,9 +217,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		done := make(chan bool)
 
-		defer wg.Wait()
-		wg.Add(1)
-
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
 
@@ -288,13 +285,11 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		// Run inspect continuously in the background
 		go func(volumes []*volume.Volume) {
-			defer wg.Done()
 			for {
 				select {
 				case <-done:
 					return
 				default:
-
 					for _, each := range volumes {
 						vid := each.ID
 						_, err := getVolumeRuntimeState(vid)
