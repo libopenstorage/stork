@@ -29,12 +29,12 @@ type GlobalRoleBindingsApiService service
 type ApiApiGlobalRoleBindingsDeleteRequest struct {
 	ctx context.Context
 	ApiService *GlobalRoleBindingsApiService
-	actorType *string
+	body *RequestsDeleteRoleBindingRequest
 }
 
-// GlobalRoleBinding actor type
-func (r ApiApiGlobalRoleBindingsDeleteRequest) ActorType(actorType string) ApiApiGlobalRoleBindingsDeleteRequest {
-	r.actorType = &actorType
+// Request body containing the global role binding
+func (r ApiApiGlobalRoleBindingsDeleteRequest) Body(body RequestsDeleteRoleBindingRequest) ApiApiGlobalRoleBindingsDeleteRequest {
+	r.body = &body
 	return r
 }
 
@@ -75,6 +75,9 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsDeleteExecute(r ApiA
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
+	if r.body == nil {
+		return nil, reportError("body is required and must be specified")
+	}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{"application/json"}
@@ -94,7 +97,7 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsDeleteExecute(r ApiA
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.actorType
+	localVarPostBody = r.body
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {

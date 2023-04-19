@@ -542,7 +542,7 @@ func (r ApiApiTenantsIdBackupCredentialsGetRequest) Type_(type_ string) ApiApiTe
 	return r
 }
 
-func (r ApiApiTenantsIdBackupCredentialsGetRequest) Execute() (*ControllersPaginatedBackupCredentials, *http.Response, error) {
+func (r ApiApiTenantsIdBackupCredentialsGetRequest) Execute() (*ModelsPaginatedResultModelsBackupCredentials, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdBackupCredentialsGetExecute(r)
 }
 
@@ -564,13 +564,13 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsGet(ctx conte
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedBackupCredentials
-func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsGetExecute(r ApiApiTenantsIdBackupCredentialsGetRequest) (*ControllersPaginatedBackupCredentials, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsBackupCredentials
+func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsGetExecute(r ApiApiTenantsIdBackupCredentialsGetRequest) (*ModelsPaginatedResultModelsBackupCredentials, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedBackupCredentials
+		localVarReturnValue  *ModelsPaginatedResultModelsBackupCredentials
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiTenantsIdBackupCredentialsGet")

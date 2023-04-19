@@ -600,6 +600,10 @@ spec:
       value: "${DEPLOY_ALL_IMAGES}"
     - name: DEPLOY_ALL_DATASERVICE
       value: "${DEPLOY_ALL_DATASERVICE}"
+    - name: CONTROL_PLANE_URL
+      value: "${CONTROL_PLANE_URL}"
+    - name: GCP_PROJECT_ID
+      value: "${GCP_PROJECT_ID}"
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD
@@ -633,6 +637,8 @@ spec:
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
+
+
 EOF
 
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then

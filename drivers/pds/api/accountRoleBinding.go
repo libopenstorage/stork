@@ -76,7 +76,7 @@ func (accountRoleBinding *AccountRoleBinding) AddUser(accountID string, email st
 	if isAdmin {
 		rBinding = "account-admin"
 	}
-	invitationRequest := pds.ControllersInvitationRequest{Email: &email, RoleName: &rBinding}
+	invitationRequest := pds.RequestsInvitationAccountRequest{Email: email, RoleName: rBinding}
 	log.Info("Get list of Accounts.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {

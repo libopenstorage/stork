@@ -32,7 +32,7 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
-	github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71
+	github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9
 	github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
 	github.com/portworx/talisman v1.1.3
@@ -66,6 +66,9 @@ require (
 	cloud.google.com/go/storage v1.28.1 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.2 // indirect
 	github.com/Azure/azure-sdk-for-go v56.3.0+incompatible // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.3.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.1.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.27 // indirect

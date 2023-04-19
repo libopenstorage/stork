@@ -64,14 +64,14 @@ func (r ApiApiAccountsIdTenantsGetRequest) Name(name string) ApiApiAccountsIdTen
 	return r
 }
 
-func (r ApiApiAccountsIdTenantsGetRequest) Execute() (*ControllersPaginatedAccountTenants, *http.Response, error) {
+func (r ApiApiAccountsIdTenantsGetRequest) Execute() (*ModelsPaginatedResultModelsTenant, *http.Response, error) {
 	return r.ApiService.ApiAccountsIdTenantsGetExecute(r)
 }
 
 /*
 ApiAccountsIdTenantsGet List Account's Tenants
 
-Lists Tenants visible to the caller and belonging to the Account.
+Lists Tenants.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Account ID (must be valid UUID)
@@ -86,13 +86,13 @@ func (a *TenantsApiService) ApiAccountsIdTenantsGet(ctx context.Context, id stri
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedAccountTenants
-func (a *TenantsApiService) ApiAccountsIdTenantsGetExecute(r ApiApiAccountsIdTenantsGetRequest) (*ControllersPaginatedAccountTenants, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsTenant
+func (a *TenantsApiService) ApiAccountsIdTenantsGetExecute(r ApiApiAccountsIdTenantsGetRequest) (*ModelsPaginatedResultModelsTenant, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedAccountTenants
+		localVarReturnValue  *ModelsPaginatedResultModelsTenant
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantsApiService.ApiAccountsIdTenantsGet")
