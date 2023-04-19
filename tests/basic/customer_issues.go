@@ -167,6 +167,8 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		var iptablesflushed bool
 		iptablesflushed = false
 
+		vInspectBackground := false
+
 		var getKvdbLeaderNode node.Node
 		allkvdbNodes, err := GetAllKvdbNodes()
 		log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
@@ -213,7 +215,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		}
 
 		done := make(chan bool)
-		
+
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
 
@@ -264,7 +266,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 					log.InfoD("Flushing iptables rules on node [%v]", eachNode.Name)
 					log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
 				}
-				done <- true
+				if vInspectBackground {
+					done <- true
+				}
 			}
 		}
 		revertZone1 := func() {
@@ -287,6 +291,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 				case <-done:
 					return
 				default:
+					log.InfoD("get volume inspect on all the available volumes")
 					for _, each := range volumes {
 						vid := each.ID
 						_, err := getVolumeRuntimeState(vid)
@@ -298,6 +303,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			}
 		}(volumesPresent)
 
+		vInspectBackground = true
 		// From Zone 1 block all the traffic to systems under zone2
 		// From Zone 2 block all the traffic to systems under zone1
 		log.InfoD("blocking iptables from all nodes present in zone1 from accessing zone2")
@@ -369,8 +375,6 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		for _, eachVol := range volumesPresent {
 			log.FailOnError(VerifyVolumeStatusOnline(eachVol), fmt.Sprintf("Volume [%v] is not in expected state", eachVol.Name))
 		}
-
-		done <- true
 
 	})
 
