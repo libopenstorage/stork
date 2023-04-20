@@ -1242,6 +1242,32 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 	return nil
 }
 
+// ValidateBackup validates a backup and returns a clone of the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup
+func ValidateBackup(ctx context.Context, backupName string, orgID string, clusterAppContexts []*scheduler.Context, backupClusterConfigPath string) ([]*scheduler.Context, error) {
+	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
+	backupDriver := Inst().Backup
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("GetBackupUID Err: %v", err)
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	backupInspectResponse, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, fmt.Errorf("InspectBackup Err: %v", err)
+	}
+	// TODO: Remove
+	log.Infof("backupInspectResponse: ++%+v++", backupInspectResponse)
+
+	if backedupAppContexts, err := GetBackupSpecObjectsContexts(backupInspectResponse, clusterAppContexts); err != nil {
+		return nil, fmt.Errorf("GetBackupSpecObjectsContexts Err: %v", err)
+	} else {
+		return backedupAppContexts, nil
+	}
+}
 
 // GetBackupSpecObjectsContexts clones and returns the provided `context`s (and each of their `spec`s)
 // *after* filtering the `spec`s to only include the resources that are in the backup.
