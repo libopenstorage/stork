@@ -120,7 +120,7 @@ type Driver interface {
 
 	// OwnsPVCForBackup returns true if the PVC is owned by the driver
 	// Since we have extra check need to done for backup case, added seperate version of API.
-	OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool
+	OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool
 
 	// OwnsPV returns true if the PV is owned by the driver
 	OwnsPV(pvc *v1.PersistentVolume) bool
@@ -223,7 +223,7 @@ type BackupRestorePluginInterface interface {
 	// Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) (bool, error)
 	// Get any resources that should be created before the restore is started
-	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured) ([]runtime.Unstructured, error)
+	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured, []byte) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
 	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo, []runtime.Unstructured) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
@@ -347,14 +347,13 @@ func GetPVCDriverForBackup(coreOps core.Ops,
 	pvc *v1.PersistentVolumeClaim,
 	cmBackupType string,
 	crBackupType string,
-	blType storkapi.BackupLocationType,
 ) (string, error) {
 	for _, driverName := range orderedListOfDrivers {
 		d, ok := volDrivers[driverName]
 		if !ok {
 			continue
 		}
-		if d.OwnsPVCForBackup(coreOps, pvc, cmBackupType, crBackupType, blType) {
+		if d.OwnsPVCForBackup(coreOps, pvc, cmBackupType, crBackupType) {
 			return driverName, nil
 		}
 	}

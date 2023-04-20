@@ -691,7 +691,7 @@ func (p *portworx) GetClusterID() (string, error) {
 	return cluster.Id, nil
 }
 
-func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool {
+func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
 	if enablePXGenericBackup() {
 		logrus.Tracef("Provisioner in Storageclass is Portworx but will take generic backup")
 		return false
@@ -2655,7 +2655,13 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 ) (*v1.PersistentVolume, error) {
 	// Get the pv storageclass and get the provision detail and decide on csi section.
 	if len(pv.Spec.StorageClassName) != 0 {
-		sc, err := storkcache.Instance().GetStorageClass(pv.Spec.StorageClassName)
+		var sc *storagev1.StorageClass
+		var err error
+		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+			sc, err = storkcache.Instance().GetStorageClass(pv.Spec.StorageClassName)
+		} else {
+			sc, err = storage.Instance().GetStorageClass(pv.Spec.StorageClassName)
+		}
 		if err != nil {
 			logrus.Warnf("failed in getting the storage class [%v]: %v", pv.Spec.StorageClassName, err)
 		}
@@ -3415,6 +3421,7 @@ func (p *portworx) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
+	storageClassByte []byte,
 ) ([]runtime.Unstructured, error) {
 	secretsToRestore := make(map[string]bool)
 	objectsToRestore := make([]runtime.Unstructured, 0)
@@ -3593,7 +3600,13 @@ func (p *portworx) getCloudBackupRestoreSpec(
 		// No mapping provided
 		return locator, restoreSpec, nil
 	}
-	sc, err := storkcache.Instance().GetStorageClass(destStorageClass)
+	var sc *storagev1.StorageClass
+	var err error
+	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		sc, err = storkcache.Instance().GetStorageClass(destStorageClass)
+	} else {
+		sc, err = storage.Instance().GetStorageClass(destStorageClass)
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch storage class %v: %v", destStorageClass, err)
 	}
