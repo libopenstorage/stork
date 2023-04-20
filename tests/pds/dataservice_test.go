@@ -1263,14 +1263,14 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		dash.VerifyFatal(config.Spec.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
 	})
 
-		Step("Delete Deployments", func() {
-			resp, err := pdslib.DeleteDeployment(deployment.GetId())
-			log.FailOnError(err, "Error while deleting data services")
-			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			log.InfoD("Getting all PV and associated PVCs and deleting them")
-			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
-			log.FailOnError(err, "Error while deleting PV and PVCs")
-		})
+	Step("Delete Deployments", func() {
+		resp, err := pdslib.DeleteDeployment(deployment.GetId())
+		log.FailOnError(err, "Error while deleting data services")
+		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		log.InfoD("Getting all PV and associated PVCs and deleting them")
+		err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+		log.FailOnError(err, "Error while deleting PV and PVCs")
+	})
 
 }
 
