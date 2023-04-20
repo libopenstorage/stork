@@ -116,11 +116,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 
-		log.InfoD("Deploy applications")
-
-		log.InfoD("switching to source context")
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch to context to source cluster")
+		log.InfoD("assuming that current context is set to source cluster.")
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -131,11 +127,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				appCtx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(appCtx, taskName)
 				appCtx.ScheduleOptions.Namespace = namespace
-				scs, err := GetAppStorageClasses(appCtx)
-				if err != nil {
-					log.FailOnError(err, "failed to GetAppStorageClasses")
-				}
-				storageClasses = append(storageClasses, scs)
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
@@ -145,10 +136,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
-
-			log.InfoD("switching to default context")
-			err := SetClusterContext("")
-			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
