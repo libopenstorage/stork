@@ -1512,6 +1512,27 @@ func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
 	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
 }
 
+// GetAppStorageClasses gets the storage classes belonging to an app's PVCs
+func GetAppStorageClasses(appCtx *scheduler.Context) (*[]string, error) {
+	vols, err := Inst().S.GetVolumes(appCtx)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get volumes")
+	}
+	storageClasses := make([]string, 0)
+	for _, vol := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get pvc for volume %s", vol)
+		}
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			return nil, fmt.Errorf("Error Occured while getting storage class for pvc %s", pvcObj)
+		}
+		storageClasses = append(storageClasses, sc.Name)
+	}
+	return &storageClasses, nil
+}
+
 // CreateScheduleOptions uses the current Context (kubeconfig) to generate schedule options
 // NOTE: When using a ScheduleOption that was created during a context (kubeconfig)
 // that is different from the current context, make sure to re-generate ScheduleOptions
@@ -2189,32 +2210,32 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 	if specObj, ok := in.(*appsapi.Deployment); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*appsapi.StatefulSet); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*appsapi.DaemonSet); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.Service); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.PersistentVolumeClaim); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storageapi.StorageClass); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*snapv1.VolumeSnapshot); ok {
@@ -2223,172 +2244,172 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 		return nil
 	} else if specObj, ok := in.(*storkapi.GroupVolumeSnapshot); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.Secret); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.ConfigMap); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.Rule); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.Pod); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.ClusterPair); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.Migration); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.MigrationSchedule); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.BackupLocation); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.ApplicationBackup); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.SchedulePolicy); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.ApplicationRestore); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.ApplicationClone); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.VolumeSnapshotRestore); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*apapi.AutopilotRule); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.ServiceAccount); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*rbacv1.Role); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*rbacv1.ClusterRole); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*rbacv1.ClusterRoleBinding); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*batchv1.Job); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.LimitRange); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*monitoringv1.Prometheus); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*monitoringv1.PrometheusRule); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*monitoringv1.ServiceMonitor); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.Namespace); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*policyv1beta1.PodDisruptionBudget); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*netv1.NetworkPolicy); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*corev1.Endpoints); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*storkapi.ResourceTransformation); ok {
 		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
-		specObj.SetNamespace(namespace)
+			specObj.SetNamespace(namespace)
 		}
 		return nil
 	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
@@ -6468,7 +6489,6 @@ func DoRetryWithTimeoutWithGinkgoRecover(taskFunc func() (interface{}, bool, err
 	}
 	return task.DoRetryWithTimeout(taskFuncWithGinkgoRecover, timeout, timeBeforeRetry)
 }
-
 
 // GetVolumesInDegradedState Get the list of volumes in degraded state
 func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume, error) {
