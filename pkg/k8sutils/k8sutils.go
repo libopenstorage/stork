@@ -62,6 +62,12 @@ const (
 	DefaultRestoreVolumeBatchSleepInterval = "20s"
 	// RestoreVolumeBatchSleepIntervalKey - restore volume batch sleep interval key
 	RestoreVolumeBatchSleepIntervalKey = "restore-volume-sleep-interval"
+	// RestoreVolumeBatchSleepInterval - restore volume batch sleep interval
+	RestoreVolumeBatchSleepInterval = 20 * time.Second
+	// PxServiceEnvName - PX service ENV name
+	PxServiceEnvName = "PX_SERVICE_NAME"
+	// PxNamespaceEnvName - PX namespace ENV name
+	PxNamespaceEnvName = "PX_NAMESPACE"
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
@@ -339,4 +345,22 @@ func IsValidBucketRetentionPeriod(bucketRetentionPeriod int64) (bool, int64, err
 	// user should set.
 	minRetentionDays := minProtectionPeriod + incrBkpCnt + 1
 	return (bucketRetentionPeriod >= minRetentionDays), minRetentionDays, nil
+}
+
+// GetPxNamespaceFromStorkDeploy - will return the px namespace env from stork deploy
+func GetPxNamespaceFromStorkDeploy(storkDeployName, storkDeployNamespace string) (string, string, error) {
+	deploy, err := apps.Instance().GetDeployment(storkDeployName, storkDeployNamespace)
+	if err != nil {
+		return "", "", err
+	}
+	var service, namespace string
+	for _, envVar := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if envVar.Name == PxServiceEnvName {
+			service = envVar.Value
+		}
+		if envVar.Name == PxNamespaceEnvName {
+			namespace = envVar.Value
+		}
+	}
+	return namespace, service, nil
 }
