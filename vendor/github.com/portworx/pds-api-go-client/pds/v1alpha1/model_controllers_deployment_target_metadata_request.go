@@ -20,7 +20,9 @@ type ControllersDeploymentTargetMetadataRequest struct {
 	KubeApiVersion *string `json:"kube_api_version,omitempty"`
 	KubePlatform *string `json:"kube_platform,omitempty"`
 	PdsChartVersion *string `json:"pds_chart_version,omitempty"`
+	PxCsiEnabled *string `json:"px_csi_enabled,omitempty"`
 	PxServiceNamespace *string `json:"px_service_namespace,omitempty"`
+	PxVersion *string `json:"px_version,omitempty"`
 }
 
 // NewControllersDeploymentTargetMetadataRequest instantiates a new ControllersDeploymentTargetMetadataRequest object
@@ -168,6 +170,38 @@ func (o *ControllersDeploymentTargetMetadataRequest) SetPdsChartVersion(v string
 	o.PdsChartVersion = &v
 }
 
+// GetPxCsiEnabled returns the PxCsiEnabled field value if set, zero value otherwise.
+func (o *ControllersDeploymentTargetMetadataRequest) GetPxCsiEnabled() string {
+	if o == nil || o.PxCsiEnabled == nil {
+		var ret string
+		return ret
+	}
+	return *o.PxCsiEnabled
+}
+
+// GetPxCsiEnabledOk returns a tuple with the PxCsiEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersDeploymentTargetMetadataRequest) GetPxCsiEnabledOk() (*string, bool) {
+	if o == nil || o.PxCsiEnabled == nil {
+		return nil, false
+	}
+	return o.PxCsiEnabled, true
+}
+
+// HasPxCsiEnabled returns a boolean if a field has been set.
+func (o *ControllersDeploymentTargetMetadataRequest) HasPxCsiEnabled() bool {
+	if o != nil && o.PxCsiEnabled != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPxCsiEnabled gets a reference to the given string and assigns it to the PxCsiEnabled field.
+func (o *ControllersDeploymentTargetMetadataRequest) SetPxCsiEnabled(v string) {
+	o.PxCsiEnabled = &v
+}
+
 // GetPxServiceNamespace returns the PxServiceNamespace field value if set, zero value otherwise.
 func (o *ControllersDeploymentTargetMetadataRequest) GetPxServiceNamespace() string {
 	if o == nil || o.PxServiceNamespace == nil {
@@ -200,6 +234,38 @@ func (o *ControllersDeploymentTargetMetadataRequest) SetPxServiceNamespace(v str
 	o.PxServiceNamespace = &v
 }
 
+// GetPxVersion returns the PxVersion field value if set, zero value otherwise.
+func (o *ControllersDeploymentTargetMetadataRequest) GetPxVersion() string {
+	if o == nil || o.PxVersion == nil {
+		var ret string
+		return ret
+	}
+	return *o.PxVersion
+}
+
+// GetPxVersionOk returns a tuple with the PxVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersDeploymentTargetMetadataRequest) GetPxVersionOk() (*string, bool) {
+	if o == nil || o.PxVersion == nil {
+		return nil, false
+	}
+	return o.PxVersion, true
+}
+
+// HasPxVersion returns a boolean if a field has been set.
+func (o *ControllersDeploymentTargetMetadataRequest) HasPxVersion() bool {
+	if o != nil && o.PxVersion != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPxVersion gets a reference to the given string and assigns it to the PxVersion field.
+func (o *ControllersDeploymentTargetMetadataRequest) SetPxVersion(v string) {
+	o.PxVersion = &v
+}
+
 func (o ControllersDeploymentTargetMetadataRequest) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.ClusterId != nil {
@@ -214,8 +280,14 @@ func (o ControllersDeploymentTargetMetadataRequest) MarshalJSON() ([]byte, error
 	if o.PdsChartVersion != nil {
 		toSerialize["pds_chart_version"] = o.PdsChartVersion
 	}
+	if o.PxCsiEnabled != nil {
+		toSerialize["px_csi_enabled"] = o.PxCsiEnabled
+	}
 	if o.PxServiceNamespace != nil {
 		toSerialize["px_service_namespace"] = o.PxServiceNamespace
+	}
+	if o.PxVersion != nil {
+		toSerialize["px_version"] = o.PxVersion
 	}
 	return json.Marshal(toSerialize)
 }

@@ -2313,6 +2313,52 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 	return resp, nil
 }
 
+// suspendBackupSchedule will suspend backup schedule
+func suspendBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        true,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
+}
+
+// resumeBackupSchedule will resume backup schedule
+func resumeBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        false,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
+}
+
 // NamespaceLabelBackupSuccessCheck verifies if the labeled namespaces are backed up and checks for labels applied to backups
 func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, listOfLabelledNamespaces []string, namespaceLabel string) error {
 	backupDriver := Inst().Backup

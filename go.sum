@@ -435,6 +435,12 @@ github.com/Azure/azure-pipeline-go v0.2.2 h1:6oiIS9yaG6XCCzhgAgKFfIWyo4LLCiDhZot
 github.com/Azure/azure-pipeline-go v0.2.2/go.mod h1:4rQ/NZncSvGqNkkOsNpOU1tgoNuIlp9AfUH5G1tvCHc=
 github.com/Azure/azure-sdk-for-go v43.0.0+incompatible h1:/wSNCu0e6EsHFR4Qa3vBEBbicaprEHMyyga9g8RTULI=
 github.com/Azure/azure-sdk-for-go v43.0.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.3.0 h1:VuHAcMq8pU1IWNT/m5yRaGqbK0BiQKHT8X4DTp9CHdI=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.3.0/go.mod h1:tZoQYdDZNOiIjdSn0dVWVfl0NEPGOJqVLzSrcFk4Is0=
+github.com/Azure/azure-sdk-for-go/sdk/internal v1.1.1 h1:Oj853U9kG+RLTCQXpjvOnrv0WaZHxgmZz1TlLywgOPY=
+github.com/Azure/azure-sdk-for-go/sdk/internal v1.1.1/go.mod h1:eWRD7oawr1Mu1sLCawqVc0CUiF43ia3qQMxLscsKQ9w=
+github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0 h1:u/LLAOFgsMv7HmNL4Qufg58y+qElGOt5qv0z1mURkRY=
+github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0/go.mod h1:2e8rMJtl2+2j+HXbTBwnyGpm5Nou7KhvSfxOq8JpTag=
 github.com/Azure/azure-service-bus-go v0.10.1/go.mod h1:E/FOceuKAFUfpbIJDKWz/May6guE+eGibfGT6q+n1to=
 github.com/Azure/azure-storage-blob-go v0.0.0-20190123011202-457680cc0804/go.mod h1:oGfmITT1V6x//CswqY2gtAHND+xIP64/qL7a5QJix0Y=
 github.com/Azure/azure-storage-blob-go v0.9.0 h1:kORqvzXP8ORhKbW13FflGUaSE5CMyDWun9UwMxY8gPs=
@@ -2174,6 +2180,8 @@ github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467 h1:jkqzdbOnejgSN5HG/
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71 h1:jF8tolVFJFf7zdtFqRuSzThXu7B0uuhxi9+vLgIbxsA=
 github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
+github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9 h1:+H7QxM4TKGgphdfh03wrK4Yqkk3VcEYGVSFc+4/psT4=
+github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba h1:gfjvrZVdbwYKvxJEqOzbarvRgfzWFyl1xYMfX+QMETU=
 github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba/go.mod h1:fwJb8kCDTvEwzQbId6jJL+z6GX6m6acfHgPBFncZJGE=

@@ -16,6 +16,8 @@ import (
 
 // AuthClaims struct for AuthClaims
 type AuthClaims struct {
+	// Audience is the intended recipient of the token.
+	Aud *string `json:"aud,omitempty"`
 	// Email of this account.
 	Email *string `json:"email,omitempty"`
 	// (optional) Groups in which this account is part of.
@@ -45,6 +47,38 @@ func NewAuthClaims() *AuthClaims {
 func NewAuthClaimsWithDefaults() *AuthClaims {
 	this := AuthClaims{}
 	return &this
+}
+
+// GetAud returns the Aud field value if set, zero value otherwise.
+func (o *AuthClaims) GetAud() string {
+	if o == nil || o.Aud == nil {
+		var ret string
+		return ret
+	}
+	return *o.Aud
+}
+
+// GetAudOk returns a tuple with the Aud field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *AuthClaims) GetAudOk() (*string, bool) {
+	if o == nil || o.Aud == nil {
+		return nil, false
+	}
+	return o.Aud, true
+}
+
+// HasAud returns a boolean if a field has been set.
+func (o *AuthClaims) HasAud() bool {
+	if o != nil && o.Aud != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetAud gets a reference to the given string and assigns it to the Aud field.
+func (o *AuthClaims) SetAud(v string) {
+	o.Aud = &v
 }
 
 // GetEmail returns the Email field value if set, zero value otherwise.
@@ -241,6 +275,9 @@ func (o *AuthClaims) SetSub(v string) {
 
 func (o AuthClaims) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
+	if o.Aud != nil {
+		toSerialize["aud"] = o.Aud
+	}
 	if o.Email != nil {
 		toSerialize["email"] = o.Email
 	}

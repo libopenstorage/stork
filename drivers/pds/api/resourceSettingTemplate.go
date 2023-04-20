@@ -53,7 +53,7 @@ func (rt *ResourceSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsR
 // CreateTemplate return newly created pds resource setting template model.
 func (rt *ResourceSettingsTemplate) CreateTemplate(tenantID string, cpuLimit string, cpuRequest string, dataServiceID string, memoryLimit string, memoryRequest string, name string, storageRequest string) (*pds.ModelsResourceSettingsTemplate, error) {
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
-	createRequest := pds.ControllersCreateResourceSettingsTemplatesRequest{CpuLimit: &cpuLimit, CpuRequest: &cpuRequest, DataServiceId: &dataServiceID, MemoryLimit: &memoryLimit, MemoryRequest: &memoryRequest, Name: &name, StorageRequest: &storageRequest}
+	createRequest := pds.ControllersCreateResourceSettingsTemplateRequest{CpuLimit: &cpuLimit, CpuRequest: &cpuRequest, DataServiceId: &dataServiceID, MemoryLimit: &memoryLimit, MemoryRequest: &memoryRequest, Name: &name, StorageRequest: &storageRequest}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)

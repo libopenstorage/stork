@@ -31,12 +31,12 @@ type ApiApiProjectsIdRoleBindingsDeleteRequest struct {
 	ctx context.Context
 	ApiService *ProjectRoleBindingsApiService
 	id string
-	actorType *string
+	body *RequestsDeleteRoleBindingRequest
 }
 
-// ProjectRoleBinding actor type
-func (r ApiApiProjectsIdRoleBindingsDeleteRequest) ActorType(actorType string) ApiApiProjectsIdRoleBindingsDeleteRequest {
-	r.actorType = &actorType
+// Request body containing the project role binding
+func (r ApiApiProjectsIdRoleBindingsDeleteRequest) Body(body RequestsDeleteRoleBindingRequest) ApiApiProjectsIdRoleBindingsDeleteRequest {
+	r.body = &body
 	return r
 }
 
@@ -80,6 +80,9 @@ func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsDeleteExecute(r
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
+	if r.body == nil {
+		return nil, reportError("body is required and must be specified")
+	}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{"application/json"}
@@ -99,7 +102,7 @@ func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsDeleteExecute(r
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.actorType
+	localVarPostBody = r.body
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {

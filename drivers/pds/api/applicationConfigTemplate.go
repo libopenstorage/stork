@@ -55,7 +55,7 @@ func (at *AppConfigTemplate) GetTemplate(templateID string) (*pds.ModelsApplicat
 func (at *AppConfigTemplate) CreateTemplate(tenantID string, dataServiceID string, name string, data []pds.ModelsConfigItem) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Info("Create new resource template.")
-	createRequest := pds.ControllersCreateApplicationConfigurationTemplatesRequest{ConfigItems: data, DataServiceId: &dataServiceID, Name: &name}
+	createRequest := pds.ControllersCreateApplicationConfigurationTemplateRequest{ConfigItems: data, DataServiceId: &dataServiceID, Name: &name}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
