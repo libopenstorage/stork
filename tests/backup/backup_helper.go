@@ -1524,6 +1524,9 @@ func GetRestoreCtxFromBackupCtx(backedupAppContext *scheduler.Context, namespace
 
 	restoreAppContext := *backedupAppContext
 
+	// TODO: remove workaround in future.
+	allStorageClassMappingsPresent := true
+
 	specObjects := make([]interface{}, 0)
 	for _, appSpecOrig := range backedupAppContext.App.SpecList {
 		appSpec, err := CloneSpec(appSpecOrig) //clone spec to create "restore" specs
@@ -1542,6 +1545,13 @@ func GetRestoreCtxFromBackupCtx(backedupAppContext *scheduler.Context, namespace
 			continue
 		}
 		specObjects = append(specObjects, appSpec)
+
+		// TODO: remove workaround in future.
+		if specObj, ok := appSpecOrig.(*corev1.PersistentVolumeClaim); ok {
+			if _, ok := storageClassMapping[*specObj.Spec.StorageClassName]; !ok {
+				allStorageClassMappingsPresent = false
+			}
+		}
 	}
 
 	app := *backedupAppContext.App
@@ -1556,6 +1566,11 @@ func GetRestoreCtxFromBackupCtx(backedupAppContext *scheduler.Context, namespace
 		options.Namespace = backedupAppContext.ScheduleOptions.Namespace
 	}
 	restoreAppContext.ScheduleOptions = options
+
+	// TODO: remove workaround in future.
+	if !allStorageClassMappingsPresent {
+		restoreAppContext.SkipVolumeValidation = true
+	}
 
 	return &restoreAppContext, nil
 }
