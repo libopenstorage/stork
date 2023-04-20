@@ -1481,6 +1481,41 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
+// ValidateRestore returns a clone of the contexts (with backup objects) *after* converting the contexts to point to restored objects (and after validating those objects)
+func ValidateRestore(ctx context.Context, restoreName string, orgID string, backedupAppContexts []*scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, restoreClusterConfigPath string) ([]*scheduler.Context, error) {
+	err := SetClusterContext(restoreClusterConfigPath)
+	log.FailOnError(err, "failed to SetClusterContext to %s cluster", restoreClusterConfigPath)
+
+	backupDriver := Inst().Backup
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+
+	restoreInspectResponse, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: Remove
+	log.Infof("restoreInspectResponse: ++%+v++", restoreInspectResponse)
+
+	restoredAppContexts := make([]*scheduler.Context, 0)
+	for _, backedupAppContext := range backedupAppContexts {
+		restoredAppContext, err := GetRestoreCtxFromBackupCtx(backedupAppContext, namespaceMapping, storageClassMapping)
+		if err != nil {
+			return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
+		}
+		restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+	}
+
+	ValidateApplications(restoredAppContexts)
+
+	log.InfoD("switching to default context")
+	err1 := SetClusterContext("")
+	log.FailOnError(err1, "failed to SetClusterContext to default cluster")
+
+	return restoredAppContexts, nil
+}
 
 // GetRestoreCtxFromBackupCtx uses the contexts to create and return clones which refer to restored specs (along with conversion of their specs)
 // NOTE: To be used after switching context to the required destination cluster where restore was performed
