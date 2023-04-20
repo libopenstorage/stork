@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
@@ -64,6 +65,15 @@ func (m Driver) Init(_ interface{}) error {
 // Stop Stops the mock driver
 func (m Driver) Stop() error {
 	return nil
+}
+
+func (m *Driver) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
 }
 
 // CreateCluster Creates a cluster with specified number of nodes
@@ -278,7 +288,7 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePend
 }
 
 // OwnsPVCForBackup returns true because it owns all PVCs created by tests
-func (m *Driver) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool {
+func (m *Driver) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
 	return m.OwnsPVC(coreOps, pvc)
 }
 

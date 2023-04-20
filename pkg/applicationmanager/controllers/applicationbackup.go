@@ -607,11 +607,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					continue
 				}
 				var driverName string
-				backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
-				if err != nil {
-					return err
-				}
-				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType, backupLocation.Location.Type)
+				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType)
 				if err != nil {
 					// Skip unsupported PVCs
 					if _, ok := err.(*errors.ErrNotSupported); ok {
