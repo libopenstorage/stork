@@ -122,11 +122,6 @@ func (a *aws) OwnsPVCForBackup(
 		// If user has forced the backupType in config map, default to generic always
 		return false
 	}
-	// For AWS volume and backuplocation type is NFS, we will not own.
-	// It will default to kdmp
-	if blType == storkapi.BackupLocationNFS {
-		return false
-	}
 	return a.OwnsPVC(coreOps, pvc)
 }
 
@@ -421,6 +416,7 @@ func (a *aws) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
 	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
+	[]byte,
 ) ([]runtime.Unstructured, error) {
 	return nil, nil
 }

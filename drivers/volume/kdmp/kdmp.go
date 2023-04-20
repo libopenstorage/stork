@@ -570,6 +570,7 @@ func (k *kdmp) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
+	storageClassBytes []byte,
 ) ([]runtime.Unstructured, error) {
 	return k.getRestorePVCs(backup, restore, objects)
 }
