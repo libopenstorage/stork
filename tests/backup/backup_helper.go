@@ -1242,7 +1242,8 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 	return nil
 }
 
-// restoreSuccessCheck inspects restore task
+
+// restoreSuccessCheck inspects restore task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
 func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
