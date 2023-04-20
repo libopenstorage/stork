@@ -111,11 +111,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName         = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
 		weeklyName        = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
 		monthlyName       = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
-		scMap             = map[string]string{
-			"mysql-sc":      "mysql-sc",
-			"mysql-sc-aggr": "mysql-sc-aggr",
-			"mysql-sc-seq":  "mysql-sc-seq",
-		}
+		storageClasses    = make([]*[]string, 0)
 	)
 
 	JustBeforeEach(func() {
@@ -136,6 +132,11 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				appCtx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(appCtx, taskName)
 				appCtx.ScheduleOptions.Namespace = namespace
+				scs, err := GetAppStorageClasses(appCtx)
+				if err != nil {
+					log.FailOnError(err, "failed to GetAppStorageClasses")
+				}
+				storageClasses = append(storageClasses, scs)
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
@@ -264,6 +265,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
 				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
 					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
+				}
+				scMap := make(map[string]string)
+				for _, sc := range *storageClasses[i] {
+					scMap[sc] = sc
 				}
 				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
 				err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, scMap)
