@@ -65,6 +65,15 @@ func (l *linstor) linstorClient() (*lclient.Client, error) {
 	return l.cli, nil
 }
 
+func (l *linstor) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
+}
+
 func (l *linstor) Init(_ interface{}) error {
 	// Configuration of linstor client happens via environment variables:
 	// * LS_CONTROLLERS
@@ -329,7 +338,7 @@ func (l *linstor) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim) 
 	return linstorTemplates, nil
 }
 
-func (l *linstor) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string, blType storkapi.BackupLocationType) bool {
+func (l *linstor) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
 	return l.OwnsPVC(coreOps, pvc)
 }
 
