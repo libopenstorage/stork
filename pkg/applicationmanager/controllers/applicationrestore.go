@@ -522,57 +522,6 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 	return restore, nil
 }
 
-func convertResourceVolInfoToAppBkpVolInfo(
-	volInfo []*kdmpapi.ResourceBackupVolumeInfo,
-) (resVolInfo []*storkapi.ApplicationBackupVolumeInfo) {
-	restoreVolumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-	for _, vol := range volInfo {
-		restoreVolInfo := &storkapi.ApplicationBackupVolumeInfo{}
-		restoreVolInfo.PersistentVolumeClaim = vol.PersistentVolumeClaim
-		restoreVolInfo.PersistentVolumeClaimUID = vol.PersistentVolumeClaimUID
-		restoreVolInfo.Namespace = vol.Namespace
-		restoreVolInfo.Volume = vol.Volume
-		restoreVolInfo.BackupID = vol.BackupID
-		restoreVolInfo.DriverName = vol.DriverName
-		restoreVolInfo.Status = storkapi.ApplicationBackupStatusType(vol.Status)
-		restoreVolInfo.Zones = vol.Zones
-		restoreVolInfo.Reason = vol.Reason
-		restoreVolInfo.Options = vol.Options
-		restoreVolInfo.TotalSize = vol.TotalSize
-		restoreVolInfo.ActualSize = vol.ActualSize
-		restoreVolInfo.StorageClass = vol.StorageClass
-		restoreVolInfo.Provisioner = vol.Provisioner
-		restoreVolInfo.VolumeSnapshot = vol.VolumeSnapshot
-		restoreVolumeInfos = append(restoreVolumeInfos, restoreVolInfo)
-	}
-
-	return restoreVolumeInfos
-}
-
-func convertResourceVolInfoToAppRestoreVolInfo(
-	volInfo []*kdmpapi.ResourceRestoreVolumeInfo,
-) (resVolInfo []*storkapi.ApplicationRestoreVolumeInfo) {
-	restoreVolumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
-	for _, vol := range volInfo {
-		restoreVolInfo := &storkapi.ApplicationRestoreVolumeInfo{}
-		restoreVolInfo.PersistentVolumeClaim = vol.PersistentVolumeClaim
-		restoreVolInfo.PersistentVolumeClaimUID = vol.PersistentVolumeClaimUID
-		restoreVolInfo.DriverName = vol.DriverName
-		restoreVolInfo.Status = storkapi.ApplicationRestoreStatusType(vol.Status)
-		restoreVolInfo.Zones = vol.Zones
-		restoreVolInfo.Reason = vol.Reason
-		restoreVolInfo.Options = vol.Options
-		restoreVolInfo.TotalSize = vol.TotalSize
-		restoreVolInfo.SourceVolume = vol.SourceVolume
-		restoreVolInfo.SourceNamespace = vol.SourceNamespace
-		restoreVolInfo.RestoreVolume = vol.RestoreVolume
-
-		restoreVolumeInfos = append(restoreVolumeInfos, restoreVolInfo)
-	}
-
-	return restoreVolumeInfos
-}
-
 func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.ApplicationRestore, updateCr chan int) error {
 	funct := "restoreVolumes"
 	restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
@@ -662,16 +611,14 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	if len(restore.Status.Volumes) != pvcCount {
 		// Here backupVolumeInfoMappings is framed based on driver name mapping, hence startRestore()
 		// gets called once per driver
-		var sErr error
-		for driverName, vInfos := range backupVolumeInfoMappings {
-			restoreVolumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
-			backupVolInfos := vInfos
-			driver, err := volume.Get(driverName)
-			//	BL NFS + kdmp = nfs code path
-			//	s3 + kdmp = legacy code path
-			//	BL NFS + EBS/GKE/Azure = legacy code path
-			//	s3 + EBS/GKE/Azure = legacy code path
-			if !nfs || (nfs && driverName != volume.KDMPDriverName) {
+		if !nfs {
+			for driverName, vInfos := range backupVolumeInfoMappings {
+				backupVolInfos := vInfos
+				driver, err := volume.Get(driverName)
+				//	BL NFS + kdmp = nfs code path
+				//	s3 + kdmp = legacy code path
+				//	BL NFS + EBS/GKE/Azure = legacy code path
+				//	s3 + EBS/GKE/Azure = legacy code path
 				existingRestoreVolInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 				if err != nil {
 					return err
@@ -691,7 +638,15 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						return err
 					}
 				}
-				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects)
+				var storageClassesBytes []byte
+				if driverName == "csi" {
+					storageClassesBytes, err = a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
+					if err != nil {
+						log.ApplicationRestoreLog(restore).Errorf("Error in a.downloadObject %v", err)
+						return err
+					}
+				}
+				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects, storageClassesBytes)
 				if err != nil {
 					log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
 					return err
@@ -744,147 +699,180 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						return err
 					}
 				}
-				restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
-				restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, preRestoreObjects)
+				restore, err = a.updateRestoreCRInVolumeStage(
+					namespacedName,
+					storkapi.ApplicationRestoreStatusInProgress,
+					storkapi.ApplicationRestoreStageVolumes,
+					"Volume restores are in progress",
+					existingRestoreVolInfos,
+				)
 				if err != nil {
 					return err
 				}
-			}
-			// Check whether ResourceExport is present or not
-			if nfs && driverName == volume.KDMPDriverName {
-				err = a.client.Update(context.TODO(), restore)
+				// Get restore volume batch count
+				batchCount := k8sutils.DefaultRestoreVolumeBatchCount
+				restoreVolumeBatchCount, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.RestoreVolumeBatchCountKey)
 				if err != nil {
-					time.Sleep(retrySleep)
-					return nil
-				}
-				crName := getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace)
-				resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
-				if err != nil {
-					if k8s_errors.IsNotFound(err) {
-						// create resource export CR
-						resourceExport = &kdmpapi.ResourceExport{}
-						// Adding required label for debugging
-						labels := make(map[string]string)
-						labels[utils.ApplicationRestoreCRNameKey] = utils.GetValidLabel(restore.Name)
-						labels[utils.ApplicationRestoreCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(restore.UID)))
-						// If restore from px-backup, update the restore object details in the label
-						if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
-							if val == utils.PxbackupAnnotationCreateByValue {
-								labels[utils.RestoreObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
-								labels[utils.RestoreObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
-							}
-						}
-						resourceExport.Labels = labels
-						resourceExport.Annotations = make(map[string]string)
-						resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
-						resourceExport.Name = crName
-						resourceExport.Namespace = restore.Namespace
-						resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
-						// TODO: In the restore path we need to change source and destination ref as it is confusing now
-						// Usually dest means where it's backed up or restore to
-						source := &kdmpapi.ResourceExportObjectReference{
-							APIVersion: restore.APIVersion,
-							Kind:       restore.Kind,
-							Namespace:  restore.Namespace,
-							Name:       restore.Name,
-						}
-						backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
-						if err != nil {
-							return fmt.Errorf("error getting backup location path: %v", err)
-						}
-						destination := &kdmpapi.ResourceExportObjectReference{
-							// TODO: GetBackupLocation is not returning APIVersion and kind.
-							// Hardcoding for now.
-							APIVersion: utils.StorkAPIVersion,
-							Kind:       utils.BackupLocationKind,
-							Namespace:  backupLocation.Namespace,
-							Name:       backupLocation.Name,
-						}
-						resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
-						storkPodNs, err := k8sutils.GetStorkPodNamespace()
-						if err != nil {
-							logrus.Errorf("error in getting stork pod namespace: %v", err)
-							return err
-						}
-						resourceExport.Spec.TriggeredFromNs = storkPodNs
-						resourceExport.Spec.Source = *source
-						resourceExport.Spec.Destination = *destination
-						_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
-						if err != nil {
-							logrus.Errorf("failed to create resourceExport CR %v: %v", crName, err)
-							return err
-						}
-						return nil
-					}
-					logrus.Errorf("%s error reading resourceExport CR %v: %v", funct, crName, err)
-					return nil
+					logrus.Debugf("error in reading %v cm, defaulting restore volume batch count", k8sutils.StorkControllerConfigMapName)
 				} else {
-					var message string
-					logrus.Infof("%s re cr %v status %v", funct, crName, resourceExport.Status.Status)
-					switch resourceExport.Status.Status {
-					case kdmpapi.ResourceExportStatusFailed:
-						message = fmt.Sprintf("%s Error creating CR %v for pvc creation: %v", funct, crName, resourceExport.Status.Reason)
-						restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
-						restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
-						restore.Status.Reason = message
-						restore.Status.LastUpdateTimestamp = metav1.Now()
-						err = a.client.Update(context.TODO(), restore)
+					if len(restoreVolumeBatchCount) != 0 {
+						batchCount, err = strconv.Atoi(restoreVolumeBatchCount)
 						if err != nil {
+							logrus.Debugf("error in conversion of restoreVolumeBatchCount: %v", err)
+						}
+					}
+				}
+				for i := 0; i < len(backupVolInfos); i += batchCount {
+					batchVolInfo := backupVolInfos[i:min(i+batchCount, len(backupVolInfos))]
+					restoreVolumeInfos, err := driver.StartRestore(restore, batchVolInfo, preRestoreObjects)
+					if err != nil {
+						message := fmt.Sprintf("Error starting Application Restore for volumes: %v", err)
+						log.ApplicationRestoreLog(restore).Errorf(message)
+						if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
+							msg := fmt.Sprintf("Volume restores are in progress. Restores are failing for some volumes"+
+								" since the storage provider is busy. Restore will be retried. Error: %v", err)
+							a.recorder.Event(restore,
+								v1.EventTypeWarning,
+								string(storkapi.ApplicationRestoreStatusInProgress),
+								msg)
+
+							log.ApplicationRestoreLog(restore).Errorf(msg)
+							// Update the restore status even for failed restores when storage is busy
+							_, updateErr := a.updateRestoreCRInVolumeStage(
+								namespacedName,
+								storkapi.ApplicationRestoreStatusInProgress,
+								storkapi.ApplicationRestoreStageVolumes,
+								msg,
+								restoreVolumeInfos,
+							)
+							if updateErr != nil {
+								logrus.Warnf("failed to update restore status: %v", updateErr)
+							}
 							return err
 						}
 						a.recorder.Event(restore,
 							v1.EventTypeWarning,
 							string(storkapi.ApplicationRestoreStatusFailed),
 							message)
-						log.ApplicationRestoreLog(restore).Errorf(message)
+						_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
 						return err
-					case kdmpapi.ResourceExportStatusInitial:
-						return nil
-					case kdmpapi.ResourceExportStatusPending:
-						return nil
-					case kdmpapi.ResourceExportStatusInProgress:
-						return nil
-					case kdmpapi.ResourceExportStatusSuccessful:
-						backupVolInfos := convertResourceVolInfoToAppBkpVolInfo(resourceExport.VolumesInfo)
-						existingRestoreVolInfos := convertResourceVolInfoToAppRestoreVolInfo(resourceExport.ExistingVolumesInfo)
-						restoreCompleteList = append(restoreCompleteList, existingRestoreVolInfos...)
-						restoreVolumeInfos, sErr = driver.StartRestore(restore, backupVolInfos, nil)
-					default:
-						logrus.Infof("%s still valid re CR[%v]stage not available", funct, crName)
-						return nil
+					}
+					time.Sleep(k8sutils.RestoreVolumeBatchSleepInterval)
+					restore, err = a.updateRestoreCRInVolumeStage(
+						namespacedName,
+						storkapi.ApplicationRestoreStatusInProgress,
+						storkapi.ApplicationRestoreStageVolumes,
+						"Volume restores are in progress",
+						restoreVolumeInfos,
+					)
+					if err != nil {
+						return err
 					}
 				}
+
 			}
-			if sErr != nil {
-				logrus.Infof("%s sErr: %v", funct, sErr)
-				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", sErr)
-				log.ApplicationRestoreLog(restore).Errorf(message)
-				if _, ok := sErr.(*volume.ErrStorageProviderBusy); ok {
-					msg := fmt.Sprintf("Volume restores are in progress. Restores are failing for some volumes"+
-						" since the storage provider is busy. Restore will be retried. Error: %v", sErr)
+		}
+		// Check whether ResourceExport is present or not
+		if nfs {
+			err = a.client.Update(context.TODO(), restore)
+			if err != nil {
+				time.Sleep(retrySleep)
+				return nil
+			}
+			crName := getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace)
+			resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					// create resource export CR
+					resourceExport = &kdmpapi.ResourceExport{}
+					// Adding required label for debugging
+					labels := make(map[string]string)
+					labels[utils.ApplicationRestoreCRNameKey] = utils.GetValidLabel(restore.Name)
+					labels[utils.ApplicationRestoreCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(restore.UID)))
+					// If restore from px-backup, update the restore object details in the label
+					if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+						if val == utils.PxbackupAnnotationCreateByValue {
+							labels[utils.RestoreObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
+							labels[utils.RestoreObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
+						}
+					}
+					resourceExport.Labels = labels
+					resourceExport.Annotations = make(map[string]string)
+					resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
+					resourceExport.Name = crName
+					resourceExport.Namespace = restore.Namespace
+					resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
+					// TODO: In the restore path we need to change source and destination ref as it is confusing now
+					// Usually dest means where it's backed up or restore to
+					source := &kdmpapi.ResourceExportObjectReference{
+						APIVersion: restore.APIVersion,
+						Kind:       restore.Kind,
+						Namespace:  restore.Namespace,
+						Name:       restore.Name,
+					}
+					backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+					if err != nil {
+						return fmt.Errorf("error getting backup location path: %v", err)
+					}
+					destination := &kdmpapi.ResourceExportObjectReference{
+						// TODO: GetBackupLocation is not returning APIVersion and kind.
+						// Hardcoding for now.
+						APIVersion: utils.StorkAPIVersion,
+						Kind:       utils.BackupLocationKind,
+						Namespace:  backupLocation.Namespace,
+						Name:       backupLocation.Name,
+					}
+					resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
+					storkPodNs, err := k8sutils.GetStorkPodNamespace()
+					if err != nil {
+						logrus.Errorf("error in getting stork pod namespace: %v", err)
+						return err
+					}
+					resourceExport.Spec.TriggeredFromNs = storkPodNs
+					resourceExport.Spec.Source = *source
+					resourceExport.Spec.Destination = *destination
+					_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
+					if err != nil {
+						logrus.Errorf("failed to create resourceExport CR %v: %v", crName, err)
+						return err
+					}
+					return nil
+				}
+				logrus.Errorf("%s error reading resourceExport CR %v: %v", funct, crName, err)
+				return nil
+			} else {
+				var message string
+				logrus.Infof("%s re cr %v status %v", funct, crName, resourceExport.Status.Status)
+				switch resourceExport.Status.Status {
+				case kdmpapi.ResourceExportStatusFailed:
+					message = fmt.Sprintf("%s Error creating CR %v for pvc creation: %v", funct, crName, resourceExport.Status.Reason)
+					restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+					restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
+					restore.Status.Reason = message
+					restore.Status.LastUpdateTimestamp = metav1.Now()
+					err = a.client.Update(context.TODO(), restore)
+					if err != nil {
+						return err
+					}
 					a.recorder.Event(restore,
 						v1.EventTypeWarning,
 						string(storkapi.ApplicationRestoreStatusFailed),
 						message)
-					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, msg, nil)
+					log.ApplicationRestoreLog(restore).Errorf(message)
 					return err
+				case kdmpapi.ResourceExportStatusInitial:
+					return nil
+				case kdmpapi.ResourceExportStatusPending:
+					return nil
+				case kdmpapi.ResourceExportStatusInProgress:
+					return nil
+				case kdmpapi.ResourceExportStatusSuccessful:
+					restoreCompleteList = append(restoreCompleteList, resourceExport.RestoreCompleteList...)
+				default:
+					logrus.Infof("%s still valid re CR[%v]stage not available", funct, crName)
+					return nil
 				}
-				// TODO: Need to port the changes to read the value from configmap.
-				time.Sleep(20 * time.Second)
-				restore, err = a.updateRestoreCRInVolumeStage(
-					namespacedName,
-					storkapi.ApplicationRestoreStatusInProgress,
-					storkapi.ApplicationRestoreStageVolumes,
-					"Volume restores are in progress",
-					restoreVolumeInfos,
-				)
-				if err != nil {
-					return err
-				}
-
 			}
-			restoreCompleteList = append(restoreCompleteList, restoreVolumeInfos...)
-			logrus.Tracef("restoreCompleteList %+v", restoreCompleteList)
 		}
 		restore, err = a.updateRestoreCRInVolumeStage(
 			namespacedName,
