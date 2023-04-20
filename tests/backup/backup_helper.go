@@ -17,6 +17,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/torpedo/pkg/osutils"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -198,6 +199,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
 }
+
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.BackupUpdateResponse, error) {
 	backupDriver := Inst().Backup
 	bkpUpdateRequest := &api.BackupUpdateRequest{
@@ -1476,6 +1478,62 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	}
 	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
 	return err
+}
+
+
+// GetRestoreCtxFromBackupCtx uses the contexts to create and return clones which refer to restored specs (along with conversion of their specs)
+// NOTE: To be used after switching context to the required destination cluster where restore was performed
+func GetRestoreCtxFromBackupCtx(backedupAppContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string) (*scheduler.Context, error) {
+	log.InfoD("Getting Restore Context from Backup Context")
+
+	restoreAppContext := *backedupAppContext
+
+	specObjects := make([]interface{}, 0)
+	for _, appSpecOrig := range backedupAppContext.App.SpecList {
+		appSpec, err := CloneSpec(appSpecOrig) //clone spec to create "restore" specs
+		if err != nil {
+			log.Errorf("Failed to clone spec: '%v'. Err: %v", appSpecOrig, err)
+			continue
+		}
+		err = TransformToRestoredSpec(appSpec, storageClassMapping)
+		if err != nil {
+			log.Errorf("Failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
+			continue
+		}
+		err = UpdateNamespace(appSpec, namespaceMapping)
+		if err != nil {
+			log.Errorf("Failed to Update the namespace for %v, with ns map %s. Err: %v", appSpec, namespaceMapping, err)
+			continue
+		}
+		specObjects = append(specObjects, appSpec)
+	}
+
+	app := *backedupAppContext.App
+	app.SpecList = specObjects
+	restoreAppContext.App = &app
+
+	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
+	options := CreateScheduleOptions()
+	if namespace, ok := namespaceMapping[backedupAppContext.ScheduleOptions.Namespace]; ok {
+		options.Namespace = namespace
+	} else {
+		options.Namespace = backedupAppContext.ScheduleOptions.Namespace
+	}
+	restoreAppContext.ScheduleOptions = options
+
+	return &restoreAppContext, nil
+}
+
+// CloneSpec clones a given spec and returns it. It returns an error if the object (spec) provided is not supported by this function
+func TransformToRestoredSpec(spec interface{}, storageClassMapping map[string]string) error {
+	if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+		if sc, ok := storageClassMapping[*specObj.Spec.StorageClassName]; ok {
+			*specObj.Spec.StorageClassName = sc
+		}
+		return nil
+	}
+
+	return nil
 }
 
 // IsBackupLocationPresent checks whether the backup location is present or not
