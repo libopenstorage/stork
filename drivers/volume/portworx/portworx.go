@@ -148,8 +148,9 @@ const (
 )
 
 const (
-	driveAddSuccessStatus = "Drive add done"
-	driveExitsStatus      = "Device already exists"
+	driveAddSuccessStatus    = "Drive add done"
+	driveExitsStatus         = "Device already exists"
+	metadataAddSuccessStatus = "Successfully added metadata device"
 )
 
 // Provisioners types of supported provisioners
@@ -1015,6 +1016,8 @@ func (d *portworx) EnterMaintenance(n node.Node) error {
 		}
 		return nil, false, nil
 	}
+	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
@@ -1036,6 +1039,7 @@ func (d *portworx) EnterMaintenance(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
+
 	return nil
 }
 
@@ -1081,6 +1085,8 @@ func (d *portworx) EnterPoolMaintenance(n node.Node) error {
 		return fmt.Errorf("error when entering pool maintenance on node [%s], Err: %v", n.Name, err)
 	}
 	log.Infof("Enter pool maintenance %s", out)
+	log.Infof("waiting for 3 mins allowing pool to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 	return nil
 }
 
@@ -4874,7 +4880,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		return fmt.Errorf("failed to add drive [%s] on node [%s]", drivePath, n.Name)
 	}
 
-	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) {
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) {
 		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}
