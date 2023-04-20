@@ -111,7 +111,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName         = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
 		weeklyName        = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
 		monthlyName       = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
-		storageClasses    = make([]*[]string, 0)
 	)
 
 	JustBeforeEach(func() {
@@ -266,12 +265,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
 					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
 				}
-				scMap := make(map[string]string)
-				for _, sc := range *storageClasses[i] {
-					scMap[sc] = sc
-				}
 				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, scMap)
+				err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 
@@ -279,7 +274,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
 				log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
-				restoredAppCtxs, err := ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), scMap, destinationClusterConfigPath)
+				restoredAppCtxs, err := ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string), destinationClusterConfigPath)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of restore [%s] is success", restoreName))
 				restoredAppContexts = append(restoredAppContexts, restoredAppCtxs[0])
 			}
