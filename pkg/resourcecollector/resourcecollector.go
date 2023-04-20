@@ -1120,11 +1120,14 @@ func (r *ResourceCollector) DeleteResources(
 	deleteStart := metav1.Now()
 	startTime := time.Now()
 	for _, object := range objects {
-		elapsedTime := time.Since(startTime)
-		if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
-			updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
-			startTime = time.Now()
+		if updateTimestamp != nil {
+			elapsedTime := time.Since(startTime)
+			if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
+				updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
+				startTime = time.Now()
+			}
 		}
+
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
 			continue
@@ -1150,10 +1153,12 @@ func (r *ResourceCollector) DeleteResources(
 
 	// Then wait for them to actually be deleted
 	for _, object := range objects {
-		elapsedTime := time.Since(startTime)
-		if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
-			updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
-			startTime = time.Now()
+		if updateTimestamp != nil {
+			elapsedTime := time.Since(startTime)
+			if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
+				updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
+				startTime = time.Now()
+			}
 		}
 		// Objects that support merging aren't deleted
 		if r.mergeSupportedForResource(object) {
