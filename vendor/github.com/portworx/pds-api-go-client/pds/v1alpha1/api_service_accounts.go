@@ -41,11 +41,13 @@ func (r ApiApiServiceAccountsIdDeleteRequest) Execute() (*http.Response, error) 
 /*
 ApiServiceAccountsIdDelete Delete ServiceAccounts
 
-Removes a single ServiceAccount
+Removes a single ServiceAccount (will be replaced by service level API keys)
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id ServiceAccount ID (must be valid UUID)
  @return ApiApiServiceAccountsIdDeleteRequest
+
+Deprecated
 */
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdDelete(ctx context.Context, id string) ApiApiServiceAccountsIdDeleteRequest {
 	return ApiApiServiceAccountsIdDeleteRequest{
@@ -56,6 +58,7 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdDelete(ctx context.Conte
 }
 
 // Execute executes the request
+// Deprecated
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdDeleteExecute(r ApiApiServiceAccountsIdDeleteRequest) (*http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodDelete
@@ -148,11 +151,13 @@ func (r ApiApiServiceAccountsIdGetRequest) Execute() (*ControllersServiceAccount
 /*
 ApiServiceAccountsIdGet Get ServiceAccounts
 
-Fetches a single ServiceAccount
+Fetches a single ServiceAccount (will be replaced by service level API keys)
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id ServiceAccount ID (must be valid UUID)
  @return ApiApiServiceAccountsIdGetRequest
+
+Deprecated
 */
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdGet(ctx context.Context, id string) ApiApiServiceAccountsIdGetRequest {
 	return ApiApiServiceAccountsIdGetRequest{
@@ -164,6 +169,7 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdGet(ctx context.Context,
 
 // Execute executes the request
 //  @return ControllersServiceAccountResponse
+// Deprecated
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdGetExecute(r ApiApiServiceAccountsIdGetRequest) (*ControllersServiceAccountResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
@@ -266,11 +272,13 @@ func (r ApiApiServiceAccountsIdTokenGetRequest) Execute() (*ControllersServiceAc
 /*
 ApiServiceAccountsIdTokenGet Get token of a ServiceAccount
 
-Fetches the token of a ServiceAccount
+Fetches the token of a ServiceAccount (will be replaced by service level API keys)
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id ServiceAccount ID (must be valid UUID)
  @return ApiApiServiceAccountsIdTokenGetRequest
+
+Deprecated
 */
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdTokenGet(ctx context.Context, id string) ApiApiServiceAccountsIdTokenGetRequest {
 	return ApiApiServiceAccountsIdTokenGetRequest{
@@ -282,6 +290,7 @@ func (a *ServiceAccountsApiService) ApiServiceAccountsIdTokenGet(ctx context.Con
 
 // Execute executes the request
 //  @return ControllersServiceAccountTokenResponse
+// Deprecated
 func (a *ServiceAccountsApiService) ApiServiceAccountsIdTokenGetExecute(r ApiApiServiceAccountsIdTokenGetRequest) (*ControllersServiceAccountTokenResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
@@ -413,18 +422,20 @@ func (r ApiApiTenantsIdServiceAccountsGetRequest) Token(token string) ApiApiTena
 	return r
 }
 
-func (r ApiApiTenantsIdServiceAccountsGetRequest) Execute() (*ControllersPaginatedServiceAccounts, *http.Response, error) {
+func (r ApiApiTenantsIdServiceAccountsGetRequest) Execute() (*ModelsPaginatedResultModelsServiceAccount, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdServiceAccountsGetExecute(r)
 }
 
 /*
 ApiTenantsIdServiceAccountsGet List Tenant's ServiceAccounts
 
-List Tenant's ServiceAccounts
+List Tenant's ServiceAccounts (will be replaced by service level API keys)
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Tenant ID (must be valid UUID)
  @return ApiApiTenantsIdServiceAccountsGetRequest
+
+Deprecated
 */
 func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGet(ctx context.Context, id string) ApiApiTenantsIdServiceAccountsGetRequest {
 	return ApiApiTenantsIdServiceAccountsGetRequest{
@@ -435,13 +446,14 @@ func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGet(ctx context.C
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedServiceAccounts
-func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGetExecute(r ApiApiTenantsIdServiceAccountsGetRequest) (*ControllersPaginatedServiceAccounts, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsServiceAccount
+// Deprecated
+func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsGetExecute(r ApiApiTenantsIdServiceAccountsGetRequest) (*ModelsPaginatedResultModelsServiceAccount, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedServiceAccounts
+		localVarReturnValue  *ModelsPaginatedResultModelsServiceAccount
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ServiceAccountsApiService.ApiTenantsIdServiceAccountsGet")
@@ -562,11 +574,13 @@ func (r ApiApiTenantsIdServiceAccountsPostRequest) Execute() (*ModelsServiceAcco
 /*
 ApiTenantsIdServiceAccountsPost Create ServiceAccounts
 
-Creates a new ServiceAccount
+Creates a new ServiceAccount (will be replaced by service level API keys)
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Tenant ID (must be valid UUID)
  @return ApiApiTenantsIdServiceAccountsPostRequest
+
+Deprecated
 */
 func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsPost(ctx context.Context, id string) ApiApiTenantsIdServiceAccountsPostRequest {
 	return ApiApiTenantsIdServiceAccountsPostRequest{
@@ -578,6 +592,7 @@ func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsPost(ctx context.
 
 // Execute executes the request
 //  @return ModelsServiceAccount
+// Deprecated
 func (a *ServiceAccountsApiService) ApiTenantsIdServiceAccountsPostExecute(r ApiApiTenantsIdServiceAccountsPostRequest) (*ModelsServiceAccount, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodPost

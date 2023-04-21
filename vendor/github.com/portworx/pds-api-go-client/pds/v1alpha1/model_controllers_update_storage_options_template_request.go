@@ -17,9 +17,13 @@ import (
 // ControllersUpdateStorageOptionsTemplateRequest struct for ControllersUpdateStorageOptionsTemplateRequest
 type ControllersUpdateStorageOptionsTemplateRequest struct {
 	Fg *bool `json:"fg,omitempty"`
+	// Filesystem to be laid out.
 	Fs *string `json:"fs,omitempty"`
 	// See models.StorageOptionsTemplate for more information.
 	Name *string `json:"name,omitempty"`
+	// Portworx volume provisioner. Valid values are: \"pxd.portworx.com\" for PX CSI, \"kubernetes.io/portworx-volume\" for PX in-tree or \"auto\" for auto-detect
+	Provisioner *string `json:"provisioner,omitempty"`
+	// Replication factor for the volume.
 	Repl *int32 `json:"repl,omitempty"`
 	Secure *bool `json:"secure,omitempty"`
 }
@@ -137,6 +141,38 @@ func (o *ControllersUpdateStorageOptionsTemplateRequest) SetName(v string) {
 	o.Name = &v
 }
 
+// GetProvisioner returns the Provisioner field value if set, zero value otherwise.
+func (o *ControllersUpdateStorageOptionsTemplateRequest) GetProvisioner() string {
+	if o == nil || o.Provisioner == nil {
+		var ret string
+		return ret
+	}
+	return *o.Provisioner
+}
+
+// GetProvisionerOk returns a tuple with the Provisioner field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersUpdateStorageOptionsTemplateRequest) GetProvisionerOk() (*string, bool) {
+	if o == nil || o.Provisioner == nil {
+		return nil, false
+	}
+	return o.Provisioner, true
+}
+
+// HasProvisioner returns a boolean if a field has been set.
+func (o *ControllersUpdateStorageOptionsTemplateRequest) HasProvisioner() bool {
+	if o != nil && o.Provisioner != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetProvisioner gets a reference to the given string and assigns it to the Provisioner field.
+func (o *ControllersUpdateStorageOptionsTemplateRequest) SetProvisioner(v string) {
+	o.Provisioner = &v
+}
+
 // GetRepl returns the Repl field value if set, zero value otherwise.
 func (o *ControllersUpdateStorageOptionsTemplateRequest) GetRepl() int32 {
 	if o == nil || o.Repl == nil {
@@ -211,6 +247,9 @@ func (o ControllersUpdateStorageOptionsTemplateRequest) MarshalJSON() ([]byte, e
 	}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
+	}
+	if o.Provisioner != nil {
+		toSerialize["provisioner"] = o.Provisioner
 	}
 	if o.Repl != nil {
 		toSerialize["repl"] = o.Repl

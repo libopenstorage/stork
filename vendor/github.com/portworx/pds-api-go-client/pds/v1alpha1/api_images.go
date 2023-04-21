@@ -27,6 +27,174 @@ var (
 // ImagesApiService ImagesApi service
 type ImagesApiService service
 
+type ApiApiImagesGetRequest struct {
+	ctx context.Context
+	ApiService *ImagesApiService
+	dataServiceId *string
+	versionId *string
+	latest *bool
+	sortBy *string
+	limit *string
+	continuation *string
+}
+
+// Filter results by data_service_id
+func (r ApiApiImagesGetRequest) DataServiceId(dataServiceId string) ApiApiImagesGetRequest {
+	r.dataServiceId = &dataServiceId
+	return r
+}
+// Filter results by version_id
+func (r ApiApiImagesGetRequest) VersionId(versionId string) ApiApiImagesGetRequest {
+	r.versionId = &versionId
+	return r
+}
+// Only include the latest image for each version_id.
+func (r ApiApiImagesGetRequest) Latest(latest bool) ApiApiImagesGetRequest {
+	r.latest = &latest
+	return r
+}
+// A given Image attribute to sort results by (one of: id, name, created_at). Ignored when latest&#x3D;true.
+func (r ApiApiImagesGetRequest) SortBy(sortBy string) ApiApiImagesGetRequest {
+	r.sortBy = &sortBy
+	return r
+}
+// Maximum number of rows to return (could be less). Ignored when latest&#x3D;true.
+func (r ApiApiImagesGetRequest) Limit(limit string) ApiApiImagesGetRequest {
+	r.limit = &limit
+	return r
+}
+// Use a token returned by a previous query to continue listing with the next batch of rows. Ignored when latest&#x3D;true.
+func (r ApiApiImagesGetRequest) Continuation(continuation string) ApiApiImagesGetRequest {
+	r.continuation = &continuation
+	return r
+}
+
+func (r ApiApiImagesGetRequest) Execute() (*ModelsPaginatedResultModelsImage, *http.Response, error) {
+	return r.ApiService.ApiImagesGetExecute(r)
+}
+
+/*
+ApiImagesGet List Images
+
+Lists Images
+
+ @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @return ApiApiImagesGetRequest
+*/
+func (a *ImagesApiService) ApiImagesGet(ctx context.Context) ApiApiImagesGetRequest {
+	return ApiApiImagesGetRequest{
+		ApiService: a,
+		ctx: ctx,
+	}
+}
+
+// Execute executes the request
+//  @return ModelsPaginatedResultModelsImage
+func (a *ImagesApiService) ApiImagesGetExecute(r ApiApiImagesGetRequest) (*ModelsPaginatedResultModelsImage, *http.Response, error) {
+	var (
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsPaginatedResultModelsImage
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ImagesApiService.ApiImagesGet")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/api/images"
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+
+	if r.dataServiceId != nil {
+		localVarQueryParams.Add("data_service_id", parameterToString(*r.dataServiceId, ""))
+	}
+	if r.versionId != nil {
+		localVarQueryParams.Add("version_id", parameterToString(*r.versionId, ""))
+	}
+	if r.latest != nil {
+		localVarQueryParams.Add("latest", parameterToString(*r.latest, ""))
+	}
+	if r.sortBy != nil {
+		localVarQueryParams.Add("sort_by", parameterToString(*r.sortBy, ""))
+	}
+	if r.limit != nil {
+		localVarQueryParams.Add("limit", parameterToString(*r.limit, ""))
+	}
+	if r.continuation != nil {
+		localVarQueryParams.Add("continuation", parameterToString(*r.continuation, ""))
+	}
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	if r.ctx != nil {
+		// API Key Authentication
+		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
+			if apiKey, ok := auth["ApiKeyAuth"]; ok {
+				var key string
+				if apiKey.Prefix != "" {
+					key = apiKey.Prefix + " " + apiKey.Key
+				} else {
+					key = apiKey.Key
+				}
+				localVarHeaderParams["Authorization"] = key
+			}
+		}
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
 type ApiApiImagesIdGetRequest struct {
 	ctx context.Context
 	ApiService *ImagesApiService
@@ -182,7 +350,7 @@ func (r ApiApiVersionsIdImagesGetRequest) Name(name string) ApiApiVersionsIdImag
 	return r
 }
 
-func (r ApiApiVersionsIdImagesGetRequest) Execute() (*ControllersPaginatedImages, *http.Response, error) {
+func (r ApiApiVersionsIdImagesGetRequest) Execute() (*ModelsPaginatedResultModelsImage, *http.Response, error) {
 	return r.ApiService.ApiVersionsIdImagesGetExecute(r)
 }
 
@@ -204,13 +372,13 @@ func (a *ImagesApiService) ApiVersionsIdImagesGet(ctx context.Context, id string
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedImages
-func (a *ImagesApiService) ApiVersionsIdImagesGetExecute(r ApiApiVersionsIdImagesGetRequest) (*ControllersPaginatedImages, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsImage
+func (a *ImagesApiService) ApiVersionsIdImagesGetExecute(r ApiApiVersionsIdImagesGetRequest) (*ModelsPaginatedResultModelsImage, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedImages
+		localVarReturnValue  *ModelsPaginatedResultModelsImage
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ImagesApiService.ApiVersionsIdImagesGet")

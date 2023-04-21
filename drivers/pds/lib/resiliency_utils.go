@@ -3,8 +3,10 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
@@ -26,6 +28,9 @@ const (
 	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
 	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
+	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
+	UpdateTemplate                    = "medium"
+	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
 )
 
 // PDS vars
@@ -105,6 +110,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
+	case RebootNodeDuringAppVersionUpdate:
+		log.InfoD("Entering to check if Data service pods started update " +
+			"Once it does, we restart portworx")
+		func1 := func() {
+			CheckPodIsTerminating(deployment.GetClusterResourceName(), namespace)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
 	case RestartPxDuringDSScaleUp:
 		log.InfoD("Entering to check if Data service has %v active pods. "+
 			"Once it does, we restart portworx", checkTillReplica)
@@ -120,6 +135,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
 		func1 := func() {
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case RestartAppDuringResourceUpdate:
+		log.InfoD("Entering to check if Data service has %v active pods. "+
+			"Once it does, we restart application pods", checkTillReplica)
+		func1 := func() {
+			UpdateDeploymentResourceConfig(deployment, namespace, UpdateTemplate)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -217,6 +242,63 @@ func RestartPXDuringDSScaleUp(ns string) error {
 	}
 
 	log.InfoD("PX restarted successfully on node %v", podName)
+	return testError
+}
+
+func NodeRebootDurinAppVersionUpdate(ns string) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+	var nodeToReboot node.Node
+	var nodeName, podName string
+
+	// Waiting till atleast first pod have a node assigned
+	var pods []corev1.Pod
+	err = wait.PollImmediate(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if Pods have a node assigned or it's in a window where it's just coming up
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is %v and deletiontimestamp is %v", pod.Name, pod.Spec.NodeName, pod.DeletionTimestamp)
+			if pod.DeletionTimestamp != nil {
+				podName = pod.Name
+				nodeName = pod.Spec.NodeName
+				return true, nil
+			} else {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	nodeToReboot, testError = node.GetNodeByName(nodeName)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	log.InfoD("Going ahead and restarting PX the node %v as there is an "+
+		"application pod %v that's coming up on this node", nodeName, podName)
+
+	testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         defaultCommandTimeout,
+			TimeBeforeRetry: defaultCommandRetry,
+		},
+	})
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	log.Infof("Node %v rebooted successfully", nodeName)
 	return testError
 }
 
@@ -374,6 +456,30 @@ func KillPodsInNamespace(ns string, podName string) error {
 			return testError
 		}
 		log.InfoD("Successfully Killed Pod: %v", pod.Name)
+	}
+	return testError
+}
+
+func RestartApplicationDuringResourceUpdate(ns string) error {
+	var ss *v1.StatefulSet
+	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	// Get Pods of this StatefulSet
+	pods, testError := k8sApps.GetStatefulSetPods(ss)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	rand.Seed(time.Now().Unix())
+	pod := pods[rand.Intn(len(pods))]
+	// Delete the deployment Pods during update.
+	testError = DeleteK8sPods(pod.Name, ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
 	}
 	return testError
 }

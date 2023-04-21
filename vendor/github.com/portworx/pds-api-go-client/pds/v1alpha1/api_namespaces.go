@@ -70,7 +70,7 @@ func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Status(status string) Api
 	return r
 }
 
-func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Execute() (*ControllersPaginatedNamespaces, *http.Response, error) {
+func (r ApiApiDeploymentTargetsIdNamespacesGetRequest) Execute() (*ModelsPaginatedResultModelsNamespace, *http.Response, error) {
 	return r.ApiService.ApiDeploymentTargetsIdNamespacesGetExecute(r)
 }
 
@@ -92,13 +92,13 @@ func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesGet(ctx context.C
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedNamespaces
-func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesGetExecute(r ApiApiDeploymentTargetsIdNamespacesGetRequest) (*ControllersPaginatedNamespaces, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsNamespace
+func (a *NamespacesApiService) ApiDeploymentTargetsIdNamespacesGetExecute(r ApiApiDeploymentTargetsIdNamespacesGetRequest) (*ModelsPaginatedResultModelsNamespace, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedNamespaces
+		localVarReturnValue  *ModelsPaginatedResultModelsNamespace
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "NamespacesApiService.ApiDeploymentTargetsIdNamespacesGet")

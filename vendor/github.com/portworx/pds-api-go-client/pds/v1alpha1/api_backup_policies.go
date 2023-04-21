@@ -418,7 +418,7 @@ func (r ApiApiTenantsIdBackupPoliciesGetRequest) Name(name string) ApiApiTenants
 	return r
 }
 
-func (r ApiApiTenantsIdBackupPoliciesGetRequest) Execute() (*ControllersPaginatedBackupPolicies, *http.Response, error) {
+func (r ApiApiTenantsIdBackupPoliciesGetRequest) Execute() (*ModelsPaginatedResultModelsBackupPolicy, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdBackupPoliciesGetExecute(r)
 }
 
@@ -440,13 +440,13 @@ func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesGet(ctx context.Con
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedBackupPolicies
-func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesGetExecute(r ApiApiTenantsIdBackupPoliciesGetRequest) (*ControllersPaginatedBackupPolicies, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsBackupPolicy
+func (a *BackupPoliciesApiService) ApiTenantsIdBackupPoliciesGetExecute(r ApiApiTenantsIdBackupPoliciesGetRequest) (*ModelsPaginatedResultModelsBackupPolicy, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedBackupPolicies
+		localVarReturnValue  *ModelsPaginatedResultModelsBackupPolicy
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupPoliciesApiService.ApiTenantsIdBackupPoliciesGet")

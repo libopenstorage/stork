@@ -424,7 +424,7 @@ func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) DataServiceI
 	return r
 }
 
-func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) Execute() (*ControllersPaginatedApplicationConfigurationTemplates, *http.Response, error) {
+func (r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) Execute() (*ModelsPaginatedResultModelsApplicationConfigurationTemplate, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdApplicationConfigurationTemplatesGetExecute(r)
 }
 
@@ -446,13 +446,13 @@ func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationCon
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedApplicationConfigurationTemplates
-func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationConfigurationTemplatesGetExecute(r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) (*ControllersPaginatedApplicationConfigurationTemplates, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsApplicationConfigurationTemplate
+func (a *ApplicationConfigurationTemplatesApiService) ApiTenantsIdApplicationConfigurationTemplatesGetExecute(r ApiApiTenantsIdApplicationConfigurationTemplatesGetRequest) (*ModelsPaginatedResultModelsApplicationConfigurationTemplate, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedApplicationConfigurationTemplates
+		localVarReturnValue  *ModelsPaginatedResultModelsApplicationConfigurationTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ApplicationConfigurationTemplatesApiService.ApiTenantsIdApplicationConfigurationTemplatesGet")
@@ -557,11 +557,11 @@ type ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest struct {
 	ctx context.Context
 	ApiService *ApplicationConfigurationTemplatesApiService
 	id string
-	body *ControllersCreateApplicationConfigurationTemplatesRequest
+	body *ControllersCreateApplicationConfigurationTemplateRequest
 }
 
 // Request body containing the application configuration template
-func (r ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest) Body(body ControllersCreateApplicationConfigurationTemplatesRequest) ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest {
+func (r ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest) Body(body ControllersCreateApplicationConfigurationTemplateRequest) ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest {
 	r.body = &body
 	return r
 }
@@ -571,9 +571,9 @@ func (r ApiApiTenantsIdApplicationConfigurationTemplatesPostRequest) Execute() (
 }
 
 /*
-ApiTenantsIdApplicationConfigurationTemplatesPost Create ApplicationConfigurationTemplates
+ApiTenantsIdApplicationConfigurationTemplatesPost Create ApplicationConfigurationTemplate
 
-Creates a new ApplicationConfigurationTemplates
+Creates a new ApplicationConfigurationTemplate
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Tenant ID (must be valid UUID)

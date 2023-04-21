@@ -31,11 +31,11 @@ type ApiApiAccountsIdInvitationsPostRequest struct {
 	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
 	id string
-	body *ControllersInvitationRequest
+	body *RequestsInvitationAccountRequest
 }
 
 // Request body containing the invitation details.
-func (r ApiApiAccountsIdInvitationsPostRequest) Body(body ControllersInvitationRequest) ApiApiAccountsIdInvitationsPostRequest {
+func (r ApiApiAccountsIdInvitationsPostRequest) Body(body RequestsInvitationAccountRequest) ApiApiAccountsIdInvitationsPostRequest {
 	r.body = &body
 	return r
 }
@@ -47,7 +47,7 @@ func (r ApiApiAccountsIdInvitationsPostRequest) Execute() (*http.Response, error
 /*
 ApiAccountsIdInvitationsPost Create Invitation
 
-Adds role binding to existing user. The plan is to send invites to non-existing users in the future.
+Adds role binding to existing user or creates invitation if user does not exist.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Account ID (must be valid UUID)
@@ -149,12 +149,12 @@ type ApiApiAccountsIdRoleBindingsDeleteRequest struct {
 	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
 	id string
-	actorType *string
+	body *RequestsDeleteRoleBindingRequest
 }
 
-// AccountRoleBinding actor type
-func (r ApiApiAccountsIdRoleBindingsDeleteRequest) ActorType(actorType string) ApiApiAccountsIdRoleBindingsDeleteRequest {
-	r.actorType = &actorType
+// Request body containing the account role binding
+func (r ApiApiAccountsIdRoleBindingsDeleteRequest) Body(body RequestsDeleteRoleBindingRequest) ApiApiAccountsIdRoleBindingsDeleteRequest {
+	r.body = &body
 	return r
 }
 
@@ -198,6 +198,9 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsDeleteExecute(r
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
+	if r.body == nil {
+		return nil, reportError("body is required and must be specified")
+	}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{"application/json"}
@@ -217,7 +220,7 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsDeleteExecute(r
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.actorType
+	localVarPostBody = r.body
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
@@ -556,7 +559,7 @@ func (r ApiApiUsersIdAccountRoleBindingsGetRequest) SortBy(sortBy string) ApiApi
 	r.sortBy = &sortBy
 	return r
 }
-// Filter results by AccountRoleBinding assigned role_name
+// Filter results by role_name
 func (r ApiApiUsersIdAccountRoleBindingsGetRequest) RoleName(roleName string) ApiApiUsersIdAccountRoleBindingsGetRequest {
 	r.roleName = &roleName
 	return r
@@ -567,9 +570,9 @@ func (r ApiApiUsersIdAccountRoleBindingsGetRequest) Execute() (*ControllersPagin
 }
 
 /*
-ApiUsersIdAccountRoleBindingsGet List AccountRoleBindings of a given user
+ApiUsersIdAccountRoleBindingsGet List User's AccountRoleBindings
 
-Every user can read its own bindings. Only pds-admin can read bindings of other users.
+Lists the AccountRoleBindings of a User.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id User ID (must be valid UUID)

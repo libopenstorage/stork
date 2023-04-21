@@ -82,8 +82,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 			}
 
@@ -91,16 +89,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-				log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
-			}
-		}()
 	})
 })
 
@@ -372,8 +360,6 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 
 			})
@@ -382,15 +368,6 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
 	})
 })
 
@@ -403,7 +380,6 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
-					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
@@ -453,7 +429,6 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
 				})
 			}
 		})
@@ -461,15 +436,6 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
 	})
 })
 
@@ -801,7 +767,6 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			log.InfoD("Getting all PV and associated PVCs and deleting them")
 			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 			log.FailOnError(err, "Error while deleting PV and PVCs")
-			isDeploymentsDeleted = true
 		})
 
 	})
@@ -1057,21 +1022,11 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-
 		defer EndTorpedoTest()
 	})
 })
@@ -1157,8 +1112,21 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID string, deployOldVersion bool) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	Step("Deploy Data Services", func() {
+		var dsVersion string
+		var dsImage string
+
+		if deployOldVersion {
+			dsVersion = ds.OldVersion
+			dsImage = ds.OldImage
+			log.Debugf("Deploying old version %s and image %s", dsVersion, dsImage)
+		} else {
+			dsVersion = ds.Version
+			dsImage = ds.Image
+			log.Debugf("Deploying latest version %s and image %s", dsVersion, dsImage)
+		}
+
 		log.InfoD("Deploying DataService %v ", ds.Name)
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 		log.FailOnError(err, "Error while getting resource template")
@@ -1184,8 +1152,8 @@ func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID 
 			serviceType,
 			dataServiceDefaultResourceTemplateID,
 			storageTemplateID,
-			ds.Version,
-			ds.Image,
+			dsVersion,
+			dsImage,
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
@@ -1195,7 +1163,7 @@ func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID 
 
 func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	log.InfoD("Data Service Deployment Triggered")
-	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := TriggerDeployDataService(ds, namespace, tenantID, projectID)
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := TriggerDeployDataService(ds, namespace, tenantID, projectID, false)
 	Step("Validate Data Service Configurations", func() {
 		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
@@ -1238,67 +1206,72 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		log.FailOnError(err, "Error while deploying data services")
 		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
 
-		Step("Validate Storage Configurations", func() {
-			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
-		})
+	Step("Validate Storage Configurations", func() {
+		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+	})
 
-		Step("Running Workloads before scaling up of dataservices ", func() {
-			var params pdslib.WorkloadGenerationParams
+	Step("Running Workloads before scaling up of dataservices ", func() {
+		var params pdslib.WorkloadGenerationParams
+		if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
 			pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
 			log.FailOnError(err, "Error while genearating workloads")
-		})
-
-		defer func() {
-			Step("Delete the workload generating deployments", func() {
-				if Contains(dataServiceDeploymentWorkloads, ds.Name) {
-					log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
-					err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-				} else if Contains(dataServicePodWorkloads, ds.Name) {
-					log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
-					err = pdslib.DeleteK8sPods(pod.Name, namespace)
-				}
-				log.FailOnError(err, "error deleting workload generating pods for ds %s", dataservice)
-			})
-		}()
-
-		Step("Update the data service patch versions", func() {
-			log.Infof("Version/Build: %v %v", dsVersion, dsBuild)
-			updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
-				dataServiceDefaultAppConfigID,
-				replicas, dataServiceDefaultResourceTemplateID, dsBuild, namespace, dsVersion)
-			log.FailOnError(err, "Error while updating data services")
-			log.InfoD("data service deployed %v ", dataservice)
-
-			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-
-			id := pdslib.GetDataServiceID(dataservice)
-			dash.VerifyFatal(id != "", true, "Validating dataservice id")
-			log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-			for version := range dataServiceVersionBuildMap {
-				delete(dataServiceVersionBuildMap, version)
-			}
-			_, _, dataServiceVersionBuildMap, err := pdslib.GetVersionsImage(dsVersion, dsBuild, id)
-			log.FailOnError(err, "Error while fetching versions/image information")
-
-			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
-			dash.VerifyFatal(config.Spec.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
-		})
-
-		Step("Delete Deployments", func() {
-			resp, err := pdslib.DeleteDeployment(deployment.GetId())
-			log.FailOnError(err, "Error while deleting data services")
-			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			log.InfoD("Getting all PV and associated PVCs and deleting them")
-			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
-			log.FailOnError(err, "Error while deleting PV and PVCs")
-			isDeploymentsDeleted = true
-		})
+		}
 
 	})
+
+	defer func() {
+		Step("Delete the workload generating deployments", func() {
+			if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+				log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+				err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+			} else if Contains(dataServicePodWorkloads, ds.Name) {
+				log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+				err = pdslib.DeleteK8sPods(pod.Name, namespace)
+			}
+			log.FailOnError(err, "error deleting workload generating pods for ds %s", dataservice)
+		})
+	}()
+
+	Step("Update the data service patch versions", func() {
+		log.Infof("Version/Build: %v %v", dsVersion, dsBuild)
+		updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
+			dataServiceDefaultAppConfigID,
+			replicas, dataServiceDefaultResourceTemplateID, dsBuild, dsVersion)
+		log.FailOnError(err, "Error while updating data services")
+		log.InfoD("data service deployed %v ", dataservice)
+
+		err = pdslib.ValidateDataServiceDeployment(updatedDeployment, namespace)
+		log.FailOnError(err, "error while Validating DataService Deployment")
+
+		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+
+		id := pdslib.GetDataServiceID(dataservice)
+		dash.VerifyFatal(id != "", true, "Validating dataservice id")
+		log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
+		for version := range dataServiceVersionBuildMap {
+			delete(dataServiceVersionBuildMap, version)
+		}
+		_, _, dataServiceVersionBuildMap, err := pdslib.GetVersionsImage(dsVersion, dsBuild, id)
+		log.FailOnError(err, "Error while fetching versions/image information")
+
+		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+		dash.VerifyFatal(config.Spec.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
+	})
+
+	Step("Delete Deployments", func() {
+		resp, err := pdslib.DeleteDeployment(deployment.GetId())
+		log.FailOnError(err, "Error while deleting data services")
+		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		log.InfoD("Getting all PV and associated PVCs and deleting them")
+		err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+		log.FailOnError(err, "Error while deleting PV and PVCs")
+	})
+
 }
 
 var _ = Describe("{DeployMultipleNamespaces}", func() {
@@ -1560,23 +1533,12 @@ var _ = Describe("{RestartPXPods}", func() {
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
-					isDeploymentsDeleted = true
 				})
 			}
 		})
 	})
 
 	JustAfterEach(func() {
-		//TODO: Write a wrapper method for defer func
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "error deleting deployment")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-
 		defer EndTorpedoTest()
 	})
 
