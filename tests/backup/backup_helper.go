@@ -1272,31 +1272,48 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, cluste
 	}
 }
 
-// GetBackupSpecObjectsContexts clones and returns the provided `context`s (and each of their `spec`s)
-// *after* filtering the `spec`s to only include the resources that are in the backup.
-// NOTE: make sure to include Contexts of *all* namespaces which are supposed to contain the backup objects
-// NOTE: This function assumes that `clusterAppContexts[].ScheduleOptions.Namespace` will always contain the namespace of the scheduled specs
-func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectResponse, clusterAppContexts []*scheduler.Context) ([]*scheduler.Context, error) {
-	log.InfoD("Validation: Getting the backup objects (specs) from the Context")
+// GetBackupCtxsFromScheduledCtxs clones and returns the scheduled contexts
+// * after filtering its `spec`s to only include the resources that are in the backup.
+// *
+// * Returns:
+// * backupclusterAppsContexts: the filtered context (backup)
+// * ScheduledCtxNotFoundInBackupErrors: these are errors that are generated when namespaces and/or specObjs in the scheduled context are not found in the backup
+// * BackupNotFoundInAnyScheduledCtxErrors: these are errors that are generated when namespaces and/or resources in the backup context are not found in the scheduled contextx
+// * otherErrors: all the other kind of error.
+// *
+// * NOTES:
+// * - make sure to include Contexts of *all* namespaces which are supposed to contain the backup objects
+// * - The errors returned are all tolerable errors that have been caught until an intolerable error was encountered
+func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResponse, scheduledAppContexts []*scheduler.Context) (backupclusterAppsContexts []*scheduler.Context, ScheduledCtxNotFoundInBackupErrors, BackupNotFoundInAnyScheduledCtxErrors, otherErrors []error) {
 	backupName := backupInspectResponse.Backup.Name
 	resourceInfos := backupInspectResponse.Backup.Resources
+	backupNamesspaces := backupInspectResponse.GetBackup().GetNamespaces()
 
-	// Error Checking: if all backed up resources have corresponding specs in _some_ scheduler.Contexts
-	// This can be problematic as this means that we're not keeping track of all possible objects via specs
-	var namespaces []string = nil
-	getNS := func() {
-		if namespaces == nil {
-			for _, clusterAppsContext := range clusterAppContexts {
-				namespaces = append(namespaces, clusterAppsContext.ScheduleOptions.Namespace)
-			}
-		}
+	log.InfoD("Getting the backup objects (specs) from contexts, for backup [%s]", backupName)
+
+	// Verifying if appCtxs for all namespaces in backup
+	log.InfoD("Verifying if scheduledAppContexts provided to ValidateBackup correspond to all namespaces in backup [%s]", backupName)
+	availableNamespaces := make([]string, 0)
+	unavailableNamespaces := make([]string, 0)
+	for _, clusterAppsContext := range scheduledAppContexts {
+		availableNamespaces = append(availableNamespaces, clusterAppsContext.ScheduleOptions.Namespace)
 	}
 
-	backupclusterAppsContexts := make([]*scheduler.Context, 0)
+	namespacesAvailable := true
+	for _, namespace := range backupNamesspaces {
+		if !Contains(availableNamespaces, namespace) {
+			namespacesAvailable = false
+			unavailableNamespaces = append(unavailableNamespaces, namespace)
+			}
+		}
+	if !namespacesAvailable {
+		err := fmt.Errorf("The namespaces (appCtxs) [%v] provided to the ValidateBackup, do not contain the namespaces [%v] present in the backup [%s]. They are required for Validation", availableNamespaces, unavailableNamespaces, backupName)
+		BackupNotFoundInAnyScheduledCtxErrors = append(BackupNotFoundInAnyScheduledCtxErrors, err)
+	}
 
 	nonNSResourceInfoBackupObjsFound := make(map[*api.ResourceInfo]bool)
 
-	var nonNSResourceInfoBackupObjs []*api.ResourceInfo = make([]*api.ResourceInfo, 0)
+	nonNSResourceInfoBackupObjs := make([]*api.ResourceInfo, 0)
 	for _, resource := range resourceInfos {
 		if resource.GetNamespace() == "" && resource.GetKind() != "PersistentVolume" /*we don't have specs of PVs*/ {
 			nonNSResourceInfoBackupObjs = append(nonNSResourceInfoBackupObjs, resource)
@@ -1305,13 +1322,19 @@ func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectRespon
 	}
 
 	// filter stage: for each clusterAppsContext (namespace), we create the corresponding BackupSpecObject
-	for _, clusterAppsContext := range clusterAppContexts {
+	for _, clusterAppsContext := range scheduledAppContexts {
+
+		clusterAppsContextNamespace := clusterAppsContext.ScheduleOptions.Namespace
+		if !Contains(backupNamesspaces, clusterAppsContextNamespace) {
+			err := fmt.Errorf("The namespace (appCtx) [%s] provided to the ValidateBackup, is not present in the backup [%s]", clusterAppsContextNamespace, backupName)
+			ScheduledCtxNotFoundInBackupErrors = append(ScheduledCtxNotFoundInBackupErrors, err)
+		}
 
 		resourceInfoBackupObjsFound := make(map[*api.ResourceInfo]bool)
 		// collect the backup resources whose specs should be present in this context (namespace)
-		var resourceInfoBackupObjs []*api.ResourceInfo = make([]*api.ResourceInfo, 0)
+		resourceInfoBackupObjs := make([]*api.ResourceInfo, 0)
 		for _, resource := range resourceInfos {
-			if resource.GetNamespace() == clusterAppsContext.ScheduleOptions.Namespace {
+			if resource.GetNamespace() == clusterAppsContextNamespace {
 				resourceInfoBackupObjs = append(resourceInfoBackupObjs, resource)
 				resourceInfoBackupObjsFound[resource] = false
 			}
@@ -1323,8 +1346,7 @@ func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectRespon
 		for _, spec := range clusterAppsContext.App.SpecList {
 			name, kind, ns, err := GetSpecNameKindNamepace(spec)
 			if err != nil {
-				// this should actually result in an error, but ignoring for now
-				log.Error(err)
+				otherErrors = append(otherErrors, err)
 				continue specloop
 			}
 
@@ -1342,11 +1364,14 @@ func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectRespon
 							clone := spec
 							specObjects = append(specObjects, clone)
 							nonNSResourceInfoBackupObjsFound[nonNSBackupObj] = true
+
 							continue specloop
 						}
 					}
+
 					// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-					log.Errorf("The non-namespaced spec (name: [%s], kind: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, clusterAppsContext.ScheduleOptions.Namespace, backupName)
+					err := fmt.Errorf("The non-namespaced spec (name: [%s], kind: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, clusterAppsContextNamespace, backupName)
+					ScheduledCtxNotFoundInBackupErrors = append(ScheduledCtxNotFoundInBackupErrors, err)
 					continue specloop
 				} else {
 					for _, backupObj := range resourceInfoBackupObjs {
@@ -1354,17 +1379,22 @@ func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectRespon
 							clone := spec
 							specObjects = append(specObjects, clone)
 							resourceInfoBackupObjsFound[backupObj] = true
+
 							continue specloop
 						}
 					}
+
 					// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-					log.Errorf("The spec (name: [%s], kind: [%s], namespace: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace, backupName)
+					err := fmt.Errorf("The spec (name: [%s], kind: [%s], namespace: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, ns, clusterAppsContextNamespace, backupName)
+					ScheduledCtxNotFoundInBackupErrors = append(ScheduledCtxNotFoundInBackupErrors, err)
+
 					continue specloop
 				}
 
 			} else {
-				// This should actually result in an error, but ignoring for now
-				log.Errorf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this spec will be ignored", name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
+				err := fmt.Errorf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this spec will be ignored", name, kind, ns, clusterAppsContextNamespace)
+				otherErrors = append(otherErrors, err)
+
 				continue specloop
 			}
 		}
@@ -1380,25 +1410,25 @@ func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectRespon
 
 		for res, found := range resourceInfoBackupObjsFound {
 			if !found {
-				log.Errorf("resource(name: [%s], kind: [%s], namespace: [%s]) in backup [%s], doesn't have a corresponding spec in the context [%v]", res.GetName(), res.GetKind(), res.GetNamespace(), backupName, clusterAppsContext.ScheduleOptions.Namespace)
+				err := fmt.Errorf("resource(name: [%s], kind: [%s], namespace: [%s]) in backup [%s], doesn't have a corresponding spec in the context [%v]", res.GetName(), res.GetKind(), res.GetNamespace(), backupName, clusterAppsContextNamespace)
+				BackupNotFoundInAnyScheduledCtxErrors = append(BackupNotFoundInAnyScheduledCtxErrors, err)
 			} else {
-				// TODO: make Infof
-				log.InfoD("resource(name: [%s], kind: [%s], namespace: [%s]) in backup [%s] has a spec!", res.GetName(), res.GetKind(), res.GetNamespace(), backupName)
+				log.Infof("resource(name: [%s], kind: [%s], namespace: [%s]) in backup [%s] has a spec in the context [%s]", res.GetName(), res.GetKind(), res.GetNamespace(), backupName, clusterAppsContextNamespace)
 			}
 		}
 	}
 
 	for res, found := range nonNSResourceInfoBackupObjsFound {
 		if !found {
-			getNS()
-			log.Errorf("non NS resource(name: [%s], kind: [%s]) in backup [%s], doesn't have a corresponding spec any of the contexts [%v]", res.GetName(), res.GetKind(), backupName, namespaces)
+			err := fmt.Errorf("non NS resource(name: [%s], kind: [%s]) in backup [%s], doesn't have a corresponding spec any of the contexts [%v]", res.GetName(), res.GetKind(), backupName, availableNamespaces)
+			BackupNotFoundInAnyScheduledCtxErrors = append(BackupNotFoundInAnyScheduledCtxErrors, err)
 		} else {
 			// TODO: make Infof
-			log.Errorf("non NS resource(name: [%s], kind: [%s]) in backup [%s] has a spec!", res.GetName(), res.GetKind(), backupName)
+			log.Errorf("non NS resource(name: [%s], kind: [%s]) in backup [%s] has a spec in scheduledAppContexts", res.GetName(), res.GetKind(), backupName)
 		}
 	}
 
-	return backupclusterAppsContexts, nil
+	return
 }
 
 // restoreSuccessCheck inspects restore task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
