@@ -482,6 +482,21 @@ func updateChannel(err error, errChan ...*chan error) {
 	}
 }
 
+// processMultipleErrors does `log.Errof` on all errors, and returns a consolidated error
+func ProcessMultipleErrors(errorOrigin string, errs []error) error {
+	if len(errs) > 0 {
+		combinedErrors := make([]string, 0)
+		for _, err := range errs {
+			errStr := err.Error()
+			log.Errorf("%s: %s", errorOrigin, errStr)
+			combinedErrors = append(combinedErrors, errStr)
+		}
+		return fmt.Errorf("%s: %v", errorOrigin, combinedErrors)
+	} else {
+		return nil
+	}
+}
+
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	defer func() {
