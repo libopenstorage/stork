@@ -1245,9 +1245,21 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 	return nil
 }
 
-// ValidateBackup validates a backup and returns a clone of the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup
-func ValidateBackup(ctx context.Context, backupName string, orgID string, clusterAppContexts []*scheduler.Context, backupClusterConfigPath string) ([]*scheduler.Context, error) {
+// ValidateBackup validates a backup and returns a clone of the provided scheduledCtxs (and each of their specs) *after* filtering the specs to only include the resources that are in the backup.
+// * An error can be returned *with* backedupAppContexts, so do check if the first variable returned is actually nil
+// *
+// * # Parameters
+// *
+// * requireAllScheduledCtxAreInBackup: This requires that Backup objects are a superset of objects in ScheduledCtx: If set to true, error is returned if something in scheduledCtx is not present in BackupCtx (set to false if not everything in scheduledCtx has been backed up, on purpose)
+// * requireAllBackupAreInSomeScheduledCtx: This requires that ScheduledCtx objects are a superset of objects in Backup: If set to true, error is returned if something in Backup is not present in scheduledCtx. (set to false if deploying CRs)
+// * NOTES: Setting both to true will check for strict equality of both sets. Set both to false if you just want to filter and get whatever is possible.
+// *
+// * NOTE: Ensure scheduledCtxs which correspond to the namespaces backed up in the backup are provided
+// * NOTE: This function must be called after the backup is completed (with status Success/PartialSuccess)
+func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, requireAllScheduledCtxAreInBackup, requireAllBackupAreInSomeScheduledCtx bool, backupClusterConfigPath string) ([]*scheduler.Context, error) {
 	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
+
+	log.InfoD("Obtaining backup info for backup [%s]", backupName)
 	backupDriver := Inst().Backup
 	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
@@ -1262,14 +1274,24 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, cluste
 	if err != nil {
 		return nil, fmt.Errorf("InspectBackup Err: %v", err)
 	}
-	// TODO: Remove
-	log.Infof("backupInspectResponse: ++%+v++", backupInspectResponse)
 
-	if backedupAppContexts, err := GetBackupSpecObjectsContexts(backupInspectResponse, clusterAppContexts); err != nil {
-		return nil, fmt.Errorf("GetBackupSpecObjectsContexts Err: %v", err)
-	} else {
-		return backedupAppContexts, nil
+	backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
+	if backupStatus != api.BackupInfo_StatusInfo_Success &&
+		backupStatus != api.BackupInfo_StatusInfo_PartialSuccess {
+		return nil, fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess", backupName)
 	}
+
+	backedupAppContexts, ScheduledCtxNotFoundInBackupErrors, BackupNotFoundInAnyScheduledCtxErrors, otherErrors := GetBackupCtxsFromScheduledCtxs(backupInspectResponse, scheduledAppContexts)
+	errArr := make([]error, 0)
+	if requireAllScheduledCtxAreInBackup {
+		errArr = append(errArr, ScheduledCtxNotFoundInBackupErrors...)
+	}
+	if requireAllBackupAreInSomeScheduledCtx {
+		errArr = append(errArr, BackupNotFoundInAnyScheduledCtxErrors...)
+	}
+	errArr = append(errArr, otherErrors...)
+	err = ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs", errArr)
+	return backedupAppContexts, err
 }
 
 // GetBackupCtxsFromScheduledCtxs clones and returns the scheduled contexts
