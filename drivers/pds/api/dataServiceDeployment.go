@@ -35,7 +35,7 @@ func (ds *DataServiceDeployment) ListDeployments(projectID string) ([]pds.Models
 // CreateDeployment return newly created deployment model.
 func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	createRequest := pds.ControllersCreateProjectDeployment{
+	createRequest := pds.RequestsCreateProjectDeploymentRequest{
 		ApplicationConfigurationTemplateId: &appConfigID,
 		DeploymentTargetId:                 &deploymentTargetID,
 		DnsZone:                            &dnsZone,
@@ -62,13 +62,13 @@ func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTa
 }
 
 // CreateDeploymentWithScehduleBackup return newly created deployment model with schedule backup enabled.
-func (ds *DataServiceDeployment) CreateDeploymentWithScehduleBackup(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, backupPolicyID string, backupTargetID string) (*pds.ModelsDeployment, error) {
+func (ds *DataServiceDeployment) CreateDeploymentWithSchehduleBackup(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, backupPolicyID string, backupTargetID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	scheduledBackup := pds.ControllersCreateDeploymentScheduledBackup{
+	scheduledBackup := pds.RequestsDeploymentScheduledBackup{
 		BackupPolicyId: &backupPolicyID,
 		BackupTargetId: &backupTargetID,
 	}
-	createRequest := pds.ControllersCreateProjectDeployment{
+	createRequest := pds.RequestsCreateProjectDeploymentRequest{
 		ApplicationConfigurationTemplateId: &appConfigID,
 		DeploymentTargetId:                 &deploymentTargetID,
 		DnsZone:                            &dnsZone,
@@ -112,7 +112,7 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 }
 
 // GetDeploymentStatus return deployment status.
-func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.ControllersStatusResponse, *status.Response, error) {
+func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.ServiceDeploymentStatus, *status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
@@ -129,7 +129,7 @@ func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.
 }
 
 // GetDeploymentEvents return events on the given deployment.
-func (ds *DataServiceDeployment) GetDeploymentEvents(deploymentID string) (*pds.ControllersEventsResponse, error) {
+func (ds *DataServiceDeployment) GetDeploymentEvents(deploymentID string) (*pds.ServiceDeploymentResourceEvents, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -123,6 +124,7 @@ import (
 
 	context1 "context"
 
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -1885,7 +1887,7 @@ func ValidateClusterSize(count int64) {
 	storageNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Storage nodes are empty")
 
-	log.Info("List of storage nodes:[%v]", storageNodes)
+	log.Infof("List of storage nodes:[%v]", storageNodes)
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
 }
 
@@ -4470,9 +4472,9 @@ func ParseFlags() {
 		repl1AppList = append(repl1AppList, appList...)
 	} else if len(repl1AppsCSV) > 0 {
 		apl, err := splitCsv(repl1AppsCSV)
-		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
+		log.FailOnError(err, fmt.Sprintf("failed to parse repl-1 app list: %v", repl1AppsCSV))
 		repl1AppList = append(repl1AppList, apl...)
-		log.Infof("volume repl 1 apps : %+v", secureAppList)
+		log.Infof("volume repl 1 apps : %+v", repl1AppList)
 		//Adding repl-1 apps as part of app list for deployment
 		appList = append(appList, repl1AppList...)
 	}
@@ -5192,7 +5194,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 	if err != nil {
 		//this is a special case occurs where drive is added with same path as deleted pool
-		if initPoolCount == len(stNode.Pools) {
+		if initPoolCount >= len(stNode.Pools) {
 			for p := range stNode.Disks {
 				drivePathsToValidate = append(drivePathsToValidate, p)
 			}
@@ -6422,4 +6424,190 @@ func DoRetryWithTimeoutWithGinkgoRecover(taskFunc func() (interface{}, bool, err
 		return taskFunc()
 	}
 	return task.DoRetryWithTimeout(taskFuncWithGinkgoRecover, timeout, timeBeforeRetry)
+}
+
+// GetVolumesInDegradedState Get the list of volumes in degraded state
+func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume, error) {
+	var volumes []*volume.Volume
+	err := RefreshDriverEndPoints()
+	if err != nil {
+		return nil, err
+	}
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return nil, err
+			}
+			log.InfoD(fmt.Sprintf("Current Status of the volume [%v] is [%v]", vol.Name, appVol.Status))
+			if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_DEGRADED" {
+				volumes = append(volumes, vol)
+			}
+		}
+	}
+	return volumes, nil
+}
+
+// VerifyVolumeStatusOnline returns true is volume status is up
+func VerifyVolumeStatusOnline(vol *volume.Volume) error {
+	appVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return err
+	}
+	if fmt.Sprintf("%v", appVol.Status) != "VOLUME_STATUS_UP" {
+		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status)
+	}
+	return nil
+}
+
+type KvdbNode struct {
+	PeerUrls   []string `json:"PeerUrls"`
+	ClientUrls []string `json:"ClientUrls"`
+	Leader     bool     `json:"Leader"`
+	DbSize     int      `json:"DbSize"`
+	IsHealthy  bool     `json:"IsHealthy"`
+	ID         string   `json:"ID"`
+}
+
+// GetAllKvdbNodes returns list of all kvdb nodes present in the cluster
+func GetAllKvdbNodes() ([]KvdbNode, error) {
+	type kvdbNodes []map[string]KvdbNode
+	storageNodes := node.GetStorageNodes()
+	randomIndex := rand.Intn(len(storageNodes))
+	randomNode := storageNodes[randomIndex]
+
+	jsonConvert := func(jsonString string) ([]KvdbNode, error) {
+		var nodes kvdbNodes
+		var kvdb KvdbNode
+		var kvdbNodes []KvdbNode
+
+		err := json.Unmarshal([]byte(fmt.Sprintf("[%s]", jsonString)), &nodes)
+		if err != nil {
+			return nil, err
+		}
+		for _, nodeMap := range nodes {
+			for id, value := range nodeMap {
+				kvdb.ID = id
+				kvdb.Leader = value.Leader
+				kvdb.IsHealthy = value.IsHealthy
+				kvdb.ClientUrls = value.ClientUrls
+				kvdb.DbSize = value.DbSize
+				kvdb.PeerUrls = value.PeerUrls
+				kvdbNodes = append(kvdbNodes, kvdb)
+			}
+		}
+		return kvdbNodes, nil
+	}
+
+	var allKvdbNodes []KvdbNode
+	// Execute the command and check the alerts of type POOL
+	command := "pxctl service kvdb members list -j"
+	out, err := Inst().N.RunCommandWithNoRetry(randomNode, command, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	//log.FailOnError(err, "Unable to get KVDB members from the command [%s]", command)
+	log.InfoD("List of KVDBMembers in the cluster [%v]", out)
+
+	// Convert KVDB members to map
+	allKvdbNodes, err = jsonConvert(out)
+	if err != nil {
+		return nil, err
+	}
+	return allKvdbNodes, nil
+}
+
+// GetKvdbMasterPID returns the PID of KVDB master node
+func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
+	var processPid string
+	command := "ps -ef | grep -i px-etcd"
+	out, err := Inst().N.RunCommand(kvdbNode, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "px-etcd start") && !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+	return processPid, err
+}
+
+// getReplicaNodes returns the list of nodes which has replicas
+func getReplicaNodes(vol *volume.Volume) ([]string, error) {
+	getReplicaSets, err := Inst().V.GetReplicaSets(vol)
+	if err != nil {
+		return nil, err
+	}
+	return getReplicaSets[0].Nodes, nil
+}
+
+// IsDMthin returns true if setup is dmthin enabled
+func IsDMthin() (bool, error) {
+	dmthinEnabled := false
+	cluster, err := Inst().V.GetDriver()
+	if err != nil {
+		return dmthinEnabled, err
+	}
+	argsList, err := util.MiscArgs(cluster)
+	for _, args := range argsList {
+		if strings.Contains(args, "dmthin") {
+			dmthinEnabled = true
+		}
+	}
+	return dmthinEnabled, nil
+}
+
+// AddMetadataDisk add metadisk to the node if not already exists
+func AddMetadataDisk(n node.Node) error {
+	drivesMap, err := Inst().N.GetBlockDrives(n, node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	})
+	if err != nil {
+		return err
+	}
+
+	isDedicatedMetadataDiskExist := false
+
+	for _, v := range drivesMap {
+		for lk := range v.Labels {
+			if lk == "mdvol" {
+				isDedicatedMetadataDiskExist = true
+			}
+		}
+	}
+
+	if !isDedicatedMetadataDiskExist {
+		cluster, err := Inst().V.GetDriver()
+		log.FailOnError(err, "error getting storage cluster")
+		metadataSpec := cluster.Spec.CloudStorage.SystemMdDeviceSpec
+		deviceSpec := fmt.Sprintf("%s --metadata", *metadataSpec)
+
+		log.InfoD("Initiate add cloud drive and validate")
+		err = Inst().V.AddCloudDrive(&n, deviceSpec, -1)
+
+		if err != nil {
+			return fmt.Errorf("error adding metadata device [%s] to node [%s]. Err: %v", *metadataSpec, n.Name, err)
+		}
+
+	}
+
+	return nil
+
 }

@@ -18,6 +18,7 @@ import (
 type ModelsDeploymentStorageOptions struct {
 	Fg *bool `json:"fg,omitempty"`
 	Fs *string `json:"fs,omitempty"`
+	Provisioner *string `json:"provisioner,omitempty"`
 	Repl *int32 `json:"repl,omitempty"`
 	Secure *bool `json:"secure,omitempty"`
 }
@@ -103,6 +104,38 @@ func (o *ModelsDeploymentStorageOptions) SetFs(v string) {
 	o.Fs = &v
 }
 
+// GetProvisioner returns the Provisioner field value if set, zero value otherwise.
+func (o *ModelsDeploymentStorageOptions) GetProvisioner() string {
+	if o == nil || o.Provisioner == nil {
+		var ret string
+		return ret
+	}
+	return *o.Provisioner
+}
+
+// GetProvisionerOk returns a tuple with the Provisioner field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentStorageOptions) GetProvisionerOk() (*string, bool) {
+	if o == nil || o.Provisioner == nil {
+		return nil, false
+	}
+	return o.Provisioner, true
+}
+
+// HasProvisioner returns a boolean if a field has been set.
+func (o *ModelsDeploymentStorageOptions) HasProvisioner() bool {
+	if o != nil && o.Provisioner != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetProvisioner gets a reference to the given string and assigns it to the Provisioner field.
+func (o *ModelsDeploymentStorageOptions) SetProvisioner(v string) {
+	o.Provisioner = &v
+}
+
 // GetRepl returns the Repl field value if set, zero value otherwise.
 func (o *ModelsDeploymentStorageOptions) GetRepl() int32 {
 	if o == nil || o.Repl == nil {
@@ -174,6 +207,9 @@ func (o ModelsDeploymentStorageOptions) MarshalJSON() ([]byte, error) {
 	}
 	if o.Fs != nil {
 		toSerialize["fs"] = o.Fs
+	}
+	if o.Provisioner != nil {
+		toSerialize["provisioner"] = o.Provisioner
 	}
 	if o.Repl != nil {
 		toSerialize["repl"] = o.Repl

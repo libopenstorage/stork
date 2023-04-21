@@ -19,7 +19,12 @@ type ModelsDeploymentTargetMetadata struct {
 	KubeApiVersion *string `json:"kube_api_version,omitempty"`
 	KubePlatform *string `json:"kube_platform,omitempty"`
 	PdsChartVersion *string `json:"pds_chart_version,omitempty"`
+	PdsFeatures *string `json:"pds_features,omitempty"`
+	PdsOperatorVersion *string `json:"pds_operator_version,omitempty"`
+	PxCsiEnabled *string `json:"px_csi_enabled,omitempty"`
 	PxServiceNamespace *string `json:"px_service_namespace,omitempty"`
+	PxStatus *string `json:"px_status,omitempty"`
+	PxVersion *string `json:"px_version,omitempty"`
 }
 
 // NewModelsDeploymentTargetMetadata instantiates a new ModelsDeploymentTargetMetadata object
@@ -135,6 +140,102 @@ func (o *ModelsDeploymentTargetMetadata) SetPdsChartVersion(v string) {
 	o.PdsChartVersion = &v
 }
 
+// GetPdsFeatures returns the PdsFeatures field value if set, zero value otherwise.
+func (o *ModelsDeploymentTargetMetadata) GetPdsFeatures() string {
+	if o == nil || o.PdsFeatures == nil {
+		var ret string
+		return ret
+	}
+	return *o.PdsFeatures
+}
+
+// GetPdsFeaturesOk returns a tuple with the PdsFeatures field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTargetMetadata) GetPdsFeaturesOk() (*string, bool) {
+	if o == nil || o.PdsFeatures == nil {
+		return nil, false
+	}
+	return o.PdsFeatures, true
+}
+
+// HasPdsFeatures returns a boolean if a field has been set.
+func (o *ModelsDeploymentTargetMetadata) HasPdsFeatures() bool {
+	if o != nil && o.PdsFeatures != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPdsFeatures gets a reference to the given string and assigns it to the PdsFeatures field.
+func (o *ModelsDeploymentTargetMetadata) SetPdsFeatures(v string) {
+	o.PdsFeatures = &v
+}
+
+// GetPdsOperatorVersion returns the PdsOperatorVersion field value if set, zero value otherwise.
+func (o *ModelsDeploymentTargetMetadata) GetPdsOperatorVersion() string {
+	if o == nil || o.PdsOperatorVersion == nil {
+		var ret string
+		return ret
+	}
+	return *o.PdsOperatorVersion
+}
+
+// GetPdsOperatorVersionOk returns a tuple with the PdsOperatorVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTargetMetadata) GetPdsOperatorVersionOk() (*string, bool) {
+	if o == nil || o.PdsOperatorVersion == nil {
+		return nil, false
+	}
+	return o.PdsOperatorVersion, true
+}
+
+// HasPdsOperatorVersion returns a boolean if a field has been set.
+func (o *ModelsDeploymentTargetMetadata) HasPdsOperatorVersion() bool {
+	if o != nil && o.PdsOperatorVersion != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPdsOperatorVersion gets a reference to the given string and assigns it to the PdsOperatorVersion field.
+func (o *ModelsDeploymentTargetMetadata) SetPdsOperatorVersion(v string) {
+	o.PdsOperatorVersion = &v
+}
+
+// GetPxCsiEnabled returns the PxCsiEnabled field value if set, zero value otherwise.
+func (o *ModelsDeploymentTargetMetadata) GetPxCsiEnabled() string {
+	if o == nil || o.PxCsiEnabled == nil {
+		var ret string
+		return ret
+	}
+	return *o.PxCsiEnabled
+}
+
+// GetPxCsiEnabledOk returns a tuple with the PxCsiEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTargetMetadata) GetPxCsiEnabledOk() (*string, bool) {
+	if o == nil || o.PxCsiEnabled == nil {
+		return nil, false
+	}
+	return o.PxCsiEnabled, true
+}
+
+// HasPxCsiEnabled returns a boolean if a field has been set.
+func (o *ModelsDeploymentTargetMetadata) HasPxCsiEnabled() bool {
+	if o != nil && o.PxCsiEnabled != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPxCsiEnabled gets a reference to the given string and assigns it to the PxCsiEnabled field.
+func (o *ModelsDeploymentTargetMetadata) SetPxCsiEnabled(v string) {
+	o.PxCsiEnabled = &v
+}
+
 // GetPxServiceNamespace returns the PxServiceNamespace field value if set, zero value otherwise.
 func (o *ModelsDeploymentTargetMetadata) GetPxServiceNamespace() string {
 	if o == nil || o.PxServiceNamespace == nil {
@@ -167,6 +268,70 @@ func (o *ModelsDeploymentTargetMetadata) SetPxServiceNamespace(v string) {
 	o.PxServiceNamespace = &v
 }
 
+// GetPxStatus returns the PxStatus field value if set, zero value otherwise.
+func (o *ModelsDeploymentTargetMetadata) GetPxStatus() string {
+	if o == nil || o.PxStatus == nil {
+		var ret string
+		return ret
+	}
+	return *o.PxStatus
+}
+
+// GetPxStatusOk returns a tuple with the PxStatus field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTargetMetadata) GetPxStatusOk() (*string, bool) {
+	if o == nil || o.PxStatus == nil {
+		return nil, false
+	}
+	return o.PxStatus, true
+}
+
+// HasPxStatus returns a boolean if a field has been set.
+func (o *ModelsDeploymentTargetMetadata) HasPxStatus() bool {
+	if o != nil && o.PxStatus != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPxStatus gets a reference to the given string and assigns it to the PxStatus field.
+func (o *ModelsDeploymentTargetMetadata) SetPxStatus(v string) {
+	o.PxStatus = &v
+}
+
+// GetPxVersion returns the PxVersion field value if set, zero value otherwise.
+func (o *ModelsDeploymentTargetMetadata) GetPxVersion() string {
+	if o == nil || o.PxVersion == nil {
+		var ret string
+		return ret
+	}
+	return *o.PxVersion
+}
+
+// GetPxVersionOk returns a tuple with the PxVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTargetMetadata) GetPxVersionOk() (*string, bool) {
+	if o == nil || o.PxVersion == nil {
+		return nil, false
+	}
+	return o.PxVersion, true
+}
+
+// HasPxVersion returns a boolean if a field has been set.
+func (o *ModelsDeploymentTargetMetadata) HasPxVersion() bool {
+	if o != nil && o.PxVersion != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPxVersion gets a reference to the given string and assigns it to the PxVersion field.
+func (o *ModelsDeploymentTargetMetadata) SetPxVersion(v string) {
+	o.PxVersion = &v
+}
+
 func (o ModelsDeploymentTargetMetadata) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.KubeApiVersion != nil {
@@ -178,8 +343,23 @@ func (o ModelsDeploymentTargetMetadata) MarshalJSON() ([]byte, error) {
 	if o.PdsChartVersion != nil {
 		toSerialize["pds_chart_version"] = o.PdsChartVersion
 	}
+	if o.PdsFeatures != nil {
+		toSerialize["pds_features"] = o.PdsFeatures
+	}
+	if o.PdsOperatorVersion != nil {
+		toSerialize["pds_operator_version"] = o.PdsOperatorVersion
+	}
+	if o.PxCsiEnabled != nil {
+		toSerialize["px_csi_enabled"] = o.PxCsiEnabled
+	}
 	if o.PxServiceNamespace != nil {
 		toSerialize["px_service_namespace"] = o.PxServiceNamespace
+	}
+	if o.PxStatus != nil {
+		toSerialize["px_status"] = o.PxStatus
+	}
+	if o.PxVersion != nil {
+		toSerialize["px_version"] = o.PxVersion
 	}
 	return json.Marshal(toSerialize)
 }

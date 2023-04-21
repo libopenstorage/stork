@@ -424,7 +424,7 @@ func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) DataServiceId(dataSe
 	return r
 }
 
-func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) Execute() (*ControllersPaginatedResourceSettingsTemplates, *http.Response, error) {
+func (r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) Execute() (*ModelsPaginatedResultModelsResourceSettingsTemplate, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdResourceSettingsTemplatesGetExecute(r)
 }
 
@@ -446,13 +446,13 @@ func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTempla
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedResourceSettingsTemplates
-func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTemplatesGetExecute(r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) (*ControllersPaginatedResourceSettingsTemplates, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsResourceSettingsTemplate
+func (a *ResourceSettingsTemplatesApiService) ApiTenantsIdResourceSettingsTemplatesGetExecute(r ApiApiTenantsIdResourceSettingsTemplatesGetRequest) (*ModelsPaginatedResultModelsResourceSettingsTemplate, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedResourceSettingsTemplates
+		localVarReturnValue  *ModelsPaginatedResultModelsResourceSettingsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ResourceSettingsTemplatesApiService.ApiTenantsIdResourceSettingsTemplatesGet")
@@ -557,11 +557,11 @@ type ApiApiTenantsIdResourceSettingsTemplatesPostRequest struct {
 	ctx context.Context
 	ApiService *ResourceSettingsTemplatesApiService
 	id string
-	body *ControllersCreateResourceSettingsTemplatesRequest
+	body *ControllersCreateResourceSettingsTemplateRequest
 }
 
 // Request body containing the resource settings template
-func (r ApiApiTenantsIdResourceSettingsTemplatesPostRequest) Body(body ControllersCreateResourceSettingsTemplatesRequest) ApiApiTenantsIdResourceSettingsTemplatesPostRequest {
+func (r ApiApiTenantsIdResourceSettingsTemplatesPostRequest) Body(body ControllersCreateResourceSettingsTemplateRequest) ApiApiTenantsIdResourceSettingsTemplatesPostRequest {
 	r.body = &body
 	return r
 }
@@ -571,9 +571,9 @@ func (r ApiApiTenantsIdResourceSettingsTemplatesPostRequest) Execute() (*ModelsR
 }
 
 /*
-ApiTenantsIdResourceSettingsTemplatesPost Create ResourceSettingsTemplates
+ApiTenantsIdResourceSettingsTemplatesPost Create ResourceSettingsTemplate
 
-Creates a new ResourceSettingsTemplates
+Creates a new ResourceSettingsTemplate
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Tenant ID (must be valid UUID)

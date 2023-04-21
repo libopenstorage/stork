@@ -87,7 +87,7 @@ func (r ApiApiDataServicesGetRequest) ComingSoon(comingSoon bool) ApiApiDataServ
 	return r
 }
 
-func (r ApiApiDataServicesGetRequest) Execute() (*ControllersPaginatedDataServices, *http.Response, error) {
+func (r ApiApiDataServicesGetRequest) Execute() (*ModelsPaginatedResultModelsDataService, *http.Response, error) {
 	return r.ApiService.ApiDataServicesGetExecute(r)
 }
 
@@ -107,13 +107,13 @@ func (a *DataServicesApiService) ApiDataServicesGet(ctx context.Context) ApiApiD
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedDataServices
-func (a *DataServicesApiService) ApiDataServicesGetExecute(r ApiApiDataServicesGetRequest) (*ControllersPaginatedDataServices, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsDataService
+func (a *DataServicesApiService) ApiDataServicesGetExecute(r ApiApiDataServicesGetRequest) (*ModelsPaginatedResultModelsDataService, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedDataServices
+		localVarReturnValue  *ModelsPaginatedResultModelsDataService
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DataServicesApiService.ApiDataServicesGet")

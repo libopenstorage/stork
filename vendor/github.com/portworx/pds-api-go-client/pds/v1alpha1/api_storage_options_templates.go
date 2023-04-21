@@ -390,6 +390,7 @@ type ApiApiTenantsIdStorageOptionsTemplatesGetRequest struct {
 	continuation *string
 	id2 *string
 	name *string
+	provisioner *[]string
 }
 
 // A given StorageOptionsTemplates attribute to sort results by (one of: id, name, created_at)
@@ -417,8 +418,13 @@ func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Name(name string) ApiA
 	r.name = &name
 	return r
 }
+// Filter results by StorageOptionsTemplates provisioner
+func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Provisioner(provisioner []string) ApiApiTenantsIdStorageOptionsTemplatesGetRequest {
+	r.provisioner = &provisioner
+	return r
+}
 
-func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Execute() (*ControllersPaginatedStorageOptionsTemplates, *http.Response, error) {
+func (r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) Execute() (*ModelsPaginatedResultModelsStorageOptionsTemplate, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdStorageOptionsTemplatesGetExecute(r)
 }
 
@@ -440,13 +446,13 @@ func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesG
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedStorageOptionsTemplates
-func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesGetExecute(r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) (*ControllersPaginatedStorageOptionsTemplates, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsStorageOptionsTemplate
+func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesGetExecute(r ApiApiTenantsIdStorageOptionsTemplatesGetRequest) (*ModelsPaginatedResultModelsStorageOptionsTemplate, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedStorageOptionsTemplates
+		localVarReturnValue  *ModelsPaginatedResultModelsStorageOptionsTemplate
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "StorageOptionsTemplatesApiService.ApiTenantsIdStorageOptionsTemplatesGet")
@@ -475,6 +481,9 @@ func (a *StorageOptionsTemplatesApiService) ApiTenantsIdStorageOptionsTemplatesG
 	}
 	if r.name != nil {
 		localVarQueryParams.Add("name", parameterToString(*r.name, ""))
+	}
+	if r.provisioner != nil {
+		localVarQueryParams.Add("provisioner", parameterToString(*r.provisioner, "csv"))
 	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -548,11 +557,11 @@ type ApiApiTenantsIdStorageOptionsTemplatesPostRequest struct {
 	ctx context.Context
 	ApiService *StorageOptionsTemplatesApiService
 	id string
-	body *ControllersCreateStorageOptionsTemplatesRequest
+	body *ControllersCreateStorageOptionsTemplateRequest
 }
 
 // Request body containing the storage options template
-func (r ApiApiTenantsIdStorageOptionsTemplatesPostRequest) Body(body ControllersCreateStorageOptionsTemplatesRequest) ApiApiTenantsIdStorageOptionsTemplatesPostRequest {
+func (r ApiApiTenantsIdStorageOptionsTemplatesPostRequest) Body(body ControllersCreateStorageOptionsTemplateRequest) ApiApiTenantsIdStorageOptionsTemplatesPostRequest {
 	r.body = &body
 	return r
 }
@@ -562,9 +571,9 @@ func (r ApiApiTenantsIdStorageOptionsTemplatesPostRequest) Execute() (*ModelsSto
 }
 
 /*
-ApiTenantsIdStorageOptionsTemplatesPost Create StorageOptionsTemplates
+ApiTenantsIdStorageOptionsTemplatesPost Create StorageOptionsTemplate
 
-Creates a new StorageOptionsTemplates
+Creates a new StorageOptionsTemplate
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Tenant ID (must be valid UUID)

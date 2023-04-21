@@ -736,7 +736,7 @@ func (r ApiApiProjectsIdBackupTargetsGetRequest) BackupCredentialsId(backupCrede
 	return r
 }
 
-func (r ApiApiProjectsIdBackupTargetsGetRequest) Execute() (*ControllersPaginatedBackupTargets, *http.Response, error) {
+func (r ApiApiProjectsIdBackupTargetsGetRequest) Execute() (*ModelsPaginatedResultModelsBackupTarget, *http.Response, error) {
 	return r.ApiService.ApiProjectsIdBackupTargetsGetExecute(r)
 }
 
@@ -758,13 +758,13 @@ func (a *BackupTargetsApiService) ApiProjectsIdBackupTargetsGet(ctx context.Cont
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedBackupTargets
-func (a *BackupTargetsApiService) ApiProjectsIdBackupTargetsGetExecute(r ApiApiProjectsIdBackupTargetsGetRequest) (*ControllersPaginatedBackupTargets, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsBackupTarget
+func (a *BackupTargetsApiService) ApiProjectsIdBackupTargetsGetExecute(r ApiApiProjectsIdBackupTargetsGetRequest) (*ModelsPaginatedResultModelsBackupTarget, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedBackupTargets
+		localVarReturnValue  *ModelsPaginatedResultModelsBackupTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiProjectsIdBackupTargetsGet")
@@ -938,7 +938,7 @@ func (r ApiApiTenantsIdBackupTargetsGetRequest) BackupCredentialsId(backupCreden
 	return r
 }
 
-func (r ApiApiTenantsIdBackupTargetsGetRequest) Execute() (*ControllersPaginatedBackupTargets, *http.Response, error) {
+func (r ApiApiTenantsIdBackupTargetsGetRequest) Execute() (*ModelsPaginatedResultModelsBackupTarget, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdBackupTargetsGetExecute(r)
 }
 
@@ -960,13 +960,13 @@ func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsGet(ctx context.Conte
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedBackupTargets
-func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsGetExecute(r ApiApiTenantsIdBackupTargetsGetRequest) (*ControllersPaginatedBackupTargets, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsBackupTarget
+func (a *BackupTargetsApiService) ApiTenantsIdBackupTargetsGetExecute(r ApiApiTenantsIdBackupTargetsGetRequest) (*ModelsPaginatedResultModelsBackupTarget, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedBackupTargets
+		localVarReturnValue  *ModelsPaginatedResultModelsBackupTarget
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupTargetsApiService.ApiTenantsIdBackupTargetsGet")

@@ -164,41 +164,43 @@ const (
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
 	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
 
-	defaultCommandRetry   = 5 * time.Second
-	defaultCommandTimeout = 1 * time.Minute
-	storageTemplateName   = "QaDefault"
-	resourceTemplateName  = "Small"
-	appConfigTemplateName = "QaDefault"
-	defaultRetryInterval  = 10 * time.Minute
-	duration              = 900
-	timeOut               = 30 * time.Minute
-	timeInterval          = 10 * time.Second
-	maxtimeInterval       = 30 * time.Second
-	resiliencyInterval    = 1 * time.Second
-	envDsVersion          = "DS_VERSION"
-	envDsBuild            = "DS_BUILD"
-	zookeeper             = "ZooKeeper"
-	redis                 = "Redis"
-	consul                = "Consul"
-	cassandraStresImage   = "scylladb/scylla:4.1.11"
-	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
-	consulBenchImage      = "pwxbuild/consul-bench-0.1.1"
-	consulAgentImage      = "pwxbuild/consul-agent-0.1.1"
-	esRallyImage          = "elastic/rally"
-	cbloadImage           = "portworx/pds-loadtests:couchbase-0.0.2"
-	pdsTpccImage          = "portworx/torpedo-tpcc-automation:v1"
-	redisStressImage      = "redis:latest"
-	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
-	postgresql            = "PostgreSQL"
-	cassandra             = "Cassandra"
-	elasticSearch         = "Elasticsearch"
-	couchbase             = "Couchbase"
-	rabbitmq              = "RabbitMQ"
-	mysql                 = "MySQL"
-	pxLabel               = "pds.portworx.com/available"
-	defaultParams         = "../drivers/pds/parameters/pds_default_parameters.json"
-	pdsParamsConfigmap    = "pds-params"
-	configmapNamespace    = "default"
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	storageTemplateName          = "QaDefault"
+	resourceTemplateName         = "Small"
+	appConfigTemplateName        = "QaDefault"
+	defaultRetryInterval         = 10 * time.Minute
+	duration                     = 900
+	timeOut                      = 30 * time.Minute
+	timeInterval                 = 10 * time.Second
+	maxtimeInterval              = 30 * time.Second
+	resiliencyInterval           = 1 * time.Second
+	defaultTestConnectionTimeout = 15 * time.Minute
+	defaultWaitRebootRetry       = 10 * time.Second
+	envDsVersion                 = "DS_VERSION"
+	envDsBuild                   = "DS_BUILD"
+	zookeeper                    = "ZooKeeper"
+	redis                        = "Redis"
+	consul                       = "Consul"
+	cassandraStresImage          = "scylladb/scylla:4.1.11"
+	postgresqlStressImage        = "portworx/torpedo-pgbench:pdsloadTest"
+	consulBenchImage             = "pwxbuild/consul-bench-0.1.1"
+	consulAgentImage             = "pwxbuild/consul-agent-0.1.1"
+	esRallyImage                 = "elastic/rally"
+	cbloadImage                  = "portworx/pds-loadtests:couchbase-0.0.2"
+	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
+	redisStressImage             = "redis:latest"
+	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
+	postgresql                   = "PostgreSQL"
+	cassandra                    = "Cassandra"
+	elasticSearch                = "Elasticsearch"
+	couchbase                    = "Couchbase"
+	rabbitmq                     = "RabbitMQ"
+	mysql                        = "MySQL"
+	pxLabel                      = "pds.portworx.com/available"
+	defaultParams                = "../drivers/pds/parameters/pds_default_parameters.json"
+	pdsParamsConfigmap           = "pds-params"
+	configmapNamespace           = "default"
 )
 
 // K8s/PDS Instances
@@ -803,15 +805,54 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 	return err
 }
 
+func CheckPodIsTerminating(depName, ns string) error {
+	var ss *v1.StatefulSet
+	conditionError := wait.PollImmediate(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(depName, ns)
+		if err != nil {
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		log.Debugf("pods current replica %v", ss.Status.Replicas)
+		pods, err := k8sApps.GetStatefulSetPods(ss)
+		if err != nil {
+			return false, fmt.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
+		}
+
+		for _, pod := range pods {
+			if pod.DeletionTimestamp != nil {
+				log.InfoD("pod %v is terminating", pod.Name)
+				// Checking If this is a resiliency test case
+				if ResiliencyFlag {
+					ResiliencyCondition <- true
+				}
+				log.InfoD("Resiliency Condition Met. Will go ahead and try to induce failure now")
+				return true, nil
+			}
+		}
+		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
+		return false, nil
+	})
+	if conditionError != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- conditionError
+		}
+	}
+	return conditionError
+}
+
 // Function to check for set amount of Replica Pods
 func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
+	log.Debugf("expected replica %v", checkTillReplica)
 	conditionError := wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
 			return false, nil
 		}
+		log.Debugf("pods current replica %v", ss.Status.Replicas)
 		if ss.Status.Replicas >= checkTillReplica {
 			// Checking If this is a resiliency test case
 			if ResiliencyFlag {
@@ -900,6 +941,9 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 // done for MySQL before running MySQL.
 func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) bool {
 	log.InfoD("Trying to configure Mysql deployment for TPCC Workload")
+	if dbUser == "" {
+		dbUser = "pds"
+	}
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
@@ -922,14 +966,31 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
-	_, err := k8sCore.CreatePod(podSpec)
+	configureMysqlPod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
 		log.Errorf("An Error Occured while creating %v", err)
 		return false
 	}
-
+	configureMysqlPodName := configureMysqlPod.ObjectMeta.Name
 	//Static sleep to let DB changes settle in
 	time.Sleep(20 * time.Second)
+
+	err = wait.Poll(defaultCommandRetry, defaultRetryInterval, func() (bool, error) {
+		pod, err := k8sCore.GetPodByName(configureMysqlPodName, namespace)
+		if err != nil {
+			return false, err
+		}
+		if k8sCore.IsPodRunning(*pod) {
+			log.Infof("Looks like configure-mysql pod is running. Waiting for it to complete.")
+			return false, nil
+		} else {
+			log.Infof("configure-mysql pod is now not running. Moving ahead.")
+			return true, nil
+		}
+	})
+	if err != nil {
+		return false
+	}
 	var newPods []corev1.Pod
 	newPodList, err := GetPods(namespace)
 	if err != nil {
@@ -940,15 +1001,20 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 
 	// Validate if MySQL pod is configured successfully or not for running TPCC
 	for _, pod := range newPods {
-		if strings.Contains(pod.Name, "configure-mysql") {
+		if strings.Contains(pod.Name, configureMysqlPodName) {
 			log.InfoD("pds system pod name %v", pod.Name)
 			for _, c := range pod.Status.ContainerStatuses {
-				if c.State.Terminated.ExitCode == 0 && c.State.Terminated.Reason == "Completed" {
-					log.InfoD("Successfully Configured Mysql for TPCC Run. Exiting")
-					DeleteK8sPods(pod.Name, namespace)
-					return true
+				if c.State.Terminated != nil {
+					if c.State.Terminated.ExitCode == 0 && c.State.Terminated.Reason == "Completed" {
+						log.InfoD("Successfully Configured Mysql for TPCC Run. Exiting")
+						DeleteK8sPods(pod.Name, namespace)
+						return true
+					} else {
+						DeleteK8sPods(pod.Name, namespace)
+					}
 				} else {
-					DeleteK8sPods(pod.Name, namespace)
+					log.Infof("configure-mysql pod seems to be still running. This is not expected.")
+					return false
 				}
 			}
 		}
@@ -1327,8 +1393,9 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
 
 	ns, err = k8sCore.GetNamespace("kube-system")
+	log.Infof("kube-system ns-> %v", ns)
 	if err != nil {
-		return "", "", "", "", "", "", err
+		return "", "", "", "", "", "", fmt.Errorf("error Get kube-system ns-> %v", err)
 	}
 	clusterID := string(ns.GetObjectMeta().GetUID())
 	if len(clusterID) > 0 {
@@ -1445,6 +1512,7 @@ func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, inst
 // Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
 func DeletePvandPVCs(resourceName string, delPod bool) error {
 	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
+	var claimName string
 	pv_list, err := k8sCore.GetPersistentVolumes()
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -1453,7 +1521,12 @@ func DeletePvandPVCs(resourceName string, delPod bool) error {
 		return err
 	}
 	for _, vol := range pv_list.Items {
-		claimName := vol.Spec.ClaimRef.Name
+		if vol.Spec.ClaimRef != nil {
+			claimName = vol.Spec.ClaimRef.Name
+		} else {
+			log.Infof("No PVC bounded to the PV - %v", vol.Name)
+			continue
+		}
 		flag := strings.Contains(claimName, resourceName)
 		if flag {
 			err := CheckAndDeleteIndependentPV(vol.Name, delPod)
@@ -1907,7 +1980,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		var wasMysqlConfigured bool
 		// Waiting for approx an hour to check if Mysql deployment comes up
 		for i := 1; i <= 80; i++ {
-			wasMysqlConfigured := SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
+			wasMysqlConfigured = SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
 			if wasMysqlConfigured {
 				log.InfoD("MySQL Deployment is successfully configured to run for TPCC Workload. Starting TPCC Workload Now.")
 				break
@@ -2159,7 +2232,7 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 }
 
 // UpdateDataServiceVerison modifies the existing deployment version/image
-func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage, namespace, dsVersion string) (*pds.ModelsDeployment, error) {
+func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage, dsVersion string) (*pds.ModelsDeployment, error) {
 
 	//Validate if the passed dsImage is available in the list of images
 	var versions []pds.ModelsVersion
@@ -2193,11 +2266,6 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 		return nil, err
 	}
 
-	err = ValidateDataServiceDeployment(deployment, namespace)
-	if err != nil {
-		return nil, err
-	}
-
 	return deployment, nil
 
 }
@@ -2226,11 +2294,6 @@ func UpdateDataServices(deploymentID string, appConfigID string, imageID string,
 		}
 		return true, nil
 	})
-
-	err = ValidateDataServiceDeployment(deployment, namespace)
-	if err != nil {
-		return nil, err
-	}
 
 	return deployment, nil
 }
@@ -2585,4 +2648,74 @@ func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]core
 		return podsList, nil
 	}
 	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
+}
+
+func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string) error {
+	var resourceTemplateId string
+	var cpuLimits int64
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	for _, template := range resourceTemplates {
+		log.Debugf("template - %v", template.GetName())
+		if template.GetDataServiceId() == deployment.GetDataServiceId() && strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
+			cpuLimits, _ = strconv.ParseInt(template.GetCpuLimit(), 10, 64)
+			log.Debugf("CpuLimit - %v, %T", cpuLimits, cpuLimits)
+			resourceTemplateId = template.GetId()
+		}
+	}
+	if resourceTemplateId == "" {
+		return fmt.Errorf("resource template - {%v} , not found", resourceTemplate)
+	}
+	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
+	_, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if testError != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- testError
+		}
+		return testError
+	}
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		// Get Pods of this StatefulSet
+		pods, testError := k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			if ResiliencyFlag {
+				CapturedErrors <- testError
+			}
+			return false, testError
+		}
+		for _, pod := range pods {
+			for _, container := range pod.Spec.Containers {
+				if container.Resources.Limits.Cpu().Value() == cpuLimits {
+					if ResiliencyFlag {
+						ResiliencyCondition <- true
+					}
+					return true, nil
+				} else {
+					return false, nil
+				}
+			}
+		}
+		return false, fmt.Errorf("no pods has been updated to required resource configuration")
+	})
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	return nil
 }

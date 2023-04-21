@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -91,17 +92,20 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 		Name:        &name,
 	}
 	ctx, err := pdsutils.GetContext()
+	log.Infof("Ctx: %v", ctx)
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
+
+	if err != nil {
+		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupCredentialsPost` to create credentials - %v", err)
+	}
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)
 	}
 	return backupModel, err
-
 }
 
 // CreateS3CompatibleBackupCredential func
@@ -125,9 +129,40 @@ func (backupCredential *BackupCredential) CreateS3CompatibleBackupCredential(ten
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupCredentialsPost` to create credentials - %v", err)
+	}
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)
+	}
+	return backupModel, err
+
+}
+
+// CreateGoogleCredential func
+func (backupCredential *BackupCredential) CreateGoogleCredential(tenantID string, name string, GcpProjectId string, jsonkey string) (*pds.ModelsBackupCredentials, error) {
+	backupClient := backupCredential.apiClient.BackupCredentialsApi
+	gcpCredsModel := pds.ModelsGoogleCredentials{
+		JsonKey:   &jsonkey,
+		ProjectId: &GcpProjectId,
+	}
+	controllerCreds := pds.ControllersCredentials{
+		Google: &gcpCredsModel,
+	}
+	createRequest := pds.ControllersCreateBackupCredentialsRequest{
+		Credentials: &controllerCreds,
+		Name:        &name,
+	}
+	ctx, err := pdsutils.GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)
 	}
 	return backupModel, err
 
@@ -219,6 +254,34 @@ func (backupCredential *BackupCredential) UpdateS3CompatibleBackupCredential(bac
 
 }
 
+// UpdateGoogleBackupCredential func
+func (backupCredential *BackupCredential) UpdateGoogleBackupCredential(backupCredsID string, name string, GcpProjectId string, jsonkey string) (*pds.ModelsBackupCredentials, error) {
+	backupClient := backupCredential.apiClient.BackupCredentialsApi
+	gcpCredsModel := pds.ModelsGoogleCredentials{
+		JsonKey:   &GcpProjectId,
+		ProjectId: &jsonkey,
+	}
+	controllerCreds := pds.ControllersCredentials{
+		Google: &gcpCredsModel,
+	}
+	updateRequest := pds.ControllersUpdateBackupCredentialsRequest{
+		Credentials: &controllerCreds,
+		Name:        &name,
+	}
+	ctx, err := pdsutils.GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	backupModel, res, err := backupClient.ApiBackupCredentialsIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
+	}
+	if res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
+	}
+	return backupModel, err
+}
+
 // DeleteBackupCredential func
 func (backupCredential *BackupCredential) DeleteBackupCredential(backupCredsID string) (*status.Response, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
@@ -228,9 +291,7 @@ func (backupCredential *BackupCredential) DeleteBackupCredential(backupCredsID s
 		return nil, err
 	}
 	res, err := backupClient.ApiBackupCredentialsIdDelete(ctx, backupCredsID).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil {
 		return nil, err
 	}
 	return res, nil

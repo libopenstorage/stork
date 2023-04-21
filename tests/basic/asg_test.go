@@ -248,21 +248,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 
 	if Inst().N.String() == ibm.DriverName {
 
-		t := func() (interface{}, bool, error) {
-
-			currState, err := Inst().N.GetNodeState(nodeToKill)
-			if err != nil {
-				return "", true, err
-			}
-			if currState == ibm.DELETED {
-				return "", false, nil
-			}
-
-			return "", true, fmt.Errorf("node [%s] not deleted yet, current state : %s", nodeToKill.Hostname, currState)
-
-		}
-
-		_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+		err := waitForIBMNodeToDelete(nodeToKill)
 		log.FailOnError(err, "failed to kill node [%s]", nodeToKill.Hostname)
 
 		log.InfoD("Initiating IBM worker pool rebalance")
@@ -270,7 +256,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 		log.FailOnError(err, "Failed to rebalance worker pool")
 		log.Infof("Sleeping for 2 mins for new node to start deploying")
 		time.Sleep(2 * time.Minute)
-		err = waitforIBMNodeTODeploy()
+		err = waitForIBMNodeTODeploy()
 		log.FailOnError(err, "Failed to deploy new worker")
 	}
 
@@ -293,7 +279,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 	})
 }
 
-func waitforIBMNodeTODeploy() error {
+func waitForIBMNodeTODeploy() error {
 
 	workers, err := ibm.GetWorkers()
 	if err != nil {
@@ -302,7 +288,8 @@ func waitforIBMNodeTODeploy() error {
 
 	var newWorkerID string
 	for _, w := range workers {
-		if w.Lifecycle.ActualState == ibm.DEPLOYING || w.Lifecycle.ActualState == ibm.PROVISIONING {
+		workerState := w.Lifecycle.ActualState
+		if workerState == ibm.DEPLOYING || workerState == ibm.PROVISIONING || workerState == ibm.PROVISION_PENDING {
 			newWorkerID = w.WorkerID
 			break
 		}
@@ -328,5 +315,24 @@ func waitforIBMNodeTODeploy() error {
 
 	_, err = task.DoRetryWithTimeout(t, 20*time.Minute, 1*time.Minute)
 
+	return err
+}
+
+func waitForIBMNodeToDelete(nodeToKill node.Node) error {
+	t := func() (interface{}, bool, error) {
+
+		currState, err := Inst().N.GetNodeState(nodeToKill)
+		if err != nil {
+			return "", true, err
+		}
+		if currState == ibm.DELETED {
+			return "", false, nil
+		}
+
+		return "", true, fmt.Errorf("node [%s] not deleted yet, current state : %s", nodeToKill.Hostname, currState)
+
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
 	return err
 }

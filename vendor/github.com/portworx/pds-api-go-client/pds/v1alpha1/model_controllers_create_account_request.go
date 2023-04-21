@@ -16,10 +16,18 @@ import (
 
 // ControllersCreateAccountRequest struct for ControllersCreateAccountRequest
 type ControllersCreateAccountRequest struct {
+	// Whether BAAS should be enabled for this account.
+	BaasFeaturesEnabled *bool `json:"baas_features_enabled,omitempty"`
 	DnsDetails *ModelsDNSDetails `json:"dns_details,omitempty"`
 	MaasDetails *ModelsMAASDetails `json:"maas_details,omitempty"`
 	// Name of the account.
 	Name *string `json:"name,omitempty"`
+	// Whether PDS should be enabled for this account.
+	PdsFeaturesEnabled *bool `json:"pds_features_enabled,omitempty"`
+	// Whether PX-ONE should be enabled for this account.
+	PxoneFeaturesEnabled *bool `json:"pxone_features_enabled,omitempty"`
+	// (optional) Account subdomain name.
+	Subdomain *string `json:"subdomain,omitempty"`
 }
 
 // NewControllersCreateAccountRequest instantiates a new ControllersCreateAccountRequest object
@@ -37,6 +45,38 @@ func NewControllersCreateAccountRequest() *ControllersCreateAccountRequest {
 func NewControllersCreateAccountRequestWithDefaults() *ControllersCreateAccountRequest {
 	this := ControllersCreateAccountRequest{}
 	return &this
+}
+
+// GetBaasFeaturesEnabled returns the BaasFeaturesEnabled field value if set, zero value otherwise.
+func (o *ControllersCreateAccountRequest) GetBaasFeaturesEnabled() bool {
+	if o == nil || o.BaasFeaturesEnabled == nil {
+		var ret bool
+		return ret
+	}
+	return *o.BaasFeaturesEnabled
+}
+
+// GetBaasFeaturesEnabledOk returns a tuple with the BaasFeaturesEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersCreateAccountRequest) GetBaasFeaturesEnabledOk() (*bool, bool) {
+	if o == nil || o.BaasFeaturesEnabled == nil {
+		return nil, false
+	}
+	return o.BaasFeaturesEnabled, true
+}
+
+// HasBaasFeaturesEnabled returns a boolean if a field has been set.
+func (o *ControllersCreateAccountRequest) HasBaasFeaturesEnabled() bool {
+	if o != nil && o.BaasFeaturesEnabled != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetBaasFeaturesEnabled gets a reference to the given bool and assigns it to the BaasFeaturesEnabled field.
+func (o *ControllersCreateAccountRequest) SetBaasFeaturesEnabled(v bool) {
+	o.BaasFeaturesEnabled = &v
 }
 
 // GetDnsDetails returns the DnsDetails field value if set, zero value otherwise.
@@ -135,8 +175,107 @@ func (o *ControllersCreateAccountRequest) SetName(v string) {
 	o.Name = &v
 }
 
+// GetPdsFeaturesEnabled returns the PdsFeaturesEnabled field value if set, zero value otherwise.
+func (o *ControllersCreateAccountRequest) GetPdsFeaturesEnabled() bool {
+	if o == nil || o.PdsFeaturesEnabled == nil {
+		var ret bool
+		return ret
+	}
+	return *o.PdsFeaturesEnabled
+}
+
+// GetPdsFeaturesEnabledOk returns a tuple with the PdsFeaturesEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersCreateAccountRequest) GetPdsFeaturesEnabledOk() (*bool, bool) {
+	if o == nil || o.PdsFeaturesEnabled == nil {
+		return nil, false
+	}
+	return o.PdsFeaturesEnabled, true
+}
+
+// HasPdsFeaturesEnabled returns a boolean if a field has been set.
+func (o *ControllersCreateAccountRequest) HasPdsFeaturesEnabled() bool {
+	if o != nil && o.PdsFeaturesEnabled != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPdsFeaturesEnabled gets a reference to the given bool and assigns it to the PdsFeaturesEnabled field.
+func (o *ControllersCreateAccountRequest) SetPdsFeaturesEnabled(v bool) {
+	o.PdsFeaturesEnabled = &v
+}
+
+// GetPxoneFeaturesEnabled returns the PxoneFeaturesEnabled field value if set, zero value otherwise.
+func (o *ControllersCreateAccountRequest) GetPxoneFeaturesEnabled() bool {
+	if o == nil || o.PxoneFeaturesEnabled == nil {
+		var ret bool
+		return ret
+	}
+	return *o.PxoneFeaturesEnabled
+}
+
+// GetPxoneFeaturesEnabledOk returns a tuple with the PxoneFeaturesEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersCreateAccountRequest) GetPxoneFeaturesEnabledOk() (*bool, bool) {
+	if o == nil || o.PxoneFeaturesEnabled == nil {
+		return nil, false
+	}
+	return o.PxoneFeaturesEnabled, true
+}
+
+// HasPxoneFeaturesEnabled returns a boolean if a field has been set.
+func (o *ControllersCreateAccountRequest) HasPxoneFeaturesEnabled() bool {
+	if o != nil && o.PxoneFeaturesEnabled != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPxoneFeaturesEnabled gets a reference to the given bool and assigns it to the PxoneFeaturesEnabled field.
+func (o *ControllersCreateAccountRequest) SetPxoneFeaturesEnabled(v bool) {
+	o.PxoneFeaturesEnabled = &v
+}
+
+// GetSubdomain returns the Subdomain field value if set, zero value otherwise.
+func (o *ControllersCreateAccountRequest) GetSubdomain() string {
+	if o == nil || o.Subdomain == nil {
+		var ret string
+		return ret
+	}
+	return *o.Subdomain
+}
+
+// GetSubdomainOk returns a tuple with the Subdomain field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersCreateAccountRequest) GetSubdomainOk() (*string, bool) {
+	if o == nil || o.Subdomain == nil {
+		return nil, false
+	}
+	return o.Subdomain, true
+}
+
+// HasSubdomain returns a boolean if a field has been set.
+func (o *ControllersCreateAccountRequest) HasSubdomain() bool {
+	if o != nil && o.Subdomain != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSubdomain gets a reference to the given string and assigns it to the Subdomain field.
+func (o *ControllersCreateAccountRequest) SetSubdomain(v string) {
+	o.Subdomain = &v
+}
+
 func (o ControllersCreateAccountRequest) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
+	if o.BaasFeaturesEnabled != nil {
+		toSerialize["baas_features_enabled"] = o.BaasFeaturesEnabled
+	}
 	if o.DnsDetails != nil {
 		toSerialize["dns_details"] = o.DnsDetails
 	}
@@ -145,6 +284,15 @@ func (o ControllersCreateAccountRequest) MarshalJSON() ([]byte, error) {
 	}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
+	}
+	if o.PdsFeaturesEnabled != nil {
+		toSerialize["pds_features_enabled"] = o.PdsFeaturesEnabled
+	}
+	if o.PxoneFeaturesEnabled != nil {
+		toSerialize["pxone_features_enabled"] = o.PxoneFeaturesEnabled
+	}
+	if o.Subdomain != nil {
+		toSerialize["subdomain"] = o.Subdomain
 	}
 	return json.Marshal(toSerialize)
 }

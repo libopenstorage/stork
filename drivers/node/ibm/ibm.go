@@ -32,6 +32,8 @@ const (
 	DELETED = "deleted"
 	// PROVISIONING state of the node when provisioning
 	PROVISIONING = "provisioning"
+	// PROVISION_PENDING state of the node when provisioning is pending
+	PROVISION_PENDING = "provision_pending"
 	// DEPLOYING state of the node when deploying
 	DEPLOYING = "deploying"
 	// DEPLOYED state of the node when deployed
@@ -45,7 +47,7 @@ type ibm struct {
 	clusterConfig ClusterConfig
 }
 
-// Worker stores info about iks worker node as proviced by IBM
+// Worker stores info about iks worker node as provided by IBM
 type Worker struct {
 	WorkerID  string `json:"id"`
 	Lifecycle struct {
@@ -55,8 +57,19 @@ type Worker struct {
 		State   string `json:"state"`
 		Message string `json:"message"`
 	} `json:"health"`
+	KubeVersion struct {
+		Actual string `json:"actual"`
+	}
 	PoolID   string `json:"poolID"`
 	PoolName string `json:"poolName"`
+}
+
+type Cluster struct {
+	ClusterID         string `json:"id"`
+	Name              string `json:"name"`
+	MasterKubeVersion string `json:"masterKubeVersion"`
+	State             string `json:"state"`
+	Status            string `json:"status"`
 }
 
 // ClusterConfig stores info about iks cluster as provided by IBM
@@ -144,6 +157,23 @@ func (i *ibm) DeleteNode(node node.Node, timeout time.Duration) error {
 	return nil
 }
 
+func (i *ibm) SetClusterVersion(version string, timeout time.Duration) error {
+
+	err := loginToIBMCloud()
+	if err != nil {
+		return err
+	}
+
+	cmd := fmt.Sprintf("ibmcloud ks cluster master update -c %s --version %s -f", i.clusterConfig.ClusterName, version)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to set cluser %s master version to %s. Error: %v %v %v", i.clusterConfig.ClusterName, version, stderr, err, stdout)
+	}
+	log.Infof("Node group version set successfully.")
+
+	return nil
+}
+
 func (i *ibm) RebalanceWorkerPool() error {
 
 	err := loginToIBMCloud()
@@ -209,6 +239,70 @@ func GetWorkers() ([]Worker, error) {
 		return nil, err
 	}
 	return workers, nil
+}
+
+func ReplaceWorkerNodeWithUpdate(node node.Node) error {
+
+	err := loginToIBMCloud()
+	if err != nil {
+		return err
+	}
+	cm, err := core.Instance().GetConfigMap(iksClusterInfoConfigMapName, "kube-system")
+	if err != nil {
+		return err
+	}
+
+	clusterInfo := &ClusterConfig{}
+	err = json.Unmarshal([]byte(cm.Data[clusterIDconfigMapField]), clusterInfo)
+	if err != nil {
+		return err
+	}
+	clusterName := clusterInfo.ClusterName
+
+	cmd := fmt.Sprintf("ibmcloud ks worker replace -c %s -w %s --update -f", clusterName, node.Hostname)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to replace node [%s]. Error: %v %v %v", node.Hostname, stderr, err, stdout)
+	}
+
+	return nil
+
+}
+
+func GetCluster() (Cluster, error) {
+	err := loginToIBMCloud()
+	if err != nil {
+		return Cluster{}, err
+	}
+	cm, err := core.Instance().GetConfigMap(iksClusterInfoConfigMapName, "kube-system")
+	if err != nil {
+		return Cluster{}, err
+	}
+
+	clusterInfo := &ClusterConfig{}
+	err = json.Unmarshal([]byte(cm.Data[clusterIDconfigMapField]), clusterInfo)
+	if err != nil {
+		return Cluster{}, err
+	}
+	clusterName := clusterInfo.ClusterName
+
+	cmd := fmt.Sprintf("ibmcloud ks cluster ls  --provider vpc-gen2 --output json")
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return Cluster{}, fmt.Errorf("failed to get workers list info. Error: %v %v %v", stderr, err, stdout)
+	}
+	var clusters []Cluster
+	err = json.Unmarshal([]byte(stdout), &clusters)
+	if err != nil {
+		return Cluster{}, err
+	}
+
+	for _, cluster := range clusters {
+		if cluster.Name == clusterName {
+			return cluster, nil
+		}
+	}
+	return Cluster{}, fmt.Errorf("IKS Cluster %s not found", clusterName)
 }
 
 func init() {

@@ -88,7 +88,7 @@ func (r ApiApiBackupTargetsIdBackupsGetRequest) BackupLevel(backupLevel string) 
 	return r
 }
 
-func (r ApiApiBackupTargetsIdBackupsGetRequest) Execute() (*ControllersPaginatedBackups, *http.Response, error) {
+func (r ApiApiBackupTargetsIdBackupsGetRequest) Execute() (*ModelsPaginatedResultModelsBackup, *http.Response, error) {
 	return r.ApiService.ApiBackupTargetsIdBackupsGetExecute(r)
 }
 
@@ -110,13 +110,13 @@ func (a *BackupsApiService) ApiBackupTargetsIdBackupsGet(ctx context.Context, id
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedBackups
-func (a *BackupsApiService) ApiBackupTargetsIdBackupsGetExecute(r ApiApiBackupTargetsIdBackupsGetRequest) (*ControllersPaginatedBackups, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsBackup
+func (a *BackupsApiService) ApiBackupTargetsIdBackupsGetExecute(r ApiApiBackupTargetsIdBackupsGetRequest) (*ModelsPaginatedResultModelsBackup, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedBackups
+		localVarReturnValue  *ModelsPaginatedResultModelsBackup
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiBackupTargetsIdBackupsGet")
@@ -770,7 +770,7 @@ func (r ApiApiDeploymentsIdBackupsGetRequest) BackupLevel(backupLevel string) Ap
 	return r
 }
 
-func (r ApiApiDeploymentsIdBackupsGetRequest) Execute() (*ControllersPaginatedBackups, *http.Response, error) {
+func (r ApiApiDeploymentsIdBackupsGetRequest) Execute() (*ModelsPaginatedResultModelsBackup, *http.Response, error) {
 	return r.ApiService.ApiDeploymentsIdBackupsGetExecute(r)
 }
 
@@ -792,13 +792,13 @@ func (a *BackupsApiService) ApiDeploymentsIdBackupsGet(ctx context.Context, id s
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedBackups
-func (a *BackupsApiService) ApiDeploymentsIdBackupsGetExecute(r ApiApiDeploymentsIdBackupsGetRequest) (*ControllersPaginatedBackups, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsBackup
+func (a *BackupsApiService) ApiDeploymentsIdBackupsGetExecute(r ApiApiDeploymentsIdBackupsGetRequest) (*ModelsPaginatedResultModelsBackup, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedBackups
+		localVarReturnValue  *ModelsPaginatedResultModelsBackup
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupsApiService.ApiDeploymentsIdBackupsGet")
