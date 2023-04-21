@@ -290,7 +290,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 				case <-done:
 					return
 				default:
-					log.InfoD("get volume inspect on all the available volumes")
+					// Get volume inspect on all the available volumes
 					for _, each := range volumes {
 						vid := each.ID
 						_, err := getVolumeRuntimeState(vid)
@@ -302,7 +302,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 			}
 		}(volumesPresent)
 
+		// flag is used to run volume inspect in the background continuously till the time script terminates
 		vInspectBackground = true
+		
 		// From Zone 1 block all the traffic to systems under zone2
 		// From Zone 2 block all the traffic to systems under zone1
 		log.InfoD("blocking iptables from all nodes present in zone1 from accessing zone2")
