@@ -236,7 +236,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				log.FailOnError(err, "failed to get kubeconfig path for source cluster. Error: [%v]", err)
 
 				log.InfoD("Validating Backup [%s]", backupName)
-				backupCtxs, err := ValidateBackup(ctx, backupName, orgID, []*scheduler.Context{scheduledAppContexts[i]}, sourceClusterConfigPath)
+				backupCtxs, err := ValidateBackup(ctx, backupName, orgID, []*scheduler.Context{scheduledAppContexts[i]}, true, true, sourceClusterConfigPath)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of backup [%s]", backupName))
 				backedupAppContexts = append(backedupAppContexts, backupCtxs[0])
 			}
