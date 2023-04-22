@@ -1291,7 +1291,18 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		errArr = append(errArr, BackupNotFoundInAnyScheduledCtxErrors...)
 	}
 	errArr = append(errArr, otherErrors...)
-	err = ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs", errArr)
+	errGetBackupCtxsFromScheduledCtxs := ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs", errArr, true)
+
+	errors := ValidateBackedUpVolumes(backupInspectResponse, scheduledAppContexts)
+	errValidateBackedUpVolumes := ProcessMultipleErrors("ValidateBackedUpVolumes", errors, true)
+
+	if errGetBackupCtxsFromScheduledCtxs != nil || errValidateBackedUpVolumes != nil {
+		err = fmt.Errorf("GetBackupCtxsFromScheduledCtxs: %v ;; ValidateBackedUpVolumes: %v",
+			errGetBackupCtxsFromScheduledCtxs, errValidateBackedUpVolumes)
+	} else {
+		err = nil
+	}
+
 	return backedupAppContexts, err
 }
 
