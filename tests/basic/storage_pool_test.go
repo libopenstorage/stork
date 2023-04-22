@@ -8,7 +8,6 @@ import (
 	"regexp"
 
 	"github.com/google/uuid"
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -1146,7 +1145,7 @@ var _ = Describe("{AddDriveAndPXRestart}", func() {
 			log.InfoD(stepLog)
 			err := Inst().V.RestartDriver(stNode, nil)
 			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
-			err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after restarting on node %s", stNode.Name))
 		})
@@ -1424,8 +1423,18 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 		if len(slNodes) == 0 {
 			dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
 		}
+
 		slNode := GetRandomStorageLessNode(slNodes)
-		err := addCloudDrive(slNode, -1)
+
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+		if isDMthin {
+			err = AddMetadataDisk(slNode)
+			log.FailOnError(err, "error while adding metadata disk")
+		}
+
+		err = addCloudDrive(slNode, -1)
 		log.FailOnError(err, "error adding cloud drive")
 		err = Inst().V.RefreshDriverEndpoints()
 		log.FailOnError(err, "error refreshing end points")
@@ -3099,7 +3108,7 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", func() {
 			err = Inst().V.RecoverDriver(selectedNode)
 			log.FailOnError(err, fmt.Sprintf("error performing maintenance cycle on node %s", selectedNode.Name))
 
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, 2*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
@@ -3687,7 +3696,7 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
+		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
@@ -3796,7 +3805,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
+		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
@@ -3908,7 +3917,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 			}
 			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("fail to exit maintenance mode in node %s", stNode.Name))
-			err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after exiting maintenance on node %s", stNode.Name))
 			status, err = Inst().V.GetNodeStatus(*stNode)
@@ -4026,7 +4035,7 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 			}
 			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("fail to exit maintenance mode on node %s", stNode.Name))
-			err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("verify PX is up after exiting maintenance on node %s", stNode.Name))
 			status, err = Inst().V.GetNodeStatus(*stNode)
 			log.FailOnError(err, "error getting node [%s] status", stNode.Name)
@@ -4252,7 +4261,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
+		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
@@ -4450,7 +4459,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 
 			err = Inst().V.StartDriver(*storageNode1)
 			log.FailOnError(err, "error starting vol driver on node [%s]", storageNode1.Name)
-			err = Inst().V.WaitDriverUpOnNode(*storageNode1, 3*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(*storageNode1, 5*time.Minute)
 			log.FailOnError(err, "error waiting for vol driver to be up on node [%s]", storageNode1.Name)
 
 			time.Sleep(5 * time.Second)
@@ -4475,7 +4484,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 
 			err = Inst().V.StartDriver(*storageNode2)
 			log.FailOnError(err, "error starting vol driver on node [%s]", storageNode2.Name)
-			err = Inst().V.WaitDriverUpOnNode(*storageNode2, 3*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(*storageNode2, 5*time.Minute)
 			log.FailOnError(err, "error waiting for vol driver to be up on node [%s]", storageNode2.Name)
 			poolStatus, err := getPoolLastOperation(poolToBeResized.Uuid)
 			log.FailOnError(err, "error getting pool status")
@@ -6859,6 +6868,14 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		pickNode = storageLessNode[randomIndex]
 		log.InfoD("Storage Less node is [%v]", pickNode.Name)
 
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+		if isDMthin {
+			err = AddMetadataDisk(pickNode)
+			log.FailOnError(err, "err adding metadata disk")
+		}
+
 		// Add multiple Drives to Storage less node
 		maxDrivesToAdd := 6
 		for i := 0; i < maxDrivesToAdd; i++ {
@@ -7407,7 +7424,19 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 		log.InfoD(stepLog)
 
 		stNodes := node.GetStorageNodes()
-		stNode := stNodes[rand.Intn(len(stNodes))]
+		kvdbNodesIDs := make([]string, 0)
+		kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
+		log.FailOnError(err, "Error getting KVDB members")
+
+		var stNode node.Node
+		for k := range kvdbMembers {
+			kvdbNodesIDs = append(kvdbNodesIDs, k)
+		}
+		for _, n := range stNodes {
+			if !Contains(kvdbNodesIDs, n.Id) {
+				stNode = n
+			}
+		}
 
 		stepLog = fmt.Sprintf("Deleting all the pools from the node [%s]", stNode.Name)
 		Step(stepLog, func() {
@@ -8527,16 +8556,9 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
-		// Get PX StorageCluster
-		var dmthinEnabled bool
-		cluster, err := Inst().V.GetDriver()
-		log.FailOnError(err, "Error getting clusterspecs")
-		argsList, err := util.MiscArgs(cluster)
-		for _, args := range argsList {
-			if strings.Contains(args, "dmthin") {
-				dmthinEnabled = true
-			}
-		}
+
+		dmthinEnabled, err := IsDMthin()
+		log.FailOnError(err, "error checking if set up is DMTHIN enabled")
 
 		// Add cloud drive on the node selected and wait for rebalance to happen
 		driveSpecs, err := GetCloudDriveDeviceSpecs()

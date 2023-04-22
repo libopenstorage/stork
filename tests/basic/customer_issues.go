@@ -129,7 +129,6 @@ func getVolumeRuntimeState(vol string) (string, error) {
 	}
 	var runTimeStat string
 	runTimeStat = ""
-	log.Debugf("VolumeDetails [%v]", volDetails)
 	for _, v := range volDetails.RuntimeState {
 		runTimeStat = v.GetRuntimeState()["RuntimeState"]
 	}
@@ -163,8 +162,11 @@ var _ = Describe("{FordRunFlatResync}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "Ford customer issue for runflat and resync failed"
 	It(stepLog, func() {
+
 		var iptablesflushed bool
 		iptablesflushed = false
+
+		vInspectBackground := false
 
 		var getKvdbLeaderNode node.Node
 		allkvdbNodes, err := GetAllKvdbNodes()
@@ -210,6 +212,8 @@ var _ = Describe("{FordRunFlatResync}", func() {
 				volumesPresent = append(volumesPresent, eachVol)
 			}
 		}
+
+		done := make(chan bool)
 
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
@@ -261,6 +265,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 					log.InfoD("Flushing iptables rules on node [%v]", eachNode.Name)
 					log.FailOnError(flushIptableRules(eachNode), "Iptables flush all failed on node [%v]", eachNode.Name)
 				}
+				if vInspectBackground {
+					done <- true
+				}
 			}
 		}
 		revertZone1 := func() {
@@ -276,6 +283,28 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		// force flush iptables on all the nodes at the end
 		defer flushiptables()
 
+		// Run inspect continuously in the background
+		go func(volumes []*volume.Volume) {
+			for {
+				select {
+				case <-done:
+					return
+				default:
+					// Get volume inspect on all the available volumes
+					for _, each := range volumes {
+						vid := each.ID
+						_, err := getVolumeRuntimeState(vid)
+						if err != nil {
+							fmt.Printf("Error while fetching the volume info")
+						}
+					}
+				}
+			}
+		}(volumesPresent)
+
+		// flag is used to run volume inspect in the background continuously till the time script terminates
+		vInspectBackground = true
+		
 		// From Zone 1 block all the traffic to systems under zone2
 		// From Zone 2 block all the traffic to systems under zone1
 		log.InfoD("blocking iptables from all nodes present in zone1 from accessing zone2")

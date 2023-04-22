@@ -124,6 +124,7 @@ import (
 
 	context1 "context"
 
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -5279,7 +5280,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 	if err != nil {
 		//this is a special case occurs where drive is added with same path as deleted pool
-		if initPoolCount == len(stNode.Pools) {
+		if initPoolCount >= len(stNode.Pools) {
 			for p := range stNode.Disks {
 				drivePathsToValidate = append(drivePathsToValidate, p)
 			}
@@ -6637,4 +6638,62 @@ func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 		return nil, err
 	}
 	return getReplicaSets[0].Nodes, nil
+}
+
+// IsDMthin returns true if setup is dmthin enabled
+func IsDMthin() (bool, error) {
+	dmthinEnabled := false
+	cluster, err := Inst().V.GetDriver()
+	if err != nil {
+		return dmthinEnabled, err
+	}
+	argsList, err := util.MiscArgs(cluster)
+	for _, args := range argsList {
+		if strings.Contains(args, "dmthin") {
+			dmthinEnabled = true
+		}
+	}
+	return dmthinEnabled, nil
+}
+
+// AddMetadataDisk add metadisk to the node if not already exists
+func AddMetadataDisk(n node.Node) error {
+	drivesMap, err := Inst().N.GetBlockDrives(n, node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	})
+	if err != nil {
+		return err
+	}
+
+	isDedicatedMetadataDiskExist := false
+
+	for _, v := range drivesMap {
+		for lk := range v.Labels {
+			if lk == "mdvol" {
+				isDedicatedMetadataDiskExist = true
+			}
+		}
+	}
+
+	if !isDedicatedMetadataDiskExist {
+		cluster, err := Inst().V.GetDriver()
+		log.FailOnError(err, "error getting storage cluster")
+		metadataSpec := cluster.Spec.CloudStorage.SystemMdDeviceSpec
+		deviceSpec := fmt.Sprintf("%s --metadata", *metadataSpec)
+
+		log.InfoD("Initiate add cloud drive and validate")
+		err = Inst().V.AddCloudDrive(&n, deviceSpec, -1)
+
+		if err != nil {
+			return fmt.Errorf("error adding metadata device [%s] to node [%s]. Err: %v", *metadataSpec, n.Name, err)
+		}
+
+	}
+
+	return nil
+
 }

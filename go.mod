@@ -3,6 +3,8 @@ module github.com/portworx/torpedo
 go 1.19
 
 require (
+	cloud.google.com/go/storage v1.28.1
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0
 	github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/andygrunwald/go-jira v1.15.0
@@ -45,6 +47,7 @@ require (
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.8.0
+	google.golang.org/api v0.110.0
 	google.golang.org/genproto v0.0.0-20230301171018-9ab4bdc49ad5
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1
@@ -63,12 +66,10 @@ require (
 	cloud.google.com/go/compute v1.18.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.12.0 // indirect
-	cloud.google.com/go/storage v1.28.1 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.2 // indirect
 	github.com/Azure/azure-sdk-for-go v56.3.0+incompatible // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.1.1 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.27 // indirect
@@ -232,7 +233,6 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
-	google.golang.org/api v0.110.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
