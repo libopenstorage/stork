@@ -3141,9 +3141,9 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 					destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
 					log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
-					restoreCtx, err := ValidateRestore(ctx, initialRestoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string), destinationClusterConfigPath)
+					restoreLaterCtx, err := ValidateRestore(ctx, initialRestoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string), destinationClusterConfigPath)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("validation of initial restore [%s] is success", initialRestoreName))
-					restoredAppContexts = append(restoredAppContexts, restoreCtx)
+					restoredLaterAppContexts = append(restoredLaterAppContexts, restoreLaterCtx)
 
 					// If Later Restore was an error before, we have to fail the test at this point, having processed the other stage
 					dash.VerifyFatal(restoreLaterStatusErr, nil, fmt.Sprintf("status of later restore [%s] is 'PartialSuccess' or 'Success'", restoreLaterName))
