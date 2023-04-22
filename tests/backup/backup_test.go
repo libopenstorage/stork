@@ -137,6 +137,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
+
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
 			log.InfoD("Creating pre rule for deployed apps")
@@ -158,6 +159,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				}
 			}
 		})
+
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -174,6 +176,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				dash.VerifyFatal(err, nil, "Creating backup location")
 			}
 		})
+
 		Step("Creating backup schedule policies", func() {
 			log.InfoD("Creating backup schedule policies")
 			log.InfoD("Creating backup interval schedule policy")
@@ -196,6 +199,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			monthlyPolicyStatus := Inst().Backup.BackupSchedulePolicy(monthlyName, uuid.New(), orgID, monthlySchedulePolicyInfo)
 			dash.VerifyFatal(monthlyPolicyStatus, nil, "Creating monthly schedule policy")
 		})
+
 		Step("Registering cluster for backup", func() {
 			log.InfoD("Registering cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -269,6 +273,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	})
 
 	JustAfterEach(func() {
+		log.InfoD("Begin JustAfterEach")
+		defer func() { log.InfoD("End JustAfterEach") }()
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 
 		log.InfoD("switching to default context")
