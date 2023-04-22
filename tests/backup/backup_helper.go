@@ -1692,108 +1692,11 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 
 // ValidateRestore returns a clone of the contexts (with backup objects) *after* converting the contexts to point to restored objects (and after validating those objects)
 func ValidateRestore(ctx context.Context, restoreName string, orgID string, backedupAppContexts []*scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, restoreClusterConfigPath string) ([]*scheduler.Context, error) {
-	err := SetClusterContext(restoreClusterConfigPath)
-	log.FailOnError(err, "failed to SetClusterContext to %s cluster", restoreClusterConfigPath)
 
-	backupDriver := Inst().Backup
-	restoreInspectRequest := &api.RestoreInspectRequest{
-		Name:  restoreName,
-		OrgId: orgID,
-	}
+	// placeholder.
+	// will be taken care of in seprate PR
 
-	restoreInspectResponse, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
-	if err != nil {
-		return nil, err
-	}
-	// TODO: Remove
-	log.Infof("restoreInspectResponse: ++%+v++", restoreInspectResponse)
-
-	restoredAppContexts := make([]*scheduler.Context, 0)
-	for _, backedupAppContext := range backedupAppContexts {
-		restoredAppContext, err := GetRestoreCtxFromBackupCtx(backedupAppContext, namespaceMapping, storageClassMapping)
-		if err != nil {
-			return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
-		}
-		restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-	}
-
-	ValidateApplications(restoredAppContexts)
-
-	log.InfoD("switching to default context")
-	err1 := SetClusterContext("")
-	log.FailOnError(err1, "failed to SetClusterContext to default cluster")
-
-	return restoredAppContexts, nil
-}
-
-// GetRestoreCtxFromBackupCtx uses the contexts to create and return clones which refer to restored specs (along with conversion of their specs)
-// NOTE: To be used after switching context to the required destination cluster where restore was performed
-func GetRestoreCtxFromBackupCtx(backedupAppContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string) (*scheduler.Context, error) {
-	log.InfoD("Getting Restore Context from Backup Context")
-
-	restoreAppContext := *backedupAppContext
-
-	// TODO: remove workaround in future.
-	allStorageClassMappingsPresent := true
-
-	specObjects := make([]interface{}, 0)
-	for _, appSpecOrig := range backedupAppContext.App.SpecList {
-		appSpec, err := CloneSpec(appSpecOrig) //clone spec to create "restore" specs
-		if err != nil {
-			log.Errorf("Failed to clone spec: '%v'. Err: %v", appSpecOrig, err)
-			continue
-		}
-		err = TransformToRestoredSpec(appSpec, storageClassMapping)
-		if err != nil {
-			log.Errorf("Failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
-			continue
-		}
-		err = UpdateNamespace(appSpec, namespaceMapping)
-		if err != nil {
-			log.Errorf("Failed to Update the namespace for %v, with ns map %s. Err: %v", appSpec, namespaceMapping, err)
-			continue
-		}
-		specObjects = append(specObjects, appSpec)
-
-		// TODO: remove workaround in future.
-		if specObj, ok := appSpecOrig.(*corev1.PersistentVolumeClaim); ok {
-			if _, ok := storageClassMapping[*specObj.Spec.StorageClassName]; !ok {
-				allStorageClassMappingsPresent = false
-			}
-		}
-	}
-
-	app := *backedupAppContext.App
-	app.SpecList = specObjects
-	restoreAppContext.App = &app
-
-	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
-	options := CreateScheduleOptions()
-	if namespace, ok := namespaceMapping[backedupAppContext.ScheduleOptions.Namespace]; ok {
-		options.Namespace = namespace
-	} else {
-		options.Namespace = backedupAppContext.ScheduleOptions.Namespace
-	}
-	restoreAppContext.ScheduleOptions = options
-
-	// TODO: remove workaround in future.
-	if !allStorageClassMappingsPresent {
-		restoreAppContext.SkipVolumeValidation = true
-	}
-
-	return &restoreAppContext, nil
-}
-
-// CloneSpec clones a given spec and returns it. It returns an error if the object (spec) provided is not supported by this function
-func TransformToRestoredSpec(spec interface{}, storageClassMapping map[string]string) error {
-	if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
-		if sc, ok := storageClassMapping[*specObj.Spec.StorageClassName]; ok {
-			*specObj.Spec.StorageClassName = sc
-		}
-		return nil
-	}
-
-	return nil
+	return nil, nil
 }
 
 // IsBackupLocationPresent checks whether the backup location is present or not
