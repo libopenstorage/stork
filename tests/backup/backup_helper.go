@@ -1411,7 +1411,7 @@ func ValidateBackedUpVolumes(backupInspectResponse *api.BackupInspectResponse,
 // * backupclusterAppsContexts: the filtered context (backup)
 // * ScheduledCtxNotFoundInBackupErrors: these are errors that are generated when namespaces and/or specObjs in the scheduled context are not found in the backup
 // * BackupNotFoundInAnyScheduledCtxErrors: these are errors that are generated when namespaces and/or resources in the backup context are not found in the scheduled contextx
-// * otherErrors: all the other kind of error.
+// * otherErrors: all the other kinds of errors; Don't ignore these are they're serious errors
 // *
 // * NOTES:
 // * - make sure to include Contexts of *all* namespaces which are supposed to contain the backup objects
@@ -1421,7 +1421,7 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 	resourceInfos := backupInspectResponse.Backup.Resources
 	backupNamesspaces := backupInspectResponse.GetBackup().GetNamespaces()
 
-	log.InfoD("Getting the backup objects (specs) from contexts, for backup [%s]", backupName)
+	log.InfoD("GetBackupCtxsFromScheduledCtxs: Getting the backup objects (specs) from contexts, for backup [%s]", backupName)
 
 	// Verifying if appCtxs for all namespaces in backup
 	log.InfoD("Verifying if scheduledAppContexts provided to ValidateBackup correspond to all namespaces in backup [%s]", backupName)
@@ -1439,7 +1439,7 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 			}
 		}
 	if !namespacesAvailable {
-		err := fmt.Errorf("The namespaces (appCtxs) [%v] provided to the ValidateBackup, do not contain the namespaces [%v] present in the backup [%s]. They are required for Validation", availableNamespaces, unavailableNamespaces, backupName)
+		err := fmt.Errorf("the namespaces (appCtxs) [%v] provided to the GetBackupCtxsFromScheduledCtxs, do not contain the namespaces [%v] present in the backup [%s]. They are required for Validation", availableNamespaces, unavailableNamespaces, backupName)
 		BackupNotFoundInAnyScheduledCtxErrors = append(BackupNotFoundInAnyScheduledCtxErrors, err)
 	}
 
@@ -1458,7 +1458,7 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 
 		clusterAppsContextNamespace := clusterAppsContext.ScheduleOptions.Namespace
 		if !Contains(backupNamesspaces, clusterAppsContextNamespace) {
-			err := fmt.Errorf("The namespace (appCtx) [%s] provided to the ValidateBackup, is not present in the backup [%s]", clusterAppsContextNamespace, backupName)
+			err := fmt.Errorf("the namespace (appCtx) [%s] provided to the ValidateBackup, is not present in the backup [%s]", clusterAppsContextNamespace, backupName)
 			ScheduledCtxNotFoundInBackupErrors = append(ScheduledCtxNotFoundInBackupErrors, err)
 		}
 
@@ -1478,6 +1478,7 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 		for _, spec := range clusterAppsContext.App.SpecList {
 			name, kind, ns, err := GetSpecNameKindNamepace(spec)
 			if err != nil {
+				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, clusterAppsContextNamespace, spec)
 				otherErrors = append(otherErrors, err)
 				continue specloop
 			}
@@ -1502,7 +1503,7 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 					}
 
 					// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-					err := fmt.Errorf("The non-namespaced spec (name: [%s], kind: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, clusterAppsContextNamespace, backupName)
+					err := fmt.Errorf("the non-namespaced spec (name: [%s], kind: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, clusterAppsContextNamespace, backupName)
 					ScheduledCtxNotFoundInBackupErrors = append(ScheduledCtxNotFoundInBackupErrors, err)
 					continue specloop
 				} else {
@@ -1517,7 +1518,7 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 					}
 
 					// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-					err := fmt.Errorf("The spec (name: [%s], kind: [%s], namespace: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, ns, clusterAppsContextNamespace, backupName)
+					err := fmt.Errorf("the spec (name: [%s], kind: [%s], namespace: [%s]) found in the clusterAppsContext [%s], is not in the backup [%s]", name, kind, ns, clusterAppsContextNamespace, backupName)
 					ScheduledCtxNotFoundInBackupErrors = append(ScheduledCtxNotFoundInBackupErrors, err)
 
 					continue specloop
@@ -1555,7 +1556,7 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 			err := fmt.Errorf("non NS resource(name: [%s], kind: [%s]) in backup [%s], doesn't have a corresponding spec any of the contexts [%v]", res.GetName(), res.GetKind(), backupName, availableNamespaces)
 			BackupNotFoundInAnyScheduledCtxErrors = append(BackupNotFoundInAnyScheduledCtxErrors, err)
 		} else {
-			// TODO: make Infof
+			// TODO: make Infof after testing with elastic-search-CRD-webhook
 			log.Errorf("non NS resource(name: [%s], kind: [%s]) in backup [%s] has a spec in scheduledAppContexts", res.GetName(), res.GetKind(), backupName)
 		}
 	}
