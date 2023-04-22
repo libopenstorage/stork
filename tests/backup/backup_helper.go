@@ -30,6 +30,7 @@ import (
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1297,107 +1298,141 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 // ValidateBackedUpVolumes checks if the volumes have been backed up and done so rightly
 // *
 // * Returns:
-// * VolumeOfPVCInScheduledCtxNotFoundInBackupErrors:
-// * VolumeInBackupHasNoPVCInAnyScheduledCtxErrors:
-// * otherErrors: all the other kind of error.
+// * otherErrors: all the other kind of error; Don't ignore these are they're serious errors
 // *
 // * NOTES:
-// * - make sure to include Contexts of *all* namespaces which are supposed to contain the backup objects
+// * - make sure to include Contexts of *all* namespaces which are supposed to contain the volumes
 func ValidateBackedUpVolumes(backupInspectResponse *api.BackupInspectResponse,
-	scheduledAppContexts []*scheduler.Context) (
-	VolumeOfPVCInScheduledCtxNotFoundInBackupErrors,
-	VolumeInBackupHasNoPVCInAnyScheduledCtxErrors,
-	otherErrors []error) {
+	scheduledAppContexts []*scheduler.Context) (errors []error) {
 
 	backupName := backupInspectResponse.Backup.Name
 	backedupVolumes := backupInspectResponse.GetBackup().GetVolumes()
 	backupNamespaces := backupInspectResponse.GetBackup().GetNamespaces()
 
-	log.InfoD("Validating backed up volumes for backup [%s]", backupName)
+	log.InfoD("ValidateBackedUpVolumes: Validating backed up volumes for backup [%s]", backupName)
 
 	backedUpVolumesFound := make(map[*api.BackupInfo_Volume]bool)
 	for _, volume := range backedupVolumes {
 		backedUpVolumesFound[volume] = false
 	}
 
-	// Verifying if appCtxs for all namespaces in backup
-	log.InfoD("Verifying if scheduledAppContexts provided to ValidateBackup correspond to all namespaces in backup [%s]", backupName)
-	var availableNamespaces []string = make([]string, 0)
-	var unavailableNamespaces []string = make([]string, 0)
-	for _, clusterAppsContext := range scheduledAppContexts {
-		availableNamespaces = append(availableNamespaces, clusterAppsContext.ScheduleOptions.Namespace)
-	}
-
-	namespacesAvailable := true
-	for _, namespace := range backupNamespaces {
-		if !Contains(availableNamespaces, namespace) {
-			namespacesAvailable = false
-			unavailableNamespaces = append(unavailableNamespaces, namespace)
-		}
-	}
-	if !namespacesAvailable {
-		err := fmt.Errorf("The namespaces (appCtxs) [%v] provided to the ValidateBackup, do not contain the namespaces [%v] present in the backup [%s]. They are required for Validation", availableNamespaces, unavailableNamespaces, backupName)
-		VolumeInBackupHasNoPVCInAnyScheduledCtxErrors = append(VolumeInBackupHasNoPVCInAnyScheduledCtxErrors, err)
-	}
-
-	// filter stage: for each clusterAppsContext (namespace), we create the corresponding BackupSpecObject
 	for _, clusterAppsContext := range scheduledAppContexts {
 
+		// Checking if this cluster (namespace) is actually present in the backup
 		clusterAppsContextNamespace := clusterAppsContext.ScheduleOptions.Namespace
 		if !Contains(backupNamespaces, clusterAppsContextNamespace) {
-			err := fmt.Errorf("The namespace (appCtx) [%s] provided to the ValidateBackup, is not present in the backup [%s]", clusterAppsContextNamespace, backupName)
-			VolumeOfPVCInScheduledCtxNotFoundInBackupErrors = append(VolumeOfPVCInScheduledCtxNotFoundInBackupErrors, err)
+			err := fmt.Errorf("the namespace (appCtx) [%s] provided to the ValidateBackup, is not present in the backup [%s]", clusterAppsContextNamespace, backupName)
+			errors = append(errors, err)
 		}
 
 		namespacedBackedUpVolumesFound := make(map[*api.BackupInfo_Volume]bool)
-		// collect the backup resources whose specs should be present in this context (namespace)
+		// collect the backup resources whose VOLUMES should be present in this context (namespace)
 		namespacedBackedUpVolumes := make([]*api.BackupInfo_Volume, 0)
-		for _, volume := range backedupVolumes {
-			if volume.GetNamespace() == clusterAppsContextNamespace {
-				namespacedBackedUpVolumes = append(namespacedBackedUpVolumes, volume)
-				namespacedBackedUpVolumesFound[volume] = false
-				backedUpVolumesFound[volume] = true
+		for _, vol := range backedupVolumes {
+			if vol.GetNamespace() == clusterAppsContextNamespace {
+				if vol.Status.Status != api.BackupInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
+					backedUpVolumesFound[vol] = true
+					err := fmt.Errorf("the status of the backedup volume [%s] was not Success. It was [%s] with reason [%s]", vol.Name, vol.Status.Status, vol.Status.Reason)
+					errors = append(errors, err)
+				}
+				namespacedBackedUpVolumes = append(namespacedBackedUpVolumes, vol)
+				namespacedBackedUpVolumesFound[vol] = false
 			}
 		}
 
-	specloop:
+		// Collect all volumes belonging to a context
+		log.InfoD("getting the volumes bounded to the PVCs in the context [%s]", clusterAppsContextNamespace)
+		volumeMap := make(map[string]*volume.Volume)
+		scheduledVolumes, err := Inst().S.GetVolumes(clusterAppsContext)
+		if err != nil {
+			err := fmt.Errorf("error in Inst().S.GetVolumes: [%s] in namespace (appCtx) [%s]", err, clusterAppsContextNamespace)
+			errors = append(errors, err)
+			continue
+		}
+		for _, scheduledVol := range scheduledVolumes {
+			volumeMap[scheduledVol.ID] = scheduledVol
+		}
+		log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", clusterAppsContextNamespace, scheduledVolumes)
+
+		// Verify if volumes are present
+	volloop:
 		for _, spec := range clusterAppsContext.App.SpecList {
+			// Obtaining the volume from the PVC
 			pvcSpecObj, ok := spec.(*corev1.PersistentVolumeClaim)
 			if !ok {
-				continue specloop
+				continue volloop
 			}
 
-			for _, volume := range namespacedBackedUpVolumes {
-				if volume.GetName() == pvcSpecObj.Spec.VolumeName {
-					namespacedBackedUpVolumesFound[volume] = true
+			sched, ok := Inst().S.(*k8s.K8s)
+			if !ok {
+				continue volloop
+			}
 
-					// TODO: volume checking and stuff
+			updatedSpec, err := sched.GetUpdatedSpec(pvcSpecObj)
+			if err != nil {
+				err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), clusterAppsContextNamespace, err)
+				errors = append(errors, err)
+				continue volloop
+			}
 
-					continue specloop
+			pvcObj, ok := updatedSpec.(*corev1.PersistentVolumeClaim)
+			if !ok {
+				err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), clusterAppsContextNamespace, err)
+				errors = append(errors, err)
+				continue volloop
+			}
+
+			scheduledVol, ok := volumeMap[pvcObj.Spec.VolumeName]
+			if !ok {
+				err := fmt.Errorf("unable to find the volume corresponding to PVC(name: [%s], namespace: [%s]) in the cluster corresponding to the PVC's context, which is [%s]", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), clusterAppsContextNamespace)
+				errors = append(errors, err)
+				continue volloop
+			}
+
+			// Finding the volume in the backup
+			for _, backedupVol := range namespacedBackedUpVolumes {
+				if backedupVol.GetName() == scheduledVol.ID {
+					namespacedBackedUpVolumesFound[backedupVol] = true
+					backedUpVolumesFound[backedupVol] = true
+
+					if backedupVol.Pvc != pvcObj.Name {
+						err := fmt.Errorf("the PVC of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.Pvc, pvcObj.Name)
+						errors = append(errors, err)
+					}
+
+					if backedupVol.DriverName != Inst().V.String() {
+						err := fmt.Errorf("the Driver Name of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.DriverName, clusterAppsContext.ScheduleOptions.StorageProvisioner)
+						errors = append(errors, err)
+					}
+
+					if backedupVol.StorageClass != *pvcObj.Spec.StorageClassName {
+						err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
+						errors = append(errors, err)
+					}
+
+					continue volloop
 				}
 			}
 
 			// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-			err := fmt.Errorf("The Volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) didn't have a corresponding volume in the backup [%s]", pvcSpecObj.Spec.VolumeName, pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), backupName)
-			VolumeOfPVCInScheduledCtxNotFoundInBackupErrors = append(VolumeOfPVCInScheduledCtxNotFoundInBackupErrors, err)
-
-			continue specloop
+			err = fmt.Errorf("the volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) was present in the cluster corresponding to the PVC's context, but not in the backup [%s]", pvcObj.Spec.VolumeName, pvcObj.GetName(), pvcObj.GetNamespace(), backupName)
+			errors = append(errors, err)
 		}
 
 		for vol, found := range namespacedBackedUpVolumesFound {
 			if !found {
-				err := fmt.Errorf("Volume (name: [%s], namespace: [%s]) in backup [%s], doesn't have a corresponding PVC spec in the context [%v]", vol.GetName(), vol.GetNamespace(), backupName, clusterAppsContextNamespace)
-				VolumeInBackupHasNoPVCInAnyScheduledCtxErrors = append(VolumeInBackupHasNoPVCInAnyScheduledCtxErrors, err)
+				err := fmt.Errorf("volume (name: [%s], namespace: [%s]) in backup [%s], doesn't have a corresponding PVC spec in the context [%v]", vol.GetName(), vol.GetNamespace(), backupName, clusterAppsContextNamespace)
+				errors = append(errors, err)
 			} else {
-				log.Infof("Volume (name: [%s], namespace: [%s]) in backup [%s] has a PVC spec in the context [%s]", vol.GetName(), vol.GetNamespace(), backupName, clusterAppsContextNamespace)
+				log.Infof("volume (name: [%s], namespace: [%s]) in backup [%s] has a PVC spec in the context [%s]", vol.GetName(), vol.GetNamespace(), backupName, clusterAppsContextNamespace)
 			}
 		}
 	}
 
 	for vol, found := range backedUpVolumesFound {
 		if !found {
-			err := fmt.Errorf("Volume (name: [%s], namespace: [%s]) in backup [%s], doesn't have a corresponding PVC spec in ANY provided context", vol.GetName(), vol.GetNamespace(), backupName)
-			VolumeInBackupHasNoPVCInAnyScheduledCtxErrors = append(VolumeInBackupHasNoPVCInAnyScheduledCtxErrors, err)
+			err := fmt.Errorf("volume (name: [%s], namespace: [%s]) in backup [%s], doesn't have a corresponding PVC spec in ANY provided context", vol.GetName(), vol.GetNamespace(), backupName)
+			errors = append(errors, err)
 		}
 	}
 
@@ -1436,8 +1471,8 @@ func GetBackupCtxsFromScheduledCtxs(backupInspectResponse *api.BackupInspectResp
 		if !Contains(availableNamespaces, namespace) {
 			namespacesAvailable = false
 			unavailableNamespaces = append(unavailableNamespaces, namespace)
-			}
 		}
+	}
 	if !namespacesAvailable {
 		err := fmt.Errorf("the namespaces (appCtxs) [%v] provided to the GetBackupCtxsFromScheduledCtxs, do not contain the namespaces [%v] present in the backup [%s]. They are required for Validation", availableNamespaces, unavailableNamespaces, backupName)
 		BackupNotFoundInAnyScheduledCtxErrors = append(BackupNotFoundInAnyScheduledCtxErrors, err)
