@@ -359,7 +359,10 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sRbac.SetConfig(config)
 	k8sMonitoring.SetConfig(config)
 	k8sPolicy.SetConfig(config)
+	k8sBatch.SetConfig(config)
+	k8sMonitoring.SetConfig(config)
 	k8sAdmissionRegistration.SetConfig(config)
+	k8sExternalsnap.SetConfig(config)
 	k8sApiExtensions.SetConfig(config)
 
 	return nil
@@ -4901,6 +4904,10 @@ func (k *K8s) createRbacObjects(
 		return clusterrole, nil
 	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
 		obj.Namespace = ns.Name
+		for i := range obj.Subjects {
+			// since everything in a spec is in the same namespace in cluster, we can set here:
+			obj.Subjects[i].Namespace = ns.Name
+		}
 		clusterrolebinding, err := k8sRbac.CreateClusterRoleBinding(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if clusterrolebinding, err = k8sRbac.GetClusterRoleBinding(obj.Name); err == nil {
