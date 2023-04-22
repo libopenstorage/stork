@@ -2962,8 +2962,6 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 
 			backupNames = make([]string, 0)
 			backedupAppContexts = make([]*scheduler.Context, 0)
-
-			backedupAppContexts = make([]*scheduler.Context, 0)
 			for i, appCtx := range scheduledAppContexts {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, scheduledNamespace, time.Now().Unix())
