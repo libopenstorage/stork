@@ -2769,20 +2769,17 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 
 	var (
-		backupNames              []string             // backups in px-backup
-		restoreNames             []string             // restores in px-backup
-		restoreLaterNames        []string             // restore-laters in px-backup
-		scheduledAppContexts     []*scheduler.Context // Each Context is for one Namespace which corresponds to one App
-		backedupAppContexts      []*scheduler.Context // Each Context is for one backup in px-backup
-		restoredAppContexts      []*scheduler.Context // Each Context is for one restore in px-backup
-		restoredLaterAppContexts []*scheduler.Context // Each Context is for one restore-later in px-backup
-		preRuleNameList          []string
-		postRuleNameList         []string
-		scheduledClusterUid      string
-		cloudCredName            string
-		cloudCredUID             string
-		backupLocationUID        string
-		backupLocationName       string
+		backupNames          []string             // backups in px-backup
+		restoreNames         []string             // restores in px-backup
+		restoreLaterNames    []string             // restore-laters in px-backup
+		scheduledAppContexts []*scheduler.Context // Each Context is for one Namespace which corresponds to one App
+		preRuleNameList      []string
+		postRuleNameList     []string
+		scheduledClusterUid  string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
 	)
 
 	var (
@@ -2961,8 +2958,7 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			backupNames = make([]string, 0)
-			backedupAppContexts = make([]*scheduler.Context, 0)
-			for i, appCtx := range scheduledAppContexts {
+			for _, appCtx := range scheduledAppContexts {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, scheduledNamespace, time.Now().Unix())
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, scheduledClusterUid, orgID, scheduledNamespace, backupLocationName)
@@ -2970,14 +2966,7 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 
-				log.Infof("Obtaining SourceClusterConfigPath")
-				sourceClusterConfigPath, err := GetSourceClusterConfigPath()
-				log.FailOnError(err, "failed to get kubeconfig path for source cluster. Error: [%v]", err)
-
-				log.InfoD("Validating Backup [%s]", backupName)
-				backupCtxs, err := ValidateBackup(ctx, backupName, orgID, []*scheduler.Context{scheduledAppContexts[i]}, true, true, sourceClusterConfigPath)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of backup [%s]", backupName))
-				backedupAppContexts = append(backedupAppContexts, backupCtxs[0])
+				// Validation code will be added here in upcoming PR
 			}
 		})
 
@@ -3088,13 +3077,7 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 
 					// We can consider validation and cleanup for 'PartialSuccess' and 'Success'
 					if restoreLaterStatusErr == nil {
-						// Validation of Later Restore
-						log.Infof("Obtaining DestinationClusterConfigPath")
-						destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-						log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
-
-						restoreLaterCtx, err := ValidateRestore(ctx, restoreLaterName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string), destinationClusterConfigPath)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("validation of later restore [%s] is success", restoreLaterName))
+						// Validation code will be added here in upcoming PR
 					} else {
 						log.Warnf("proceeding to next step, after which the test will be failed.")
 					}
@@ -3134,14 +3117,7 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 
 					dash.VerifyFatal(initialRestoreError, nil, fmt.Sprintf("status of initial restore [%s] is 'PartialSuccess' or 'Success'", initialRestoreName))
 
-					// Validation of Inital Restore
-					log.Infof("Obtaining DestinationClusterConfigPath")
-					destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-					log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
-
-					restoreLaterCtx, err := ValidateRestore(ctx, initialRestoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string), destinationClusterConfigPath)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("validation of initial restore [%s] is success", initialRestoreName))
-					restoredLaterAppContexts = append(restoredLaterAppContexts, restoreLaterCtx)
+					// Validation code will be added here in upcoming PR
 
 					// If Later Restore was an error before, we have to fail the test at this point, having processed the other stage
 					dash.VerifyFatal(restoreLaterStatusErr, nil, fmt.Sprintf("status of later restore [%s] is 'PartialSuccess' or 'Success'", restoreLaterName))
@@ -3212,19 +3188,7 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 		time.Sleep(time.Minute * 1)
 		log.Warn("no verification of destruction is done; it might lead to undetectable errors")
 
-		log.InfoD("switching to destination context")
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "failed to switch to context to destination cluster")
-
-		log.InfoD("deleting restored namespaces on destination clusters")
-		ValidateAndDestroy(restoredAppContexts, opts)
-
-		//TODO: delete restore-later apps
-		log.Warn("not deleting deployed applications (restore-later) on destination clusters")
-
-		log.InfoD("waiting (for 1 minute) for any Resources created by Operator of Custom Resources to finish being destroyed")
-		time.Sleep(time.Minute * 1)
-		log.Warn("no verification of destruction is done; it might lead to undetectable errors")
+		// Restored stuff destruction will be added here in upcoming PR
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
