@@ -1317,6 +1317,23 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
+func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
+	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+		pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack, because the `Kind` is empty for some reason
+		pvc.Kind = "PersistentVolumeClaim"
+
+		return pvc, nil
+	}
+
+	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(spec))
+}
+
 func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) (*corev1.Namespace, error) {
 	k8sOps := k8sCore
 
