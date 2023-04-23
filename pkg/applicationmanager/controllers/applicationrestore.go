@@ -653,9 +653,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	if restore.Status.Volumes == nil {
 		restore.Status.Volumes = make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	}
-	namespacedName := types.NamespacedName{}
-	namespacedName.Namespace = restore.Namespace
-	namespacedName.Name = restore.Name
 	restoreCompleteList := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
@@ -869,10 +866,11 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						v1.EventTypeWarning,
 						string(storkapi.ApplicationRestoreStatusFailed),
 						message)
-					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
+					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, msg, nil)
 					return err
 				}
-				time.Sleep(volumeBatchSleepInterval)
+				// TODO: Need to port the changes to read the value from configmap.
+				time.Sleep(20 * time.Second)
 				restore, err = a.updateRestoreCRInVolumeStage(
 					namespacedName,
 					storkapi.ApplicationRestoreStatusInProgress,
