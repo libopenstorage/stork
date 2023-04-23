@@ -869,6 +869,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, msg, nil)
 					return err
 				}
+				// TODO: Need to port the changes to read the value from configmap.
+				time.Sleep(20 * time.Second)
 				restore, err = a.updateRestoreCRInVolumeStage(
 					namespacedName,
 					storkapi.ApplicationRestoreStatusInProgress,
