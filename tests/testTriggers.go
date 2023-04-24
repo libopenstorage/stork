@@ -388,9 +388,8 @@ const (
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
-	ConfluentAsyncDR = "ConfluentAsyncDR"
+	ConfluentAsyncDR = "confluentasyncdr"
 	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
-
 	AsyncDRVolumeOnly = "asyncdrvolumeonly"
 	// stork application backup runs stork backups for applications
 	StorkApplicationBackup = "storkapplicationbackup"
