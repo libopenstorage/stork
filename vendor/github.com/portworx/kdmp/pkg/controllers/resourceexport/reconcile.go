@@ -31,8 +31,7 @@ type updateResourceExportFields struct {
 	reason              string
 	id                  string
 	resources           []*kdmpapi.ResourceRestoreResourceInfo
-	VolumesInfo         []*kdmpapi.ResourceBackupVolumeInfo
-	ExistingVolumesInfo []*kdmpapi.ResourceRestoreVolumeInfo
+	RestoreCompleteList []*storkapi.ApplicationRestoreVolumeInfo
 }
 
 func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (bool, error) {
@@ -207,8 +206,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 				status:              kdmpapi.ResourceExportStatusSuccessful,
 				reason:              "Job successful",
 				resources:           rb.Status.Resources,
-				VolumesInfo:         rb.VolumesInfo,
-				ExistingVolumesInfo: rb.ExistingVolumesInfo,
+				RestoreCompleteList: rb.RestoreCompleteList,
 			}
 
 			return true, c.updateStatus(resourceExport, updateData)
@@ -289,12 +287,8 @@ func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourc
 		if len(data.resources) != 0 {
 			re.Status.Resources = data.resources
 		}
-		if len(data.VolumesInfo) != 0 {
-			re.VolumesInfo = data.VolumesInfo
-		}
-
-		if len(data.ExistingVolumesInfo) != 0 {
-			re.ExistingVolumesInfo = data.ExistingVolumesInfo
+		if len(data.RestoreCompleteList) != 0 {
+			re.RestoreCompleteList = data.RestoreCompleteList
 		}
 
 		updErr = c.client.Update(context.TODO(), re)
@@ -380,6 +374,7 @@ func startNfsResourceJob(
 			drivers.WithResoureBackupName(re.Name),
 			drivers.WithResoureBackupNamespace(re.Namespace),
 			drivers.WithNfsMountOption(bl.Location.NFSConfig.MountOptions),
+			drivers.WithNfsSubPath(bl.Location.NFSConfig.SubPath),
 		)
 	case drivers.NFSRestore:
 		return drv.StartJob(
@@ -395,6 +390,7 @@ func startNfsResourceJob(
 			drivers.WithResoureBackupName(re.Name),
 			drivers.WithResoureBackupNamespace(re.Namespace),
 			drivers.WithNfsMountOption(bl.Location.NFSConfig.MountOptions),
+			drivers.WithNfsSubPath(bl.Location.NFSConfig.SubPath),
 		)
 	}
 	return "", fmt.Errorf("unknown data transfer driver: %s", drv.Name())

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -223,6 +224,19 @@ func jobForRestoreResource(
 		logrus.Errorf("failed to get the toleration details: %v", err)
 		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobOption.RestoreExportName)
 	}
+	// Get the stork deployment namespace
+	storkPodNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		logrus.Errorf("failed to get the stork pod namespace: %v", err)
+		return nil, fmt.Errorf("failed to get the stork pod namespace: %v", err)
+	}
+	// Get the PX service account name and namespace
+	pxServiceNamespace, pxServiceName, err := k8sutils.GetPxNamespaceFromStorkDeploy(k8sutils.StorkDeploymentName, storkPodNamespace)
+	if err != nil {
+		logrus.Infof("failed to get the px service name and namespace: %v", err)
+		return nil, fmt.Errorf("failed to get the px service name and namespace: %v", err)
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobOption.RestoreExportName,
@@ -244,7 +258,17 @@ func jobForRestoreResource(
 					ServiceAccountName: jobOption.RestoreExportName,
 					Containers: []corev1.Container{
 						{
-							Name:            drivers.NfsExecutorImage,
+							Name: drivers.NfsExecutorImage,
+							Env: []corev1.EnvVar{
+								{
+									Name:  k8sutils.PxServiceEnvName,
+									Value: pxServiceName,
+								},
+								{
+									Name:  k8sutils.PxNamespaceEnvName,
+									Value: pxServiceNamespace,
+								},
+							},
 							Image:           nfsExecutorImage,
 							ImagePullPolicy: corev1.PullAlways,
 							Command: []string{

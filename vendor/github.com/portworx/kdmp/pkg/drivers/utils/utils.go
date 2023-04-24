@@ -743,7 +743,7 @@ func CreateNfsPvc(pvcName string, pvName string, namespace string) error {
 func CreateNFSPvPvcForJob(jobName string, namespace string, o drivers.JobOpts) error {
 	// create PV before creating job
 	nfsPvName := GetPvNameForJob(jobName)
-	if err := CreateNfsPv(nfsPvName, o.NfsServer, o.NfsExportDir, o.NfsMountOption); err != nil {
+	if err := CreateNfsPv(nfsPvName, o.NfsServer, o.NfsSubPath, o.NfsMountOption); err != nil {
 		return err
 	}
 	logrus.Debugf("Created NFS PV successfully %s", nfsPvName)
