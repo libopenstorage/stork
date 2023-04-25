@@ -91,6 +91,7 @@ var _ = Describe("{Longevity}", func() {
 		ValidateDeviceMapper:   TriggerValidateDeviceMapperCleanup,
 		MetroDR:                TriggerMetroDR,
 		AsyncDR:                TriggerAsyncDR,
+		ConfluentAsyncDR:       TriggerConfluentAsyncDR,
 		AsyncDRVolumeOnly:      TriggerAsyncDRVolumeOnly,
 		StorkApplicationBackup: TriggerStorkApplicationBackup,
 		StorkAppBkpVolResize:   TriggerStorkAppBkpVolResize,

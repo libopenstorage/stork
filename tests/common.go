@@ -3407,13 +3407,19 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-
 	sourceClusterStatus := func() (interface{}, bool, error) {
 		err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
-		return "", false, nil
+		srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+		if err != nil {
+			return "", true, err
+		}
+		if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
 	}
 	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
@@ -3431,7 +3437,14 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
-		return "", false, nil
+		destClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+		if err != nil {
+			return "", true, err
+		}
+		if destClusterStatus == api.ClusterInfo_StatusInfo_Online {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("the %s cluster state is not Online yet", destinationClusterName)
 	}
 	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
