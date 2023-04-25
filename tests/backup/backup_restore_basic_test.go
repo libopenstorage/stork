@@ -2765,8 +2765,8 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 	})
 })
 
-// BackupCRs.MultipleRestoresOnHigherK8sVersion deploys CRs (CRD + webhook) -> backups them up -> creates two simulatanous restores on a cluster with higher K8s version :: one restore is Success and other PartialSuccess
-var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
+// BackupCRsThenMultipleRestoresOnHigherK8sVersion deploys CRs (CRD + webhook) -> backups them up -> creates two simulatanous restores on a cluster with higher K8s version :: one restore is Success and other PartialSuccess
+var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 
 	var (
 		backupNames          []string             // backups in px-backup
@@ -2791,7 +2791,7 @@ var _ = Describe("{BackupCRs.MultipleRestoresOnHigherK8sVersion}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupCRs.MultipleRestoresOnHigherK8sVersion", "deploy CRs (CRD + webhook); then backup; create two simulatanous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
+		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "deploy CRs (CRD + webhook); then backup; create two simulatanous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
 	})
 
 	It("Deploy CRs (CRD + webhook); Backup; two simulatanous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", func() {
