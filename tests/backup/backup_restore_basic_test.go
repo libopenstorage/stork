@@ -2798,8 +2798,8 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 
 		defer func() {
 			log.InfoD("switching to default context")
-			err1 := SetClusterContext("")
-			log.FailOnError(err1, "failed to SetClusterContext to default cluster")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
 		Step("Verify if app used to execute test is a valid/allowed spec (apps) for *this* test", func() {
@@ -2810,29 +2810,35 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			}
 		})
 
+		Step("creating source and destination cluster", func() {
+			log.InfoD("creating source and destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "create source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			scheduledClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+		})
+
 		Step("verify kubernetes version of source and destination cluster", func() {
 			var srcVer, destVer semver.Version
 			log.InfoD("begin verification kubernetes version of source and destination cluster")
 
-			Step("Registering cluster for backup", func() {
-				log.InfoD("Registering cluster for backup")
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-
-				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
-				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-
-				clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
-				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
-				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-
-				scheduledClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
-
-				clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
-				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
-				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
-			})
+			defer func() {
+				log.InfoD("switching to default context")
+				err := SetClusterContext("")
+				log.FailOnError(err, "failed to SetClusterContext to default cluster")
+			}()
 
 			Step("Get kubernetes source cluster version", func() {
 				log.InfoD("switched context to source")
@@ -2864,52 +2870,44 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 				log.FailOnError(err, "failed to get destination cluster version")
 			})
 
-			Step("Compare Source and Destination cluster version numbers", func() {
-				log.InfoD("source cluster version: %s ; destination cluster version: %s", srcVer.String(), destVer.String())
-				isValid := srcVer.LT(destVer)
-				dash.VerifyFatal(isValid, true,
-					"source cluster kubernetes version should be lesser than the destination cluster kubernetes version.")
-			})
-
-			log.InfoD("switching to default context")
-			err := SetClusterContext("")
-			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+			log.InfoD("Compare Source and Destination cluster version numbers")
+			log.InfoD("source cluster version: %s ; destination cluster version: %s", srcVer.String(), destVer.String())
+			isValid := srcVer.LT(destVer)
+			dash.VerifyFatal(isValid, true,
+				"source cluster kubernetes version should be lesser than the destination cluster kubernetes version.")
 		})
 
-		Step("deploy the applications on Src cluster", func() {
-			log.InfoD("deploy the applications on Src cluster")
+		Step("deploy the applications on source cluster and validate", func() {
+			log.InfoD("deploy the applications on source cluster and validate")
 
-			Step("deploy applications", func() {
-				log.InfoD("deploy applications")
-
-				log.InfoD("switching to source context")
-				err := SetSourceKubeConfig()
-				log.FailOnError(err, "failed to switch to context to source cluster")
-
-				log.InfoD("scheduling applications")
-				scheduledAppContexts = make([]*scheduler.Context, 0)
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-					appContexts := ScheduleApplications(taskName)
-					for _, appCtx := range appContexts {
-						appCtx.ReadinessTimeout = appReadinessTimeout
-						namespace := GetAppNamespace(appCtx, taskName)
-						appCtx.ScheduleOptions.Namespace = namespace
-						scheduledAppContexts = append(scheduledAppContexts, appCtx)
-					}
-				}
-			})
-
-			Step("Validate applications", func() {
-				ValidateApplications(scheduledAppContexts)
-
+			defer func() {
 				log.InfoD("switching to default context")
 				err := SetClusterContext("")
 				log.FailOnError(err, "failed to SetClusterContext to default cluster")
-			})
+			}()
 
-			log.InfoD("waiting (for 2 minutes) for any CRs to finish starting up.")
-			time.Sleep(time.Minute * 2)
+			log.InfoD("switching to source context")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "failed to switch to context to source cluster")
+
+			log.InfoD("scheduling applications")
+			scheduledAppContexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				appContexts := ScheduleApplications(taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(appCtx, taskName)
+					appCtx.ScheduleOptions.Namespace = namespace
+					scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				}
+			}
+
+			log.InfoD("validating applications")
+			ValidateApplications(scheduledAppContexts)
+
+			log.InfoD("waiting (for 1 minutes) for any CRs to finish starting up.")
+			time.Sleep(time.Minute * 1)
 			log.Warnf("no verification is done; it might lead to undetectable errors.")
 		})
 
@@ -2935,7 +2933,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			}
 		})
 
-		Step("Creating bucket, backup location and cloud credentials", func() {
+		Step("Creating backup location and cloud credentials", func() {
 			log.InfoD("Creating backup location and cloud setting")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -3193,16 +3191,6 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
-
-		backupDriver := Inst().Backup
-		log.InfoD("deleting backed up namespaces")
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
-			log.FailOnError(err, "backup [%s] could not be deleted", backupName)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("verifying [%s] backup deletion is successful", backupName))
-		}
 
 		log.InfoD("deleting restores")
 		for _, restoreName := range restoreNames {
