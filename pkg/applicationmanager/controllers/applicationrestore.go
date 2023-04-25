@@ -1399,6 +1399,8 @@ func (a *ApplicationRestoreController) applyResources(
 		}
 	}
 	objects = tempObjects
+	// Total resource count will include the PV PVC as a resource too.
+	restore.Status.ResourceCount = len(objects)
 
 	// skip CSI PV/PVCs before applying
 	objects, err = a.removeCSIVolumesBeforeApply(restore, objects)
@@ -1614,6 +1616,9 @@ func (a *ApplicationRestoreController) restoreResources(
 		// Strip off the resource info it contributes to bigger size of application restore CR in case of large number of resource
 		restore.Status.Resources = make([]*storkapi.ApplicationRestoreResourceInfo, 0)
 		restore.Status.ResourceCount = resourceCount
+		// For csi & kdmp we have updated the restore object after applyResources() completed,
+		// we need to update the restored resource count once again.
+		restore.Status.RestoredResourceCount = resourceCount
 		restore.Status.LargeResourceEnabled = true
 	}
 	err = a.client.Update(context.TODO(), restore)
