@@ -5,13 +5,14 @@ package integrationtest
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestAction(t *testing.T) {
