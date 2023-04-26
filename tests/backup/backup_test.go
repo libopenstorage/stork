@@ -133,6 +133,12 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	})
 
 	It("Basic Backup Creation", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
@@ -276,9 +282,11 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		defer func() { log.InfoD("End JustAfterEach") }()
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 
+		defer func() {
 		log.InfoD("switching to default context")
 		err := SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
 
 		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
 		ctx, err := backup.GetAdminCtxFromSecret()
