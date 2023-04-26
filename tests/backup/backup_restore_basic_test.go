@@ -2843,7 +2843,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 
 			defer func() {
 				log.InfoD("switching to default context")
-				err := SetClusterContext("")
+				err := Inst().S.SetConfig("")
 				log.FailOnError(err, "failed to SetClusterContext to default cluster")
 			}()
 
