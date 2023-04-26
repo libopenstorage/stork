@@ -2805,7 +2805,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
 			filteredAppList = make([]string, 0)
 			for i := 0; i < len(originalAppList); i++ {
-				if !Contains(appsWithCRDsAndWebhooks, originalAppList[i]) {
+				if Contains(appsWithCRDsAndWebhooks, originalAppList[i]) {
 					filteredAppList = append(filteredAppList, originalAppList[i])
 				} else {
 					log.Warnf("app [%s] is not allowed in execution of this test", originalAppList[i])
