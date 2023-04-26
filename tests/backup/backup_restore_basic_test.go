@@ -2765,7 +2765,7 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 	})
 })
 
-// BackupCRsThenMultipleRestoresOnHigherK8sVersion deploys CRs (CRD + webhook) -> backups them up -> creates two simulatanous restores on a cluster with higher K8s version :: one restore is Success and other PartialSuccess
+// BackupCRsThenMultipleRestoresOnHigherK8sVersion deploys CRs via operator (CRD + webhook) -> backups them up -> creates two simultaneous restores on a cluster with higher K8s version :: one restore is Success and other PartialSuccess
 var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 
 	var (
@@ -2773,17 +2773,16 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 		restoreNames         []string             // restores in px-backup
 		restoreLaterNames    []string             // restore-laters in px-backup
 		scheduledAppContexts []*scheduler.Context // Each Context is for one Namespace which corresponds to one App
-		preRuleNameList      []string
-		postRuleNameList     []string
 		scheduledClusterUid  string
 		cloudCredName        string
 		cloudCredUID         string
 		backupLocationUID    string
 		backupLocationName   string
+		filteredAppList      []string
 	)
 
 	var (
-		appList           = Inst().AppList
+		originalAppList   = Inst().AppList
 		namespaceMapping  = make(map[string]string)
 		backupLocationMap = make(map[string]string)
 		labelSelectors    = make(map[string]string)
@@ -2791,10 +2790,10 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "deploy CRs (CRD + webhook); then backup; create two simulatanous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
+		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
 	})
 
-	It("Deploy CRs (CRD + webhook); Backup; two simulatanous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", func() {
+	It("Deploy CRs (CRD + webhook); Backup; two simultaneous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", func() {
 
 		defer func() {
 			log.InfoD("switching to default context")
@@ -2802,12 +2801,20 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
-		Step("Verify if app used to execute test is a valid/allowed spec (apps) for *this* test", func() {
+		Step("filter appList to only allow valid spec (apps) for *this* test", func() {
 			log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
-			for i := 0; i < len(appList); i++ {
-				contains := Contains(appsWithCRDsAndWebhooks, appList[i])
-				dash.VerifyFatal(contains, true, fmt.Sprintf("app [%s] allowed in execution of this test", appList[i]))
+			filteredAppList = make([]string, 0)
+			for i := 0; i < len(originalAppList); i++ {
+				if !Contains(appsWithCRDsAndWebhooks, originalAppList[i]) {
+					filteredAppList = append(filteredAppList, originalAppList[i])
+				} else {
+					log.Warnf("app [%s] is not allowed in execution of this test", originalAppList[i])
+				}
 			}
+			if len(filteredAppList) == 0 {
+				dash.VerifyFatal(false, true, "none of the apps are allowed in execution of this test. Ending test.")
+			}
+			Inst().AppList = filteredAppList
 		})
 
 		Step("creating source and destination cluster", func() {
@@ -2877,18 +2884,8 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 				"source cluster kubernetes version should be lesser than the destination cluster kubernetes version.")
 		})
 
-		Step("deploy the applications on source cluster and validate", func() {
-			log.InfoD("deploy the applications on source cluster and validate")
-
-			defer func() {
-				log.InfoD("switching to default context")
-				err := SetClusterContext("")
-				log.FailOnError(err, "failed to SetClusterContext to default cluster")
-			}()
-
-			log.InfoD("switching to source context")
-			err := SetSourceKubeConfig()
-			log.FailOnError(err, "failed to switch to context to source cluster")
+		Step("schedule the applications on source cluster and validate", func() {
+			log.InfoD("schedule the applications on source cluster and validate")
 
 			log.InfoD("scheduling applications")
 			scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -2909,28 +2906,6 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			log.InfoD("waiting (for 1 minutes) for any CRs to finish starting up.")
 			time.Sleep(time.Minute * 1)
 			log.Warnf("no verification is done; it might lead to undetectable errors.")
-		})
-
-		Step("Creating rules for backup", func() {
-			log.InfoD("creating pre rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
-				log.FailOnError(err, "creating pre rule for deployed apps failed")
-				dash.VerifyFatal(preRuleStatus, true, "verifying pre rule for backup")
-
-				if ruleName != "" {
-					preRuleNameList = append(preRuleNameList, ruleName)
-				}
-			}
-			log.InfoD("Creating post rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
-				log.FailOnError(err, "creating post rule for deployed apps failed")
-				dash.VerifyFatal(postRuleStatus, true, "verifying Post rule for backup")
-				if ruleName != "" {
-					postRuleNameList = append(postRuleNameList, ruleName)
-				}
-			}
 		})
 
 		Step("Creating backup location and cloud credentials", func() {
@@ -3144,32 +3119,21 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer func() { Inst().AppList = originalAppList }()
+
 		log.InfoD("Begin JustAfterEach")
 		defer func() { log.InfoD("End JustAfterEach") }()
 
 		defer func() {
 			log.InfoD("switching to default context")
-			err1 := SetClusterContext("")
-			log.FailOnError(err1, "failed to SetClusterContext to default cluster")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
 		defer EndTorpedoTest()
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "fetching px-central-admin ctx")
-
-		if len(preRuleNameList) > 0 {
-			for _, ruleName := range preRuleNameList {
-				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("deleting backup pre rules %s", ruleName))
-			}
-		}
-		if len(postRuleNameList) > 0 {
-			for _, ruleName := range postRuleNameList {
-				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("deleting backup post rules %s", ruleName))
-			}
-		}
 
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = false

@@ -4905,8 +4905,10 @@ func (k *K8s) createRbacObjects(
 	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
 		obj.Namespace = ns.Name
 		for i := range obj.Subjects {
-			// since everything in a spec is in the same namespace in cluster, we can set here:
-			obj.Subjects[i].Namespace = ns.Name
+			// since everything in a spec is in the same namespace in cluster, we can set here ONLY for namespaced object:
+			if obj.Subjects[i].Kind == "ServiceAccount" {
+				obj.Subjects[i].Namespace = ns.Name
+			}
 		}
 		clusterrolebinding, err := k8sRbac.CreateClusterRoleBinding(obj)
 		if k8serrors.IsAlreadyExists(err) {
