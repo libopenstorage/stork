@@ -112,7 +112,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		if err != nil {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Getting label from worker node %v", destinationClusterWorkerNodes[0].Name))
 		}
-		for key, _ := range nodeLabels {
+		for key := range nodeLabels {
 			if key == "portworx.io/nobackup" {
 				log.InfoD("Removing the applied label portworx.io/nobackup=true from worker nodes on destination cluster at the end of the testcase")
 				err = Inst().S.RemoveLabelOnNode(destinationClusterWorkerNodes[0], "portworx.io/nobackup")
@@ -127,7 +127,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		if err != nil {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Getting label from worker node %v", sourceClusterWorkerNodes[0].Name))
 		}
-		for key, _ := range nodeLabels {
+		for key := range nodeLabels {
 			if key == "portworx.io/nobackup" {
 				log.InfoD("Removing the applied label portworx.io/nobackup=true from worker nodes on source cluster at the end of the testcase")
 				err = Inst().S.RemoveLabelOnNode(sourceClusterWorkerNodes[0], "portworx.io/nobackup")
