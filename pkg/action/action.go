@@ -76,8 +76,7 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 			return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 		}
 	}
-
-	ac.pruneActions(action.Namespace)
+	ac.pruneActionIfExpired(action)
 
 	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
@@ -128,16 +127,12 @@ func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus st
 }
 
 // delete any action older than actionExpiryTime
-func (ac *ActionController) pruneActions(namespace string) {
-	actionList, err := storkops.Instance().ListActions(namespace)
-	if err != nil {
-		logrus.Errorf("call to fetch ActionList to prune older actions failed with error %v", err)
-	}
-	for _, action := range actionList.Items {
+func (ac *ActionController) pruneActionIfExpired(action *storkv1.Action) {
+	if action.Status == storkv1.ActionStatusFailed || action.Status == storkv1.ActionStatusSuccessful {
 		if time.Since(action.CreationTimestamp.Local()) >= actionExpiryTime {
-			err = storkops.Instance().DeleteAction(action.Name, namespace)
+			err := storkops.Instance().DeleteAction(action.Name, action.Namespace)
 			if err != nil {
-				log.ActionLog(&action).Errorf("received error when deleting expired action %v", err)
+				log.ActionLog(action).Errorf("received error when deleting expired action %v", err)
 			}
 		}
 	}
