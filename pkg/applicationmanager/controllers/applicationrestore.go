@@ -287,6 +287,8 @@ func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request re
 	}
 	// This channel listens on two values if the CR's time stamp to be updated or to quit the go routine
 	updateCr := make(chan int, utils.RestoreCrChannelBufferSize)
+	// This go routine updates the CR's timestamp every 15 minutes based on the input
+	go a.restoreCrTimestampUpdate(restore, updateCr)
 	if err = a.handle(context.TODO(), restore, updateCr); err != nil && err != errResourceBusy {
 		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(a), restore.Namespace, restore.Name, err)
 		// The restore CR is done with the go-routine, lets purge it
@@ -506,6 +508,23 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.ApplicationRestore, updateCr chan int) error {
 	restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
 
+	var err error
+	namespacedName := types.NamespacedName{}
+	namespacedName.Namespace = restore.Namespace
+	namespacedName.Name = restore.Name
+	// In case of kdmp driver we may delete resources first before operating on volumes
+	// Hence we need to update the status.
+	// This is to prevent px-backup to fail the restore declaring timeout.
+	restore, err = a.updateRestoreCRInVolumeStage(
+		namespacedName,
+		storkapi.ApplicationRestoreStatusInProgress,
+		storkapi.ApplicationRestoreStageVolumes,
+		"Volume or Resource(kdmp) restores are in progress",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
 	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
 	if err != nil {
 		return fmt.Errorf("error getting backup spec for restore: %v", err)
@@ -565,9 +584,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	if restore.Status.Volumes == nil {
 		restore.Status.Volumes = make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	}
-	namespacedName := types.NamespacedName{}
-	namespacedName.Namespace = restore.Namespace
-	namespacedName.Name = restore.Name
 	if len(restore.Status.Volumes) != pvcCount {
 		for driverName, vInfos := range backupVolumeInfoMappings {
 			backupVolInfos := vInfos
@@ -643,7 +659,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				}
 				err = a.resourceCollector.DeleteResources(
 					a.dynamicInterface,
-					tempObjects, nil)
+					tempObjects, updateCr)
 				if err != nil {
 					return err
 				}
@@ -669,6 +685,22 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					batchCount, err = strconv.Atoi(restoreVolumeBatchCount)
 					if err != nil {
 						logrus.Debugf("error in conversion of restoreVolumeBatchCount: %v", err)
+					}
+				}
+			}
+			// Get restore volume batch sleep interval
+			volumeBatchSleepInterval, err := time.ParseDuration(k8sutils.DefaultRestoreVolumeBatchSleepInterval)
+			if err != nil {
+				logrus.Infof("error in parsing default restore volume sleep interval %s", k8sutils.DefaultRestoreVolumeBatchSleepInterval)
+			}
+			RestoreVolumeBatchSleepInterval, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.RestoreVolumeBatchSleepIntervalKey)
+			if err != nil {
+				logrus.Infof("error in reading %v cm, switching to default restore volume sleep interval", k8sutils.StorkControllerConfigMapName)
+			} else {
+				if len(RestoreVolumeBatchSleepInterval) != 0 {
+					volumeBatchSleepInterval, err = time.ParseDuration(RestoreVolumeBatchSleepInterval)
+					if err != nil {
+						logrus.Infof("error in conversion of volumeBatchSleepInterval: %v", err)
 					}
 				}
 			}
@@ -708,7 +740,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
 					return err
 				}
-				time.Sleep(k8sutils.RestoreVolumeBatchSleepInterval)
+				time.Sleep(volumeBatchSleepInterval)
 				restore, err = a.updateRestoreCRInVolumeStage(
 					namespacedName,
 					storkapi.ApplicationRestoreStatusInProgress,
@@ -1342,8 +1374,6 @@ func (a *ApplicationRestoreController) applyResources(
 
 	// This channel listens on two values if the CR's time stamp to be updated or to quit the go routine
 	startTime := time.Now()
-	// this go routine updates the CR's timestamp every 15 minutes
-	go a.restoreCrTimestampUpdate(restore, updateCr)
 	for _, o := range objects {
 		elapsedTime := time.Since(startTime)
 		if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
@@ -1395,7 +1425,8 @@ func (a *ApplicationRestoreController) applyResources(
 		if elapsedTime > utils.TimeoutUpdateRestoreCrProgress {
 			restore, err = a.updateRestoreCR(restore, namespacedName,
 				len(tempResourceList),
-				string(storkapi.ApplicationRestoreResourceApplying))
+				string(storkapi.ApplicationRestoreResourceApplying),
+				restore.Status.ResourceCount)
 			if err != nil {
 				// no need to return error lets wait for next turn to write timestamp.
 				log.ApplicationRestoreLog(restore).Errorf("%v: failed to update timestamp and restored resource count", fn)
@@ -1481,6 +1512,7 @@ func (a *ApplicationRestoreController) updateRestoreCR(
 	namespacedName types.NamespacedName,
 	restoredCount int,
 	resourceRestoreStage string,
+	totalResourceCount int,
 ) (*storkapi.ApplicationRestore, error) {
 	fn := "updateRestoreCR"
 	//restore := &storkapi.ApplicationRestore{}
@@ -1488,6 +1520,7 @@ func (a *ApplicationRestoreController) updateRestoreCR(
 	for i := 0; i < maxRetry; i++ {
 		restore.Status.RestoredResourceCount = restoredCount
 		restore.Status.ResourceRestoreState = storkapi.ApplicationRestoreResourceStateType(resourceRestoreStage)
+		restore.Status.ResourceCount = totalResourceCount
 		restore.Status.LastUpdateTimestamp = metav1.Now()
 		err = a.client.Update(context.TODO(), restore)
 		if err != nil {
