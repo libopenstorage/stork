@@ -1283,6 +1283,11 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 	}
 
 	backedupAppContexts, ScheduledCtxNotFoundInBackupErrors, BackupNotFoundInAnyScheduledCtxErrors, otherErrors := GetBackupCtxsFromScheduledCtxs(backupInspectResponse, scheduledAppContexts)
+	// print all error, but don't consume them
+	ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs-ScheduledCtxNotFoundInBackupErrors", ScheduledCtxNotFoundInBackupErrors, true)
+	ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs-BackupNotFoundInAnyScheduledCtxErrors", BackupNotFoundInAnyScheduledCtxErrors, true)
+	ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs-otherErrors", otherErrors, true)
+
 	errArr := make([]error, 0)
 	if requireAllScheduledCtxAreInBackup {
 		errArr = append(errArr, ScheduledCtxNotFoundInBackupErrors...)
@@ -1291,7 +1296,8 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		errArr = append(errArr, BackupNotFoundInAnyScheduledCtxErrors...)
 	}
 	errArr = append(errArr, otherErrors...)
-	errGetBackupCtxsFromScheduledCtxs := ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs", errArr, true)
+	// consume required errors, but don't print
+	errGetBackupCtxsFromScheduledCtxs := ProcessMultipleErrors("GetBackupCtxsFromScheduledCtxs", errArr, false)
 
 	errors := ValidateBackedUpVolumes(backupInspectResponse, scheduledAppContexts)
 	errValidateBackedUpVolumes := ProcessMultipleErrors("ValidateBackedUpVolumes", errors, true)
