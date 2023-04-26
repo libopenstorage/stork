@@ -43,7 +43,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 				return
 			}
 			for _, namespace := range namespaces {
-				if incompleteAction := anyActionIncomplete(namespace); incompleteAction != nil {
+				if incompleteAction := getAnyIncompleteAction(namespace); incompleteAction != nil {
 					printMsg(
 						fmt.Sprintf(
 							"Failed to start failover for namespace %v as action %v is already %v",
@@ -83,7 +83,7 @@ func isActionIncomplete(action *storkv1.Action) bool {
 }
 
 // check if there is already an Action scheduled or in-progress
-func anyActionIncomplete(namespace string) *storkv1.Action {
+func getAnyIncompleteAction(namespace string) *storkv1.Action {
 	actionList, err := storkops.Instance().ListActions(namespace)
 	if err != nil {
 		util.CheckErr(err)
@@ -102,6 +102,6 @@ func newActionName(action storkv1.ActionType) string {
 }
 
 func getDescribeActionMessage(action *storkv1.Action) string {
-	return "To check Action status use:\n" +
+	return "To check Action status use: " +
 		fmt.Sprintf("kubectl describe action %v -n %v", action.Name, action.Namespace)
 }
