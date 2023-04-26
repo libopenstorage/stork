@@ -97,7 +97,6 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		errMsg := fmt.Errorf("kind=%s not supported", arReq.Kind.Kind)
 		log.Errorf("Failed to serve admission review request: %v", err)
 		c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "invalid admission review request", errMsg.Error())
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -121,19 +120,6 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			return
 		}
 		schedPath = podSpecSchedPath
-
-		// get extra patches for pods
-		if isStorkResource {
-			// pod object does not have name and namespace populated, so we pass them separately. Also,
-			// if the pod is using generateName, arReq.Name is empty.
-			patches, err = c.Driver.GetPodPatches(arReq.Namespace, &pod)
-			if err != nil {
-				log.Errorf("Failed to get pod patches for pod %s/%s: %v", arReq.Namespace, resourceName, err)
-				c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not get pod patches", err.Error())
-				http.Error(w, "Could not get pod patches", http.StatusInternalServerError)
-				return
-			}
-		}
 	}
 
 	if !isStorkResource {
@@ -144,6 +130,16 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			Allowed: true,
 		}
 	} else {
+		// pod object does not have name and namespace populated, so we pass them separately. Also,
+		// if the pod is using generateName, arReq.Name is empty.
+		patches, err = c.Driver.GetPodPatches(arReq.Namespace, &pod)
+		if err != nil {
+			log.Errorf("Failed to get pod patches for pod %s/%s: %v", arReq.Namespace, resourceName, err)
+			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not get pod patches", err.Error())
+			http.Error(w, "Could not get pod patches", http.StatusInternalServerError)
+			return
+		}
+
 		// create patch
 		log.Debugf("Updating scheduler to stork for Resource:%s, Name: %s, Namespace:%s",
 			arReq.Kind.Kind, resourceName, arReq.Namespace)
