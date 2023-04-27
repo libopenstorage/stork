@@ -1159,7 +1159,7 @@ func createStorageClass(storageClass StorageClass) (*storage_v1.StorageClass, er
 		parameters["nearsync"] = "true"
 	}
 	if storageClass.nearsync_replication_strategy != "" {
-		parameters["nearsync_replication_strategy"] = storageClass.nearsync_replication_strategy
+		parameters["near_sync_replication_strategy"] = storageClass.nearsync_replication_strategy
 	}
 	return storage.Instance().CreateStorageClass(&storage_v1.StorageClass{
 		ObjectMeta: meta_v1.ObjectMeta{
