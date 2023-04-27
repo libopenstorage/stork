@@ -2,7 +2,6 @@ package controlplane
 
 import (
 	"github.com/portworx/torpedo/drivers/pds/api"
-
 	"github.com/portworx/torpedo/pkg/log"
 )
 

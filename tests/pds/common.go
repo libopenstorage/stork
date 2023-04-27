@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -80,7 +81,7 @@ var (
 	dataServiceImageMap                     map[string][]string
 	dep                                     *v1.Deployment
 	pod                                     *corev1.Pod
-	params                                  *pdslib.Parameter
+	params                                  *parameters.Parameter
 	podList                                 *corev1.PodList
 	isDeploymentsDeleted                    bool
 	isNamespacesDeleted                     bool
