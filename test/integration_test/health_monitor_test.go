@@ -39,6 +39,10 @@ func TestHealthMonitor(t *testing.T) {
 }
 
 func stopDriverTest(t *testing.T) {
+	var testrailID, testResult = 50790, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "stopdrivertest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -85,9 +89,17 @@ func stopDriverTest(t *testing.T) {
 	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func stopKubeletTest(t *testing.T) {
+	var testrailID, testResult = 50791, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// Cordon node where the test is running. This is so that we don't end up stopping
 	// kubelet on the node where the stork-test pod is running
 	testPodNode := ""
@@ -136,9 +148,17 @@ func stopKubeletTest(t *testing.T) {
 
 	destroyAndWait(t, ctxs)
 
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+
 }
 
 func healthCheckFixTest(t *testing.T) {
+	var testrailID, testResult = 85900, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// When a node's storage is offline stork should not bounce pods right away.
 	// It now waits for a minute and checks again to see if the storage driver is still offline.
 	// Bringing back node's storage within a minute should not affect anything
@@ -217,9 +237,17 @@ func healthCheckFixTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func stopDriverCsiPodFailoverTest(t *testing.T) {
+	var testrailID, testResult = 85901, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// Verify CSI pods are running on online nodes
 	logrus.Infof("Checking if CSI pods are initially scheduled on online PX nodes")
 	verifyCsiPodsRunningOnOnlineNode(t)
@@ -269,6 +297,10 @@ func stopDriverCsiPodFailoverTest(t *testing.T) {
 
 	err = volumeDriver.StartDriver(nodeNameMap[nodeName])
 	require.NoError(t, err, "Error re-starting driver on Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func verifyCsiPodsRunningOnOnlineNode(t *testing.T) {

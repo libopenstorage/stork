@@ -96,6 +96,20 @@ spec:
       value: px_namespace
     - name: INTERNAL_AWS_LB 
       value: internal_aws_lb 
+    - name: TESTRAIL_RUN_NAME
+      value: testrail_run_name
+    - name: TESTRAIL_RUN_ID
+      value: testrail_run_id
+    - name: TESTRAIL_JENKINS_BUILD_URL
+      value: testrail_jenkins_build_url
+    - name: TESTRAIL_HOST
+      value: testrail_host
+    - name: TESTRAIL_USERNAME
+      value: testrail_uame
+    - name: TESTRAIL_PASSWORD
+      value: testrail_pwd
+    - name: TESTRAIL_MILESTONE
+      value: testrail_milestone
   hostNetwork: false
   hostNetwork: false
   hostPID: false

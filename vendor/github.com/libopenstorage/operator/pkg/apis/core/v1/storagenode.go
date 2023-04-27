@@ -74,6 +74,18 @@ type NodeStatus struct {
 	Geo Geography `json:"geography,omitempty"`
 	// Conditions is an array of current node conditions
 	Conditions []NodeCondition `json:"conditions,omitempty"`
+	// Checks are a list of pre or post flight checks that are performed by the Operator
+	Checks []CheckResult `json:"checks,omitempty"`
+}
+
+// CheckResult captures result of a pre or post flight check
+type CheckResult struct {
+	// Type is the type of check that was performed
+	Type string `json:"type,omitempty"`
+	// Reason is the reason for success or failure
+	Reason string `json:"reason,omitempty"`
+	// Success indicates if the check was successful or failed
+	Success bool `json:"success,omitempty"`
 }
 
 // NetworkStatus network status of the storage node
@@ -125,14 +137,16 @@ type NodeConditionStatus string
 
 // These are valid statuses of different node conditions.
 const (
-	// NodeSucceeded means the node condition status is succeeded
+	// NodeSucceededStatus means the node condition status is succeeded
 	NodeSucceededStatus NodeConditionStatus = "Succeeded"
-	// NodeFailed means the node condition status is failed
+	// NodeFailedStatus means the node condition status is failed
 	NodeFailedStatus NodeConditionStatus = "Failed"
 	// NodeOnlineStatus means the node condition is online and healthy
 	NodeOnlineStatus NodeConditionStatus = "Online"
 	// NodeInitStatus means the node condition is in initializing state
 	NodeInitStatus NodeConditionStatus = "Initializing"
+	// NodeUpdateStatus means the node condition is in updating state
+	NodeUpdateStatus NodeConditionStatus = "Updating"
 	// NodeNotInQuorumStatus means the node is not in quorum
 	NodeNotInQuorumStatus NodeConditionStatus = "NotInQuorum"
 	// NodeMaintenanceStatus means the node condition is in maintenance state

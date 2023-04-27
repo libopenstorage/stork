@@ -64,7 +64,7 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 				Rule: admissionv1beta1.Rule{
 					APIGroups:   []string{"apps", ""},
 					APIVersions: []string{"v1"},
-					Resources:   []string{"deployments", "statefulsets", "pods"},
+					Resources:   []string{"pods"},
 				},
 			},
 		},
@@ -189,7 +189,7 @@ func createWebhookV1(caBundle []byte, ns string) error {
 				Rule: admissionv1.Rule{
 					APIGroups:   []string{"apps", ""},
 					APIVersions: []string{"v1"},
-					Resources:   []string{"deployments", "statefulsets", "pods"},
+					Resources:   []string{"pods"},
 				},
 			},
 		},

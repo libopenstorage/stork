@@ -464,6 +464,14 @@ func (d *DefaultDriver) GetDriverNodes() ([]*api.StorageNode, error) {
 
 }
 
+// GetDriveSet gets the drive set for a given Node
+func (d *DefaultDriver) GetDriveSet(n *node.Node) (*DriveSet, error) {
+	return &DriveSet{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDriveSet()",
+	}
+}
+
 // GetDriverNode return api.Storage Node
 func (d *DefaultDriver) GetDriverNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
 	return &api.StorageNode{}, &errors.ErrNotSupported{
@@ -658,6 +666,14 @@ func (d *DefaultDriver) GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.F
 	}
 }
 
+// GetAutoFsTrimUsage get autofstrim  usage stats
+func (d *DefaultDriver) GetAutoFsTrimUsage(pxEndpoint string) (map[string]*api.FstrimVolumeUsageInfo, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutoFsTrimUsage()",
+	}
+}
+
 // ListStoragePools lists all existing storage pools
 func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error) {
 	return nil, &errors.ErrNotSupported{
@@ -794,6 +810,14 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpdateIOPriority",
+	}
+}
+
+// ValidateMountOptions for pure volumes
+func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateMountOptions",
 	}
 }
 
@@ -982,6 +1006,14 @@ func (d *DefaultDriver) GetPoolsUsedSize(n *node.Node) (map[string]string, error
 	}
 }
 
+// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
+func (d *DefaultDriver) IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsIOsInProgressForTheVolume()",
+	}
+}
+
 // GetRebalanceJobs returns the list of rebalance jobs
 func (d *DefaultDriver) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
 	return nil, &errors.ErrNotSupported{
@@ -1027,5 +1059,21 @@ func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
 	return true, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsNodeOutOfMaintenance()",
+	}
+}
+
+// GetAlertsUsingResourceTypeByTime returns all the alerts by resource type filtered by time
+func (d *DefaultDriver) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceType, startTime time.Time, endTime time.Time) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAlertsUsingResourceTypeByTime()",
+	}
+}
+
+// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
+func (d *DefaultDriver) GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAlertsUsingResourceTypeBySeverity()",
 	}
 }
