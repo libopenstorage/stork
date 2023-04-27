@@ -3,6 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	dataservice "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"net/http"
 	"os"
@@ -114,7 +115,7 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 				err = target.DeRegisterFromControlPlane()
 				log.FailOnError(err, "Target Cluster DeRegisteration failed")
 
-				err = pdslib.RegisterClusterToControlPlane(params, tenantID, true)
+				err = targetCluster.RegisterClusterToControlPlane(params, tenantID, true)
 				log.FailOnError(err, "Target Cluster Registeration failed")
 			} else {
 				log.InfoD("Target Cluster is with old pds helm version %s", params.PDSHelmVersions.PreviousHelmVersion)
@@ -183,7 +184,7 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 		steplog = "Upgrade to latest pds helm verison"
 		Step(steplog, func() {
 			log.InfoD(steplog)
-			err = pdslib.RegisterClusterToControlPlane(params, tenantID, false)
+			err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
 			log.FailOnError(err, "Target Cluster Registeration failed")
 		})
 
@@ -265,7 +266,7 @@ var _ = Describe("{DeregisterTargetCluster}", func() {
 			steplog = "Check and Register Target Cluster to ControlPlane"
 			Step(steplog, func() {
 				log.InfoD(steplog)
-				err = pdslib.RegisterClusterToControlPlane(params, tenantID, false)
+				err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
 				log.FailOnError(err, "Target Cluster Registeration failed")
 
 				deploymentTarget, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
@@ -718,7 +719,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
-		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+		deployment, _, dataServiceVersionBuildMap, err = dsTest.DeployDS(dataservice, projectID,
 			deploymentTargetID,
 			dnsZone,
 			deploymentName,
@@ -1112,63 +1113,20 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID string, deployOldVersion bool) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
-	Step("Deploy Data Services", func() {
-		var dsVersion string
-		var dsImage string
-
-		if deployOldVersion {
-			dsVersion = ds.OldVersion
-			dsImage = ds.OldImage
-			log.Debugf("Deploying old version %s and image %s", dsVersion, dsImage)
-		} else {
-			dsVersion = ds.Version
-			dsImage = ds.Image
-			log.Debugf("Deploying latest version %s and image %s", dsVersion, dsImage)
-		}
-
-		log.InfoD("Deploying DataService %v ", ds.Name)
-		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-		log.FailOnError(err, "Error while getting resource template")
-		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
-
-		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-		log.FailOnError(err, "Error while getting app configuration template")
-		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-
-		log.InfoD("Getting the namespaceID to deploy dataservice")
-		namespaceID, err := pdslib.GetnameSpaceID(namespace, deploymentTargetID)
-		log.FailOnError(err, "Error while getting namespaceID")
-		dash.VerifyFatal(namespaceID != "", true, "Validating namespaceID")
-
-		deployment, dataServiceImageMap, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
-			deploymentTargetID,
-			dnsZone,
-			deploymentName,
-			namespaceID,
-			dataServiceDefaultAppConfigID,
-			int32(ds.Replicas),
-			serviceType,
-			dataServiceDefaultResourceTemplateID,
-			storageTemplateID,
-			dsVersion,
-			dsImage,
-			namespace,
-		)
-		log.FailOnError(err, "Error while deploying data services")
-	})
-	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
-}
-
-func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	log.InfoD("Data Service Deployment Triggered")
-	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := TriggerDeployDataService(ds, namespace, tenantID, projectID, false)
-	Step("Validate Data Service Configurations", func() {
+	log.InfoD("Deploying ds in namespace %v", namespace)
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
+		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
+	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
+	Step("Validate Data Service Deployments", func() {
 		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 	})
 	Step("Validate Storage Configurations", func() {
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+		log.FailOnError(err, "Error while getting resource template")
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 		ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
@@ -1189,7 +1147,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
-		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+		deployment, _, dataServiceVersionBuildMap, err = dsTest.DeployDS(dataservice, projectID,
 			deploymentTargetID,
 			dnsZone,
 			deploymentName,
@@ -1316,7 +1274,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 
 			log.InfoD("List of created deployments")
 			for _, dep := range cleanupall {
-				log.InfoD("%v ", dep.ClusterResourceName)
+				log.InfoD("%v ", *dep.ClusterResourceName)
 			}
 
 			Step("Delete created deployments", func() {

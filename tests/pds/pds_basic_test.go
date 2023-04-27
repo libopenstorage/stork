@@ -1,6 +1,9 @@
 package tests
 
 import (
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"os"
 	"testing"
 
@@ -9,7 +12,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -23,6 +26,13 @@ func TestDataService(t *testing.T) {
 
 }
 
+//imports based on functionalities
+var (
+	dsTest        *dataservices.DataserviceType
+	customParams  *parameters.Customparams
+	targetCluster *targetcluster.TargetCluster
+)
+
 var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run the pds tests"
 	log.InfoD(steplog)
@@ -32,20 +42,26 @@ var _ = BeforeSuite(func() {
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
 		pdsLabels["pds"] = "true"
+
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
-		params, err = pdslib.ReadParams(pdsparams)
+		params, err = customParams.ReadParams(pdsparams)
 		log.FailOnError(err, "Failed to read params from json file")
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
+		dsTest, err = dataservices.DataserviceInit(params.InfraToTest.ControlPlaneURL)
+		log.FailOnError(err, "Error while initializing dataservice package")
+
+		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(
+			infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
+
 	})
 
 	steplog = "Check and Register Target Cluster to ControlPlane"
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		err = pdslib.RegisterClusterToControlPlane(params, tenantID, false)
+		err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
 		log.FailOnError(err, "Target Cluster Registeration failed")
 	})
 
@@ -57,6 +73,7 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Failed to get the deployment TargetID")
 		dash.VerifyFatal(deploymentTargetID != "", true, "Verifying deployment target is registerd to control plane")
 		log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
+
 	})
 
 	steplog = "Get StorageTemplateID and Replicas"
