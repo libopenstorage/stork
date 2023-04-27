@@ -22,8 +22,9 @@ const (
 
 func newDoCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	doCommands := &cobra.Command{
-		Use:   "do",
-		Short: "do actions",
+		Use:    "do",
+		Short:  "do actions",
+		Hidden: true,
 	}
 
 	doCommands.AddCommand(
