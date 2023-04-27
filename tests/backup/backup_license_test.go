@@ -314,3 +314,159 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// LicensingCountBeforeAndAfterBackupPodRestart verifies the license count before and after the backup pods restart
+var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
+	var (
+		pxbNamespace                  string
+		sourceClusterWorkerNodes      []node.Node
+		destinationClusterWorkerNodes []node.Node
+		totalNumberOfWorkerNodes      []node.Node
+		contexts                      []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("LicensingCountBeforeAndAfterBackupPodRestart",
+			"Verifies the license count before and after the backup pod restarts", nil, 82956)
+	})
+
+	It("Verify the license count before and after the backup pod restarts", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		Step("Adding source and destination clusters for backup", func() {
+			log.InfoD("Adding source and destination clusters for backup")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			log.FailOnError(err, fmt.Sprintf("Adding source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+		})
+		Step("Getting the total number of worker nodes in source and destination cluster", func() {
+			log.InfoD("Getting the total number of worker nodes in source and destination cluster")
+			sourceClusterWorkerNodes = node.GetWorkerNodes()
+			log.InfoD("Total number of worker nodes in source cluster are %v", len(sourceClusterWorkerNodes))
+			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, sourceClusterWorkerNodes...)
+			log.InfoD("Switching cluster context to destination cluster")
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			destinationClusterWorkerNodes = node.GetWorkerNodes()
+			log.InfoD("Total number of worker nodes in destination cluster are %v", len(destinationClusterWorkerNodes))
+			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, destinationClusterWorkerNodes...)
+			log.InfoD("Total number of worker nodes in source and destination cluster are %v", len(totalNumberOfWorkerNodes))
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+		Step("Verifying the license count after adding source and destination clusters", func() {
+			log.InfoD("Verifying the license count after adding source and destination clusters")
+			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the license count when source cluster with %d worker nodes and destination cluster with %d worker nodes are added to backup", len(sourceClusterWorkerNodes), len(destinationClusterWorkerNodes)))
+		})
+		Step("Verify worker nodes on application cluster with label portworx.io/nobackup=true is not counted for licensing before pod restart", func() {
+			log.InfoD("Applying label portworx.io/nobackup=true to one of the worker node on source cluster")
+			err := Inst().S.AddLabelOnNode(sourceClusterWorkerNodes[0], "portworx.io/nobackup", "true")
+			log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to worker node %v", sourceClusterWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.InfoD("Applying label portworx.io/nobackup=true to one of the worker node on destination cluster")
+			err = Inst().S.AddLabelOnNode(destinationClusterWorkerNodes[0], "portworx.io/nobackup", "true")
+			log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to worker node %v", destinationClusterWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			log.InfoD("Verify worker nodes with label portworx.io/nobackup=true is not counted for licensing")
+			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-2))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to 2 worker nodes"))
+		})
+		Step("Restart all the backup pod and wait for it to come up", func() {
+			pxbNamespace, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting px-backup namespace")
+			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
+			dash.VerifyFatal(err, nil, "Restart all the backup pods")
+			log.InfoD("Validate if all the backup pods are up")
+			pods, err := core.Instance().GetPods(pxbNamespace, nil)
+			dash.VerifyFatal(err, nil, "Getting all the backup pods")
+			for _, pod := range pods.Items {
+				err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
+				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
+			}
+		})
+		Step("Verify the license count after backup pods restart", func() {
+			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-2))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after backup pods restart should be same as before pod restart"))
+		})
+		Step("Label all the remaining worker nodes on source and destination cluster after pod restart", func() {
+			log.InfoD("Applying label portworx.io/nobackup=true to all the remaining worker nodes on source cluster after pod restart")
+			for _, workerNode := range sourceClusterWorkerNodes[1:] {
+				err := Inst().S.AddLabelOnNode(workerNode, "portworx.io/nobackup", "true")
+				log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to source cluster worker node %v", workerNode.Name))
+			}
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.InfoD("Applying label portworx.io/nobackup=true to all the remaining worker nodes on destination cluster after pod restart")
+			for _, workerNode := range destinationClusterWorkerNodes[1:] {
+				err := Inst().S.AddLabelOnNode(workerNode, "portworx.io/nobackup", "true")
+				log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to destination cluster worker node %v", workerNode.Name))
+			}
+			log.InfoD("Switching cluster context to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+		Step("Restart all the backup pod again and wait for it to come up", func() {
+			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
+			dash.VerifyFatal(err, nil, "Restart all the backup pods")
+			log.InfoD("Validate if all the backup pods are up")
+			pods, err := core.Instance().GetPods(pxbNamespace, nil)
+			dash.VerifyFatal(err, nil, "Getting all the backup pods")
+			for _, pod := range pods.Items {
+				err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
+				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
+			}
+		})
+		Step("Verify the license count again after pod restart with all the worker nodes labelled portworx.io/nobackup=true", func() {
+			err = VerifyLicenseConsumedCount(ctx, orgID, 0)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to all the worker node"))
+		})
+		Step("Removing label portworx.io/nobackup=true from all the worker nodes from both source and destination cluster", func() {
+			log.InfoD("Removing label from all worker nodes on source cluster")
+			for _, workerNode := range sourceClusterWorkerNodes {
+				err := Inst().S.RemoveLabelOnNode(workerNode, "portworx.io/nobackup")
+				log.FailOnError(err, fmt.Sprintf("Failed to remove label portworx.io/nobackup=true from worker node %v", workerNode.Name))
+			}
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.InfoD("Removing label from all worker nodes on destination cluster")
+			for _, workerNode := range destinationClusterWorkerNodes {
+				err := Inst().S.RemoveLabelOnNode(workerNode, "portworx.io/nobackup")
+				log.FailOnError(err, fmt.Sprintf("Failed to remove label portworx.io/nobackup=true from worker node %v", workerNode.Name))
+			}
+			log.InfoD("Switching cluster context to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+		Step("Verify the license count when no worker nodes are labelled portworx.io/nobackup=true", func() {
+			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count when no worker nodes are labelled portworx.io/nobackup=true"))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		err := SetDestinationKubeConfig()
+		dash.VerifySafely(err, nil, "Switching context to destination cluster")
+		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")
+		for _, workerNode := range destinationClusterWorkerNodes {
+			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+		}
+		log.InfoD("Switching cluster context back to source cluster")
+		err = SetSourceKubeConfig()
+		dash.VerifySafely(err, nil, "Switching context to source cluster")
+		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on source cluster if present")
+		for _, workerNode := range sourceClusterWorkerNodes {
+			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+		}
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+	})
+})

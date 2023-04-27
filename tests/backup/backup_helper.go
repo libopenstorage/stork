@@ -84,6 +84,8 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
+	podReadyTimeout                           = 30 * time.Minute
+	podReadyRetryTime                         = 30 * time.Second
 )
 
 var (
