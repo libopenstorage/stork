@@ -24,7 +24,7 @@ const (
 //
 // These variables typically come from -ldflags settings.
 var (
-	gitVersion = "1.2.5-dev"
+	gitVersion = "1.2.6-dev"
 	gitCommit  = ""                     // sha1 from git, output of $(git rev-parse HEAD)
 	buildDate  = "1970-01-01T00:00:00Z" // build date in ISO8601 format, output of $(date -u +'%Y-%m-%dT%H:%M:%SZ')
 	kbVerRegex = regexp.MustCompile(`^(v\d+\.\d+\.\d+)(.*)`)
