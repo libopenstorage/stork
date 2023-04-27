@@ -5,6 +5,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,10 +16,11 @@ import (
 )
 
 type configTestAppWithNearSync struct {
-	appKey           string
-	stressAppKey     string
-	repl             int
-	ns_repl_strategy string
+	appKey               string
+	stressAppKey         string
+	instanceId           string
+	repl                 int
+	nearsyncReplStrategy string
 }
 
 func TestApplicationsWithNearSync(t *testing.T) {
@@ -37,20 +39,21 @@ func TestApplicationsWithNearSync(t *testing.T) {
 
 	appConfigList := [][]string{
 		{"Postgres", "nearsync-postgres", "nearsync-pgbench"},
-		// {"nearsync-cassandra", "nearsync-cassandra-stress"},
-		// {"nearsync-elasticsearch", "nearsync-elasticsearch-rally"},
+		{"Cassandra", "nearsync-cassandra", "nearsync-cassandra-stress"},
+		{"Elasticsearch", "nearsync-elasticsearch", "nearsync-elasticsearch-rally"},
 	}
 	for _, repl := range []int{2, 3} {
-		for _, ns_repl_strategy := range []string{"aggressive"} {
+		for _, nearsyncReplStrategy := range []string{"Aggressive", "Optimized"} {
 			for _, appConfig := range appConfigList {
 				config := configTestAppWithNearSync{
-					appKey:           appConfig[1],
-					stressAppKey:     appConfig[2],
-					repl:             repl,
-					ns_repl_strategy: ns_repl_strategy,
+					appKey:               appConfig[1],
+					stressAppKey:         appConfig[2],
+					instanceId:           fmt.Sprintf("repl%v-%v", repl, strings.ToLower(nearsyncReplStrategy)),
+					repl:                 repl,
+					nearsyncReplStrategy: strings.ToLower(nearsyncReplStrategy),
 				}
 				t.Run(
-					fmt.Sprintf("testApp%vWithNearSync", appConfig[0]),
+					fmt.Sprintf("testNearsync%vRepl%v%v", appConfig[0], repl, nearsyncReplStrategy),
 					func(t *testing.T) { helperTestAppWithNearSync(t, config) })
 			}
 		}
@@ -58,8 +61,8 @@ func TestApplicationsWithNearSync(t *testing.T) {
 }
 
 func helperTestAppWithNearSync(t *testing.T, config configTestAppWithNearSync) {
-	instanceIDs := []string{"test"}
-	storageClass := "px-sc" // TODO: change to postgres-sc
+	instanceIDs := []string{config.instanceId}
+	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
 	namespaces := getNamespaces(instanceIDs, config.appKey)
@@ -71,39 +74,39 @@ func helperTestAppWithNearSync(t *testing.T, config configTestAppWithNearSync) {
 		provisioner:                   "kubernetes.io/portworx-volume",
 		repl:                          config.repl,
 		nearsync:                      true,
-		nearsync_replication_strategy: config.ns_repl_strategy,
+		nearsync_replication_strategy: config.nearsyncReplStrategy,
 	})
 	require.NoError(t, err, "unable to create storage class")
 
 	// start application
 	ctxs := scheduleAppAndWait(t, instanceIDs, config.appKey)
 
-	// start and validate migration for the application
+	// start and validate migration
 	startAppsOnMigration := false
 	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 	validateMigrationOnSrcAndDest(
 		t, migrationName, namespaces[0], preMigrationCtxs[0],
 		startAppsOnMigration, uint64(4), uint64(0))
-	time.Sleep(time.Second * 10)
 
-	// start the stress tool after migration completes
+	// start the stress tool
+	setSourceKubeConfig()
 	err = schedulerDriver.AddTasks(
 		ctxs[0],
 		scheduler.ScheduleOptions{
 			AppKeys: []string{config.stressAppKey},
 		})
 	require.NoError(t, err, "error scheduling app")
-	logrus.Infof("pause to load data in db")
+	logrus.Infof("wait for some data to load in db")
 	time.Sleep(time.Minute * 5)
 
 	// disable cluster domain for src, then
 	// start and validate failover on dest
-	defer func() {
-		executeOnDestination(t, func() { updateClusterDomain(t, true) })
-	}()
 	executeOnDestination(t, func() {
 		updateClusterDomain(t, false)
+		defer func() {
+			executeOnDestination(t, func() { updateClusterDomain(t, true) })
+		}()
 		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
 	})
