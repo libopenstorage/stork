@@ -12,7 +12,7 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.5
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/LINBIT/golinstor v0.27.0
-	github.com/aquilax/truncate v1.0.0 // indirect
+	github.com/aquilax/truncate v1.0.0
 	github.com/aws/aws-sdk-go v1.44.45
 	github.com/go-openapi/inflect v0.19.0
 	github.com/hashicorp/go-multierror v1.1.1
@@ -62,7 +62,7 @@ require (
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
 
-require github.com/portworx/kdmp v0.4.1-0.20230320064430-aad8b8b5f8ea
+require github.com/portworx/kdmp v0.4.1-0.20230426121717-92715d963a77
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -300,7 +300,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230320064430-aad8b8b5f8ea
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230426121717-92715d963a77
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230330091134-421296e5f8d0
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
