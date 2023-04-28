@@ -500,7 +500,7 @@ func getClusterPairParams(config, endpoint string, customPort string) (string, s
 		ip = svc.Spec.LoadBalancerIP
 	}
 	pxToken := os.Getenv("PX_AUTH_TOKEN")
-	if customPort != "" {
+	if len(customPort) > 0 {
 		port = customPort
 	} else {
 		for _, svcPort := range svc.Spec.Ports {
@@ -510,7 +510,6 @@ func getClusterPairParams(config, endpoint string, customPort string) (string, s
 			}
 		}
 	}
-
 	pxEndpoint := net.JoinHostPort(ip, port)
 	// TODO: support https as well
 	clnt, err := clusterclient.NewAuthClusterClient("http://"+pxEndpoint, "v1", pxToken, "")
