@@ -1117,7 +1117,7 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 	log.InfoD("Data Service Deployment Triggered")
 	log.InfoD("Deploying ds in namespace %v", namespace)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
-		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
+		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
 	Step("Validate Data Service Deployments", func() {
 		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
@@ -1336,9 +1336,9 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 					cleanup = append(cleanup, deployment)
 				})
 			}
-			log.InfoD("List of created deployments: %v ", cleanup)
+			log.InfoD("List of created deployments")
 			for _, deployment := range cleanup {
-				log.InfoD("%v ", *deployment.ClusterResourceName)
+				log.InfoD("%s ", deployment.GetClusterResourceName())
 			}
 
 			Step("Delete created namespace", func() {
@@ -1357,6 +1357,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				for _, dep := range cleanup {
 					err := pdslib.ValidateDataServiceDeploymentNegative(dep, nname)
 					log.FailOnError(err, "Error while cleaning up data services")
+					isDeploymentsDeleted = true
 				}
 			})
 
