@@ -5734,11 +5734,7 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		labels := b.Labels
 		for k, v := range labels {
 			if k == "pxpool" {
-				if c, ok := driveCountMap[v]; ok {
-					driveCountMap[v] += c
-				} else {
-					driveCountMap[v] = 1
-				}
+				driveCountMap[v] += 1
 			}
 		}
 	}
