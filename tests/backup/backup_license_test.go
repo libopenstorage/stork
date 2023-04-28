@@ -113,7 +113,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")
 		for _, workerNode := range destinationClusterWorkerNodes {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
-			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
 		log.InfoD("Switching cluster context back to source cluster")
 		err = SetSourceKubeConfig()
@@ -121,7 +121,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on source cluster if present")
 		for _, workerNode := range sourceClusterWorkerNodes {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
-			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -295,7 +295,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")
 		for _, workerNode := range destinationClusterWorkerNodes {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
-			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
 		log.InfoD("Switching cluster context back to source cluster")
 		err = SetSourceKubeConfig()
@@ -304,7 +304,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on source cluster if present")
 		for _, workerNode := range sourceClusterWorkerNodes {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
-			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -455,7 +455,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")
 		for _, workerNode := range destinationClusterWorkerNodes {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
-			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
 		log.InfoD("Switching cluster context back to source cluster")
 		err = SetSourceKubeConfig()
@@ -463,7 +463,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on source cluster if present")
 		for _, workerNode := range sourceClusterWorkerNodes {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
-			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
