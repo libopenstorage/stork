@@ -259,7 +259,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 			printMsg("Using PX-Service Endpoint of DR cluster to create clusterpair...\n", ioStreams.Out)
-			ip, port, token, err := getClusterPairParams(dFile, dIP)
+			ip, port, token, err := getClusterPairParams(dFile, dIP, dPort)
 			if err != nil {
 				err := fmt.Errorf("unable to create clusterpair from source to DR cluster. Err: %v", err)
 				util.CheckErr(err)
@@ -296,7 +296,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 			printMsg("Using PX-Service endpoints of source cluster to create clusterpair...\n", ioStreams.Out)
-			ip, port, token, err = getClusterPairParams(sFile, sIP)
+			ip, port, token, err = getClusterPairParams(sFile, sIP, sPort)
 			if err != nil {
 				err := fmt.Errorf("unable to create clusterpair from DR to source cluster. Err: %v", err)
 				util.CheckErr(err)
@@ -476,13 +476,12 @@ func getConfig(configFile string) clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
 }
 
-func getClusterPairParams(config, endpoint string) (string, string, string, error) {
+func getClusterPairParams(config, endpoint string, customPort string) (string, string, string, error) {
 	var ip, port, token string
 	client, err := core.NewInstanceFromConfigFile(config)
 	if err != nil {
 		return ip, port, token, err
 	}
-
 	services, err := client.ListServices("", meta.ListOptions{LabelSelector: "name=portworx-api"})
 	if err != nil || len(services.Items) == 0 {
 		err := fmt.Errorf("unable to retrieve portworx-api service from DR cluster. Err: %v", err)
@@ -500,10 +499,14 @@ func getClusterPairParams(config, endpoint string) (string, string, string, erro
 		ip = svc.Spec.LoadBalancerIP
 	}
 	pxToken := os.Getenv("PX_AUTH_TOKEN")
-	for _, svcPort := range svc.Spec.Ports {
-		if svcPort.Name == "px-api" {
-			port = strconv.Itoa(int(svcPort.Port))
-			break
+	if customPort != "" {
+		port = customPort
+	} else {
+		for _, svcPort := range svc.Spec.Ports {
+			if svcPort.Name == "px-api" {
+				port = strconv.Itoa(int(svcPort.Port))
+				break
+			}
 		}
 	}
 	pxEndpoint := net.JoinHostPort(ip, port)
