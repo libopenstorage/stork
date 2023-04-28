@@ -6,11 +6,14 @@ package integrationtest
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -54,10 +57,11 @@ func testMigrationFailoverFailback(t *testing.T) {
 
 	t.Run("vanillaFailoverAndFailbackMigrationTest", vanillaFailoverAndFailbackMigrationTest)
 	t.Run("rancherFailoverAndFailbackMigrationTest", rancherFailoverAndFailbackMigrationTest)
+	t.Run("stickyFlagFailoverAndFailbackMigrationTest", stickyFlagFailoverAndFailbackMigrationTest)
 }
 
 func vanillaFailoverAndFailbackMigrationTest(t *testing.T) {
-	failoverAndFailbackMigrationTest(t)
+	failoverAndFailbackMigrationTest(t, "mysql-enc-pvc", "mysql-migration-failover-failback", true)
 }
 
 func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
@@ -105,20 +109,22 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 
 	scaleFactor := testMigrationFailover(t, preMigrationCtx, ctxs, "", appKey, instanceID)
 
-	testMigrationFailback(t, preMigrationCtx, ctxs, scaleFactor, projectIDMappingsReverse, appKey, instanceID)
+	testMigrationFailback(t, preMigrationCtx, ctxs, scaleFactor, projectIDMappingsReverse, appKey, instanceID, true)
 }
 
-func failoverAndFailbackMigrationTest(t *testing.T) {
+func stickyFlagFailoverAndFailbackMigrationTest(t *testing.T) {
+	failoverAndFailbackMigrationTest(t, "mysql-sticky", "mysql-migration-sticky", false)
+}
 
-	appKey := "mysql-enc-pvc"
-	instanceID := "mysql-migration-failover-failback"
+func failoverAndFailbackMigrationTest(t *testing.T, appKey, migrationKey string, failbackSuccessExpected bool) {
+
 	// Migrate the resources
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		instanceID,
+		migrationKey,
 		appKey,
 		nil,
-		[]string{instanceID},
+		[]string{migrationKey},
 		true,
 		false,
 		false,
@@ -150,9 +156,9 @@ func failoverAndFailbackMigrationTest(t *testing.T) {
 	// validate the migration summary based on the application specs that were deployed by the test
 	validateMigrationSummary(t, preMigrationCtx, expectedResources, expectedVolumes, migrationObj.Name, migrationObj.Namespace)
 
-	scaleFactor := testMigrationFailover(t, preMigrationCtx, ctxs, "", appKey, instanceID)
+	scaleFactor := testMigrationFailover(t, preMigrationCtx, ctxs, "", appKey, migrationKey)
 
-	testMigrationFailback(t, preMigrationCtx, ctxs, scaleFactor, "", appKey, instanceID)
+	testMigrationFailback(t, preMigrationCtx, ctxs, scaleFactor, "", appKey, migrationKey, failbackSuccessExpected)
 }
 
 func testMigrationFailover(
@@ -242,6 +248,7 @@ func testMigrationFailback(
 	scaleFactor map[string]int32,
 	projectIDMappings string,
 	appKey, instanceID string,
+	failbackSuccessExpected bool,
 ) {
 	// Failback the application
 	// Trigger a reverse migration
@@ -250,6 +257,8 @@ func testMigrationFailback(
 		scheduler.ScheduleOptions{AppKeys: []string{appKey}})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxsReverse), "Only one task should have started")
+
+	appCtx := ctxsReverse[0]
 
 	err = schedulerDriver.WaitForRunning(ctxsReverse[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for app to get to running state")
@@ -264,6 +273,50 @@ func testMigrationFailback(
 	err = schedulerDriver.AddTasks(ctxsReverse[0],
 		scheduler.ScheduleOptions{AppKeys: []string{instanceID}})
 	require.NoError(t, err, "Error scheduling migration specs")
+
+	if !failbackSuccessExpected {
+		// In case of sticky volumes migration failure is expected, so will update volume and trigger migration again
+		err = schedulerDriver.WaitForRunning(ctxsReverse[0], defaultWaitTimeout/10, defaultWaitInterval)
+		require.Error(t, err, "Expected failback migration to fail")
+
+		// Get volumes for this migration on source cluster and update sticky flag
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config, for updating sticky volume")
+
+		vols, err := schedulerDriver.GetVolumes(appCtx)
+		require.NoError(t, err, "Error getting volumes for app")
+		for _, v := range vols {
+			err = volumeDriver.UpdateStickyFlag(v.ID, "off")
+			require.NoError(t, err, "Error updating sticky flag for volumes %s", v.Name)
+		}
+		time.Sleep(3 * time.Minute)
+
+		// Trigger migration on destination cluster again
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "Error setting destination config after updating sticky volume")
+
+		var failedMigrationObj *v1alpha1.Migration
+		var ok bool
+		for _, specObj := range ctxsReverse[0].App.SpecList {
+			if failedMigrationObj, ok = specObj.(*v1alpha1.Migration); ok {
+				break
+			}
+		}
+		failedMigrationObj, err = storkops.Instance().GetMigration(failedMigrationObj.Name, failedMigrationObj.Namespace)
+		require.NoError(t, err, "Error getting the failed migration")
+		logrus.Infof("Failed migration object found: %s in namespace: %s. Status: %s", failedMigrationObj.Name, failedMigrationObj.Namespace, failedMigrationObj.Status.Status)
+
+		err = deleteMigrations([]*v1alpha1.Migration{failedMigrationObj})
+		require.NoError(t, err, "error in deleting failed migrations.")
+
+		// apply migration specs again, it should pass this time
+		err = schedulerDriver.AddTasks(ctxsReverse[0],
+			scheduler.ScheduleOptions{AppKeys: []string{instanceID}})
+		require.NoError(t, err, "Error scheduling migration specs")
+
+		err = schedulerDriver.WaitForRunning(ctxsReverse[0], defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for migration to complete post sticky flag update")
+	}
 
 	err = schedulerDriver.WaitForRunning(ctxsReverse[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for migration to complete")
@@ -322,8 +375,16 @@ func testMigrationFailback(
 			require.Equal(t, projectValue, "project-A")
 		}
 	}
-
 	destroyAndWait(t, []*scheduler.Context{postMigrationCtx})
+	destroyAndWait(t, ctxs)
+
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "Error resetting remote config")
+	destroyAndWait(t, ctxsReverse)
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "Error resetting remote config")
+
 }
 
 // The below two functions are currently not invoked during the tests since the namespaceSelector
