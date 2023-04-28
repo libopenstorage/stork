@@ -314,7 +314,7 @@ func TestExtender(t *testing.T) {
 	t.Run("setup", setup)
 	t.Run("pxCSIExtPodNoDriverTest", pxCSIExtPodNoDriverTest)
 	t.Run("pxCSIExtPodDriverTest", pxCSIExtPodDriverTest)
-	t.Run("pxCSIExtPodDegradedNodesTest", pxCSIExtPodDegradedNodesTest)
+	t.Run("pxCSIExtPodStorageDownNodesTest", pxCSIExtPodStorageDownNodesTest)
 	t.Run("pxCSIExtPodOfflinePxNodesTest", pxCSIExtPodOfflinePxNodesTest)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("noDriverVolumeTest", noDriverVolumeTest)
@@ -325,13 +325,13 @@ func TestExtender(t *testing.T) {
 	t.Run("singleVolumeTest", singleVolumeTest)
 	t.Run("multipleVolumeTest", multipleVolumeTest)
 	t.Run("multipleVolumeSkipTest", multipleVolumeSkipTest)
-	t.Run("multipleVolumeDegradedTest", multipleVolumeDegradedTest)
+	t.Run("multipleVolumeStorageDownTest", multipleVolumeStorageDownTest)
 	t.Run("driverErrorTest", driverErrorTest)
 	t.Run("driverNodeErrorStateTest", driverNodeErrorStateTest)
 	t.Run("zoneTest", zoneTest)
-	t.Run("zoneDegradedNodeTest", zoneDegradedNodeTest)
+	t.Run("zoneStorageDownNodeTest", zoneStorageDownNodeTest)
 	t.Run("regionTest", regionTest)
-	t.Run("regionDegradedNodeTest", regionDegradedNodeTest)
+	t.Run("regionStorageDownNodeTest", regionStorageDownNodeTest)
 	t.Run("nodeNameTest", nodeNameTest)
 	t.Run("ipTest", ipTest)
 	t.Run("invalidRequestsTest", invalidRequestsTest)
@@ -349,7 +349,7 @@ func TestExtender(t *testing.T) {
 	t.Run("multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest", multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest)
 	t.Run("multiVolumeSkipAllVolumeScoringTest", multiVolumeSkipAllVolumeScoringTest)
 	t.Run("multiVolumeSkipHyperConvergedVolumesScoringTest", multiVolumeSkipHyperConvergedVolumesScoringTest)
-	t.Run("multiVolumeWithDegradedNodesAntiHyperConvergenceTest", multiVolumeWithDegradedNodesAntiHyperConvergenceTest)
+	t.Run("multiVolumeWithStorageDownNodesAntiHyperConvergenceTest", multiVolumeWithStorageDownNodesAntiHyperConvergenceTest)
 	t.Run("disableHyperConvergenceTest", disableHyperConvergenceTest)
 	t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
 	t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
@@ -365,6 +365,11 @@ func pxCSIExtPodNoDriverTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
 	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "us-east-1"))
+
+	if err := driver.UpdateNodeStatus(3, volume.NodeDegraded); err != nil {
+		t.Fatalf("Error setting node status to StorageDown: %v", err)
+	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -393,11 +398,16 @@ func pxCSIExtPodDriverTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "", ""))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 	pod := newPod("px-csi-ext-foo", nil)
+
+	if err := driver.UpdateNodeStatus(5, volume.NodeDegraded); err != nil {
+		t.Fatalf("Error setting node status to StorageDown: %v", err)
+	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -416,10 +426,10 @@ func pxCSIExtPodDriverTest(t *testing.T) {
 		prioritizeResponse)
 }
 
-// Send scheduler request for px-csi-ext pod with a node in degraded state
+// Send scheduler request for px-csi-ext pod with a node in StorageDown state
 // filter response should return all the input nodes
-// prioritize response should return all nodes giving lower score to degraded node
-func pxCSIExtPodDegradedNodesTest(t *testing.T) {
+// prioritize response should return all nodes giving lower score to StorageDown node
+func pxCSIExtPodStorageDownNodesTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
@@ -432,8 +442,8 @@ func pxCSIExtPodDegradedNodesTest(t *testing.T) {
 	}
 	pod := newPod("px-csi-ext-foo", nil)
 
-	if err := driver.UpdateNodeStatus(2, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to Degraded: %v", err)
+	if err := driver.UpdateNodeStatus(2, volume.NodeStorageDown); err != nil {
+		t.Fatalf("Error setting node status to StorageDown: %v", err)
 	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -449,7 +459,7 @@ func pxCSIExtPodDegradedNodesTest(t *testing.T) {
 	verifyPrioritizeResponse(
 		t,
 		nodes,
-		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore * (degradedNodeScorePenaltyPercentage / 100), nodePriorityScore, nodePriorityScore},
+		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore * (storageDownNodeScorePenaltyPercentage / 100), nodePriorityScore, nodePriorityScore},
 		prioritizeResponse)
 }
 
@@ -470,7 +480,7 @@ func pxCSIExtPodOfflinePxNodesTest(t *testing.T) {
 	pod := newPod("px-csi-ext-foo", nil)
 
 	if err := driver.UpdateNodeStatus(2, volume.NodeOffline); err != nil {
-		t.Fatalf("Error setting node status to Degraded: %v", err)
+		t.Fatalf("Error setting node status to StorageDown: %v", err)
 	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -906,13 +916,13 @@ func multipleVolumeSkipTest(t *testing.T) {
 // Create a pod with 2 PVCs using the mock storage class.
 // Place the data for volume1 on nodes n1, n2.
 // Place the data for volume2 on nodes n2, n3.
-// Set the node status of n3 to be degraded
+// Set the node status of n3 to be StorageDown
 // Send requests with node n1, n2, n3, n4, n5
 // The scores returned for n2 should be half the expected value
 // The prioritize response should assign priorities in the following order
-// n2 (both volumes local) >> n1 (one volume local)  >> n5 (both volumes on same rack) >> n3 (one volume local but node degraded) and n4 (one volume on same rack)
+// n2 (both volumes local) >> n1 (one volume local)  >> n5 (both volumes on same rack) >> n3 (one volume local but node StorageDown) and n4 (one volume on same rack)
 // n1 & n3 highest priority. n2 should have half the priority
-func multipleVolumeDegradedTest(t *testing.T) {
+func multipleVolumeStorageDownTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
@@ -935,8 +945,8 @@ func multipleVolumeDegradedTest(t *testing.T) {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
-	if err := driver.UpdateNodeStatus(2, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to Degraded: %v", err)
+	if err := driver.UpdateNodeStatus(2, volume.NodeStorageDown); err != nil {
+		t.Fatalf("Error setting node status to StorageDown: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -953,7 +963,7 @@ func multipleVolumeDegradedTest(t *testing.T) {
 		nodes,
 		[]float64{nodePriorityScore,
 			2 * nodePriorityScore,
-			rackPriorityScore * (degradedNodeScorePenaltyPercentage / 100),
+			rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100),
 			rackPriorityScore,
 			2 * rackPriorityScore},
 		prioritizeResponse)
@@ -1106,12 +1116,12 @@ func zoneTest(t *testing.T) {
 // Place the data for volume1 on nodes n1, n2.
 // Place the data for volume2 on nodes n2, n3.
 // Send requests with node n1, n2, n3, n4, n5
-// Set n1 in degraded state
+// Set n1 in StorageDown state
 // The filter response should return n1, n2, n3, n4, n5. Use these nodes for prioritize request.
 // The prioritize response should assign priorities in the following order
 // n2 (both volumes local) >> n3 (one volume local) >> n1 (one volume local and other
-// in same zone but node degraded) >>  n4 (one volume in same zone) >> n5 (no locality)
-func zoneDegradedNodeTest(t *testing.T) {
+// in same zone but node StorageDown) >>  n4 (one volume in same zone) >> n5 (no locality)
+func zoneStorageDownNodeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "a", ""))
@@ -1123,7 +1133,7 @@ func zoneDegradedNodeTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
-	pod := newPod("zoneDegradedNodeTest", map[string]bool{"zoneVol1": false, "zoneVol2": false})
+	pod := newPod("zoneStorageDownNodeTest", map[string]bool{"zoneVol1": false, "zoneVol2": false})
 	provNodes := []int{0, 1}
 	if err := driver.ProvisionVolume("zoneVol1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
@@ -1132,8 +1142,8 @@ func zoneDegradedNodeTest(t *testing.T) {
 	if err := driver.ProvisionVolume("zoneVol2", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
-	if err := driver.UpdateNodeStatus(0, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to Degraded: %v", err)
+	if err := driver.UpdateNodeStatus(0, volume.NodeStorageDown); err != nil {
+		t.Fatalf("Error setting node status to StorageDown: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -1145,8 +1155,8 @@ func zoneDegradedNodeTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error sending prioritize request: %v", err)
 	}
-	n1ExpectedPriority := rackPriorityScore*(degradedNodeScorePenaltyPercentage/100) +
-		zonePriorityScore*(degradedNodeScorePenaltyPercentage/100)
+	n1ExpectedPriority := rackPriorityScore*(storageDownNodeScorePenaltyPercentage/100) +
+		zonePriorityScore*(storageDownNodeScorePenaltyPercentage/100)
 	verifyPrioritizeResponse(
 		t,
 		nodes,
@@ -1213,11 +1223,11 @@ func regionTest(t *testing.T) {
 // Place the data for volume1 on nodes n1, n2.
 // Place the data for volume2 on nodes n2, n3.
 // Send requests with node n1, n2, n3, n4, n5
-// Set node n3 to degraded state
+// Set node n3 to StorageDown state
 // The filter response should return n1, n2, n3, n4, n5. Use these nodes for prioritize request.
 // The prioritize response should assign priorities in the following order
-// n2 (both volumes local) >> n1 (one volume local and other in same region) >> n3 (one volume local and other in same region but in degraded state) >> n4 and n5 (no locality)
-func regionDegradedNodeTest(t *testing.T) {
+// n2 (both volumes local) >> n1 (one volume local and other in same region) >> n3 (one volume local and other in same region but in StorageDown state) >> n4 and n5 (no locality)
+func regionStorageDownNodeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node11", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
 	nodes.Items = append(nodes.Items, *newNode("node21", "node2", "192.168.0.2", "rack2", "c", "us-east-1"))
@@ -1229,7 +1239,7 @@ func regionDegradedNodeTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
-	pod := newPod("regionDegradedNodeTest", map[string]bool{"regionVol1": false, "regionVol2": false})
+	pod := newPod("regionStorageDownNodeTest", map[string]bool{"regionVol1": false, "regionVol2": false})
 	provNodes := []int{0, 1}
 	if err := driver.ProvisionVolume("regionVol1", provNodes, 1, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
@@ -1239,8 +1249,8 @@ func regionDegradedNodeTest(t *testing.T) {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
-	if err := driver.UpdateNodeStatus(2, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to Degraded: %v", err)
+	if err := driver.UpdateNodeStatus(2, volume.NodeStorageDown); err != nil {
+		t.Fatalf("Error setting node status to StorageDown: %v", err)
 	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -1253,7 +1263,7 @@ func regionDegradedNodeTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error sending prioritize request: %v", err)
 	}
-	n3ExpectedScore := (rackPriorityScore * (degradedNodeScorePenaltyPercentage / 100)) + (regionPriorityScore * (degradedNodeScorePenaltyPercentage / 100))
+	n3ExpectedScore := (rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100)) + (regionPriorityScore * (storageDownNodeScorePenaltyPercentage / 100))
 	verifyPrioritizeResponse(
 		t,
 		nodes,
@@ -1635,11 +1645,11 @@ func preferRemoteNodeOnlyAntiHyperConvergenceTest(t *testing.T) {
 	}
 	verifyFilterResponse(t, nodes, []int{4, 5}, filterResponse)
 
-	if err := driver.UpdateNodeStatus(4, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to NodeDegraded: %v", err)
+	if err := driver.UpdateNodeStatus(4, volume.NodeStorageDown); err != nil {
+		t.Fatalf("Error setting node status to NodeStorageDown: %v", err)
 	}
-	if err := driver.UpdateNodeStatus(5, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to NodeDegraded: %v", err)
+	if err := driver.UpdateNodeStatus(5, volume.NodeStorageDown); err != nil {
+		t.Fatalf("Error setting node status to NodeStorageDown: %v", err)
 	}
 	filterResponse, err = sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -1970,8 +1980,8 @@ func multiVolumeSkipAllVolumeScoringTest(t *testing.T) {
 		prioritizeResponse)
 }
 
-// Verify anti hyperconverged works with multi volumes with degraded nodes
-func multiVolumeWithDegradedNodesAntiHyperConvergenceTest(t *testing.T) {
+// Verify anti hyperconverged works with multi volumes with StorageDown nodes
+func multiVolumeWithStorageDownNodesAntiHyperConvergenceTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
@@ -1983,19 +1993,19 @@ func multiVolumeWithDegradedNodesAntiHyperConvergenceTest(t *testing.T) {
 	if err := driver.CreateCluster(6, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
-	pod := newPod("multiVolumeWithDegradedNodesAntiHyperConvergenceTest", map[string]bool{"degradedNodesHyperConvergedVolumes": false, "degradedNodeSharedV4Svc": false})
+	pod := newPod("multiVolumeWithStorageDownNodesAntiHyperConvergenceTest", map[string]bool{"StorageDownNodesHyperConvergedVolumes": false, "StorageDownNodeSharedV4Svc": false})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("degradedNodesHyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false); err != nil {
+	if err := driver.ProvisionVolume("StorageDownNodesHyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{3, 4, 5}
-	if err := driver.ProvisionVolume("degradedNodeSharedV4Svc", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("StorageDownNodeSharedV4Svc", sharedV4SvcProvNodes, 3, nil, true); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
-	if err := driver.UpdateNodeStatus(3, volume.NodeDegraded); err != nil {
+	if err := driver.UpdateNodeStatus(3, volume.NodeStorageDown); err != nil {
 		t.Fatalf("Error setting node status to Offline: %v", err)
 	}
 

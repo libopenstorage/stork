@@ -58,6 +58,7 @@ func TestMonitor(t *testing.T) {
 	t.Run("testOfflineStorageNodeDuplicateIP", testOfflineStorageNodeDuplicateIP)
 	t.Run("testVolumeAttachmentCleanup", testVolumeAttachmentCleanup)
 	t.Run("testOfflineStorageNodeForCSIExtPod", testOfflineStorageNodeForCSIExtPod)
+	t.Run("testStorageDownNode", testStorageDownNode)
 	t.Run("teardown", teardown)
 }
 
@@ -304,6 +305,25 @@ func testOfflineStorageNode(t *testing.T) {
 	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 	_, err = core.Instance().GetPodByName(noStoragePod.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
+}
+
+func testStorageDownNode(t *testing.T) {
+	storageDownPod := newPod("storageDownPod", []string{driverVolumeName})
+	storageDownPod.Spec.NodeName = "node2.domain"
+	node2Index := 1
+	_, err := core.Instance().CreatePod(storageDownPod)
+	require.NoError(t, err, "failed to create pod")
+
+	err = driver.UpdateNodeStatus(node2Index, volume.NodeStorageDown)
+	require.NoError(t, err, "Error setting node status to Degraded")
+	defer func() {
+		err = driver.UpdateNodeStatus(node2Index, volume.NodeOnline)
+		require.NoError(t, err, "Error setting node status to Online")
+	}()
+
+	time.Sleep(testNodeOfflineTimeout)
+	_, err = core.Instance().GetPodByName(storageDownPod.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
 

@@ -206,10 +206,11 @@ func (m *Monitor) driverMonitor() {
 			}
 			nodes = volume.RemoveDuplicateOfflineNodes(nodes)
 			for _, node := range nodes {
-				// Check if nodes are reported online by the storage driver
-				// If not online, look at all the pods on that node
+				// Check if nodes are reported as offline or degraded by the storage driver
+				// If offline or degraded, look at all the pods on that node
 				// For any Running pod on that node using volume by the driver, kill the pod
-				if node.Status != volume.NodeOnline {
+				// Degraded nodes are not considered offline and pods are not deleted from them.
+				if node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded {
 					m.wg.Add(1)
 					// wait for 1 min if node is upgrading
 					go m.cleanupDriverNodePods(node)

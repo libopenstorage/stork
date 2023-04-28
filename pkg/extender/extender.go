@@ -39,10 +39,10 @@ const (
 	regionPriorityScore float64 = 10
 	// defaultScore Score assigned to a node which doesn't have data for any volume
 	defaultScore float64 = 5
-	// degradedNodeScorePenaltyPercentage is the percentage by which a node's score
-	// will take a hit if the node's status is degraded
-	degradedNodeScorePenaltyPercentage float64 = 50
-	schedulingFailureEventReason               = "FailedScheduling"
+	// storageDownNodeScorePenaltyPercentage is the percentage by which a node's score
+	// will take a hit if the node's status is StorageDown
+	storageDownNodeScorePenaltyPercentage float64 = 50
+	schedulingFailureEventReason                  = "FailedScheduling"
 	// Pod annotation to check if only local nodes should be used to schedule a pod
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
 	// StorageCluster parameter to check if only remote nodes should be used to schedule a pod
@@ -280,7 +280,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			for _, node := range args.Nodes.Items {
 				for _, driverNode := range driverNodes {
 					storklog.PodLog(pod).Debugf("nodeInfo: %v", driverNode)
-					if (driverNode.Status == volume.NodeOnline || driverNode.Status == volume.NodeDegraded) &&
+					if (driverNode.Status == volume.NodeOnline || driverNode.Status == volume.NodeStorageDown) &&
 						volume.IsNodeMatch(&node, driverNode) {
 						// If only nodes with replicas are to be preferred,
 						// filter out all nodes that don't have a replica
@@ -459,36 +459,36 @@ func (e *Extender) getNodeScore(
 							if rack == nodeRack || nodeRack == "" {
 								for _, datanodeID := range volumeInfo.DataNodes {
 									if storageNode.StorageID == datanodeID {
-										if storageNode.Status == volume.NodeDegraded {
+										if storageNode.Status == volume.NodeStorageDown {
 											// Even if the volume data is local to the node
 											// the node is in degraded state. So the app won't benefit
 											// from hyperconvergence on this node. So we will not use
 											// the nodePriorityScore but instead rackPriorityScore and
 											// penalize based on that.
-											return rackPriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+											return rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
 										}
 										return nodePriorityScore
 									}
 								}
 								if nodeRack != "" {
-									if storageNode.Status == volume.NodeDegraded {
-										return rackPriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+									if storageNode.Status == volume.NodeStorageDown {
+										return rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
 									}
 									return rackPriorityScore
 								}
 							}
 						}
 						if nodeZone != "" {
-							if storageNode.Status == volume.NodeDegraded {
-								return zonePriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+							if storageNode.Status == volume.NodeStorageDown {
+								return zonePriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
 							}
 							return zonePriorityScore
 						}
 					}
 				}
 				if nodeRegion != "" {
-					if storageNode.Status == volume.NodeDegraded {
-						return regionPriorityScore * (degradedNodeScorePenaltyPercentage / 100)
+					if storageNode.Status == volume.NodeStorageDown {
+						return regionPriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
 					}
 					return regionPriorityScore
 				}
@@ -599,7 +599,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 				storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
 				// For any node that is offline remove the locality info so that we
 				// don't prioritize nodes close to it
-				if dnode.Status == volume.NodeOnline || dnode.Status == volume.NodeDegraded {
+				if dnode.Status == volume.NodeOnline || dnode.Status == volume.NodeStorageDown {
 					// Add region info into zone and zone info into rack so that we can
 					// differentiate same names in different localities
 					regionInfo.HostnameMap[dnode.Hostname] = dnode.Region
@@ -749,7 +749,9 @@ func (e *Extender) processCSIExtPodFilterRequest(
 		for _, knode := range args.Nodes.Items {
 			for _, dnode := range driverNodes {
 				storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
-				if (dnode.Status == volume.NodeOnline || dnode.Status == volume.NodeDegraded) &&
+				// Only nodes which are Online or in StorageDown state should schedule pods.
+				// All the nodes in Offline or Degraded state will be skipped.
+				if (dnode.Status == volume.NodeOnline || dnode.Status == volume.NodeStorageDown) &&
 					volume.IsNodeMatch(&knode, dnode) {
 					filteredNodes = append(filteredNodes, knode)
 					break
@@ -800,7 +802,7 @@ func (e *Extender) processCSIExtPodPrioritizeRequest(
 					} else if dnode.Status == volume.NodeOffline {
 						score = 0
 					} else {
-						score = int64(nodePriorityScore * (degradedNodeScorePenaltyPercentage / 100))
+						score = int64(nodePriorityScore * (storageDownNodeScorePenaltyPercentage / 100))
 					}
 					hostPriority := schedulerapi.HostPriority{Host: knode.Name, Score: int64(score)}
 					respList = append(respList, hostPriority)
