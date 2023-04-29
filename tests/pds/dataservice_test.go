@@ -692,16 +692,7 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
+		EndTorpedoTest()
 	})
 })
 
@@ -759,7 +750,6 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 				}
 			}
 		})
-
 		Step("Delete Deployments", func() {
 			log.InfoD("Deleting DataService")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
@@ -769,7 +759,6 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 			log.FailOnError(err, "Error while deleting PV and PVCs")
 		})
-
 	})
 }
 
