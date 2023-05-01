@@ -2807,10 +2807,10 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 
 	var (
-		backupNames          []string             // backups in px-backup
-		restoreNames         []string             // restores in px-backup
-		restoreLaterNames    []string             // restore-laters in px-backup
-		scheduledAppContexts []*scheduler.Context // Each Context is for one Namespace which corresponds to one App
+		backupNames          []string
+		restoreNames         []string
+		restoreLaterNames    []string
+		scheduledAppContexts []*scheduler.Context
 		scheduledClusterUid  string
 		cloudCredName        string
 		cloudCredUID         string
