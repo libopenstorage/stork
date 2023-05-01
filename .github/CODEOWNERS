@@ -1,4 +1,4 @@
 # Need approval from these core developers before merging any change 
 *.go @portworx/torpedo-codeowners 
-.Makefile @mborodin-px @aghodke1312 @pureneelesh @CharudathGopal @aravindranath14
-.Dockerfile @mborodin-px @aghodke1312 @pureneelesh @CharudathGopal @aravindranath14
+.Makefile @mborodin-px @aghodke1312 @CharudathGopal @aravindranath14
+.Dockerfile @mborodin-px @aghodke1312 @CharudathGopal @aravindranath14

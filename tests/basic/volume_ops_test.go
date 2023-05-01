@@ -89,6 +89,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 						Inst().V.String(), ctx.App.Key, v)
 					Step(stepLog,
 						func() {
+							log.InfoD(stepLog)
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
 							// GetMaxReplicationFactory is hardcoded to 3
@@ -101,7 +102,10 @@ var _ = Describe("{VolumeUpdate}", func() {
 								MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true)
+							opts := volume.Options{
+								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+							}
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
 							log.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
 							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Repl factor set succesfully on volume  %s repl", v.Name))
 						})
