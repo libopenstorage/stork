@@ -132,7 +132,7 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 	cleanup(t, namespaces[0], storageClass)
 
 	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
-	scheduleTasksAndWait(t, ctxs[0], additionalAppKeys)
+	addTasksAndWait(t, ctxs[0], additionalAppKeys)
 
 	startAppsOnMigration := false
 	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
@@ -202,7 +202,7 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 		nodeObj, _ := mapNodeIDToNode[nearSyncTargetMid]
 		logrus.Infof("node: %v", nodeObj)
 
-		nodeDriver.RunCommand(
+		_, err = nodeDriver.RunCommand(
 			nodeObj,
 			"touch /root/whatAboutNow.txt",
 			node.ConnectionOpts{
@@ -211,13 +211,16 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 			},
 		)
 		logrus.Infof("run command on node: %v", nodeObj.Name)
+		require.NoError(t, err)
 
-		volumeDriver.StopDriver([]node.Node{nodeObj}, false, nil)
+		err = volumeDriver.StopDriver([]node.Node{nodeObj}, false, nil)
+		require.NoError(t, err)
 
 		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, false)
 
-		volumeDriver.StartDriver(nodeObj)
+		err = volumeDriver.StartDriver(nodeObj)
+		require.NoError(t, err)
 	}
 	executeOnDestination(t, funcRestartNode)
 }

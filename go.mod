@@ -21,7 +21,8 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
-	github.com/libopenstorage/openstorage v9.4.46+incompatible
+	github.com/libopenstorage/openstorage v9.4.47+incompatible
+	github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a
 	github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
@@ -29,6 +30,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
+	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
@@ -36,7 +38,7 @@ require (
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/urfave/cli v1.22.2
 	github.com/zoido/yag-config v0.4.0
 	gocloud.dev v0.20.0
@@ -60,10 +62,7 @@ require (
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
 
-require (
-	github.com/portworx/kdmp v0.4.1-0.20230127055521-e23d6b003478
-	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
-)
+require github.com/portworx/kdmp v0.4.1-0.20230316085313-95fc97e8493b
 
 require (
 	cloud.google.com/go v0.107.0 // indirect
@@ -186,7 +185,6 @@ require (
 	github.com/lib/pq v1.10.6 // indirect
 	github.com/libopenstorage/autopilot-api v1.3.0 // indirect
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
-	github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a // indirect
 	github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
@@ -214,7 +212,7 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/moul/http2curl v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/gomega v1.20.0 // indirect
+	github.com/onsi/gomega v1.20.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/opencontainers/runc v1.1.3 // indirect
@@ -291,7 +289,7 @@ replace (
 	github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 	github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
-	github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
+	github.com/docker/docker => github.com/moby/moby v20.10.23+incompatible
 	//github.com/go-logr/logr => github.com/go-logr/logr v0.3.0
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	//github.com/heptio/ark => github.com/heptio/ark v1.0.0
@@ -300,10 +298,10 @@ replace (
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230207113334-0b97b6052012
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230316085313-95fc97e8493b
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230228105744-505c1a2d8203
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230206162106-035fee117ba3
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230216213348-6ba0e5494ad5
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 

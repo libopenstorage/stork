@@ -12,7 +12,7 @@ LABEL name="Stork" \
 
 RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip openssl
 
-RUN python3 -m pip install awscli  && python3 -m pip install rsa --upgrade
+RUN python3 -m pip install awscli && python3 -m pip install oci-cli && python3 -m pip install rsa --upgrade
 
 
 RUN curl -q -o /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \

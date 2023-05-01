@@ -92,6 +92,11 @@ spec:
       value: external_test_cluster
     - name: CLOUD_DELETION_VALIDATION
       value: cloud_deletion_validation
+    - name: PX_NAMESPACE
+      value: px_namespace
+    - name: INTERNAL_AWS_LB 
+      value: internal_aws_lb 
+  hostNetwork: false
   hostNetwork: false
   hostPID: false
   volumes:

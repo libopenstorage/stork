@@ -15,6 +15,7 @@ import (
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/drivers"
@@ -484,7 +485,21 @@ func (c *Controller) createJobCredCertSecrets(
 			}
 		}
 		if count > 0 {
-			namespace = utils.AdminNamespace
+			storkCm, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, k8sutils.DefaultAdminNamespace)
+			if err != nil && !k8sErrors.IsNotFound(err) {
+				msg := fmt.Sprintf("error fetching admin namespace from stork configmap %s/%s: %v", k8sutils.DefaultAdminNamespace, k8sutils.StorkControllerConfigMapName, err)
+				logrus.Errorf(msg)
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: msg,
+				}
+				return data, err
+			}
+			if storkCm.Data[k8sutils.AdminNsKey] != "" {
+				namespace = storkCm.Data[k8sutils.AdminNsKey]
+			} else {
+				namespace = utils.AdminNamespace
+			}
 		}
 		blName = dataExport.Spec.Destination.Name
 		blNamespace = dataExport.Spec.Destination.Namespace
@@ -683,7 +698,15 @@ func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (stri
 	if err != nil {
 		return "", err
 	}
-	_, err = cs.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), dataExport.Spec.SnapshotStorageClass, metav1.GetOptions{})
+	v1SnapshotRequired, err := version.RequiresV1VolumeSnapshot()
+	if err != nil {
+		return "", err
+	}
+	if v1SnapshotRequired {
+		_, err = cs.SnapshotV1().VolumeSnapshotClasses().Get(context.TODO(), dataExport.Spec.SnapshotStorageClass, metav1.GetOptions{})
+	} else {
+		_, err = cs.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), dataExport.Spec.SnapshotStorageClass, metav1.GetOptions{})
+	}
 	if err == nil {
 		return csiProvider, nil
 	}
@@ -1256,7 +1279,15 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 	}
 	var namespace string
 	if len(pods) > 0 {
-		namespace = utils.AdminNamespace
+		storkCm, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, k8sutils.DefaultAdminNamespace)
+		if err != nil && !k8sErrors.IsNotFound(err) {
+			return err
+		}
+		if storkCm.Data[k8sutils.AdminNsKey] != "" {
+			namespace = storkCm.Data[k8sutils.AdminNsKey]
+		} else {
+			namespace = utils.AdminNamespace
+		}
 	} else {
 		namespace = de.Namespace
 	}

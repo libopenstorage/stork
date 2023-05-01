@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package btrfs // import "github.com/docker/docker/daemon/graphdriver/btrfs"
@@ -5,6 +6,9 @@ package btrfs // import "github.com/docker/docker/daemon/graphdriver/btrfs"
 /*
 #include <stdlib.h>
 #include <dirent.h>
+
+// keep struct field name compatible with btrfs-progs < 6.1.
+#define max_referenced max_rfer
 #include <btrfs/ioctl.h>
 #include <btrfs/ctree.h>
 
@@ -70,7 +74,14 @@ func Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 		return nil, graphdriver.ErrPrerequisites
 	}
 
-	if err := idtools.MkdirAllAndChown(home, 0701, idtools.CurrentIdentity()); err != nil {
+	remappedRoot := idtools.NewIDMappingsFromMaps(uidMaps, gidMaps)
+	currentID := idtools.CurrentIdentity()
+	dirID := idtools.Identity{
+		UID: currentID.UID,
+		GID: remappedRoot.RootPair().GID,
+	}
+
+	if err := idtools.MkdirAllAndChown(home, 0710, dirID); err != nil {
 		return nil, err
 	}
 
@@ -426,7 +437,7 @@ func subvolLimitQgroup(path string, size uint64) error {
 	defer closeDir(dir)
 
 	var args C.struct_btrfs_ioctl_qgroup_limit_args
-	args.lim.max_referenced = C.__u64(size)
+	args.lim.max_rfer = C.__u64(size)
 	args.lim.flags = C.BTRFS_QGROUP_LIMIT_MAX_RFER
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, getDirFd(dir), C.BTRFS_IOC_QGROUP_LIMIT,
 		uintptr(unsafe.Pointer(&args)))
@@ -521,7 +532,14 @@ func (d *Driver) Create(id, parent string, opts *graphdriver.CreateOpts) error {
 	if err != nil {
 		return err
 	}
-	if err := idtools.MkdirAllAndChown(subvolumes, 0701, idtools.CurrentIdentity()); err != nil {
+
+	currentID := idtools.CurrentIdentity()
+	dirID := idtools.Identity{
+		UID: currentID.UID,
+		GID: rootGID,
+	}
+
+	if err := idtools.MkdirAllAndChown(subvolumes, 0710, dirID); err != nil {
 		return err
 	}
 	if parent == "" {
@@ -633,7 +651,14 @@ func (d *Driver) Remove(id string) error {
 	d.updateQuotaStatus()
 
 	if err := subvolDelete(d.subvolumesDir(), id, d.quotaEnabled); err != nil {
-		return err
+		if d.quotaEnabled {
+			return err
+		}
+		// If quota is not enabled, fallback to rmdir syscall to delete subvolumes.
+		// This would allow unprivileged user to delete their owned subvolumes
+		// in kernel >= 4.18 without user_subvol_rm_allowed mount option.
+		//
+		// From https://github.com/containers/storage/pull/508/commits/831e32b6bdcb530acc4c1cb9059d3c6dba14208c
 	}
 	if err := system.EnsureRemoveAll(dir); err != nil {
 		return err
