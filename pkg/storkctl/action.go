@@ -34,7 +34,7 @@ func newDoCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *co
 }
 
 func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	getClusterPairCommand := &cobra.Command{
+	failoverCommand := &cobra.Command{
 		Use:   failoverCommand,
 		Short: "Initiate failover for the given namespaces",
 		Run: func(c *cobra.Command, args []string) {
@@ -43,15 +43,23 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 				util.CheckErr(err)
 				return
 			}
+			failed_to_start := false
 			for _, namespace := range namespaces {
 				if incompleteAction := getAnyIncompleteAction(namespace); incompleteAction != nil {
-					printMsg(
-						fmt.Sprintf(
-							"Failed to start failover for namespace %v as action %v is already %v",
-							namespace, incompleteAction.Name, incompleteAction.Status),
+					if !failed_to_start {
+						printMsg("Failed to start failover as there pending actions for following namespaces:", ioStreams.Out)
+						failed_to_start = true
+					}
+					printMsg(fmt.Sprintf(
+						"Namespace %v has action %v in state %v",
+						namespace, incompleteAction.Name, incompleteAction.Status),
 						ioStreams.Out)
-					continue
 				}
+			}
+			if failed_to_start {
+				return
+			}
+			for _, namespace := range namespaces {
 				action := storkv1.Action{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      newActionName(storkv1.ActionTypeFailover),
@@ -76,7 +84,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 			}
 		},
 	}
-	return getClusterPairCommand
+	return failoverCommand
 }
 
 func isActionIncomplete(action *storkv1.Action) bool {
