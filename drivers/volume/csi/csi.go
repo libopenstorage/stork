@@ -653,7 +653,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 			if err != nil {
 				return err
 			}
-			for _, vs := range vsList.Items {
+			for _, val := range vsList.Items {
+				vs := val
 				vsMap[vs.Name] = &vs
 			}
 
@@ -666,7 +667,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 		if err != nil {
 			return err
 		}
-		for _, vsContent := range vsContentList.Items {
+		for _, val := range vsContentList.Items {
+			vsContent := val
 			vsContentMap[vsContent.Name] = &vsContent
 		}
 		log.ApplicationRestoreLog(restore).Debugf("collected %v snapshots and %v snapshotcontents to clean", len(vsMap), len(vsContentMap))
@@ -684,7 +686,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 		if err != nil {
 			return err
 		}
-		for _, vs := range vsList.Items {
+		for _, val := range vsList.Items {
+			vs := val
 			vsMap[vs.Name] = &vs
 		}
 
@@ -697,7 +700,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 	if err != nil {
 		return err
 	}
-	for _, vsContent := range vsContentList.Items {
+	for _, val := range vsContentList.Items {
+		vsContent := val
 		vsContentMap[vsContent.Name] = &vsContent
 	}
 	log.ApplicationRestoreLog(restore).Debugf("collected %v snapshots and %v snapshotcontents to clean", len(vsMap), len(vsContentMap))
