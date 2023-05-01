@@ -391,6 +391,8 @@ const (
 	ConfluentAsyncDR = "confluentasyncdr"
 	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
 	AsyncDRVolumeOnly = "asyncdrvolumeonly"
+	// AutoFsTrimAsyncDR runs Async DR of volumes with FSTRIM=true parameter and validates it exists on DR as well
+	AutoFsTrimAsyncDR = "autofstrimasyncdr"
 	// stork application backup runs stork backups for applications
 	StorkApplicationBackup = "storkapplicationbackup"
 	// stork application backup volume resize runs stork backups for applications and inject volume resize in between
@@ -6689,6 +6691,128 @@ func TriggerConfluentAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *E
 			})
 		}
 	})
+}
+
+func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AutoFsTrimAsyncDR)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Async DR with autofstrim volumes triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AutoFsTrimAsyncDR,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "adr-fstrim"
+		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
+		appVolumes            []*volume.Volume
+	)
+	chaosLevel := ChaosMap[AutoFsTrimAsyncDR]
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to write kubeconfig: %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to Set source kubeconfig: %v", err))
+			return
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+				// Get Autofstrim status for vols
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("not able to get appVolumes, err is: %v", err))
+					return
+				}
+				for _, vol := range appVolumes {
+					cVol, err := Inst().V.InspectVolume(vol.ID)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error inspecting volume %v", vol.Name))
+						return
+					}
+					if !cVol.Spec.AutoFstrim {
+						UpdateOutcome(event, fmt.Errorf("fstrim should be enable for volume %v, please use spec which use autofstrim volumes", vol.Name))
+						return
+					}
+				}
+				Step("Create cluster pair between source and destination clusters", func() {
+					// Set cluster context to cluster where torpedo is running
+					ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+				})
+			}
+		}
+	})
+
+	log.Infof("Migration Namespaces: %v", migrationNamespaces)
+	log.Infof("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+		} else {
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		}
+	}
+
+	// Validate autofstrim on destination volumes
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to Set destination kubeconfig: %v", err))
+		return
+	}
+	for _, vol := range appVolumes {
+		cVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("unable to inspect volume %v, err is %v", vol.Name, err))
+		}
+		dash.VerifyFatal(cVol.Spec.AutoFstrim, true, fmt.Sprintf("fstrim should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.AutoFstrim))
+		dash.VerifyFatal(cVol.Spec.Nodiscard, true, fmt.Sprintf("nodiscard should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.Nodiscard))
+	}
+	err = SetSourceKubeConfig()
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to Set Source kubeconfig post test completion: %v", err))
+	}
+	updateMetrics(*event)
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {

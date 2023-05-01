@@ -24,7 +24,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -215,6 +214,7 @@ var (
 var (
 	components    *pdsapi.Components
 	deployment    *pds.ModelsDeployment
+	controlplane  *pdscontrolplane.ControlPlane
 	apiClient     *pds.APIClient
 	ns            *corev1.Namespace
 	pdsAgentpod   corev1.Pod
@@ -755,6 +755,23 @@ func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterva
 
 	})
 	return err
+}
+
+func InitializeApiComponents(ControlPlaneURL string) (*pds.APIClient, *pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
+	log.InfoD("Initializing Api components")
+	apiConf := pds.NewConfiguration()
+	endpointURL, err := url.Parse(ControlPlaneURL)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	apiConf.Host = endpointURL.Host
+	apiConf.Scheme = endpointURL.Scheme
+
+	apiClient = pds.NewAPIClient(apiConf)
+	components = pdsapi.NewComponents(apiClient)
+	controlplane = pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
+
+	return apiClient, components, controlplane, nil
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running
@@ -1331,22 +1348,16 @@ func IsReachable(url string) (bool, error) {
 // SetupPDSTest returns few params required to run the test
 func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, string, error) {
 	var err error
-	apiConf := pds.NewConfiguration()
-	endpointURL, err := url.Parse(ControlPlaneURL)
-	if err != nil {
-		return "", "", "", "", "", "", err
-	}
-	apiConf.Host = endpointURL.Host
-	apiConf.Scheme = endpointURL.Scheme
-
-	apiClient = pds.NewAPIClient(apiConf)
-	components = pdsapi.NewComponents(apiClient)
-	controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
 
 	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
 		serviceType = "ClusterIP"
 	}
 	log.InfoD("Deployment service type %s", serviceType)
+
+	_, _, _, err = InitializeApiComponents(ControlPlaneURL)
+	if err != nil {
+		return "", "", "", "", "", "", err
+	}
 
 	acc := components.Account
 	accounts, err := acc.GetAccountsList()
@@ -1451,60 +1462,6 @@ func DeletePDSCRDs(pdsApiGroups []string) error {
 			log.InfoD("No crd's found for api groups %s", pdsApiGroups[index])
 		}
 		isCrdsAvailable = false
-	}
-	return nil
-}
-
-// RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
-// func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string, installOldVersion bool) error {
-func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, installOldVersion bool) error {
-	log.InfoD("Test control plane url connectivity.")
-	var helmChartversion string
-	controlPlaneUrl := infraParams.InfraToTest.ControlPlaneURL
-	clusterType := infraParams.InfraToTest.ClusterType
-
-	_, err := IsReachable(controlPlaneUrl)
-	if err != nil {
-		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
-	}
-
-	if installOldVersion {
-		helmChartversion = infraParams.PDSHelmVersions.PreviousHelmVersion
-		log.InfoD("Deregister PDS and Install Old Version")
-
-	} else {
-		helmChartversion, err = components.APIVersion.GetHelmChartVersion()
-		log.Debugf("helm chart version %v", helmChartversion)
-		if err != nil {
-			return fmt.Errorf("error while getting helm version - %v", helmChartversion)
-		}
-	}
-
-	log.InfoD("Listing service account")
-	listServiceAccounts, err := components.ServiceAccount.ListServiceAccounts(tenantId)
-	if err != nil {
-		return err
-	}
-	for _, acc := range listServiceAccounts {
-		log.Infof(*acc.Name)
-		if *acc.Name == "Default-AgentWriter" {
-			serviceAccId = *acc.Id
-			break
-		}
-	}
-
-	log.InfoD("Getting service account token")
-	serviceAccToken, err := components.ServiceAccount.GetServiceAccountToken(serviceAccId)
-	if err != nil {
-		return err
-	}
-	bearerToken := *serviceAccToken.Token
-
-	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
-	target := tc.NewTargetCluster(ctx)
-	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
-	if err != nil {
-		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
 	}
 	return nil
 }
@@ -2092,74 +2049,6 @@ func GetDataServiceID(ds string) string {
 		}
 	}
 	return dataServiceID
-}
-
-// DeployDataServices deploys all dataservices, versions and images that are supported
-func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceDefaultAppConfigID string,
-	replicas int32, serviceType, dataServiceDefaultResourceTemplateID, storageTemplateID, dsVersion,
-	dsBuild, namespace string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
-
-	currentReplicas = replicas
-
-	log.Infof("dataService: %v ", ds)
-	id := GetDataServiceID(ds)
-	if id == "" {
-		log.Errorf("dataservice ID is empty")
-		return nil, nil, nil, err
-	}
-	log.Infof(`Request params:
-				projectID- %v deploymentTargetID - %v,
-				dnsZone - %v,deploymentName - %v,namespaceID - %v
-				App config ID - %v,
-				num pods- %v, service-type - %v
-				Resource template id - %v, storageTemplateID - %v`,
-		projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceDefaultAppConfigID,
-		replicas, serviceType, dataServiceDefaultResourceTemplateID, storageTemplateID)
-
-	if ds == zookeeper && replicas != 3 {
-		log.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
-		currentReplicas = 3
-	}
-	if ds == redis {
-		log.Infof("Replicas passed %v", replicas)
-		log.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
-	}
-
-	//clearing up the previous entries of dataServiceImageMap
-	for version := range dataServiceImageMap {
-		delete(dataServiceImageMap, version)
-	}
-
-	for version := range dataServiceVersionBuildMap {
-		delete(dataServiceVersionBuildMap, version)
-	}
-
-	log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-	versionID, imageID, dataServiceVersionBuildMap, err = GetVersionsImage(dsVersion, dsBuild, id)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	log.Infof("VersionID %v ImageID %v", versionID, imageID)
-	components = pdsapi.NewComponents(apiClient)
-	deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
-		deploymentTargetID,
-		dnsZone,
-		deploymentName,
-		namespaceID,
-		dataServiceDefaultAppConfigID,
-		imageID,
-		currentReplicas,
-		serviceType,
-		dataServiceDefaultResourceTemplateID,
-		storageTemplateID)
-
-	if err != nil {
-		log.Warnf("An Error Occured while creating deployment %v", err)
-		return nil, nil, nil, err
-	}
-
-	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, nil
 }
 
 // DeployAllDataServices deploys all dataservices, versions and images that are supported

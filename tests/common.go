@@ -76,6 +76,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
@@ -5820,11 +5821,7 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		labels := b.Labels
 		for k, v := range labels {
 			if k == "pxpool" {
-				if c, ok := driveCountMap[v]; ok {
-					driveCountMap[v] += c
-				} else {
-					driveCountMap[v] = 1
-				}
+				driveCountMap[v] += 1
 			}
 		}
 	}
@@ -6709,4 +6706,114 @@ func AddMetadataDisk(n node.Node) error {
 
 	return nil
 
+}
+
+// createNamespaces Create N number of namespaces and return namespace list
+func createNamespaces(numberOfNamespaces int) ([]string, error) {
+
+	// Create multiple namespaces in string
+	var (
+		namespaces []string
+	)
+
+	// Create a good number of namespaces
+	for i := 0; i < numberOfNamespaces; i++ {
+		namespace := fmt.Sprintf("large-resource-%d-%v", i, time.Now().Unix())
+		nsName := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		log.InfoD("Creating namespace %v", namespace)
+		_, err := k8sCore.CreateNamespace(nsName)
+		if err != nil {
+			return nil, err
+		} else {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	return namespaces, nil
+}
+
+// createConfigMaps with the given number of entries on specified namespaces
+func createConfigMaps(namespaces []string, numberOfConfigmap int, numberOfEntries int) error {
+
+	// Create random data to add in ConfigMap
+	var randomData = make(map[string]string)
+	for i := 0; i < numberOfEntries; i++ {
+		randomString := RandomString(80)
+		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
+		randomData[randomStringWithTimeStamp] = randomString
+	}
+
+	// create the number of configmaps needed
+	k8sCore = core.Instance()
+	for _, namespace := range namespaces {
+		for i := 0; i < numberOfConfigmap; i++ {
+			name := fmt.Sprintf("configmap-%s-%d-%v", namespace, i, time.Now().Unix())
+			log.InfoD("Creating Configmap: %v", name)
+			metaObj := metaV1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			}
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metaObj,
+				Data:       randomData,
+			}
+
+			_, err := k8sCore.CreateConfigMap(obj)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// createSecrets with the given number of entries on specified namespaces
+func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int) error {
+
+	// Create random data to add in ConfigMap
+	var randomData = make(map[string]string)
+	for i := 0; i < numberOfEntries; i++ {
+		randomString := RandomString(80)
+		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
+		randomData[randomStringWithTimeStamp] = randomString
+	}
+
+	// create the number of configmaps needed
+	k8sCore = core.Instance()
+	for _, namespace := range namespaces {
+		for i := 0; i < numberOfSecrets; i++ {
+			name := fmt.Sprintf("secret-%s-%d-%v", namespace, i, time.Now().Unix())
+			log.InfoD("Creating secret: %v", name)
+			metaObj := metaV1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			}
+			obj := &corev1.Secret{
+				ObjectMeta: metaObj,
+				StringData: randomData,
+			}
+
+			_, err := k8sCore.CreateSecret(obj)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// deleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
+func deleteNamespaces(namespaces []string) error {
+	// Delete a list of namespaces given
+	k8sCore = core.Instance()
+	for _, namespace := range namespaces {
+		err := k8sCore.DeleteNamespace(namespace)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

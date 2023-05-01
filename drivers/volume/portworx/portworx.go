@@ -3562,7 +3562,7 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 		url = netutil.MakeURL("http://", endpoint, int(pxdRestPort))
 	}
 	// TODO replace by sdk call whenever it is available
-	log.Infof("Url to call %v", url)
+	log.Debugf("Url to call %v", url)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err

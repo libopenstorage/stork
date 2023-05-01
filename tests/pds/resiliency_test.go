@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	pds2 "github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -141,7 +142,8 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					}
 					pdslib.DefineFailureType(failuretype)
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false)
+					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						pds2.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
@@ -177,7 +179,8 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 
 		Step("Deploy and Validate Data services", func() {
 			for _, ds := range params.DataServiceToTest {
-				deployment, _, _, err = TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, true)
+				deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, true,
+					pds2.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
 				log.FailOnError(err, "Error while deploying data services")
 
 				err = pdslib.ValidateDataServiceDeployment(deployment, params.InfraToTest.Namespace)
@@ -311,7 +314,8 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 					}
 					pdslib.DefineFailureType(failuretype)
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false)
+					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						pds2.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Deployment Controller test for data service %v", *deployment.ClusterResourceName))
@@ -355,7 +359,8 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 					}
 					pdslib.DefineFailureType(failuretype)
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false)
+					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						pds2.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot all worker nodes test for data service %v", *deployment.ClusterResourceName))
@@ -399,7 +404,8 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 					}
 					pdslib.DefineFailureType(failuretype)
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false)
+					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						pds2.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Agent Pod test for data service %v", *deployment.ClusterResourceName))
