@@ -162,7 +162,7 @@ func getPXNamespace() string {
 	return defaultStorkDeploymentNamespace
 }
 
-// CreateBackup creates backup
+// CreateBackup creates backup and checks for success
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
@@ -203,6 +203,20 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	}
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
+}
+
+// CreateBackupWithValidatation creates backup, checks for success, and validates the backup
+func CreateBackupWithValidatation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
+	}
+	err := CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Validating Backup [%s]", backupName)
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContexts)
 }
 
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.BackupUpdateResponse, error) {
@@ -1291,7 +1305,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 			err := fmt.Errorf("the namespace (scheduledAppContext) [%s] provided to the ValidateBackup, is not present in the backup [%s]", scheduledAppContextNamespace, backupName)
 			errors = append(errors, err)
 			continue
-	}
+		}
 
 		// collect the backup resources whose specs should be present in this scheduledAppContext (namespace)
 		resourceInfoBackupObjs := make([]*api.ResourceInfo, 0)
@@ -1299,7 +1313,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 			if resource.GetNamespace() == scheduledAppContextNamespace {
 				resourceInfoBackupObjs = append(resourceInfoBackupObjs, resource)
 			}
-}
+		}
 
 	specloop:
 		for _, spec := range scheduledAppContext.App.SpecList {
@@ -1320,7 +1334,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 			if kind == "StorageClass" || kind == "VolumeSnapshot" {
 				// we don't backup "StorageClass"s and "VolumeSnapshot"s
 				continue specloop
-	}
+			}
 
 			// we only validate namespace level resource
 			if ns != "" {
@@ -1333,7 +1347,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 				// The following error means that something was NOT backed up,
 				// OR it wasn't supposed to be backed up, and we forgot to exclude the check.
 				err := fmt.Errorf("the spec (name: [%s], kind: [%s], namespace: [%s]) found in the scheduledAppContext [%s], is not in the backup [%s]", name, kind, ns, scheduledAppContextNamespace, backupName)
-			errors = append(errors, err)
+				errors = append(errors, err)
 				continue specloop
 			}
 		}
@@ -1432,16 +1446,16 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 
 	errStrings := make([]string, 0)
 	for _, err := range errors {
-			if err != nil {
+		if err != nil {
 			errStrings = append(errStrings, err.Error())
 		}
 	}
 
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
-		} else {
+	} else {
 		return nil
-		}
+	}
 }
 
 // restoreSuccessCheck inspects restore task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
