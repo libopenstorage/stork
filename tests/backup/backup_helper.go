@@ -2305,3 +2305,19 @@ func RemoveLabelFromNodesIfPresent(node node.Node, expectedKey string) error {
 	}
 	return nil
 }
+
+// ValidatePodByLabel validates if the pod with specified label is in a running state
+func ValidatePodByLabel(label map[string]string, namespace string, timeout time.Duration, retryInterval time.Duration) error {
+	log.Infof("Checking if pods with label %v are running in namespace %s", label, namespace)
+	pods, err := core.Instance().GetPods(namespace, label)
+	if err != nil {
+		return err
+	}
+	for _, pod := range pods.Items {
+		err = core.Instance().ValidatePod(&pod, timeout, retryInterval)
+		if err != nil {
+			return fmt.Errorf("failed to validate pod [%s] with error - %s", pod.GetName(), err.Error())
+		}
+	}
+	return nil
+}
