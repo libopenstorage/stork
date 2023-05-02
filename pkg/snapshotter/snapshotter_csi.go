@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -52,8 +53,6 @@ const (
 	SnapshotTimeoutKey = "SNAPSHOT_TIMEOUT"
 	// restoreTimeout is the duration to wait before timing out the restore
 	restoreTimeout = time.Minute * 5
-	// localCSIRetention is the max number of csi snapshots those can be kept locally
-	localCSIRetention = 1
 	// snapDeleteAnnotation needs to be set if volume snapshot is scheduled for deletion
 	snapDeleteAnnotation = "snapshotScheduledForDeletion"
 	// snapRestoreAnnotation needs to be set if volume snapshot is scheduled for restore
@@ -1066,26 +1065,38 @@ func (c *csiDriver) DownloadSnapshotObjects(
 	objectPath string,
 ) ([]SnapshotInfo, error) {
 	var snapshotInfoList []SnapshotInfo
-	bucket, err := objectstore.GetBucket(backupLocation)
-	if err != nil {
-		return snapshotInfoList, err
-	}
+	var data []byte
+	var err error
 
-	exists, err := bucket.Exists(context.TODO(), objectPath)
-	if err != nil || !exists {
-		return snapshotInfoList, err
-	}
-	data, err := bucket.ReadAll(context.TODO(), objectPath)
-	if err != nil {
-		return snapshotInfoList, err
-	}
-	if backupLocation.Location.EncryptionV2Key != "" {
-		if decryptData, err := crypto.Decrypt(data, backupLocation.Location.EncryptionV2Key); err != nil {
-		} else {
-			data = decryptData
+	if backupLocation.Location.Type != storkapi.BackupLocationNFS {
+		bucket, err := objectstore.GetBucket(backupLocation)
+		if err != nil {
+			return snapshotInfoList, err
+		}
+
+		exists, err := bucket.Exists(context.TODO(), objectPath)
+		if err != nil || !exists {
+			return snapshotInfoList, err
+		}
+		data, err = bucket.ReadAll(context.TODO(), objectPath)
+		if err != nil {
+			return snapshotInfoList, err
+		}
+		if backupLocation.Location.EncryptionV2Key != "" {
+			if decryptData, err := crypto.Decrypt(data, backupLocation.Location.EncryptionV2Key); err != nil {
+			} else {
+				data = decryptData
+			}
+		}
+	} else {
+		data, err = DownloadObject(objectPath, backupLocation.Location.EncryptionV2Key)
+		if err != nil {
+			return snapshotInfoList, err
+		}
+		if len(data) == 0 {
+			return snapshotInfoList, fmt.Errorf("decrypted data from %s is empty", objectPath)
 		}
 	}
-
 	cboCommon := &csiBackupObject{}
 	if c.v1SnapshotRequired {
 		type CsiBackupObjectv1 struct {
@@ -1095,7 +1106,7 @@ func (c *csiDriver) DownloadSnapshotObjects(
 			V1SnapshotRequired     bool
 		}
 		cbov1 := &CsiBackupObjectv1{}
-		err = json.Unmarshal(data, cbov1)
+		err := json.Unmarshal(data, cbov1)
 		if err != nil {
 			return nil, err
 		}
@@ -1368,30 +1379,43 @@ func (c *csiDriver) getCSISnapshotsCRList(backupLocation *storkapi.BackupLocatio
 	var timestamps []string
 	timestampBackupMapping := make(map[string]string)
 
-	bucket, err := objectstore.GetBucket(backupLocation)
-	if err != nil {
-		return vsList, err
-	}
-	iterator := bucket.List(&blob.ListOptions{
-		Prefix: fmt.Sprintf("%s/", objectPath),
-	})
-
-	for {
-		object, err := iterator.Next(context.TODO())
-		if err == io.EOF {
-			break
-		}
+	if backupLocation.Location.Type != storkapi.BackupLocationNFS {
+		bucket, err := objectstore.GetBucket(backupLocation)
 		if err != nil {
 			return vsList, err
 		}
-		if object.IsDir {
-			continue
-		}
+		iterator := bucket.List(&blob.ListOptions{
+			Prefix: fmt.Sprintf("%s/", objectPath),
+		})
 
-		backupUID, timestamp := getBackupInfoFromObjectKey(object.Key)
-		logrus.Debugf("volumes snapshots file: %s, backupUID: %s, timestamp: %s", object.Key, backupUID, timestamp)
-		timestamps = append(timestamps, timestamp)
-		timestampBackupMapping[timestamp] = object.Key
+		for {
+			object, err := iterator.Next(context.TODO())
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return vsList, err
+			}
+			if object.IsDir {
+				continue
+			}
+
+			backupUID, timestamp := getBackupInfoFromObjectKey(object.Key)
+			logrus.Debugf("volumes snapshots file: %s, backupUID: %s, timestamp: %s", object.Key, backupUID, timestamp)
+			timestamps = append(timestamps, timestamp)
+			timestampBackupMapping[timestamp] = object.Key
+		}
+	} else {
+		files, err := ListFiles(objectPath)
+		if err != nil {
+			return vsList, err
+		}
+		for _, file := range files {
+			backupUID, timestamp := getBackupInfoFromObjectKey(file)
+			logrus.Debugf("volumes snapshots file: %s, backupUID: %s, timestamp: %s", file, backupUID, timestamp)
+			timestamps = append(timestamps, timestamp)
+			timestampBackupMapping[timestamp] = file
+		}
 	}
 
 	sort.Strings(timestamps)
@@ -1399,107 +1423,6 @@ func (c *csiDriver) getCSISnapshotsCRList(backupLocation *storkapi.BackupLocatio
 		vsList = append(vsList, timestampBackupMapping[timestamp])
 	}
 	return vsList, nil
-}
-
-func (c *csiDriver) RetainLocalSnapshots(
-	backupLocation *storkapi.BackupLocation,
-	snapshotDriverName string,
-	snapshotClassName string,
-	namespace string,
-	pvcUID string,
-	objectPath string,
-	retain bool,
-) error {
-	vsCRList, err := c.getCSISnapshotsCRList(backupLocation, pvcUID, objectPath)
-	if err != nil {
-		return fmt.Errorf("failed in getting list of older volumesnapshot CRs from objectstore : %v", err)
-	}
-
-	for index, volumeSnapshotCR := range vsCRList {
-		snapshotInfoList, err := c.DownloadSnapshotObjects(backupLocation, volumeSnapshotCR)
-		if err != nil {
-			return err
-		}
-		var vs interface{}
-		var snapName string
-		var vsName string
-
-		for _, snapshotInfo := range snapshotInfoList {
-			if c.v1SnapshotRequired {
-				vs = snapshotInfo.SnapshotRequest.(*kSnapshotv1.VolumeSnapshot)
-				snapName = vs.(*kSnapshotv1.VolumeSnapshot).Name
-				vs.(*kSnapshotv1.VolumeSnapshot).Annotations[snapDeleteAnnotation] = "true"
-			} else {
-				vs = snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
-				snapName = vs.(*kSnapshotv1beta1.VolumeSnapshot).Name
-				vs.(*kSnapshotv1beta1.VolumeSnapshot).Annotations[snapDeleteAnnotation] = "true"
-			}
-			snapshotInfo.SnapshotRequest = vs
-			newSnapInfo, err := c.RecreateSnapshotResources(snapshotInfo, snapshotDriverName, namespace, retain)
-			if err != nil {
-				return fmt.Errorf("recreating snapshot resources failed for snapshot %s/%s: %v", namespace, snapName, err)
-			}
-			logrus.Debugf("successfully recreated snapshot resources for snapshot %s/%s", namespace, snapName)
-
-			// Check if the snapshot is scheduled for restore, then don't delete it
-			if c.v1SnapshotRequired {
-				vs = newSnapInfo.SnapshotRequest.(*kSnapshotv1.VolumeSnapshot)
-				if restoreAnnotation, ok := vs.(*kSnapshotv1.VolumeSnapshot).Annotations[snapRestoreAnnotation]; ok {
-					if restoreAnnotation == "true" {
-						logrus.Debugf("volumesnapshot %s is set for restore, hence not deleting it", vs.(*kSnapshotv1.VolumeSnapshot).Name)
-						continue
-					}
-				}
-				vsName = vs.(*kSnapshotv1.VolumeSnapshot).Name
-			} else {
-				vs = newSnapInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
-				if restoreAnnotation, ok := vs.(*kSnapshotv1beta1.VolumeSnapshot).Annotations[snapRestoreAnnotation]; ok {
-					if restoreAnnotation == "true" {
-						logrus.Debugf("volumesnapshot %s is set for restore, hence not deleting it", vs.(*kSnapshotv1beta1.VolumeSnapshot).Name)
-						continue
-					}
-				}
-				vsName = vs.(*kSnapshotv1beta1.VolumeSnapshot).Name
-			}
-			// Waiting for vs to get bound with vsc as in cleanup path by the time deletesnapshot is running,
-			// vsc may not be bound to vs.
-			err = c.waitForVolumeSnapshotBound(vs, namespace)
-			if err == nil {
-				if index < len(vsCRList)-localCSIRetention {
-					retain = false
-				} else {
-					retain = true
-				}
-				if c.v1SnapshotRequired {
-					err = c.DeleteSnapshot(
-						vsName,
-						namespace,
-						retain, // retain snapshot content
-					)
-				} else {
-					err = c.DeleteSnapshot(
-						vsName,
-						namespace,
-						retain, // retain snapshot content
-					)
-				}
-			}
-			if err != nil {
-				logrus.Errorf("failed to delete the old snapshot %s: %v", vsName, err)
-			}
-			logrus.Debugf("successfully deleted the recreated snapshot resources for snapshot %s/%s", namespace, snapName)
-			if !retain {
-				// Delete the CRs from objectstore
-				err = c.DeleteSnapshotObject(backupLocation, volumeSnapshotCR)
-				if err != nil {
-					logrus.Errorf("deleting the CRs from objectstore failed for snapshot %s/%s: %v", namespace, snapName, err)
-				}
-			}
-			logrus.Debugf("successfully deleted snapshot resources in objectstore for snapshot %s/%s", namespace, snapName)
-		}
-	}
-
-	return nil
 }
 
 func (c *csiDriver) getLocalSnapshot(backupLocation *storkapi.BackupLocation, pvcUID, backupUID, objectPath string) (SnapshotInfo, error) {
@@ -1526,6 +1449,10 @@ func (c *csiDriver) getLocalSnapshot(backupLocation *storkapi.BackupLocation, pv
 		return snapshotInfo, nil
 	}
 
+	if backupLocation.Location.Type == storkapi.BackupLocationNFS {
+		// For NFS backuplocation, making vsCRPath the absolute mount path for the file
+		vsCRPath = filepath.Join(objectPath, vsCRPath)
+	}
 	snapshotInfoList, err := c.DownloadSnapshotObjects(backupLocation, vsCRPath)
 	if err != nil {
 		return snapshotInfo, err
@@ -1852,4 +1779,44 @@ func getSnapshotTimeout() (time.Duration, error) {
 		snapshotTimeout = defaultSnapshotTimeout
 	}
 	return snapshotTimeout, nil
+}
+
+// DownloadObject download nfs resource object
+func DownloadObject(
+	filePath string,
+	encryptionKey string,
+) ([]byte, error) {
+	logrus.Debugf("downloading file with path: %s", filePath)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("getting file content of %s failed: %v", filePath, err)
+	}
+
+	if len(encryptionKey) > 0 {
+		var decryptData []byte
+		if decryptData, err = crypto.Decrypt(data, encryptionKey); err != nil {
+			logrus.Errorf("nfs downloadObject: decrypt failed :%v, returning data direclty", err)
+			return data, nil
+		}
+		return decryptData, nil
+	}
+	return data, nil
+}
+
+func ListFiles(
+	directoryPath string,
+) ([]string, error) {
+	logrus.Debugf("listing files in directory path: %s", directoryPath)
+	res := []string{}
+	files, err := os.ReadDir(directoryPath)
+	if err != nil {
+		logrus.Errorf("error reading directory: %v", err)
+		return res, err
+	}
+	for _, file := range files {
+		if !file.IsDir() {
+			res = append(res, file.Name())
+		}
+	}
+	return res, nil
 }
