@@ -1605,7 +1605,7 @@ func (a *ApplicationRestoreController) restoreResources(
 	for _, resource := range restore.Status.Resources {
 		if resource.Status != storkapi.ApplicationRestoreStatusSuccessful {
 			restore.Status.Status = storkapi.ApplicationRestoreStatusPartialSuccess
-			restore.Status.Reason = "Volumes were restored successfully. Some existing resources were not replaced"
+			restore.Status.Reason = fmt.Sprintf("Volumes were restored successfully. Some existing resources were not replaced, resource: %s", resource.Name)
 			break
 		}
 	}

@@ -4,3 +4,5 @@ bin/
 help-cmdexecutor.1
 help.1
 coverage.txt
+.idea
+
