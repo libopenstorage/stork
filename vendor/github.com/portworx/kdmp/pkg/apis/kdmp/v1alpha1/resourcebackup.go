@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -57,10 +58,8 @@ type ResourceBackup struct {
 	Type ResourceBackupType `json:"type,omitempty"`
 	// Status Overall status
 	Status ResourceBackupProgressStatus `json:"status,omitempty"`
-	// VolumesInfo Contains list of vols to be restored. Filled in by nfs executor job
-	VolumesInfo []*ResourceBackupVolumeInfo `json:"volumesInfo,omitempty"`
-	// ExistingVolumesInfo existing vols which are not be restored
-	ExistingVolumesInfo []*ResourceRestoreVolumeInfo `json:"existingVolumesInfo,omitempty"`
+	// RestoreCompleteList - restore complete volumeInfo
+	RestoreCompleteList []*storkapi.ApplicationRestoreVolumeInfo `json:"restoreCompleteList,omitempty"`
 }
 
 // ResourceBackupSpec configuration parameters for ResourceBackup
