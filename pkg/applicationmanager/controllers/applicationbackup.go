@@ -1760,7 +1760,7 @@ func (a *ApplicationBackupController) backupResources(
 			// Check the status of the resourceExport CR and update it to the applicationBackup CR
 			switch resourceExport.Status.Status {
 			case kdmpapi.ResourceExportStatusFailed:
-				message = fmt.Sprintf("Error uploading resources: %v", err)
+				message = fmt.Sprintf("Error uploading resources: %v", resourceExport.Status.Reason)
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.Reason = message
