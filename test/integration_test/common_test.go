@@ -35,7 +35,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/objectstore"
@@ -466,7 +467,7 @@ func setRemoteConfig(kubeConfig string) error {
 	k8sOps := core.Instance()
 	k8sOps.SetConfig(config)
 
-	storkOps := stork.Instance()
+	storkOps := storkops.Instance()
 	storkOps.SetConfig(config)
 
 	appsOps := apps.Instance()
@@ -493,44 +494,47 @@ func setRemoteConfig(kubeConfig string) error {
 	return nil
 }
 
-func setSourceKubeConfig() error {
+func setKubeConfig(config string) error {
 	// setting kubeconfig to default cluster first since all configmaps are created there
 	err := setRemoteConfig("")
 	if err != nil {
 		return fmt.Errorf("setting kubeconfig to default failed: %v", err)
 	}
 
-	// Change kubeconfig to source cluster
-	err = dumpRemoteKubeConfig(srcConfig)
+	err = dumpRemoteKubeConfig(config)
 	if err != nil {
-		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
+		return fmt.Errorf("unable to dump config %v to remoteFilePath: %v", config, err)
 	}
 
 	err = setRemoteConfig(remoteFilePath)
 	if err != nil {
-		return fmt.Errorf("unable to set source config: %v", err)
+		return fmt.Errorf("unable to set config to %v: %v", config, err)
+	}
+
+	if schedulerDriver != nil {
+		err = schedulerDriver.RefreshNodeRegistry()
+		if err != nil {
+			return fmt.Errorf(
+				"unable to refresh node registry after setting config to %v: %v", config, err)
+		}
+
+		err = volumeDriver.RefreshDriverEndpoints()
+		if err != nil {
+			return fmt.Errorf(
+				"unable to refresh driver endpoints after setting config to %v: %v", config, err)
+		}
 	}
 	return nil
 }
 
+func setSourceKubeConfig() error {
+	logrus.Info("Set kubeConfig to Source")
+	return setKubeConfig(srcConfig)
+}
+
 func setDestinationKubeConfig() error {
-	// setting kubeconfig to default cluster first since all configmaps are created there
-	err := setRemoteConfig("")
-	if err != nil {
-		return fmt.Errorf("unable to set destination config: %v", err)
-	}
-
-	// Change kubeconfig to source cluster
-	err = dumpRemoteKubeConfig(destConfig)
-	if err != nil {
-		return fmt.Errorf("unable to dump remote config while setting destination config: %v", err)
-	}
-
-	err = setRemoteConfig(remoteFilePath)
-	if err != nil {
-		return fmt.Errorf("unable to set destination config: %v", err)
-	}
-	return nil
+	logrus.Info("Set kubeConfig to Destination")
+	return setKubeConfig(destConfig)
 }
 
 func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir, projectIDMappings string) error {
@@ -983,6 +987,212 @@ func getTokenFromSecret(secretName, secretNamespace string) (string, error) {
 		return token, nil
 	}
 	return "", fmt.Errorf("secret does not contain key 'auth-token'")
+}
+
+func createSecret(t *testing.T, secret_name string, secret_map map[string]string) *v1.Secret {
+	secret := &v1.Secret{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      secret_name,
+			Namespace: "kube-system",
+		},
+		StringData: secret_map,
+	}
+	secretObj, err := core.Instance().CreateSecret(secret)
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create secret for volumes")
+	}
+	return secretObj
+}
+
+func cleanup(t *testing.T, namespace string, storageClass string) {
+	funcCleanup := func() {
+		err := core.Instance().DeleteNamespace(namespace)
+		if err != nil {
+			logrus.Infof("Error deleting namespace %s: %v\n", namespace, err)
+		}
+		if storageClass != "" {
+			err = storage.Instance().DeleteStorageClass(storageClass)
+			if err != nil {
+				logrus.Infof("Error deleting storage class %s: %v\n", namespace, err)
+			}
+		}
+
+	}
+	funcCleanup()
+	executeOnDestination(t, funcCleanup)
+	// time to let deletion finish
+	time.Sleep(time.Second * 20)
+}
+
+func executeOnDestination(t *testing.T, funcToExecute func()) {
+	err := setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	defer func() {
+		err := setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	}()
+
+	funcToExecute()
+}
+
+func scheduleAppAndWait(t *testing.T, instanceIDs []string, appKey string) []*scheduler.Context {
+	var ctxs []*scheduler.Context
+
+	// creates the namespace (appKey-instanceID) and schedules the app (appKey)
+	for _, instanceID := range instanceIDs {
+		newCtxs, err := schedulerDriver.Schedule(
+			instanceID,
+			scheduler.ScheduleOptions{
+				AppKeys: []string{appKey},
+				Labels:  nil,
+			})
+		require.NoError(t, err, "Error scheduling task")
+		require.Equal(t, 1, len(newCtxs), "Only one task should have started")
+		ctxs = append(ctxs, newCtxs[0])
+	}
+
+	// wait for all apps to get to running state
+	for _, ctx := range ctxs {
+		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for app to get to running state")
+	}
+	return ctxs
+}
+
+func addTasksAndWait(t *testing.T, ctx *scheduler.Context, appKeys []string) {
+	err := schedulerDriver.AddTasks(
+		ctx,
+		scheduler.ScheduleOptions{
+			AppKeys: appKeys,
+		})
+	require.NoError(t, err, "Error scheduling app")
+
+	err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for app to get to running state")
+}
+
+func triggerMigrationMultiple(
+	t *testing.T,
+	ctxs []*scheduler.Context,
+	migrationName string,
+	namespaces []string,
+	includeResources bool,
+	includeVolumes bool,
+	startApplications bool,
+) ([]*scheduler.Context, []*scheduler.Context, []*storkv1.Migration) {
+	var preMigrationCtxs []*scheduler.Context
+	var migrations []*storkv1.Migration
+
+	for idx, ctx := range ctxs {
+		preMigrationCtxs = append(preMigrationCtxs, ctx.DeepCopy())
+
+		// create, apply and validate cluster pair specs
+		err := scheduleClusterPair(
+			ctx, true, true, defaultClusterPairDir, "", false)
+		require.NoError(t, err, "Error scheduling cluster pair")
+
+		// apply migration specs
+		migration, err := createMigration(
+			t, migrationName, namespaces[idx], "remoteclusterpair",
+			namespaces[idx], &includeResources, &includeVolumes, &startApplications)
+		require.NoError(t, err, "Error scheduling migration")
+		migrations = append(migrations, migration)
+	}
+	return preMigrationCtxs, ctxs, migrations
+}
+
+func createActionCR(
+	t *testing.T,
+	actionName,
+	namespace string,
+) (*storkv1.Action, error) {
+	actionSpec := storkv1.Action{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      actionName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.ActionSpec{
+			ActionType: storkv1.ActionTypeFailover,
+		},
+		Status: storkv1.ActionStatusScheduled,
+	}
+	return storkops.Instance().CreateAction(&actionSpec)
+}
+
+func validateActionCR(t *testing.T, actionName, namespace string, isSuccessful bool) {
+	action, err := storkops.Instance().GetAction(actionName, namespace)
+	require.NoError(t, err, "error fetching Action CR")
+	if isSuccessful {
+		require.Equal(t, storkv1.ActionStatusSuccessful, action.Status)
+	} else {
+		require.Equal(t, storkv1.ActionStatusFailed, action.Status)
+	}
+}
+
+func scaleDownApps(
+	t *testing.T,
+	ctxs []*scheduler.Context,
+) []map[string]int32 {
+	var scaleFactors []map[string]int32
+
+	for _, ctx := range ctxs {
+		scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctx)
+		require.NoError(t, err, "unexpected error on GetScaleFactorMap")
+		scaleFactors = append(scaleFactors, scaleFactor)
+
+		zeroScaleFactor := make(map[string]int32) // scale down
+		for k := range scaleFactor {
+			zeroScaleFactor[k] = 0
+		}
+
+		err = schedulerDriver.ScaleApplication(ctx, zeroScaleFactor)
+		require.NoError(t, err, "unexpected error on ScaleApplication")
+
+		// check if the app is scaled down
+		_, err = task.DoRetryWithTimeout(
+			func() (interface{}, bool, error) {
+				updatedScaleFactor, err := schedulerDriver.GetScaleFactorMap(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				for k := range updatedScaleFactor {
+					if int(updatedScaleFactor[k]) != 0 {
+						return "", true, fmt.Errorf("expected scale to be 0")
+					}
+				}
+				return "", false, nil
+			},
+			defaultWaitTimeout,
+			defaultWaitInterval)
+		require.NoError(t, err, "unexpected error on scaling down application.")
+	}
+	return scaleFactors
+}
+
+func validateMigrationOnSrcAndDest(
+	t *testing.T,
+	migrationName string,
+	namespace string,
+	preMigrationCtx *scheduler.Context,
+	startAppsOnMigration bool,
+	expectedResources uint64,
+	expectedVolumes uint64,
+) {
+	err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error validating migration")
+	logrus.Infof("Validated migration: %v", migrationName)
+
+	funcValidateMigrationOnDestination := func() {
+		if startAppsOnMigration {
+			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+		} else {
+			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
+			require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
+		}
+	}
+	executeOnDestination(t, funcValidateMigrationOnDestination)
 }
 
 func changePxServiceToLoadBalancer(internalLB bool) error {

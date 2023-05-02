@@ -47,6 +47,7 @@ func deleteStorkPodsDestDuringMigrationTest(t *testing.T) {
 func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStorkDest bool) {
 	var err error
 	includeResourcesFlag := true
+	includeVolumesFlag := true
 	startApplicationsFlag := false
 
 	err = setSourceKubeConfig()
@@ -66,7 +67,7 @@ func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStor
 
 	// apply migration specs
 	currMigNamespace := migrationAppKey + "-" + nsKey + "-" + clusterKey
-	currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+	currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &includeVolumesFlag, &startApplicationsFlag)
 	require.NoError(t, err, "failed to create migration %s in namespace: %s", currMig.Name, currMig.Namespace)
 
 	// Wait for migration to start
