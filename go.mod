@@ -300,7 +300,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230426121717-92715d963a77
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230502134244-8ea3a2953c26
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230330091134-421296e5f8d0
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7

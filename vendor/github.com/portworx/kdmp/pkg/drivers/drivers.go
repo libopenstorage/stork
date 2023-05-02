@@ -17,6 +17,7 @@ const (
 	KopiaMaintenance = "kopiamaintenance"
 	NFSBackup        = "nfsbackup"
 	NFSRestore       = "nfsrestore"
+	NFSCSIRestore    = "nfscsirestore"
 	NFSDelete        = "nfsdelete"
 )
 
