@@ -2811,7 +2811,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 		restoreNames         []string
 		restoreLaterNames    []string
 		scheduledAppContexts []*scheduler.Context
-		scheduledClusterUid  string
+		sourceClusterUid     string
 		cloudCredName        string
 		cloudCredUID         string
 		backupLocationUID    string
@@ -2867,7 +2867,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 
-			scheduledClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
@@ -2971,8 +2971,8 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			for _, appCtx := range scheduledAppContexts {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, scheduledNamespace, time.Now().Unix())
-				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, scheduledClusterUid, orgID, scheduledNamespace, backupLocationName)
-				err := CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{scheduledNamespace}, labelSelectors, orgID, scheduledClusterUid, "", "", "", "", ctx)
+				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, scheduledNamespace, backupLocationName)
+				err := CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{scheduledNamespace}, labelSelectors, orgID, sourceClusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 
