@@ -2816,7 +2816,6 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 		cloudCredUID         string
 		backupLocationUID    string
 		backupLocationName   string
-		filteredAppList      []string
 	)
 
 	var (
@@ -2829,6 +2828,9 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "Deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
+
+		log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
+		Inst().AppList = appsWithCRDsAndWebhooks
 	})
 
 	It("Deploy CRs (CRD + webhook); Backup; two simultaneous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", func() {
@@ -2838,22 +2840,6 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			err := SetClusterContext("")
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
-
-		Step("filter appList to only allow valid spec (apps) for *this* test", func() {
-			log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
-			filteredAppList = make([]string, 0)
-			for i := 0; i < len(originalAppList); i++ {
-				if Contains(appsWithCRDsAndWebhooks, originalAppList[i]) {
-					filteredAppList = append(filteredAppList, originalAppList[i])
-				} else {
-					log.Warnf("app [%s] is not allowed in execution of this test", originalAppList[i])
-				}
-			}
-			if len(filteredAppList) == 0 {
-				dash.VerifyFatal(false, true, "none of the apps are allowed in execution of this test. Ending test.")
-			}
-			Inst().AppList = filteredAppList
-		})
 
 		Step("creating source and destination cluster", func() {
 			log.InfoD("creating source and destination cluster")
