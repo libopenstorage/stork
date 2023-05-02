@@ -1317,6 +1317,7 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
+// GetUpdatedSpec takes a spec and returns the latest version of it by `GET`-ing it
 func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
