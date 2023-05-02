@@ -138,9 +138,10 @@ func main() {
 			Value: 120,
 			Usage: "The interval in seconds to monitor the health of the storage driver (min: 30)",
 		},
-		cli.BoolTFlag{
-			Name:  "action-controller",
-			Usage: "Start the Action controller (default: true)",
+		cli.BoolFlag{
+			Name:   "action-controller",
+			Usage:  "Start the Action controller (default: false)",
+			Hidden: true,
 		},
 		cli.BoolTFlag{
 			Name:  "migration-controller",
