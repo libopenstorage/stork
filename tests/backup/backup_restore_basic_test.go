@@ -2828,7 +2828,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
+		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "Deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
 	})
 
 	It("Deploy CRs (CRD + webhook); Backup; two simultaneous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", func() {
@@ -2915,7 +2915,6 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 				log.FailOnError(err, "failed to get destination cluster version")
 			})
 
-			log.InfoD("Compare Source and Destination cluster version numbers")
 			log.InfoD("source cluster version: %s ; destination cluster version: %s", srcVer.String(), destVer.String())
 			isValid := srcVer.LT(destVer)
 			dash.VerifyFatal(isValid, true,
@@ -3175,24 +3174,13 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = false
-		log.InfoD("deleting deployed applications for source and destination clusters")
 
-		log.InfoD("switching to source context")
-		err = SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch to context to source cluster")
-
-		log.InfoD("deleting deployed applications on source clusters")
+		log.InfoD("deleting applications scheduled on source clusters")
 		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("waiting (for 1 minute) for any Resources created by Operator of Custom Resources to finish being destroyed.")
 		time.Sleep(time.Minute * 1)
 		log.Warn("no verification of destruction is done; it might lead to undetectable errors")
-
-		// Restored stuff destruction will be added here in upcoming PR
-
-		log.InfoD("switching to default context")
-		err = SetClusterContext("")
-		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 
 		log.InfoD("deleting restores")
 		for _, restoreName := range restoreNames {
