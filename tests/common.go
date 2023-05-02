@@ -9,6 +9,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/apps"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -5378,12 +5380,35 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	log.InfoD("Getting cloud drive specs")
 	deviceSpecs := make([]string, 0)
 	IsOperatorBasedInstall, err := Inst().V.IsOperatorBasedInstall()
-	if err != nil {
+	if err != nil && !k8serrors.IsNotFound(err) {
 		return deviceSpecs, err
 	}
 
 	if !IsOperatorBasedInstall {
-		return deviceSpecs, fmt.Errorf("it is not operator based install, cannot get device spec")
+		ns, err := Inst().V.GetVolumeDriverNamespace()
+		if err != nil {
+			return deviceSpecs, err
+		}
+		daemonSets, err := apps.Instance().ListDaemonSets(ns, metav1.ListOptions{
+			LabelSelector: "name=portworx",
+		})
+		if err != nil {
+			return deviceSpecs, err
+		}
+
+		if len(daemonSets) == 0 {
+			return deviceSpecs, fmt.Errorf("no portworx daemonset found")
+		}
+		for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
+			if container.Name == "portworx" {
+				for _, arg := range container.Args {
+					if strings.Contains(arg, "size") {
+						deviceSpecs = append(deviceSpecs, arg)
+					}
+				}
+			}
+		}
+		return deviceSpecs, nil
 	}
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
