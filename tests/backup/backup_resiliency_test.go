@@ -12,7 +12,6 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/node"
@@ -493,12 +492,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
 			err = DeletePodWithLabelInNamespace(pxbNamespace, backupPodLabel)
 			dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
-			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
-			dash.VerifyFatal(err, nil, "Getting px-backup pod")
-			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
-				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
-			}
+			err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Checking if px-backup pod is in running state")
 		})
 
 		Step("Validate the shared backup with users", func() {
@@ -545,18 +540,14 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 
 		Step("Restart mongo pods when backup sharing is in-progress", func() {
 			log.InfoD("Restart mongo pod when backup sharing is in-progress")
-			backupPodLabel := make(map[string]string)
-			backupPodLabel["app.kubernetes.io/component"] = mongodbStatefulset
+			mongoDBPodLabel := make(map[string]string)
+			mongoDBPodLabel["app.kubernetes.io/component"] = mongodbStatefulset
 			pxbNamespace, err := backup.GetPxBackupNamespace()
 			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
-			err = DeletePodWithLabelInNamespace(pxbNamespace, backupPodLabel)
+			err = DeletePodWithLabelInNamespace(pxbNamespace, mongoDBPodLabel)
 			dash.VerifyFatal(err, nil, "Restart mongo pod when backup sharing is in-progress")
-			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
-			dash.VerifyFatal(err, nil, "Getting mongo pods")
-			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 30*time.Minute, 30*time.Second)
-				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
-			}
+			err = ValidatePodByLabel(mongoDBPodLabel, pxbNamespace, 30*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Checking if mongo db pod is in running state")
 		})
 		Step("Validate the shared backup with users", func() {
 			for _, user := range users {
@@ -932,7 +923,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				if err != nil {
 					return "", true, err
 				}
-				if statefulSet.Status.ReadyReplicas < 1 {
+				if statefulSet.Status.ReadyReplicas < 2 {
 					return "", true, fmt.Errorf("no mongodb pods are ready yet")
 				}
 				return "", false, nil
@@ -940,10 +931,15 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
 			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
-			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
+			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 1, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
 		Step("Check if backup is successful after MongoDB statefulset is scaled back to original replica", func() {
 			log.InfoD("Check if backup is successful after MongoDB statefulset is scaled back to original replica")
+			backupPodLabel := map[string]string{
+				"app": "px-backup",
+			}
+			err = ValidatePodByLabel(backupPodLabel, pxBackupNS, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Checking if px-backup pod is in running state")
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
@@ -1005,6 +1001,11 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		})
 		Step("Check if restore is successful after MongoDB statefulset is scaled back to original replica", func() {
 			log.InfoD("Check if restore is successful after MongoDB statefulset is scaled back to original replica")
+			backupPodLabel := map[string]string{
+				"app": "px-backup",
+			}
+			err = ValidatePodByLabel(backupPodLabel, pxBackupNS, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Checking if px-backup pod is in running state")
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, restoreName := range restoreNames {
