@@ -227,6 +227,38 @@ func (m *MigrationController) updateMigrationCR(ctx context.Context, migration *
 	return m.client.Update(ctx, migration)
 }
 
+func (m *MigrationController) getMigrationNamespaces(ctx context.Context, migration *stork_api.Migration) ([]string, error) {
+	var migrationNamespaces []string
+	migrationNamespaces = append(migrationNamespaces, migration.Spec.Namespaces...)
+
+	// create a Kubernetes client using the default config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// set the label selectors
+	labelSelector := "app=myapp,env=production"
+	//var labelBasedNamespaces map[string]string
+	// get all namespaces that have the labels
+	// TO-Do
+	for _, _ = range migration.Spec.ExcludeSelectors {
+		namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return nil, err
+		}
+		for _, namespace := range namespaces.Items {
+			migrationNamespaces = append(migrationNamespaces, namespace.GetName())
+		}
+	}
+
+	return migrationNamespaces, nil
+}
+
 func (m *MigrationController) handle(ctx context.Context, migration *stork_api.Migration) error {
 	if migration.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(migration, controllers.FinalizerCleanup) {
@@ -311,6 +343,8 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		return nil
 	}
 
+	migrationNamespaces, err := m.getMigrationNamespaces(ctx, migration)
+
 	// Check whether namespace is allowed to be migrated before each stage
 	// Restrict migration to only the namespace that the object belongs
 	// except for the namespace designated by the admin
@@ -324,7 +358,6 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		return nil
 	}
 	var terminationChannels []chan bool
-	var err error
 	var clusterDomains *stork_api.ClusterDomains
 	if !*migration.Spec.IncludeVolumes {
 		for i := 0; i < domainsMaxRetries; i++ {
