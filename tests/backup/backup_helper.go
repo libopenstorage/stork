@@ -1539,15 +1539,6 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
-// ValidateRestore returns a clone of the contexts (with backup objects) *after* converting the contexts to point to restored objects (and after validating those objects)
-func ValidateRestore(ctx context.Context, restoreName string, orgID string, backedupAppContexts []*scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, restoreClusterConfigPath string) ([]*scheduler.Context, error) {
-
-	// placeholder.
-	// will be taken care of in seprate PR
-
-	return nil, nil
-}
-
 // IsBackupLocationPresent checks whether the backup location is present or not
 func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID string) (bool, error) {
 	backupLocationNames := make([]string, 0)

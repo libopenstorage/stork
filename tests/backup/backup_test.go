@@ -254,13 +254,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
-
-				log.Infof("Obtaining DestinationClusterConfigPath")
-				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-				log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
-
-				_, err = ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{scheduledAppContexts[i]}, make(map[string]string), make(map[string]string), destinationClusterConfigPath)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of restore [%s] is success", restoreName))
 			}
 		})
 	})
