@@ -356,11 +356,10 @@ func run(c *cli.Context) {
 	}
 	// Registering application registration CRDs explicitly to use
 	// shared informer cache for caching application-controller CRs
-	if c.Bool("application-controller") {
-		if err := applicationmanager.CreateCRD(); err != nil {
-			log.Fatalf("Error creating CRDs for application manager: %v", err)
-		}
+	if err := applicationmanager.CreateCRD(); err != nil {
+		log.Fatalf("Error creating CRDs for application manager: %v", err)
 	}
+
 	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
 	// In this way, even the stork extender code can use this cache, since the extender filter/process
 	// requests can land on any stork pod.
