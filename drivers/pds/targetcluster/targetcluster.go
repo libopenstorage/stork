@@ -128,8 +128,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 		}
 		if !isLatest {
 			log.InfoD("Upgrading PDS helm chart to %v", helmChartversion)
-			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s --set tenantId=%s "+
-				"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
+			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s", PDSNamespace, PDSChartRepo, helmChartversion)
 		}
 		isRegistered = true
 	}

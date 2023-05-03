@@ -9,6 +9,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/apps"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -76,6 +78,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
@@ -3348,32 +3351,38 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 }
 
 // DeleteSchedule deletes backup schedule
-func DeleteSchedule(backupScheduleName, backupScheduleUID, OrgID string) error {
+func DeleteSchedule(backupScheduleName string, clusterName string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		Name:  backupScheduleName,
+		Uid:   "",
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return err
+	}
+	backupScheduleUID := resp.GetBackupSchedule().GetUid()
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
-		OrgId: OrgID,
+		OrgId: orgID,
 		Name:  backupScheduleName,
 		// DeleteBackups indicates whether the cloud backup files need to
 		// be deleted or retained.
 		DeleteBackups: true,
 		Uid:           backupScheduleUID,
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	if err != nil {
-		return err
-	}
 	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {
 		return err
 	}
-	clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: SourceClusterName, IncludeSecrets: true}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
 	namespace := "*"
-	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
 		clusterObj,
 		BackupRestoreCompletionTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
@@ -5463,12 +5472,35 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	log.InfoD("Getting cloud drive specs")
 	deviceSpecs := make([]string, 0)
 	IsOperatorBasedInstall, err := Inst().V.IsOperatorBasedInstall()
-	if err != nil {
+	if err != nil && !k8serrors.IsNotFound(err) {
 		return deviceSpecs, err
 	}
 
 	if !IsOperatorBasedInstall {
-		return deviceSpecs, fmt.Errorf("it is not operator based install, cannot get device spec")
+		ns, err := Inst().V.GetVolumeDriverNamespace()
+		if err != nil {
+			return deviceSpecs, err
+		}
+		daemonSets, err := apps.Instance().ListDaemonSets(ns, metav1.ListOptions{
+			LabelSelector: "name=portworx",
+		})
+		if err != nil {
+			return deviceSpecs, err
+		}
+
+		if len(daemonSets) == 0 {
+			return deviceSpecs, fmt.Errorf("no portworx daemonset found")
+		}
+		for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
+			if container.Name == "portworx" {
+				for _, arg := range container.Args {
+					if strings.Contains(arg, "size") {
+						deviceSpecs = append(deviceSpecs, arg)
+					}
+				}
+			}
+		}
+		return deviceSpecs, nil
 	}
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
@@ -5820,11 +5852,7 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		labels := b.Labels
 		for k, v := range labels {
 			if k == "pxpool" {
-				if c, ok := driveCountMap[v]; ok {
-					driveCountMap[v] += c
-				} else {
-					driveCountMap[v] = 1
-				}
+				driveCountMap[v] += 1
 			}
 		}
 	}
@@ -6709,4 +6737,114 @@ func AddMetadataDisk(n node.Node) error {
 
 	return nil
 
+}
+
+// createNamespaces Create N number of namespaces and return namespace list
+func createNamespaces(numberOfNamespaces int) ([]string, error) {
+
+	// Create multiple namespaces in string
+	var (
+		namespaces []string
+	)
+
+	// Create a good number of namespaces
+	for i := 0; i < numberOfNamespaces; i++ {
+		namespace := fmt.Sprintf("large-resource-%d-%v", i, time.Now().Unix())
+		nsName := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		log.InfoD("Creating namespace %v", namespace)
+		_, err := k8sCore.CreateNamespace(nsName)
+		if err != nil {
+			return nil, err
+		} else {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	return namespaces, nil
+}
+
+// createConfigMaps with the given number of entries on specified namespaces
+func createConfigMaps(namespaces []string, numberOfConfigmap int, numberOfEntries int) error {
+
+	// Create random data to add in ConfigMap
+	var randomData = make(map[string]string)
+	for i := 0; i < numberOfEntries; i++ {
+		randomString := RandomString(80)
+		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
+		randomData[randomStringWithTimeStamp] = randomString
+	}
+
+	// create the number of configmaps needed
+	k8sCore = core.Instance()
+	for _, namespace := range namespaces {
+		for i := 0; i < numberOfConfigmap; i++ {
+			name := fmt.Sprintf("configmap-%s-%d-%v", namespace, i, time.Now().Unix())
+			log.InfoD("Creating Configmap: %v", name)
+			metaObj := metaV1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			}
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metaObj,
+				Data:       randomData,
+			}
+
+			_, err := k8sCore.CreateConfigMap(obj)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// createSecrets with the given number of entries on specified namespaces
+func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int) error {
+
+	// Create random data to add in ConfigMap
+	var randomData = make(map[string]string)
+	for i := 0; i < numberOfEntries; i++ {
+		randomString := RandomString(80)
+		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
+		randomData[randomStringWithTimeStamp] = randomString
+	}
+
+	// create the number of configmaps needed
+	k8sCore = core.Instance()
+	for _, namespace := range namespaces {
+		for i := 0; i < numberOfSecrets; i++ {
+			name := fmt.Sprintf("secret-%s-%d-%v", namespace, i, time.Now().Unix())
+			log.InfoD("Creating secret: %v", name)
+			metaObj := metaV1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			}
+			obj := &corev1.Secret{
+				ObjectMeta: metaObj,
+				StringData: randomData,
+			}
+
+			_, err := k8sCore.CreateSecret(obj)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// deleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
+func deleteNamespaces(namespaces []string) error {
+	// Delete a list of namespaces given
+	k8sCore = core.Instance()
+	for _, namespace := range namespaces {
+		err := k8sCore.DeleteNamespace(namespace)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

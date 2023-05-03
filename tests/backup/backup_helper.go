@@ -28,6 +28,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -86,6 +87,8 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
+	podReadyTimeout                           = 30 * time.Minute
+	podReadyRetryTime                         = 30 * time.Second
 )
 
 var (
@@ -2753,6 +2756,41 @@ func RemoveElementByValue(arr interface{}, value interface{}) error {
 		if v.Index(i).Interface() == value {
 			v.Set(reflect.AppendSlice(v.Slice(0, i), v.Slice(i+1, v.Len())))
 			break
+		}
+	}
+	return nil
+}
+
+// RemoveLabelFromNodesIfPresent remove the given label from the given node if present
+func RemoveLabelFromNodesIfPresent(node node.Node, expectedKey string) error {
+	nodeLabels, err := core.Instance().GetLabelsOnNode(node.Name)
+	if err != nil {
+		return err
+	}
+	for key := range nodeLabels {
+		if key == expectedKey {
+			log.InfoD("Removing the applied label with key %s from node %s", expectedKey, node.Name)
+			err = Inst().S.RemoveLabelOnNode(node, expectedKey)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+// ValidatePodByLabel validates if the pod with specified label is in a running state
+func ValidatePodByLabel(label map[string]string, namespace string, timeout time.Duration, retryInterval time.Duration) error {
+	log.Infof("Checking if pods with label %v are running in namespace %s", label, namespace)
+	pods, err := core.Instance().GetPods(namespace, label)
+	if err != nil {
+		return err
+	}
+	for _, pod := range pods.Items {
+		err = core.Instance().ValidatePod(&pod, timeout, retryInterval)
+		if err != nil {
+			return fmt.Errorf("failed to validate pod [%s] with error - %s", pod.GetName(), err.Error())
 		}
 	}
 	return nil

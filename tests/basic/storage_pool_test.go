@@ -1705,6 +1705,22 @@ func getPoolWithLeastSize() *api.StoragePool {
 	return selectedPool
 }
 
+func getNodeWithLeastSize() *node.Node {
+	stNodes := node.GetStorageNodes()
+	var selectedNode node.Node
+	var currLowestSize uint64
+	currLowestSize = 54975581388800 / units.GiB
+	for _, n := range stNodes {
+		plSize := getTotalPoolSize(n) / units.GiB
+		if plSize < currLowestSize {
+			currLowestSize = plSize
+			selectedNode = n
+		}
+	}
+	log.Infof(fmt.Sprintf("Node %s has least total size %d", selectedNode.Name, currLowestSize))
+	return &selectedNode
+}
+
 func waitForVolMinimumSize(volID string, size uint64) (bool, error) {
 
 	//waiting till given volume has enough IO to run the test
@@ -4524,10 +4540,8 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		selectedPool := getPoolWithLeastSize()
-		selectedNode, err := GetNodeWithGivenPoolID(selectedPool.Uuid)
-		log.FailOnError(err, fmt.Sprintf("Failed to get node with pool UUID %s", selectedPool.Uuid))
-		log.Infof(fmt.Sprintf("Node %s with pool %s is marked for repl 1", selectedNode.Name, selectedPool.Uuid))
+		selectedNode := getNodeWithLeastSize()
+		log.Infof(fmt.Sprintf("Node %s is marked for repl 1", selectedNode.Name))
 		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
@@ -4535,23 +4549,10 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 				secondReplNode = stNode
 			}
 		}
-		secondNodePools := secondReplNode.Pools
-		secondNodePool := secondNodePools[0]
-		log.Infof(fmt.Sprintf("Node %s with pool %s is marked for repl 2", secondReplNode.Name, secondNodePool.Uuid))
-		drvSize, err := getPoolDiskSize(selectedPool)
-		log.FailOnError(err, "error getting drive size for pool [%s]", selectedPool.Uuid)
-		expectPoolSize := (selectedPool.TotalSize / units.GiB) + (2 * drvSize)
 
 		isjournal, err := isJournalEnabled()
 		log.FailOnError(err, "is journal enabled check failed")
-		if secondNodePool.TotalSize/units.GiB < expectPoolSize-3 {
-			log.InfoD("Current Size of the pool %s is %d", secondNodePool.Uuid, secondNodePool.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(secondNodePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectPoolSize)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-			err = waitForPoolToBeResized(expectPoolSize, secondNodePool.Uuid, isjournal)
-			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", secondNodePool.Uuid))
-		}
+		adjustReplPools(*selectedNode, secondReplNode, isjournal)
 
 		appList := Inst().AppList
 		defer func() {
@@ -4610,7 +4611,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 				break
 			}
 		}
-		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
+		selectedPool, err := GetStoragePoolByUUID(offlinePoolUUID)
 		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
 
 		defer func() {
@@ -4673,11 +4674,22 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 			err = Inst().V.AddCloudDrive(selectedNode, newSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
 
+			err = waitForPoolToBeResized(expandedExpectedPoolSize, selectedPool.Uuid, isjournal)
+			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", selectedPool.Uuid))
+
+			status, err = Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+			log.InfoD(fmt.Sprintf("Pool %s has status %s", selectedNode.Name, status[selectedPool.Uuid]))
+			if status[selectedPool.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+			}
+
 			log.InfoD("Validate pool rebalance after drive add")
 			err = ValidateDriveRebalance(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", selectedPool.Uuid))
-			err = waitForPoolToBeResized(expandedExpectedPoolSize, selectedPool.Uuid, isjournal)
-			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", selectedPool.Uuid))
+
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, fmt.Sprintf("error get pool using UUID %s", selectedPool.Uuid))
 			newPoolSize := resizedPool.TotalSize / units.GiB
@@ -4692,9 +4704,9 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 			log.FailOnError(err, "error getting storage pools")
 
 			dash.VerifyFatal(len(pools), existingPoolsCount+1, "Validate new pool is created")
-			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			nodeStatus, err := Inst().V.GetNodeStatus(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
-			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
+			dash.VerifySafely(*nodeStatus, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
 	})
 
@@ -4709,7 +4721,7 @@ func adjustReplPools(firstNode, replNode node.Node, isjournal bool) error {
 
 	selectedNodeSize := getTotalPoolSize(firstNode)
 	secondReplSize := getTotalPoolSize(replNode)
-	if secondReplSize <= selectedNodeSize*2 {
+	if secondReplSize <= selectedNodeSize*3 {
 		secondPool := replNode.StoragePools[0]
 		maxSize := secondPool.TotalSize / units.GiB
 		for _, p := range replNode.StoragePools {
@@ -4720,7 +4732,7 @@ func adjustReplPools(firstNode, replNode node.Node, isjournal bool) error {
 			}
 		}
 
-		expandSize := maxSize * 2
+		expandSize := maxSize * 3
 		log.InfoD("Current Size of the pool %s is %d", secondPool.Uuid, secondPool.TotalSize/units.GiB)
 		if err := Inst().V.ExpandPool(secondPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expandSize); err != nil {
 			return fmt.Errorf("pool expansion init failed for %s. Err : %v", secondPool.Uuid, err)
@@ -4754,9 +4766,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		selectedPool := getPoolWithLeastSize()
-		selectedNode, err := GetNodeWithGivenPoolID(selectedPool.Uuid)
-		log.FailOnError(err, fmt.Sprintf("Failed to get node with pool UUID %s", selectedPool.Uuid))
+		selectedNode := getNodeWithLeastSize()
 
 		stNodes := node.GetStorageDriverNodes()
 		var secondReplNode node.Node
@@ -4767,6 +4777,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		}
 
 		applist := Inst().AppList
+		var err error
 		defer func() {
 			Inst().AppList = applist
 			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
@@ -4805,7 +4816,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 				break
 			}
 		}
-		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
+		selectedPool, err := GetStoragePoolByUUID(offlinePoolUUID)
 		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
 
 		var expandedExpectedPoolSize uint64
@@ -4867,9 +4878,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		selectedPool := getPoolWithLeastSize()
-		selectedNode, err := GetNodeWithGivenPoolID(selectedPool.Uuid)
-		log.FailOnError(err, fmt.Sprintf("Failed to get node with pool UUID %s", selectedPool.Uuid))
+		selectedNode := getNodeWithLeastSize()
 		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
@@ -4879,6 +4888,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 		}
 
 		applist := Inst().AppList
+		var err error
 		defer func() {
 			Inst().AppList = applist
 			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
@@ -4917,7 +4927,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 				break
 			}
 		}
-		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
+		selectedPool, err := GetStoragePoolByUUID(offlinePoolUUID)
 		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
 
 		defer func() {
@@ -4956,6 +4966,15 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, selectedPool.Uuid, isjournal)
 			log.FailOnError(err, "Error waiting for poor resize")
+			status, err = Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+			log.InfoD(fmt.Sprintf("Pool %s has status %s", selectedNode.Name, status[selectedPool.Uuid]))
+			if status[selectedPool.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+			}
+
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, fmt.Sprintf("error get pool using UUID %s", selectedPool.Uuid))
 			newPoolSize := resizedPool.TotalSize / units.GiB
