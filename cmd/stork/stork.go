@@ -354,7 +354,7 @@ func run(c *cli.Context) {
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
 		log.Fatalf("Setup scheme failed for stork resources: %v", err)
 	}
-	// Registering application registration CRDs explicitly to use
+	// Registering application registration CRD explicitly to use
 	// shared informer cache for caching application-controller CRs
 	if err := applicationmanager.CreateCRD(); err != nil {
 		log.Fatalf("Error creating CRDs for application manager: %v", err)
