@@ -358,10 +358,10 @@ type Driver interface {
 	ValidateDriver(endpointVersion string, autoUpdateComponents bool) error
 
 	// ExpandPool resizes a pool of a given ID
-	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error
 
 	// ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
-	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error
 
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
