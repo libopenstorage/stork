@@ -3265,32 +3265,38 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 }
 
 // DeleteSchedule deletes backup schedule
-func DeleteSchedule(backupScheduleName, backupScheduleUID, OrgID string) error {
+func DeleteSchedule(backupScheduleName string, clusterName string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		Name:  backupScheduleName,
+		Uid:   "",
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return err
+	}
+	backupScheduleUID := resp.GetBackupSchedule().GetUid()
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
-		OrgId: OrgID,
+		OrgId: orgID,
 		Name:  backupScheduleName,
 		// DeleteBackups indicates whether the cloud backup files need to
 		// be deleted or retained.
 		DeleteBackups: true,
 		Uid:           backupScheduleUID,
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	if err != nil {
-		return err
-	}
 	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {
 		return err
 	}
-	clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: SourceClusterName, IncludeSecrets: true}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
 	namespace := "*"
-	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
 		clusterObj,
 		BackupRestoreCompletionTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)

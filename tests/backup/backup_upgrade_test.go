@@ -188,9 +188,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		log.InfoD("Clean up objects after test execution")
 		log.Infof("Deleting backup schedule")
 		for _, scheduleName := range scheduleNames {
-			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
-			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")
