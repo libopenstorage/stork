@@ -294,24 +294,23 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 // DeleteAllBackupObjects deletes all backed up objects
 var _ = Describe("{DeleteAllBackupObjects}", func() {
 	var (
-		appList           = Inst().AppList
-		backupName        string
-		contexts          []*scheduler.Context
-		preRuleNameList   []string
-		postRuleNameList  []string
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		restoreName       string
-		cloudCredName     string
-		cloudCredUID      string
-		backupLocationUID string
-		bkpLocationName   string
-		preRuleName       string
-		postRuleName      string
-		preRuleUid        string
-		postRuleUid       string
+		appList              = Inst().AppList
+		backupName           string
+		scheduledAppContexts []*scheduler.Context
+		preRuleNameList      []string
+		postRuleNameList     []string
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		restoreName          string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		bkpLocationName      string
+		preRuleName          string
+		postRuleName         string
+		preRuleUid           string
+		postRuleUid          string
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -335,15 +334,15 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -351,7 +350,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		providers := getProviders()
 
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
@@ -430,9 +429,9 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			}
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup creation", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidatation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
 		Step("Restoring the backed up applications", func() {
@@ -492,11 +491,11 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.Infof(" Deleting deployed applications")
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 	})
 })
 
