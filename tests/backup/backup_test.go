@@ -257,8 +257,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	})
 
 	JustAfterEach(func() {
-		log.InfoD("Begin JustAfterEach")
-		defer func() { log.InfoD("End JustAfterEach") }()
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 
 		defer func() {
