@@ -1291,10 +1291,11 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 
 	var errors []error
 
-	backupName = backupInspectResponse.GetBackup().GetName()
-	resourceInfos := backupInspectResponse.GetBackup().GetResources()
-	backedupVolumes := backupInspectResponse.GetBackup().GetVolumes()
-	backupNamespaces := backupInspectResponse.GetBackup().GetNamespaces()
+	theBackup := backupInspectResponse.GetBackup()
+	backupName = theBackup.GetName()
+	resourceInfos := theBackup.GetResources()
+	backedupVolumes := theBackup.GetVolumes()
+	backupNamespaces := theBackup.GetNamespaces()
 
 	for _, scheduledAppContext := range scheduledAppContexts {
 
@@ -1439,7 +1440,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 			}
 
 			// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-			err = fmt.Errorf("the volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) was present in the cluster corresponding to the PVC's context, but not in the backup [%s]", pvcObj.Spec.VolumeName, pvcObj.GetName(), pvcObj.GetNamespace(), backupName)
+			err = fmt.Errorf("the volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) was present in the cluster with the namespace containing that PVC, but the volume was not in the backup [%s]", pvcObj.Spec.VolumeName, pvcObj.GetName(), pvcObj.GetNamespace(), backupName)
 			errors = append(errors, err)
 		}
 	}
