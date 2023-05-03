@@ -300,7 +300,6 @@ func CreateBackupWithCustomResourceTypeWithValidatation(ctx context.Context, bac
 	if err != nil {
 		return err
 	}
-	log.InfoD("Validating Backup [%s]", backupName)
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContexts, resourceTypes)
 }
 
@@ -1290,7 +1289,7 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypes []string) error {
 	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
 
-	log.InfoD("Obtaining backup info for backup [%s]", backupName)
+	log.Infof("Obtaining backup info for backup [%s]", backupName)
 	backupDriver := Inst().Backup
 	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
@@ -1396,7 +1395,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		}
 
 		// Collect all volumes belonging to a context
-		log.InfoD("getting the volumes bounded to the PVCs in the namespace (scheduledAppContext) [%s]", scheduledAppContextNamespace)
+		log.Infof("getting the volumes bounded to the PVCs in the namespace (scheduledAppContext) [%s]", scheduledAppContextNamespace)
 		volumeMap := make(map[string]*volume.Volume)
 		scheduledVolumes, err := Inst().S.GetVolumes(scheduledAppContext)
 		if err != nil {
