@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/sched-ops/task"
+	"github.com/blang/semver"
 
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -25,8 +25,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
-
-	semver "github.com/blang/semver"
 )
 
 // BasicSelectiveRestore selects random backed-up apps and restores them
@@ -951,9 +949,8 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		scheduleName           string
 		appNamespaces          []string
 		newAppNamespaces       []string
-		scheduleNames          []string
 		restoreName            string
-		nextScheduleBackupName interface{}
+		nextScheduleBackupName string
 		intervalInMins         int
 		numDeployments         int
 	)
@@ -1043,6 +1040,8 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		})
 		Step("Create schedule backup", func() {
 			log.InfoD("Creating a schedule backup")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
@@ -1053,11 +1052,12 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
-			scheduleNames = append(scheduleNames, scheduleName)
 		})
 		// To ensure applications are deployed after a schedule backup is created
 		Step("Schedule applications in destination cluster to create new namespaces", func() {
 			log.InfoD("Scheduling applications in destination cluster to create new namespaces")
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			for i := numDeployments; i < numDeployments+1; i++ {
 				taskName := fmt.Sprintf("dst-%s-new-%d", taskNamePrefix, i)
 				appContexts := ScheduleApplications(taskName)
@@ -1077,32 +1077,17 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		})
 		Step("Verify new application namespaces inclusion in next schedule backup", func() {
 			log.InfoD("Verifying new application namespaces inclusion in next schedule backup")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching names of all schedule backups of schedule named [%s]", scheduleName))
-			currentScheduleBackupCount := len(allScheduleBackupNames)
-			log.InfoD("Current number of schedule backups is [%v]", currentScheduleBackupCount)
-			nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
-			log.InfoD("Ordinal of the next schedule backup is [%v]", nextScheduleBackupOrdinal)
-			checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
-				ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
-				if err != nil {
-					return "", true, err
-				}
-				return ordinalScheduleBackupName, false, nil
-			}
-			log.InfoD("Waiting for %v minutes for the next schedule backup to be triggered", intervalInMins)
-			time.Sleep(time.Duration(intervalInMins) * time.Minute)
-			nextScheduleBackupName, err = task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
-			log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName.(string))
-			err = backupSuccessCheck(nextScheduleBackupName.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying success of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName.(string), scheduleName))
-			nextScheduleBackupUid, err := Inst().Backup.GetBackupUID(ctx, nextScheduleBackupName.(string), orgID)
+			nextScheduleBackupName, err = GetNextScheduleBackupName(scheduleName, time.Duration(intervalInMins), ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of schedule named [%s]", scheduleName))
+			log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
+			nextScheduleBackupUid, err := Inst().Backup.GetBackupUID(ctx, nextScheduleBackupName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
 			backupInspectRequest := &api.BackupInspectRequest{
-				Name:  nextScheduleBackupName.(string),
+				Name:  nextScheduleBackupName,
 				Uid:   nextScheduleBackupUid,
 				OrgId: orgID,
 			}
@@ -1125,7 +1110,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			}
 			log.InfoD("Namespace mapping used for restoring - %v", namespaceMapping)
 			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
-			err = CreateRestore(restoreName, nextScheduleBackupName.(string), namespaceMapping, SourceClusterName, orgID, ctx, make(map[string]string))
+			err = CreateRestore(restoreName, nextScheduleBackupName, namespaceMapping, SourceClusterName, orgID, ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 		})
 	})
@@ -1135,24 +1120,24 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		defer EndPxBackupTorpedoTest(allContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		for _, scheduleName := range scheduleNames {
-			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
-			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		}
+		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting schedule [%s] uid", scheduleName))
+		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{schedulePolicyName}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		err = SetDestinationKubeConfig()
+		dash.VerifySafely(err, nil, "Verifying if context is switched to destination cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		allAppNamespaces := append(appNamespaces, newAppNamespaces...)
 		log.InfoD("Deleting deployed namespaces - %v", allAppNamespaces)
 		ValidateAndDestroy(allContexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 		err = SetSourceKubeConfig()
 		dash.VerifySafely(err, nil, "Verifying if context is switched to source cluster")
 	})
