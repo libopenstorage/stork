@@ -354,6 +354,19 @@ func run(c *cli.Context) {
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
 		log.Fatalf("Setup scheme failed for stork resources: %v", err)
 	}
+	// Registering application registration CRDs explicitly to use
+	// shared informer cache for caching application-controller CRs
+	if err := applicationmanager.CreateCRD(); err != nil {
+		log.Fatalf("Error creating CRDs for application manager: %v", err)
+	}
+
+	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
+	// In this way, even the stork extender code can use this cache, since the extender filter/process
+	// requests can land on any stork pod.
+	if err := cache.CreateSharedInformerCache(mgr); err != nil {
+		log.Fatalf("failed to setup shared informer cache: %v", err)
+	}
+	log.Infof("shared informer cache has been intialized")
 
 	var d volume.Driver
 	if driverName != "" {
@@ -581,14 +594,6 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 			log.Fatalf("Error initializing kdmp controller: %v", err)
 		}
 	}
-
-	// Setup stork cache. We setup this cache for all the stork pods instead of just the leader pod.
-	// In this way, even the stork extender code can use this cache, since the extender filter/process
-	// requests can land on any stork pod.
-	if err := cache.CreateSharedInformerCache(mgr); err != nil {
-		log.Fatalf("failed to setup shared informer cache: %v", err)
-	}
-	log.Infof("shared informer cache has been intialized")
 
 	go func() {
 		for {
