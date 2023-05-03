@@ -1188,6 +1188,29 @@ func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
 			}
 			return newVolInfos, existingInfos, fmt.Errorf("erorr getting pvc %s/%s: %v", ns, pvcObject.Name, err)
 		}
+		pvName := pvc.Spec.VolumeName
+		var zones []string
+		// If PVC is present, fetch the corresponding PV spec and get the zone information
+		if driver.String() == volume.GCEDriverName || driver.String() == volume.AWSDriverName {
+			pv, err := core.Instance().GetPersistentVolume(pvName)
+			if err != nil && !errors.IsNotFound(err) {
+				return newVolInfos, existingInfos, fmt.Errorf("erorr getting pv %s: %v", pvName, err)
+			}
+
+			if driver.String() == volume.GCEDriverName {
+				zones = volume.GetGCPZones(pv)
+			}
+			if driver.String() == volume.AWSDriverName {
+				zones, err = volume.GetAWSZones(pv)
+				if err != nil {
+					return newVolInfos, existingInfos, fmt.Errorf("erorr getting AWS zones : %v", err)
+				}
+			}
+			// if fetched zones are empty, assign it to the source zones
+			if len(zones) == 0 {
+				zones = bkupVolInfo.Zones
+			}
+		}
 
 		restoreVolInfo.PersistentVolumeClaim = bkupVolInfo.PersistentVolumeClaim
 		restoreVolInfo.PersistentVolumeClaimUID = bkupVolInfo.PersistentVolumeClaimUID
@@ -1197,6 +1220,7 @@ func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
 		restoreVolInfo.Status = storkapi.ApplicationRestoreStatusRetained
 		restoreVolInfo.RestoreVolume = pvc.Spec.VolumeName
 		restoreVolInfo.TotalSize = bkupVolInfo.TotalSize
+		restoreVolInfo.Zones = zones
 		restoreVolInfo.Reason = fmt.Sprintf("Skipped from volume restore as policy is set to %s and pvc already exists", storkapi.ApplicationRestoreReplacePolicyRetain)
 		existingInfos = append(existingInfos, restoreVolInfo)
 	}

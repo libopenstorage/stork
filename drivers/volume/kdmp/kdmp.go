@@ -89,18 +89,15 @@ const (
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
-	// pvProvisionedByAnnotation is the annotation on PV which has the
-	// provisioner name
-	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
-	pureCSIProvisioner        = "pure-csi"
-	bindCompletedKey          = "pv.kubernetes.io/bind-completed"
-	boundByControllerKey      = "pv.kubernetes.io/bound-by-controller"
-	storageClassKey           = "volume.beta.kubernetes.io/storage-class"
-	storageProvisioner        = "volume.beta.kubernetes.io/storage-provisioner"
-	storageNodeAnnotation     = "volume.kubernetes.io/selected-node"
-	gkeNodeLabelKey           = "topology.gke.io/zone"
-	awsNodeLabelKey           = "alpha.eksctl.io/cluster-name"
-	ocpAWSNodeLabelKey        = "topology.ebs.csi.aws.com/zone"
+	pureCSIProvisioner       = "pure-csi"
+	bindCompletedKey         = "pv.kubernetes.io/bind-completed"
+	boundByControllerKey     = "pv.kubernetes.io/bound-by-controller"
+	storageClassKey          = "volume.beta.kubernetes.io/storage-class"
+	storageProvisioner       = "volume.beta.kubernetes.io/storage-provisioner"
+	storageNodeAnnotation    = "volume.kubernetes.io/selected-node"
+	gkeNodeLabelKey          = "topology.gke.io/zone"
+	awsNodeLabelKey          = "alpha.eksctl.io/cluster-name"
+	ocpAWSNodeLabelKey       = "topology.ebs.csi.aws.com/zone"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -171,7 +168,7 @@ func getProvisionerName(pvc v1.PersistentVolumeClaim) string {
 		logrus.Warnf("error getting pv for pvc [%v/%v]: %v", pvc.Namespace, pvc.Name, err)
 		return provisioner
 	}
-	if val, ok := pv.Annotations[pvProvisionedByAnnotation]; ok {
+	if val, ok := pv.Annotations[storkvolume.PvProvisionedByAnnotation]; ok {
 		provisioner = val
 	}
 	return provisioner
@@ -208,24 +205,7 @@ func getZones(pv *v1.PersistentVolume) ([]string, error) {
 
 	if awsCluster {
 		// Zone are supported only for EBS provisioner
-		if pv.Annotations[pvProvisionedByAnnotation] == storkvolume.EbsProvisionerName {
-			ebsName := storkvolume.GetEBSVolumeID(pv)
-			if ebsName == "" {
-				return nil, fmt.Errorf("AWS EBS info not found in PV %v", pv.Name)
-			}
-
-			client, err := storkvolume.GetAWSClient()
-			if err != nil {
-				return nil, err
-			}
-			ebsVolume, err := storkvolume.GetEBSVolume(ebsName, nil, client)
-			if err != nil {
-				return nil, err
-			}
-			logrus.Tracef("getZones: zone: %v", *ebsVolume.AvailabilityZone)
-
-			return []string{*ebsVolume.AvailabilityZone}, nil
-		}
+		return storkvolume.GetAWSZones(pv)
 	}
 
 	return nil, nil
