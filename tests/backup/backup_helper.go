@@ -1785,7 +1785,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, sche
 
 	restoredAppContexts := make([]*scheduler.Context, 0)
 	for _, backedupAppContext := range scheduledAppContexts {
-		restoredAppContext, err := GetRestoreCtxFromBackupCtx(backedupAppContext, namespaceMapping, storageClassMapping)
+		restoredAppContext, err := TransformAppContextWithMappings(backedupAppContext, namespaceMapping, storageClassMapping)
 		if err != nil {
 			return fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
 		}
@@ -1820,18 +1820,18 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, sche
 	return nil
 }
 
-// GetRestoreCtxFromBackupCtx uses the contexts to create and return clones which refer to restored specs (along with conversion of their specs)
-// NOTE: To be used after switching context to the required destination cluster where restore was performed
-func GetRestoreCtxFromBackupCtx(backedupAppContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string) (*scheduler.Context, error) {
+// TransformAppContextWithMappings clones an appContext and transforms it according to the maps provided.
+// NOTE: To be used after switching k8s context (cluster) which has the namespace
+func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string) (*scheduler.Context, error) {
 	log.InfoD("Getting Restore Context from Backup Context")
 
-	restoreAppContext := *backedupAppContext
+	restoreAppContext := *appContext
 
 	// TODO: remove workaround in future.
 	allStorageClassMappingsPresent := true
 
 	specObjects := make([]interface{}, 0)
-	for _, appSpecOrig := range backedupAppContext.App.SpecList {
+	for _, appSpecOrig := range appContext.App.SpecList {
 		appSpec, err := CloneSpec(appSpecOrig) //clone spec to create "restore" specs
 		if err != nil {
 			log.Errorf("Failed to clone spec: '%v'. Err: %v", appSpecOrig, err)
@@ -1857,16 +1857,16 @@ func GetRestoreCtxFromBackupCtx(backedupAppContext *scheduler.Context, namespace
 		}
 	}
 
-	app := *backedupAppContext.App
+	app := *appContext.App
 	app.SpecList = specObjects
 	restoreAppContext.App = &app
 
 	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
 	options := CreateScheduleOptions()
-	if namespace, ok := namespaceMapping[backedupAppContext.ScheduleOptions.Namespace]; ok {
+	if namespace, ok := namespaceMapping[appContext.ScheduleOptions.Namespace]; ok {
 		options.Namespace = namespace
 	} else {
-		options.Namespace = backedupAppContext.ScheduleOptions.Namespace
+		options.Namespace = appContext.ScheduleOptions.Namespace
 	}
 	restoreAppContext.ScheduleOptions = options
 

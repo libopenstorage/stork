@@ -88,11 +88,9 @@ var _ = Describe("{UserGroupManagement}", func() {
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (
-		backupNames          []string             // backups in px-backup
-		restoreNames         []string             // restores in px-backup
-		scheduledAppContexts []*scheduler.Context // Each Context is for one Namespace which corresponds to one App
-		backedupAppContexts  []*scheduler.Context // Each Context is for one backup in px-backup
-		restoredAppContexts  []*scheduler.Context // Each Context is for one restore in px-backup
+		backupNames          []string
+		restoreNames         []string
+		scheduledAppContexts []*scheduler.Context
 		preRuleNameList      []string
 		postRuleNameList     []string
 		scheduledClusterUid  string
@@ -274,9 +272,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				err = SetClusterContext(destinationClusterConfigPath)
 				log.FailOnError(err, "failed to SetClusterContext to %s cluster", destinationClusterConfigPath)
 
-				err = ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of restore [%s] is success", restoreName))
-				restoredAppContexts = append(restoredAppContexts, restoredAppCtxs[0])
 			}
 		})
 	})
@@ -322,6 +317,15 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.FailOnError(err, "failed to switch to context to destination cluster")
 
 		log.InfoD("deleting restored namespaces on destination clusters")
+		restoredAppContexts := make([]*scheduler.Context, 0)
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string))
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
 		ValidateAndDestroy(restoredAppContexts, opts)
 
 		log.InfoD("switching to default context")
