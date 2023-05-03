@@ -48,13 +48,16 @@ const (
 	// ZoneSeperator zone separator
 	ZoneSeperator = "__"
 	// EbsProvisionerName EBS provisioner name
-	EbsProvisionerName      = "kubernetes.io/aws-ebs"
-	pureCSIProvisioner      = "pure-csi"
-	ocpCephfsProvisioner    = "openshift-storage.cephfs.csi.ceph.com"
-	ocpRbdProvisioner       = "openshift-storage.rbd.csi.ceph.com"
-	vSphereCSIProvisioner   = "csi.vsphere.vmware.com"
-	efsCSIProvisioner       = "efs.csi.aws.com"
-	azureFileCSIProvisioner = "file.csi.azure.com"
+	EbsProvisionerName = "kubernetes.io/aws-ebs"
+	// pvProvisionedByAnnotation is the annotation on PV which has the
+	// provisioner name
+	PvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
+	pureCSIProvisioner        = "pure-csi"
+	ocpCephfsProvisioner      = "openshift-storage.cephfs.csi.ceph.com"
+	ocpRbdProvisioner         = "openshift-storage.rbd.csi.ceph.com"
+	vSphereCSIProvisioner     = "csi.vsphere.vmware.com"
+	efsCSIProvisioner         = "efs.csi.aws.com"
+	azureFileCSIProvisioner   = "file.csi.azure.com"
 
 	azureFileIntreeProvisioner = "kubernetes.io/azure-file"
 	googleFileCSIProvisioner   = "com.google.csi.filestore"
@@ -941,6 +944,29 @@ func GetAWSClient() (*ec2.EC2, error) {
 	}
 
 	return ec2.New(s), nil
+}
+
+// GetAWSZones get zones from AWS
+func GetAWSZones(pv *v1.PersistentVolume) ([]string, error) {
+	if pv.Annotations[PvProvisionedByAnnotation] != EbsProvisionerName {
+		return nil, nil
+	}
+	ebsName := GetEBSVolumeID(pv)
+	if ebsName == "" {
+		return nil, fmt.Errorf("AWS EBS info not found in PV %v", pv.Name)
+	}
+
+	client, err := GetAWSClient()
+	if err != nil {
+		return nil, err
+	}
+	ebsVolume, err := GetEBSVolume(ebsName, nil, client)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Tracef("getZones: zone: %v", *ebsVolume.AvailabilityZone)
+
+	return []string{*ebsVolume.AvailabilityZone}, nil
 }
 
 // GetGCPZones get zones from GCP
