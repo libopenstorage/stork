@@ -3064,10 +3064,8 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 					}
 				})
 
-				Step("Validating status of Initial and Later Restore", func() {
-					log.InfoD("Step: Validating status of Initial and Later Restore")
-
-					log.InfoD("Verifying status of Initial Restore")
+				Step("Verifying and validating status of Initial and Later Restore", func() {
+					log.InfoD("Verifying status of Initial and Later Restore")
 					// getting the status of initial restore
 					restoreInspectRequest := &api.RestoreInspectRequest{
 						Name:  initialRestoreName,
