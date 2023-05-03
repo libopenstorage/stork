@@ -247,6 +247,12 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 
 		Step("Restoring the backed up namespaces", func() {
+			defer func() {
+				log.InfoD("switching to default context")
+				err1 := SetClusterContext("")
+				log.FailOnError(err1, "failed to SetClusterContext to default cluster")
+			}()
+
 			log.InfoD("Restoring the backed up namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -265,7 +271,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
 				log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
-				restoredAppCtxs, err := ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string), destinationClusterConfigPath)
+				err = SetClusterContext(destinationClusterConfigPath)
+				log.FailOnError(err, "failed to SetClusterContext to %s cluster", destinationClusterConfigPath)
+
+				err = ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{backedupAppContexts[i]}, make(map[string]string), make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("validation of restore [%s] is success", restoreName))
 				restoredAppContexts = append(restoredAppContexts, restoredAppCtxs[0])
 			}

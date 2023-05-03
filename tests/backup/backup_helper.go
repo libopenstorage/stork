@@ -1694,10 +1694,7 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 }
 
 // ValidateRestore returns a clone of the contexts (with backup objects) *after* converting the contexts to point to restored objects (and after validating those objects)
-func ValidateRestore(ctx context.Context, restoreName string, orgID string, backedupAppContexts []*scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, restoreClusterConfigPath string) ([]*scheduler.Context, error) {
-	err := SetClusterContext(restoreClusterConfigPath)
-	log.FailOnError(err, "failed to SetClusterContext to %s cluster", restoreClusterConfigPath)
-
+func ValidateRestore(ctx context.Context, restoreName string, orgID string, scheduledAppContexts []*scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string) error {
 	backupDriver := Inst().Backup
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
@@ -1706,27 +1703,121 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, back
 
 	restoreInspectResponse, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	// TODO: Remove
-	log.Infof("restoreInspectResponse: ++%+v++", restoreInspectResponse)
+
+	restoreStatus := restoreInspectResponse.GetRestore().GetStatus().Status
+	if restoreStatus != api.RestoreInfo_StatusInfo_Success &&
+		restoreStatus != api.RestoreInfo_StatusInfo_PartialSuccess {
+		restoreStatusReason := restoreInspectResponse.GetRestore().GetStatus().Reason
+		return fmt.Errorf("ValidateRestore requires restore [%s] to have a status of Success or PartialSuccess, but found [%s] with reason [%s]", restoreName, restoreStatus, restoreStatusReason)
+	}
+
+	restoredVolumesMap := make(map[string]*api.RestoreInfo_Volume, 0)
+	for _, vol := range restoreInspectResponse.Restore.Volumes {
+		restoredVolumesMap[vol.Pvc] = vol
+	}
+
+	backupName := restoreInspectResponse.Restore.Backup
+	log.InfoD("Obtaining backup info for backup [%s] corresponding to restore [%s]", backupName, restoreName)
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		err := fmt.Errorf("GetBackupUID Err: %v", err)
+		log.Error(err)
+	} else {
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  backupName,
+			Uid:   backupUid,
+			OrgId: orgID,
+		}
+		backupInspectResponse, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			err := fmt.Errorf("InspectBackup Err: %v", err)
+			log.Error(err)
+		} else {
+			log.Info("verifying if all backed up resources have been restored (via API)")
+
+			if restoreInspectResponse.Restore.ResourceCount != backupInspectResponse.Backup.ResourceCount {
+				err := fmt.Errorf("the resource count in backup [%s] and corresponding restore [%s] are not the same", backupName, restoreName)
+				log.Error(err)
+			}
+
+			restoredResources := make([]*api.RestoreInfo_RestoredResource, 0)
+			for _, res := range restoreInspectResponse.Restore.Resources {
+				if res.Kind != "PersistentVolume" {
+					restoredResources = append(restoredResources, res)
+				}
+			}
+
+			// check if all backed up stuff has been restored (as per what px-backup says it restored)
+		backupResloop:
+			for _, backedupResource := range backupInspectResponse.Backup.Resources {
+				if backedupResource.Kind != "PersistentVolume" {
+					for _, restoredResource := range restoredResources {
+						if backedupResource.Name == restoredResource.Name &&
+							backedupResource.Kind == restoredResource.Name &&
+							backedupResource.Namespace == restoredResource.Namespace &&
+							backedupResource.Group == restoredResource.Group &&
+							backedupResource.Version == restoredResource.Version {
+							//TODO: infof
+							log.InfoD("found the resource (name: %s, GVK: %s,%s,%s) in backup [%s] corresponding to the restore [%s]", backedupResource.Name, backedupResource.Group, backedupResource.Version, backedupResource.Kind, backupName, restoreName)
+							continue backupResloop
+						}
+					}
+					err := fmt.Errorf("the resource (name: %s, GVK: %s,%s,%s) in backup [%s] is missing from the corresponding restore [%s]", backedupResource.Name, backedupResource.Group, backedupResource.Version, backedupResource.Kind, backupName, restoreName)
+					log.Error(err)
+				}
+			}
+
+			// check if all backed up volumes (PVC) has been restored (as per what px-backup says it restored)
+			for _, backedupVolume := range backupInspectResponse.Backup.Volumes {
+				if _, ok := restoredVolumesMap[backedupVolume.Pvc]; !ok {
+					err := fmt.Errorf("the volume having PVC [%s] is missing in restore [%s] corresponding to backup [%s]", backedupVolume.Pvc, restoreName, backupName)
+					log.Error(err)
+				}
+			}
+		}
+	}
+
+	// namespace matching
+
+	// check for success/retai status, and if yes "Get" then and verify presence in restored namesapce. OR use below specs to directly verify presence.
 
 	restoredAppContexts := make([]*scheduler.Context, 0)
-	for _, backedupAppContext := range backedupAppContexts {
+	for _, backedupAppContext := range scheduledAppContexts {
 		restoredAppContext, err := GetRestoreCtxFromBackupCtx(backedupAppContext, namespaceMapping, storageClassMapping)
 		if err != nil {
-			return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
+			return fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
 		}
 		restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 	}
 
+	// verifying of existence of
+	for _, restoredAppContext := range restoredAppContexts {
+		log.InfoD("getting the volumes bounded to the PVCs in the restored context [%s]", restoredAppContext)
+		volumeMap := make(map[string]*volume.Volume)
+		restoredAppsContextNamespace := restoredAppContext.ScheduleOptions.Namespace
+		scheduledVolumes, err := Inst().S.GetVolumes(restoredAppContext)
+		if err != nil {
+			err := fmt.Errorf("error in Inst().S.GetVolumes: [%s] in namespace (appCtx) [%s]", err, restoredAppsContextNamespace)
+			log.Error(err)
+			continue
+		}
+		for _, scheduledVol := range scheduledVolumes {
+			volumeMap[scheduledVol.ID] = scheduledVol
+		}
+		log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", clusterAppsContextNamespace, scheduledVolumes)
+	}
+
+	// check if volume status are all success
+	for pvc, vol := range restoredVolumesMap {
+
+	}
+
+	// this validates volumes too
 	ValidateApplications(restoredAppContexts)
 
-	log.InfoD("switching to default context")
-	err1 := SetClusterContext("")
-	log.FailOnError(err1, "failed to SetClusterContext to default cluster")
-
-	return restoredAppContexts, nil
+	return nil
 }
 
 // GetRestoreCtxFromBackupCtx uses the contexts to create and return clones which refer to restored specs (along with conversion of their specs)
