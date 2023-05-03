@@ -34,6 +34,9 @@ type ApplicationManager struct {
 
 // Init Initializes the ApplicationManager and any children controller
 func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, stopChannel chan os.Signal) error {
+	if err := a.createCRD(); err != nil {
+		return err
+	}
 	backupController := controllers.NewApplicationBackup(mgr, a.Recorder, a.ResourceCollector)
 	if err := backupController.Init(mgr, adminNamespace, a.RsyncTime); err != nil {
 		return err
@@ -67,7 +70,7 @@ func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, st
 	return nil
 }
 
-func CreateCRD() error {
+func (a *ApplicationManager) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    stork_api.BackupLocationResourceName,
 		Plural:  stork_api.BackupLocationResourcePlural,
