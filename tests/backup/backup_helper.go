@@ -205,6 +205,15 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	return nil
 }
 
+func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces []string) (filteredAppContexts []*scheduler.Context) {
+	for _, appContext := range appContexts {
+		if Contains(namespaces, appContext.ScheduleOptions.Namespace) {
+			filteredAppContexts = append(filteredAppContexts, appContext)
+		}
+	}
+	return
+}
+
 // CreateBackupWithValidatation creates backup, checks for success, and validates the backup
 func CreateBackupWithValidatation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
