@@ -123,8 +123,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
 				appCtx.ReadinessTimeout = appReadinessTimeout
-				namespace := GetAppNamespace(appCtx, taskName)
-				appCtx.ScheduleOptions.Namespace = namespace
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
