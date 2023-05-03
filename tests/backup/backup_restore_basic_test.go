@@ -2,11 +2,12 @@ package tests
 
 import (
 	"fmt"
-	"github.com/blang/semver"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/blang/semver"
 
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -29,21 +30,20 @@ import (
 // BasicSelectiveRestore selects random backed-up apps and restores them
 var _ = Describe("{BasicSelectiveRestore}", func() {
 	var (
-		backupName        string
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		restoreName       string
-		cloudCredName     string
-		cloudCredUID      string
-		backupLocationUID string
-		bkpLocationName   string
-		numDeployments    int
-		providers         []string
-		backupLocationMap map[string]string
-		labelSelectors    map[string]string
+		backupName           string
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		restoreName          string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		bkpLocationName      string
+		numDeployments       int
+		providers            []string
+		backupLocationMap    map[string]string
+		labelSelectors       map[string]string
 	)
 	JustBeforeEach(func() {
 		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -57,17 +57,17 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 
 		StartTorpedoTest("BasicSelectiveRestore", "All namespace backup and restore selective namespaces", nil, 83717)
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
 			log.InfoD(fmt.Sprintf("Iteration %v of deploying applications", i))
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -75,7 +75,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 
 		Step("Validating deployed applications", func() {
 			log.InfoD("Validating deployed applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
@@ -109,9 +109,10 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces,
-				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying [%s] backup creation", backupName))
+
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithValidatation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Selecting random backed-up apps and restoring them", func() {
 			log.InfoD("Selecting random backed-up apps and restoring them")
@@ -129,13 +130,13 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		backupDriver := Inst().Backup
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
