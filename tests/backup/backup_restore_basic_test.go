@@ -3129,9 +3129,6 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 	JustAfterEach(func() {
 		defer func() { Inst().AppList = originalAppList }()
 
-		log.InfoD("Begin JustAfterEach")
-		defer func() { log.InfoD("End JustAfterEach") }()
-
 		defer func() {
 			log.InfoD("switching to default context")
 			err := SetClusterContext("")
