@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -19,15 +20,11 @@ func (tenant *Tenant) GetTenantsList(accountID string) ([]pds.ModelsTenant, erro
 	log.Info("Get list of tenants.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	tenantsModel, res, err := tenantClient.ApiAccountsIdTenantsGet(ctx, accountID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiAccountsIdTenantsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiAccountsIdTenantsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return tenantsModel.GetData(), nil
 }
@@ -38,15 +35,11 @@ func (tenant *Tenant) GetTenant(tenantID string) (*pds.ModelsTenant, error) {
 	log.Info("Get tenant.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	tenantModel, res, err := tenantClient.ApiTenantsIdGet(ctx, tenantID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return tenantModel, nil
 }
@@ -57,15 +50,11 @@ func (tenant *Tenant) GetDNS(tenantID string) (*pds.ModelsDNSDetails, error) {
 	log.Info("Get tenant.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	tenantDNSModel, res, err := tenantClient.ApiTenantsIdDnsDetailsGet(ctx, tenantID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdDnsDetailsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return tenantDNSModel, nil
 }

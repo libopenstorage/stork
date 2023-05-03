@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -18,15 +19,11 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantID string
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dtModels, res, err := dtClient.ApiTenantsIdDeploymentTargetsGet(ctx, tenantID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdDeploymentTargetsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdDeploymentTargetsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dtModels.GetData(), nil
 }
@@ -36,15 +33,11 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectID stri
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dtModels, res, err := dtClient.ApiProjectsIdDeploymentTargetsGet(ctx, projectID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiProjectsIdDeploymentTargetsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiProjectsIdDeploymentTargetsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dtModels.GetData(), nil
 }
@@ -55,14 +48,11 @@ func (dt *DeploymentTarget) GetTarget(targetID string) (*pds.ModelsDeploymentTar
 	log.Infof("Get cluster details having uuid - %v", targetID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dtModel, res, err := dtClient.ApiDeploymentTargetsIdGet(ctx, targetID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentTargetsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentTargetsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dtModel, nil
 }
@@ -71,17 +61,14 @@ func (dt *DeploymentTarget) GetTarget(targetID string) (*pds.ModelsDeploymentTar
 func (dt *DeploymentTarget) UpdateTarget(targetID string, name string) (*pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	log.Infof("Get cluster details having uuid - %v", targetID)
-	upateRequest := pds.ControllersUpdateDeploymentTargetRequest{Name: &name}
+	updateRequest := pds.ControllersUpdateDeploymentTargetRequest{Name: &name}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	dtModel, res, err := dtClient.ApiDeploymentTargetsIdPut(ctx, targetID).Body(upateRequest).Execute()
+	dtModel, res, err := dtClient.ApiDeploymentTargetsIdPut(ctx, targetID).Body(updateRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentTargetsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentTargetsIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dtModel, nil
 }
@@ -92,14 +79,11 @@ func (dt *DeploymentTarget) DeleteTarget(targetID string) (*status.Response, err
 	log.Infof("Get cluster details having uuid - %v", targetID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := dtClient.ApiDeploymentTargetsIdDelete(ctx, targetID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentTargetsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentTargetsIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }

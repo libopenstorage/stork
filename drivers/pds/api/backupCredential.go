@@ -19,14 +19,12 @@ func (backupCredential *BackupCredential) ListBackupCredentials(tenantID string)
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModels, res, err := backupClient.ApiTenantsIdBackupCredentialsGet(ctx, tenantID).Execute()
 
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdBackupCredentialsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModels.GetData(), err
 }
@@ -36,14 +34,12 @@ func (backupCredential *BackupCredential) GetBackupCredential(backupCredID strin
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiBackupCredentialsIdGet(ctx, backupCredID).Execute()
 
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModel, err
 }
@@ -64,13 +60,11 @@ func (backupCredential *BackupCredential) CreateAzureBackupCredential(tenantID s
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModel, err
 
@@ -94,8 +88,7 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 	ctx, err := pdsutils.GetContext()
 	log.Infof("Ctx: %v", ctx)
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
 
@@ -125,8 +118,7 @@ func (backupCredential *BackupCredential) CreateS3CompatibleBackupCredential(ten
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
 	if err != nil {
@@ -184,13 +176,11 @@ func (backupCredential *BackupCredential) UpdateAzureBackupCredential(backupCred
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiBackupCredentialsIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModel, err
 
@@ -213,13 +203,11 @@ func (backupCredential *BackupCredential) UpdateS3BackupCredential(backupCredsID
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiBackupCredentialsIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModel, err
 
@@ -242,13 +230,11 @@ func (backupCredential *BackupCredential) UpdateS3CompatibleBackupCredential(bac
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiBackupCredentialsIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModel, err
 
@@ -287,8 +273,7 @@ func (backupCredential *BackupCredential) DeleteBackupCredential(backupCredsID s
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := backupClient.ApiBackupCredentialsIdDelete(ctx, backupCredsID).Execute()
 	if err != nil {
@@ -302,13 +287,11 @@ func (backupCredential *BackupCredential) GetCloudCredentials(backupCredsID stri
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	cloudCredsModel, res, err := backupClient.ApiBackupCredentialsIdCredentialsGet(ctx, backupCredsID).Execute()
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdCredentialsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdCredentialsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return cloudCredsModel, err
 }

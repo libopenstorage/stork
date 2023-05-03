@@ -21,14 +21,11 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountID
 	log.Info("List Account Role Bindings.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	accountRoleBindings, res, err := client.ApiAccountsIdRoleBindingsGet(ctx, accountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiAccountsIdRoleBindingsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiAccountsIdRoleBindingsGet``: %v\n.Full HTTP response: %v", err, res)
 	}
 	return accountRoleBindings.GetData(), nil
 }
@@ -38,14 +35,11 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(user
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	accRoleModels, res, err := client.ApiUsersIdAccountRoleBindingsGet(ctx, userID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiUsersIdAccountRoleBindingsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiUsersIdAccountRoleBindingsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return accRoleModels.GetData(), nil
 }
@@ -57,14 +51,11 @@ func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountID
 	log.Info("Get list of Accounts.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	accRoleBinding, res, err := client.ApiAccountsIdRoleBindingsPut(ctx, accountID).Body(updateReq).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiAccountsIdRoleBindingsPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiAccountsIdRoleBindingsPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return accRoleBinding, nil
 }
@@ -80,14 +71,11 @@ func (accountRoleBinding *AccountRoleBinding) AddUser(accountID string, email st
 	log.Info("Get list of Accounts.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return err
+		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := client.ApiAccountsIdInvitationsPost(ctx, accountID).Body(invitationRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiAccountsIdInvitationsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return err
+		return fmt.Errorf("Error when calling `ApiAccountsIdInvitationsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return nil
 }

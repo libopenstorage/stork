@@ -2,11 +2,11 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 // ResourceSettingsTemplate struct
@@ -19,15 +19,11 @@ func (rt *ResourceSettingsTemplate) ListTemplates(tenantID string) ([]pds.Models
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	rtModel, res, err := rtClient.ApiTenantsIdResourceSettingsTemplatesGet(ctx, tenantID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdResourceSettingsTemplatesGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdResourceSettingsTemplatesGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return rtModel.GetData(), nil
 }
@@ -37,15 +33,11 @@ func (rt *ResourceSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsR
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	rtModel, res, err := rtClient.ApiResourceSettingsTemplatesIdGet(ctx, templateID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiResourceSettingsTemplatesIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiResourceSettingsTemplatesIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return rtModel, nil
 }
@@ -56,15 +48,11 @@ func (rt *ResourceSettingsTemplate) CreateTemplate(tenantID string, cpuLimit str
 	createRequest := pds.ControllersCreateResourceSettingsTemplateRequest{CpuLimit: &cpuLimit, CpuRequest: &cpuRequest, DataServiceId: &dataServiceID, MemoryLimit: &memoryLimit, MemoryRequest: &memoryRequest, Name: &name, StorageRequest: &storageRequest}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	rtModel, res, err := rtClient.ApiTenantsIdResourceSettingsTemplatesPost(ctx, tenantID).Body(createRequest).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdResourceSettingsTemplatesPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdResourceSettingsTemplatesPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return rtModel, nil
 }
@@ -75,15 +63,11 @@ func (rt *ResourceSettingsTemplate) UpdateTemplate(templateID string, cpuLimit s
 	updateRequest := pds.ControllersUpdateResourceSettingsTemplateRequest{CpuLimit: &cpuLimit, CpuRequest: &cpuRequest, MemoryLimit: &memoryLimit, MemoryRequest: &memoryRequest, Name: &name, StorageRequest: &storageRequest}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	rtModel, res, err := rtClient.ApiResourceSettingsTemplatesIdPut(ctx, templateID).Body(updateRequest).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiResourceSettingsTemplatesIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiResourceSettingsTemplatesIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return rtModel, nil
 }
@@ -93,15 +77,11 @@ func (rt *ResourceSettingsTemplate) DeleteTemplate(templateID string) (*status.R
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := rtClient.ApiResourceSettingsTemplatesIdDelete(ctx, templateID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiResourceSettingsTemplatesIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiResourceSettingsTemplatesIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }
