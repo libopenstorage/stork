@@ -1683,7 +1683,10 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 		if vrInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
-		pvcRestoreSucceeded := (vrInfo.Status == storkapi.ApplicationRestoreStatusPartialSuccess || vrInfo.Status == storkapi.ApplicationRestoreStatusSuccessful)
+		// For existing volume, the status will be retained.
+		pvcRestoreSucceeded := (vrInfo.Status == storkapi.ApplicationRestoreStatusPartialSuccess ||
+			vrInfo.Status == storkapi.ApplicationRestoreStatusSuccessful ||
+			vrInfo.Status == storkapi.ApplicationRestoreStatusRetained)
 
 		// Only clean up dangling PVC if it's restore did not succeed
 		if !pvcRestoreSucceeded {
