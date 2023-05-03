@@ -141,6 +141,13 @@ const (
 	FullAccess                  = 3
 )
 
+type ExecutionMode int32
+
+const (
+	Sequential ExecutionMode = iota
+	Parallel
+)
+
 // Set default provider as aws
 func getProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
@@ -1697,6 +1704,9 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	log.Infof("helm command: %v ", cmd)
+
+	pxBackupUpgradeStartTime := time.Now()
+
 	output, _, err = osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("upgrade failed with error: %v", err)
@@ -1725,6 +1735,10 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if err != nil {
 		return err
 	}
+
+	pxBackupUpgradeEndTime := time.Now()
+	pxBackupUpgradeDuration := pxBackupUpgradeEndTime.Sub(pxBackupUpgradeStartTime)
+	log.InfoD("Time taken for Px-Backup upgrade to complete: %02d:%02d:%02d hh:mm:ss", int(pxBackupUpgradeDuration.Hours()), int(pxBackupUpgradeDuration.Minutes())%60, int(pxBackupUpgradeDuration.Seconds())%60)
 
 	// Checking if all pods are running
 	err = ValidateAllPodsInPxBackupNamespace()
@@ -2199,6 +2213,133 @@ func VerifyLicenseConsumedCount(ctx context.Context, OrgId string, expectedLicen
 	return err
 }
 
+// DeleteRule deletes backup rule
+func DeleteRule(ruleName string, orgId string, ctx context.Context) error {
+	ruleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, ruleName)
+	if err != nil {
+		return err
+	}
+	deleteRuleReq := &api.RuleDeleteRequest{
+		OrgId: orgId,
+		Name:  ruleName,
+		Uid:   ruleUid,
+	}
+	_, err = Inst().Backup.DeleteRule(ctx, deleteRuleReq)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// SafeAppend appends elements to a given slice in a thread-safe manner using a provided mutex
+func SafeAppend(mu *sync.Mutex, slice interface{}, elements ...interface{}) interface{} {
+	mu.Lock()
+	defer mu.Unlock()
+	sliceValue := reflect.ValueOf(slice)
+	for _, elem := range elements {
+		elemValue := reflect.ValueOf(elem)
+		sliceValue = reflect.Append(sliceValue, elemValue)
+	}
+	return sliceValue.Interface()
+}
+
+// TaskHandler executes the given task on each input in the taskInputs collection, either sequentially
+// * or in parallel, depending on the specified execution mode. It also returns an error when taskInputs is not
+// * of type slice or map.
+// *
+// * Parameters:
+// *
+// * taskInputs: The collection of inputs to operate on (either a slice or map).
+// * task:       The function to execute on each input. If the function takes one argument,
+// *
+// *	it will be passed the input value. If it takes two arguments, the first
+// *	will be the input key or index, and the second will be the input value.
+// *
+// * executionMode: The mode to use for executing the task, either "Sequential" or "Parallel".
+// *
+// * # Example
+// *
+// * The original code:
+// *
+// *	for _, value := range taskInputs / slice or map / {
+// *	    task(value)
+// *	}
+// *
+// * or
+// *
+// *	for index, value := range taskInputs / slice / {
+// *	    task(index, value)
+// *	}
+// *
+// * or
+// *
+// *	for key, value := range taskInputs / map / {
+// *	    task(key, value)
+// *	}
+// *
+// * The original code uses a common pattern for iterating over a slice or map of inputs and calling the 'task'
+// * function for each input. To simplify this pattern and allow for concurrent execution of the 'task'
+// * function, you can replace the for loops with a call to TaskHandler(taskInputs, task, executionMode), where
+// * 'executionMode' is either 'Parallel' or 'Sequential'.
+func TaskHandler(taskInputs interface{}, task interface{}, executionMode ExecutionMode) error {
+	v := reflect.ValueOf(taskInputs)
+	var keys []reflect.Value
+	isMap := false
+	if v.Kind() == reflect.Map {
+		keys = v.MapKeys()
+		isMap = true
+	} else if v.Kind() == reflect.Slice || v.Kind() == reflect.Array {
+		keys = make([]reflect.Value, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			keys[i] = v.Index(i)
+		}
+	} else {
+		return fmt.Errorf("instead of %#v, type of taskInputs should be a slice or map", v.Kind().String())
+	}
+	length := len(keys)
+	if length == 0 {
+		return nil
+	} else if length == 1 {
+		executionMode = Sequential
+	}
+	fnValue := reflect.ValueOf(task)
+	numArgs := fnValue.Type().NumIn()
+	callTask := func(key, value reflect.Value) {
+		in := make([]reflect.Value, numArgs)
+		if numArgs == 1 {
+			in[0] = value
+		} else {
+			in[0] = key
+			in[1] = value
+		}
+		fnValue.Call(in)
+	}
+	if executionMode == Sequential {
+		for i := 0; i < length; i++ {
+			if isMap {
+				callTask(keys[i], v.MapIndex(keys[i]))
+			} else {
+				callTask(reflect.ValueOf(i), keys[i])
+			}
+		}
+	} else {
+		var wg sync.WaitGroup
+		for i := 0; i < length; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				if isMap {
+					callTask(keys[i], v.MapIndex(keys[i]))
+				} else {
+					callTask(reflect.ValueOf(i), keys[i])
+				}
+			}(i)
+		}
+		wg.Wait()
+	}
+	return nil
+}
+
 // FetchNamespacesFromBackup fetches the namespace from backup
 func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID string) ([]string, error) {
 	var backedUpNamespaces []string
@@ -2282,6 +2423,31 @@ func RemoveElementByValue(arr interface{}, value interface{}) error {
 		if v.Index(i).Interface() == value {
 			v.Set(reflect.AppendSlice(v.Slice(0, i), v.Slice(i+1, v.Len())))
 			break
+		}
+	}
+	return nil
+}
+
+// IsFullBackup checks if given backup is full backup or not
+func IsFullBackup(backupName string, orgID string, ctx context.Context) error {
+	backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectReq := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUid,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectReq)
+	if err != nil {
+		return err
+	}
+	for _, vol := range resp.GetBackup().GetVolumes() {
+		backupId := vol.GetBackupId()
+		log.Infof("BackupID of backup [%s]: [%s]", backupName, backupId)
+		if strings.HasSuffix(backupId, "-incr") {
+			return fmt.Errorf("backup [%s] is an incremental backup", backupName)
 		}
 	}
 	return nil
