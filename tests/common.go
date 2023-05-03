@@ -486,27 +486,6 @@ func updateChannel(err error, errChan ...*chan error) {
 	}
 }
 
-// processMultipleErrors does `log.Errof` on all errors (if `logging` is set to true), and returns a consolidated error
-func ProcessMultipleErrors(errorOrigin string, errs []error, logging bool) error {
-	isErrPresent := false
-	combinedErrors := make([]string, 0)
-	for _, err := range errs {
-		if err != nil {
-			isErrPresent = true
-			errStr := err.Error()
-			if logging {
-				log.Errorf("%s: %s", errorOrigin, errStr)
-			}
-			combinedErrors = append(combinedErrors, errStr)
-		}
-	}
-	if isErrPresent {
-		return fmt.Errorf("%s: %v", errorOrigin, combinedErrors)
-	} else {
-		return nil
-	}
-}
-
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	defer func() {
