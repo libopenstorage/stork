@@ -304,7 +304,7 @@ func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backu
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, resourceTypesFilter)
 }
 
-// CreateScheduleBackup creates a schedule backup
+// CreateScheduleBackup creates a schedule backup and checks for success of first (immediately triggered) backup
 func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) error {
@@ -351,6 +351,23 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	}
 	log.Infof("Schedule backup [%s] created successfully", firstScheduleBackupName)
 	return nil
+}
+
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, and validates that backup
+func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) error {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
+	}
+	err := CreateScheduleBackup(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	if err != nil {
+		return err
+	}
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return err
+	}
+	return ValidateBackup(ctx, firstScheduleBackupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
 // CreateBackupWithoutCheck creates backup without waiting for success
