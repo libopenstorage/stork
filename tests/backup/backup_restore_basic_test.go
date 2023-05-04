@@ -1142,13 +1142,12 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 	timeBetweenConsecutiveBackups := 10 * time.Second
 	backupNames := make([]string, 0)
 	numberOfSimultaneousBackups := 20
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	var backupLocationUID string
 	var cloudCredUID string
 	var backupName string
 	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
@@ -1162,15 +1161,15 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 		StartTorpedoTest("BackupSyncBasicTest",
 			"Validate that the backup sync syncs all the backups present in bucket", nil, 58040)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1178,7 +1177,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 		providers := getProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
@@ -1231,9 +1230,9 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						err = CreateBackup(backupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-							labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					}(backupName)
 				}
 				wg.Wait()
@@ -1280,8 +1279,9 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
-				err = CreateBackup(backupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
 		})
@@ -1329,11 +1329,11 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
