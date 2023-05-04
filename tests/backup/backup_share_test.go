@@ -147,7 +147,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 	numberOfBackups := 1
 	var backupName string
 	userContexts := make([]context.Context, 0)
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	var backupLocationName string
 	var backupLocationUID string
 	var cloudCredUID string
@@ -164,15 +164,15 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		StartTorpedoTest("DuplicateSharedBackup",
 			"Share backup with user and duplicate it", nil, 82942)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -183,7 +183,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create User", func() {
 			err = backup.AddUser(userName, firstName, lastName, email, commonPassword)
@@ -220,9 +220,9 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking Backup of application")
-			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				nil, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 
 		Step("Share backup with user", func() {
@@ -255,11 +255,11 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		//Deleting user
 		err := backup.DeleteUser(userName)
