@@ -783,21 +783,20 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 
 var _ = Describe("{CustomResourceRestore}", func() {
 	var (
-		contexts           []*scheduler.Context
-		appContexts        []*scheduler.Context
-		backupLocationUID  string
-		cloudCredUID       string
-		bkpNamespaces      []string
-		clusterUid         string
-		clusterStatus      api.ClusterInfo_StatusInfo_Status
-		backupName         string
-		credName           string
-		cloudCredUidList   []string
-		backupLocationName string
-		deploymentName     string
-		restoreName        string
-		backupNames        []string
-		restoreNames       []string
+		scheduledAppContexts []*scheduler.Context
+		backupLocationUID    string
+		cloudCredUID         string
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupName           string
+		credName             string
+		cloudCredUidList     []string
+		backupLocationName   string
+		deploymentName       string
+		restoreName          string
+		backupNames          []string
+		restoreNames         []string
 	)
 	labelSelectors := make(map[string]string)
 	namespaceMapping := make(map[string]string)
@@ -810,15 +809,15 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		StartTorpedoTest("CustomResourceRestore", "Create custom resource restore", nil, 58041)
 		log.InfoD("Deploy applications")
 
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -826,7 +825,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating credentials and backup location", func() {
@@ -867,8 +866,9 @@ var _ = Describe("{CustomResourceRestore}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
-				err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
 		})
@@ -902,7 +902,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		//Delete Backup
@@ -924,7 +924,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		log.Infof("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(newBackupLocationMap, credName, cloudCredUID, ctx)
 
 	})
