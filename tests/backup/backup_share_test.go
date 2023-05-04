@@ -2559,8 +2559,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 // ShareBackupWithDifferentRoleUsers shares backup with multiple user with different access permissions and roles
 var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 	var (
-		contexts                 []*scheduler.Context
-		appContexts              []*scheduler.Context
+		scheduledAppContexts     []*scheduler.Context
 		bkpNamespaces            []string
 		clusterUid               string
 		clusterStatus            api.ClusterInfo_StatusInfo_Status
@@ -2582,15 +2581,15 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		StartTorpedoTest("ShareBackupWithDifferentRoleUsers",
 			"Take backups and share it with multiple user with different access permissions and different roles", nil, 82947)
 		log.InfoD("Deploy applications needed for backup")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -2600,7 +2599,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Create multiple Users", func() {
@@ -2650,9 +2649,9 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-						labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-					log.FailOnError(err, "Failed while trying to take backup of application - %s with backup name - [%s]", bkpNamespaces[0], backupName)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] with namespaces (scheduled contexts) [%s]", backupName, bkpNamespaces[0]))
 				}(backupName)
 			}
 			wg.Wait()
@@ -2681,12 +2680,12 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		backupDriver := Inst().Backup
 		for _, backupName := range backupNames {
 			wg.Add(1)
