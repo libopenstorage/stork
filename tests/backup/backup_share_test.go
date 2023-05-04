@@ -3175,12 +3175,11 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	var backupLocationUID string
 	var cloudCredUID string
 	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var customBackupLocationName string
@@ -3196,15 +3195,15 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			"Full backup view only and incremental backup restore access", nil, 82939)
 		log.InfoD("Deploy applications")
 
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -3213,7 +3212,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Create Users", func() {
@@ -3268,18 +3267,18 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			for _, namespace := range bkpNamespaces {
 				fullBackupName = fmt.Sprintf("%s-%v", "full-backup", time.Now().Unix())
 				backupNames = append(backupNames, fullBackupName)
-				err = CreateBackup(fullBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", fullBackupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, fullBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", fullBackupName))
 			}
 
 			//Incremental backup
 			for _, namespace := range bkpNamespaces {
 				incrementalBackupName = fmt.Sprintf("%s-%v", "incremental-backup", time.Now().Unix())
 				backupNames = append(backupNames, incrementalBackupName)
-				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", incrementalBackupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", incrementalBackupName))
 			}
 			log.Infof("List of backups - %v", backupNames)
 		})
@@ -3361,11 +3360,11 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
