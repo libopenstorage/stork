@@ -216,7 +216,7 @@ type statusJSON struct {
 }
 
 // ExpandPool resizes a pool of a given ID
-func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, size, operation.String())
 
 	// start a task to check if pool  resize is done
@@ -226,13 +226,14 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			ResizeFactor: &api.SdkStoragePoolResizeRequest_Size{
 				Size: size,
 			},
-			OperationType: operation,
+			OperationType:           operation,
+			SkipWaitForCleanVolumes: skipWaitForCleanVolumes,
 		})
 		if err != nil {
 			return nil, true, err
 		}
 		if jobListResp.String() != "" {
-			log.Debugf("Resize respone: %v", jobListResp.String())
+			log.Debugf("Resize response: %v", jobListResp.String())
 		}
 		return nil, false, nil
 	}
@@ -244,7 +245,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 }
 
 // ExpandPoolUsingPxctlCmd resizes a pool of a given UUID using CLI command
-func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 
 	var operationString string
 
@@ -259,6 +260,9 @@ func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operati
 
 	log.InfoD("Initiate Pool %v resize by %v with operationtype %v using CLI", poolUUID, size, operation.String())
 	cmd := fmt.Sprintf("pxctl sv pool expand --uid %v --size %v --operation %v", poolUUID, size, operationString)
+	if skipWaitForCleanVolumes {
+		cmd = fmt.Sprintf("%s -f", cmd)
+	}
 	out, err := d.nodeDriver.RunCommandWithNoRetry(
 		n,
 		cmd,

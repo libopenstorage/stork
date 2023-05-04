@@ -1,11 +1,11 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 // Backup struct
@@ -18,14 +18,11 @@ func (backup *Backup) ListBackup(deploymentID string) ([]pds.ModelsBackup, error
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModels, res, err := backupClient.ApiDeploymentsIdBackupsGet(ctx, deploymentID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdBackupsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdBackupsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModels.GetData(), err
 }
@@ -35,14 +32,11 @@ func (backup *Backup) ListBackupsBelongToTarget(backupTargetID string) ([]pds.Mo
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModels, res, err := backupClient.ApiBackupTargetsIdBackupsGet(ctx, backupTargetID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupTargetsIdBackupsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiBackupTargetsIdBackupsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModels.GetData(), err
 }
@@ -52,16 +46,13 @@ func (backup *Backup) GetBackup(backupID string) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	backuptModel, res, err := backupClient.ApiBackupsIdGet(ctx, backupID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	backupModel, res, err := backupClient.ApiBackupsIdGet(ctx, backupID).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiBackupsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
-	return backuptModel, err
+	return backupModel, err
 }
 
 // CreateBackup create adhoc/schedule backup and return the newly create backup model.
@@ -80,16 +71,13 @@ func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, j
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	backuptModel, res, err := backupClient.ApiDeploymentsIdBackupsPost(ctx, deploymentID).Body(createRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdBackupsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	backupModel, res, err := backupClient.ApiDeploymentsIdBackupsPost(ctx, deploymentID).Body(createRequest).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdBackupsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
-	return backuptModel, err
-
+	return backupModel, err
 }
 
 // UpdateBackup return updated backup model.
@@ -100,16 +88,13 @@ func (backup *Backup) UpdateBackup(backupID string, jobHistoryLimit int32) (*pds
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupTargetModel, res, err := backupClient.ApiBackupsIdPut(ctx, backupID).Body(updateRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiBackupsIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupTargetModel, err
-
 }
 
 // DeleteBackupJobs delete the backup job and return the status.
@@ -117,14 +102,11 @@ func (backup *Backup) DeleteBackupJobs(backupID string, jobName string) (*status
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := backupClient.ApiBackupsIdJobsNameDelete(ctx, backupID, jobName).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupsIdJobsNameDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiBackupsIdJobsNameDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }
@@ -134,14 +116,11 @@ func (backup *Backup) DeleteBackup(backupID string) (*status.Response, error) {
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := backupClient.ApiBackupsIdDelete(ctx, backupID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiBackupsIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }

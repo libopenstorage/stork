@@ -1,11 +1,11 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 // BackupPolicy struct
@@ -18,14 +18,12 @@ func (backupPolicy *BackupPolicy) ListBackupPolicy(tenantID string) ([]pds.Model
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModels, res, err := backupClient.ApiTenantsIdBackupPoliciesGet(ctx, tenantID).Execute()
 
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupPoliciesGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdBackupPoliciesGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupModels.GetData(), err
 }
@@ -35,14 +33,12 @@ func (backupPolicy *BackupPolicy) GetBackupPolicy(backupCredID string) (*pds.Mod
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupPolicyModel, res, err := backupClient.ApiBackupPoliciesIdGet(ctx, backupCredID).Execute()
 
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupPoliciesIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiBackupPoliciesIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupPolicyModel, err
 }
@@ -61,13 +57,11 @@ func (backupPolicy *BackupPolicy) CreateBackupPolicy(tenantID string, name strin
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupPolicyModel, res, err := backupClient.ApiTenantsIdBackupPoliciesPost(ctx, tenantID).Body(createRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupPoliciesPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdBackupPoliciesPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupPolicyModel, err
 
@@ -87,13 +81,11 @@ func (backupPolicy *BackupPolicy) UpdateBackupPolicy(backupCredsID string, name 
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupPolicyModel, res, err := backupClient.ApiBackupPoliciesIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupPoliciesIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiBackupPoliciesIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupPolicyModel, err
 
@@ -104,14 +96,11 @@ func (backupPolicy *BackupPolicy) DeleteBackupPolicy(backupCredsID string) (*sta
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := backupClient.ApiBackupPoliciesIdDelete(ctx, backupCredsID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupPoliciesIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiBackupPoliciesIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }

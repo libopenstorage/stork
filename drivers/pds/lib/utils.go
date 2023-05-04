@@ -864,7 +864,7 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
 	log.Debugf("expected replica %v", checkTillReplica)
 	conditionError := wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
-		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		ss, err = k8sApps.GetStatefulSet(depName, ns)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
 			return false, nil

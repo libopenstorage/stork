@@ -1,11 +1,11 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 // BackupJob struct
@@ -18,14 +18,12 @@ func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ControllersBa
 	backupJobClient := backupJob.apiClient.BackupJobsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupJobModels, res, err := backupJobClient.ApiBackupsIdJobsGet(ctx, backupID).Execute()
 
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupsIdJobsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupsIdJobsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupJobModels.GetData(), err
 }
@@ -35,14 +33,12 @@ func (backupJob *BackupJob) GetBackupJob(backupJobID string) (*pds.ModelsBackupJ
 	backupJobClient := backupJob.apiClient.BackupJobsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupJobModel, res, err := backupJobClient.ApiBackupJobsIdGet(ctx, backupJobID).Execute()
 
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupJobsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupJobsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupJobModel, err
 }
