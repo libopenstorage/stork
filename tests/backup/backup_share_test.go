@@ -2927,8 +2927,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 // ShareAndRemoveBackupLocation shares and remove backup location and add it back and verify
 var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 	var (
-		contexts             []*scheduler.Context
-		appContexts          []*scheduler.Context
+		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
 		srcClusterUid        string
 		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
@@ -2955,15 +2954,15 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 		StartTorpedoTest("ShareAndRemoveBackupLocation",
 			"Share and remove backup location and add it back and check from other users if they show up", nil, 82949)
 		log.Infof("Deploy applications needed for backup")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -2973,7 +2972,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.Infof("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Create multiple Users", func() {
@@ -3025,9 +3024,9 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-						labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
-					log.FailOnError(err, "Failed while trying to take backup of application- %s", bkpNamespaces[0])
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, srcClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of applications [%s]", backupName, bkpNamespaces[0]))
 				}(backupName)
 			}
 			wg.Wait()
@@ -3083,9 +3082,9 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					err = CreateBackup(backupName, SourceClusterName, newBkpLocationName, newBackupLocationUID, []string{bkpNamespaces[0]},
-						labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
-					log.FailOnError(err, "Failed while trying to take backup of application- %s", bkpNamespaces[0])
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, newBkpLocationName, newBackupLocationUID, appContextsToBackup, labelSelectors, orgID, srcClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of applications [%s]", backupName, bkpNamespaces[0]))
 				}(backupName)
 			}
 			wg.Wait()
@@ -3117,12 +3116,12 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		backupDriver := Inst().Backup
 		for _, backupName := range newBackupNames {
 			wg.Add(1)
