@@ -478,25 +478,43 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 
 // Restore backup from encrypted and non-encrypted backups
 var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
-	var scheduledAppContexts []*scheduler.Context
-	backupLocationMap := make(map[string]string)
-	var bkpNamespaces []string
-	var backupNames []string
-	var restoreNames []string
-	var backupLocationNames []string
-	var CloudCredUID string
-	var BackupLocationUID string
-	var BackupLocation1UID string
-	var clusterUid string
-	var clusterStatus api.ClusterInfo_StatusInfo_Status
-	var CredName string
-	var backupName string
-	var encryptionBucketName string
+	var (
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		backupNames          []string
+		restoreNames         []string
+		backupLocationNames  []string
+		CloudCredUID         string
+		BackupLocationUID    string
+		BackupLocation1UID   string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		CredName             string
+		backupName           string
+		encryptionBucketName string
+	)
+
 	providers := getProviders()
+	backupLocationMap := make(map[string]string)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encrypted backups", nil, 79915)
+
+		log.InfoD("Deploy applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
 	})
-	It("Creating bucket, encrypted and non-encrypted backup location", func() {
+
+	It("Restore encrypted and non encrypted backups", func() {
 		log.InfoD("Creating bucket, encrypted and non-encrypted backup location")
 		encryptionBucketName = fmt.Sprintf("%s-%s-%v", providers[0], "encryptionbucket", time.Now().Unix())
 		backupLocationName := fmt.Sprintf("%s-%s", "location", providers[0])
@@ -519,18 +537,11 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		err = CreateBackupLocation(providers[0], backupLocationNames[1], BackupLocation1UID, CredName, CloudCredUID, encryptionBucketName, orgID, encryptionKey)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationNames[1]))
 		backupLocationMap[BackupLocation1UID] = backupLocationNames[1]
-		log.InfoD("Deploy applications")
-		scheduledAppContexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts := ScheduleApplications(taskName)
-			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = appReadinessTimeout
-				namespace := GetAppNamespace(ctx, taskName)
-				bkpNamespaces = append(bkpNamespaces, namespace)
-				scheduledAppContexts = append(scheduledAppContexts, ctx)
-			}
-		}
+
+		Step("Validate applications", func() {
+			ValidateApplications(scheduledAppContexts)
+		})
+
 		Step("Register cluster for backup", func() {
 			log.InfoD("Register clusters for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
