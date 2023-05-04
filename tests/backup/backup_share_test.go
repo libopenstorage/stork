@@ -1794,13 +1794,12 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 	users := make([]string, 0)
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	var backupLocationName string
 	var backupLocationUID string
 	var cloudCredUID string
 	var newCloudCredUID string
 	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
@@ -1812,15 +1811,15 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		StartTorpedoTest("ShareBackupAndEdit",
 			"Share backup with restore and full access mode and edit the shared backup", nil, 82950)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1828,7 +1827,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		providers := getProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications and get their labels")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 			log.Infof("Create list of pod selector for the apps deployed")
 		})
 		Step("Create Users", func() {
@@ -1889,13 +1888,14 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		})
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			backupNames = append(backupNames, backupName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				nil, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
+
+			backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			backupNames = append(backupNames, backupName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Share backup with user restore mode and validate", func() {
 			log.InfoD("Share backup with user restore mode and validate")
@@ -1991,11 +1991,11 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
