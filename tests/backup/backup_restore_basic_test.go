@@ -645,19 +645,18 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 // This testcase verifies schedule backup creation with all namespaces.
 var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	var (
-		contexts           []*scheduler.Context
-		appContexts        []*scheduler.Context
-		backupLocationName string
-		backupLocationUID  string
-		cloudCredUID       string
-		bkpNamespaces      []string
-		scheduleNames      []string
-		cloudAccountName   string
-		backupName         string
-		schBackupName      string
-		schPolicyUid       string
-		restoreName        string
-		clusterStatus      api.ClusterInfo_StatusInfo_Status
+		scheduledAppContexts []*scheduler.Context
+		backupLocationName   string
+		backupLocationUID    string
+		cloudCredUID         string
+		bkpNamespaces        []string
+		scheduleNames        []string
+		cloudAccountName     string
+		backupName           string
+		schBackupName        string
+		schPolicyUid         string
+		restoreName          string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
 	)
 	var testrailID = 58015 // testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58015
 	namespaceMapping := make(map[string]string)
@@ -671,22 +670,22 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, testrailID)
 		log.Infof("Application installation")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 
 	It("Schedule Backup Creation with all namespaces", func() {
 		Step("Validate deployed applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		providers := getProviders()
 		Step("Adding Cloud Account", func() {
@@ -738,9 +737,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
 			backupName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, timeStamp)
-			err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces,
-				labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
+			err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", backupName))
 			schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
 			scheduleNames = append(scheduleNames, backupName)
@@ -757,7 +755,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Clean up objects after test execution")
@@ -776,7 +774,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		log.Infof("Deleting the deployed applications after test execution")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
